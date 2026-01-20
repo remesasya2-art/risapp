@@ -17,6 +17,7 @@ import json
 import base64
 from openpyxl import Workbook
 from io import BytesIO
+from whatsapp_service import whatsapp_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
