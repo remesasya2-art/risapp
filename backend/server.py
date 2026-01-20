@@ -429,7 +429,14 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         {"$inc": {"balance_ris": -request.amount_ris}}
     )
     
-    # TODO: Send Slack notification to team
+    # Send WhatsApp notification to team
+    try:
+        await whatsapp_service.send_withdrawal_notification(
+            transaction.dict(),
+            current_user.dict()
+        )
+    except Exception as e:
+        logger.error(f"WhatsApp notification error: {e}")
     
     return transaction
 
