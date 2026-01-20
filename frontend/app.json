@@ -45,6 +45,23 @@
           "resizeMode": "contain",
           "backgroundColor": "#2563eb"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2563eb",
+          "sounds": [],
+          "mode": "production"
+        }
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
       ]
     ],
     "experiments": {
