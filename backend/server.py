@@ -540,6 +540,40 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@api_router.post("/test-whatsapp")
+async def test_whatsapp():
+    """Test endpoint to send a WhatsApp message"""
+    try:
+        test_transaction = {
+            "transaction_id": "TEST-123",
+            "amount_input": 100.0,
+            "amount_output": 7800.0,
+            "beneficiary_data": {
+                "full_name": "Test Beneficiary",
+                "bank": "Banco Test",
+                "account_number": "1234-5678-9012",
+                "id_document": "V-12345678",
+                "phone_number": "+58 412-1234567"
+            }
+        }
+        
+        test_user = {
+            "name": "Test User",
+            "email": "test@example.com"
+        }
+        
+        result = await whatsapp_service.send_withdrawal_notification(
+            test_transaction,
+            test_user
+        )
+        
+        if result:
+            return {"status": "success", "message": "WhatsApp test message sent!"}
+        else:
+            return {"status": "error", "message": "Failed to send WhatsApp message"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # Include the router in the main app
 app.include_router(api_router)
 
