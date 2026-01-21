@@ -13,6 +13,8 @@ interface User {
   name: string;
   picture?: string;
   balance_ris: number;
+  verification_status?: string;
+  rejection_reason?: string;
 }
 
 interface AuthContextType {
