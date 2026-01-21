@@ -58,6 +58,18 @@ export default function ProfileScreen() {
 
         {/* Menu Items */}
         <View style={styles.menuContainer}>
+          {/* Only show verification option if not yet submitted */}
+          {user.verification_status !== 'pending' && user.verification_status !== 'verified' && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/verification')}
+            >
+              <Ionicons name="shield-checkmark" size={24} color="#f59e0b" />
+              <Text style={styles.menuText}>Completar Verificación</Text>
+              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+
           {user.email.includes('admin') && (
             <TouchableOpacity
               style={styles.menuItem}
