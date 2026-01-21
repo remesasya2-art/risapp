@@ -13,8 +13,8 @@
       "bundleIdentifier": "com.remesasya.app",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSCameraUsageDescription": "La app necesita acceso a la cámara para escanear documentos",
-        "NSPhotoLibraryUsageDescription": "La app necesita acceso a tu galería para adjuntar comprobantes"
+        "NSCameraUsageDescription": "Necesitamos la cámara para verificar tu identidad con fotos en vivo",
+        "NSPhotoLibraryUsageDescription": "Necesitamos acceso a tu galería para mostrar tus fotos"
       }
     },
     "android": {
