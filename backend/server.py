@@ -193,6 +193,15 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+async def get_verified_user(current_user: User = Depends(get_current_user)) -> User:
+    """Check if user is verified"""
+    if current_user.verification_status != "verified":
+        raise HTTPException(
+            status_code=403, 
+            detail="Account not verified. Please complete verification first."
+        )
+    return current_user
+
 # =======================
 # AUTH ROUTES
 # =======================
