@@ -132,6 +132,10 @@ export default function VerificationScreen() {
       Alert.alert('Error', 'Por favor sube una foto de tu CPF');
       return;
     }
+    if (!acceptedDeclaration) {
+      Alert.alert('Error', 'Debes aceptar la declaración de titularidad para continuar');
+      return;
+    }
 
     try {
       setLoading(true);
