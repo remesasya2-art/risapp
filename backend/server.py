@@ -261,6 +261,76 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
     return {"message": "Logged out successfully"}
 
 # =======================
+# VERIFICATION/KYC ROUTES
+# =======================
+
+@api_router.post("/verification/submit")
+async def submit_verification(request: VerificationRequest, current_user: User = Depends(get_current_user)):
+    """Submit documents for verification"""
+    # Update user with verification data
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {
+            "full_name": request.full_name,
+            "document_number": request.document_number,
+            "cpf_number": request.cpf_number,
+            "id_document_image": request.id_document_image,
+            "cpf_image": request.cpf_image,
+            "verification_status": "pending"
+        }}
+    )
+    
+    return {"message": "Verification submitted successfully. Please wait for admin approval."}
+
+@api_router.get("/verification/status")
+async def get_verification_status(current_user: User = Depends(get_current_user)):
+    """Get current verification status"""
+    return {
+        "status": current_user.verification_status,
+        "rejection_reason": current_user.rejection_reason
+    }
+
+@api_router.get("/admin/verifications/pending")
+async def get_pending_verifications(admin_user: User = Depends(get_admin_user)):
+    """Admin: Get all pending verifications"""
+    users = await db.users.find(
+        {"verification_status": "pending"},
+        {
+            "_id": 0,
+            "user_id": 1,
+            "name": 1,
+            "email": 1,
+            "full_name": 1,
+            "document_number": 1,
+            "cpf_number": 1,
+            "id_document_image": 1,
+            "cpf_image": 1,
+            "created_at": 1
+        }
+    ).to_list(1000)
+    return users
+
+@api_router.post("/admin/verifications/decide")
+async def decide_verification(decision: VerificationDecision, admin_user: User = Depends(get_admin_user)):
+    """Admin: Approve or reject verification"""
+    update_data = {
+        "verification_status": "verified" if decision.approved else "rejected",
+        "verified_at": datetime.now(timezone.utc) if decision.approved else None,
+        "verified_by": admin_user.user_id if decision.approved else None,
+        "rejection_reason": decision.rejection_reason if not decision.approved else None
+    }
+    
+    result = await db.users.update_one(
+        {"user_id": decision.user_id},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"User {'approved' if decision.approved else 'rejected'} successfully"}
+
+# =======================
 # USER ROUTES
 # =======================
 
