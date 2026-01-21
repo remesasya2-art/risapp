@@ -136,6 +136,7 @@ class VerificationRequest(BaseModel):
     cpf_number: str
     id_document_image: str  # base64
     cpf_image: str  # base64
+    selfie_image: str  # base64 - live selfie
 
 class VerificationDecision(BaseModel):
     user_id: str
