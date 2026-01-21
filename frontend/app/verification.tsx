@@ -21,6 +21,7 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function VerificationScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -31,6 +32,23 @@ export default function VerificationScreen() {
   const [cpfImage, setCpfImage] = useState<string | null>(null);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [acceptedDeclaration, setAcceptedDeclaration] = useState(false);
+
+  // Redirect if already verified or pending
+  useEffect(() => {
+    if (user?.verification_status === 'verified') {
+      Alert.alert(
+        'Ya Verificado',
+        'Tu cuenta ya está verificada. No necesitas completar este proceso nuevamente.',
+        [{ text: 'OK', onPress: () => router.replace('/') }]
+      );
+    } else if (user?.verification_status === 'pending') {
+      Alert.alert(
+        'Verificación Pendiente',
+        'Ya has enviado tu documentación. Estamos revisándola.',
+        [{ text: 'OK', onPress: () => router.replace('/') }]
+      );
+    }
+  }, [user]);
 
   const takePhoto = async (type: 'id' | 'cpf' | 'selfie') => {
     try {
