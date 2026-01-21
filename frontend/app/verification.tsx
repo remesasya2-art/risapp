@@ -275,62 +275,99 @@ export default function VerificationScreen() {
           )}
         </View>
 
-        {/* Declaration Section */}
+        {/* Declaration Section - Professional Design */}
         <View style={styles.declarationSection}>
-          <View style={styles.declarationHeader}>
-            <Ionicons name="shield-checkmark-outline" size={32} color="#ef4444" />
-            <Text style={styles.declarationTitle}>DECLARACIÓN IMPORTANTE</Text>
+          <View style={styles.declarationHeaderPro}>
+            <View style={styles.declarationIconContainer}>
+              <Ionicons name="document-text" size={28} color="#2563eb" />
+            </View>
+            <Text style={styles.declarationTitlePro}>Declaración de Titularidad</Text>
           </View>
           
-          <Text style={styles.declarationText}>
-            Al continuar, declaro bajo responsabilidad legal que:
+          <View style={styles.declarationDivider} />
+
+          <Text style={styles.declarationIntro}>
+            Al aceptar esta declaración, yo <Text style={styles.boldText}>{formData.fullName || '[Tu nombre]'}</Text>, declaro bajo juramento que:
           </Text>
 
-          <View style={styles.declarationList}>
-            <View style={styles.declarationItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-              <Text style={styles.declarationItemText}>
-                Las tarjetas y cuentas que usaré para recargar están <Text style={styles.bold}>A MI NOMBRE</Text>
+          <View style={styles.declarationPoints}>
+            <View style={styles.pointRow}>
+              <View style={styles.pointNumber}>
+                <Text style={styles.pointNumberText}>1</Text>
+              </View>
+              <Text style={styles.pointText}>
+                Soy el <Text style={styles.boldText}>titular único y exclusivo</Text> de todas las tarjetas de crédito/débito y cuentas bancarias que utilizaré para realizar recargas en la plataforma RIS.
               </Text>
             </View>
 
-            <View style={styles.declarationItem}>
-              <Ionicons name="close-circle" size={20} color="#ef4444" />
-              <Text style={styles.declarationItemText}>
-                <Text style={styles.bold}>NO</Text> usaré tarjetas o cuentas de otras personas (familiares, amigos, empresas)
+            <View style={styles.pointRow}>
+              <View style={styles.pointNumber}>
+                <Text style={styles.pointNumberText}>2</Text>
+              </View>
+              <Text style={styles.pointText}>
+                Los fondos utilizados para las recargas provienen de <Text style={styles.boldText}>actividades lícitas</Text> y son de mi completa propiedad.
               </Text>
             </View>
 
-            <View style={styles.declarationItem}>
-              <Ionicons name="cash-outline" size={20} color="#10b981" />
-              <Text style={styles.declarationItemText}>
-                Los fondos son míos y de origen lícito
+            <View style={styles.pointRow}>
+              <View style={styles.pointNumber}>
+                <Text style={styles.pointNumberText}>3</Text>
+              </View>
+              <Text style={styles.pointText}>
+                <Text style={styles.boldText}>No utilizaré</Text> tarjetas, cuentas o métodos de pago pertenecientes a terceras personas, incluyendo familiares, amigos o entidades corporativas.
+              </Text>
+            </View>
+
+            <View style={styles.pointRow}>
+              <View style={styles.pointNumber}>
+                <Text style={styles.pointNumberText}>4</Text>
+              </View>
+              <Text style={styles.pointText}>
+                Autorizo a RIS a verificar la titularidad de mis métodos de pago y acepto que las transacciones que no cumplan con esta declaración serán rechazadas.
               </Text>
             </View>
           </View>
 
-          <View style={styles.warningBox}>
-            <Ionicons name="warning" size={24} color="#ef4444" />
-            <View style={styles.warningTextContainer}>
-              <Text style={styles.warningTitle}>Si usas cuentas de terceros:</Text>
-              <Text style={styles.warningText}>❌ Suspensión de cuenta</Text>
-              <Text style={styles.warningText}>❌ Retención de fondos</Text>
-              <Text style={styles.warningText}>❌ Reporte a autoridades</Text>
+          <View style={styles.consequencesBox}>
+            <View style={styles.consequencesHeader}>
+              <Ionicons name="alert-circle" size={24} color="#dc2626" />
+              <Text style={styles.consequencesTitle}>Consecuencias por Incumplimiento</Text>
+            </View>
+            <View style={styles.consequencesList}>
+              <View style={styles.consequenceItem}>
+                <Ionicons name="close-circle" size={16} color="#dc2626" />
+                <Text style={styles.consequenceText}>Suspensión inmediata de la cuenta</Text>
+              </View>
+              <View style={styles.consequenceItem}>
+                <Ionicons name="close-circle" size={16} color="#dc2626" />
+                <Text style={styles.consequenceText}>Retención de fondos para investigación</Text>
+              </View>
+              <View style={styles.consequenceItem}>
+                <Ionicons name="close-circle" size={16} color="#dc2626" />
+                <Text style={styles.consequenceText}>Reporte a autoridades competentes</Text>
+              </View>
             </View>
           </View>
+
+          <View style={styles.declarationDivider} />
 
           <TouchableOpacity
-            style={styles.checkboxContainer}
+            style={styles.checkboxContainerPro}
             onPress={() => setAcceptedDeclaration(!acceptedDeclaration)}
           >
-            <View style={[styles.checkbox, acceptedDeclaration && styles.checkboxChecked]}>
+            <View style={[styles.checkboxPro, acceptedDeclaration && styles.checkboxCheckedPro]}>
               {acceptedDeclaration && (
-                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Ionicons name="checkmark" size={24} color="#fff" />
               )}
             </View>
-            <Text style={styles.checkboxLabel}>
-              He leído y acepto esta declaración bajo responsabilidad legal
-            </Text>
+            <View style={styles.checkboxTextContainer}>
+              <Text style={styles.checkboxLabelPro}>
+                He leído, comprendido y acepto esta declaración bajo responsabilidad legal
+              </Text>
+              <Text style={styles.checkboxSubtext}>
+                Al marcar esta casilla, confirmo que toda la información proporcionada es verdadera y verificable.
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
 
