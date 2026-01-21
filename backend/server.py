@@ -48,6 +48,16 @@ class User(BaseModel):
     name: str
     picture: Optional[str] = None
     balance_ris: float = 0.0
+    # KYC/Verification fields
+    verification_status: str = "pending"  # pending, verified, rejected
+    id_document_image: Optional[str] = None  # base64
+    cpf_image: Optional[str] = None  # base64
+    full_name: Optional[str] = None  # For card validation
+    document_number: Optional[str] = None
+    cpf_number: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    verified_by: Optional[str] = None  # admin user_id
+    rejection_reason: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserSession(BaseModel):
