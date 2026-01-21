@@ -58,6 +58,9 @@ class User(BaseModel):
     verified_at: Optional[datetime] = None
     verified_by: Optional[str] = None  # admin user_id
     rejection_reason: Optional[str] = None
+    # Declaration acceptance
+    accepted_declaration: bool = False
+    declaration_accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserSession(BaseModel):
