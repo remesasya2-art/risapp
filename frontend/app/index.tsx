@@ -34,16 +34,17 @@ export default function HomeScreen() {
 
   const checkVerificationStatus = () => {
     if (user && user.verification_status === 'pending') {
-      // User has submitted but waiting approval
+      // User has submitted but waiting approval - don't redirect
+      return;
+    }
+    if (user && user.verification_status === 'rejected') {
+      // User was rejected - allow retry
       return;
     }
     if (user && !user.verification_status) {
-      // User needs to submit verification
-      Alert.alert(
-        'Verificación Requerida',
-        'Para usar la app, primero debes verificar tu cuenta',
-        [{ text: 'Verificar Ahora', onPress: () => router.push('/verification') }]
-      );
+      // User needs to submit verification - show alert but don't auto-redirect
+      // They can access it from profile if needed
+      return;
     }
   };
 
