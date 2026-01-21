@@ -89,7 +89,7 @@ export default function HomeScreen() {
       );
       return;
     }
-    Alert.alert('Info', 'Funcionalidad de envío próximamente');
+    router.push('/send');
   };
 
   if (authLoading) {
