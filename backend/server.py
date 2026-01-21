@@ -52,6 +52,7 @@ class User(BaseModel):
     verification_status: str = "pending"  # pending, verified, rejected
     id_document_image: Optional[str] = None  # base64
     cpf_image: Optional[str] = None  # base64
+    selfie_image: Optional[str] = None  # base64 - live selfie
     full_name: Optional[str] = None  # For card validation
     document_number: Optional[str] = None
     cpf_number: Optional[str] = None
