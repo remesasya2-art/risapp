@@ -270,6 +270,65 @@ export default function VerificationScreen() {
           )}
         </View>
 
+        {/* Declaration Section */}
+        <View style={styles.declarationSection}>
+          <View style={styles.declarationHeader}>
+            <Ionicons name="shield-checkmark-outline" size={32} color="#ef4444" />
+            <Text style={styles.declarationTitle}>DECLARACIÓN IMPORTANTE</Text>
+          </View>
+          
+          <Text style={styles.declarationText}>
+            Al continuar, declaro bajo responsabilidad legal que:
+          </Text>
+
+          <View style={styles.declarationList}>
+            <View style={styles.declarationItem}>
+              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              <Text style={styles.declarationItemText}>
+                Las tarjetas y cuentas que usaré para recargar están <Text style={styles.bold}>A MI NOMBRE</Text>
+              </Text>
+            </View>
+
+            <View style={styles.declarationItem}>
+              <Ionicons name="close-circle" size={20} color="#ef4444" />
+              <Text style={styles.declarationItemText}>
+                <Text style={styles.bold}>NO</Text> usaré tarjetas o cuentas de otras personas (familiares, amigos, empresas)
+              </Text>
+            </View>
+
+            <View style={styles.declarationItem}>
+              <Ionicons name="cash-outline" size={20} color="#10b981" />
+              <Text style={styles.declarationItemText}>
+                Los fondos son míos y de origen lícito
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.warningBox}>
+            <Ionicons name="warning" size={24} color="#ef4444" />
+            <View style={styles.warningTextContainer}>
+              <Text style={styles.warningTitle}>Si usas cuentas de terceros:</Text>
+              <Text style={styles.warningText}>❌ Suspensión de cuenta</Text>
+              <Text style={styles.warningText}>❌ Retención de fondos</Text>
+              <Text style={styles.warningText}>❌ Reporte a autoridades</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.checkboxContainer}
+            onPress={() => setAcceptedDeclaration(!acceptedDeclaration)}
+          >
+            <View style={[styles.checkbox, acceptedDeclaration && styles.checkboxChecked]}>
+              {acceptedDeclaration && (
+                <Ionicons name="checkmark" size={20} color="#fff" />
+              )}
+            </View>
+            <Text style={styles.checkboxLabel}>
+              He leído y acepto esta declaración bajo responsabilidad legal
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Submit Button */}
         <TouchableOpacity
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
