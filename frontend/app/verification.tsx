@@ -29,58 +29,28 @@ export default function VerificationScreen() {
   });
   const [idImage, setIdImage] = useState<string | null>(null);
   const [cpfImage, setCpfImage] = useState<string | null>(null);
+  const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [acceptedDeclaration, setAcceptedDeclaration] = useState(false);
 
-  const pickImage = async (type: 'id' | 'cpf') => {
-    try {
-      // Request permissions
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!permissionResult.granted) {
-        Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para subir documentos');
-        return;
-      }
-
-      // Launch image picker
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0].base64) {
-        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        
-        if (type === 'id') {
-          setIdImage(base64Image);
-        } else {
-          setCpfImage(base64Image);
-        }
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'No se pudo cargar la imagen');
-    }
-  };
-
-  const takePhoto = async (type: 'id' | 'cpf') => {
+  const takePhoto = async (type: 'id' | 'cpf' | 'selfie') => {
     try {
       // Request camera permissions
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       
       if (!permissionResult.granted) {
-        Alert.alert('Permiso requerido', 'Necesitamos acceso a tu cámara para tomar fotos');
+        Alert.alert(
+          'Permiso requerido', 
+          'Necesitamos acceso a tu cámara para verificar tu identidad. Ve a Configuración → RIS → Cámara y activa el permiso.'
+        );
         return;
       }
 
-      // Launch camera
+      // Launch camera with specific settings
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.7,
+        allowsEditing: false,
+        quality: 0.8,
         base64: true,
+        cameraType: type === 'selfie' ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
       });
 
       if (!result.canceled && result.assets[0].base64) {
@@ -88,26 +58,16 @@ export default function VerificationScreen() {
         
         if (type === 'id') {
           setIdImage(base64Image);
-        } else {
+        } else if (type === 'cpf') {
           setCpfImage(base64Image);
+        } else {
+          setSelfieImage(base64Image);
         }
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'No se pudo tomar la foto');
+      Alert.alert('Error', 'No se pudo tomar la foto. Intenta nuevamente.');
     }
-  };
-
-  const showImageOptions = (type: 'id' | 'cpf') => {
-    Alert.alert(
-      'Seleccionar imagen',
-      'Elige una opción',
-      [
-        { text: 'Tomar foto', onPress: () => takePhoto(type) },
-        { text: 'Elegir de galería', onPress: () => pickImage(type) },
-        { text: 'Cancelar', style: 'cancel' },
-      ]
-    );
   };
 
   const handleSubmit = async () => {
