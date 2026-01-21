@@ -431,6 +431,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
   },
+  uploadButtonSubtext: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  selfieButton: {
+    paddingVertical: 40,
+  },
+  selfieHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  selfieHeaderText: {
+    flex: 1,
+  },
+  selfieTips: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    width: '100%',
+    gap: 4,
+  },
+  selfieTipText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '500',
+  },
   imagePreview: {
     alignItems: 'center',
   },
