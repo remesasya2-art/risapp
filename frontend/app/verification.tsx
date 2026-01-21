@@ -85,11 +85,15 @@ export default function VerificationScreen() {
       return;
     }
     if (!idImage) {
-      Alert.alert('Error', 'Por favor sube una foto de tu documento de identidad');
+      Alert.alert('Error', 'Por favor toma una foto de tu documento de identidad');
       return;
     }
     if (!cpfImage) {
-      Alert.alert('Error', 'Por favor sube una foto de tu CPF');
+      Alert.alert('Error', 'Por favor toma una foto de tu CPF');
+      return;
+    }
+    if (!selfieImage) {
+      Alert.alert('Error', 'Por favor toma un selfie en vivo desde la cámara frontal');
       return;
     }
     if (!acceptedDeclaration) {
@@ -109,6 +113,7 @@ export default function VerificationScreen() {
           cpf_number: formData.cpfNumber,
           id_document_image: idImage,
           cpf_image: cpfImage,
+          selfie_image: selfieImage,
         },
         {
           headers: { Authorization: `Bearer ${token}` },
