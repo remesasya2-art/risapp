@@ -191,19 +191,20 @@ export default function VerificationScreen() {
               <Image source={{ uri: idImage }} style={styles.previewImage} />
               <TouchableOpacity
                 style={styles.changeImageButton}
-                onPress={() => showImageOptions('id')}
+                onPress={() => takePhoto('id')}
               >
                 <Ionicons name="camera" size={20} color="#fff" />
-                <Text style={styles.changeImageText}>Cambiar foto</Text>
+                <Text style={styles.changeImageText}>Tomar nueva foto</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity
               style={styles.uploadButton}
-              onPress={() => showImageOptions('id')}
+              onPress={() => takePhoto('id')}
             >
               <Ionicons name="camera-outline" size={40} color="#2563eb" />
-              <Text style={styles.uploadButtonText}>Tomar o subir foto</Text>
+              <Text style={styles.uploadButtonText}>Tomar foto con cámara</Text>
+              <Text style={styles.uploadButtonSubtext}>📸 Foto en vivo requerida</Text>
             </TouchableOpacity>
           )}
         </View>
