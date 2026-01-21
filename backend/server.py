@@ -279,7 +279,9 @@ async def submit_verification(request: VerificationRequest, current_user: User =
             "cpf_number": request.cpf_number,
             "id_document_image": request.id_document_image,
             "cpf_image": request.cpf_image,
-            "verification_status": "pending"
+            "verification_status": "pending",
+            "accepted_declaration": True,
+            "declaration_accepted_at": datetime.now(timezone.utc)
         }}
     )
     
