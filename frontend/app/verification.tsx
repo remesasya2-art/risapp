@@ -1,0 +1,415 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+export default function VerificationScreen() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    fullName: '',
+    documentNumber: '',
+    cpfNumber: '',
+  });
+  const [idImage, setIdImage] = useState<string | null>(null);
+  const [cpfImage, setCpfImage] = useState<string | null>(null);
+
+  const pickImage = async (type: 'id' | 'cpf') => {
+    try {
+      // Request permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para subir documentos');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        
+        if (type === 'id') {
+          setIdImage(base64Image);
+        } else {
+          setCpfImage(base64Image);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'No se pudo cargar la imagen');
+    }
+  };
+
+  const takePhoto = async (type: 'id' | 'cpf') => {
+    try {
+      // Request camera permissions
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert('Permiso requerido', 'Necesitamos acceso a tu cámara para tomar fotos');
+        return;
+      }
+
+      // Launch camera
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        
+        if (type === 'id') {
+          setIdImage(base64Image);
+        } else {
+          setCpfImage(base64Image);
+        }
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'No se pudo tomar la foto');
+    }
+  };
+
+  const showImageOptions = (type: 'id' | 'cpf') => {
+    Alert.alert(
+      'Seleccionar imagen',
+      'Elige una opción',
+      [
+        { text: 'Tomar foto', onPress: () => takePhoto(type) },
+        { text: 'Elegir de galería', onPress: () => pickImage(type) },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleSubmit = async () => {
+    // Validation
+    if (!formData.fullName.trim()) {
+      Alert.alert('Error', 'Por favor ingresa tu nombre completo');
+      return;
+    }
+    if (!formData.documentNumber.trim()) {
+      Alert.alert('Error', 'Por favor ingresa tu número de documento');
+      return;
+    }
+    if (!formData.cpfNumber.trim()) {
+      Alert.alert('Error', 'Por favor ingresa tu número de CPF');
+      return;
+    }
+    if (!idImage) {
+      Alert.alert('Error', 'Por favor sube una foto de tu documento de identidad');
+      return;
+    }
+    if (!cpfImage) {
+      Alert.alert('Error', 'Por favor sube una foto de tu CPF');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('session_token');
+
+      await axios.post(
+        `${BACKEND_URL}/api/verification/submit`,
+        {
+          full_name: formData.fullName,
+          document_number: formData.documentNumber,
+          cpf_number: formData.cpfNumber,
+          id_document_image: idImage,
+          cpf_image: cpfImage,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      Alert.alert(
+        'Verificación enviada',
+        'Tu documentación ha sido enviada exitosamente. El equipo la revisará pronto.',
+        [{ text: 'OK', onPress: () => router.replace('/') }]
+      );
+    } catch (error: any) {
+      console.error('Verification error:', error);
+      Alert.alert('Error', error.response?.data?.detail || 'No se pudo enviar la verificación');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Ionicons name="shield-checkmark" size={60} color="#2563eb" />
+          <Text style={styles.title}>Verificación de Cuenta</Text>
+          <Text style={styles.subtitle}>
+            Para tu seguridad, necesitamos verificar tu identidad
+          </Text>
+        </View>
+
+        {/* Personal Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Información Personal</Text>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Nombre Completo *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.fullName}
+              onChangeText={(text) => setFormData({ ...formData, fullName: text })}
+              placeholder="Ej: João Silva Santos"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Número de Documento *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.documentNumber}
+              onChangeText={(text) => setFormData({ ...formData, documentNumber: text })}
+              placeholder="DNI o Pasaporte"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Número de CPF *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.cpfNumber}
+              onChangeText={(text) => setFormData({ ...formData, cpfNumber: text })}
+              placeholder="000.000.000-00"
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+
+        {/* ID Document */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Documento de Identidad *</Text>
+          <Text style={styles.sectionSubtitle}>DNI o Pasaporte vigente</Text>
+          
+          {idImage ? (
+            <View style={styles.imagePreview}>
+              <Image source={{ uri: idImage }} style={styles.previewImage} />
+              <TouchableOpacity
+                style={styles.changeImageButton}
+                onPress={() => showImageOptions('id')}
+              >
+                <Ionicons name="camera" size={20} color="#fff" />
+                <Text style={styles.changeImageText}>Cambiar foto</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadButton}
+              onPress={() => showImageOptions('id')}
+            >
+              <Ionicons name="camera-outline" size={40} color="#2563eb" />
+              <Text style={styles.uploadButtonText}>Tomar o subir foto</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* CPF Document */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>CPF *</Text>
+          <Text style={styles.sectionSubtitle}>Documento CPF vigente</Text>
+          
+          {cpfImage ? (
+            <View style={styles.imagePreview}>
+              <Image source={{ uri: cpfImage }} style={styles.previewImage} />
+              <TouchableOpacity
+                style={styles.changeImageButton}
+                onPress={() => showImageOptions('cpf')}
+              >
+                <Ionicons name="camera" size={20} color="#fff" />
+                <Text style={styles.changeImageText}>Cambiar foto</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadButton}
+              onPress={() => showImageOptions('cpf')}
+            >
+              <Ionicons name="camera-outline" size={40} color="#2563eb" />
+              <Text style={styles.uploadButtonText}>Tomar o subir foto</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Submit Button */}
+        <TouchableOpacity
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={24} color="#fff" />
+              <Text style={styles.submitButtonText}>Enviar Verificación</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.disclaimer}>
+          * Campos obligatorios. Tus documentos serán revisados por nuestro equipo en un máximo de 24 horas.
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 12,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  uploadButton: {
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 32,
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+  },
+  uploadButtonText: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  imagePreview: {
+    alignItems: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    resizeMode: 'contain',
+    backgroundColor: '#f3f4f6',
+  },
+  changeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  changeImageText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#9ca3af',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disclaimer: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 18,
+  },
+});
