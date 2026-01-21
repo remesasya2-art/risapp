@@ -13,11 +13,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import { useRouter } from 'expo-router';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function HomeScreen() {
   const { user, loading: authLoading, login, refreshUser } = useAuth();
+  const router = useRouter();
   const [rate, setRate] = useState(78);
   const [risAmount, setRisAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
@@ -26,8 +28,24 @@ export default function HomeScreen() {
   useEffect(() => {
     if (user) {
       loadRate();
+      checkVerificationStatus();
     }
   }, [user]);
+
+  const checkVerificationStatus = () => {
+    if (user && user.verification_status === 'pending') {
+      // User has submitted but waiting approval
+      return;
+    }
+    if (user && !user.verification_status) {
+      // User needs to submit verification
+      Alert.alert(
+        'Verificación Requerida',
+        'Para usar la app, primero debes verificar tu cuenta',
+        [{ text: 'Verificar Ahora', onPress: () => router.push('/verification') }]
+      );
+    }
+  };
 
   const loadRate = async () => {
     try {
@@ -48,6 +66,30 @@ export default function HomeScreen() {
     setVesAmount(value);
     const ves = parseFloat(value) || 0;
     setRisAmount((ves / rate).toFixed(2));
+  };
+
+  const handleRecharge = () => {
+    if (user?.verification_status !== 'verified') {
+      Alert.alert(
+        'Verificación Requerida',
+        'Debes completar la verificación de tu cuenta antes de recargar',
+        [{ text: 'Verificar', onPress: () => router.push('/verification') }]
+      );
+      return;
+    }
+    Alert.alert('Info', 'Funcionalidad de recarga próximamente');
+  };
+
+  const handleSend = () => {
+    if (user?.verification_status !== 'verified') {
+      Alert.alert(
+        'Verificación Requerida',
+        'Debes completar la verificación de tu cuenta antes de enviar RIS',
+        [{ text: 'Verificar', onPress: () => router.push('/verification') }]
+      );
+      return;
+    }
+    Alert.alert('Info', 'Funcionalidad de envío próximamente');
   };
 
   if (authLoading) {
@@ -76,9 +118,56 @@ export default function HomeScreen() {
     );
   }
 
+  // Show verification status
+  if (user.verification_status === 'pending') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <Ionicons name="time-outline" size={80} color="#f59e0b" />
+          <Text style={styles.welcomeTitle}>Verificación Pendiente</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Tu documentación está siendo revisada.{'\n'}
+            Te notificaremos cuando esté aprobada.
+          </Text>
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>Estado: En revisión ⏳</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (user.verification_status === 'rejected') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <Ionicons name="close-circle-outline" size={80} color="#ef4444" />
+          <Text style={styles.welcomeTitle}>Verificación Rechazada</Text>
+          <Text style={styles.welcomeSubtitle}>
+            {user.rejection_reason || 'Tu documentación fue rechazada'}
+          </Text>
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => router.push('/verification')}
+          >
+            <Text style={styles.loginButtonText}>Intentar Nuevamente</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Verification Badge */}
+        {user.verification_status === 'verified' && (
+          <View style={styles.verifiedBadge}>
+            <Ionicons name="shield-checkmark" size={20} color="#10b981" />
+            <Text style={styles.verifiedText}>Cuenta Verificada ✓</Text>
+          </View>
+        )}
+
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Balance Disponible</Text>
@@ -127,7 +216,7 @@ export default function HomeScreen() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryButton]}
-            onPress={() => Alert.alert('Info', 'Funcionalidad de recarga próximamente')}
+            onPress={handleRecharge}
           >
             <Ionicons name="add-circle" size={24} color="#fff" />
             <Text style={styles.actionButtonText}>Recargar REAIS</Text>
@@ -135,7 +224,7 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={[styles.actionButton, styles.secondaryButton]}
-            onPress={() => Alert.alert('Info', 'Funcionalidad de envío próximamente')}
+            onPress={handleSend}
           >
             <Ionicons name="send" size={24} color="#fff" />
             <Text style={styles.actionButtonText}>Enviar RIS</Text>
@@ -166,6 +255,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   welcomeSubtitle: {
     fontSize: 16,
@@ -186,6 +276,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d1fae5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  verifiedText: {
+    color: '#065f46',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  statusCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  statusText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
   },
   balanceCard: {
     backgroundColor: '#2563eb',
