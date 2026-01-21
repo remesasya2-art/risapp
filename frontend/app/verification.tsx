@@ -218,19 +218,58 @@ export default function VerificationScreen() {
               <Image source={{ uri: cpfImage }} style={styles.previewImage} />
               <TouchableOpacity
                 style={styles.changeImageButton}
-                onPress={() => showImageOptions('cpf')}
+                onPress={() => takePhoto('cpf')}
               >
                 <Ionicons name="camera" size={20} color="#fff" />
-                <Text style={styles.changeImageText}>Cambiar foto</Text>
+                <Text style={styles.changeImageText}>Tomar nueva foto</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity
               style={styles.uploadButton}
-              onPress={() => showImageOptions('cpf')}
+              onPress={() => takePhoto('cpf')}
             >
               <Ionicons name="camera-outline" size={40} color="#2563eb" />
-              <Text style={styles.uploadButtonText}>Tomar o subir foto</Text>
+              <Text style={styles.uploadButtonText}>Tomar foto con cámara</Text>
+              <Text style={styles.uploadButtonSubtext}>Foto en vivo requerida</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Selfie */}
+        <View style={styles.section}>
+          <View style={styles.selfieHeader}>
+            <Ionicons name="person-circle" size={32} color="#2563eb" />
+            <View style={styles.selfieHeaderText}>
+              <Text style={styles.sectionTitle}>Selfie en Vivo *</Text>
+              <Text style={styles.sectionSubtitle}>Cámara frontal - Asegúrate de estar bien iluminado</Text>
+            </View>
+          </View>
+          
+          {selfieImage ? (
+            <View style={styles.imagePreview}>
+              <Image source={{ uri: selfieImage }} style={styles.previewImage} />
+              <TouchableOpacity
+                style={styles.changeImageButton}
+                onPress={() => takePhoto('selfie')}
+              >
+                <Ionicons name="camera" size={20} color="#fff" />
+                <Text style={styles.changeImageText}>Tomar nuevo selfie</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.uploadButton, styles.selfieButton]}
+              onPress={() => takePhoto('selfie')}
+            >
+              <Ionicons name="camera-reverse-outline" size={50} color="#2563eb" />
+              <Text style={styles.uploadButtonText}>Tomar selfie con cámara frontal</Text>
+              <Text style={styles.uploadButtonSubtext}>📸 Foto en vivo requerida</Text>
+              <View style={styles.selfieTips}>
+                <Text style={styles.selfieTipText}>✓ Buena iluminación</Text>
+                <Text style={styles.selfieTipText}>✓ Rostro visible</Text>
+                <Text style={styles.selfieTipText}>✓ Sin gafas oscuras</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
