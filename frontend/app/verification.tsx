@@ -29,6 +29,7 @@ export default function VerificationScreen() {
   });
   const [idImage, setIdImage] = useState<string | null>(null);
   const [cpfImage, setCpfImage] = useState<string | null>(null);
+  const [acceptedDeclaration, setAcceptedDeclaration] = useState(false);
 
   const pickImage = async (type: 'id' | 'cpf') => {
     try {
