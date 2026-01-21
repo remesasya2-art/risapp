@@ -126,6 +126,18 @@ class BeneficiaryCreate(BaseModel):
     phone_number: str
     bank: str
 
+class VerificationRequest(BaseModel):
+    full_name: str
+    document_number: str
+    cpf_number: str
+    id_document_image: str  # base64
+    cpf_image: str  # base64
+
+class VerificationDecision(BaseModel):
+    user_id: str
+    approved: bool
+    rejection_reason: Optional[str] = None
+
 # =======================
 # AUTH DEPENDENCIES
 # =======================
