@@ -58,6 +58,17 @@ export default function ProfileScreen() {
 
         {/* Menu Items */}
         <View style={styles.menuContainer}>
+          {user.email.includes('admin') && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/admin')}
+            >
+              <Ionicons name="shield-checkmark" size={24} color="#2563eb" />
+              <Text style={styles.menuText}>Panel de Administración</Text>
+              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => Alert.alert('Info', 'Funcionalidad próximamente')}
