@@ -267,6 +267,28 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
         await db.user_sessions.delete_one({"session_token": session_token})
     return {"message": "Logged out successfully"}
 
+@api_router.post("/auth/register-fcm-token")
+async def register_fcm_token(request: Request, current_user: User = Depends(get_current_user)):
+    """Register FCM token for push notifications"""
+    try:
+        data = await request.json()
+        fcm_token = data.get('fcm_token')
+        
+        if not fcm_token:
+            raise HTTPException(status_code=400, detail="FCM token is required")
+        
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {"fcm_token": fcm_token}}
+        )
+        
+        logger.info(f"FCM token registered for user {current_user.user_id}")
+        return {"message": "FCM token registered successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error registering FCM token: {e}")
+        raise HTTPException(status_code=500, detail="Error registering FCM token")
+
 # =======================
 # VERIFICATION/KYC ROUTES
 # =======================
