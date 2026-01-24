@@ -62,6 +62,11 @@ class User(BaseModel):
     # Declaration acceptance
     accepted_declaration: bool = False
     declaration_accepted_at: Optional[datetime] = None
+    # Policy acceptance (LGPD compliance)
+    accepted_policies: bool = False
+    policies_version: Optional[str] = None  # Version of policies accepted
+    policies_accepted_at: Optional[datetime] = None
+    policies_ip_address: Optional[str] = None  # IP at time of acceptance
     # Push notifications
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
