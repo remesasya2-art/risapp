@@ -538,11 +538,38 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         {"$inc": {"balance_ris": -request.amount_ris}}
     )
     
-    # Send WhatsApp notification to team
+    # Send WhatsApp notification to team with transaction ID
     try:
-        await whatsapp_service.send_withdrawal_notification(
-            transaction.dict(),
-            current_user.dict()
+        # Enhanced message with clear instructions
+        message = f"""🔔 *NUEVO RETIRO PENDIENTE*
+
+💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} VES
+👤 Usuario: {current_user.name}
+📧 Email: {current_user.email}
+
+📋 *BENEFICIARIO:*
+Nombre: {request.beneficiary_data.get('full_name')}
+Banco: {request.beneficiary_data.get('bank')}
+Cuenta: {request.beneficiary_data.get('account_number')}
+Cédula: {request.beneficiary_data.get('id_document')}
+Teléfono: {request.beneficiary_data.get('phone_number')}
+
+🆔 ID: {transaction.transaction_id}
+
+---
+✅ Opción 1: Responde con foto del comprobante
+✅ Opción 2: Procesa en admin panel"""
+
+        from twilio.rest import Client
+        twilio_client = Client(
+            os.getenv('TWILIO_ACCOUNT_SID'),
+            os.getenv('TWILIO_AUTH_TOKEN')
+        )
+        
+        twilio_client.messages.create(
+            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+            body=message,
+            to=os.getenv('TWILIO_WHATSAPP_TO')
         )
     except Exception as e:
         logger.error(f"WhatsApp notification error: {e}")
