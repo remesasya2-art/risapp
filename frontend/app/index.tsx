@@ -125,10 +125,13 @@ export default function HomeScreen() {
     router.push('/send');
   };
 
-  if (authLoading) {
+  if (authLoading || checkingPolicies) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.loadingText}>
+          {checkingPolicies ? 'Verificando políticas...' : 'Cargando...'}
+        </Text>
       </View>
     );
   }
