@@ -681,6 +681,7 @@ async def twilio_whatsapp_webhook(request: Request):
         message_sid = form_data.get('MessageSid', '')
         
         logger.info(f"WhatsApp webhook received from {from_number}: {body}")
+        logger.info(f"NumMedia: {num_media}")
         
         # Check if message has media (image)
         if num_media > 0:
@@ -704,43 +705,48 @@ async def twilio_whatsapp_webhook(request: Request):
                         import base64
                         image_base64 = f"data:{media_content_type};base64,{base64.b64encode(response.content).decode()}"
                         
-                        # Extract transaction ID from recent message
-                        # Look for pattern like "ID: abc123def456"
+                        logger.info("Image downloaded and converted to base64")
+                        
+                        # Extract transaction ID from message body
+                        # Look for pattern like "ID: abc123def456" or just the ID
                         transaction_id = None
                         if body:
                             # Try to extract ID from body
                             import re
-                            match = re.search(r'ID[:\s]+([a-f0-9-]+)', body, re.IGNORECASE)
+                            match = re.search(r'ID[:\s]*([a-f0-9]{24})', body, re.IGNORECASE)
                             if match:
                                 transaction_id = match.group(1)
+                                logger.info(f"Transaction ID extracted from message: {transaction_id}")
                         
-                        # If no ID in current message, try to find the most recent pending transaction
+                        # If no ID in current message, find the most recent pending transaction
                         if not transaction_id:
-                            # Find most recent pending withdrawal
+                            logger.info("No ID in message, looking for most recent pending withdrawal...")
                             recent_withdrawal = await db.transactions.find_one(
                                 {"type": "withdrawal", "status": "pending"},
-                                {"_id": 0},
                                 sort=[("created_at", -1)]
                             )
                             if recent_withdrawal:
-                                transaction_id = recent_withdrawal.get('transaction_id')
+                                transaction_id = str(recent_withdrawal['_id'])
+                                logger.info(f"Found pending transaction: {transaction_id}")
                         
                         if transaction_id:
-                            # Update transaction with proof image
+                            # Update transaction with proof image using _id
+                            from bson import ObjectId
                             result = await db.transactions.update_one(
-                                {"transaction_id": transaction_id, "status": "pending"},
+                                {"_id": ObjectId(transaction_id), "status": "pending"},
                                 {"$set": {
                                     "status": "completed",
                                     "proof_image": image_base64,
                                     "completed_at": datetime.now(timezone.utc),
+                                    "updated_at": datetime.now(timezone.utc),
                                     "processed_via": "whatsapp"
                                 }}
                             )
                             
+                            logger.info(f"Update result: modified_count={result.modified_count}")
+                            
                             if result.modified_count > 0:
                                 logger.info(f"Transaction {transaction_id} marked as completed via WhatsApp")
-                                
-                                # TODO: Send notification to user via FCM
                                 
                                 # Send confirmation back via WhatsApp
                                 from twilio.rest import Client
@@ -754,8 +760,15 @@ async def twilio_whatsapp_webhook(request: Request):
                                     body=f"✅ Retiro {transaction_id[:8]}... procesado exitosamente. Usuario notificado.",
                                     to=from_number
                                 )
+                                logger.info("Confirmation message sent via WhatsApp")
                             else:
                                 logger.warning(f"No pending transaction found with ID {transaction_id}")
+                        else:
+                            logger.warning("Could not find any pending transaction to process")
+                    else:
+                        logger.error(f"Failed to download media: {response.status_code}")
+        else:
+            logger.info("No media in message, ignoring")
         
         return {"status": "success"}
         
