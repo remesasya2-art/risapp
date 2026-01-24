@@ -665,6 +665,105 @@ async def export_transactions(admin_user: User = Depends(get_admin_user)):
     )
 
 # =======================
+# TWILIO WHATSAPP WEBHOOK
+# =======================
+
+@api_router.post("/webhooks/twilio/whatsapp")
+async def twilio_whatsapp_webhook(request: Request):
+    """Webhook to receive WhatsApp messages from Twilio"""
+    try:
+        form_data = await request.form()
+        
+        # Extract message data
+        from_number = form_data.get('From', '')
+        body = form_data.get('Body', '')
+        num_media = int(form_data.get('NumMedia', 0))
+        message_sid = form_data.get('MessageSid', '')
+        
+        logger.info(f"WhatsApp webhook received from {from_number}: {body}")
+        
+        # Check if message has media (image)
+        if num_media > 0:
+            media_url = form_data.get('MediaUrl0', '')
+            media_content_type = form_data.get('MediaContentType0', '')
+            
+            logger.info(f"Media received: {media_url} ({media_content_type})")
+            
+            # Download the image
+            if media_url and 'image' in media_content_type:
+                async with httpx.AsyncClient() as client:
+                    # Twilio requires authentication to download media
+                    auth = (
+                        os.getenv('TWILIO_ACCOUNT_SID'),
+                        os.getenv('TWILIO_AUTH_TOKEN')
+                    )
+                    response = await client.get(media_url, auth=auth)
+                    
+                    if response.status_code == 200:
+                        # Convert to base64
+                        import base64
+                        image_base64 = f"data:{media_content_type};base64,{base64.b64encode(response.content).decode()}"
+                        
+                        # Extract transaction ID from recent message
+                        # Look for pattern like "ID: abc123def456"
+                        transaction_id = None
+                        if body:
+                            # Try to extract ID from body
+                            import re
+                            match = re.search(r'ID[:\s]+([a-f0-9-]+)', body, re.IGNORECASE)
+                            if match:
+                                transaction_id = match.group(1)
+                        
+                        # If no ID in current message, try to find the most recent pending transaction
+                        if not transaction_id:
+                            # Find most recent pending withdrawal
+                            recent_withdrawal = await db.transactions.find_one(
+                                {"type": "withdrawal", "status": "pending"},
+                                {"_id": 0},
+                                sort=[("created_at", -1)]
+                            )
+                            if recent_withdrawal:
+                                transaction_id = recent_withdrawal.get('transaction_id')
+                        
+                        if transaction_id:
+                            # Update transaction with proof image
+                            result = await db.transactions.update_one(
+                                {"transaction_id": transaction_id, "status": "pending"},
+                                {"$set": {
+                                    "status": "completed",
+                                    "proof_image": image_base64,
+                                    "completed_at": datetime.now(timezone.utc),
+                                    "processed_via": "whatsapp"
+                                }}
+                            )
+                            
+                            if result.modified_count > 0:
+                                logger.info(f"Transaction {transaction_id} marked as completed via WhatsApp")
+                                
+                                # TODO: Send notification to user via FCM
+                                
+                                # Send confirmation back via WhatsApp
+                                from twilio.rest import Client
+                                twilio_client = Client(
+                                    os.getenv('TWILIO_ACCOUNT_SID'),
+                                    os.getenv('TWILIO_AUTH_TOKEN')
+                                )
+                                
+                                twilio_client.messages.create(
+                                    from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                                    body=f"✅ Retiro {transaction_id[:8]}... procesado exitosamente. Usuario notificado.",
+                                    to=from_number
+                                )
+                            else:
+                                logger.warning(f"No pending transaction found with ID {transaction_id}")
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        logger.error(f"WhatsApp webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+# =======================
 # HEALTH CHECK
 # =======================
 
