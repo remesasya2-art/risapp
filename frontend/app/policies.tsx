@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,25 +16,12 @@ import { useRouter } from 'expo-router';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
-interface PolicySection {
-  title: string;
-  content: string;
-}
-
 export default function PoliciesScreen() {
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [policiesContent, setPoliciesContent] = useState('');
   const [policiesVersion, setPoliciesVersion] = useState('');
-  const [checkedItems, setCheckedItems] = useState({
-    readPolicies: false,
-    consentData: false,
-    consentBiometric: false,
-    ownPaymentMethods: false,
-    licitFunds: false,
-    over18: false,
-    acceptNotifications: false,
-  });
+  const [accepted, setAccepted] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -55,15 +41,9 @@ export default function PoliciesScreen() {
     }
   };
 
-  const allChecked = Object.values(checkedItems).every(Boolean);
-
-  const toggleCheck = (key: keyof typeof checkedItems) => {
-    setCheckedItems(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleAccept = async () => {
-    if (!allChecked) {
-      Alert.alert('Atención', 'Debe aceptar todos los términos para continuar.');
+    if (!accepted) {
+      Alert.alert('Atención', 'Debe aceptar los términos para continuar.');
       return;
     }
 
@@ -88,23 +68,6 @@ export default function PoliciesScreen() {
       setAccepting(false);
     }
   };
-
-  const CheckItem = ({ 
-    label, 
-    checked, 
-    onPress 
-  }: { 
-    label: string; 
-    checked: boolean; 
-    onPress: () => void;
-  }) => (
-    <TouchableOpacity style={styles.checkItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-        {checked && <Ionicons name="checkmark" size={16} color="#fff" />}
-      </View>
-      <Text style={styles.checkLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
 
   if (loading) {
     return (
@@ -139,61 +102,32 @@ export default function PoliciesScreen() {
         </ScrollView>
       </View>
 
-      {/* Checkboxes */}
-      <View style={styles.checkboxesContainer}>
-        <Text style={styles.checkboxesTitle}>
-          Confirmación de Aceptación (LGPD Art. 7°)
-        </Text>
-        
-        <CheckItem
-          label="He leído y comprendido la Política de Privacidad y los Términos y Condiciones"
-          checked={checkedItems.readPolicies}
-          onPress={() => toggleCheck('readPolicies')}
-        />
-        
-        <CheckItem
-          label="Consiento el tratamiento de mis datos personales para las finalidades descritas"
-          checked={checkedItems.consentData}
-          onPress={() => toggleCheck('consentData')}
-        />
-        
-        <CheckItem
-          label="Consiento el tratamiento de mis datos biométricos (selfie) para verificación de identidad"
-          checked={checkedItems.consentBiometric}
-          onPress={() => toggleCheck('consentBiometric')}
-        />
-        
-        <CheckItem
-          label="Declaro que utilizaré únicamente métodos de pago de mi titularidad"
-          checked={checkedItems.ownPaymentMethods}
-          onPress={() => toggleCheck('ownPaymentMethods')}
-        />
-        
-        <CheckItem
-          label="Declaro que los fondos que utilizaré provienen de fuentes lícitas"
-          checked={checkedItems.licitFunds}
-          onPress={() => toggleCheck('licitFunds')}
-        />
-        
-        <CheckItem
-          label="Confirmo que tengo al menos 18 años de edad"
-          checked={checkedItems.over18}
-          onPress={() => toggleCheck('over18')}
-        />
-        
-        <CheckItem
-          label="Acepto recibir notificaciones sobre mis transacciones"
-          checked={checkedItems.acceptNotifications}
-          onPress={() => toggleCheck('acceptNotifications')}
-        />
+      {/* Single Checkbox */}
+      <View style={styles.checkboxContainer}>
+        <TouchableOpacity 
+          style={styles.checkItem} 
+          onPress={() => setAccepted(!accepted)} 
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, accepted && styles.checkboxChecked]}>
+            {accepted && <Ionicons name="checkmark" size={18} color="#fff" />}
+          </View>
+          <Text style={styles.checkLabel}>
+            He leído y acepto la <Text style={styles.boldText}>Política de Privacidad</Text>, 
+            los <Text style={styles.boldText}>Términos y Condiciones</Text>, y la 
+            <Text style={styles.boldText}> Política de Prevención de Lavado de Dinero</Text>. 
+            Declaro ser mayor de 18 años, que los fondos utilizados serán de origen lícito, 
+            y que utilizaré únicamente métodos de pago de mi titularidad.
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Accept Button */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.acceptButton, !allChecked && styles.acceptButtonDisabled]}
+          style={[styles.acceptButton, !accepted && styles.acceptButtonDisabled]}
           onPress={handleAccept}
-          disabled={!allChecked || accepting}
+          disabled={!accepted || accepting}
         >
           {accepting ? (
             <ActivityIndicator color="#fff" />
@@ -206,7 +140,7 @@ export default function PoliciesScreen() {
         </TouchableOpacity>
         
         <Text style={styles.legalNote}>
-          Al aceptar, usted confirma que ha leído, entendido y acepta estar legalmente
+          Al aceptar, usted confirma que ha leído y acepta estar legalmente
           vinculado por estos términos conforme a la LGPD (Lei N° 13.709/2018).
         </Text>
       </View>
@@ -280,7 +214,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#334155',
   },
-  checkboxesContainer: {
+  checkboxContainer: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
     padding: 16,
@@ -288,20 +222,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  checkboxesTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 12,
-  },
   checkItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
   },
   checkbox: {
-    width: 24,
-    height: 24,
+    width: 26,
+    height: 26,
     borderRadius: 6,
     borderWidth: 2,
     borderColor: '#cbd5e1',
@@ -316,9 +243,13 @@ const styles = StyleSheet.create({
   },
   checkLabel: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     color: '#475569',
-    lineHeight: 20,
+    lineHeight: 22,
+  },
+  boldText: {
+    fontWeight: '600',
+    color: '#1e293b',
   },
   buttonContainer: {
     padding: 16,
