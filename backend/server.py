@@ -295,6 +295,79 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
         raise HTTPException(status_code=500, detail="Error registering FCM token")
 
 # =======================
+# POLICIES ROUTES
+# =======================
+
+CURRENT_POLICIES_VERSION = "1.0"
+
+@api_router.get("/policies")
+async def get_policies():
+    """Get current policies text and version"""
+    policies_path = Path(__file__).parent / 'policies' / 'POLITICAS_RIS.md'
+    
+    if policies_path.exists():
+        with open(policies_path, 'r', encoding='utf-8') as f:
+            policies_text = f.read()
+    else:
+        policies_text = "Políticas no disponibles"
+    
+    return {
+        "version": CURRENT_POLICIES_VERSION,
+        "content": policies_text,
+        "last_updated": "2026-01-24"
+    }
+
+@api_router.post("/policies/accept")
+async def accept_policies(request: Request, current_user: User = Depends(get_current_user)):
+    """Accept policies - required before using the app"""
+    try:
+        # Get client IP
+        forwarded_for = request.headers.get('X-Forwarded-For')
+        client_ip = forwarded_for.split(',')[0] if forwarded_for else request.client.host
+        
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {
+                "accepted_policies": True,
+                "policies_version": CURRENT_POLICIES_VERSION,
+                "policies_accepted_at": datetime.now(timezone.utc),
+                "policies_ip_address": client_ip
+            }}
+        )
+        
+        logger.info(f"User {current_user.user_id} accepted policies v{CURRENT_POLICIES_VERSION} from IP {client_ip}")
+        
+        return {
+            "message": "Políticas aceptadas exitosamente",
+            "version": CURRENT_POLICIES_VERSION,
+            "accepted_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error accepting policies: {e}")
+        raise HTTPException(status_code=500, detail="Error al aceptar las políticas")
+
+@api_router.get("/policies/status")
+async def get_policies_status(current_user: User = Depends(get_current_user)):
+    """Check if user has accepted current policies"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    accepted = user.get('accepted_policies', False)
+    user_version = user.get('policies_version')
+    needs_update = user_version != CURRENT_POLICIES_VERSION if accepted else True
+    
+    return {
+        "accepted": accepted,
+        "user_version": user_version,
+        "current_version": CURRENT_POLICIES_VERSION,
+        "needs_acceptance": not accepted or needs_update,
+        "accepted_at": user.get('policies_accepted_at')
+    }
+
+# =======================
 # VERIFICATION/KYC ROUTES
 # =======================
 
