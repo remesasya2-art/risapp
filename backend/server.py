@@ -774,6 +774,25 @@ async def twilio_whatsapp_webhook(request: Request):
                             if result.modified_count > 0:
                                 logger.info(f"Transaction {transaction_id} marked as completed via WhatsApp")
                                 
+                                # Get transaction and user info for push notification
+                                completed_tx = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
+                                if completed_tx:
+                                    user_id = completed_tx.get('user_id')
+                                    if user_id:
+                                        user = await db.users.find_one({"user_id": user_id})
+                                        if user and user.get('fcm_token'):
+                                            # Send push notification
+                                            from firebase_service import push_service
+                                            beneficiary = completed_tx.get('beneficiary_data', {})
+                                            await push_service.send_withdrawal_completed_notification(
+                                                fcm_token=user['fcm_token'],
+                                                transaction_id=transaction_id,
+                                                amount_ris=completed_tx.get('amount_input', 0),
+                                                amount_ves=completed_tx.get('amount_output', 0),
+                                                beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
+                                            )
+                                            logger.info(f"Push notification sent to user {user_id}")
+                                
                                 # Send confirmation back via WhatsApp
                                 from twilio.rest import Client
                                 twilio_client = Client(
