@@ -50,6 +50,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkExistingSession();
   }, []);
 
+  // Register for push notifications when user logs in
+  useEffect(() => {
+    if (user && Platform.OS !== 'web') {
+      setupPushNotifications();
+    }
+  }, [user]);
+
+  const setupPushNotifications = async () => {
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        await sendPushTokenToServer(token);
+      }
+
+      // Setup notification listeners
+      const notificationListener = addNotificationReceivedListener((notification) => {
+        console.log('Notification received:', notification);
+      });
+
+      const responseListener = addNotificationResponseReceivedListener((response) => {
+        console.log('Notification response:', response);
+        // Handle notification tap - could navigate to specific screen
+        const data = response.notification.request.content.data;
+        if (data?.type === 'withdrawal_completed') {
+          // Could navigate to transaction history
+          console.log('User tapped withdrawal completion notification');
+        }
+      });
+
+      return () => {
+        notificationListener.remove();
+        responseListener.remove();
+      };
+    } catch (error) {
+      console.error('Error setting up push notifications:', error);
+    }
+  };
+
   const checkExistingSession = async () => {
     try {
       const token = await AsyncStorage.getItem('session_token');
