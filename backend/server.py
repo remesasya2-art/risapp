@@ -692,13 +692,15 @@ async def twilio_whatsapp_webhook(request: Request):
             
             # Download the image
             if media_url and 'image' in media_content_type:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(follow_redirects=True) as client:
                     # Twilio requires authentication to download media
                     auth = (
                         os.getenv('TWILIO_ACCOUNT_SID'),
                         os.getenv('TWILIO_AUTH_TOKEN')
                     )
                     response = await client.get(media_url, auth=auth)
+                    
+                    logger.info(f"Media download response: {response.status_code}")
                     
                     if response.status_code == 200:
                         # Convert to base64
