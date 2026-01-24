@@ -62,6 +62,8 @@ class User(BaseModel):
     # Declaration acceptance
     accepted_declaration: bool = False
     declaration_accepted_at: Optional[datetime] = None
+    # Push notifications
+    fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserSession(BaseModel):
