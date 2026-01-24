@@ -4,6 +4,12 @@ import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import axios from 'axios';
+import { 
+  registerForPushNotificationsAsync, 
+  sendPushTokenToServer,
+  addNotificationReceivedListener,
+  addNotificationResponseReceivedListener
+} from '../services/notifications';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
