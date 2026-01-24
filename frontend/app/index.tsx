@@ -282,6 +282,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6b7280',
+  },
   scrollContent: {
     padding: 16,
   },
