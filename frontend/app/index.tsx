@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -24,13 +25,44 @@ export default function HomeScreen() {
   const [risAmount, setRisAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingPolicies, setCheckingPolicies] = useState(true);
 
   useEffect(() => {
     if (user) {
+      checkPoliciesAndVerification();
       loadRate();
-      checkVerificationStatus();
+    } else {
+      setCheckingPolicies(false);
     }
   }, [user]);
+
+  const checkPoliciesAndVerification = async () => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      if (!token) {
+        setCheckingPolicies(false);
+        return;
+      }
+
+      // Check if user has accepted policies
+      const response = await axios.get(`${BACKEND_URL}/api/policies/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.needs_acceptance) {
+        // Redirect to policies screen
+        router.replace('/policies');
+        return;
+      }
+
+      // Check verification status
+      checkVerificationStatus();
+    } catch (error) {
+      console.error('Error checking policies:', error);
+    } finally {
+      setCheckingPolicies(false);
+    }
+  };
 
   const checkVerificationStatus = () => {
     if (user && user.verification_status === 'pending') {
