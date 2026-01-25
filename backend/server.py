@@ -965,17 +965,20 @@ async def twilio_whatsapp_webhook(request: Request):
                                     if user_id:
                                         user = await db.users.find_one({"user_id": user_id})
                                         if user and user.get('fcm_token'):
-                                            # Send push notification
-                                            from firebase_service import push_service
+                                            # Send push notification using Expo
+                                            from push_service import push_service
                                             beneficiary = completed_tx.get('beneficiary_data', {})
-                                            await push_service.send_withdrawal_completed_notification(
-                                                fcm_token=user['fcm_token'],
+                                            notification_sent = await push_service.send_withdrawal_completed_notification(
+                                                push_token=user['fcm_token'],
                                                 transaction_id=transaction_id,
                                                 amount_ris=completed_tx.get('amount_input', 0),
                                                 amount_ves=completed_tx.get('amount_output', 0),
                                                 beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
                                             )
-                                            logger.info(f"Push notification sent to user {user_id}")
+                                            if notification_sent:
+                                                logger.info(f"Push notification sent to user {user_id}")
+                                            else:
+                                                logger.warning(f"Failed to send push notification to user {user_id}")
                                 
                                 # Send confirmation back via WhatsApp
                                 from twilio.rest import Client
