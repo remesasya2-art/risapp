@@ -1103,6 +1103,7 @@ async def get_support_conversation(current_user: User = Depends(get_current_user
         conversation.append({
             "id": str(msg['_id']),
             "text": msg.get('message', ''),
+            "image": msg.get('image'),  # Include image if present
             "sender": "user",
             "timestamp": msg.get('created_at').isoformat() if msg.get('created_at') else None
         })
