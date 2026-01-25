@@ -12,7 +12,8 @@ import {
   Alert,
   Platform,
   Image,
-  FlatList,
+  Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type TabType = 'dashboard' | 'withdrawals' | 'recharges' | 'support' | 'users' | 'admins' | 'settings';
 
@@ -67,7 +69,6 @@ export default function AdminPanelScreen() {
       });
       setDashboard(response.data);
       
-      // Get user role
       const userResponse = await axios.get(`${BACKEND_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -94,45 +95,46 @@ export default function AdminPanelScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={styles.loadingText}>Cargando panel de administración...</Text>
+          <Text style={styles.loadingText}>Cargando panel...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  const tabs = [
+    { key: 'dashboard', icon: 'grid', label: 'Inicio' },
+    { key: 'withdrawals', icon: 'arrow-up-circle', label: 'Retiros', badge: dashboard?.transactions.pending_withdrawals },
+    { key: 'recharges', icon: 'arrow-down-circle', label: 'Recargas', badge: dashboard?.transactions.pending_recharges },
+    { key: 'support', icon: 'chatbubbles', label: 'Soporte', badge: dashboard?.support.open_chats },
+    { key: 'users', icon: 'people', label: 'Usuarios' },
+    ...(userRole === 'super_admin' ? [{ key: 'admins', icon: 'shield', label: 'Admins' }] : []),
+    { key: 'settings', icon: 'settings', label: 'Config' },
+  ];
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Compact Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1f2937" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={22} color="#1f2937" />
         </TouchableOpacity>
-        <View>
-          <Text style={styles.headerTitle}>Panel de Administración</Text>
-          <Text style={styles.roleText}>{userRole === 'super_admin' ? 'Super Admin' : 'Admin'}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Admin</Text>
+          <View style={[styles.roleBadge, userRole === 'super_admin' && styles.superBadge]}>
+            <Text style={styles.roleBadgeText}>{userRole === 'super_admin' ? 'Super' : 'Admin'}</Text>
+          </View>
         </View>
-        <TouchableOpacity onPress={onRefresh}>
-          <Ionicons name="refresh" size={24} color="#2563eb" />
+        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+          <Ionicons name="refresh" size={22} color="#2563eb" />
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
-        <TabButton icon="speedometer" label="Dashboard" active={activeTab === 'dashboard'} onPress={() => setActiveTab('dashboard')} />
-        <TabButton icon="arrow-up-circle" label="Retiros" active={activeTab === 'withdrawals'} onPress={() => setActiveTab('withdrawals')} badge={dashboard?.transactions.pending_withdrawals} />
-        <TabButton icon="arrow-down-circle" label="Recargas" active={activeTab === 'recharges'} onPress={() => setActiveTab('recharges')} badge={dashboard?.transactions.pending_recharges} />
-        <TabButton icon="chatbubbles" label="Soporte" active={activeTab === 'support'} onPress={() => setActiveTab('support')} badge={dashboard?.support.open_chats} />
-        <TabButton icon="people" label="Usuarios" active={activeTab === 'users'} onPress={() => setActiveTab('users')} />
-        {userRole === 'super_admin' && (
-          <TabButton icon="shield" label="Admins" active={activeTab === 'admins'} onPress={() => setActiveTab('admins')} />
-        )}
-        <TabButton icon="settings" label="Config" active={activeTab === 'settings'} onPress={() => setActiveTab('settings')} />
-      </ScrollView>
-
-      {/* Content */}
+      {/* Main Content - Takes full remaining space */}
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
         {activeTab === 'dashboard' && <DashboardTab data={dashboard} />}
         {activeTab === 'withdrawals' && <WithdrawalsTab />}
@@ -140,79 +142,111 @@ export default function AdminPanelScreen() {
         {activeTab === 'support' && <SupportTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'admins' && userRole === 'super_admin' && <AdminsTab />}
-        {activeTab === 'settings' && <SettingsTab currentRate={dashboard?.current_rate || 78} />}
+        {activeTab === 'settings' && <SettingsTab currentRate={dashboard?.current_rate || 78} onRateUpdated={onRefresh} />}
       </ScrollView>
+
+      {/* Bottom Navigation - Fixed at bottom */}
+      <View style={styles.bottomNav}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.bottomNavContent}
+        >
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.navItem, activeTab === tab.key && styles.navItemActive]}
+              onPress={() => setActiveTab(tab.key as TabType)}
+            >
+              <View style={styles.navIconContainer}>
+                <Ionicons 
+                  name={tab.icon as any} 
+                  size={22} 
+                  color={activeTab === tab.key ? '#2563eb' : '#6b7280'} 
+                />
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <View style={styles.navBadge}>
+                    <Text style={styles.navBadgeText}>{tab.badge > 9 ? '9+' : tab.badge}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.navLabel, activeTab === tab.key && styles.navLabelActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
-// Tab Button Component
-function TabButton({ icon, label, active, onPress, badge }: { icon: string; label: string; active: boolean; onPress: () => void; badge?: number }) {
-  return (
-    <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
-      <View style={styles.tabIconContainer}>
-        <Ionicons name={icon as any} size={20} color={active ? '#2563eb' : '#6b7280'} />
-        {badge !== undefined && badge > 0 && (
-          <View style={styles.tabBadge}>
-            <Text style={styles.tabBadgeText}>{badge}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-// Dashboard Tab
+// Dashboard Tab - Optimized layout
 function DashboardTab({ data }: { data: DashboardData | null }) {
   if (!data) return null;
 
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Resumen General</Text>
-      
-      <View style={styles.statsGrid}>
-        <StatCard icon="people" title="Usuarios" value={data.users.total} color="#2563eb" subtitle={`${data.users.verified} verificados`} />
-        <StatCard icon="checkmark-circle" title="KYC Pendiente" value={data.users.pending_kyc} color="#f59e0b" />
-        <StatCard icon="arrow-up-circle" title="Retiros Pend." value={data.transactions.pending_withdrawals} color="#ef4444" />
-        <StatCard icon="arrow-down-circle" title="Recargas Pend." value={data.transactions.pending_recharges} color="#10b981" />
-        <StatCard icon="chatbubbles" title="Chats Abiertos" value={data.support.open_chats} color="#8b5cf6" />
-        <StatCard icon="swap-horizontal" title="Tasa Actual" value={data.current_rate} color="#06b6d4" subtitle="VES/RIS" />
+      {/* Quick Stats Row */}
+      <View style={styles.quickStatsRow}>
+        <QuickStat icon="arrow-up" value={data.transactions.pending_withdrawals} label="Retiros" color="#ef4444" />
+        <QuickStat icon="arrow-down" value={data.transactions.pending_recharges} label="Recargas" color="#10b981" />
+        <QuickStat icon="chatbubble" value={data.support.open_chats} label="Soporte" color="#8b5cf6" />
+        <QuickStat icon="person-add" value={data.users.pending_kyc} label="KYC" color="#f59e0b" />
       </View>
 
-      <Text style={styles.sectionTitle}>Volumen de Transacciones</Text>
+      {/* Stats Cards */}
+      <Text style={styles.sectionTitle}>Estadísticas</Text>
+      <View style={styles.statsGrid}>
+        <StatCard icon="people" title="Total Usuarios" value={data.users.total} color="#2563eb" />
+        <StatCard icon="checkmark-circle" title="Verificados" value={data.users.verified} color="#10b981" />
+        <StatCard icon="swap-horizontal" title="Tasa RIS/VES" value={data.current_rate} color="#06b6d4" />
+        <StatCard icon="receipt" title="Transacciones" value={data.transactions.completed} color="#8b5cf6" />
+      </View>
+
+      {/* Volume Summary */}
       <View style={styles.volumeCard}>
-        <View style={styles.volumeRow}>
-          <Text style={styles.volumeLabel}>Total Retiros:</Text>
-          <Text style={styles.volumeValue}>{data.volume.withdrawals.toFixed(2)} RIS</Text>
-        </View>
-        <View style={styles.volumeRow}>
-          <Text style={styles.volumeLabel}>Total Recargas:</Text>
-          <Text style={styles.volumeValue}>{data.volume.recharges.toFixed(2)} BRL</Text>
-        </View>
-        <View style={styles.volumeRow}>
-          <Text style={styles.volumeLabel}>Transacciones Completadas:</Text>
-          <Text style={styles.volumeValue}>{data.transactions.completed}</Text>
+        <Text style={styles.volumeTitle}>Volumen Total</Text>
+        <View style={styles.volumeGrid}>
+          <View style={styles.volumeItem}>
+            <Text style={styles.volumeValue}>{data.volume.withdrawals.toFixed(0)}</Text>
+            <Text style={styles.volumeLabel}>RIS Enviados</Text>
+          </View>
+          <View style={styles.volumeDivider} />
+          <View style={styles.volumeItem}>
+            <Text style={styles.volumeValue}>{data.volume.recharges.toFixed(0)}</Text>
+            <Text style={styles.volumeLabel}>BRL Recargados</Text>
+          </View>
         </View>
       </View>
     </View>
   );
 }
 
-function StatCard({ icon, title, value, color, subtitle }: { icon: string; title: string; value: number; color: string; subtitle?: string }) {
+function QuickStat({ icon, value, label, color }: { icon: string; value: number; label: string; color: string }) {
+  return (
+    <View style={styles.quickStat}>
+      <View style={[styles.quickStatIcon, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon as any} size={18} color={color} />
+        {value > 0 && <View style={[styles.quickStatDot, { backgroundColor: color }]} />}
+      </View>
+      <Text style={styles.quickStatValue}>{value}</Text>
+      <Text style={styles.quickStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function StatCard({ icon, title, value, color }: { icon: string; title: string; value: number; color: string }) {
   return (
     <View style={styles.statCard}>
-      <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
-        <Ionicons name={icon as any} size={24} color={color} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
+      <Ionicons name={icon as any} size={24} color={color} />
+      <Text style={styles.statValue}>{typeof value === 'number' ? value.toLocaleString() : value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
-      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
     </View>
   );
 }
 
-// Withdrawals Tab
+// Withdrawals Tab - Full screen
 function WithdrawalsTab() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -288,27 +322,42 @@ function WithdrawalsTab() {
 
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Retiros Pendientes ({withdrawals.length})</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Retiros Pendientes</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{withdrawals.length}</Text>
+        </View>
+      </View>
       
       {withdrawals.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="checkmark-circle" size={48} color="#10b981" />
+          <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+          <Text style={styles.emptyTitle}>¡Todo al día!</Text>
           <Text style={styles.emptyText}>No hay retiros pendientes</Text>
         </View>
       ) : (
         withdrawals.map((tx) => (
           <TouchableOpacity key={tx.transaction_id} style={styles.txCard} onPress={() => setSelectedTx(tx)}>
-            <View style={styles.txHeader}>
-              <Text style={styles.txAmount}>{tx.amount_input?.toFixed(2)} RIS</Text>
-              <Text style={styles.txVes}>→ {tx.amount_output?.toFixed(2)} VES</Text>
+            <View style={styles.txCardHeader}>
+              <View>
+                <Text style={styles.txAmount}>{tx.amount_input?.toFixed(2)} RIS</Text>
+                <Text style={styles.txConversion}>→ {tx.amount_output?.toFixed(2)} VES</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </View>
-            <Text style={styles.txUser}>{tx.user_name} ({tx.user_email})</Text>
-            <View style={styles.txBeneficiary}>
-              <Text style={styles.txLabel}>Beneficiario: {tx.beneficiary_data?.full_name}</Text>
-              <Text style={styles.txLabel}>Banco: {tx.beneficiary_data?.bank_code} - {tx.beneficiary_data?.bank}</Text>
-              <Text style={styles.txLabel}>Cuenta: {tx.beneficiary_data?.account_number}</Text>
-              <Text style={styles.txLabel}>Cédula: {tx.beneficiary_data?.id_document}</Text>
-              <Text style={styles.txLabel}>Tel: {tx.beneficiary_data?.phone_number}</Text>
+            <View style={styles.txCardBody}>
+              <View style={styles.txInfoRow}>
+                <Ionicons name="person" size={14} color="#6b7280" />
+                <Text style={styles.txInfoText}>{tx.user_name}</Text>
+              </View>
+              <View style={styles.txInfoRow}>
+                <Ionicons name="business" size={14} color="#6b7280" />
+                <Text style={styles.txInfoText}>{tx.beneficiary_data?.bank_code} - {tx.beneficiary_data?.bank}</Text>
+              </View>
+              <View style={styles.txInfoRow}>
+                <Ionicons name="card" size={14} color="#6b7280" />
+                <Text style={styles.txInfoText}>{tx.beneficiary_data?.account_number}</Text>
+              </View>
             </View>
           </TouchableOpacity>
         ))
@@ -316,33 +365,51 @@ function WithdrawalsTab() {
 
       {/* Process Modal */}
       <Modal visible={!!selectedTx} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Procesar Retiro</Text>
-              <TouchableOpacity onPress={() => { setSelectedTx(null); setProofImage(null); }}>
-                <Ionicons name="close" size={24} color="#1f2937" />
+              <TouchableOpacity onPress={() => { setSelectedTx(null); setProofImage(null); }} style={styles.modalClose}>
+                <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             {selectedTx && (
-              <ScrollView style={styles.modalBody}>
-                <Text style={styles.modalAmount}>{selectedTx.amount_input?.toFixed(2)} RIS → {selectedTx.amount_output?.toFixed(2)} VES</Text>
-                <Text style={styles.modalUser}>{selectedTx.user_name}</Text>
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                <View style={styles.amountBox}>
+                  <Text style={styles.amountLabel}>Monto a Transferir</Text>
+                  <Text style={styles.amountValue}>{selectedTx.amount_output?.toFixed(2)} VES</Text>
+                  <Text style={styles.amountSub}>{selectedTx.amount_input?.toFixed(2)} RIS</Text>
+                </View>
                 
                 <View style={styles.beneficiaryBox}>
-                  <Text style={styles.beneficiaryTitle}>Datos para Transferencia:</Text>
-                  <Text style={styles.beneficiaryText}>Banco: {selectedTx.beneficiary_data?.bank_code} - {selectedTx.beneficiary_data?.bank}</Text>
-                  <Text style={styles.beneficiaryText}>Cuenta: {selectedTx.beneficiary_data?.account_number}</Text>
-                  <Text style={styles.beneficiaryText}>Titular: {selectedTx.beneficiary_data?.full_name}</Text>
-                  <Text style={styles.beneficiaryText}>Cédula: {selectedTx.beneficiary_data?.id_document}</Text>
-                  <Text style={styles.beneficiaryText}>Teléfono: {selectedTx.beneficiary_data?.phone_number}</Text>
+                  <Text style={styles.beneficiaryTitle}>Datos del Beneficiario</Text>
+                  <View style={styles.beneficiaryRow}>
+                    <Text style={styles.beneficiaryLabel}>Banco:</Text>
+                    <Text style={styles.beneficiaryValue}>{selectedTx.beneficiary_data?.bank_code} - {selectedTx.beneficiary_data?.bank}</Text>
+                  </View>
+                  <View style={styles.beneficiaryRow}>
+                    <Text style={styles.beneficiaryLabel}>Cuenta:</Text>
+                    <Text style={styles.beneficiaryValue}>{selectedTx.beneficiary_data?.account_number}</Text>
+                  </View>
+                  <View style={styles.beneficiaryRow}>
+                    <Text style={styles.beneficiaryLabel}>Titular:</Text>
+                    <Text style={styles.beneficiaryValue}>{selectedTx.beneficiary_data?.full_name}</Text>
+                  </View>
+                  <View style={styles.beneficiaryRow}>
+                    <Text style={styles.beneficiaryLabel}>Cédula:</Text>
+                    <Text style={styles.beneficiaryValue}>{selectedTx.beneficiary_data?.id_document}</Text>
+                  </View>
+                  <View style={styles.beneficiaryRow}>
+                    <Text style={styles.beneficiaryLabel}>Teléfono:</Text>
+                    <Text style={styles.beneficiaryValue}>{selectedTx.beneficiary_data?.phone_number}</Text>
+                  </View>
                 </View>
 
                 <TouchableOpacity style={styles.uploadButton} onPress={pickProofImage}>
-                  <Ionicons name="camera" size={24} color="#2563eb" />
-                  <Text style={styles.uploadButtonText}>
-                    {proofImage ? 'Cambiar Comprobante' : 'Subir Comprobante'}
+                  <Ionicons name={proofImage ? 'checkmark-circle' : 'camera'} size={24} color={proofImage ? '#10b981' : '#2563eb'} />
+                  <Text style={[styles.uploadButtonText, proofImage && { color: '#10b981' }]}>
+                    {proofImage ? 'Comprobante Cargado ✓' : 'Subir Comprobante'}
                   </Text>
                 </TouchableOpacity>
 
@@ -365,7 +432,7 @@ function WithdrawalsTab() {
                     disabled={processing || !proofImage}
                   >
                     {processing ? (
-                      <ActivityIndicator color="#fff" />
+                      <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <>
                         <Ionicons name="checkmark-circle" size={20} color="#fff" />
@@ -377,7 +444,7 @@ function WithdrawalsTab() {
               </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -387,6 +454,7 @@ function WithdrawalsTab() {
 function RechargesTab() {
   const [recharges, setRecharges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
     loadRecharges();
@@ -407,6 +475,7 @@ function RechargesTab() {
   };
 
   const processRecharge = async (txId: string, approved: boolean) => {
+    setProcessing(txId);
     try {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
@@ -418,6 +487,8 @@ function RechargesTab() {
       loadRecharges();
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo procesar');
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -427,27 +498,51 @@ function RechargesTab() {
 
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Recargas Pendientes ({recharges.length})</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Recargas Pendientes</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{recharges.length}</Text>
+        </View>
+      </View>
       
       {recharges.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="checkmark-circle" size={48} color="#10b981" />
+          <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+          <Text style={styles.emptyTitle}>¡Todo al día!</Text>
           <Text style={styles.emptyText}>No hay recargas pendientes</Text>
         </View>
       ) : (
         recharges.map((tx) => (
-          <View key={tx.transaction_id} style={styles.txCard}>
-            <View style={styles.txHeader}>
-              <Text style={styles.txAmount}>R$ {tx.amount_input?.toFixed(2)}</Text>
-              <Text style={styles.txVes}>→ {tx.amount_output?.toFixed(2)} RIS</Text>
+          <View key={tx.transaction_id} style={styles.rechargeCard}>
+            <View style={styles.rechargeHeader}>
+              <View>
+                <Text style={styles.rechargeAmount}>R$ {tx.amount_input?.toFixed(2)}</Text>
+                <Text style={styles.rechargeUser}>{tx.user_name}</Text>
+              </View>
+              <Text style={styles.rechargeRis}>+{tx.amount_output?.toFixed(2)} RIS</Text>
             </View>
-            <Text style={styles.txUser}>{tx.user_name} ({tx.user_email})</Text>
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={[styles.actionButton, styles.rejectButton]} onPress={() => processRecharge(tx.transaction_id, false)}>
-                <Text style={styles.actionButtonText}>Rechazar</Text>
+            <View style={styles.rechargeActions}>
+              <TouchableOpacity 
+                style={[styles.rechargeBtn, styles.rejectBtn]} 
+                onPress={() => processRecharge(tx.transaction_id, false)}
+                disabled={processing === tx.transaction_id}
+              >
+                {processing === tx.transaction_id ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.rechargeBtnText}>Rechazar</Text>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => processRecharge(tx.transaction_id, true)}>
-                <Text style={styles.actionButtonText}>Aprobar</Text>
+              <TouchableOpacity 
+                style={[styles.rechargeBtn, styles.approveBtn]} 
+                onPress={() => processRecharge(tx.transaction_id, true)}
+                disabled={processing === tx.transaction_id}
+              >
+                {processing === tx.transaction_id ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.rechargeBtnText}>Aprobar</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -538,69 +633,82 @@ function SupportTab() {
     return <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />;
   }
 
+  if (selectedChat) {
+    return (
+      <View style={styles.chatDetail}>
+        <View style={styles.chatDetailHeader}>
+          <TouchableOpacity onPress={() => setSelectedChat(null)} style={styles.chatBackBtn}>
+            <Ionicons name="arrow-back" size={24} color="#1f2937" />
+          </TouchableOpacity>
+          <View style={styles.chatDetailInfo}>
+            <Text style={styles.chatDetailName}>{selectedChat.user_name}</Text>
+            <Text style={styles.chatDetailEmail}>{selectedChat.user_email}</Text>
+          </View>
+          <TouchableOpacity style={styles.closeChatBtn} onPress={closeChat}>
+            <Text style={styles.closeChatBtnText}>Cerrar</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.messagesContainer} contentContainerStyle={styles.messagesContent}>
+          {messages.map((msg) => (
+            <View key={msg.id} style={[styles.message, msg.sender === 'admin' ? styles.adminMessage : styles.userMessage]}>
+              {msg.image && <Image source={{ uri: msg.image }} style={styles.messageImage} />}
+              <Text style={[styles.messageText, msg.sender === 'admin' && styles.adminMessageText]}>{msg.text}</Text>
+            </View>
+          ))}
+        </ScrollView>
+
+        <View style={styles.responseContainer}>
+          <TextInput
+            style={styles.responseInput}
+            value={responseText}
+            onChangeText={setResponseText}
+            placeholder="Escribe tu respuesta..."
+            multiline
+          />
+          <TouchableOpacity style={styles.sendButton} onPress={sendResponse} disabled={sending}>
+            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={20} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.tabContent}>
-      {!selectedChat ? (
-        <>
-          <Text style={styles.sectionTitle}>Chats de Soporte ({chats.length})</Text>
-          {chats.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={48} color="#6b7280" />
-              <Text style={styles.emptyText}>No hay chats de soporte</Text>
-            </View>
-          ) : (
-            chats.map((chat) => (
-              <TouchableOpacity key={chat.user_id} style={styles.chatCard} onPress={() => loadChatDetail(chat.user_id)}>
-                <View style={styles.chatHeader}>
-                  <Text style={styles.chatName}>{chat.user_name}</Text>
-                  <View style={[styles.chatStatus, chat.status === 'closed' ? styles.statusClosed : styles.statusOpen]}>
-                    <Text style={styles.chatStatusText}>{chat.status === 'closed' ? 'Cerrado' : 'Abierto'}</Text>
-                  </View>
-                </View>
-                <Text style={styles.chatEmail}>{chat.user_email}</Text>
-                <Text style={styles.chatPreview}>{chat.last_message}</Text>
-                <Text style={styles.chatCount}>{chat.message_count} mensajes</Text>
-              </TouchableOpacity>
-            ))
-          )}
-        </>
-      ) : (
-        <View style={styles.chatDetail}>
-          <View style={styles.chatDetailHeader}>
-            <TouchableOpacity onPress={() => setSelectedChat(null)}>
-              <Ionicons name="arrow-back" size={24} color="#1f2937" />
-            </TouchableOpacity>
-            <View style={styles.chatDetailInfo}>
-              <Text style={styles.chatDetailName}>{selectedChat.user_name}</Text>
-              <Text style={styles.chatDetailEmail}>{selectedChat.user_email}</Text>
-            </View>
-            <TouchableOpacity style={styles.closeButton} onPress={closeChat}>
-              <Text style={styles.closeButtonText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.messagesContainer}>
-            {messages.map((msg) => (
-              <View key={msg.id} style={[styles.message, msg.sender === 'admin' ? styles.adminMessage : styles.userMessage]}>
-                {msg.image && <Image source={{ uri: msg.image }} style={styles.messageImage} />}
-                <Text style={[styles.messageText, msg.sender === 'admin' && styles.adminMessageText]}>{msg.text}</Text>
-              </View>
-            ))}
-          </ScrollView>
-
-          <View style={styles.responseContainer}>
-            <TextInput
-              style={styles.responseInput}
-              value={responseText}
-              onChangeText={setResponseText}
-              placeholder="Escribe tu respuesta..."
-              multiline
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={sendResponse} disabled={sending}>
-              {sending ? <ActivityIndicator color="#fff" /> : <Ionicons name="send" size={20} color="#fff" />}
-            </TouchableOpacity>
-          </View>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Chats de Soporte</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{chats.length}</Text>
         </View>
+      </View>
+      
+      {chats.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="chatbubbles-outline" size={64} color="#9ca3af" />
+          <Text style={styles.emptyTitle}>Sin mensajes</Text>
+          <Text style={styles.emptyText}>No hay chats de soporte</Text>
+        </View>
+      ) : (
+        chats.map((chat) => (
+          <TouchableOpacity key={chat.user_id} style={styles.chatCard} onPress={() => loadChatDetail(chat.user_id)}>
+            <View style={styles.chatCardHeader}>
+              <View style={styles.chatAvatar}>
+                <Text style={styles.chatAvatarText}>{chat.user_name?.charAt(0)?.toUpperCase()}</Text>
+              </View>
+              <View style={styles.chatCardInfo}>
+                <Text style={styles.chatCardName}>{chat.user_name}</Text>
+                <Text style={styles.chatCardPreview} numberOfLines={1}>{chat.last_message}</Text>
+              </View>
+              <View style={styles.chatCardMeta}>
+                <View style={[styles.chatStatusBadge, chat.status === 'closed' ? styles.statusClosed : styles.statusOpen]}>
+                  <Text style={styles.chatStatusText}>{chat.status === 'closed' ? 'Cerrado' : 'Abierto'}</Text>
+                </View>
+                <Text style={styles.chatCardCount}>{chat.message_count} msgs</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))
       )}
     </View>
   );
@@ -617,6 +725,7 @@ function UsersTab() {
   }, []);
 
   const loadUsers = async (searchTerm?: string) => {
+    setLoading(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
       const url = searchTerm 
@@ -633,43 +742,49 @@ function UsersTab() {
     }
   };
 
-  const doSearch = () => {
-    loadUsers(search);
-  };
-
-  if (loading) {
-    return <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />;
-  }
-
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Usuarios ({users.length})</Text>
+      <Text style={styles.sectionTitle}>Usuarios</Text>
       
-      <View style={styles.searchContainer}>
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={20} color="#9ca3af" />
         <TextInput
           style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar por nombre o email..."
-          onSubmitEditing={doSearch}
+          onSubmitEditing={() => loadUsers(search)}
+          returnKeyType="search"
         />
-        <TouchableOpacity style={styles.searchButton} onPress={doSearch}>
-          <Ionicons name="search" size={20} color="#fff" />
-        </TouchableOpacity>
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => { setSearch(''); loadUsers(); }}>
+            <Ionicons name="close-circle" size={20} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {users.map((u) => (
-        <View key={u.user_id} style={styles.userCard}>
-          <View style={styles.userHeader}>
-            <Text style={styles.userName}>{u.name}</Text>
-            <View style={[styles.verificationBadge, u.verification_status === 'verified' ? styles.verified : styles.pending]}>
-              <Text style={styles.verificationText}>{u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}</Text>
+      {loading ? (
+        <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 20 }} />
+      ) : (
+        users.map((u) => (
+          <View key={u.user_id} style={styles.userCard}>
+            <View style={styles.userCardHeader}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>{u.name?.charAt(0)?.toUpperCase()}</Text>
+              </View>
+              <View style={styles.userCardInfo}>
+                <Text style={styles.userCardName}>{u.name}</Text>
+                <Text style={styles.userCardEmail}>{u.email}</Text>
+              </View>
+              <View style={[styles.statusDot, u.verification_status === 'verified' ? styles.dotVerified : styles.dotPending]} />
+            </View>
+            <View style={styles.userCardFooter}>
+              <Text style={styles.userBalance}>{u.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
+              <Text style={styles.userStatus}>{u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}</Text>
             </View>
           </View>
-          <Text style={styles.userEmail}>{u.email}</Text>
-          <Text style={styles.userBalance}>Balance: {u.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
-        </View>
-      ))}
+        ))
+      )}
     </View>
   );
 }
@@ -681,6 +796,7 @@ function AdminsTab() {
   const [permissions, setPermissions] = useState<Record<string, string>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ email: '', name: '', permissions: [] as string[] });
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     loadAdmins();
@@ -718,6 +834,7 @@ function AdminsTab() {
       showAlert('Error', 'Completa todos los campos');
       return;
     }
+    setCreating(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
@@ -731,6 +848,8 @@ function AdminsTab() {
       loadAdmins();
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo crear');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -750,76 +869,87 @@ function AdminsTab() {
   return (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Administradores ({admins.length})</Text>
+        <Text style={styles.sectionTitle}>Administradores</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
           <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Nuevo</Text>
         </TouchableOpacity>
       </View>
 
       {admins.map((admin) => (
         <View key={admin.user_id} style={styles.adminCard}>
-          <View style={styles.adminHeader}>
-            <Text style={styles.adminName}>{admin.name}</Text>
-            <View style={[styles.roleBadge, admin.role === 'super_admin' && styles.superAdminBadge]}>
-              <Text style={styles.roleText}>{admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}</Text>
+          <View style={styles.adminCardHeader}>
+            <View style={[styles.adminAvatar, admin.role === 'super_admin' && styles.superAdminAvatar]}>
+              <Ionicons name={admin.role === 'super_admin' ? 'shield' : 'person'} size={20} color="#fff" />
+            </View>
+            <View style={styles.adminCardInfo}>
+              <Text style={styles.adminCardName}>{admin.name}</Text>
+              <Text style={styles.adminCardEmail}>{admin.email}</Text>
+            </View>
+            <View style={[styles.adminRoleBadge, admin.role === 'super_admin' && styles.superBadge]}>
+              <Text style={styles.adminRoleText}>{admin.role === 'super_admin' ? 'Super' : 'Admin'}</Text>
             </View>
           </View>
-          <Text style={styles.adminEmail}>{admin.email}</Text>
-          {admin.permissions && admin.permissions.length > 0 && (
-            <Text style={styles.adminPermissions}>Permisos: {admin.permissions.length}</Text>
-          )}
         </View>
       ))}
 
       {/* Create Admin Modal */}
       <Modal visible={showCreate} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nuevo Administrador</Text>
-              <TouchableOpacity onPress={() => setShowCreate(false)}>
-                <Ionicons name="close" size={24} color="#1f2937" />
+              <Text style={styles.modalTitle}>Nuevo Admin</Text>
+              <TouchableOpacity onPress={() => setShowCreate(false)} style={styles.modalClose}>
+                <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalBody}>
               <Text style={styles.inputLabel}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={styles.textInput}
                 value={newAdmin.email}
                 onChangeText={(v) => setNewAdmin(p => ({ ...p, email: v }))}
                 placeholder="email@ejemplo.com"
                 keyboardType="email-address"
+                autoCapitalize="none"
               />
               <Text style={styles.inputLabel}>Nombre</Text>
               <TextInput
-                style={styles.input}
+                style={styles.textInput}
                 value={newAdmin.name}
                 onChangeText={(v) => setNewAdmin(p => ({ ...p, name: v }))}
                 placeholder="Nombre completo"
               />
-              <Text style={styles.inputLabel}>Permisos</Text>
-              {Object.entries(permissions).map(([key, label]) => (
-                <TouchableOpacity key={key} style={styles.permissionRow} onPress={() => togglePermission(key)}>
-                  <View style={[styles.checkbox, newAdmin.permissions.includes(key) && styles.checkboxChecked]}>
-                    {newAdmin.permissions.includes(key) && <Ionicons name="checkmark" size={14} color="#fff" />}
-                  </View>
-                  <Text style={styles.permissionLabel}>{label}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity style={styles.createButton} onPress={createAdmin}>
-                <Text style={styles.createButtonText}>Crear Administrador</Text>
+              <Text style={styles.inputLabel}>Permisos ({newAdmin.permissions.length} seleccionados)</Text>
+              <View style={styles.permissionsGrid}>
+                {Object.entries(permissions).map(([key, label]) => (
+                  <TouchableOpacity 
+                    key={key} 
+                    style={[styles.permissionChip, newAdmin.permissions.includes(key) && styles.permissionChipActive]} 
+                    onPress={() => togglePermission(key)}
+                  >
+                    <Text style={[styles.permissionChipText, newAdmin.permissions.includes(key) && styles.permissionChipTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.createButton} onPress={createAdmin} disabled={creating}>
+                {creating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.createButtonText}>Crear Administrador</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 // Settings Tab
-function SettingsTab({ currentRate }: { currentRate: number }) {
+function SettingsTab({ currentRate, onRateUpdated }: { currentRate: number; onRateUpdated: () => void }) {
   const [rate, setRate] = useState(currentRate.toString());
   const [saving, setSaving] = useState(false);
 
@@ -838,6 +968,7 @@ function SettingsTab({ currentRate }: { currentRate: number }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       showAlert('Éxito', 'Tasa actualizada');
+      onRateUpdated();
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo guardar');
     } finally {
@@ -850,19 +981,30 @@ function SettingsTab({ currentRate }: { currentRate: number }) {
       <Text style={styles.sectionTitle}>Configuración</Text>
       
       <View style={styles.settingCard}>
-        <Text style={styles.settingTitle}>Tasa de Cambio RIS/VES</Text>
-        <Text style={styles.settingDescription}>1 RIS equivale a:</Text>
-        <View style={styles.rateInputContainer}>
+        <View style={styles.settingHeader}>
+          <Ionicons name="swap-horizontal" size={24} color="#2563eb" />
+          <Text style={styles.settingTitle}>Tasa de Cambio</Text>
+        </View>
+        <Text style={styles.settingDesc}>1 RIS equivale a:</Text>
+        <View style={styles.rateInputRow}>
           <TextInput
             style={styles.rateInput}
             value={rate}
             onChangeText={setRate}
             keyboardType="numeric"
+            placeholder="0"
           />
-          <Text style={styles.rateLabel}>VES</Text>
+          <Text style={styles.rateUnit}>VES</Text>
         </View>
         <TouchableOpacity style={styles.saveButton} onPress={saveRate} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Guardar</Text>}
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="save" size={18} color="#fff" />
+              <Text style={styles.saveButtonText}>Guardar</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -870,125 +1012,258 @@ function SettingsTab({ currentRate }: { currentRate: number }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, color: '#6b7280' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
-  roleText: { fontSize: 12, color: '#6b7280' },
-  tabsContainer: { backgroundColor: '#fff', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  tabButton: { paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center', marginHorizontal: 4 },
-  tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#2563eb' },
-  tabIconContainer: { position: 'relative' },
-  tabBadge: { position: 'absolute', top: -4, right: -8, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
-  tabBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-  tabLabel: { fontSize: 12, color: '#6b7280', marginTop: 4 },
-  tabLabelActive: { color: '#2563eb', fontWeight: '600' },
+  loadingText: { marginTop: 12, color: '#6b7280', fontSize: 14 },
+  
+  // Header
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fff', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#e5e7eb' 
+  },
+  backButton: { padding: 8 },
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1f2937' },
+  roleBadge: { backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
+  superBadge: { backgroundColor: '#fef3c7' },
+  roleBadgeText: { fontSize: 11, fontWeight: '600', color: '#1f2937' },
+  refreshButton: { padding: 8 },
+
+  // Content
   content: { flex: 1 },
+  contentContainer: { paddingBottom: 100 },
   tabContent: { padding: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 },
+
+  // Bottom Navigation
+  bottomNav: { 
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff', 
+    borderTopWidth: 1, 
+    borderTopColor: '#e5e7eb',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+  },
+  bottomNavContent: { 
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
+  navItem: { 
+    alignItems: 'center', 
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 60,
+  },
+  navItemActive: {},
+  navIconContainer: { position: 'relative' },
+  navBadge: { 
+    position: 'absolute', 
+    top: -6, 
+    right: -10, 
+    backgroundColor: '#ef4444', 
+    borderRadius: 10, 
+    minWidth: 18, 
+    height: 18, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  navBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  navLabel: { fontSize: 11, color: '#6b7280', marginTop: 4 },
+  navLabelActive: { color: '#2563eb', fontWeight: '600' },
+
+  // Section Headers
+  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1f2937', marginBottom: 16 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 },
-  statCard: { width: '46%', backgroundColor: '#fff', borderRadius: 12, padding: 16, margin: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  statIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  statValue: { fontSize: 24, fontWeight: 'bold', color: '#1f2937' },
-  statTitle: { fontSize: 12, color: '#6b7280', marginTop: 4 },
-  statSubtitle: { fontSize: 11, color: '#9ca3af' },
-  volumeCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16 },
-  volumeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  volumeLabel: { color: '#6b7280' },
-  volumeValue: { fontWeight: '600', color: '#1f2937' },
-  emptyState: { alignItems: 'center', padding: 40 },
-  emptyText: { marginTop: 12, color: '#6b7280' },
-  txCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
-  txHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  txAmount: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
-  txVes: { fontSize: 14, color: '#10b981', marginLeft: 8 },
-  txUser: { fontSize: 14, color: '#6b7280', marginBottom: 8 },
-  txBeneficiary: { backgroundColor: '#f9fafb', padding: 12, borderRadius: 8 },
-  txLabel: { fontSize: 13, color: '#374151', marginBottom: 4 },
+  countBadge: { backgroundColor: '#2563eb', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  countText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+
+  // Quick Stats
+  quickStatsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  quickStat: { alignItems: 'center', flex: 1 },
+  quickStatIcon: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 6, position: 'relative' },
+  quickStatDot: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: '#fff' },
+  quickStatValue: { fontSize: 18, fontWeight: '700', color: '#1f2937' },
+  quickStatLabel: { fontSize: 11, color: '#6b7280' },
+
+  // Stats Grid
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6, marginBottom: 16 },
+  statCard: { 
+    width: (SCREEN_WIDTH - 56) / 2, 
+    backgroundColor: '#fff', 
+    borderRadius: 12, 
+    padding: 16, 
+    margin: 6,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  statValue: { fontSize: 28, fontWeight: '700', color: '#1f2937', marginTop: 8 },
+  statTitle: { fontSize: 12, color: '#6b7280', marginTop: 4, textAlign: 'center' },
+
+  // Volume Card
+  volumeCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginTop: 8 },
+  volumeTitle: { fontSize: 14, fontWeight: '600', color: '#6b7280', marginBottom: 12 },
+  volumeGrid: { flexDirection: 'row', alignItems: 'center' },
+  volumeItem: { flex: 1, alignItems: 'center' },
+  volumeValue: { fontSize: 24, fontWeight: '700', color: '#1f2937' },
+  volumeLabel: { fontSize: 12, color: '#6b7280', marginTop: 4 },
+  volumeDivider: { width: 1, height: 40, backgroundColor: '#e5e7eb', marginHorizontal: 16 },
+
+  // Empty State
+  emptyState: { alignItems: 'center', paddingVertical: 48 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1f2937', marginTop: 16 },
+  emptyText: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+
+  // Transaction Cards
+  txCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  txCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  txAmount: { fontSize: 20, fontWeight: '700', color: '#1f2937' },
+  txConversion: { fontSize: 14, color: '#10b981', fontWeight: '500' },
+  txCardBody: { gap: 6 },
+  txInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  txInfoText: { fontSize: 13, color: '#4b5563' },
+
+  // Recharge Cards
+  rechargeCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
+  rechargeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  rechargeAmount: { fontSize: 20, fontWeight: '700', color: '#1f2937' },
+  rechargeUser: { fontSize: 13, color: '#6b7280' },
+  rechargeRis: { fontSize: 16, fontWeight: '600', color: '#10b981' },
+  rechargeActions: { flexDirection: 'row', gap: 12 },
+  rechargeBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  rejectBtn: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
+  approveBtn: { backgroundColor: '#10b981' },
+  rechargeBtnText: { fontWeight: '600', color: '#fff' },
+
+  // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#1f2937' },
+  modalClose: { padding: 4 },
   modalBody: { padding: 16 },
-  modalAmount: { fontSize: 24, fontWeight: 'bold', color: '#1f2937', textAlign: 'center' },
-  modalUser: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 16 },
-  beneficiaryBox: { backgroundColor: '#f3f4f6', padding: 16, borderRadius: 12, marginBottom: 16 },
-  beneficiaryTitle: { fontWeight: '600', marginBottom: 8 },
-  beneficiaryText: { fontSize: 14, marginBottom: 4 },
-  uploadButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: '#2563eb', borderRadius: 12, marginBottom: 16 },
-  uploadButtonText: { marginLeft: 8, color: '#2563eb', fontWeight: '600' },
-  proofPreview: { width: '100%', height: 200, borderRadius: 12, marginBottom: 16 },
-  actionButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 8, gap: 6 },
+
+  // Amount Box
+  amountBox: { backgroundColor: '#f0fdf4', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 16 },
+  amountLabel: { fontSize: 12, color: '#6b7280' },
+  amountValue: { fontSize: 32, fontWeight: '700', color: '#10b981', marginTop: 4 },
+  amountSub: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+
+  // Beneficiary Box
+  beneficiaryBox: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 16, marginBottom: 16 },
+  beneficiaryTitle: { fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 12 },
+  beneficiaryRow: { flexDirection: 'row', marginBottom: 8 },
+  beneficiaryLabel: { width: 80, fontSize: 13, color: '#6b7280' },
+  beneficiaryValue: { flex: 1, fontSize: 13, color: '#1f2937', fontWeight: '500' },
+
+  // Upload Button
+  uploadButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: '#d1d5db', borderRadius: 12, marginBottom: 16, gap: 8 },
+  uploadButtonText: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
+  proofPreview: { width: '100%', height: 180, borderRadius: 12, marginBottom: 16, backgroundColor: '#f3f4f6' },
+
+  // Action Buttons
+  actionButtons: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 10, gap: 6 },
   approveButton: { backgroundColor: '#10b981' },
   rejectButton: { backgroundColor: '#ef4444' },
-  disabledButton: { backgroundColor: '#9ca3af' },
-  actionButtonText: { color: '#fff', fontWeight: '600' },
-  chatCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
-  chatHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  chatName: { fontSize: 16, fontWeight: '600' },
-  chatStatus: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  disabledButton: { backgroundColor: '#d1d5db' },
+  actionButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+
+  // Chat
+  chatCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 },
+  chatCardHeader: { flexDirection: 'row', alignItems: 'center' },
+  chatAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  chatAvatarText: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  chatCardInfo: { flex: 1, marginLeft: 12 },
+  chatCardName: { fontSize: 15, fontWeight: '600', color: '#1f2937' },
+  chatCardPreview: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+  chatCardMeta: { alignItems: 'flex-end' },
+  chatStatusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
   statusOpen: { backgroundColor: '#fef3c7' },
   statusClosed: { backgroundColor: '#d1fae5' },
-  chatStatusText: { fontSize: 12, fontWeight: '500' },
-  chatEmail: { color: '#6b7280', marginTop: 4 },
-  chatPreview: { color: '#374151', marginTop: 8 },
-  chatCount: { color: '#9ca3af', fontSize: 12, marginTop: 4 },
+  chatStatusText: { fontSize: 11, fontWeight: '500' },
+  chatCardCount: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+
+  // Chat Detail
   chatDetail: { flex: 1 },
-  chatDetailHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 12 },
+  chatDetailHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  chatBackBtn: { padding: 4 },
   chatDetailInfo: { flex: 1, marginLeft: 12 },
-  chatDetailName: { fontWeight: '600' },
+  chatDetailName: { fontSize: 16, fontWeight: '600', color: '#1f2937' },
   chatDetailEmail: { fontSize: 12, color: '#6b7280' },
-  closeButton: { backgroundColor: '#ef4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
-  closeButtonText: { color: '#fff', fontWeight: '600' },
-  messagesContainer: { flex: 1, maxHeight: 300 },
-  message: { padding: 12, borderRadius: 12, marginBottom: 8, maxWidth: '80%' },
-  userMessage: { backgroundColor: '#e5e7eb', alignSelf: 'flex-start' },
-  adminMessage: { backgroundColor: '#2563eb', alignSelf: 'flex-end' },
-  messageImage: { width: 150, height: 100, borderRadius: 8, marginBottom: 8 },
-  messageText: { fontSize: 14 },
+  closeChatBtn: { backgroundColor: '#ef4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  closeChatBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  messagesContainer: { flex: 1, padding: 16 },
+  messagesContent: { paddingBottom: 16 },
+  message: { padding: 12, borderRadius: 16, marginBottom: 8, maxWidth: '85%' },
+  userMessage: { backgroundColor: '#f3f4f6', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
+  adminMessage: { backgroundColor: '#2563eb', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  messageImage: { width: 180, height: 120, borderRadius: 8, marginBottom: 8 },
+  messageText: { fontSize: 14, color: '#1f2937', lineHeight: 20 },
   adminMessageText: { color: '#fff' },
-  responseContainer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 12 },
-  responseInput: { flex: 1, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100 },
+  responseContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, gap: 8, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  responseInput: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: 14 },
   sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
-  searchContainer: { flexDirection: 'row', marginBottom: 16, gap: 8 },
-  searchInput: { flex: 1, backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  searchButton: { backgroundColor: '#2563eb', width: 44, height: 44, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  userCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
-  userHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  userName: { fontSize: 16, fontWeight: '600' },
-  verificationBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  verified: { backgroundColor: '#d1fae5' },
-  pending: { backgroundColor: '#fef3c7' },
-  verificationText: { fontSize: 12, fontWeight: '500' },
-  userEmail: { color: '#6b7280', marginTop: 4 },
-  userBalance: { color: '#10b981', fontWeight: '600', marginTop: 8 },
-  addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 4 },
-  addButtonText: { color: '#fff', fontWeight: '600' },
-  adminCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
-  adminHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  adminName: { fontSize: 16, fontWeight: '600' },
-  roleBadge: { backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  superAdminBadge: { backgroundColor: '#fef3c7' },
-  roleText: { fontSize: 12, fontWeight: '600', color: '#1f2937' },
-  adminEmail: { color: '#6b7280', marginTop: 4 },
-  adminPermissions: { color: '#9ca3af', fontSize: 12, marginTop: 4 },
-  inputLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 12 },
-  input: { backgroundColor: '#f3f4f6', borderRadius: 8, padding: 12, fontSize: 16 },
-  permissionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#d1d5db', borderRadius: 4, marginRight: 12, justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  permissionLabel: { flex: 1, fontSize: 14 },
-  createButton: { backgroundColor: '#2563eb', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 20, marginBottom: 30 },
+
+  // Users
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, marginBottom: 16, height: 44 },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 14 },
+  userCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 },
+  userCardHeader: { flexDirection: 'row', alignItems: 'center' },
+  userAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' },
+  userAvatarText: { color: '#6b7280', fontSize: 16, fontWeight: '600' },
+  userCardInfo: { flex: 1, marginLeft: 12 },
+  userCardName: { fontSize: 15, fontWeight: '600', color: '#1f2937' },
+  userCardEmail: { fontSize: 12, color: '#6b7280' },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  dotVerified: { backgroundColor: '#10b981' },
+  dotPending: { backgroundColor: '#f59e0b' },
+  userCardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  userBalance: { fontSize: 14, fontWeight: '600', color: '#2563eb' },
+  userStatus: { fontSize: 12, color: '#6b7280' },
+
+  // Admins
+  addButton: { backgroundColor: '#2563eb', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  adminCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 },
+  adminCardHeader: { flexDirection: 'row', alignItems: 'center' },
+  adminAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  superAdminAvatar: { backgroundColor: '#f59e0b' },
+  adminCardInfo: { flex: 1, marginLeft: 12 },
+  adminCardName: { fontSize: 15, fontWeight: '600', color: '#1f2937' },
+  adminCardEmail: { fontSize: 12, color: '#6b7280' },
+  adminRoleBadge: { backgroundColor: '#dbeafe', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  adminRoleText: { fontSize: 12, fontWeight: '600', color: '#1f2937' },
+
+  // Forms
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 16 },
+  textInput: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 14, fontSize: 15 },
+  permissionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  permissionChip: { backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  permissionChipActive: { backgroundColor: '#dbeafe', borderColor: '#2563eb' },
+  permissionChipText: { fontSize: 12, color: '#6b7280' },
+  permissionChipTextActive: { color: '#2563eb', fontWeight: '500' },
+  createButton: { backgroundColor: '#2563eb', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 24, marginBottom: 32, flexDirection: 'row', justifyContent: 'center', gap: 8 },
   createButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  settingCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16 },
-  settingTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  settingDescription: { color: '#6b7280', marginBottom: 12 },
-  rateInputContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rateInput: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, padding: 12, fontSize: 24, fontWeight: 'bold', textAlign: 'center' },
-  rateLabel: { fontSize: 18, fontWeight: '600', color: '#6b7280' },
-  saveButton: { backgroundColor: '#2563eb', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 16 },
-  saveButtonText: { color: '#fff', fontWeight: '600' },
+
+  // Settings
+  settingCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20 },
+  settingHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  settingTitle: { fontSize: 18, fontWeight: '600', color: '#1f2937' },
+  settingDesc: { fontSize: 14, color: '#6b7280', marginBottom: 12 },
+  rateInputRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rateInput: { flex: 1, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 16, fontSize: 28, fontWeight: '700', textAlign: 'center' },
+  rateUnit: { fontSize: 20, fontWeight: '600', color: '#6b7280' },
+  saveButton: { backgroundColor: '#2563eb', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 20, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  saveButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 });
