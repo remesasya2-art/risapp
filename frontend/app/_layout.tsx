@@ -71,6 +71,7 @@ export default function TabLayout() {
         <Tabs.Screen name="admin" options={{ href: null }} />
         <Tabs.Screen name="policies" options={{ href: null }} />
         <Tabs.Screen name="notifications" options={{ href: null }} />
+        <Tabs.Screen name="beneficiaries" options={{ href: null }} />
       </Tabs>
     </AuthProvider>
   );
