@@ -2,20 +2,30 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider } from '../contexts/AuthContext';
+import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <AuthProvider>
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: '#2563eb',
+          tabBarInactiveTintColor: '#9ca3af',
           tabBarStyle: {
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
-            paddingBottom: 5,
-            paddingTop: 5,
-            height: 60,
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom : 12,
+            paddingTop: 8,
+            height: Platform.OS === 'ios' ? 85 + insets.bottom : 70,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '500',
+            marginBottom: Platform.OS === 'android' ? 8 : 0,
           },
           headerStyle: {
             backgroundColor: '#2563eb',
@@ -30,6 +40,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Inicio',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="home" size={size} color={color} />
             ),
@@ -53,6 +64,13 @@ export default function TabLayout() {
             ),
           }}
         />
+        {/* Hidden screens */}
+        <Tabs.Screen name="send" options={{ href: null }} />
+        <Tabs.Screen name="recharge" options={{ href: null }} />
+        <Tabs.Screen name="verification" options={{ href: null }} />
+        <Tabs.Screen name="admin" options={{ href: null }} />
+        <Tabs.Screen name="policies" options={{ href: null }} />
+        <Tabs.Screen name="notifications" options={{ href: null }} />
       </Tabs>
     </AuthProvider>
   );
