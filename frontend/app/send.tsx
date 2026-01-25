@@ -93,6 +93,10 @@ export default function SendRISScreen() {
   };
 
   const handleSend = async () => {
+    console.log('handleSend called');
+    console.log('Amount:', amount);
+    console.log('Beneficiary:', beneficiaryData);
+    
     // Validations
     const risAmount = parseFloat(amount);
     
@@ -101,83 +105,92 @@ export default function SendRISScreen() {
       return;
     }
 
-    if (!user || user.balance_ris < risAmount) {
-      Alert.alert('Error', `Saldo insuficiente. Balance actual: ${user?.balance_ris.toFixed(2)} RIS`);
+    if (!user) {
+      Alert.alert('Error', 'No se pudo obtener información del usuario');
+      return;
+    }
+    
+    if (user.balance_ris < risAmount) {
+      Alert.alert('Error', `Saldo insuficiente. Balance actual: ${user.balance_ris.toFixed(2)} RIS`);
       return;
     }
 
-    if (!beneficiaryData.full_name.trim()) {
+    if (!beneficiaryData.full_name || !beneficiaryData.full_name.trim()) {
       Alert.alert('Error', 'Ingresa el nombre completo del beneficiario');
       return;
     }
 
-    if (!beneficiaryData.account_number.trim()) {
+    if (!beneficiaryData.account_number || !beneficiaryData.account_number.trim()) {
       Alert.alert('Error', 'Ingresa el número de cuenta');
       return;
     }
 
-    if (!beneficiaryData.id_document.trim()) {
+    if (!beneficiaryData.id_document || !beneficiaryData.id_document.trim()) {
       Alert.alert('Error', 'Ingresa la cédula del beneficiario');
       return;
     }
 
-    if (!beneficiaryData.phone_number.trim()) {
+    if (!beneficiaryData.phone_number || !beneficiaryData.phone_number.trim()) {
       Alert.alert('Error', 'Ingresa el teléfono del beneficiario');
       return;
     }
 
-    if (!beneficiaryData.bank.trim()) {
+    if (!beneficiaryData.bank || !beneficiaryData.bank.trim()) {
       Alert.alert('Error', 'Ingresa el banco del beneficiario');
       return;
     }
 
-    // Confirm
+    // All validations passed, proceed with confirmation
+    console.log('All validations passed, showing confirmation');
+    
+    const confirmAndSend = async () => {
+      try {
+        setLoading(true);
+        const token = await AsyncStorage.getItem('session_token');
+
+        // Save beneficiary if requested
+        if (saveBeneficiary && !selectedBeneficiary) {
+          await axios.post(
+            `${BACKEND_URL}/api/beneficiaries`,
+            beneficiaryData,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        }
+
+        // Create withdrawal
+        const response = await axios.post(
+          `${BACKEND_URL}/api/withdrawal/create`,
+          {
+            amount_ris: risAmount,
+            beneficiary_data: beneficiaryData,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        console.log('Withdrawal response:', response.data);
+        
+        await refreshUser();
+
+        Alert.alert(
+          'Envío Exitoso',
+          `Se han descontado ${risAmount.toFixed(2)} RIS de tu balance.\n\nEl equipo ha sido notificado y procesará tu transferencia pronto.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } catch (error: any) {
+        console.error('Send error:', error);
+        Alert.alert('Error', error.response?.data?.detail || 'No se pudo procesar el envío');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Show confirmation dialog
     Alert.alert(
       'Confirmar Envío',
-      `¿Enviar ${risAmount.toFixed(2)} RIS (${parseFloat(vesAmount).toFixed(2)} VES) a ${beneficiaryData.full_name}?\n\nEl monto será descontado inmediatamente y el equipo procesará la transferencia.`,
+      `¿Enviar ${risAmount.toFixed(2)} RIS (${parseFloat(vesAmount).toFixed(2)} VES) a ${beneficiaryData.full_name}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const token = await AsyncStorage.getItem('session_token');
-
-              // Save beneficiary if requested
-              if (saveBeneficiary && !selectedBeneficiary) {
-                await axios.post(
-                  `${BACKEND_URL}/api/beneficiaries`,
-                  beneficiaryData,
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
-              }
-
-              // Create withdrawal
-              await axios.post(
-                `${BACKEND_URL}/api/withdrawal/create`,
-                {
-                  amount_ris: risAmount,
-                  beneficiary_data: beneficiaryData,
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-
-              await refreshUser();
-
-              Alert.alert(
-                'Envío Exitoso',
-                `Se han descontado ${risAmount.toFixed(2)} RIS de tu balance.\n\nEl equipo ha sido notificado y procesará tu transferencia pronto.`,
-                [{ text: 'OK', onPress: () => router.back() }]
-              );
-            } catch (error: any) {
-              console.error('Send error:', error);
-              Alert.alert('Error', error.response?.data?.detail || 'No se pudo procesar el envío');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
+        { text: 'Confirmar', onPress: confirmAndSend }
       ]
     );
   };
