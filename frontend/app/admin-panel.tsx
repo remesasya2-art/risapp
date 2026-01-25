@@ -395,7 +395,7 @@ function RechargesTab() {
   const loadRecharges = async () => {
     try {
       const token = await AsyncStorage.getItem('session_token');
-      const response = await axios.get(`${BACKEND_URL}/api/admin/pending-recharges`, {
+      const response = await axios.get(`${BACKEND_URL}/api/admin/recharges/pending`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRecharges(response.data.recharges || []);
@@ -410,7 +410,7 @@ function RechargesTab() {
     try {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
-        `${BACKEND_URL}/api/admin/recharge/approve`,
+        `${BACKEND_URL}/api/admin/recharges/approve`,
         { transaction_id: txId, approved },
         { headers: { Authorization: `Bearer ${token}` } }
       );
