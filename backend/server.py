@@ -27,8 +27,8 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Stripe configuration
-stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test_placeholder')
+# Stripe configuration (disabled - using Mercado Pago PIX)
+# stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test_placeholder')
 
 # Create the main app without a prefix
 app = FastAPI()
