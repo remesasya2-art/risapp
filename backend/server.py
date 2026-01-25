@@ -644,6 +644,23 @@ async def create_pix_payment(request: PixRechargeRequest, current_user: User = D
     if current_user.verification_status != "verified":
         raise HTTPException(status_code=403, detail="Debes completar la verificación de tu cuenta primero")
     
+    # Check for consecutive payments with the same amount
+    last_pending_recharge = await db.transactions.find_one(
+        {
+            "user_id": current_user.user_id,
+            "type": "recharge",
+            "status": "pending",
+            "amount_input": request.amount
+        },
+        sort=[("created_at", -1)]
+    )
+    
+    if last_pending_recharge:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Ya tienes una recarga pendiente de R$ {request.amount:.2f}. Completa o cancela esa transacción primero, o elige un monto diferente."
+        )
+    
     # Generate unique transaction ID
     transaction_id = str(uuid.uuid4())
     
