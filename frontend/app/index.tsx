@@ -227,6 +227,24 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* Header with notification bell */}
+        <View style={styles.headerRow}>
+          <Text style={styles.welcomeText}>Hola, {user.name?.split(' ')[0]}</Text>
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={26} color="#1e293b" />
+            {unreadNotifications > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.badgeText}>
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Balance Disponible</Text>
