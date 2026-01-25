@@ -90,6 +90,7 @@ class Beneficiary(BaseModel):
     id_document: str
     phone_number: str
     bank: str
+    bank_code: Optional[str] = None  # Venezuelan bank code (e.g., 0102)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Transaction(BaseModel):
