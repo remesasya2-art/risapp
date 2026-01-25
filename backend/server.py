@@ -1150,10 +1150,46 @@ async def twilio_whatsapp_webhook(request: Request):
                                 completed_tx = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
                                 if completed_tx:
                                     user_id = completed_tx.get('user_id')
+                                    tx_id = completed_tx.get('transaction_id', transaction_id)
+                                    
+                                    # Get user info
+                                    user = await db.users.find_one({"user_id": user_id})
+                                    
                                     if user_id:
                                         beneficiary = completed_tx.get('beneficiary_data', {})
                                         amount_ris = completed_tx.get('amount_input', 0)
                                         amount_ves = completed_tx.get('amount_output', 0)
+                                        
+                                        # ============================
+                                        # SAVE ADMIN RECORD (ARCHIVO ADMINISTRATIVO)
+                                        # ============================
+                                        admin_record = {
+                                            "record_type": "withdrawal_completed",
+                                            "transaction_id": tx_id,
+                                            "mongo_id": transaction_id,
+                                            "user_id": user_id,
+                                            "user_name": user.get('name', 'N/A') if user else 'N/A',
+                                            "user_email": user.get('email', 'N/A') if user else 'N/A',
+                                            "amount_ris": amount_ris,
+                                            "amount_ves": amount_ves,
+                                            "beneficiary": {
+                                                "full_name": beneficiary.get('full_name', 'N/A'),
+                                                "bank": beneficiary.get('bank', 'N/A'),
+                                                "account_number": beneficiary.get('account_number', 'N/A'),
+                                                "id_document": beneficiary.get('id_document', 'N/A'),
+                                                "phone_number": beneficiary.get('phone_number', 'N/A')
+                                            },
+                                            "proof_image": image_base64,
+                                            "processed_via": "whatsapp",
+                                            "processed_by_phone": from_number,
+                                            "whatsapp_message_sid": message_sid,
+                                            "created_at": completed_tx.get('created_at'),
+                                            "completed_at": datetime.now(timezone.utc),
+                                            "recorded_at": datetime.now(timezone.utc)
+                                        }
+                                        
+                                        await db.admin_payment_records.insert_one(admin_record)
+                                        logger.info(f"Admin record saved for transaction {tx_id}")
                                         
                                         # Create in-app notification
                                         await create_notification(
@@ -1162,20 +1198,19 @@ async def twilio_whatsapp_webhook(request: Request):
                                             message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} VES) a {beneficiary.get('full_name', 'beneficiario')} fue procesado exitosamente.",
                                             notification_type="withdrawal_completed",
                                             data={
-                                                "transaction_id": transaction_id,
+                                                "transaction_id": tx_id,
                                                 "amount_ris": amount_ris,
                                                 "amount_ves": amount_ves
                                             }
                                         )
                                         
                                         # Try push notification (may fail in Expo Go)
-                                        user = await db.users.find_one({"user_id": user_id})
                                         if user and user.get('fcm_token'):
                                             try:
                                                 from push_service import push_service
                                                 await push_service.send_withdrawal_completed_notification(
                                                     push_token=user['fcm_token'],
-                                                    transaction_id=transaction_id,
+                                                    transaction_id=tx_id,
                                                     amount_ris=amount_ris,
                                                     amount_ves=amount_ves,
                                                     beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
@@ -1192,7 +1227,7 @@ async def twilio_whatsapp_webhook(request: Request):
                                 
                                 twilio_client.messages.create(
                                     from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-                                    body=f"✅ Retiro {transaction_id[:8]}... procesado exitosamente. Usuario notificado.",
+                                    body=f"✅ Retiro {tx_id[:8]}... procesado exitosamente. Usuario notificado. Registro guardado.",
                                     to=from_number
                                 )
                                 logger.info("Confirmation message sent via WhatsApp")
