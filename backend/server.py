@@ -1025,6 +1025,44 @@ async def get_support_history(current_user: User = Depends(get_current_user)):
     
     return messages
 
+@api_router.get("/support/conversation")
+async def get_support_conversation(current_user: User = Depends(get_current_user)):
+    """Get full support conversation (user messages + admin responses)"""
+    
+    # Get user's sent messages
+    user_messages = await db.support_messages.find(
+        {"user_id": current_user.user_id}
+    ).to_list(100)
+    
+    # Get admin responses to this user
+    admin_responses = await db.support_responses.find(
+        {"user_id": current_user.user_id}
+    ).to_list(100)
+    
+    # Combine and format messages
+    conversation = []
+    
+    for msg in user_messages:
+        conversation.append({
+            "id": str(msg['_id']),
+            "text": msg.get('message', ''),
+            "sender": "user",
+            "timestamp": msg.get('created_at').isoformat() if msg.get('created_at') else None
+        })
+    
+    for resp in admin_responses:
+        conversation.append({
+            "id": str(resp['_id']),
+            "text": resp.get('message', ''),
+            "sender": "admin",
+            "timestamp": resp.get('created_at').isoformat() if resp.get('created_at') else None
+        })
+    
+    # Sort by timestamp
+    conversation.sort(key=lambda x: x['timestamp'] if x['timestamp'] else '')
+    
+    return conversation
+
 # =======================
 # IN-APP NOTIFICATIONS
 # =======================
