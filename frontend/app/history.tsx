@@ -6,6 +6,11 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  Image,
+  Dimensions,
+  Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,6 +20,15 @@ import { format } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
 
 interface Transaction {
   transaction_id: string;
@@ -23,6 +37,8 @@ interface Transaction {
   amount_input: number;
   amount_output: number;
   created_at: string;
+  completed_at?: string;
+  proof_image?: string;
   beneficiary_data?: {
     full_name: string;
   };
