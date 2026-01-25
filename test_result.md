@@ -188,6 +188,66 @@ backend:
       - working: "NA"
         agent: "main"
         comment: "GET /api/transactions with filter by type. Export to Excel endpoint created."
+  
+  - task: "PIX verification with proof endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/pix/verify-with-proof endpoint tested successfully. Endpoint exists, handles authentication correctly, and responds with proper status codes. Requires valid session token for access."
+  
+  - task: "Transaction proof retrieval endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/transaction/{transaction_id}/proof endpoint tested successfully. Endpoint exists, handles authentication correctly, and responds with proper status codes."
+  
+  - task: "Admin payment records endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/admin/payment-records endpoint tested successfully. Endpoint exists, requires authentication and admin privileges as expected."
+  
+  - task: "Admin pending recharges endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/admin/pending-recharges endpoint tested successfully. Endpoint exists, requires authentication and admin privileges as expected."
+  
+  - task: "Admin recharge approval endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/admin/recharge/approve endpoint tested successfully. Endpoint exists, handles authentication correctly, and accepts proper request format."
 
 frontend:
   - task: "Auth Context Provider"
