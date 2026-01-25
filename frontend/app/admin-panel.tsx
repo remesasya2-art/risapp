@@ -227,10 +227,10 @@ function WithdrawalsTab() {
   const loadWithdrawals = async () => {
     try {
       const token = await AsyncStorage.getItem('session_token');
-      const response = await axios.get(`${BACKEND_URL}/api/admin/transactions?type=withdrawal&status=pending`, {
+      const response = await axios.get(`${BACKEND_URL}/api/admin/withdrawals/pending`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setWithdrawals(response.data.transactions);
+      setWithdrawals(response.data || []);
     } catch (error) {
       console.error('Error loading withdrawals:', error);
     } finally {
