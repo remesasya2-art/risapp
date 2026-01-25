@@ -49,6 +49,14 @@ export default function HistoryScreen() {
   const [filter, setFilter] = useState<'all' | 'recharge' | 'withdrawal'>('all');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [proofModalVisible, setProofModalVisible] = useState(false);
+  const [selectedProof, setSelectedProof] = useState<{
+    image: string;
+    transactionId: string;
+    amount: string;
+    completedAt: string;
+  } | null>(null);
+  const [loadingProof, setLoadingProof] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -75,6 +83,34 @@ export default function HistoryScreen() {
     }
   };
 
+  const viewProof = async (transactionId: string) => {
+    try {
+      setLoadingProof(true);
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await axios.get(
+        `${BACKEND_URL}/api/transaction/${transactionId}/proof`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.proof_image) {
+        setSelectedProof({
+          image: response.data.proof_image,
+          transactionId: transactionId,
+          amount: `${response.data.amount_input?.toFixed(2) || '0.00'} RIS → ${response.data.amount_output?.toFixed(2) || '0.00'} VES`,
+          completedAt: response.data.completed_at ? format(new Date(response.data.completed_at), 'dd/MM/yyyy HH:mm') : 'N/A'
+        });
+        setProofModalVisible(true);
+      } else {
+        showAlert('Sin comprobante', 'Esta transacción aún no tiene comprobante adjunto.');
+      }
+    } catch (error: any) {
+      console.error('Error loading proof:', error);
+      showAlert('Error', error.response?.data?.detail || 'No se pudo cargar el comprobante');
+    } finally {
+      setLoadingProof(false);
+    }
+  };
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -91,10 +127,15 @@ export default function HistoryScreen() {
 
   const renderTransaction = ({ item }: { item: Transaction }) => {
     const isRecharge = item.type === 'recharge';
+    const isWithdrawal = item.type === 'withdrawal';
     const icon = isRecharge ? 'arrow-down-circle' : 'arrow-up-circle';
     const iconColor = isRecharge ? '#10b981' : '#f59e0b';
     const statusColor = item.status === 'completed' ? '#10b981' : 
-                       item.status === 'pending' ? '#f59e0b' : '#ef4444';
+                       item.status === 'pending' ? '#f59e0b' : 
+                       item.status === 'pending_review' ? '#3b82f6' : '#ef4444';
+    
+    // Show "Ver Comprobante" button for completed withdrawals
+    const canViewProof = isWithdrawal && item.status === 'completed';
 
     return (
       <View style={styles.transactionCard}>
@@ -120,18 +161,43 @@ export default function HistoryScreen() {
           </View>
         </View>
         
+        {/* Transaction ID - Always visible */}
+        <View style={styles.transactionIdContainer}>
+          <Text style={styles.transactionIdLabel}>ID:</Text>
+          <Text style={styles.transactionIdValue}>{item.transaction_id.substring(0, 8)}...</Text>
+        </View>
+        
         <View style={styles.transactionFooter}>
           <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
             <Text style={[styles.statusText, { color: statusColor }]}>
               {item.status === 'completed' ? 'Completado' : 
-               item.status === 'pending' ? 'Pendiente' : 'Rechazado'}
+               item.status === 'pending' ? 'Pendiente' : 
+               item.status === 'pending_review' ? 'En Revisión' : 'Rechazado'}
             </Text>
           </View>
-          {item.beneficiary_data && (
-            <Text style={styles.beneficiaryText}>
-              Para: {item.beneficiary_data.full_name}
-            </Text>
-          )}
+          
+          <View style={styles.footerRight}>
+            {item.beneficiary_data && (
+              <Text style={styles.beneficiaryText}>
+                Para: {item.beneficiary_data.full_name}
+              </Text>
+            )}
+            
+            {/* View Proof Button for completed withdrawals */}
+            {canViewProof && (
+              <TouchableOpacity 
+                style={styles.viewProofButton}
+                onPress={() => viewProof(item.transaction_id)}
+                disabled={loadingProof}
+              >
+                {loadingProof ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <Ionicons name="eye-outline" size={18} color="#2563eb" />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -183,6 +249,60 @@ export default function HistoryScreen() {
           contentContainerStyle={styles.listContent}
         />
       )}
+
+      {/* Proof Image Modal */}
+      <Modal
+        visible={proofModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setProofModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Comprobante de Pago</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setProofModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#1f2937" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedProof && (
+              <>
+                <View style={styles.proofInfoContainer}>
+                  <Text style={styles.proofInfoLabel}>ID Transacción:</Text>
+                  <Text style={styles.proofInfoValue}>{selectedProof.transactionId.substring(0, 12)}...</Text>
+                </View>
+                <View style={styles.proofInfoContainer}>
+                  <Text style={styles.proofInfoLabel}>Monto:</Text>
+                  <Text style={styles.proofInfoValue}>{selectedProof.amount}</Text>
+                </View>
+                <View style={styles.proofInfoContainer}>
+                  <Text style={styles.proofInfoLabel}>Completado:</Text>
+                  <Text style={styles.proofInfoValue}>{selectedProof.completedAt}</Text>
+                </View>
+                
+                <View style={styles.proofImageContainer}>
+                  <Image 
+                    source={{ uri: selectedProof.image }} 
+                    style={styles.proofImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              </>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.modalCloseButtonFull}
+              onPress={() => setProofModalVisible(false)}
+            >
+              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
