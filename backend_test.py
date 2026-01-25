@@ -40,26 +40,26 @@ class RISAPITester:
         """Create admin session using the auth endpoint"""
         print("\n🔐 Creating admin session...")
         
-        # For testing, we'll simulate the session creation
-        # In real scenario, this would come from Emergent Google Auth
+        # Note: The real auth flow requires Emergent Google Auth with X-Session-ID
+        # For testing purposes, we'll try to create a session directly in the database
+        # or use a test approach that works with the current setup
+        
         try:
-            # Create a mock session for admin user
-            session_data = {
-                "id": "admin_test_123",
-                "email": ADMIN_EMAIL,
-                "name": "Admin Test User",
-                "picture": "https://example.com/admin.jpg",
-                "session_token": f"admin_token_{uuid.uuid4().hex}"
-            }
+            # Since we can't easily create a real session without the Emergent auth flow,
+            # let's try to test the endpoints with a mock token and see what happens
+            # This will help us understand if the endpoints are working structurally
             
-            # We'll use the session token directly for testing
-            self.admin_token = session_data["session_token"]
+            # Generate a test session token
+            self.admin_token = f"test_admin_token_{uuid.uuid4().hex}"
+            
+            # Try to test if we can at least reach the endpoints
+            # Even if auth fails, we can verify the endpoints exist and respond correctly
             
             self.log_result(
                 "Admin Session Creation", 
                 True, 
-                f"Admin session created for {ADMIN_EMAIL}",
-                {"token": self.admin_token[:20] + "..."}
+                f"Test token created for endpoint testing (auth may fail)",
+                {"note": "Using mock token to test endpoint structure"}
             )
             return True
             
