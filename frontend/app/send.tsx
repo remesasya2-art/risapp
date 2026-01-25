@@ -122,42 +122,42 @@ export default function SendRISScreen() {
     const risAmount = parseFloat(amount);
     
     if (!risAmount || risAmount <= 0) {
-      Alert.alert('Error', 'Ingresa un monto válido');
+      showAlert('Error', 'Ingresa un monto válido');
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'No se pudo obtener información del usuario');
+      showAlert('Error', 'No se pudo obtener información del usuario');
       return;
     }
     
     if (user.balance_ris < risAmount) {
-      Alert.alert('Error', `Saldo insuficiente. Balance actual: ${user.balance_ris.toFixed(2)} RIS`);
+      showAlert('Error', `Saldo insuficiente. Balance actual: ${user.balance_ris.toFixed(2)} RIS`);
       return;
     }
 
     if (!beneficiaryData.full_name || !beneficiaryData.full_name.trim()) {
-      Alert.alert('Error', 'Ingresa el nombre completo del beneficiario');
+      showAlert('Error', 'Ingresa el nombre completo del beneficiario');
       return;
     }
 
     if (!beneficiaryData.account_number || !beneficiaryData.account_number.trim()) {
-      Alert.alert('Error', 'Ingresa el número de cuenta');
+      showAlert('Error', 'Ingresa el número de cuenta');
       return;
     }
 
     if (!beneficiaryData.id_document || !beneficiaryData.id_document.trim()) {
-      Alert.alert('Error', 'Ingresa la cédula del beneficiario');
+      showAlert('Error', 'Ingresa la cédula del beneficiario');
       return;
     }
 
     if (!beneficiaryData.phone_number || !beneficiaryData.phone_number.trim()) {
-      Alert.alert('Error', 'Ingresa el teléfono del beneficiario');
+      showAlert('Error', 'Ingresa el teléfono del beneficiario');
       return;
     }
 
     if (!beneficiaryData.bank || !beneficiaryData.bank.trim()) {
-      Alert.alert('Error', 'Ingresa el banco del beneficiario');
+      showAlert('Error', 'Ingresa el banco del beneficiario');
       return;
     }
 
@@ -192,21 +192,21 @@ export default function SendRISScreen() {
         
         await refreshUser();
 
-        Alert.alert(
+        showAlert(
           'Envío Exitoso',
-          `Se han descontado ${risAmount.toFixed(2)} RIS de tu balance.\n\nEl equipo ha sido notificado y procesará tu transferencia pronto.`,
+          `Se han descontado ${risAmount.toFixed(2)} RIS de tu balance. El equipo procesará tu transferencia pronto.`,
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } catch (error: any) {
         console.error('Send error:', error);
-        Alert.alert('Error', error.response?.data?.detail || 'No se pudo procesar el envío');
+        showAlert('Error', error.response?.data?.detail || 'No se pudo procesar el envío');
       } finally {
         setLoading(false);
       }
     };
 
     // Show confirmation dialog
-    Alert.alert(
+    showAlert(
       'Confirmar Envío',
       `¿Enviar ${risAmount.toFixed(2)} RIS (${parseFloat(vesAmount).toFixed(2)} VES) a ${beneficiaryData.full_name}?`,
       [
