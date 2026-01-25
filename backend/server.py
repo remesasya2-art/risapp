@@ -951,6 +951,81 @@ async def mercadopago_webhook(request: Request):
         return {"status": "error"}
 
 # =======================
+# SUPPORT CHAT
+# =======================
+
+class SupportMessageRequest(BaseModel):
+    message: str
+
+@api_router.post("/support/send")
+async def send_support_message(request: SupportMessageRequest, current_user: User = Depends(get_current_user)):
+    """Send a support message to admin via WhatsApp"""
+    
+    if not request.message or len(request.message.strip()) < 1:
+        raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
+    
+    if len(request.message) > 500:
+        raise HTTPException(status_code=400, detail="El mensaje es demasiado largo (máximo 500 caracteres)")
+    
+    try:
+        # Format message for admin
+        support_message = f"""📩 *MENSAJE DE SOPORTE*
+
+👤 *Usuario:* {current_user.name}
+📧 *Email:* {current_user.email}
+🆔 *ID:* {current_user.user_id}
+
+💬 *Mensaje:*
+{request.message.strip()}
+
+---
+Responde a este mensaje para contactar al usuario."""
+
+        # Send via Twilio WhatsApp
+        from twilio.rest import Client
+        twilio_client = Client(
+            os.getenv('TWILIO_ACCOUNT_SID'),
+            os.getenv('TWILIO_AUTH_TOKEN')
+        )
+        
+        twilio_client.messages.create(
+            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+            body=support_message,
+            to=os.getenv('TWILIO_WHATSAPP_TO')
+        )
+        
+        # Save support message to database
+        support_record = {
+            "user_id": current_user.user_id,
+            "user_name": current_user.name,
+            "user_email": current_user.email,
+            "message": request.message.strip(),
+            "sent_via": "whatsapp",
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.support_messages.insert_one(support_record)
+        
+        logger.info(f"Support message sent from {current_user.email}")
+        
+        return {"status": "success", "message": "Mensaje enviado correctamente"}
+        
+    except Exception as e:
+        logger.error(f"Error sending support message: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo enviar el mensaje. Intenta de nuevo.")
+
+@api_router.get("/support/history")
+async def get_support_history(current_user: User = Depends(get_current_user)):
+    """Get user's support message history"""
+    messages = await db.support_messages.find(
+        {"user_id": current_user.user_id}
+    ).sort("created_at", -1).to_list(50)
+    
+    for m in messages:
+        m['_id'] = str(m['_id'])
+    
+    return messages
+
+# =======================
 # IN-APP NOTIFICATIONS
 # =======================
 
