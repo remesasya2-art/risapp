@@ -8,6 +8,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +19,25 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+// Custom alert function that works on web
+const showAlert = (title: string, message: string, buttons?: Array<{text: string, onPress?: () => void, style?: string}>) => {
+  if (Platform.OS === 'web') {
+    if (buttons && buttons.length > 1) {
+      // Confirmation dialog
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      if (confirmed) {
+        const confirmButton = buttons.find(b => b.text === 'Confirmar' || b.text === 'OK');
+        confirmButton?.onPress?.();
+      }
+    } else {
+      window.alert(`${title}\n\n${message}`);
+      buttons?.[0]?.onPress?.();
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 interface Beneficiary {
   beneficiary_id: string;
