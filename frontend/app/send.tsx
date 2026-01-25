@@ -9,13 +9,16 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
+import { VENEZUELA_BANKS, CEDULA_TYPES, PHONE_PREFIXES, BankOption } from '../constants/venezuelaBanks';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -26,33 +29,53 @@ interface Beneficiary {
   id_document: string;
   phone_number: string;
   bank: string;
+  bank_code?: string;
 }
 
 export default function SendRISScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [rate, setRate] = useState(78);
   const [amount, setAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   
+  // Beneficiaries
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
   const [showBeneficiaries, setShowBeneficiaries] = useState(false);
+  const [useNewBeneficiary, setUseNewBeneficiary] = useState(true);
   
-  const [beneficiaryData, setBeneficiaryData] = useState({
-    full_name: '',
-    account_number: '',
-    id_document: '',
-    phone_number: '',
-    bank: '',
-  });
+  // Form data with structured fields
+  const [fullName, setFullName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [cedulaType, setCedulaType] = useState('V');
+  const [cedulaNumber, setCedulaNumber] = useState('');
+  const [phonePrefix, setPhonePrefix] = useState('0414');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedBank, setSelectedBank] = useState<BankOption | null>(null);
   const [saveBeneficiary, setSaveBeneficiary] = useState(false);
+  
+  // Modals
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
 
   useEffect(() => {
     loadRate();
     loadBeneficiaries();
   }, []);
+
+  useEffect(() => {
+    // If coming from beneficiaries screen with a specific beneficiary
+    if (params.beneficiaryId && beneficiaries.length > 0) {
+      const ben = beneficiaries.find(b => b.beneficiary_id === params.beneficiaryId);
+      if (ben) {
+        selectBeneficiary(ben);
+        setUseNewBeneficiary(false);
+      }
+    }
+  }, [params.beneficiaryId, beneficiaries]);
 
   const loadRate = async () => {
     try {
@@ -83,14 +106,54 @@ export default function SendRISScreen() {
 
   const selectBeneficiary = (beneficiary: Beneficiary) => {
     setSelectedBeneficiary(beneficiary);
-    setBeneficiaryData({
-      full_name: beneficiary.full_name,
-      account_number: beneficiary.account_number,
-      id_document: beneficiary.id_document,
-      phone_number: beneficiary.phone_number,
-      bank: beneficiary.bank,
-    });
+    setFullName(beneficiary.full_name);
+    setAccountNumber(beneficiary.account_number);
+    
+    // Parse cedula
+    if (beneficiary.id_document) {
+      const match = beneficiary.id_document.match(/^([VE])-?(\d+)$/i);
+      if (match) {
+        setCedulaType(match[1].toUpperCase());
+        setCedulaNumber(match[2]);
+      }
+    }
+    
+    // Parse phone
+    if (beneficiary.phone_number) {
+      const phoneMatch = beneficiary.phone_number.match(/\+?58\s*(04\d{2})[- ]?(\d+)/);
+      if (phoneMatch) {
+        setPhonePrefix(phoneMatch[1]);
+        setPhoneNumber(phoneMatch[2]);
+      }
+    }
+    
+    // Find bank
+    if (beneficiary.bank_code) {
+      const bank = VENEZUELA_BANKS.find(b => b.code === beneficiary.bank_code);
+      if (bank) setSelectedBank(bank);
+    } else if (beneficiary.bank) {
+      const bank = VENEZUELA_BANKS.find(b => 
+        b.name.toLowerCase().includes(beneficiary.bank.toLowerCase()) ||
+        beneficiary.bank.toLowerCase().includes(b.name.toLowerCase())
+      );
+      if (bank) setSelectedBank(bank);
+    }
+    
     setShowBeneficiaries(false);
+    setUseNewBeneficiary(false);
+  };
+
+  const clearForm = () => {
+    setSelectedBeneficiary(null);
+    setFullName('');
+    setAccountNumber('');
+    setCedulaType('V');
+    setCedulaNumber('');
+    setPhonePrefix('0414');
+    setPhoneNumber('');
+    setSelectedBank(null);
+    setSaveBeneficiary(false);
+    setUseNewBeneficiary(true);
   };
 
   const showMessage = (title: string, message: string, onOk?: () => void) => {
@@ -102,10 +165,24 @@ export default function SendRISScreen() {
     }
   };
 
+  const getBeneficiaryData = () => {
+    const idDocument = `${cedulaType}-${cedulaNumber}`;
+    const fullPhone = `+58 ${phonePrefix}-${phoneNumber}`;
+    
+    return {
+      full_name: fullName.trim(),
+      account_number: accountNumber.trim(),
+      id_document: idDocument,
+      phone_number: fullPhone,
+      bank: selectedBank ? selectedBank.fullName : '',
+      bank_code: selectedBank ? selectedBank.code : '',
+    };
+  };
+
   const handleSend = async () => {
     const risAmount = parseFloat(amount);
     
-    // Validaciones
+    // Validations
     if (!risAmount || risAmount <= 0) {
       showMessage('Error', 'Ingresa un monto válido');
       return;
@@ -114,18 +191,46 @@ export default function SendRISScreen() {
       showMessage('Error', 'Saldo insuficiente');
       return;
     }
-    if (!beneficiaryData.full_name?.trim() || !beneficiaryData.account_number?.trim() || 
-        !beneficiaryData.id_document?.trim() || !beneficiaryData.phone_number?.trim() || 
-        !beneficiaryData.bank?.trim()) {
-      showMessage('Error', 'Completa todos los campos del beneficiario');
+    if (!fullName.trim()) {
+      showMessage('Error', 'Ingresa el nombre del beneficiario');
+      return;
+    }
+    if (!selectedBank) {
+      showMessage('Error', 'Selecciona un banco');
+      return;
+    }
+    if (!accountNumber.trim()) {
+      showMessage('Error', 'Ingresa el número de cuenta');
+      return;
+    }
+    if (!cedulaNumber.trim()) {
+      showMessage('Error', 'Ingresa el número de cédula');
+      return;
+    }
+    if (!phoneNumber.trim() || phoneNumber.length < 7) {
+      showMessage('Error', 'Ingresa un número de teléfono válido');
       return;
     }
 
-    // Confirmar y enviar
+    const beneficiaryData = getBeneficiaryData();
+
     const doSend = async () => {
       setLoading(true);
       try {
         const token = await AsyncStorage.getItem('session_token');
+        
+        // Save beneficiary if checkbox is checked
+        if (saveBeneficiary && !selectedBeneficiary) {
+          try {
+            await axios.post(
+              `${BACKEND_URL}/api/beneficiaries`,
+              beneficiaryData,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          } catch (e) {
+            console.log('Could not save beneficiary:', e);
+          }
+        }
         
         await axios.post(
           `${BACKEND_URL}/api/withdrawal/create`,
@@ -134,7 +239,7 @@ export default function SendRISScreen() {
         );
         
         await refreshUser();
-        showMessage('Éxito', '¡Envío realizado! El equipo procesará tu transferencia.', () => router.back());
+        showMessage('¡Éxito!', 'Envío realizado. El equipo procesará tu transferencia y te notificará.', () => router.back());
       } catch (error: any) {
         showMessage('Error', error.response?.data?.detail || 'No se pudo procesar');
       } finally {
@@ -143,12 +248,12 @@ export default function SendRISScreen() {
     };
 
     if (Platform.OS === 'web') {
-      const confirmed = confirm(`¿Enviar ${risAmount} RIS a ${beneficiaryData.full_name}?`);
+      const confirmed = confirm(`¿Enviar ${risAmount} RIS a ${fullName}?\n\nBanco: ${selectedBank.name} (${selectedBank.code})\nRecibirá: ${vesAmount} VES`);
       if (confirmed) doSend();
     } else {
       Alert.alert(
-        'Confirmar',
-        `¿Enviar ${risAmount} RIS a ${beneficiaryData.full_name}?`,
+        'Confirmar Envío',
+        `¿Enviar ${risAmount} RIS a ${fullName}?\n\nBanco: ${selectedBank.name} (${selectedBank.code})\nRecibirá: ${vesAmount} VES`,
         [
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Enviar', onPress: doSend }
@@ -156,6 +261,11 @@ export default function SendRISScreen() {
       );
     }
   };
+
+  const filteredBanks = VENEZUELA_BANKS.filter(b => 
+    b.name.toLowerCase().includes(bankSearch.toLowerCase()) ||
+    b.code.includes(bankSearch)
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -166,13 +276,15 @@ export default function SendRISScreen() {
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Enviar RIS</Text>
-          <View style={{ width: 24 }} />
+          <TouchableOpacity onPress={() => router.push('/beneficiaries')}>
+            <Ionicons name="people" size={24} color="#2563eb" />
+          </TouchableOpacity>
         </View>
 
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Tu Balance</Text>
-          <Text style={styles.balanceAmount}>{user?.balance_ris.toFixed(2) || '0.00'} RIS</Text>
+          <Text style={styles.balanceAmount}>{user?.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
         </View>
 
         {/* Amount Input */}
@@ -199,119 +311,156 @@ export default function SendRISScreen() {
           </View>
         </View>
 
-        {/* Saved Beneficiaries */}
-        {beneficiaries.length > 0 && (
-          <View style={styles.card}>
+        {/* Beneficiary Selection */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Beneficiario</Text>
+          
+          {/* Toggle between saved and new */}
+          <View style={styles.beneficiaryToggle}>
             <TouchableOpacity
-              style={styles.savedBeneficiariesHeader}
-              onPress={() => setShowBeneficiaries(!showBeneficiaries)}
+              style={[styles.toggleButton, !useNewBeneficiary && styles.toggleButtonActive]}
+              onPress={() => beneficiaries.length > 0 && setShowBeneficiaries(true)}
+              disabled={beneficiaries.length === 0}
             >
-              <Ionicons name="people" size={24} color="#2563eb" />
-              <Text style={styles.cardTitle}>Beneficiarios Guardados</Text>
-              <Ionicons
-                name={showBeneficiaries ? 'chevron-up' : 'chevron-down'}
-                size={24}
-                color="#6b7280"
-              />
+              <Ionicons name="bookmark" size={18} color={!useNewBeneficiary ? '#fff' : '#6b7280'} />
+              <Text style={[styles.toggleButtonText, !useNewBeneficiary && styles.toggleButtonTextActive]}>
+                Guardados ({beneficiaries.length})
+              </Text>
             </TouchableOpacity>
-
-            {showBeneficiaries && (
-              <View style={styles.beneficiariesList}>
-                {beneficiaries.map((ben) => (
-                  <TouchableOpacity
-                    key={ben.beneficiary_id}
-                    style={[
-                      styles.beneficiaryItem,
-                      selectedBeneficiary?.beneficiary_id === ben.beneficiary_id &&
-                        styles.beneficiaryItemSelected,
-                    ]}
-                    onPress={() => selectBeneficiary(ben)}
-                  >
-                    <View style={styles.beneficiaryIcon}>
-                      <Ionicons name="person" size={20} color="#2563eb" />
-                    </View>
-                    <View style={styles.beneficiaryInfo}>
-                      <Text style={styles.beneficiaryName}>{ben.full_name}</Text>
-                      <Text style={styles.beneficiaryBank}>{ben.bank}</Text>
-                    </View>
-                    {selectedBeneficiary?.beneficiary_id === ben.beneficiary_id && (
-                      <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            <TouchableOpacity
+              style={[styles.toggleButton, useNewBeneficiary && styles.toggleButtonActive]}
+              onPress={clearForm}
+            >
+              <Ionicons name="person-add" size={18} color={useNewBeneficiary ? '#fff' : '#6b7280'} />
+              <Text style={[styles.toggleButtonText, useNewBeneficiary && styles.toggleButtonTextActive]}>
+                Nuevo
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
+
+          {/* Selected beneficiary indicator */}
+          {selectedBeneficiary && !useNewBeneficiary && (
+            <View style={styles.selectedBeneficiaryBanner}>
+              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              <Text style={styles.selectedBeneficiaryText}>
+                Enviando a: {selectedBeneficiary.full_name}
+              </Text>
+              <TouchableOpacity onPress={clearForm}>
+                <Ionicons name="close-circle" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         {/* Beneficiary Form */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Datos del Beneficiario</Text>
           <Text style={styles.cardSubtitle}>
-            Puede ser cualquier persona (familiar, amigo, tú mismo, etc.)
+            {useNewBeneficiary ? 'Ingresa los datos de quien recibirá el dinero' : 'Verifica los datos antes de enviar'}
           </Text>
 
+          {/* Name */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Nombre Completo *</Text>
             <TextInput
               style={styles.input}
-              value={beneficiaryData.full_name}
-              onChangeText={(text) =>
-                setBeneficiaryData({ ...beneficiaryData, full_name: text })
-              }
+              value={fullName}
+              onChangeText={setFullName}
               placeholder="Ej: María González"
             />
           </View>
 
+          {/* Bank Selector */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Banco *</Text>
-            <TextInput
-              style={styles.input}
-              value={beneficiaryData.bank}
-              onChangeText={(text) => setBeneficiaryData({ ...beneficiaryData, bank: text })}
-              placeholder="Ej: Banco de Venezuela"
-            />
+            <TouchableOpacity 
+              style={styles.selectorButton}
+              onPress={() => setShowBankModal(true)}
+            >
+              {selectedBank ? (
+                <View style={styles.selectedBankContainer}>
+                  <Text style={styles.bankCode}>{selectedBank.code}</Text>
+                  <Text style={styles.bankName}>{selectedBank.name}</Text>
+                </View>
+              ) : (
+                <Text style={styles.selectorPlaceholder}>Seleccionar banco</Text>
+              )}
+              <Ionicons name="chevron-down" size={20} color="#6b7280" />
+            </TouchableOpacity>
           </View>
 
+          {/* Account Number */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Número de Cuenta *</Text>
             <TextInput
               style={styles.input}
-              value={beneficiaryData.account_number}
-              onChangeText={(text) =>
-                setBeneficiaryData({ ...beneficiaryData, account_number: text })
-              }
-              placeholder="0102-1234-5678-9012"
+              value={accountNumber}
+              onChangeText={setAccountNumber}
+              placeholder="01020000000000000000"
               keyboardType="numeric"
+              maxLength={20}
             />
           </View>
 
+          {/* Cedula with Type Selector */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Cédula de Identidad *</Text>
-            <TextInput
-              style={styles.input}
-              value={beneficiaryData.id_document}
-              onChangeText={(text) =>
-                setBeneficiaryData({ ...beneficiaryData, id_document: text })
-              }
-              placeholder="V-12345678"
-            />
+            <View style={styles.rowInputContainer}>
+              <View style={styles.typeSelector}>
+                {CEDULA_TYPES.map((type) => (
+                  <TouchableOpacity
+                    key={type.value}
+                    style={[styles.typeOption, cedulaType === type.value && styles.typeOptionActive]}
+                    onPress={() => setCedulaType(type.value)}
+                  >
+                    <Text style={[styles.typeOptionText, cedulaType === type.value && styles.typeOptionTextActive]}>
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.input, styles.flexInput]}
+                value={cedulaNumber}
+                onChangeText={setCedulaNumber}
+                placeholder="12345678"
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </View>
           </View>
 
+          {/* Phone with Prefix Selector */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Teléfono *</Text>
-            <TextInput
-              style={styles.input}
-              value={beneficiaryData.phone_number}
-              onChangeText={(text) =>
-                setBeneficiaryData({ ...beneficiaryData, phone_number: text })
-              }
-              placeholder="+58 412-1234567"
-              keyboardType="phone-pad"
-            />
+            <View style={styles.phoneContainer}>
+              <Text style={styles.phoneCountry}>+58</Text>
+              <View style={styles.prefixSelector}>
+                {PHONE_PREFIXES.map((prefix) => (
+                  <TouchableOpacity
+                    key={prefix.value}
+                    style={[styles.prefixOption, phonePrefix === prefix.value && styles.prefixOptionActive]}
+                    onPress={() => setPhonePrefix(prefix.value)}
+                  >
+                    <Text style={[styles.prefixOptionText, phonePrefix === prefix.value && styles.prefixOptionTextActive]}>
+                      {prefix.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.input, styles.phoneInput]}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="1234567"
+                keyboardType="phone-pad"
+                maxLength={7}
+              />
+            </View>
           </View>
 
-          {!selectedBeneficiary && (
+          {/* Save checkbox for new beneficiary */}
+          {useNewBeneficiary && (
             <TouchableOpacity
               style={styles.saveCheckbox}
               onPress={() => setSaveBeneficiary(!saveBeneficiary)}
@@ -344,6 +493,102 @@ export default function SendRISScreen() {
           El monto será descontado inmediatamente. El equipo procesará la transferencia y te notificará cuando esté completada.
         </Text>
       </ScrollView>
+
+      {/* Bank Selection Modal */}
+      <Modal
+        visible={showBankModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowBankModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Seleccionar Banco</Text>
+              <TouchableOpacity onPress={() => setShowBankModal(false)}>
+                <Ionicons name="close" size={24} color="#1f2937" />
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar por nombre o código..."
+              value={bankSearch}
+              onChangeText={setBankSearch}
+            />
+            
+            <FlatList
+              data={filteredBanks}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.bankItem, selectedBank?.code === item.code && styles.bankItemSelected]}
+                  onPress={() => {
+                    setSelectedBank(item);
+                    setShowBankModal(false);
+                    setBankSearch('');
+                  }}
+                >
+                  <Text style={styles.bankItemCode}>{item.code}</Text>
+                  <View style={styles.bankItemInfo}>
+                    <Text style={styles.bankItemName}>{item.name}</Text>
+                    <Text style={styles.bankItemFullName}>{item.fullName}</Text>
+                  </View>
+                  {selectedBank?.code === item.code && (
+                    <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+                  )}
+                </TouchableOpacity>
+              )}
+              style={styles.bankList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Beneficiaries Selection Modal */}
+      <Modal
+        visible={showBeneficiaries}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowBeneficiaries(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Beneficiarios Guardados</Text>
+              <TouchableOpacity onPress={() => setShowBeneficiaries(false)}>
+                <Ionicons name="close" size={24} color="#1f2937" />
+              </TouchableOpacity>
+            </View>
+            
+            <FlatList
+              data={beneficiaries}
+              keyExtractor={(item) => item.beneficiary_id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.beneficiaryItem}
+                  onPress={() => selectBeneficiary(item)}
+                >
+                  <View style={styles.beneficiaryIcon}>
+                    <Ionicons name="person" size={20} color="#2563eb" />
+                  </View>
+                  <View style={styles.beneficiaryInfo}>
+                    <Text style={styles.beneficiaryName}>{item.full_name}</Text>
+                    <Text style={styles.beneficiaryBank}>
+                      {item.bank_code ? `${item.bank_code} - ` : ''}{item.bank}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+                </TouchableOpacity>
+              )}
+              style={styles.beneficiaryList}
+              ListEmptyComponent={
+                <Text style={styles.emptyListText}>No tienes beneficiarios guardados</Text>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -444,49 +689,148 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontSize: 16,
   },
-  savedBeneficiariesHeader: {
+  beneficiaryToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 4,
+    marginBottom: 16,
+  },
+  toggleButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 6,
+    gap: 6,
   },
-  beneficiariesList: {
-    marginTop: 16,
+  toggleButtonActive: {
+    backgroundColor: '#2563eb',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  toggleButtonTextActive: {
+    color: '#fff',
+  },
+  selectedBeneficiaryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    padding: 12,
+    borderRadius: 8,
     gap: 8,
   },
-  beneficiaryItem: {
+  selectedBeneficiaryText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#059669',
+  },
+  selectorButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    justifyContent: 'space-between',
     backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    gap: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
   },
-  beneficiaryItemSelected: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#2563eb',
+  selectorPlaceholder: {
+    fontSize: 16,
+    color: '#9ca3af',
   },
-  beneficiaryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#eff6ff',
-    justifyContent: 'center',
+  selectedBankContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  beneficiaryInfo: {
+  bankCode: {
+    backgroundColor: '#2563eb',
+    color: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bankName: {
+    fontSize: 16,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  rowInputContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 4,
+  },
+  typeOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  typeOptionActive: {
+    backgroundColor: '#2563eb',
+  },
+  typeOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  typeOptionTextActive: {
+    color: '#fff',
+  },
+  flexInput: {
     flex: 1,
   },
-  beneficiaryName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 2,
+  phoneContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  beneficiaryBank: {
-    fontSize: 13,
+  phoneCountry: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  prefixSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 2,
+  },
+  prefixOption: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    borderRadius: 4,
+  },
+  prefixOptionActive: {
+    backgroundColor: '#2563eb',
+  },
+  prefixOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: '#6b7280',
+  },
+  prefixOptionTextActive: {
+    color: '#fff',
+  },
+  phoneInput: {
+    flex: 1,
   },
   saveCheckbox: {
     flexDirection: 'row',
@@ -536,5 +880,110 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     lineHeight: 18,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  searchInput: {
+    backgroundColor: '#f3f4f6',
+    margin: 16,
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+  },
+  bankList: {
+    maxHeight: 400,
+  },
+  bankItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    gap: 12,
+  },
+  bankItemSelected: {
+    backgroundColor: '#eff6ff',
+  },
+  bankItemCode: {
+    backgroundColor: '#2563eb',
+    color: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bankItemInfo: {
+    flex: 1,
+  },
+  bankItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  bankItemFullName: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  beneficiaryList: {
+    maxHeight: 400,
+  },
+  beneficiaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    gap: 12,
+  },
+  beneficiaryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  beneficiaryInfo: {
+    flex: 1,
+  },
+  beneficiaryName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 2,
+  },
+  beneficiaryBank: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  emptyListText: {
+    textAlign: 'center',
+    color: '#6b7280',
+    padding: 20,
   },
 });
