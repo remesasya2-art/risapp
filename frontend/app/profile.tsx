@@ -92,7 +92,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Funcionalidad próximamente')}
+            onPress={() => router.push('/beneficiaries')}
           >
             <Ionicons name="people" size={24} color="#2563eb" />
             <Text style={styles.menuText}>Beneficiarios guardados</Text>
