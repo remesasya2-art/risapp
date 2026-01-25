@@ -433,30 +433,28 @@ export default function SendRISScreen() {
           {/* Phone with Prefix Selector */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Teléfono *</Text>
-            <View style={styles.phoneContainer}>
-              <Text style={styles.phoneCountry}>+58</Text>
-              <View style={styles.prefixSelector}>
-                {PHONE_PREFIXES.map((prefix) => (
-                  <TouchableOpacity
-                    key={prefix.value}
-                    style={[styles.prefixOption, phonePrefix === prefix.value && styles.prefixOptionActive]}
-                    onPress={() => setPhonePrefix(prefix.value)}
-                  >
-                    <Text style={[styles.prefixOptionText, phonePrefix === prefix.value && styles.prefixOptionTextActive]}>
-                      {prefix.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <View style={styles.phoneRow}>
+              <View style={styles.phoneFixed}>
+                <Text style={styles.phoneFixedText}>(+58)</Text>
               </View>
+              <TouchableOpacity 
+                style={styles.phonePrefixButton}
+                onPress={() => setShowPrefixModal(true)}
+              >
+                <Text style={styles.phonePrefixText}>{phonePrefix}</Text>
+                <Ionicons name="chevron-down" size={16} color="#6b7280" />
+              </TouchableOpacity>
+              <Text style={styles.phoneSeparator}>-</Text>
               <TextInput
-                style={[styles.input, styles.phoneInput]}
+                style={styles.phoneNumberInput}
                 value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                placeholder="1234567"
-                keyboardType="phone-pad"
+                onChangeText={(text) => setPhoneNumber(text.replace(/[^0-9]/g, ''))}
+                placeholder="7666491"
+                keyboardType="number-pad"
                 maxLength={7}
               />
             </View>
+            <Text style={styles.phoneHint}>Formato: (+58)0414-7666491</Text>
           </View>
 
           {/* Save checkbox for new beneficiary */}
