@@ -59,6 +59,7 @@ export default function SendRISScreen() {
   
   // Modals
   const [showBankModal, setShowBankModal] = useState(false);
+  const [showPrefixModal, setShowPrefixModal] = useState(false);
   const [bankSearch, setBankSearch] = useState('');
 
   useEffect(() => {
