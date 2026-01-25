@@ -18,6 +18,7 @@ from openpyxl import Workbook
 from io import BytesIO
 from whatsapp_service import whatsapp_service
 from mercadopago_service import mercadopago_service
+from admin_routes import admin_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -2412,8 +2413,9 @@ async def test_whatsapp():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# Include the router in the main app
+# Include the routers in the main app
 app.include_router(api_router)
+app.include_router(admin_router)
 
 app.add_middleware(
     CORSMiddleware,
