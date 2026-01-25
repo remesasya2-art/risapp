@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Alert,
   RefreshControl,
+  Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,12 +21,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 interface Message {
   id: string;
   text: string;
+  image?: string;
   sender: 'user' | 'admin' | 'system';
   timestamp: Date;
   status?: 'sending' | 'sent' | 'error';
@@ -46,6 +50,8 @@ export default function SupportScreen() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -76,15 +82,16 @@ export default function SupportScreen() {
       
       const welcomeMessage: Message = {
         id: 'welcome',
-        text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje y nuestro equipo te responderá lo antes posible.',
+        text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje o adjunta una imagen y nuestro equipo te responderá lo antes posible.',
         sender: 'system',
-        timestamp: new Date(0), // Very old date so it appears first
+        timestamp: new Date(0),
       };
       
       // Convert API response to Message format
       const conversationMessages: Message[] = response.data.map((msg: any) => ({
         id: msg.id,
         text: msg.text,
+        image: msg.image,
         sender: msg.sender === 'admin' ? 'admin' : 'user',
         timestamp: new Date(msg.timestamp),
         status: 'sent',
@@ -101,10 +108,9 @@ export default function SupportScreen() {
     } catch (error) {
       console.error('Error loading conversation:', error);
       setLoading(false);
-      // Show welcome message even if API fails
       setMessages([{
         id: 'welcome',
-        text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje y nuestro equipo te responderá lo antes posible.',
+        text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje o adjunta una imagen y nuestro equipo te responderá lo antes posible.',
         sender: 'system',
         timestamp: new Date(),
       }]);
@@ -117,8 +123,65 @@ export default function SupportScreen() {
     setRefreshing(false);
   };
 
+  const pickImage = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert('Permiso requerido', 'Necesitamos acceso a tu galería para adjuntar imágenes.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64Image = `data:image/jpeg;base64,${asset.base64}`;
+        setSelectedImage(base64Image);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showAlert('Error', 'No se pudo seleccionar la imagen');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert('Permiso requerido', 'Necesitamos acceso a tu cámara para tomar fotos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64Image = `data:image/jpeg;base64,${asset.base64}`;
+        setSelectedImage(base64Image);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      showAlert('Error', 'No se pudo tomar la foto');
+    }
+  };
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
+  };
+
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !selectedImage) return;
     
     if (!user) {
       showAlert('Inicia sesión', 'Debes iniciar sesión para enviar mensajes de soporte.');
@@ -126,11 +189,15 @@ export default function SupportScreen() {
     }
 
     const messageText = inputText.trim();
+    const imageToSend = selectedImage;
+    
     setInputText('');
+    setSelectedImage(null);
 
     const newMessage: Message = {
       id: Date.now().toString(),
-      text: messageText,
+      text: messageText || (imageToSend ? '📷 Imagen' : ''),
+      image: imageToSend || undefined,
       sender: 'user',
       timestamp: new Date(),
       status: 'sending',
@@ -148,7 +215,10 @@ export default function SupportScreen() {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
         `${BACKEND_URL}/api/support/send`,
-        { message: messageText },
+        { 
+          message: messageText,
+          image: imageToSend 
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -176,12 +246,12 @@ export default function SupportScreen() {
   };
 
   const formatTime = (date: Date) => {
-    if (date.getTime() === 0) return ''; // Welcome message
+    if (date.getTime() === 0) return '';
     return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDate = (date: Date) => {
-    if (date.getTime() === 0) return ''; // Welcome message
+    if (date.getTime() === 0) return '';
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -244,7 +314,7 @@ export default function SupportScreen() {
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle" size={20} color="#2563eb" />
           <Text style={styles.infoBannerText}>
-            Chat en vivo con nuestro equipo de soporte
+            Chat en vivo • Puedes adjuntar imágenes 📷
           </Text>
         </View>
 
@@ -265,7 +335,6 @@ export default function SupportScreen() {
             }
           >
             {messages.map((message, index) => {
-              // Show date separator
               const showDate = index === 0 || 
                 (index > 0 && formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp) && message.timestamp.getTime() !== 0);
               
@@ -289,15 +358,30 @@ export default function SupportScreen() {
                         <Text style={styles.adminLabelText}>Soporte RIS</Text>
                       </View>
                     )}
-                    <Text
-                      style={[
-                        styles.messageText,
-                        message.sender === 'user' ? styles.userMessageText : 
-                        message.sender === 'admin' ? styles.adminMessageText : styles.systemMessageText,
-                      ]}
-                    >
-                      {message.text}
-                    </Text>
+                    
+                    {/* Image if present */}
+                    {message.image && (
+                      <TouchableOpacity onPress={() => setPreviewImage(message.image || null)}>
+                        <Image 
+                          source={{ uri: message.image }} 
+                          style={styles.messageImage}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    )}
+                    
+                    {message.text && message.text !== '📷 Imagen' && (
+                      <Text
+                        style={[
+                          styles.messageText,
+                          message.sender === 'user' ? styles.userMessageText : 
+                          message.sender === 'admin' ? styles.adminMessageText : styles.systemMessageText,
+                        ]}
+                      >
+                        {message.text}
+                      </Text>
+                    )}
+                    
                     {message.timestamp.getTime() !== 0 && (
                       <View style={styles.messageFooter}>
                         <Text
@@ -330,8 +414,24 @@ export default function SupportScreen() {
           </ScrollView>
         )}
 
+        {/* Selected Image Preview */}
+        {selectedImage && (
+          <View style={styles.selectedImageContainer}>
+            <Image source={{ uri: selectedImage }} style={styles.selectedImagePreview} />
+            <TouchableOpacity style={styles.removeImageButton} onPress={removeSelectedImage}>
+              <Ionicons name="close-circle" size={24} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input Area */}
         <View style={styles.inputContainer}>
+          <TouchableOpacity style={styles.attachButton} onPress={pickImage}>
+            <Ionicons name="image-outline" size={24} color="#6b7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.attachButton} onPress={takePhoto}>
+            <Ionicons name="camera-outline" size={24} color="#6b7280" />
+          </TouchableOpacity>
           <TextInput
             style={styles.textInput}
             value={inputText}
@@ -343,9 +443,9 @@ export default function SupportScreen() {
             editable={!sending}
           />
           <TouchableOpacity
-            style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
+            style={[styles.sendButton, ((!inputText.trim() && !selectedImage) || sending) && styles.sendButtonDisabled]}
             onPress={sendMessage}
-            disabled={!inputText.trim() || sending}
+            disabled={(!inputText.trim() && !selectedImage) || sending}
           >
             {sending ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -355,6 +455,30 @@ export default function SupportScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={!!previewImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.imagePreviewModal}>
+          <TouchableOpacity 
+            style={styles.closePreviewButton} 
+            onPress={() => setPreviewImage(null)}
+          >
+            <Ionicons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {previewImage && (
+            <Image 
+              source={{ uri: previewImage }} 
+              style={styles.fullPreviewImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -504,6 +628,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#10b981',
   },
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
@@ -536,14 +666,37 @@ const styles = StyleSheet.create({
   statusIcon: {
     marginLeft: 2,
   },
+  selectedImageContainer: {
+    backgroundColor: '#fff',
+    padding: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    position: 'relative',
+  },
+  selectedImagePreview: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 0,
+    left: 72,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 12,
+    padding: 8,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    gap: 8,
+    gap: 4,
+  },
+  attachButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   textInput: {
     flex: 1,
@@ -565,5 +718,21 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#93c5fd',
+  },
+  imagePreviewModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closePreviewButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  fullPreviewImage: {
+    width: '100%',
+    height: '80%',
   },
 });
