@@ -90,6 +90,28 @@ export default function HomeScreen() {
     }
   };
 
+  const loadUnreadNotifications = async () => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      if (!token) return;
+      const response = await axios.get(`${BACKEND_URL}/api/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUnreadNotifications(response.data.count);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  // Load notifications periodically
+  useEffect(() => {
+    if (user) {
+      loadUnreadNotifications();
+      const interval = setInterval(loadUnreadNotifications, 30000); // Every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
   const handleRisChange = (value: string) => {
     setRisAmount(value);
     const ris = parseFloat(value) || 0;
