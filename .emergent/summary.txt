@@ -1,198 +1,180 @@
 <analysis>
-
 <original_problem_statement>
 The user wants to build a mobile application named RIS for Google and Apple platforms. The application allows users to top up their balance, which is then used to initiate manual transfers to beneficiaries. The app includes a full KYC process, admin panel, and notifications.
 
 **Recent User Requests:**
-1.  **PIX Recharge Flow Enhancements:**
-    *   The app should not accept consecutive payments of the exact same amount to prevent duplicates.
-    *   On the PIX payment screen, the how to pay instructions should be positioned above the action buttons.
-    *   The user must be able to upload a payment receipt (comprovante) to manually verify the PIX transaction.
-2.  **UI/UX Improvements:**
-    *   The bottom tab bar (Home, History, Profile) should be raised higher to not conflict with the phone's native navigation buttons.
-    *   The user should receive a notification when their withdrawal transaction is successfully completed by an admin.
-
-**PRODUCT REQUIREMENTS (from initial request):**
-- **User Registration & KYC:** Google Login, mandatory KYC (ID, CPF, Selfie) via camera only, and a self-declaration of payment method ownership.
-- **Balance Management:** Top-ups via Stripe (currently on hold) and PIX (via Mercado Pago). Recharge limit of 2000 BRL.
-- **RIS to VES Transfers:** Manual transfer requests processed by a human team. A RIS-to-VES calculator with a modifiable daily rate is required.
-- **Admin Panel:** Manage KYC, process withdrawals, modify exchange rates, and view transaction history.
-- **Notifications:** WhatsApp (Twilio) for admins on new withdrawals, and in-app/push notifications (Firebase) for users on successful completion.
+1.  **Saved Beneficiaries:** Implement a system for users to save and manage beneficiaries to avoid re-entering data for each transfer. The beneficiary form should have pre-defined options for Venezuelan banks (with codes), ID types (V/E), and phone prefixes. The bank code should be included in the WhatsApp message to the admin.
+2.  **In-App Support Chat:** Create a support chat screen where users can send messages and images to an admin. The admin receives these messages on WhatsApp and can reply. The replies should appear in the user's in-app chat screen. The admin should also be able to close the chat from WhatsApp using a command.
+3.  **Full Admin Panel:** Build a comprehensive admin panel with the following features:
+    *   Dashboard with stats.
+    *   Management of pending withdrawals and recharges (approve/reject).
+    *   A web-based view of support chats to reply from the app.
+    *   User management (view list, manage KYC).
+    *   Transaction history with filtering and export.
+    *   App settings (exchange rate, limits).
+    *   **Role-Based Access Control (RBAC):** A  role that can create other  or  users and configure their specific permissions.
 
 </original_problem_statement>
 
 **User's preferred language**: Spanish. The next agent MUST respond in Spanish.
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application with the following features implemented and tested:
-- **Authentication:** Google Social Login.
-- **KYC & Policies:** A complete, mandatory flow for user verification (ID, CPF, Selfie) and acceptance of privacy policies (LGPD compliant).
-- **Withdrawals (Send RIS):** Users can create withdrawal requests.
-- **Hybrid Admin Flow:** Admins receive a WhatsApp notification (via Twilio) for new withdrawals. They can process the request by replying to the WhatsApp message with a payment receipt. The backend automatically processes the reply, downloads the image, and marks the transaction as complete.
-- **PIX Recharges:** Users can initiate recharges using Brazil's PIX system via a Mercado Pago integration. The app generates a QR code and a copy-paste code.
-- **In-App Notifications:** A notification center (bell icon) has been implemented as a workaround for push notification limitations. It informs users about completed transactions.
-- **Admin Panel:** Users with the 'admin' role can access a panel to change the RIS-to-VES exchange rate.
+A full-stack Expo (React Native) and FastAPI application. The core user-facing features are mostly complete, including Google Login, KYC, PIX recharges, and the Send RIS transfer flow.
+
+Most recently, a complete **Saved Beneficiaries** system and an **In-App Support Chat** have been implemented. The support chat allows two-way communication (User App <-> Admin WhatsApp), including image attachments and the ability for the admin to close chats via a WhatsApp command.
+
+The backend has been significantly expanded to support a new, comprehensive admin panel with a Role-Based Access Control (RBAC) system. Numerous new API endpoints have been created to manage users, transactions, support chats, and admin roles. The user  has been promoted to  in the database. A new, but currently empty, frontend file  has been created.
 
 **Last working item**: 
-- Last item agent was working: Implementing a series of enhancements for the PIX recharge flow based on user feedback. The agent had just finished:
-    1.  Modifying the backend PIX creation logic ( in ) to prevent a user from creating a new PIX transaction if another pending transaction with the exact same amount already exists.
-    2.  Completely rewriting the frontend screen  to change the UI layout and add a component for uploading a payment receipt.
-    The agent was about to create the new backend endpoint to handle the receipt upload for manual verification.
+- Last item agent was working: Building the full admin panel. The agent had just finished a major backend implementation, creating all the necessary API endpoints for the admin panel features and the RBAC system. It also created the initial frontend file for the panel () and promoted the user's account to . The agent was about to link this new admin panel screen into the app's navigation.
 - Status: IN PROGRESS
-- Agent Testing Done: N
-- Which testing method agent to use? both. The frontend needs to be tested to ensure the new UI on  works, including the file upload. The backend needs to be tested to verify the new endpoint for receipt verification and the logic that blocks duplicate payments.
+- Agent Testing Done: N (Backend endpoints are created but not tested).
+- Which testing method agent to use? both. The numerous new backend admin endpoints need to be thoroughly tested via curl or a testing script. The frontend admin panel will require extensive UI testing as it is built.
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  Issue 1: Push notifications are not delivered to the device (P1)
+  Issue 1: Push notifications are not delivered to the device (P2)
   
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: The agent correctly identified that the user's device token was a native FCM token. A test send resulted in a SenderId mismatch error. The agent then correctly diagnosed the root cause: remote push notifications are not supported in the Expo Go client for recent SDKs (like SDK 53+). A custom development build would be required to make them work.
-     - Next debug checklist: This is not a bug to be fixed, but a limitation to be managed. The next agent should:
-        1. Confirm with the user that the in-app notification system is an acceptable workaround for now.
-        2. Explain that for true push notifications, the user would need to create a development build of the app, which is a more advanced step. Do not proceed with this unless the user explicitly asks for it and understands the implications.
-     - Why fix this issue and what will be achieved with the fix?: Achieving real-time push notifications, which is a better user experience than the current in-app notification center.
+     - Attempted fixes: The agent correctly diagnosed that remote push notifications are not supported in the Expo Go client. The current workaround is a functional in-app notification system (bell icon).
+     - Next debug checklist: This is a platform limitation. No further action is needed unless the user decides to create a custom development build of the app. The next agent should simply manage user expectations and explain the situation if it comes up again.
+     - Why fix this issue and what will be achieved with the fix?: Real-time push notifications are a better UX than the in-app center.
      - Status:  BLOCKED (on Expo Go limitations)
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? both
      - Blocked on other issue: None
 
 **In progress Task List**:
-  Task 1:  Complete PIX Recharge Flow Enhancements (P0)
+  Task 1:  Complete Admin Panel Implementation (P0)
 
  Task Detail:
   - Task 1: 
-     - Where to resume: The backend logic in  to block duplicate PIX payments is implemented but not the verification part. The next step is to **create a new backend endpoint** (e.g., ) that accepts a  and an uploaded image (the receipt). This endpoint should update the transaction status to 'completed' and credit the user's balance. Afterwards, ensure the rewritten  correctly calls this new endpoint when the user uploads the receipt.
-     - What will be achieved with this?: A more robust and user-friendly PIX recharge flow that prevents duplicate payments and allows for manual verification with a receipt, as requested by the user.
+     - Where to resume: 
+        1. **Integrate the Admin Panel Screen:** Modify  to register the new  route.
+        2. **Provide Access:** Modify  to make the Admin Panel button navigate to the new screen. The button should only be visible to users with an  or  role.
+        3. **Build the UI:** The file  is currently just a placeholder. The main work is to build out the entire user interface for the admin panel, connecting each section (Dashboard, Withdrawals, Users, etc.) to the corresponding backend endpoints that were just created. This is a large task and should be broken down into smaller, verifiable steps (e.g., first build the user list, then withdrawal management, etc.).
+     - What will be achieved with this?: A complete, functional admin panel with role-based access, fulfilling the user's latest major feature request.
      - Status:  IN PROGRESS
      - Should Test frontend/backend/both after fix?: both
      - Blocked on something: None
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - **Stripe Integration for Recharges (P0 - Blocked):** This is a core requirement but is blocked because the user's Stripe account is still under review. Do not proceed until the user confirms their account is active and provides API keys.
-    - **Mercado Pago Webhook (P1):** The current PIX flow requires the user to manually click a Verify Payment button. A more robust solution is to implement the Mercado Pago webhook () to receive automatic payment confirmations from Mercado Pago, which would update the transaction status automatically. The agent mentioned this but did not implement it.
-
+    - **Mercado Pago Webhook (P1):** The current PIX flow is manual. Implementing the Mercado Pago webhook would automate payment confirmation.
+    
     Future Tasks:
-    - **Automated KYC Verification (P2):** The user expressed interest in an automated KYC solution like Stripe Identity or Sumsub. This is a post-MVP enhancement.
-    - **True Push Notifications (P2 - Blocked):** Implementing push notifications that work outside the app requires creating a custom development build. This can be addressed later if the user wants to move beyond Expo Go.
+    - **Stripe Integration for Recharges (P2 - Blocked):** Blocked on user's Stripe account activation.
+    - **Automated KYC Verification (P2):** Post-MVP enhancement.
+    - **True Push Notifications (P2 - Blocked):** Requires a custom development build.
 
 **Completed work in this session**
 - List of all completed tasks with file and method name:
-  - **Twilio Webhook Fix:** Successfully debugged and fixed the hybrid WhatsApp withdrawal flow. This involved fixing the Twilio console URL, handling HTTP redirects for image downloads, and correcting database query logic ( vs ) in .
-  - **Firebase Push Notification Setup:** Integrated Firebase Admin SDK on the backend, created a service account, and added logic to the frontend () to register for a device token.
-  - **In-App Notification System:** As a workaround for push notification limitations, implemented a full-stack in-app notification system with a bell icon and badge on  and a details screen at .
-  - **Privacy Policy (LGPD):** Created and enforced a mandatory privacy policy screen () that users must accept before using the app.
-  - **Mercado Pago PIX Integration:** Fully implemented PIX recharges via Mercado Pago, including guiding the user to get API keys, creating backend endpoints (), and building the frontend  screen.
-  - **Send RIS Button Fix:** Resolved an issue where the Send button on  was unresponsive on the web due to  incompatibility.
-  - **Expo Go Black Screen Fix:** Resolved dependency conflicts (specifically React versions) that were causing a black screen when launching the app on Expo Go.
-  - **UI Adjustments:** Modified the bottom tab bar in  to increase its height and prevent overlap with system navigation buttons.
-  - **Admin User Promotion:** Promoted the user to an 'admin' role to allow them to modify the exchange rate via the admin panel.
+  - **Saved Beneficiaries System:**
+    - : Completely redesigned to include a toggle for saved/new beneficiaries, dropdowns for banks (from ), and custom inputs for Cédula and phone number.
+    - : New screen to list, add, and delete saved beneficiaries.
+    - : Updated  models and  endpoint to include  in the admin WhatsApp message.
+  - **In-App Support Chat:**
+    - : New screen for real-time chat, including image attachments.
+    - : New endpoints (, ) and new DB collections (, ).
+    - : Major update to the Twilio webhook () to handle bidirectional text/image messages for support, and commands () to close chats.
+  - **Admin Panel Backend (RBAC):**
+    - : Added  and  enums, updated User model, created  dependency, and added a large suite of new admin API endpoints.
+  - **Profile Screen Links:**
+    - : Updated to correctly link to the  screen. The link to the  screen was also added.
 
 - Recently completed:
-  - PIX Payments via Mercado Pago (DONE)
-  - Hybrid WhatsApp withdrawal flow (DONE)
-  - In-App Notification Center (DONE)
-  - Mandatory Privacy Policy Screen (DONE)
-  - Send RIS button functionality fix (DONE)
-  - Bottom tab bar UI adjustment (DONE)
-
+  - Saved Beneficiaries Feature (DONE)
+  - Bidirectional In-App Support Chat w/ WhatsApp (DONE)
+  - Backend for a full Admin Panel with RBAC (DONE)
+  - Phone number input bug fix on  (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - None not already listed in the pending/in-progress section.
 
 **Known issue recurrence from previous fork**
-  - N/A
+  - **Twilio Webhook URL:** The issue where the WhatsApp webhook stopped working after a fork recurred. The root cause was identified: the public preview URL changes with each fork, and this URL must be manually updated in the Twilio Console. The user has confirmed they updated it and it is now working. This is likely to happen again on subsequent forks.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), , , , .
+- **Frontend**: Expo (React Native), , .
 - **Backend**: FastAPI (Python), Pydantic.
 - **Database**: MongoDB.
-- **Integrations**: Google OAuth, Twilio (WhatsApp), Mercado Pago (PIX Payments), Firebase (for user identity and planned for notifications).
-- **Architecture**: Full-stack monorepo.
-- **Notifications**: Currently using a custom-built in-app notification system. Push notifications are configured but non-functional in Expo Go.
+- **Admin & Security**: Role-Based Access Control (RBAC) implemented on the backend with , ,  roles and granular permissions.
+- **Integrations**: Google OAuth, Twilio (WhatsApp), Mercado Pago (PIX).
 
 **key DB schema**
-  - **User**: {_id, ..., balance, role, verification_status, **fcm_token**, **policies_accepted**}
-  - **Transaction**: {_id, user_id, type, amount_ris, amount_ves, status, proof_image, **payment_provider, payment_id**}
-  - **Notification**: {_id, user_id, title, body, read, created_at}
+  - **User**: {_id, ..., **role**, **permissions: list**}
+  - **Beneficiary**: {_id, user_id, full_name, ..., **bank_code**}
+  - **SupportConversation**: {_id, user_id, status ('open'/'closed'), last_message_at}
+  - **SupportMessage**: {_id, conversation_id, sender ('user'/'admin'), text, image_url, created_at}
 
 **changes in tech stack**
--  Python SDK was added.
--  was added to the frontend.
+  - No new packages, but significant new data models and API endpoints were added.
 
 **All files of reference**
 - **Created:**
-  - : Service to handle Mercado Pago API calls.
-  - : Screen for PIX recharges.
-  - : Screen for privacy policy acceptance.
-  - : Screen to display in-app notifications.
+  - : UI for managing saved beneficiaries.
+  - : UI for the in-app support chat.
+  - : Placeholder file for the new admin panel.
+  - : Static data for the Venezuelan banks dropdown.
 - **Updated Heavily:**
-  - : Major changes to add PIX endpoints, block duplicate payments, add policy endpoints, and add in-app notification creation logic. Old Stripe code was commented out.
-  - : Modified to add a Recharge with PIX button and the notification bell icon.
-  - : Modified multiple times to fix the broken Send button.
-  - : Modified to adjust the styling of the bottom tab bar.
-  - : Was just completely overwritten to support file uploads and a new layout.
+  - : Massively updated. Added all logic for support chat, RBAC, and all admin panel API endpoints. The Twilio webhook logic is now much more complex.
+  - : Completely rewritten to support the new beneficiary flow.
+  - : Updated to add links to Beneficiaries and Support screens.
 
 **Areas that need refactoring**:
--  is becoming very large. It should be broken down into smaller, more manageable routers (e.g., , , ).
-- The fix for the button on  involved multiple attempts and could be cleaned up to use a more robust, cross-platform modal/alert component instead of the mix of  and .
+-  is now critically oversized. It contains authentication, user flows, transactions, PIX payments, the entire support system, and now a full admin panel with RBAC. The admin routes should be immediately moved to a separate file (e.g., ) and imported as an  to improve maintainability.
 
 **key api endpoints**
-- : Creates a PIX payment request via Mercado Pago.
-- : Checks the status of a PIX payment.
-- : Marks that the current user has accepted the privacy policies.
-- : Retrieves the content of the privacy policy.
-- : Fetches unread in-app notifications for the current user.
-- : Marks notifications as read.
-- : The now-working webhook for processing WhatsApp replies.
+- : Sends a support message (text/image) from user to admin's WhatsApp.
+- : Gets the chat history for the current user.
+- **(NEW) Admin Endpoints:** A large set of endpoints prefixed with  now exist for managing withdrawals, users, roles, support, etc. (e.g., , ).
 
 **Critical Info for New Agent**
 - **Language is Spanish:** All user communication MUST be in Spanish.
-- **Top Priority:** The immediate task is to finish the PIX recharge enhancements. This involves creating a backend endpoint for receipt uploads and ensuring the frontend connects to it correctly.
-- **Push Notification Status:** Be very clear with the user about the push notification situation. **Remote push notifications DO NOT work in Expo Go.** The in-app notification center is the current, working solution. Do not spend time trying to fix remote push notifications without first discussing the need for a custom development build with the user.
-- **User Account:** The user's account () is flagged as  and has a test balance.
+- **Top Priority: Admin Panel UI:** The immediate and primary task is to build the frontend for the admin panel in . The backend is largely in place but untested. Start by linking the screen and then building out one section at a time (e.g., User Management).
+- **User Role:** The user  is a  and should be used for testing the admin panel.
+- **WhatsApp Webhook:** The Twilio webhook is working but is sensitive to URL changes between forks. If the user reports it's broken again, the first step is to have them update the webhook URL in their Twilio console.
+- **Refactoring Needed:** The  file has become unmanageable. While the priority is to deliver the feature, consider refactoring the admin routes into a separate file as an early step to make development easier.
 
 **documents created in this job**
-- 
+- None.
 
 **Last 10 User Messages and any pending HUMAN messages** 
-- **10. QUIERO QUE LA APP NO ACEPTE PAGOS CONSECUTIVOS DEL MISMO MONTO... (PENDING):** User requests three major improvements to the PIX recharge screen.
-- **9. QUIERO QUE SUBAS MAS LA BARRA (Completed):** User asked for a further height increase on the bottom tab bar.
-- **8. AJUSTA LA BARRA INFERIOR... (Completed):** User reported the bottom tab bar conflicts with phone controls.
-- **7. EL BOTON FUNCIONA, EN EL MOVIL EL FLUJO ESTUVO BIEN... (PENDING):** User confirms the Send button and mobile flow now work but points out that the user is not notified upon successful completion of the transaction.
-- **6. NO PUEDO ACCEDER CON EXPO GO... (Completed):** User reported a black screen on the Expo Go mobile app.
-- **5. SI A MI WHATSAPP ACABA DE LLEGAR PERO DEBE0RIA DE FUNCIONAR AUTOMATICAMENTE... (In Progress):** User confirmed receipt of a manual WhatsApp message but expects the app button to work and show a confirmation.
-- **4. ME VAS A CONSUMIR TODOS LOS CREDITOS... (In Progress):** User expressed frustration that the Send button is still not working.
-- **3. LA TASA ACTUAL ES DE 82 VES DEBES MODIFICAR... (Completed):** User requested an update to the exchange rate and access to modify it.
-- **2. AUN SIGUE SIN FUNCIONAR (In Progress):** User confirms the Send button is still broken after a fix attempt.
-- **1. LA RECARGA SE REALIZO CON EXITO POR PIX (Completed):** User confirms the PIX recharge flow was successful.
+- **10. implementa todas las opciones que indicaste... (IN PROGRESS):** User confirms the full list of admin panel features and adds the requirement for a  role to manage other admins.
+- **9. ok ahora trabajemos en la interfaz del administrador (IN PROGRESS):** User asks to start work on the admin interface.
+- **8. quiero tener la opcion de cerrar el chat... (Completed):** User asks for a way for the admin to close a support chat via WhatsApp command.
+- **7. ahora necesito que el usuario puedo adjuntar... (Completed):** User requests image attachment functionality in the support chat.
+- **6. si esta llegando la respuesta al usuario pero... (Completed):** User reports that admin replies appear in notifications, not in the chat UI itself.
+- **5. yo respondi el mensaje desde el chat de administrador... (Completed):** User reports that admin replies from WhatsApp are not being received by the user in the app.
+- **4. EN LA SECCION AYUDA Y SOPORTE UN CHAT... (Completed):** User requests an in-app support chat feature that messages the admin's WhatsApp.
+- **3. OK YA ESTA FUNCIONANDO, AHORA QUIERO QUE TRABAJES... (IN PROGRESS):** User confirms the WhatsApp webhook is fixed and asks to fix the Beneficiaries button on the profile screen.
+- **2. PERO ESTABA FUNCIONANDO PERFECTAMENTE... (Completed):** User reports the WhatsApp flow and in-app notifications stopped working.
+- **1. VEO QUE NO SE ESTAN PROCESANDO LOS CAPTURE... (Completed):** User reports multiple issues with the admin's WhatsApp withdrawal processing flow (no proof saved, no confirmation).
 
 **Project Health Check:**
-- Broken: Remote push notifications are non-functional due to Expo Go limitations.
-- Mocked: Stripe integration is fully commented out and non-functional pending user account approval.
+- Broken: Remote push notifications (due to Expo Go limitations).
+- Mocked: Stripe integration.
 
 **3rd Party Integrations**
-- **Google OAuth**: Used for user authentication (via Emergent).
-- **Twilio**: Used for sending and receiving WhatsApp messages for the withdrawal flow. Requires user's Account SID, Auth Token, and phone numbers. The webhook is now correctly configured and working.
-- **Mercado Pago**: Used for PIX payments. Requires user's Public Key and Access Token. The basic payment creation and status check flow is working.
-- **Firebase Cloud Messaging**: Configured on backend and frontend, but **non-functional** for remote push due to Expo Go limitations. Currently used to provide user identity for Google Login.
+- **Google OAuth**: For user authentication.
+- **Twilio**: For sending/receiving WhatsApp messages. The webhook is now complex, handling both withdrawal proofs (images) and support chat messages (text/images/commands). **Requires user to update the webhook URL in Twilio console after each fork.**
+- **Mercado Pago**: For PIX payments.
+- **Firebase Cloud Messaging**: Configured but non-functional for remote push.
 
 **Testing status**
-  - Testing agent used after significant changes: NO
-  - Troubleshoot agent used after agent stuck in loop: NO
+  - Testing agent used after significant changes: NO (The latest major changes to the backend have not been tested).
+  - Troubleshoot agent used after agent stuck in loop: YES, to diagnose the recurring Twilio webhook URL issue.
   - Test files created: None.
   - Known regressions: None.
 
 **Credentials to test flow:**
-- Use Google OAuth to log in with the user's account: .
-- This account is already marked as verified and has an admin role in the database.
+- Log in with Google using . This user is now a .
 
 **What agent forgot to execute**
-- The agent has not yet implemented the webhook for Mercado Pago to receive automatic payment confirmations. The current PIX flow is manual, requiring the user to click a button to verify the payment status or, with the new changes, upload a receipt. An automatic webhook would be a significant improvement and was mentioned as a possibility but not added to the task list.
+- The agent created a file  with the intention of separating the admin logic, but then proceeded to add all the new admin endpoints directly into the main  file, making it even more monolithic. This was a missed opportunity for code organization.
 
 </analysis>
