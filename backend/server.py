@@ -230,12 +230,47 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     return User(**user_doc)
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    """Check if user is admin"""
-    # In production, check if user has admin role
-    # For now, we'll check if email contains 'admin'
-    if 'admin' not in current_user.email.lower():
+    """Check if user is admin or super_admin"""
+    user_data = await db.users.find_one({"user_id": current_user.user_id})
+    role = user_data.get('role', 'user') if user_data else 'user'
+    
+    if role not in ['admin', 'super_admin']:
         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Update current_user with role and permissions
+    current_user.role = role
+    current_user.permissions = user_data.get('permissions', []) if user_data else []
     return current_user
+
+async def get_super_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Check if user is super_admin"""
+    user_data = await db.users.find_one({"user_id": current_user.user_id})
+    role = user_data.get('role', 'user') if user_data else 'user'
+    
+    if role != 'super_admin':
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    
+    current_user.role = role
+    current_user.permissions = list(ADMIN_PERMISSIONS.keys())
+    return current_user
+
+def has_permission(user: User, permission: str) -> bool:
+    """Check if user has specific permission"""
+    if user.role == 'super_admin':
+        return True
+    if user.role == 'admin':
+        # Admin has all except admin management
+        admin_only = ['admins.create', 'admins.edit']
+        return permission not in admin_only
+    return permission in user.permissions
+
+def require_permission(permission: str):
+    """Dependency to check for specific permission"""
+    async def checker(admin_user: User = Depends(get_admin_user)):
+        if not has_permission(admin_user, permission):
+            raise HTTPException(status_code=403, detail=f"Permission '{permission}' required")
+        return admin_user
+    return checker
 
 async def get_verified_user(current_user: User = Depends(get_current_user)) -> User:
     """Check if user is verified"""
