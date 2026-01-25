@@ -394,6 +394,14 @@ class RISAPITester:
             print("\n❌ API is not reachable. Stopping tests.")
             return False
         
+        # Test API structure
+        if not self.test_api_structure():
+            print("\n⚠️ API structure test failed, but continuing with endpoint tests.")
+        
+        # Test endpoint methods
+        if not self.test_endpoint_methods():
+            print("\n⚠️ Endpoint methods test failed, but continuing with main tests.")
+        
         # Create admin session
         if not self.create_admin_session():
             print("\n❌ Could not create admin session. Stopping tests.")
