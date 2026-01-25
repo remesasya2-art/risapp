@@ -558,25 +558,29 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     
     # Send WhatsApp notification to team with transaction ID
     try:
-        # Enhanced message with clear instructions
+        # Get bank code if available
+        bank_code = request.beneficiary_data.get('bank_code', '')
+        bank_name = request.beneficiary_data.get('bank', '')
+        bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
+        
+        # Enhanced message with clear instructions and bank code for easy payment
         message = f"""🔔 *NUEVO RETIRO PENDIENTE*
 
 💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} VES
 👤 Usuario: {current_user.name}
 📧 Email: {current_user.email}
 
-📋 *BENEFICIARIO:*
-Nombre: {request.beneficiary_data.get('full_name')}
-Banco: {request.beneficiary_data.get('bank')}
-Cuenta: {request.beneficiary_data.get('account_number')}
-Cédula: {request.beneficiary_data.get('id_document')}
-Teléfono: {request.beneficiary_data.get('phone_number')}
+📋 *DATOS PARA TRANSFERENCIA:*
+🏦 Banco: {bank_info}
+💳 Cuenta: {request.beneficiary_data.get('account_number')}
+👤 Titular: {request.beneficiary_data.get('full_name')}
+🆔 Cédula: {request.beneficiary_data.get('id_document')}
+📱 Teléfono: {request.beneficiary_data.get('phone_number')}
 
-🆔 ID: {transaction.transaction_id}
+🔢 ID Transacción: {transaction.transaction_id}
 
 ---
-✅ Opción 1: Responde con foto del comprobante
-✅ Opción 2: Procesa en admin panel"""
+✅ Responde con foto del comprobante para completar"""
 
         from twilio.rest import Client
         twilio_client = Client(
