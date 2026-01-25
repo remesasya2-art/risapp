@@ -777,6 +777,119 @@ async def get_pix_status(transaction_id: str, current_user: User = Depends(get_c
     
     return {"status": "pending"}
 
+# =======================
+# PIX VERIFICATION WITH PROOF
+# =======================
+
+class PixVerifyWithProofRequest(BaseModel):
+    transaction_id: str
+    proof_image: str  # base64
+
+@api_router.post("/pix/verify-with-proof")
+async def verify_pix_with_proof(request: PixVerifyWithProofRequest, current_user: User = Depends(get_current_user)):
+    """Verify PIX payment manually with proof of payment image"""
+    
+    # Find transaction
+    transaction = await db.transactions.find_one({
+        "transaction_id": request.transaction_id,
+        "user_id": current_user.user_id,
+        "type": "recharge",
+        "status": "pending"
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
+    
+    # First, check with Mercado Pago if payment is already approved
+    payment_id = transaction.get("mercadopago_payment_id")
+    is_auto_approved = False
+    
+    if payment_id:
+        payment_status = mercadopago_service.get_payment_status(payment_id)
+        if payment_status and payment_status.get("status") == "approved":
+            is_auto_approved = True
+    
+    amount_ris = transaction.get("amount_output", 0)
+    
+    if is_auto_approved:
+        # Payment already approved by Mercado Pago - complete immediately
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$inc": {"balance_ris": amount_ris}}
+        )
+        
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "completed",
+                "proof_image": request.proof_image,
+                "completed_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+                "verification_method": "auto_mercadopago_with_proof"
+            }}
+        )
+        
+        logger.info(f"PIX payment auto-completed with proof for user {current_user.user_id}: +{amount_ris} RIS")
+        
+        return {
+            "status": "completed",
+            "amount_ris": amount_ris,
+            "message": "Pago confirmado y saldo acreditado"
+        }
+    else:
+        # Payment not yet confirmed by Mercado Pago - set to pending_review for admin verification
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "pending_review",
+                "proof_image": request.proof_image,
+                "updated_at": datetime.now(timezone.utc),
+                "verification_method": "manual_proof"
+            }}
+        )
+        
+        # Create notification for user
+        await create_notification(
+            user_id=current_user.user_id,
+            title="📝 Comprobante Recibido",
+            message=f"Tu comprobante de R$ {transaction.get('amount_input', 0):.2f} está siendo verificado. Te notificaremos cuando se confirme.",
+            notification_type="recharge_pending_review",
+            data={"transaction_id": request.transaction_id}
+        )
+        
+        logger.info(f"PIX payment pending review for user {current_user.user_id}: {request.transaction_id}")
+        
+        return {
+            "status": "pending_review",
+            "message": "Comprobante enviado. Será revisado y recibirás una notificación cuando se confirme."
+        }
+
+@api_router.get("/transaction/{transaction_id}/proof")
+async def get_transaction_proof(transaction_id: str, current_user: User = Depends(get_current_user)):
+    """Get the proof image for a specific transaction"""
+    
+    transaction = await db.transactions.find_one({
+        "transaction_id": transaction_id,
+        "user_id": current_user.user_id
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    proof_image = transaction.get("proof_image")
+    
+    if not proof_image:
+        raise HTTPException(status_code=404, detail="Esta transacción no tiene comprobante")
+    
+    return {
+        "transaction_id": transaction_id,
+        "proof_image": proof_image,
+        "status": transaction.get("status"),
+        "amount_input": transaction.get("amount_input"),
+        "amount_output": transaction.get("amount_output"),
+        "completed_at": transaction.get("completed_at")
+    }
+
 @api_router.post("/webhooks/mercadopago")
 async def mercadopago_webhook(request: Request):
     """Webhook to receive Mercado Pago payment notifications"""
