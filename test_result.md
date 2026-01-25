@@ -362,10 +362,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Recharge Screen PIX Flow"
-    - "Send/Transfer Screen"
-    - "Complete User Authentication Flow"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
