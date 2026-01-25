@@ -137,6 +137,7 @@ class BeneficiaryCreate(BaseModel):
     id_document: str
     phone_number: str
     bank: str
+    bank_code: Optional[str] = None  # Venezuelan bank code (e.g., 0102)
 
 class VerificationRequest(BaseModel):
     full_name: str
