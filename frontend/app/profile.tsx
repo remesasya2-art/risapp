@@ -79,13 +79,16 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          {user.email.includes('admin') && (
+          {(user.role === 'admin' || user.role === 'super_admin') && (
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => router.push('/admin')}
+              onPress={() => router.push('/admin-panel')}
             >
-              <Ionicons name="shield-checkmark" size={24} color="#2563eb" />
+              <Ionicons name="shield" size={24} color="#8b5cf6" />
               <Text style={styles.menuText}>Panel de Administración</Text>
+              <View style={styles.adminBadge}>
+                <Text style={styles.adminBadgeText}>{user.role === 'super_admin' ? 'Super' : 'Admin'}</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#6b7280" />
             </TouchableOpacity>
           )}
