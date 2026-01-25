@@ -1016,27 +1016,42 @@ async def twilio_whatsapp_webhook(request: Request):
                             if result.modified_count > 0:
                                 logger.info(f"Transaction {transaction_id} marked as completed via WhatsApp")
                                 
-                                # Get transaction and user info for push notification
+                                # Get transaction and user info for notification
                                 completed_tx = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
                                 if completed_tx:
                                     user_id = completed_tx.get('user_id')
                                     if user_id:
+                                        beneficiary = completed_tx.get('beneficiary_data', {})
+                                        amount_ris = completed_tx.get('amount_input', 0)
+                                        amount_ves = completed_tx.get('amount_output', 0)
+                                        
+                                        # Create in-app notification
+                                        await create_notification(
+                                            user_id=user_id,
+                                            title="✅ Retiro Completado",
+                                            message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} VES) a {beneficiary.get('full_name', 'beneficiario')} fue procesado exitosamente.",
+                                            notification_type="withdrawal_completed",
+                                            data={
+                                                "transaction_id": transaction_id,
+                                                "amount_ris": amount_ris,
+                                                "amount_ves": amount_ves
+                                            }
+                                        )
+                                        
+                                        # Try push notification (may fail in Expo Go)
                                         user = await db.users.find_one({"user_id": user_id})
                                         if user and user.get('fcm_token'):
-                                            # Send push notification using Expo
-                                            from push_service import push_service
-                                            beneficiary = completed_tx.get('beneficiary_data', {})
-                                            notification_sent = await push_service.send_withdrawal_completed_notification(
-                                                push_token=user['fcm_token'],
-                                                transaction_id=transaction_id,
-                                                amount_ris=completed_tx.get('amount_input', 0),
-                                                amount_ves=completed_tx.get('amount_output', 0),
-                                                beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
-                                            )
-                                            if notification_sent:
-                                                logger.info(f"Push notification sent to user {user_id}")
-                                            else:
-                                                logger.warning(f"Failed to send push notification to user {user_id}")
+                                            try:
+                                                from push_service import push_service
+                                                await push_service.send_withdrawal_completed_notification(
+                                                    push_token=user['fcm_token'],
+                                                    transaction_id=transaction_id,
+                                                    amount_ris=amount_ris,
+                                                    amount_ves=amount_ves,
+                                                    beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
+                                                )
+                                            except Exception as e:
+                                                logger.warning(f"Push notification failed: {e}")
                                 
                                 # Send confirmation back via WhatsApp
                                 from twilio.rest import Client
