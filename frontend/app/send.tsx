@@ -113,28 +113,44 @@ export default function SendRISScreen() {
     setShowBeneficiaries(false);
   };
 
+  const showMessage = (message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('', message);
+    }
+  };
+
+  const confirmAction = (message: string): boolean => {
+    if (Platform.OS === 'web') {
+      return window.confirm(message);
+    }
+    return true; // En móvil procesamos directo
+  };
+
   const handleSend = async () => {
     const risAmount = parseFloat(amount);
     
     // Validaciones básicas
     if (!risAmount || risAmount <= 0) {
-      window.alert('Error: Ingresa un monto válido');
+      showMessage('Error: Ingresa un monto válido');
       return;
     }
     if (!user || user.balance_ris < risAmount) {
-      window.alert('Error: Saldo insuficiente');
+      showMessage('Error: Saldo insuficiente');
       return;
     }
     if (!beneficiaryData.full_name?.trim() || !beneficiaryData.account_number?.trim() || 
         !beneficiaryData.id_document?.trim() || !beneficiaryData.phone_number?.trim() || 
         !beneficiaryData.bank?.trim()) {
-      window.alert('Error: Completa todos los campos del beneficiario');
+      showMessage('Error: Completa todos los campos del beneficiario');
       return;
     }
 
     // Confirmar
-    const confirmed = window.confirm(`¿Enviar ${risAmount} RIS a ${beneficiaryData.full_name}?`);
-    if (!confirmed) return;
+    if (!confirmAction(`¿Enviar ${risAmount} RIS a ${beneficiaryData.full_name}?`)) {
+      return;
+    }
 
     // Enviar
     setLoading(true);
@@ -148,10 +164,10 @@ export default function SendRISScreen() {
       );
       
       await refreshUser();
-      window.alert('¡Envío exitoso! El equipo procesará tu transferencia.');
+      showMessage('¡Envío exitoso! El equipo procesará tu transferencia.');
       router.back();
     } catch (error: any) {
-      window.alert('Error: ' + (error.response?.data?.detail || 'No se pudo procesar'));
+      showMessage('Error: ' + (error.response?.data?.detail || 'No se pudo procesar'));
     } finally {
       setLoading(false);
     }
