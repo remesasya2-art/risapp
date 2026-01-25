@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,13 +18,14 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'system';
+  sender: 'user' | 'admin' | 'system';
   timestamp: Date;
   status?: 'sending' | 'sent' | 'error';
 }
@@ -39,56 +41,80 @@ const showAlert = (title: string, message: string) => {
 export default function SupportScreen() {
   const router = useRouter();
   const { user, login } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje y nuestro equipo te responderá por WhatsApp lo antes posible.',
-      sender: 'system',
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    // Load chat history from AsyncStorage
-    loadChatHistory();
-  }, []);
-
-  const loadChatHistory = async () => {
-    try {
-      const history = await AsyncStorage.getItem('support_chat_history');
-      if (history) {
-        const parsed = JSON.parse(history);
-        // Convert timestamps back to Date objects
-        const messagesWithDates = parsed.map((m: any) => ({
-          ...m,
-          timestamp: new Date(m.timestamp),
-        }));
-        setMessages([
-          {
-            id: '1',
-            text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje y nuestro equipo te responderá por WhatsApp lo antes posible.',
-            sender: 'system',
-            timestamp: new Date(),
-          },
-          ...messagesWithDates,
-        ]);
+  // Load conversation when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        loadConversation();
+        // Start polling for new messages every 5 seconds
+        pollIntervalRef.current = setInterval(loadConversation, 5000);
       }
+      
+      return () => {
+        // Clear polling when leaving screen
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+        }
+      };
+    }, [user])
+  );
+
+  const loadConversation = async () => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await axios.get(`${BACKEND_URL}/api/support/conversation`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const welcomeMessage: Message = {
+        id: 'welcome',
+        text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje y nuestro equipo te responderá lo antes posible.',
+        sender: 'system',
+        timestamp: new Date(0), // Very old date so it appears first
+      };
+      
+      // Convert API response to Message format
+      const conversationMessages: Message[] = response.data.map((msg: any) => ({
+        id: msg.id,
+        text: msg.text,
+        sender: msg.sender === 'admin' ? 'admin' : 'user',
+        timestamp: new Date(msg.timestamp),
+        status: 'sent',
+      }));
+      
+      setMessages([welcomeMessage, ...conversationMessages]);
+      setLoading(false);
+      
+      // Scroll to bottom
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+      
     } catch (error) {
-      console.error('Error loading chat history:', error);
+      console.error('Error loading conversation:', error);
+      setLoading(false);
+      // Show welcome message even if API fails
+      setMessages([{
+        id: 'welcome',
+        text: '¡Hola! 👋 Bienvenido al soporte de RIS.\n\nEscribe tu mensaje y nuestro equipo te responderá lo antes posible.',
+        sender: 'system',
+        timestamp: new Date(),
+      }]);
     }
   };
 
-  const saveChatHistory = async (newMessages: Message[]) => {
-    try {
-      // Only save user messages
-      const userMessages = newMessages.filter(m => m.sender === 'user');
-      await AsyncStorage.setItem('support_chat_history', JSON.stringify(userMessages.slice(-20))); // Keep last 20 messages
-    } catch (error) {
-      console.error('Error saving chat history:', error);
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadConversation();
+    setRefreshing(false);
   };
 
   const sendMessage = async () => {
@@ -113,6 +139,11 @@ export default function SupportScreen() {
     setMessages(prev => [...prev, newMessage]);
     setSending(true);
 
+    // Scroll to bottom
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
     try {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
@@ -128,20 +159,6 @@ export default function SupportScreen() {
         )
       );
 
-      // Add confirmation message
-      const confirmMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: '✅ Mensaje enviado. Nuestro equipo te contactará por WhatsApp pronto.',
-        sender: 'system',
-        timestamp: new Date(),
-      };
-      
-      setMessages(prev => {
-        const updated = [...prev, confirmMessage];
-        saveChatHistory(updated);
-        return updated;
-      });
-
     } catch (error: any) {
       console.error('Error sending message:', error);
       
@@ -156,15 +173,26 @@ export default function SupportScreen() {
     } finally {
       setSending(false);
     }
-
-    // Scroll to bottom
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
   };
 
   const formatTime = (date: Date) => {
+    if (date.getTime() === 0) return ''; // Welcome message
     return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (date: Date) => {
+    if (date.getTime() === 0) return ''; // Welcome message
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Hoy';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Ayer';
+    } else {
+      return date.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
   };
 
   if (!user) {
@@ -207,66 +235,100 @@ export default function SupportScreen() {
               <Text style={styles.onlineText}>En línea</Text>
             </View>
           </View>
-          <View style={{ width: 24 }} />
+          <TouchableOpacity onPress={onRefresh}>
+            <Ionicons name="refresh" size={24} color="#2563eb" />
+          </TouchableOpacity>
         </View>
 
         {/* Info Banner */}
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle" size={20} color="#2563eb" />
           <Text style={styles.infoBannerText}>
-            Los mensajes serán enviados a nuestro equipo vía WhatsApp
+            Chat en vivo con nuestro equipo de soporte
           </Text>
         </View>
 
         {/* Messages */}
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-        >
-          {messages.map((message) => (
-            <View
-              key={message.id}
-              style={[
-                styles.messageBubble,
-                message.sender === 'user' ? styles.userBubble : styles.systemBubble,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.messageText,
-                  message.sender === 'user' ? styles.userMessageText : styles.systemMessageText,
-                ]}
-              >
-                {message.text}
-              </Text>
-              <View style={styles.messageFooter}>
-                <Text
-                  style={[
-                    styles.messageTime,
-                    message.sender === 'user' ? styles.userMessageTime : styles.systemMessageTime,
-                  ]}
-                >
-                  {formatTime(message.timestamp)}
-                </Text>
-                {message.sender === 'user' && message.status && (
-                  <View style={styles.statusIcon}>
-                    {message.status === 'sending' && (
-                      <Ionicons name="time-outline" size={14} color="#fff" />
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={styles.loadingText}>Cargando conversación...</Text>
+          </View>
+        ) : (
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.messagesContainer}
+            contentContainerStyle={styles.messagesContent}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {messages.map((message, index) => {
+              // Show date separator
+              const showDate = index === 0 || 
+                (index > 0 && formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp) && message.timestamp.getTime() !== 0);
+              
+              return (
+                <View key={message.id}>
+                  {showDate && message.timestamp.getTime() !== 0 && (
+                    <View style={styles.dateSeparator}>
+                      <Text style={styles.dateSeparatorText}>{formatDate(message.timestamp)}</Text>
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      message.sender === 'user' ? styles.userBubble : 
+                      message.sender === 'admin' ? styles.adminBubble : styles.systemBubble,
+                    ]}
+                  >
+                    {message.sender === 'admin' && (
+                      <View style={styles.adminLabel}>
+                        <Ionicons name="headset" size={12} color="#10b981" />
+                        <Text style={styles.adminLabelText}>Soporte RIS</Text>
+                      </View>
                     )}
-                    {message.status === 'sent' && (
-                      <Ionicons name="checkmark-done" size={14} color="#fff" />
-                    )}
-                    {message.status === 'error' && (
-                      <Ionicons name="alert-circle" size={14} color="#fca5a5" />
+                    <Text
+                      style={[
+                        styles.messageText,
+                        message.sender === 'user' ? styles.userMessageText : 
+                        message.sender === 'admin' ? styles.adminMessageText : styles.systemMessageText,
+                      ]}
+                    >
+                      {message.text}
+                    </Text>
+                    {message.timestamp.getTime() !== 0 && (
+                      <View style={styles.messageFooter}>
+                        <Text
+                          style={[
+                            styles.messageTime,
+                            message.sender === 'user' ? styles.userMessageTime : styles.otherMessageTime,
+                          ]}
+                        >
+                          {formatTime(message.timestamp)}
+                        </Text>
+                        {message.sender === 'user' && message.status && (
+                          <View style={styles.statusIcon}>
+                            {message.status === 'sending' && (
+                              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.7)" />
+                            )}
+                            {message.status === 'sent' && (
+                              <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.9)" />
+                            )}
+                            {message.status === 'error' && (
+                              <Ionicons name="alert-circle" size={14} color="#fca5a5" />
+                            )}
+                          </View>
+                        )}
+                      </View>
                     )}
                   </View>
-                )}
-              </View>
-            </View>
-          ))}
-        </ScrollView>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
 
         {/* Input Area */}
         <View style={styles.inputContainer}>
@@ -350,6 +412,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 24,
   },
+  loadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 12,
+  },
   loginButton: {
     backgroundColor: '#2563eb',
     paddingHorizontal: 24,
@@ -379,17 +446,42 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     padding: 16,
+    paddingBottom: 8,
+  },
+  dateSeparator: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateSeparatorText: {
+    fontSize: 12,
+    color: '#6b7280',
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
   messageBubble: {
-    maxWidth: '80%',
+    maxWidth: '85%',
     padding: 12,
     borderRadius: 16,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   userBubble: {
     backgroundColor: '#2563eb',
     alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
+  },
+  adminBubble: {
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#10b981',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   systemBubble: {
     backgroundColor: '#fff',
@@ -401,12 +493,26 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  adminLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  adminLabelText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#10b981',
+  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
   },
   userMessageText: {
     color: '#fff',
+  },
+  adminMessageText: {
+    color: '#1f2937',
   },
   systemMessageText: {
     color: '#1f2937',
@@ -424,7 +530,7 @@ const styles = StyleSheet.create({
   userMessageTime: {
     color: 'rgba(255,255,255,0.7)',
   },
-  systemMessageTime: {
+  otherMessageTime: {
     color: '#9ca3af',
   },
   statusIcon: {
