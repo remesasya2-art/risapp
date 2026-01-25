@@ -709,6 +709,198 @@ async def process_withdrawal(request: ProcessWithdrawalRequest, admin_user: User
     return {"message": "Withdrawal processed successfully"}
 
 # =======================
+# PIX RECHARGE ROUTES
+# =======================
+
+class PixRechargeRequest(BaseModel):
+    amount: float
+    cpf: str
+
+@api_router.post("/pix/create")
+async def create_pix_payment(request: PixRechargeRequest, current_user: User = Depends(get_current_user)):
+    """Create a PIX payment for recharging RIS balance"""
+    
+    # Validate amount (min 10, max 2000 BRL)
+    if request.amount < 10:
+        raise HTTPException(status_code=400, detail="El monto mínimo es R$ 10,00")
+    if request.amount > 2000:
+        raise HTTPException(status_code=400, detail="El monto máximo por transacción es R$ 2.000,00")
+    
+    # Check verification status
+    if current_user.verification_status != "verified":
+        raise HTTPException(status_code=403, detail="Debes completar la verificación de tu cuenta primero")
+    
+    # Generate unique transaction ID
+    transaction_id = str(uuid.uuid4())
+    
+    # Get user name parts
+    name_parts = current_user.name.split(" ", 1)
+    first_name = name_parts[0]
+    last_name = name_parts[1] if len(name_parts) > 1 else first_name
+    
+    # Create PIX payment with Mercado Pago
+    pix_result = mercadopago_service.create_pix_payment(
+        amount=request.amount,
+        description=f"Recarga RIS - {request.amount} BRL",
+        payer_email=current_user.email,
+        payer_first_name=first_name,
+        payer_last_name=last_name,
+        payer_cpf=request.cpf,
+        external_reference=transaction_id
+    )
+    
+    if not pix_result or not pix_result.get("success"):
+        error_msg = pix_result.get("error", "Error al crear el pago PIX") if pix_result else "Error al crear el pago PIX"
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Save pending transaction to database
+    transaction_data = {
+        "transaction_id": transaction_id,
+        "user_id": current_user.user_id,
+        "type": "recharge",
+        "payment_method": "pix",
+        "status": "pending",
+        "amount_input": request.amount,  # BRL
+        "amount_output": request.amount,  # RIS (1:1)
+        "mercadopago_payment_id": pix_result.get("payment_id"),
+        "pix_qr_code": pix_result.get("qr_code"),
+        "pix_qr_code_base64": pix_result.get("qr_code_base64"),
+        "pix_expiration": pix_result.get("expiration"),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    await db.transactions.insert_one(transaction_data)
+    
+    logger.info(f"PIX payment created for user {current_user.user_id}: {transaction_id}")
+    
+    return {
+        "success": True,
+        "transaction_id": transaction_id,
+        "payment_id": pix_result.get("payment_id"),
+        "qr_code": pix_result.get("qr_code"),
+        "qr_code_base64": pix_result.get("qr_code_base64"),
+        "expiration": pix_result.get("expiration"),
+        "amount_brl": request.amount,
+        "amount_ris": request.amount
+    }
+
+@api_router.get("/pix/status/{transaction_id}")
+async def get_pix_status(transaction_id: str, current_user: User = Depends(get_current_user)):
+    """Check PIX payment status"""
+    
+    # Find transaction
+    transaction = await db.transactions.find_one({
+        "transaction_id": transaction_id,
+        "user_id": current_user.user_id
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    # If already completed, return status
+    if transaction.get("status") == "completed":
+        return {
+            "status": "completed",
+            "amount_ris": transaction.get("amount_output"),
+            "completed_at": transaction.get("completed_at")
+        }
+    
+    # Check with Mercado Pago
+    payment_id = transaction.get("mercadopago_payment_id")
+    if payment_id:
+        payment_status = mercadopago_service.get_payment_status(payment_id)
+        
+        if payment_status and payment_status.get("status") == "approved":
+            # Payment approved - credit user's balance
+            amount_ris = transaction.get("amount_output", 0)
+            
+            # Update user balance
+            await db.users.update_one(
+                {"user_id": current_user.user_id},
+                {"$inc": {"balance_ris": amount_ris}}
+            )
+            
+            # Update transaction status
+            await db.transactions.update_one(
+                {"transaction_id": transaction_id},
+                {"$set": {
+                    "status": "completed",
+                    "completed_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }}
+            )
+            
+            logger.info(f"PIX payment completed for user {current_user.user_id}: +{amount_ris} RIS")
+            
+            return {
+                "status": "completed",
+                "amount_ris": amount_ris,
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }
+        
+        return {
+            "status": payment_status.get("status", "pending") if payment_status else "pending",
+            "status_detail": payment_status.get("status_detail") if payment_status else None
+        }
+    
+    return {"status": "pending"}
+
+@api_router.post("/webhooks/mercadopago")
+async def mercadopago_webhook(request: Request):
+    """Webhook to receive Mercado Pago payment notifications"""
+    try:
+        data = await request.json()
+        
+        logger.info(f"Mercado Pago webhook received: {data}")
+        
+        # Handle payment notification
+        if data.get("type") == "payment":
+            payment_id = data.get("data", {}).get("id")
+            
+            if payment_id:
+                # Get payment details
+                payment_status = mercadopago_service.get_payment_status(payment_id)
+                
+                if payment_status and payment_status.get("status") == "approved":
+                    external_reference = payment_status.get("external_reference")
+                    
+                    if external_reference:
+                        # Find and update transaction
+                        transaction = await db.transactions.find_one({
+                            "transaction_id": external_reference,
+                            "status": "pending"
+                        })
+                        
+                        if transaction:
+                            amount_ris = transaction.get("amount_output", 0)
+                            user_id = transaction.get("user_id")
+                            
+                            # Update user balance
+                            await db.users.update_one(
+                                {"user_id": user_id},
+                                {"$inc": {"balance_ris": amount_ris}}
+                            )
+                            
+                            # Update transaction status
+                            await db.transactions.update_one(
+                                {"transaction_id": external_reference},
+                                {"$set": {
+                                    "status": "completed",
+                                    "completed_at": datetime.now(timezone.utc),
+                                    "updated_at": datetime.now(timezone.utc)
+                                }}
+                            )
+                            
+                            logger.info(f"PIX payment auto-completed via webhook: {external_reference}")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"Error processing Mercado Pago webhook: {e}")
+        return {"status": "error"}
+
+# =======================
 # TRANSACTION ROUTES
 # =======================
 
