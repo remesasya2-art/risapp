@@ -956,19 +956,28 @@ async def mercadopago_webhook(request: Request):
 
 class SupportMessageRequest(BaseModel):
     message: str
+    image: Optional[str] = None  # base64 image
 
 @api_router.post("/support/send")
 async def send_support_message(request: SupportMessageRequest, current_user: User = Depends(get_current_user)):
     """Send a support message to admin via WhatsApp"""
     
-    if not request.message or len(request.message.strip()) < 1:
-        raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
+    if not request.message and not request.image:
+        raise HTTPException(status_code=400, detail="Debes enviar un mensaje o una imagen")
     
-    if len(request.message) > 500:
+    if request.message and len(request.message) > 500:
         raise HTTPException(status_code=400, detail="El mensaje es demasiado largo (máximo 500 caracteres)")
     
     try:
+        from twilio.rest import Client
+        twilio_client = Client(
+            os.getenv('TWILIO_ACCOUNT_SID'),
+            os.getenv('TWILIO_AUTH_TOKEN')
+        )
+        
         # Format message for admin
+        message_text = request.message.strip() if request.message else "[Imagen adjunta]"
+        
         support_message = f"""📩 *MENSAJE DE SOPORTE*
 
 👤 *Usuario:* {current_user.name}
@@ -976,36 +985,84 @@ async def send_support_message(request: SupportMessageRequest, current_user: Use
 🆔 *ID:* {current_user.user_id}
 
 💬 *Mensaje:*
-{request.message.strip()}
+{message_text}
 
 ---
 Responde a este mensaje para contactar al usuario."""
 
-        # Send via Twilio WhatsApp
-        from twilio.rest import Client
-        twilio_client = Client(
-            os.getenv('TWILIO_ACCOUNT_SID'),
-            os.getenv('TWILIO_AUTH_TOKEN')
-        )
+        # If there's an image, we need to upload it and send as media
+        if request.image:
+            # Save image temporarily and get URL
+            import base64
+            import tempfile
+            import os as os_module
+            
+            # Extract base64 data
+            if ',' in request.image:
+                image_data = request.image.split(',')[1]
+            else:
+                image_data = request.image
+            
+            # Decode and save to temp file
+            image_bytes = base64.b64decode(image_data)
+            
+            # Save to a publicly accessible location or use a service
+            # For now, we'll save it and note in the message
+            # In production, you'd upload to S3/CloudStorage and get a URL
+            
+            # Save support message with image to database first
+            support_record = {
+                "user_id": current_user.user_id,
+                "user_name": current_user.name,
+                "user_email": current_user.email,
+                "message": message_text,
+                "image": request.image,  # Store full base64
+                "sent_via": "whatsapp",
+                "created_at": datetime.now(timezone.utc)
+            }
+            result = await db.support_messages.insert_one(support_record)
+            
+            # Send text message to WhatsApp (image notification)
+            support_message_with_image = f"""📩 *MENSAJE DE SOPORTE* 📷
+
+👤 *Usuario:* {current_user.name}
+📧 *Email:* {current_user.email}
+🆔 *ID:* {current_user.user_id}
+
+💬 *Mensaje:*
+{message_text}
+
+📷 *Imagen adjunta* - Ver en panel admin o base de datos
+ID Mensaje: {str(result.inserted_id)}
+
+---
+Responde a este mensaje para contactar al usuario."""
+            
+            twilio_client.messages.create(
+                from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                body=support_message_with_image,
+                to=os.getenv('TWILIO_WHATSAPP_TO')
+            )
+        else:
+            # No image, just text
+            twilio_client.messages.create(
+                from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                body=support_message,
+                to=os.getenv('TWILIO_WHATSAPP_TO')
+            )
+            
+            # Save support message to database
+            support_record = {
+                "user_id": current_user.user_id,
+                "user_name": current_user.name,
+                "user_email": current_user.email,
+                "message": message_text,
+                "sent_via": "whatsapp",
+                "created_at": datetime.now(timezone.utc)
+            }
+            await db.support_messages.insert_one(support_record)
         
-        twilio_client.messages.create(
-            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-            body=support_message,
-            to=os.getenv('TWILIO_WHATSAPP_TO')
-        )
-        
-        # Save support message to database
-        support_record = {
-            "user_id": current_user.user_id,
-            "user_name": current_user.name,
-            "user_email": current_user.email,
-            "message": request.message.strip(),
-            "sent_via": "whatsapp",
-            "created_at": datetime.now(timezone.utc)
-        }
-        await db.support_messages.insert_one(support_record)
-        
-        logger.info(f"Support message sent from {current_user.email}")
+        logger.info(f"Support message sent from {current_user.email}" + (" with image" if request.image else ""))
         
         return {"status": "success", "message": "Mensaje enviado correctamente"}
         
