@@ -1840,6 +1840,533 @@ async def twilio_whatsapp_webhook(request: Request):
         return {"status": "error", "message": str(e)}
 
 # =======================
+# ADMIN PANEL - COMPLETE ENDPOINTS
+# =======================
+
+# --- Dashboard ---
+@api_router.get("/admin/dashboard")
+async def get_admin_dashboard(admin_user: User = Depends(get_admin_user)):
+    """Get dashboard statistics"""
+    if not has_permission(admin_user, "dashboard.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Get statistics
+    total_users = await db.users.count_documents({"role": {"$ne": "admin"}})
+    verified_users = await db.users.count_documents({"verification_status": "verified"})
+    pending_kyc = await db.users.count_documents({"verification_status": "pending", "id_document_image": {"$ne": None}})
+    
+    total_transactions = await db.transactions.count_documents({})
+    pending_withdrawals = await db.transactions.count_documents({"type": "withdrawal", "status": "pending"})
+    pending_recharges = await db.transactions.count_documents({"type": "recharge", "status": "pending_review"})
+    completed_transactions = await db.transactions.count_documents({"status": "completed"})
+    
+    open_support = await db.support_messages.count_documents({"status": {"$ne": "closed"}})
+    
+    # Volume calculations
+    pipeline = [
+        {"$match": {"status": "completed"}},
+        {"$group": {"_id": "$type", "total": {"$sum": "$amount_input"}}}
+    ]
+    volumes = await db.transactions.aggregate(pipeline).to_list(10)
+    volume_by_type = {v["_id"]: v["total"] for v in volumes}
+    
+    # Get rate
+    rate = await db.settings.find_one({"key": "exchange_rate"})
+    current_rate = rate.get("ris_to_ves", 78) if rate else 78
+    
+    return {
+        "users": {
+            "total": total_users,
+            "verified": verified_users,
+            "pending_kyc": pending_kyc
+        },
+        "transactions": {
+            "total": total_transactions,
+            "completed": completed_transactions,
+            "pending_withdrawals": pending_withdrawals,
+            "pending_recharges": pending_recharges
+        },
+        "support": {
+            "open_chats": open_support
+        },
+        "volume": {
+            "withdrawals": volume_by_type.get("withdrawal", 0),
+            "recharges": volume_by_type.get("recharge", 0)
+        },
+        "current_rate": current_rate
+    }
+
+# --- Sub-Admin Management ---
+class CreateSubAdminRequest(BaseModel):
+    email: str
+    name: str
+    permissions: List[str]
+
+class UpdateSubAdminRequest(BaseModel):
+    permissions: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    name: Optional[str] = None
+
+@api_router.get("/admin/permissions-list")
+async def get_permissions_list(admin_user: User = Depends(get_admin_user)):
+    """Get list of all available permissions"""
+    return ADMIN_PERMISSIONS
+
+@api_router.get("/admin/sub-admins")
+async def get_sub_admins(admin_user: User = Depends(get_super_admin)):
+    """Get all sub-administrators (super_admin only)"""
+    admins = await db.users.find(
+        {"role": {"$in": ["admin", "super_admin"]}},
+        {"id_document_image": 0, "cpf_image": 0, "selfie_image": 0}
+    ).to_list(100)
+    
+    for a in admins:
+        a['_id'] = str(a['_id'])
+    
+    return admins
+
+@api_router.post("/admin/sub-admins")
+async def create_sub_admin(request: CreateSubAdminRequest, admin_user: User = Depends(get_super_admin)):
+    """Create a new sub-administrator (super_admin only)"""
+    
+    # Check if user already exists
+    existing = await db.users.find_one({"email": request.email})
+    
+    if existing:
+        # Update existing user to admin
+        await db.users.update_one(
+            {"email": request.email},
+            {"$set": {
+                "role": "admin",
+                "permissions": request.permissions,
+                "created_by_admin": admin_user.user_id,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        return {"message": f"Usuario {request.email} promovido a admin", "user_id": existing.get('user_id')}
+    else:
+        # Create new admin user
+        new_admin = {
+            "user_id": f"admin_{uuid.uuid4().hex[:12]}",
+            "email": request.email,
+            "name": request.name,
+            "role": "admin",
+            "permissions": request.permissions,
+            "is_active": True,
+            "balance_ris": 0,
+            "verification_status": "verified",  # Admins don't need KYC
+            "created_by_admin": admin_user.user_id,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.users.insert_one(new_admin)
+        return {"message": f"Admin {request.email} creado", "user_id": new_admin['user_id']}
+
+@api_router.put("/admin/sub-admins/{user_id}")
+async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_user: User = Depends(get_super_admin)):
+    """Update a sub-administrator (super_admin only)"""
+    
+    target = await db.users.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Admin no encontrado")
+    
+    if target.get('role') == 'super_admin' and admin_user.user_id != user_id:
+        raise HTTPException(status_code=403, detail="No puedes modificar a otro super_admin")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc)}
+    if request.permissions is not None:
+        update_data["permissions"] = request.permissions
+    if request.is_active is not None:
+        update_data["is_active"] = request.is_active
+    if request.name is not None:
+        update_data["name"] = request.name
+    
+    await db.users.update_one({"user_id": user_id}, {"$set": update_data})
+    return {"message": "Admin actualizado"}
+
+@api_router.delete("/admin/sub-admins/{user_id}")
+async def delete_sub_admin(user_id: str, admin_user: User = Depends(get_super_admin)):
+    """Remove admin role from user (super_admin only)"""
+    
+    target = await db.users.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Admin no encontrado")
+    
+    if target.get('role') == 'super_admin':
+        raise HTTPException(status_code=403, detail="No puedes eliminar a un super_admin")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"role": "user", "permissions": []}}
+    )
+    return {"message": "Rol de admin removido"}
+
+# --- Users Management ---
+@api_router.get("/admin/users")
+async def get_all_users(
+    admin_user: User = Depends(get_admin_user),
+    skip: int = 0,
+    limit: int = 50,
+    search: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """Get all users with pagination"""
+    if not has_permission(admin_user, "users.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    query = {"role": {"$in": ["user", None]}}
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}}
+        ]
+    if status:
+        query["verification_status"] = status
+    
+    users = await db.users.find(
+        query,
+        {"id_document_image": 0, "cpf_image": 0, "selfie_image": 0}
+    ).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    
+    total = await db.users.count_documents(query)
+    
+    for u in users:
+        u['_id'] = str(u['_id'])
+    
+    return {"users": users, "total": total}
+
+@api_router.get("/admin/users/{user_id}")
+async def get_user_detail(user_id: str, admin_user: User = Depends(get_admin_user)):
+    """Get detailed user info including KYC documents"""
+    if not has_permission(admin_user, "users.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    user['_id'] = str(user['_id'])
+    
+    # Get user's transaction history summary
+    tx_count = await db.transactions.count_documents({"user_id": user_id})
+    tx_volume = await db.transactions.aggregate([
+        {"$match": {"user_id": user_id, "status": "completed"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount_input"}}}
+    ]).to_list(1)
+    
+    user['transaction_count'] = tx_count
+    user['transaction_volume'] = tx_volume[0]['total'] if tx_volume else 0
+    
+    return user
+
+@api_router.put("/admin/users/{user_id}/balance")
+async def update_user_balance(user_id: str, amount: float, admin_user: User = Depends(get_admin_user)):
+    """Manually adjust user balance"""
+    if not has_permission(admin_user, "users.edit"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    result = await db.users.update_one(
+        {"user_id": user_id},
+        {"$inc": {"balance_ris": amount}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Log the adjustment
+    adjustment = {
+        "type": "admin_adjustment",
+        "user_id": user_id,
+        "amount": amount,
+        "admin_id": admin_user.user_id,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.admin_logs.insert_one(adjustment)
+    
+    return {"message": f"Balance ajustado en {amount} RIS"}
+
+# --- Transactions ---
+@api_router.get("/admin/transactions")
+async def get_all_transactions(
+    admin_user: User = Depends(get_admin_user),
+    skip: int = 0,
+    limit: int = 50,
+    type: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """Get all transactions with filters"""
+    if not has_permission(admin_user, "transactions.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    query = {}
+    if type:
+        query["type"] = type
+    if status:
+        query["status"] = status
+    
+    transactions = await db.transactions.find(
+        query,
+        {"proof_image": 0}  # Exclude large images
+    ).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    
+    total = await db.transactions.count_documents(query)
+    
+    # Get user info for each transaction
+    for tx in transactions:
+        tx['_id'] = str(tx['_id'])
+        user = await db.users.find_one({"user_id": tx.get('user_id')}, {"name": 1, "email": 1})
+        tx['user_name'] = user.get('name', 'N/A') if user else 'N/A'
+        tx['user_email'] = user.get('email', 'N/A') if user else 'N/A'
+    
+    return {"transactions": transactions, "total": total}
+
+@api_router.get("/admin/transactions/{transaction_id}")
+async def get_transaction_detail(transaction_id: str, admin_user: User = Depends(get_admin_user)):
+    """Get transaction detail including proof image"""
+    if not has_permission(admin_user, "transactions.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    tx = await db.transactions.find_one({"transaction_id": transaction_id})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    tx['_id'] = str(tx['_id'])
+    
+    user = await db.users.find_one({"user_id": tx.get('user_id')}, {"name": 1, "email": 1})
+    tx['user_name'] = user.get('name', 'N/A') if user else 'N/A'
+    tx['user_email'] = user.get('email', 'N/A') if user else 'N/A'
+    
+    return tx
+
+# --- Support Chat Management ---
+@api_router.get("/admin/support/chats")
+async def get_support_chats(admin_user: User = Depends(get_admin_user), status: Optional[str] = None):
+    """Get all support chats"""
+    if not has_permission(admin_user, "support.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Get unique users with support messages
+    pipeline = [
+        {"$group": {
+            "_id": "$user_id",
+            "last_message": {"$last": "$message"},
+            "last_date": {"$max": "$created_at"},
+            "message_count": {"$sum": 1},
+            "status": {"$last": "$status"}
+        }},
+        {"$sort": {"last_date": -1}}
+    ]
+    
+    if status:
+        pipeline.insert(0, {"$match": {"status": status}})
+    
+    chats = await db.support_messages.aggregate(pipeline).to_list(100)
+    
+    # Get user info for each chat
+    result = []
+    for chat in chats:
+        user = await db.users.find_one({"user_id": chat['_id']}, {"name": 1, "email": 1})
+        result.append({
+            "user_id": chat['_id'],
+            "user_name": user.get('name', 'N/A') if user else 'N/A',
+            "user_email": user.get('email', 'N/A') if user else 'N/A',
+            "last_message": chat['last_message'][:100] + "..." if len(chat.get('last_message', '')) > 100 else chat.get('last_message', ''),
+            "last_date": chat['last_date'],
+            "message_count": chat['message_count'],
+            "status": chat.get('status', 'open')
+        })
+    
+    return result
+
+@api_router.get("/admin/support/chat/{user_id}")
+async def get_support_chat_detail(user_id: str, admin_user: User = Depends(get_admin_user)):
+    """Get full chat history with a user"""
+    if not has_permission(admin_user, "support.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Get user messages
+    user_messages = await db.support_messages.find({"user_id": user_id}).to_list(100)
+    
+    # Get admin responses
+    admin_responses = await db.support_responses.find({"user_id": user_id}).to_list(100)
+    
+    # Combine and sort
+    conversation = []
+    for msg in user_messages:
+        conversation.append({
+            "id": str(msg['_id']),
+            "text": msg.get('message', ''),
+            "image": msg.get('image'),
+            "sender": "user",
+            "timestamp": msg.get('created_at').isoformat() if msg.get('created_at') else None
+        })
+    
+    for resp in admin_responses:
+        conversation.append({
+            "id": str(resp['_id']),
+            "text": resp.get('message', ''),
+            "sender": "admin",
+            "timestamp": resp.get('created_at').isoformat() if resp.get('created_at') else None
+        })
+    
+    conversation.sort(key=lambda x: x['timestamp'] if x['timestamp'] else '')
+    
+    # Get user info
+    user = await db.users.find_one({"user_id": user_id}, {"name": 1, "email": 1})
+    
+    return {
+        "user_id": user_id,
+        "user_name": user.get('name', 'N/A') if user else 'N/A',
+        "user_email": user.get('email', 'N/A') if user else 'N/A',
+        "messages": conversation
+    }
+
+class AdminSupportResponse(BaseModel):
+    user_id: str
+    message: str
+
+@api_router.post("/admin/support/respond")
+async def admin_respond_support(request: AdminSupportResponse, admin_user: User = Depends(get_admin_user)):
+    """Send a response to user from admin panel"""
+    if not has_permission(admin_user, "support.respond"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Save response
+    admin_response = {
+        "user_id": request.user_id,
+        "message": request.message,
+        "sender": "admin",
+        "admin_id": admin_user.user_id,
+        "admin_name": admin_user.name,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.support_responses.insert_one(admin_response)
+    
+    # Create notification
+    await create_notification(
+        user_id=request.user_id,
+        title="💬 Respuesta de Soporte",
+        message=request.message[:200] + ("..." if len(request.message) > 200 else ""),
+        notification_type="support_response",
+        data={"full_message": request.message}
+    )
+    
+    return {"message": "Respuesta enviada"}
+
+class CloseSupportRequest(BaseModel):
+    user_id: str
+    closing_message: Optional[str] = None
+
+@api_router.post("/admin/support/close")
+async def admin_close_support(request: CloseSupportRequest, admin_user: User = Depends(get_admin_user)):
+    """Close a support chat from admin panel"""
+    if not has_permission(admin_user, "support.close"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    closing_msg = request.closing_message or "Tu caso de soporte ha sido resuelto. ¡Gracias por contactarnos!"
+    
+    # Mark as closed
+    await db.support_messages.update_many(
+        {"user_id": request.user_id},
+        {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc), "closed_by": admin_user.user_id}}
+    )
+    
+    # Save closing message
+    admin_response = {
+        "user_id": request.user_id,
+        "message": f"🔒 Chat cerrado: {closing_msg}",
+        "sender": "admin",
+        "type": "close",
+        "admin_id": admin_user.user_id,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.support_responses.insert_one(admin_response)
+    
+    # Notify user
+    await create_notification(
+        user_id=request.user_id,
+        title="✅ Caso de Soporte Resuelto",
+        message=closing_msg,
+        notification_type="support_closed",
+        data={"closing_message": closing_msg}
+    )
+    
+    return {"message": "Chat cerrado"}
+
+# --- Process Withdrawal from Admin Panel ---
+class ProcessWithdrawalAdminRequest(BaseModel):
+    transaction_id: str
+    action: str  # "approve" or "reject"
+    proof_image: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+@api_router.post("/admin/withdrawals/process")
+async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin_user: User = Depends(get_admin_user)):
+    """Process withdrawal from admin panel"""
+    if not has_permission(admin_user, "withdrawals.process"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    tx = await db.transactions.find_one({"transaction_id": request.transaction_id, "status": "pending"})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
+    
+    if request.action == "approve":
+        if not request.proof_image:
+            raise HTTPException(status_code=400, detail="Se requiere imagen de comprobante")
+        
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "completed",
+                "proof_image": request.proof_image,
+                "completed_at": datetime.now(timezone.utc),
+                "processed_by": admin_user.user_id,
+                "processed_via": "admin_panel"
+            }}
+        )
+        
+        # Notify user
+        user = await db.users.find_one({"user_id": tx['user_id']})
+        beneficiary = tx.get('beneficiary_data', {})
+        await create_notification(
+            user_id=tx['user_id'],
+            title="✅ Retiro Completado",
+            message=f"Tu retiro de {tx['amount_input']:.2f} RIS a {beneficiary.get('full_name', 'beneficiario')} fue procesado.",
+            notification_type="withdrawal_completed",
+            data={"transaction_id": request.transaction_id}
+        )
+        
+        return {"message": "Retiro aprobado y usuario notificado"}
+    
+    elif request.action == "reject":
+        # Return balance to user
+        await db.users.update_one(
+            {"user_id": tx['user_id']},
+            {"$inc": {"balance_ris": tx['amount_input']}}
+        )
+        
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "rejected",
+                "rejection_reason": request.rejection_reason or "Rechazado por administrador",
+                "rejected_at": datetime.now(timezone.utc),
+                "rejected_by": admin_user.user_id
+            }}
+        )
+        
+        await create_notification(
+            user_id=tx['user_id'],
+            title="❌ Retiro Rechazado",
+            message=f"Tu retiro de {tx['amount_input']:.2f} RIS fue rechazado. {request.rejection_reason or ''}. El monto fue devuelto a tu balance.",
+            notification_type="withdrawal_rejected",
+            data={"transaction_id": request.transaction_id}
+        )
+        
+        return {"message": "Retiro rechazado y balance devuelto"}
+    
+    raise HTTPException(status_code=400, detail="Acción inválida")
+
+# =======================
 # HEALTH CHECK
 # =======================
 
