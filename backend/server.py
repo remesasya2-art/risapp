@@ -815,6 +815,64 @@ async def mercadopago_webhook(request: Request):
         return {"status": "error"}
 
 # =======================
+# IN-APP NOTIFICATIONS
+# =======================
+
+@api_router.get("/notifications")
+async def get_notifications(current_user: User = Depends(get_current_user)):
+    """Get user's notifications"""
+    notifications = await db.notifications.find(
+        {"user_id": current_user.user_id}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    
+    for n in notifications:
+        n['_id'] = str(n['_id'])
+    
+    return {"notifications": notifications}
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_count(current_user: User = Depends(get_current_user)):
+    """Get count of unread notifications"""
+    count = await db.notifications.count_documents({
+        "user_id": current_user.user_id,
+        "read": False
+    })
+    return {"count": count}
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
+    """Mark notification as read"""
+    from bson import ObjectId
+    await db.notifications.update_one(
+        {"_id": ObjectId(notification_id), "user_id": current_user.user_id},
+        {"$set": {"read": True}}
+    )
+    return {"message": "Notification marked as read"}
+
+@api_router.post("/notifications/read-all")
+async def mark_all_read(current_user: User = Depends(get_current_user)):
+    """Mark all notifications as read"""
+    await db.notifications.update_many(
+        {"user_id": current_user.user_id, "read": False},
+        {"$set": {"read": True}}
+    )
+    return {"message": "All notifications marked as read"}
+
+async def create_notification(user_id: str, title: str, message: str, notification_type: str, data: dict = None):
+    """Helper function to create a notification"""
+    notification = {
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "type": notification_type,
+        "data": data or {},
+        "read": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.notifications.insert_one(notification)
+    logger.info(f"Notification created for user {user_id}: {title}")
+
+# =======================
 # TRANSACTION ROUTES
 # =======================
 
