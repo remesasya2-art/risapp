@@ -26,6 +26,7 @@ export default function HomeScreen() {
   const [vesAmount, setVesAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingPolicies, setCheckingPolicies] = useState(true);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     if (user) {
