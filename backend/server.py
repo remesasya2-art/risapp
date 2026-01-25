@@ -1538,7 +1538,80 @@ async def twilio_whatsapp_webhook(request: Request):
                     else:
                         logger.error(f"Error descargando imagen: {response.status_code}")
         else:
-            logger.info("Mensaje sin imagen, ignorando")
+            # Message without image - could be a support response
+            logger.info("Mensaje sin imagen - verificando si es respuesta de soporte")
+            
+            if body and body.strip():
+                # Check if message contains a user ID for support response
+                import re
+                
+                # Look for user_id pattern in the message (user_XXXX)
+                user_match = re.search(r'user_([a-f0-9]+)', body, re.IGNORECASE)
+                
+                target_user_id = None
+                response_message = body.strip()
+                
+                if user_match:
+                    # Admin included user ID in response
+                    target_user_id = f"user_{user_match.group(1)}"
+                    # Remove the user ID from the message to get clean response
+                    response_message = re.sub(r'user_[a-f0-9]+\s*', '', body).strip()
+                    logger.info(f"User ID encontrado en mensaje: {target_user_id}")
+                else:
+                    # Find the most recent support message to respond to
+                    recent_support = await db.support_messages.find_one(
+                        {},
+                        sort=[("created_at", -1)]
+                    )
+                    if recent_support:
+                        target_user_id = recent_support.get('user_id')
+                        logger.info(f"Respondiendo al último mensaje de soporte de: {target_user_id}")
+                
+                if target_user_id and response_message:
+                    # Get user info
+                    user = await db.users.find_one({"user_id": target_user_id})
+                    
+                    if user:
+                        # Save the admin response
+                        admin_response = {
+                            "user_id": target_user_id,
+                            "message": response_message,
+                            "sender": "admin",
+                            "from_phone": from_number,
+                            "created_at": datetime.now(timezone.utc)
+                        }
+                        await db.support_responses.insert_one(admin_response)
+                        
+                        # Create notification for user
+                        await create_notification(
+                            user_id=target_user_id,
+                            title="💬 Respuesta de Soporte",
+                            message=response_message[:200] + ("..." if len(response_message) > 200 else ""),
+                            notification_type="support_response",
+                            data={"full_message": response_message}
+                        )
+                        
+                        logger.info(f"Respuesta de soporte enviada a {target_user_id}")
+                        
+                        # Confirm to admin
+                        from twilio.rest import Client
+                        twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                        twilio_client.messages.create(
+                            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                            body=f"✅ Respuesta enviada a {user.get('name', target_user_id)}",
+                            to=from_number
+                        )
+                    else:
+                        logger.warning(f"Usuario no encontrado: {target_user_id}")
+                        from twilio.rest import Client
+                        twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                        twilio_client.messages.create(
+                            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                            body=f"⚠️ Usuario {target_user_id} no encontrado",
+                            to=from_number
+                        )
+                else:
+                    logger.info("No se pudo determinar el destinatario de la respuesta")
         
         return {"status": "success"}
         
