@@ -21,6 +21,8 @@ interface User {
   balance_ris: number;
   verification_status?: string;
   rejection_reason?: string;
+  role?: string;  // 'user', 'admin', 'super_admin'
+  permissions?: string[];
 }
 
 interface AuthContextType {
