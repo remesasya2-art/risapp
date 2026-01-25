@@ -48,6 +48,10 @@ class User(BaseModel):
     name: str
     picture: Optional[str] = None
     balance_ris: float = 0.0
+    # Role and permissions
+    role: str = "user"  # user, admin, super_admin
+    permissions: List[str] = []  # List of specific permissions
+    created_by_admin: Optional[str] = None  # If created as sub-admin
     # KYC/Verification fields
     verification_status: str = "pending"  # pending, verified, rejected
     id_document_image: Optional[str] = None  # base64
@@ -69,7 +73,33 @@ class User(BaseModel):
     policies_ip_address: Optional[str] = None  # IP at time of acceptance
     # Push notifications
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
+    # Admin status
+    is_active: bool = True
+    last_login: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Available permissions for sub-admins
+ADMIN_PERMISSIONS = {
+    "withdrawals.view": "Ver retiros",
+    "withdrawals.process": "Procesar retiros",
+    "recharges.view": "Ver recargas",
+    "recharges.approve": "Aprobar recargas",
+    "support.view": "Ver chats de soporte",
+    "support.respond": "Responder chats",
+    "support.close": "Cerrar chats",
+    "users.view": "Ver usuarios",
+    "users.edit": "Editar usuarios",
+    "kyc.view": "Ver KYC",
+    "kyc.approve": "Aprobar/Rechazar KYC",
+    "transactions.view": "Ver transacciones",
+    "transactions.export": "Exportar transacciones",
+    "settings.view": "Ver configuración",
+    "settings.edit": "Editar configuración",
+    "admins.view": "Ver administradores",
+    "admins.create": "Crear sub-administradores",
+    "admins.edit": "Editar sub-administradores",
+    "dashboard.view": "Ver dashboard",
+}
 
 class UserSession(BaseModel):
     user_id: str
