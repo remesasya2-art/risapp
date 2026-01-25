@@ -364,22 +364,81 @@ class RISAPITester:
             self.log_result("Admin Recharge Approve", False, f"Request failed: {str(e)}")
             return False
     
-    def test_health_check(self):
-        """Test basic health check endpoint"""
-        print("\n🏥 Testing health check...")
+    def test_endpoint_methods(self):
+        """Test that endpoints respond correctly to wrong HTTP methods"""
+        print("\n🔧 Testing endpoint HTTP methods...")
         
         try:
-            response = self.session.get(f"{BASE_URL}/health", timeout=10)
+            # Test POST endpoint with GET (should return 405 Method Not Allowed)
+            response = self.session.get(f"{BASE_URL}/pix/verify-with-proof", timeout=10)
             
-            if response.status_code == 200:
-                self.log_result("Health Check", True, "API is responding")
+            if response.status_code == 405:
+                self.log_result(
+                    "Endpoint HTTP Methods", 
+                    True, 
+                    "✅ Endpoints correctly reject wrong HTTP methods",
+                    {"status_code": response.status_code}
+                )
+                return True
+            elif response.status_code == 401:
+                # Some frameworks return 401 before checking method
+                self.log_result(
+                    "Endpoint HTTP Methods", 
+                    True, 
+                    "✅ Endpoints handle authentication before method validation",
+                    {"status_code": response.status_code}
+                )
                 return True
             else:
-                self.log_result("Health Check", False, f"API returned status {response.status_code}")
+                self.log_result(
+                    "Endpoint HTTP Methods", 
+                    False, 
+                    f"Unexpected response to wrong HTTP method: {response.status_code}",
+                    {"status_code": response.status_code}
+                )
                 return False
                 
         except Exception as e:
-            self.log_result("Health Check", False, f"API not reachable: {str(e)}")
+            self.log_result("Endpoint HTTP Methods", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_api_structure(self):
+        """Test basic API structure and routing"""
+        print("\n🏗️ Testing API structure...")
+        
+        try:
+            # Test root API endpoint
+            response = self.session.get(f"{BASE_URL}/", timeout=10)
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                if response_data.get("message") == "RIS App API":
+                    self.log_result(
+                        "API Structure", 
+                        True, 
+                        "✅ API root endpoint working correctly",
+                        {"status_code": response.status_code, "message": response_data.get("message")}
+                    )
+                    return True
+                else:
+                    self.log_result(
+                        "API Structure", 
+                        False, 
+                        "API root endpoint returned unexpected message",
+                        {"status_code": response.status_code, "response": response_data}
+                    )
+                    return False
+            else:
+                self.log_result(
+                    "API Structure", 
+                    False, 
+                    f"API root endpoint returned status {response.status_code}",
+                    {"status_code": response.status_code}
+                )
+                return False
+                
+        except Exception as e:
+            self.log_result("API Structure", False, f"Request failed: {str(e)}")
             return False
     
     def run_all_tests(self):
