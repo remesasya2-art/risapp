@@ -1061,6 +1061,165 @@ async def export_transactions(admin_user: User = Depends(get_admin_user)):
     )
 
 # =======================
+# ADMIN RECORDS & MANUAL APPROVAL
+# =======================
+
+@api_router.get("/admin/payment-records")
+async def get_admin_payment_records(admin_user: User = Depends(get_admin_user)):
+    """Admin: Get all payment records with proof images"""
+    records = await db.admin_payment_records.find(
+        {},
+        {"proof_image": 0}  # Exclude large base64 images from list view
+    ).sort("recorded_at", -1).to_list(1000)
+    
+    for r in records:
+        r['_id'] = str(r['_id'])
+    
+    return {"records": records}
+
+@api_router.get("/admin/payment-records/{record_id}")
+async def get_admin_payment_record_detail(record_id: str, admin_user: User = Depends(get_admin_user)):
+    """Admin: Get a specific payment record with full details including proof image"""
+    from bson import ObjectId
+    
+    record = await db.admin_payment_records.find_one({"_id": ObjectId(record_id)})
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    
+    record['_id'] = str(record['_id'])
+    return record
+
+@api_router.get("/admin/pending-recharges")
+async def get_pending_recharges(admin_user: User = Depends(get_admin_user)):
+    """Admin: Get all recharges pending review (with uploaded proof)"""
+    recharges = await db.transactions.find(
+        {"type": "recharge", "status": "pending_review"},
+        {"proof_image": 0}  # Exclude large base64 images from list view
+    ).sort("created_at", -1).to_list(1000)
+    
+    # Get user info for each recharge
+    result = []
+    for r in recharges:
+        user = await db.users.find_one({"user_id": r.get("user_id")})
+        r['_id'] = str(r['_id'])
+        r['user_name'] = user.get('name', 'N/A') if user else 'N/A'
+        r['user_email'] = user.get('email', 'N/A') if user else 'N/A'
+        result.append(r)
+    
+    return {"recharges": result}
+
+@api_router.get("/admin/recharge/{transaction_id}/proof")
+async def get_recharge_proof(transaction_id: str, admin_user: User = Depends(get_admin_user)):
+    """Admin: Get proof image for a specific recharge"""
+    transaction = await db.transactions.find_one({"transaction_id": transaction_id})
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    return {
+        "transaction_id": transaction_id,
+        "proof_image": transaction.get("proof_image"),
+        "amount_input": transaction.get("amount_input"),
+        "status": transaction.get("status")
+    }
+
+class ApproveRechargeRequest(BaseModel):
+    transaction_id: str
+    approved: bool
+    rejection_reason: Optional[str] = None
+
+@api_router.post("/admin/recharge/approve")
+async def approve_recharge(request: ApproveRechargeRequest, admin_user: User = Depends(get_admin_user)):
+    """Admin: Approve or reject a recharge with uploaded proof"""
+    
+    transaction = await db.transactions.find_one({
+        "transaction_id": request.transaction_id,
+        "status": "pending_review"
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
+    
+    user_id = transaction.get("user_id")
+    amount_ris = transaction.get("amount_output", 0)
+    
+    if request.approved:
+        # Credit user's balance
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balance_ris": amount_ris}}
+        )
+        
+        # Update transaction status
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+                "approved_by": admin_user.user_id,
+                "verification_method": "admin_manual_approval"
+            }}
+        )
+        
+        # Save admin record
+        user = await db.users.find_one({"user_id": user_id})
+        admin_record = {
+            "record_type": "recharge_approved",
+            "transaction_id": request.transaction_id,
+            "user_id": user_id,
+            "user_name": user.get('name', 'N/A') if user else 'N/A',
+            "user_email": user.get('email', 'N/A') if user else 'N/A',
+            "amount_brl": transaction.get("amount_input", 0),
+            "amount_ris": amount_ris,
+            "proof_image": transaction.get("proof_image"),
+            "approved_by": admin_user.user_id,
+            "approved_by_email": admin_user.email,
+            "processed_via": "admin_panel",
+            "created_at": transaction.get("created_at"),
+            "completed_at": datetime.now(timezone.utc),
+            "recorded_at": datetime.now(timezone.utc)
+        }
+        
+        await db.admin_payment_records.insert_one(admin_record)
+        
+        # Notify user
+        await create_notification(
+            user_id=user_id,
+            title="✅ Recarga Confirmada",
+            message=f"Tu recarga de R$ {transaction.get('amount_input', 0):.2f} fue confirmada. +{amount_ris:.2f} RIS agregados a tu cuenta.",
+            notification_type="recharge_completed",
+            data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
+        )
+        
+        logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.email}")
+        return {"message": "Recarga aprobada y saldo acreditado", "status": "completed"}
+    else:
+        # Reject recharge
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "rejected",
+                "updated_at": datetime.now(timezone.utc),
+                "rejected_by": admin_user.user_id,
+                "rejection_reason": request.rejection_reason or "Comprobante inválido"
+            }}
+        )
+        
+        # Notify user
+        await create_notification(
+            user_id=user_id,
+            title="❌ Recarga Rechazada",
+            message=f"Tu recarga de R$ {transaction.get('amount_input', 0):.2f} fue rechazada. Razón: {request.rejection_reason or 'Comprobante inválido'}",
+            notification_type="recharge_rejected",
+            data={"transaction_id": request.transaction_id}
+        )
+        
+        logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.email}")
+        return {"message": "Recarga rechazada", "status": "rejected"}
+
+# =======================
 # TWILIO WHATSAPP WEBHOOK
 # =======================
 
