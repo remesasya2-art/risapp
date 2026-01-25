@@ -110,7 +110,7 @@ export default function HomeScreen() {
       );
       return;
     }
-    Alert.alert('Info', 'Funcionalidad de recarga próximamente');
+    router.push('/recharge');
   };
 
   const handleSend = () => {
