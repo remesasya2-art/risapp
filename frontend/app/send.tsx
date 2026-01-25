@@ -544,6 +544,43 @@ export default function SendRISScreen() {
         </View>
       </Modal>
 
+      {/* Phone Prefix Selection Modal */}
+      <Modal
+        visible={showPrefixModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPrefixModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.prefixModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Seleccionar Operadora</Text>
+              <TouchableOpacity onPress={() => setShowPrefixModal(false)}>
+                <Ionicons name="close" size={24} color="#1f2937" />
+              </TouchableOpacity>
+            </View>
+            
+            {PHONE_PREFIXES.map((prefix) => (
+              <TouchableOpacity
+                key={prefix.value}
+                style={[styles.prefixModalItem, phonePrefix === prefix.value && styles.prefixModalItemSelected]}
+                onPress={() => {
+                  setPhonePrefix(prefix.value);
+                  setShowPrefixModal(false);
+                }}
+              >
+                <Text style={[styles.prefixModalItemText, phonePrefix === prefix.value && styles.prefixModalItemTextSelected]}>
+                  {prefix.label}
+                </Text>
+                {phonePrefix === prefix.value && (
+                  <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
       {/* Beneficiaries Selection Modal */}
       <Modal
         visible={showBeneficiaries}
