@@ -17,9 +17,19 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    alert(`${title}\n\n${message}`);
+    if (buttons && buttons[0]?.onPress) buttons[0].onPress();
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function RechargeScreen() {
   const router = useRouter();
@@ -36,6 +46,8 @@ export default function RechargeScreen() {
   } | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [proofImage, setProofImage] = useState<string | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
 
   // Quick amount options
   const quickAmounts = [50, 100, 200, 500, 1000, 2000];
@@ -59,18 +71,18 @@ export default function RechargeScreen() {
     const amountNum = parseFloat(amount);
     
     if (!amountNum || amountNum < 10) {
-      Alert.alert('Error', 'El monto mínimo es R$ 10,00');
+      showAlert('Error', 'El monto mínimo es R$ 10,00');
       return;
     }
     
     if (amountNum > 2000) {
-      Alert.alert('Error', 'El monto máximo por transacción es R$ 2.000,00');
+      showAlert('Error', 'El monto máximo por transacción es R$ 2.000,00');
       return;
     }
     
     const cpfClean = cpf.replace(/\D/g, '');
     if (cpfClean.length !== 11) {
-      Alert.alert('Error', 'Por favor ingresa un CPF válido');
+      showAlert('Error', 'Por favor ingresa un CPF válido');
       return;
     }
 
@@ -86,7 +98,7 @@ export default function RechargeScreen() {
       setPixData(response.data);
     } catch (error: any) {
       const message = error.response?.data?.detail || 'Error al crear el pago PIX';
-      Alert.alert('Error', message);
+      showAlert('Error', message);
     } finally {
       setLoading(false);
     }
@@ -95,38 +107,74 @@ export default function RechargeScreen() {
   const handleCopyPixCode = async () => {
     if (pixData?.qr_code) {
       await Clipboard.setStringAsync(pixData.qr_code);
-      Alert.alert('Copiado', 'Código PIX copiado al portapapeles');
+      showAlert('Copiado', 'Código PIX copiado al portapapeles');
     }
   };
 
-  const checkPaymentStatus = async () => {
-    if (!pixData?.transaction_id) return;
+  const pickProofImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert('Permiso requerido', 'Necesitamos acceso a tu galería para subir el comprobante');
+        return;
+      }
 
-    setCheckingPayment(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const base64 = result.assets[0].base64;
+        if (base64) {
+          setProofImage(`data:image/jpeg;base64,${base64}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showAlert('Error', 'No se pudo seleccionar la imagen');
+    }
+  };
+
+  const submitProofAndVerify = async () => {
+    if (!pixData?.transaction_id) return;
+    if (!proofImage) {
+      showAlert('Comprobante requerido', 'Por favor adjunta el comprobante de pago');
+      return;
+    }
+
+    setUploadingProof(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
-      const response = await axios.get(
-        `${BACKEND_URL}/api/pix/status/${pixData.transaction_id}`,
+      
+      // Upload proof and verify payment
+      const response = await axios.post(
+        `${BACKEND_URL}/api/pix/verify-with-proof`,
+        { 
+          transaction_id: pixData.transaction_id,
+          proof_image: proofImage 
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (response.data.status === 'completed') {
+      if (response.data.status === 'completed' || response.data.status === 'pending_review') {
         setPaymentCompleted(true);
         await refreshUser();
-        Alert.alert(
-          '¡Pago Confirmado!',
-          `Tu recarga de R$ ${pixData.amount_brl.toFixed(2)} fue procesada. Ya tienes ${response.data.amount_ris} RIS en tu cuenta.`,
+        showAlert(
+          '¡Comprobante Enviado!',
+          response.data.status === 'completed' 
+            ? `Tu recarga de R$ ${pixData.amount_brl.toFixed(2)} fue confirmada.`
+            : 'Tu comprobante está siendo verificado. Recibirás una notificación cuando se confirme.',
           [{ text: 'OK', onPress: () => router.replace('/') }]
         );
-      } else if (response.data.status === 'pending') {
-        Alert.alert('Pendiente', 'El pago aún no ha sido confirmado. Intenta nuevamente en unos segundos.');
-      } else {
-        Alert.alert('Estado', `Estado del pago: ${response.data.status}`);
       }
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo verificar el estado del pago');
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'No se pudo verificar el pago');
     } finally {
-      setCheckingPayment(false);
+      setUploadingProof(false);
     }
   };
 
@@ -188,23 +236,7 @@ export default function RechargeScreen() {
             </Text>
           </View>
 
-          {/* Check Payment Button */}
-          <TouchableOpacity
-            style={styles.checkButton}
-            onPress={checkPaymentStatus}
-            disabled={checkingPayment}
-          >
-            {checkingPayment ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle-outline" size={24} color="#fff" />
-                <Text style={styles.checkButtonText}>Ya pagué, verificar</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Instructions */}
+          {/* Instructions - NOW BEFORE THE BUTTON */}
           <View style={styles.instructionsContainer}>
             <Text style={styles.instructionsTitle}>Cómo pagar:</Text>
             <View style={styles.instructionStep}>
@@ -221,9 +253,50 @@ export default function RechargeScreen() {
             </View>
             <View style={styles.instructionStep}>
               <Text style={styles.stepNumber}>4</Text>
-              <Text style={styles.stepText}>Confirma el pago y vuelve aquí</Text>
+              <Text style={styles.stepText}>Confirma el pago y sube el comprobante</Text>
             </View>
           </View>
+
+          {/* Upload Proof Section */}
+          <View style={styles.proofSection}>
+            <Text style={styles.proofTitle}>Adjuntar comprobante de pago</Text>
+            <Text style={styles.proofSubtitle}>
+              Sube una captura de pantalla del comprobante de tu banco
+            </Text>
+            
+            {proofImage ? (
+              <View style={styles.proofImageContainer}>
+                <Image source={{ uri: proofImage }} style={styles.proofImage} />
+                <TouchableOpacity 
+                  style={styles.removeProofButton}
+                  onPress={() => setProofImage(null)}
+                >
+                  <Ionicons name="close-circle" size={28} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.uploadButton} onPress={pickProofImage}>
+                <Ionicons name="cloud-upload-outline" size={32} color="#2563eb" />
+                <Text style={styles.uploadButtonText}>Seleccionar imagen</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.checkButton, !proofImage && styles.checkButtonDisabled]}
+            onPress={submitProofAndVerify}
+            disabled={uploadingProof || !proofImage}
+          >
+            {uploadingProof ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={24} color="#fff" />
+                <Text style={styles.checkButtonText}>Ya pagué, verificar</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     );
@@ -353,6 +426,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
@@ -624,25 +698,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#92400e',
   },
-  checkButton: {
-    backgroundColor: '#10b981',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 24,
-  },
-  checkButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
   instructionsContainer: {
     backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,
+    marginBottom: 16,
   },
   instructionsTitle: {
     fontSize: 16,
@@ -671,5 +731,74 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#475569',
+  },
+  // Proof upload styles
+  proofSection: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  proofTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  proofSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 16,
+  },
+  uploadButton: {
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: '#f0f9ff',
+  },
+  uploadButtonText: {
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#2563eb',
+  },
+  proofImageContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
+  proofImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    resizeMode: 'contain',
+    backgroundColor: '#f1f5f9',
+  },
+  removeProofButton: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+  },
+  checkButton: {
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 24,
+  },
+  checkButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+  checkButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
