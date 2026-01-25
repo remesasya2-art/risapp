@@ -509,98 +509,12 @@ async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(g
     return {"message": "Beneficiary deleted"}
 
 # =======================
-# STRIPE/RECHARGE ROUTES
+# STRIPE/RECHARGE ROUTES (DISABLED - Using Mercado Pago PIX)
 # =======================
 
-@api_router.post("/recharge/create-payment-intent")
-async def create_payment_intent(request: RechargeRequest, current_user: User = Depends(get_current_user)):
-    """Create Stripe payment intent for recharge"""
-    try:
-        # Validate amount (max 2000 REAIS, min 0.50 REAIS)
-        if request.amount > 2000:
-            raise HTTPException(status_code=400, detail="Maximum recharge is 2000 REAIS")
-        if request.amount < 0.50:
-            raise HTTPException(status_code=400, detail="Minimum recharge is 0.50 REAIS")
-        
-        # Convert to cents (Stripe expects minor units)
-        amount_cents = int(request.amount * 100)
-        
-        # Create payment intent
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount_cents,
-            currency="brl",
-            metadata={
-                "user_id": current_user.user_id,
-                "type": "recharge"
-            },
-            automatic_payment_methods={"enabled": True}
-        )
-        
-        # Create pending transaction
-        transaction = Transaction(
-            user_id=current_user.user_id,
-            type="recharge",
-            status="pending",
-            amount_input=request.amount,
-            amount_output=request.amount,  # 1:1 ratio
-            stripe_payment_intent_id=payment_intent.id
-        )
-        await db.transactions.insert_one(transaction.dict())
-        
-        return {
-            "clientSecret": payment_intent.client_secret,
-            "transaction_id": transaction.transaction_id
-        }
-    except stripe.error.StripeError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logging.error(f"Payment intent creation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/recharge/webhook")
-async def stripe_webhook(request: Request):
-    """Handle Stripe webhooks"""
-    payload = await request.body()
-    sig_header = request.headers.get('stripe-signature')
-    
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, os.getenv('STRIPE_WEBHOOK_SECRET', '')
-        )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid signature")
-    
-    # Handle payment_intent.succeeded
-    if event['type'] == 'payment_intent.succeeded':
-        payment_intent = event['data']['object']
-        
-        # Find transaction
-        transaction = await db.transactions.find_one(
-            {"stripe_payment_intent_id": payment_intent.id},
-            {"_id": 0}
-        )
-        
-        if transaction:
-            # Update transaction status
-            await db.transactions.update_one(
-                {"stripe_payment_intent_id": payment_intent.id},
-                {"$set": {
-                    "status": "completed",
-                    "completed_at": datetime.now(timezone.utc)
-                }}
-            )
-            
-            # Update user balance
-            await db.users.update_one(
-                {"user_id": transaction["user_id"]},
-                {"$inc": {"balance_ris": transaction["amount_output"]}}
-            )
-            
-            # TODO: Send notification to user
-    
-    return {"status": "success"}
+# Stripe integration is temporarily disabled
+# Payment will be processed via Mercado Pago PIX
+# See /pix/create endpoint below
 
 # =======================
 # WITHDRAWAL ROUTES
