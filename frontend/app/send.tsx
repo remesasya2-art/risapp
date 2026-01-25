@@ -828,45 +828,84 @@ const styles = StyleSheet.create({
   flexInput: {
     flex: 1,
   },
-  phoneContainer: {
+  // Phone styles
+  phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
-  phoneCountry: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+  phoneFixed: {
     backgroundColor: '#e5e7eb',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 12,
     borderRadius: 8,
   },
-  prefixSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    padding: 2,
-  },
-  prefixOption: {
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-    borderRadius: 4,
-  },
-  prefixOptionActive: {
-    backgroundColor: '#2563eb',
-  },
-  prefixOptionText: {
-    fontSize: 12,
+  phoneFixedText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#374151',
+  },
+  phonePrefixButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  phonePrefixText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  phoneSeparator: {
+    fontSize: 16,
     color: '#6b7280',
+    marginHorizontal: 2,
   },
-  prefixOptionTextActive: {
-    color: '#fff',
-  },
-  phoneInput: {
+  phoneNumberInput: {
     flex: 1,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  phoneHint: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 6,
+  },
+  // Prefix modal styles
+  prefixModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+  },
+  prefixModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  prefixModalItemSelected: {
+    backgroundColor: '#eff6ff',
+  },
+  prefixModalItemText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  prefixModalItemTextSelected: {
+    color: '#2563eb',
+    fontWeight: '600',
   },
   saveCheckbox: {
     flexDirection: 'row',
