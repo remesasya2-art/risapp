@@ -1,7 +1,7 @@
 # Admin Panel Routes for RIS App
 # This module contains all admin-related endpoints for the RIS application
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -9,41 +9,134 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from openpyxl import Workbook
 from io import BytesIO
+from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 import uuid
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
 
 logger = logging.getLogger(__name__)
 
 # Create admin router
 admin_router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
-# These will be set by the main server.py
-db = None
-User = None
-get_admin_user = None
-get_super_admin = None
-has_permission = None
-ADMIN_PERMISSIONS = None
-create_notification = None
+# MongoDB connection
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
 
-def init_admin_routes(
-    database,
-    user_model,
-    admin_dependency,
-    super_admin_dependency,
-    permission_checker,
-    permissions_dict,
-    notification_creator
-):
-    """Initialize admin routes with dependencies from main server"""
-    global db, User, get_admin_user, get_super_admin, has_permission, ADMIN_PERMISSIONS, create_notification
-    db = database
-    User = user_model
-    get_admin_user = admin_dependency
-    get_super_admin = super_admin_dependency
-    has_permission = permission_checker
-    ADMIN_PERMISSIONS = permissions_dict
-    create_notification = notification_creator
+# Available permissions for sub-admins
+ADMIN_PERMISSIONS = {
+    "withdrawals.view": "Ver retiros",
+    "withdrawals.process": "Procesar retiros",
+    "recharges.view": "Ver recargas",
+    "recharges.approve": "Aprobar recargas",
+    "support.view": "Ver chats de soporte",
+    "support.respond": "Responder chats",
+    "support.close": "Cerrar chats",
+    "users.view": "Ver usuarios",
+    "users.edit": "Editar usuarios",
+    "kyc.view": "Ver KYC",
+    "kyc.approve": "Aprobar/Rechazar KYC",
+    "transactions.view": "Ver transacciones",
+    "transactions.export": "Exportar transacciones",
+    "settings.view": "Ver configuración",
+    "settings.edit": "Editar configuración",
+    "admins.view": "Ver administradores",
+    "admins.create": "Crear sub-administradores",
+    "admins.edit": "Editar sub-administradores",
+    "dashboard.view": "Ver dashboard",
+}
+
+# =======================
+# AUTH DEPENDENCIES
+# =======================
+
+async def get_current_user_from_request(request: Request, authorization: Optional[str] = Header(None)):
+    """Get current user from session token"""
+    session_token = None
+    
+    session_token = request.cookies.get('session_token')
+    
+    if not session_token and authorization:
+        if authorization.startswith('Bearer '):
+            session_token = authorization[7:]
+    
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    session = await db.user_sessions.find_one(
+        {"session_token": session_token},
+        {"_id": 0}
+    )
+    
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    expires_at = session["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Session expired")
+    
+    user_doc = await db.users.find_one(
+        {"user_id": session["user_id"]},
+        {"_id": 0}
+    )
+    
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user_doc
+
+async def get_admin_user(request: Request, authorization: Optional[str] = Header(None)):
+    """Check if user is admin or super_admin"""
+    user_doc = await get_current_user_from_request(request, authorization)
+    role = user_doc.get('role', 'user')
+    
+    if role not in ['admin', 'super_admin']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return user_doc
+
+async def get_super_admin(request: Request, authorization: Optional[str] = Header(None)):
+    """Check if user is super_admin"""
+    user_doc = await get_current_user_from_request(request, authorization)
+    role = user_doc.get('role', 'user')
+    
+    if role != 'super_admin':
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    
+    return user_doc
+
+def has_permission(user: dict, permission: str) -> bool:
+    """Check if user has specific permission"""
+    role = user.get('role', 'user')
+    if role == 'super_admin':
+        return True
+    if role == 'admin':
+        admin_only = ['admins.create', 'admins.edit']
+        return permission not in admin_only
+    return permission in user.get('permissions', [])
+
+async def create_notification(user_id: str, title: str, message: str, notification_type: str, data: dict = None):
+    """Helper function to create a notification"""
+    notification = {
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "type": notification_type,
+        "data": data or {},
+        "read": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.notifications.insert_one(notification)
+    logger.info(f"Notification created for user {user_id}: {title}")
 
 # =======================
 # REQUEST/RESPONSE MODELS
@@ -94,10 +187,9 @@ class AdjustBalanceRequest(BaseModel):
 # =======================
 
 @admin_router.get("/dashboard")
-async def get_admin_dashboard(admin_user = Depends(lambda: get_admin_user)):
+async def get_admin_dashboard(admin_user: dict = Depends(get_admin_user)):
     """Get dashboard statistics"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "dashboard.view"):
+    if not has_permission(admin_user, "dashboard.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     # Get statistics
@@ -154,7 +246,7 @@ async def get_admin_dashboard(admin_user = Depends(lambda: get_admin_user)):
 # =======================
 
 @admin_router.get("/permissions-list")
-async def get_permissions_list(admin_user = Depends(lambda: get_admin_user)):
+async def get_permissions_list(admin_user: dict = Depends(get_admin_user)):
     """Get list of all available permissions"""
     return ADMIN_PERMISSIONS
 
@@ -163,10 +255,8 @@ async def get_permissions_list(admin_user = Depends(lambda: get_admin_user)):
 # =======================
 
 @admin_router.get("/sub-admins")
-async def get_sub_admins(admin_user = Depends(lambda: get_super_admin)):
+async def get_sub_admins(admin_user: dict = Depends(get_super_admin)):
     """Get all sub-administrators (super_admin only)"""
-    current_user = await get_super_admin(admin_user)
-    
     admins = await db.users.find(
         {"role": {"$in": ["admin", "super_admin"]}},
         {"id_document_image": 0, "cpf_image": 0, "selfie_image": 0}
@@ -178,9 +268,8 @@ async def get_sub_admins(admin_user = Depends(lambda: get_super_admin)):
     return admins
 
 @admin_router.post("/sub-admins")
-async def create_sub_admin(request: CreateSubAdminRequest, admin_user = Depends(lambda: get_super_admin)):
+async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = Depends(get_super_admin)):
     """Create a new sub-administrator (super_admin only)"""
-    current_user = await get_super_admin(admin_user)
     
     # Check if user already exists
     existing = await db.users.find_one({"email": request.email})
@@ -192,7 +281,7 @@ async def create_sub_admin(request: CreateSubAdminRequest, admin_user = Depends(
             {"$set": {
                 "role": "admin",
                 "permissions": request.permissions,
-                "created_by_admin": current_user.user_id,
+                "created_by_admin": admin_user.get('user_id'),
                 "updated_at": datetime.now(timezone.utc)
             }}
         )
@@ -208,22 +297,21 @@ async def create_sub_admin(request: CreateSubAdminRequest, admin_user = Depends(
             "is_active": True,
             "balance_ris": 0,
             "verification_status": "verified",
-            "created_by_admin": current_user.user_id,
+            "created_by_admin": admin_user.get('user_id'),
             "created_at": datetime.now(timezone.utc)
         }
         await db.users.insert_one(new_admin)
         return {"message": f"Admin {request.email} creado", "user_id": new_admin['user_id']}
 
 @admin_router.put("/sub-admins/{user_id}")
-async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_user = Depends(lambda: get_super_admin)):
+async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_user: dict = Depends(get_super_admin)):
     """Update a sub-administrator (super_admin only)"""
-    current_user = await get_super_admin(admin_user)
     
     target = await db.users.find_one({"user_id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="Admin no encontrado")
     
-    if target.get('role') == 'super_admin' and current_user.user_id != user_id:
+    if target.get('role') == 'super_admin' and admin_user.get('user_id') != user_id:
         raise HTTPException(status_code=403, detail="No puedes modificar a otro super_admin")
     
     update_data = {"updated_at": datetime.now(timezone.utc)}
@@ -238,9 +326,8 @@ async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_u
     return {"message": "Admin actualizado"}
 
 @admin_router.delete("/sub-admins/{user_id}")
-async def delete_sub_admin(user_id: str, admin_user = Depends(lambda: get_super_admin)):
+async def delete_sub_admin(user_id: str, admin_user: dict = Depends(get_super_admin)):
     """Remove admin role from user (super_admin only)"""
-    current_user = await get_super_admin(admin_user)
     
     target = await db.users.find_one({"user_id": user_id})
     if not target:
@@ -261,15 +348,14 @@ async def delete_sub_admin(user_id: str, admin_user = Depends(lambda: get_super_
 
 @admin_router.get("/users")
 async def get_all_users(
-    admin_user = Depends(lambda: get_admin_user),
+    admin_user: dict = Depends(get_admin_user),
     skip: int = 0,
     limit: int = 50,
     search: Optional[str] = None,
     status: Optional[str] = None
 ):
     """Get all users with pagination"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "users.view"):
+    if not has_permission(admin_user, "users.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     query = {"role": {"$nin": ["admin", "super_admin"]}}
@@ -294,10 +380,9 @@ async def get_all_users(
     return {"users": users, "total": total}
 
 @admin_router.get("/users/{user_id}")
-async def get_user_detail(user_id: str, admin_user = Depends(lambda: get_admin_user)):
+async def get_user_detail(user_id: str, admin_user: dict = Depends(get_admin_user)):
     """Get detailed user info including KYC documents"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "users.view"):
+    if not has_permission(admin_user, "users.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     user = await db.users.find_one({"user_id": user_id})
@@ -319,10 +404,9 @@ async def get_user_detail(user_id: str, admin_user = Depends(lambda: get_admin_u
     return user
 
 @admin_router.put("/users/{user_id}/balance")
-async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin_user = Depends(lambda: get_admin_user)):
+async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin_user: dict = Depends(get_admin_user)):
     """Manually adjust user balance"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "users.edit"):
+    if not has_permission(admin_user, "users.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     result = await db.users.update_one(
@@ -338,7 +422,7 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin
         "type": "admin_adjustment",
         "user_id": user_id,
         "amount": request.amount,
-        "admin_id": current_user.user_id,
+        "admin_id": admin_user.get('user_id'),
         "created_at": datetime.now(timezone.utc)
     }
     await db.admin_logs.insert_one(adjustment)
@@ -350,10 +434,9 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin
 # =======================
 
 @admin_router.get("/verifications/pending")
-async def get_pending_verifications(admin_user = Depends(lambda: get_admin_user)):
+async def get_pending_verifications(admin_user: dict = Depends(get_admin_user)):
     """Get all pending verifications"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "kyc.view"):
+    if not has_permission(admin_user, "kyc.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     users = await db.users.find(
@@ -375,16 +458,15 @@ async def get_pending_verifications(admin_user = Depends(lambda: get_admin_user)
     return users
 
 @admin_router.post("/verifications/decide")
-async def decide_verification(decision: VerificationDecision, admin_user = Depends(lambda: get_admin_user)):
+async def decide_verification(decision: VerificationDecision, admin_user: dict = Depends(get_admin_user)):
     """Approve or reject verification"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "kyc.approve"):
+    if not has_permission(admin_user, "kyc.approve"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     update_data = {
         "verification_status": "verified" if decision.approved else "rejected",
         "verified_at": datetime.now(timezone.utc) if decision.approved else None,
-        "verified_by": current_user.user_id if decision.approved else None,
+        "verified_by": admin_user.get('user_id') if decision.approved else None,
         "rejection_reason": decision.rejection_reason if not decision.approved else None
     }
     
@@ -421,10 +503,9 @@ async def decide_verification(decision: VerificationDecision, admin_user = Depen
 # =======================
 
 @admin_router.get("/withdrawals/pending")
-async def get_pending_withdrawals(admin_user = Depends(lambda: get_admin_user)):
+async def get_pending_withdrawals(admin_user: dict = Depends(get_admin_user)):
     """Get all pending withdrawals"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "withdrawals.view"):
+    if not has_permission(admin_user, "withdrawals.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     withdrawals = await db.transactions.find(
@@ -441,10 +522,9 @@ async def get_pending_withdrawals(admin_user = Depends(lambda: get_admin_user)):
     return withdrawals
 
 @admin_router.post("/withdrawals/process")
-async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin_user = Depends(lambda: get_admin_user)):
+async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin_user: dict = Depends(get_admin_user)):
     """Process withdrawal from admin panel"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "withdrawals.process"):
+    if not has_permission(admin_user, "withdrawals.process"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     tx = await db.transactions.find_one({"transaction_id": request.transaction_id, "status": "pending"})
@@ -461,7 +541,7 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
                 "status": "completed",
                 "proof_image": request.proof_image,
                 "completed_at": datetime.now(timezone.utc),
-                "processed_by": current_user.user_id,
+                "processed_by": admin_user.get('user_id'),
                 "processed_via": "admin_panel"
             }}
         )
@@ -480,7 +560,7 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             "amount_ves": tx['amount_output'],
             "beneficiary": beneficiary,
             "proof_image": request.proof_image,
-            "processed_by": current_user.user_id,
+            "processed_by": admin_user.get('user_id'),
             "processed_via": "admin_panel",
             "completed_at": datetime.now(timezone.utc)
         }
@@ -510,7 +590,7 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
                 "status": "rejected",
                 "rejection_reason": request.rejection_reason or "Rechazado por administrador",
                 "rejected_at": datetime.now(timezone.utc),
-                "rejected_by": current_user.user_id
+                "rejected_by": admin_user.get('user_id')
             }}
         )
         
@@ -531,10 +611,9 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
 # =======================
 
 @admin_router.get("/recharges/pending")
-async def get_pending_recharges(admin_user = Depends(lambda: get_admin_user)):
+async def get_pending_recharges(admin_user: dict = Depends(get_admin_user)):
     """Get all recharges pending review"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "recharges.view"):
+    if not has_permission(admin_user, "recharges.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     recharges = await db.transactions.find(
@@ -553,10 +632,9 @@ async def get_pending_recharges(admin_user = Depends(lambda: get_admin_user)):
     return {"recharges": result}
 
 @admin_router.get("/recharges/{transaction_id}/proof")
-async def get_recharge_proof(transaction_id: str, admin_user = Depends(lambda: get_admin_user)):
+async def get_recharge_proof(transaction_id: str, admin_user: dict = Depends(get_admin_user)):
     """Get proof image for a specific recharge"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "recharges.view"):
+    if not has_permission(admin_user, "recharges.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     transaction = await db.transactions.find_one({"transaction_id": transaction_id})
@@ -572,10 +650,9 @@ async def get_recharge_proof(transaction_id: str, admin_user = Depends(lambda: g
     }
 
 @admin_router.post("/recharges/approve")
-async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends(lambda: get_admin_user)):
+async def approve_recharge(request: ApproveRechargeRequest, admin_user: dict = Depends(get_admin_user)):
     """Approve or reject a recharge with uploaded proof"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "recharges.approve"):
+    if not has_permission(admin_user, "recharges.approve"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     transaction = await db.transactions.find_one({
@@ -603,7 +680,7 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends
                 "status": "completed",
                 "completed_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
-                "approved_by": current_user.user_id,
+                "approved_by": admin_user.get('user_id'),
                 "verification_method": "admin_manual_approval"
             }}
         )
@@ -619,8 +696,8 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends
             "amount_brl": transaction.get("amount_input", 0),
             "amount_ris": amount_ris,
             "proof_image": transaction.get("proof_image"),
-            "approved_by": current_user.user_id,
-            "approved_by_email": current_user.email,
+            "approved_by": admin_user.get('user_id'),
+            "approved_by_email": admin_user.get('email'),
             "processed_via": "admin_panel",
             "created_at": transaction.get("created_at"),
             "completed_at": datetime.now(timezone.utc),
@@ -638,7 +715,7 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends
             data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
         )
         
-        logger.info(f"Recharge {request.transaction_id} approved by admin {current_user.email}")
+        logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.get('email')}")
         return {"message": "Recarga aprobada y saldo acreditado", "status": "completed"}
     else:
         # Reject recharge
@@ -647,7 +724,7 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends
             {"$set": {
                 "status": "rejected",
                 "updated_at": datetime.now(timezone.utc),
-                "rejected_by": current_user.user_id,
+                "rejected_by": admin_user.get('user_id'),
                 "rejection_reason": request.rejection_reason or "Comprobante inválido"
             }}
         )
@@ -661,7 +738,7 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends
             data={"transaction_id": request.transaction_id}
         )
         
-        logger.info(f"Recharge {request.transaction_id} rejected by admin {current_user.email}")
+        logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.get('email')}")
         return {"message": "Recarga rechazada", "status": "rejected"}
 
 # =======================
@@ -670,15 +747,14 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user = Depends
 
 @admin_router.get("/transactions")
 async def get_all_transactions(
-    admin_user = Depends(lambda: get_admin_user),
+    admin_user: dict = Depends(get_admin_user),
     skip: int = 0,
     limit: int = 50,
     type: Optional[str] = None,
     status: Optional[str] = None
 ):
     """Get all transactions with filters"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "transactions.view"):
+    if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     query = {}
@@ -704,10 +780,9 @@ async def get_all_transactions(
     return {"transactions": transactions, "total": total}
 
 @admin_router.get("/transactions/{transaction_id}")
-async def get_transaction_detail(transaction_id: str, admin_user = Depends(lambda: get_admin_user)):
+async def get_transaction_detail(transaction_id: str, admin_user: dict = Depends(get_admin_user)):
     """Get transaction detail including proof image"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "transactions.view"):
+    if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     tx = await db.transactions.find_one({"transaction_id": transaction_id})
@@ -723,10 +798,9 @@ async def get_transaction_detail(transaction_id: str, admin_user = Depends(lambd
     return tx
 
 @admin_router.get("/transactions/export")
-async def export_transactions(admin_user = Depends(lambda: get_admin_user)):
+async def export_transactions(admin_user: dict = Depends(get_admin_user)):
     """Export all transactions to Excel"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "transactions.export"):
+    if not has_permission(admin_user, "transactions.export"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     transactions = await db.transactions.find({}, {"_id": 0, "proof_image": 0}).to_list(10000)
@@ -775,10 +849,9 @@ async def export_transactions(admin_user = Depends(lambda: get_admin_user)):
 # =======================
 
 @admin_router.get("/payment-records")
-async def get_admin_payment_records(admin_user = Depends(lambda: get_admin_user)):
+async def get_admin_payment_records(admin_user: dict = Depends(get_admin_user)):
     """Get all payment records with proof images"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "transactions.view"):
+    if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     records = await db.admin_payment_records.find(
@@ -792,10 +865,9 @@ async def get_admin_payment_records(admin_user = Depends(lambda: get_admin_user)
     return {"records": records}
 
 @admin_router.get("/payment-records/{record_id}")
-async def get_admin_payment_record_detail(record_id: str, admin_user = Depends(lambda: get_admin_user)):
+async def get_admin_payment_record_detail(record_id: str, admin_user: dict = Depends(get_admin_user)):
     """Get a specific payment record with full details including proof image"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "transactions.view"):
+    if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     record = await db.admin_payment_records.find_one({"_id": ObjectId(record_id)})
@@ -811,10 +883,9 @@ async def get_admin_payment_record_detail(record_id: str, admin_user = Depends(l
 # =======================
 
 @admin_router.get("/support/chats")
-async def get_support_chats(admin_user = Depends(lambda: get_admin_user), status: Optional[str] = None):
+async def get_support_chats(admin_user: dict = Depends(get_admin_user), status: Optional[str] = None):
     """Get all support chats"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "support.view"):
+    if not has_permission(admin_user, "support.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     # Get unique users with support messages
@@ -851,10 +922,9 @@ async def get_support_chats(admin_user = Depends(lambda: get_admin_user), status
     return result
 
 @admin_router.get("/support/chat/{user_id}")
-async def get_support_chat_detail(user_id: str, admin_user = Depends(lambda: get_admin_user)):
+async def get_support_chat_detail(user_id: str, admin_user: dict = Depends(get_admin_user)):
     """Get full chat history with a user"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "support.view"):
+    if not has_permission(admin_user, "support.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     # Get user messages
@@ -895,10 +965,9 @@ async def get_support_chat_detail(user_id: str, admin_user = Depends(lambda: get
     }
 
 @admin_router.post("/support/respond")
-async def admin_respond_support(request: AdminSupportResponse, admin_user = Depends(lambda: get_admin_user)):
+async def admin_respond_support(request: AdminSupportResponse, admin_user: dict = Depends(get_admin_user)):
     """Send a response to user from admin panel"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "support.respond"):
+    if not has_permission(admin_user, "support.respond"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     # Save response
@@ -906,8 +975,8 @@ async def admin_respond_support(request: AdminSupportResponse, admin_user = Depe
         "user_id": request.user_id,
         "message": request.message,
         "sender": "admin",
-        "admin_id": current_user.user_id,
-        "admin_name": current_user.name,
+        "admin_id": admin_user.get('user_id'),
+        "admin_name": admin_user.get('name'),
         "created_at": datetime.now(timezone.utc)
     }
     await db.support_responses.insert_one(admin_response)
@@ -924,10 +993,9 @@ async def admin_respond_support(request: AdminSupportResponse, admin_user = Depe
     return {"message": "Respuesta enviada"}
 
 @admin_router.post("/support/close")
-async def admin_close_support(request: CloseSupportRequest, admin_user = Depends(lambda: get_admin_user)):
+async def admin_close_support(request: CloseSupportRequest, admin_user: dict = Depends(get_admin_user)):
     """Close a support chat from admin panel"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "support.close"):
+    if not has_permission(admin_user, "support.close"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     closing_msg = request.closing_message or "Tu caso de soporte ha sido resuelto. ¡Gracias por contactarnos!"
@@ -935,7 +1003,7 @@ async def admin_close_support(request: CloseSupportRequest, admin_user = Depends
     # Mark as closed
     await db.support_messages.update_many(
         {"user_id": request.user_id},
-        {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc), "closed_by": current_user.user_id}}
+        {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc), "closed_by": admin_user.get('user_id')}}
     )
     
     # Save closing message
@@ -944,7 +1012,7 @@ async def admin_close_support(request: CloseSupportRequest, admin_user = Depends
         "message": f"🔒 Chat cerrado: {closing_msg}",
         "sender": "admin",
         "type": "close",
-        "admin_id": current_user.user_id,
+        "admin_id": admin_user.get('user_id'),
         "created_at": datetime.now(timezone.utc)
     }
     await db.support_responses.insert_one(admin_response)
@@ -965,10 +1033,9 @@ async def admin_close_support(request: CloseSupportRequest, admin_user = Depends
 # =======================
 
 @admin_router.get("/settings/rate")
-async def get_exchange_rate(admin_user = Depends(lambda: get_admin_user)):
+async def get_exchange_rate(admin_user: dict = Depends(get_admin_user)):
     """Get current exchange rate"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "settings.view"):
+    if not has_permission(admin_user, "settings.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     rate_doc = await db.exchange_rates.find_one({})
@@ -982,20 +1049,19 @@ async def get_exchange_rate(admin_user = Depends(lambda: get_admin_user)):
     }
 
 @admin_router.post("/settings/rate")
-async def update_exchange_rate(request: UpdateRateRequest, admin_user = Depends(lambda: get_admin_user)):
+async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = Depends(get_admin_user)):
     """Update exchange rate"""
-    current_user = await get_admin_user(admin_user)
-    if not has_permission(current_user, "settings.edit"):
+    if not has_permission(admin_user, "settings.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     await db.exchange_rates.delete_many({})
     new_rate = {
         "ris_to_ves": request.ris_to_ves,
         "updated_at": datetime.now(timezone.utc),
-        "updated_by": current_user.user_id
+        "updated_by": admin_user.get('user_id')
     }
     await db.exchange_rates.insert_one(new_rate)
     
-    logger.info(f"Exchange rate updated to {request.ris_to_ves} by {current_user.email}")
+    logger.info(f"Exchange rate updated to {request.ris_to_ves} by {admin_user.get('email')}")
     
     return {"message": f"Tasa actualizada a {request.ris_to_ves} VES por RIS"}
