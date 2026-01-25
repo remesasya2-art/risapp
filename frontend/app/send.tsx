@@ -433,7 +433,7 @@ export default function SendRISScreen() {
 
           {/* Phone with Prefix Selector */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Teléfono *</Text>
+            <Text style={styles.inputLabel}>Teléfono (Aplica para Pago Móvil) *</Text>
             <View style={styles.phoneRow}>
               <View style={styles.phoneFixed}>
                 <Text style={styles.phoneFixedText}>(+58)</Text>
