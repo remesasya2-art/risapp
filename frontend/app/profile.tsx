@@ -110,10 +110,10 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Funcionalidad próximamente')}
+            onPress={() => router.push('/support')}
           >
-            <Ionicons name="help-circle" size={24} color="#2563eb" />
-            <Text style={styles.menuText}>Ayuda y soporte</Text>
+            <Ionicons name="chatbubbles" size={24} color="#2563eb" />
+            <Text style={styles.menuText}>Ayuda y Soporte</Text>
             <Ionicons name="chevron-forward" size={20} color="#6b7280" />
           </TouchableOpacity>
         </View>
