@@ -254,8 +254,8 @@ export default function HomeScreen() {
             style={[styles.actionButton, styles.primaryButton]}
             onPress={handleRecharge}
           >
-            <Ionicons name="add-circle" size={24} color="#fff" />
-            <Text style={styles.actionButtonText}>Recargar REAIS</Text>
+            <Ionicons name="qr-code" size={24} color="#fff" />
+            <Text style={styles.actionButtonText}>Recargar con PIX</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
