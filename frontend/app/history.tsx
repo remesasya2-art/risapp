@@ -93,9 +93,6 @@ export default function HistoryScreen() {
 
     setSharing(true);
     try {
-      // Check if sharing is available on this device
-      const isAvailable = await Sharing.isAvailableAsync();
-
       if (Platform.OS === 'web') {
         // Web: Use native Web Share API if available
         if (navigator.share) {
@@ -109,33 +106,46 @@ export default function HistoryScreen() {
           await navigator.clipboard.writeText(text);
           showAlert('Copiado', 'La información del comprobante ha sido copiada al portapapeles');
         }
-      } else if (isAvailable) {
-        // Mobile: Save image to temp file and share
-        const base64Data = selectedProof.image.replace(/^data:image\/\w+;base64,/, '');
-        const fileUri = `${FileSystem.cacheDirectory}comprobante_${selectedProof.transactionId.substring(0, 8)}.jpg`;
-        
-        // Write base64 image to file
-        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // Share the file
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'image/jpeg',
-          dialogTitle: 'Compartir Comprobante',
-          UTI: 'public.jpeg', // For iOS
-        });
       } else {
-        // Fallback: Use React Native Share for text
-        await Share.share({
-          title: 'Comprobante de Transacción RIS',
-          message: `Comprobante de Transacción RIS\n\nID: ${selectedProof.transactionId}\nMonto: ${selectedProof.amount}\nFecha: ${selectedProof.completedAt}\n\n¡Gracias por usar RIS!`,
-        });
+        // Mobile: Check if sharing is available
+        const isAvailable = await Sharing.isAvailableAsync();
+        
+        if (isAvailable) {
+          // Extract base64 data from the image
+          const base64Data = selectedProof.image.replace(/^data:image\/\w+;base64,/, '');
+          const fileName = `comprobante_${selectedProof.transactionId.substring(0, 8)}.jpg`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          
+          // Write base64 image to file using the correct encoding string
+          await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+            encoding: 'base64',
+          });
+
+          // Share the file
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'image/jpeg',
+            dialogTitle: 'Compartir Comprobante de RIS',
+          });
+        } else {
+          // Fallback to text sharing if file sharing not available
+          await Share.share({
+            title: 'Comprobante de Transacción RIS',
+            message: `Comprobante de Transacción RIS\n\nID: ${selectedProof.transactionId}\nMonto: ${selectedProof.amount}\nFecha: ${selectedProof.completedAt}\n\n¡Gracias por usar RIS!`,
+          });
+        }
       }
     } catch (error: any) {
-      if (error.message !== 'User did not share') {
-        console.error('Error sharing:', error);
-        showAlert('Error', 'No se pudo compartir el comprobante');
+      console.error('Error sharing:', error);
+      // If file sharing fails, try text sharing as fallback
+      if (error.message !== 'User did not share' && error.message !== 'Share action was cancelled') {
+        try {
+          await Share.share({
+            title: 'Comprobante de Transacción RIS',
+            message: `Comprobante de Transacción RIS\n\nID: ${selectedProof.transactionId}\nMonto: ${selectedProof.amount}\nFecha: ${selectedProof.completedAt}\n\n¡Gracias por usar RIS!`,
+          });
+        } catch (shareError) {
+          showAlert('Error', 'No se pudo compartir el comprobante');
+        }
       }
     } finally {
       setSharing(false);
