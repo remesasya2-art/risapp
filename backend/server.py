@@ -197,6 +197,130 @@ class VerificationDecision(BaseModel):
     approved: bool
     rejection_reason: Optional[str] = None
 
+# Security/Password Models
+class SetPasswordRequest(BaseModel):
+    password: str
+    confirm_password: str
+
+class LoginWithPasswordRequest(BaseModel):
+    email: str
+    password: str
+
+class RequestPasswordResetRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    reset_token: str
+    new_password: str
+    confirm_password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+    selfie_image: str  # Live selfie for verification
+
+# =======================
+# PASSWORD UTILITIES
+# =======================
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against its hash"""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def validate_password(password: str) -> tuple[bool, str]:
+    """
+    Validate password requirements:
+    - Minimum 7 characters
+    - Must contain letters (a-z, A-Z)
+    - Must contain numbers (0-9)
+    - Must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+    """
+    if len(password) < 7:
+        return False, "La contraseña debe tener al menos 7 caracteres"
+    
+    if not re.search(r'[a-zA-Z]', password):
+        return False, "La contraseña debe contener al menos una letra"
+    
+    if not re.search(r'[0-9]', password):
+        return False, "La contraseña debe contener al menos un número"
+    
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]', password):
+        return False, "La contraseña debe contener al menos un carácter especial (!@#$%^&*...)"
+    
+    return True, "OK"
+
+def generate_reset_token() -> str:
+    """Generate a secure reset token"""
+    return secrets.token_urlsafe(32)
+
+def generate_temp_password() -> str:
+    """Generate a temporary password"""
+    return secrets.token_urlsafe(8)
+
+async def send_password_reset_email(email: str, temp_password: str):
+    """Send password reset email with temporary password"""
+    try:
+        # Simple email sending (you should configure with proper SMTP in production)
+        subject = "RIS App - Código de Recuperación de Contraseña"
+        body = f"""
+Hola,
+
+Has solicitado recuperar tu contraseña en RIS App.
+
+Tu código temporal de acceso es: {temp_password}
+
+Este código expira en 15 minutos.
+
+Si no solicitaste este cambio, ignora este mensaje.
+
+Saludos,
+Equipo RIS
+"""
+        # Log for now (in production, use proper email service)
+        logger.info(f"Password reset email for {email}: Temp password = {temp_password}")
+        
+        # Try to send via SMTP if configured
+        smtp_host = os.getenv('SMTP_HOST', '')
+        smtp_port = int(os.getenv('SMTP_PORT', '587'))
+        smtp_user = os.getenv('SMTP_USER', '')
+        smtp_pass = os.getenv('SMTP_PASS', '')
+        
+        if smtp_host and smtp_user:
+            msg = MIMEMultipart()
+            msg['From'] = smtp_user
+            msg['To'] = email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+            
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            logger.info(f"Password reset email sent to {email}")
+        else:
+            # Fallback: create notification in-app
+            user = await db.users.find_one({"email": email})
+            if user:
+                await create_notification(
+                    user_id=user['user_id'],
+                    title="🔐 Código de Recuperación",
+                    message=f"Tu código temporal es: {temp_password}. Expira en 15 minutos.",
+                    notification_type="password_reset",
+                    data={"temp_password": temp_password}
+                )
+            logger.info(f"Password reset notification created for {email}")
+            
+        return True
+    except Exception as e:
+        logger.error(f"Error sending password reset email: {e}")
+        return False
+
 # =======================
 # AUTH DEPENDENCIES
 # =======================
