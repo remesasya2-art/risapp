@@ -501,6 +501,289 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
         raise HTTPException(status_code=500, detail="Error registering FCM token")
 
 # =======================
+# PASSWORD/SECURITY ROUTES
+# =======================
+
+@api_router.post("/auth/set-password")
+async def set_password(request: SetPasswordRequest, current_user: User = Depends(get_current_user)):
+    """Set password for user after Google login (first time)"""
+    
+    # Check if passwords match
+    if request.password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+    
+    # Validate password
+    is_valid, message = validate_password(request.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Check if user already has password
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if user.get('password_set'):
+        raise HTTPException(status_code=400, detail="Ya tienes una contraseña configurada. Usa 'cambiar contraseña' si deseas modificarla.")
+    
+    # Hash and save password
+    hashed = hash_password(request.password)
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {
+            "password_hash": hashed,
+            "password_set": True,
+            "password_changed_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    logger.info(f"Password set for user {current_user.user_id}")
+    return {"message": "Contraseña configurada exitosamente"}
+
+@api_router.post("/auth/login-password")
+async def login_with_password(request: LoginWithPasswordRequest):
+    """Login with email and password"""
+    
+    # Find user by email
+    user = await db.users.find_one({"email": request.email.lower()})
+    if not user:
+        raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    
+    # Check if account is locked
+    if user.get('locked_until'):
+        lock_time = user['locked_until']
+        if lock_time.tzinfo is None:
+            lock_time = lock_time.replace(tzinfo=timezone.utc)
+        if lock_time > datetime.now(timezone.utc):
+            remaining = int((lock_time - datetime.now(timezone.utc)).total_seconds() / 60)
+            raise HTTPException(status_code=423, detail=f"Cuenta bloqueada. Intenta en {remaining} minutos.")
+    
+    # Check if user has password set
+    if not user.get('password_set') or not user.get('password_hash'):
+        raise HTTPException(status_code=400, detail="No tienes contraseña configurada. Inicia sesión con Google primero.")
+    
+    # Verify password
+    if not verify_password(request.password, user['password_hash']):
+        # Increment failed attempts
+        failed_attempts = user.get('failed_login_attempts', 0) + 1
+        update_data = {"failed_login_attempts": failed_attempts}
+        
+        # Lock account after 5 failed attempts for 15 minutes
+        if failed_attempts >= 5:
+            update_data['locked_until'] = datetime.now(timezone.utc) + timedelta(minutes=15)
+            await db.users.update_one({"email": request.email.lower()}, {"$set": update_data})
+            raise HTTPException(status_code=423, detail="Cuenta bloqueada por múltiples intentos fallidos. Intenta en 15 minutos.")
+        
+        await db.users.update_one({"email": request.email.lower()}, {"$set": update_data})
+        raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    
+    # Invalidate all previous sessions for this user (single session policy)
+    await db.user_sessions.delete_many({"user_id": user['user_id']})
+    
+    # Reset failed attempts and create new session
+    session_token = secrets.token_urlsafe(32)
+    session_data = {
+        "user_id": user['user_id'],
+        "session_token": session_token,
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        "login_method": "password"
+    }
+    await db.user_sessions.insert_one(session_data)
+    
+    # Update user
+    await db.users.update_one(
+        {"email": request.email.lower()},
+        {"$set": {
+            "failed_login_attempts": 0,
+            "locked_until": None,
+            "last_login": datetime.now(timezone.utc)
+        }}
+    )
+    
+    logger.info(f"User {user['user_id']} logged in with password")
+    
+    return {
+        "message": "Login exitoso",
+        "session_token": session_token,
+        "user": {
+            "user_id": user['user_id'],
+            "email": user['email'],
+            "name": user['name'],
+            "picture": user.get('picture'),
+            "balance_ris": user.get('balance_ris', 0),
+            "verification_status": user.get('verification_status', 'pending'),
+            "role": user.get('role', 'user'),
+            "password_set": True
+        }
+    }
+
+@api_router.post("/auth/request-password-reset")
+async def request_password_reset(request: RequestPasswordResetRequest):
+    """Request password reset - sends temp password via email/notification"""
+    
+    user = await db.users.find_one({"email": request.email.lower()})
+    if not user:
+        # Don't reveal if email exists for security
+        return {"message": "Si el email existe, recibirás un código de recuperación."}
+    
+    # Generate temporary password
+    temp_password = generate_temp_password()
+    
+    # Hash the temp password and save
+    await db.users.update_one(
+        {"email": request.email.lower()},
+        {"$set": {
+            "password_reset_token": hash_password(temp_password),
+            "password_reset_expires": datetime.now(timezone.utc) + timedelta(minutes=15)
+        }}
+    )
+    
+    # Send email
+    await send_password_reset_email(request.email, temp_password)
+    
+    return {"message": "Si el email existe, recibirás un código de recuperación."}
+
+@api_router.post("/auth/verify-reset-token")
+async def verify_reset_token(email: str, token: str):
+    """Verify reset token is valid"""
+    user = await db.users.find_one({"email": email.lower()})
+    if not user:
+        raise HTTPException(status_code=400, detail="Código inválido o expirado")
+    
+    if not user.get('password_reset_token') or not user.get('password_reset_expires'):
+        raise HTTPException(status_code=400, detail="Código inválido o expirado")
+    
+    # Check expiration
+    expires = user['password_reset_expires']
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    
+    if expires < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Código expirado. Solicita uno nuevo.")
+    
+    # Verify token
+    if not verify_password(token, user['password_reset_token']):
+        raise HTTPException(status_code=400, detail="Código inválido o expirado")
+    
+    return {"valid": True, "message": "Código válido"}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password using temp token"""
+    
+    # Verify token first
+    user = await db.users.find_one({"email": request.email.lower()})
+    if not user:
+        raise HTTPException(status_code=400, detail="Código inválido o expirado")
+    
+    if not user.get('password_reset_token') or not user.get('password_reset_expires'):
+        raise HTTPException(status_code=400, detail="Código inválido o expirado")
+    
+    # Check expiration
+    expires = user['password_reset_expires']
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    
+    if expires < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Código expirado. Solicita uno nuevo.")
+    
+    # Verify token
+    if not verify_password(request.reset_token, user['password_reset_token']):
+        raise HTTPException(status_code=400, detail="Código inválido o expirado")
+    
+    # Validate new password
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+    
+    is_valid, message = validate_password(request.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Update password
+    hashed = hash_password(request.new_password)
+    await db.users.update_one(
+        {"email": request.email.lower()},
+        {"$set": {
+            "password_hash": hashed,
+            "password_set": True,
+            "password_changed_at": datetime.now(timezone.utc),
+            "password_reset_token": None,
+            "password_reset_expires": None,
+            "failed_login_attempts": 0,
+            "locked_until": None
+        }}
+    )
+    
+    # Invalidate all sessions
+    await db.user_sessions.delete_many({"user_id": user['user_id']})
+    
+    logger.info(f"Password reset for user {user['user_id']}")
+    return {"message": "Contraseña actualizada exitosamente. Por favor inicia sesión."}
+
+@api_router.post("/auth/change-password")
+async def change_password(request: ChangePasswordRequest, current_user: User = Depends(get_current_user)):
+    """Change password - requires current password and live selfie"""
+    
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    
+    # Verify current password
+    if not user.get('password_hash') or not verify_password(request.current_password, user['password_hash']):
+        raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
+    
+    # Validate new password
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas nuevas no coinciden")
+    
+    is_valid, message = validate_password(request.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Check that current and new password are different
+    if request.current_password == request.new_password:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser diferente a la actual")
+    
+    # Verify selfie is provided (liveness check would be done on frontend)
+    if not request.selfie_image or not request.selfie_image.startswith('data:image'):
+        raise HTTPException(status_code=400, detail="Se requiere una selfie en vivo para cambiar la contraseña")
+    
+    # Save selfie as verification record
+    verification_record = {
+        "user_id": current_user.user_id,
+        "type": "password_change",
+        "selfie_image": request.selfie_image,
+        "timestamp": datetime.now(timezone.utc),
+        "ip_address": None  # Could be added from request
+    }
+    await db.security_verifications.insert_one(verification_record)
+    
+    # Update password
+    hashed = hash_password(request.new_password)
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {
+            "password_hash": hashed,
+            "password_changed_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Invalidate all other sessions except current
+    current_session = await db.user_sessions.find_one({"user_id": current_user.user_id})
+    if current_session:
+        await db.user_sessions.delete_many({
+            "user_id": current_user.user_id,
+            "_id": {"$ne": current_session['_id']}
+        })
+    
+    logger.info(f"Password changed for user {current_user.user_id}")
+    return {"message": "Contraseña cambiada exitosamente"}
+
+@api_router.get("/auth/password-status")
+async def get_password_status(current_user: User = Depends(get_current_user)):
+    """Check if user has password set"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    return {
+        "password_set": user.get('password_set', False),
+        "password_changed_at": user.get('password_changed_at')
+    }
+
+# =======================
 # POLICIES ROUTES
 # =======================
 
