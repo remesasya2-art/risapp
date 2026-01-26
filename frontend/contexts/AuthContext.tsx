@@ -23,6 +23,7 @@ interface User {
   rejection_reason?: string;
   role?: string;  // 'user', 'admin', 'super_admin'
   permissions?: string[];
+  password_set?: boolean;  // true if user has set a password
 }
 
 interface AuthContextType {
