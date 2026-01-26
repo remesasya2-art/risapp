@@ -600,9 +600,29 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 300,
   },
-  modalCloseButtonFull: {
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
     marginTop: 16,
-    backgroundColor: '#2563eb',
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalCloseButtonFull: {
+    flex: 1,
+    backgroundColor: '#6b7280',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
