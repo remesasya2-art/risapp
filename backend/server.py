@@ -16,6 +16,12 @@ import json
 import base64
 from openpyxl import Workbook
 from io import BytesIO
+import bcrypt
+import secrets
+import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from whatsapp_service import whatsapp_service
 from mercadopago_service import mercadopago_service
 from admin_routes import admin_router
