@@ -93,6 +93,37 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
+          {/* Security Section */}
+          <View style={styles.sectionDivider}>
+            <Text style={styles.sectionTitle}>Seguridad</Text>
+          </View>
+
+          {!user.password_set && (
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemHighlight]}
+              onPress={() => router.push('/set-password')}
+            >
+              <Ionicons name="lock-closed" size={24} color="#ef4444" />
+              <Text style={styles.menuText}>Configurar Contraseña</Text>
+              <View style={styles.requiredBadge}>
+                <Text style={styles.requiredBadgeText}>Requerido</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+
+          {user.password_set && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/change-password')}
+            >
+              <Ionicons name="key" size={24} color="#10b981" />
+              <Text style={styles.menuText}>Cambiar Contraseña</Text>
+              <Ionicons name="checkmark-circle" size={18} color="#10b981" style={{ marginRight: 4 }} />
+              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => router.push('/beneficiaries')}
