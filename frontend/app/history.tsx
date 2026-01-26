@@ -11,6 +11,7 @@ import {
   Dimensions,
   Platform,
   Alert,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { format } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
