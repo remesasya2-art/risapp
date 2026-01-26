@@ -281,4 +281,36 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
+  sectionDivider: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 8,
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuItemHighlight: {
+    backgroundColor: '#fef2f2',
+  },
+  requiredBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  requiredBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
 });
