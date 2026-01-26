@@ -873,4 +873,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  cancelButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 32,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelButtonText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
