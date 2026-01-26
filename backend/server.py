@@ -936,6 +936,44 @@ async def verify_pix_with_proof(request: PixVerifyWithProofRequest, current_user
             "message": "Comprobante enviado. Será revisado y recibirás una notificación cuando se confirme."
         }
 
+@api_router.post("/pix/cancel/{transaction_id}")
+async def cancel_pix_payment(transaction_id: str, current_user: User = Depends(get_current_user)):
+    """Cancel a pending PIX payment that was not completed"""
+    
+    # Find the pending transaction
+    transaction = await db.transactions.find_one({
+        "transaction_id": transaction_id,
+        "user_id": current_user.user_id,
+        "type": "recharge",
+        "status": {"$in": ["pending", "pending_review"]}
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada o no se puede cancelar")
+    
+    # Check if already completed
+    if transaction.get("status") == "completed":
+        raise HTTPException(status_code=400, detail="Esta transacción ya fue completada y no se puede cancelar")
+    
+    # Update transaction status to cancelled
+    await db.transactions.update_one(
+        {"transaction_id": transaction_id},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc),
+            "cancelled_by": "user",
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    logger.info(f"PIX payment cancelled by user {current_user.user_id}: {transaction_id}")
+    
+    return {
+        "status": "cancelled",
+        "message": "La recarga ha sido cancelada correctamente",
+        "transaction_id": transaction_id
+    }
+
 @api_router.get("/transaction/{transaction_id}/proof")
 async def get_transaction_proof(transaction_id: str, current_user: User = Depends(get_current_user)):
     """Get the proof image for a specific transaction"""
