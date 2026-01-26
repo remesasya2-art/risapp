@@ -49,6 +49,14 @@ class User(BaseModel):
     name: str
     picture: Optional[str] = None
     balance_ris: float = 0.0
+    # Authentication/Security fields
+    password_hash: Optional[str] = None  # Hashed password
+    password_set: bool = False  # True if user has set a password
+    password_changed_at: Optional[datetime] = None
+    password_reset_token: Optional[str] = None
+    password_reset_expires: Optional[datetime] = None
+    failed_login_attempts: int = 0
+    locked_until: Optional[datetime] = None
     # Role and permissions
     role: str = "user"  # user, admin, super_admin
     permissions: List[str] = []  # List of specific permissions
