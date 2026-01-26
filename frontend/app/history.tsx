@@ -350,15 +350,33 @@ export default function HistoryScreen() {
                     resizeMode="contain"
                   />
                 </View>
+
+                {/* Action Buttons */}
+                <View style={styles.modalButtonsContainer}>
+                  <TouchableOpacity 
+                    style={styles.shareButton}
+                    onPress={shareProof}
+                    disabled={sharing}
+                  >
+                    {sharing ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="share-social" size={20} color="#fff" />
+                        <Text style={styles.shareButtonText}>Compartir</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.modalCloseButtonFull}
+                    onPress={() => setProofModalVisible(false)}
+                  >
+                    <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
-            
-            <TouchableOpacity 
-              style={styles.modalCloseButtonFull}
-              onPress={() => setProofModalVisible(false)}
-            >
-              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
