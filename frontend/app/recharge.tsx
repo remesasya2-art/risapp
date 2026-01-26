@@ -353,6 +353,22 @@ export default function RechargeScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {/* Cancel Button */}
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleCancelPayment}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <ActivityIndicator color="#ef4444" />
+            ) : (
+              <>
+                <Ionicons name="close-circle-outline" size={20} color="#ef4444" />
+                <Text style={styles.cancelButtonText}>No pude completar el pago, cancelar</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     );
