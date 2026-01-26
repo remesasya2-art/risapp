@@ -48,6 +48,7 @@ export default function RechargeScreen() {
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Quick amount options
   const quickAmounts = [50, 100, 200, 500, 1000, 2000];
