@@ -442,6 +442,8 @@ async def create_session(request: Request, x_session_id: str = Header(..., alias
         
         if existing_user:
             user_id = existing_user["user_id"]
+            # Invalidate all previous sessions (single session policy)
+            await db.user_sessions.delete_many({"user_id": user_id})
         else:
             # Create new user
             new_user = User(
@@ -462,6 +464,12 @@ async def create_session(request: Request, x_session_id: str = Header(..., alias
         )
         await db.user_sessions.insert_one(session.dict())
         
+        # Update last login
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"last_login": datetime.now(timezone.utc)}}
+        )
+        
         return SessionDataResponse(**user_data)
     except Exception as e:
         logging.error(f"Session creation error: {e}")
@@ -469,7 +477,12 @@ async def create_session(request: Request, x_session_id: str = Header(..., alias
 
 @api_router.get("/auth/me")
 async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    # Get user from DB to include all fields
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
+    if user:
+        # Add password_set status
+        user['password_set'] = user.get('password_set', False)
+    return user
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, current_user: User = Depends(get_current_user)):
