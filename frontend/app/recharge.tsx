@@ -179,6 +179,61 @@ export default function RechargeScreen() {
     }
   };
 
+  const handleCancelPayment = async () => {
+    if (!pixData?.transaction_id) return;
+
+    // Show confirmation dialog
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('¿Estás seguro de que deseas cancelar esta recarga? Esta acción no se puede deshacer.');
+      if (!confirmed) return;
+    } else {
+      return new Promise<void>((resolve) => {
+        Alert.alert(
+          'Cancelar Recarga',
+          '¿Estás seguro de que deseas cancelar esta recarga? Esta acción no se puede deshacer.',
+          [
+            { text: 'No', style: 'cancel', onPress: () => resolve() },
+            { 
+              text: 'Sí, cancelar', 
+              style: 'destructive',
+              onPress: async () => {
+                await performCancel();
+                resolve();
+              }
+            }
+          ]
+        );
+      });
+    }
+
+    // Web flow continues here
+    await performCancel();
+  };
+
+  const performCancel = async () => {
+    if (!pixData?.transaction_id) return;
+    
+    setCancelling(true);
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      await axios.post(
+        `${BACKEND_URL}/api/pix/cancel/${pixData.transaction_id}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      showAlert(
+        'Recarga Cancelada',
+        'La recarga ha sido cancelada correctamente.',
+        [{ text: 'OK', onPress: () => router.replace('/') }]
+      );
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'No se pudo cancelar la recarga');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   // If showing PIX QR code
   if (pixData && !paymentCompleted) {
     return (
