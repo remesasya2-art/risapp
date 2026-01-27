@@ -556,6 +556,86 @@ async def set_password(request: SetPasswordRequest, current_user: User = Depends
     logger.info(f"Password set for user {current_user.user_id}")
     return {"message": "Contraseña configurada exitosamente"}
 
+@api_router.post("/auth/register")
+async def register_user(request: RegisterUserRequest):
+    """Register a new user with email and password"""
+    
+    # Validate email format
+    email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    if not re.match(email_regex, request.email):
+        raise HTTPException(status_code=400, detail="Email inválido")
+    
+    # Check if email already exists
+    existing_user = await db.users.find_one({"email": request.email.lower()})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Este email ya está registrado. Intenta iniciar sesión.")
+    
+    # Validate passwords match
+    if request.password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+    
+    # Validate password strength
+    is_valid, message = validate_password(request.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Validate name
+    if not request.name or len(request.name.strip()) < 2:
+        raise HTTPException(status_code=400, detail="El nombre debe tener al menos 2 caracteres")
+    
+    # Create user
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    hashed_password = hash_password(request.password)
+    
+    new_user = {
+        "user_id": user_id,
+        "email": request.email.lower().strip(),
+        "name": request.name.strip(),
+        "phone": request.phone.strip() if request.phone else None,
+        "picture": None,
+        "balance_ris": 0.0,
+        "password_hash": hashed_password,
+        "password_set": True,
+        "password_changed_at": datetime.now(timezone.utc),
+        "role": "user",
+        "permissions": [],
+        "verification_status": "pending",
+        "accepted_policies": False,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc),
+        "registration_method": "email"
+    }
+    
+    await db.users.insert_one(new_user)
+    
+    # Create session automatically after registration
+    session_token = secrets.token_urlsafe(32)
+    session_data = {
+        "user_id": user_id,
+        "session_token": session_token,
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+        "login_method": "registration"
+    }
+    await db.user_sessions.insert_one(session_data)
+    
+    logger.info(f"New user registered: {request.email}")
+    
+    return {
+        "message": "Registro exitoso",
+        "session_token": session_token,
+        "user": {
+            "user_id": user_id,
+            "email": request.email.lower(),
+            "name": request.name.strip(),
+            "picture": None,
+            "balance_ris": 0.0,
+            "verification_status": "pending",
+            "role": "user",
+            "password_set": True
+        }
+    }
+
 @api_router.post("/auth/login-password")
 async def login_with_password(request: LoginWithPasswordRequest):
     """Login with email and password"""
