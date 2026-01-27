@@ -206,6 +206,13 @@ class LoginWithPasswordRequest(BaseModel):
     email: str
     password: str
 
+class RegisterUserRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    confirm_password: str
+    phone: Optional[str] = None
+
 class RequestPasswordResetRequest(BaseModel):
     email: str
 
