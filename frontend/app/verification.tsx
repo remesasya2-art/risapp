@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,10 +21,20 @@ import { useAuth } from '../contexts/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    alert(`${title}\n\n${message}`);
+    if (buttons && buttons[0]?.onPress) buttons[0].onPress();
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
+
 export default function VerificationScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     fullName: '',
     documentNumber: '',
@@ -34,37 +45,27 @@ export default function VerificationScreen() {
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [acceptedDeclaration, setAcceptedDeclaration] = useState(false);
 
-  // Redirect if already verified or pending
   useEffect(() => {
     if (user?.verification_status === 'verified') {
-      Alert.alert(
-        'Ya Verificado',
-        'Tu cuenta ya está verificada. No necesitas completar este proceso nuevamente.',
-        [{ text: 'OK', onPress: () => router.replace('/') }]
-      );
+      showAlert('✅ Verificado', 'Tu cuenta ya está verificada.', [
+        { text: 'OK', onPress: () => router.replace('/') }
+      ]);
     } else if (user?.verification_status === 'pending') {
-      Alert.alert(
-        'Verificación Pendiente',
-        'Ya has enviado tu documentación. Estamos revisándola.',
-        [{ text: 'OK', onPress: () => router.replace('/') }]
-      );
+      showAlert('⏳ En Revisión', 'Tu documentación está siendo revisada. Recibirás una notificación pronto.', [
+        { text: 'OK', onPress: () => router.replace('/') }
+      ]);
     }
   }, [user]);
 
   const takePhoto = async (type: 'id' | 'cpf' | 'selfie') => {
     try {
-      // Request camera permissions
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       
       if (!permissionResult.granted) {
-        Alert.alert(
-          'Permiso requerido', 
-          'Necesitamos acceso a tu cámara para verificar tu identidad. Ve a Configuración → RIS → Cámara y activa el permiso.'
-        );
+        showAlert('Permiso Requerido', 'Necesitamos acceso a la cámara para verificar tu identidad.');
         return;
       }
 
-      // Launch camera with specific settings
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
         quality: 0.8,
@@ -75,48 +76,27 @@ export default function VerificationScreen() {
       if (!result.canceled && result.assets[0].base64) {
         const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
         
-        if (type === 'id') {
-          setIdImage(base64Image);
-        } else if (type === 'cpf') {
-          setCpfImage(base64Image);
-        } else {
-          setSelfieImage(base64Image);
-        }
+        if (type === 'id') setIdImage(base64Image);
+        else if (type === 'cpf') setCpfImage(base64Image);
+        else setSelfieImage(base64Image);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'No se pudo tomar la foto. Intenta nuevamente.');
+      showAlert('Error', 'No se pudo tomar la foto');
     }
   };
 
   const handleSubmit = async () => {
-    // Validation
-    if (!formData.fullName.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu nombre completo');
+    if (!formData.fullName.trim() || !formData.documentNumber.trim() || !formData.cpfNumber.trim()) {
+      showAlert('Datos Incompletos', 'Completa toda la información personal');
       return;
     }
-    if (!formData.documentNumber.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu número de documento');
-      return;
-    }
-    if (!formData.cpfNumber.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu número de CPF');
-      return;
-    }
-    if (!idImage) {
-      Alert.alert('Error', 'Por favor toma una foto de tu documento de identidad');
-      return;
-    }
-    if (!cpfImage) {
-      Alert.alert('Error', 'Por favor toma una foto de tu CPF');
-      return;
-    }
-    if (!selfieImage) {
-      Alert.alert('Error', 'Por favor toma un selfie en vivo desde la cámara frontal');
+    if (!idImage || !cpfImage || !selfieImage) {
+      showAlert('Fotos Requeridas', 'Debes tomar todas las fotos solicitadas');
       return;
     }
     if (!acceptedDeclaration) {
-      Alert.alert('Error', 'Debes aceptar la declaración de titularidad para continuar');
+      showAlert('Declaración', 'Debes aceptar la declaración de titularidad');
       return;
     }
 
@@ -134,281 +114,292 @@ export default function VerificationScreen() {
           cpf_image: cpfImage,
           selfie_image: selfieImage,
         },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      Alert.alert(
-        'Verificación enviada',
-        'Tu documentación ha sido enviada exitosamente. El equipo la revisará pronto.',
-        [{ text: 'OK', onPress: () => router.replace('/') }]
+      await refreshUser();
+      
+      showAlert(
+        '✅ Verificación Enviada',
+        'Tu documentación ha sido enviada. Recibirás una respuesta en minutos.',
+        [{ text: 'Entendido', onPress: () => router.replace('/') }]
       );
     } catch (error: any) {
-      console.error('Verification error:', error);
-      Alert.alert('Error', error.response?.data?.detail || 'No se pudo enviar la verificación');
+      showAlert('Error', error.response?.data?.detail || 'No se pudo enviar la verificación');
     } finally {
       setLoading(false);
     }
   };
 
+  const canProceedStep1 = formData.fullName.trim() && formData.documentNumber.trim() && formData.cpfNumber.trim();
+  const canProceedStep2 = idImage && cpfImage && selfieImage;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
-          <Ionicons name="shield-checkmark" size={60} color="#2563eb" />
-          <Text style={styles.title}>Verificación de Cuenta</Text>
-          <Text style={styles.subtitle}>
-            Para tu seguridad, necesitamos verificar tu identidad
-          </Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => step > 1 ? setStep(step - 1) : router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Verificación KYC</Text>
+          <View style={{ width: 44 }} />
         </View>
 
-        {/* Personal Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Información Personal</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Nombre Completo *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.fullName}
-              onChangeText={(text) => setFormData({ ...formData, fullName: text })}
-              placeholder="Ej: João Silva Santos"
-              autoCapitalize="words"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Número de Documento *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.documentNumber}
-              onChangeText={(text) => setFormData({ ...formData, documentNumber: text })}
-              placeholder="DNI o Pasaporte"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Número de CPF *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.cpfNumber}
-              onChangeText={(text) => setFormData({ ...formData, cpfNumber: text })}
-              placeholder="000.000.000-00"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        {/* ID Document */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Documento de Identidad *</Text>
-          <Text style={styles.sectionSubtitle}>DNI o Pasaporte vigente</Text>
-          
-          {idImage ? (
-            <View style={styles.imagePreview}>
-              <Image source={{ uri: idImage }} style={styles.previewImage} />
-              <TouchableOpacity
-                style={styles.changeImageButton}
-                onPress={() => takePhoto('id')}
-              >
-                <Ionicons name="camera" size={20} color="#fff" />
-                <Text style={styles.changeImageText}>Tomar nueva foto</Text>
-              </TouchableOpacity>
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          {[1, 2, 3].map((s) => (
+            <View key={s} style={styles.progressStep}>
+              <View style={[styles.progressDot, step >= s && styles.progressDotActive]}>
+                {step > s ? (
+                  <Ionicons name="checkmark" size={16} color="#fff" />
+                ) : (
+                  <Text style={[styles.progressDotText, step >= s && styles.progressDotTextActive]}>{s}</Text>
+                )}
+              </View>
+              <Text style={[styles.progressLabel, step >= s && styles.progressLabelActive]}>
+                {s === 1 ? 'Datos' : s === 2 ? 'Documentos' : 'Confirmación'}
+              </Text>
             </View>
-          ) : (
+          ))}
+        </View>
+
+        {/* Step 1: Personal Data */}
+        {step === 1 && (
+          <View style={styles.stepContent}>
+            <View style={styles.stepHeader}>
+              <View style={styles.stepIconContainer}>
+                <Ionicons name="person" size={28} color="#F5A623" />
+              </View>
+              <Text style={styles.stepTitle}>Información Personal</Text>
+              <Text style={styles.stepSubtitle}>Ingresa tus datos exactamente como aparecen en tu documento</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nombre Completo</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#64748b" />
+                <TextInput
+                  style={styles.input}
+                  value={formData.fullName}
+                  onChangeText={(text) => setFormData({ ...formData, fullName: text })}
+                  placeholder="Ej: João Silva Santos"
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Número de Documento (DNI/Pasaporte)</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="card-outline" size={20} color="#64748b" />
+                <TextInput
+                  style={styles.input}
+                  value={formData.documentNumber}
+                  onChangeText={(text) => setFormData({ ...formData, documentNumber: text })}
+                  placeholder="Número de documento"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>CPF</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="document-text-outline" size={20} color="#64748b" />
+                <TextInput
+                  style={styles.input}
+                  value={formData.cpfNumber}
+                  onChangeText={(text) => setFormData({ ...formData, cpfNumber: text })}
+                  placeholder="000.000.000-00"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
             <TouchableOpacity
-              style={styles.uploadButton}
-              onPress={() => takePhoto('id')}
+              style={[styles.nextButton, !canProceedStep1 && styles.nextButtonDisabled]}
+              onPress={() => setStep(2)}
+              disabled={!canProceedStep1}
             >
-              <Ionicons name="camera-outline" size={40} color="#2563eb" />
-              <Text style={styles.uploadButtonText}>Tomar foto con cámara</Text>
-              <Text style={styles.uploadButtonSubtext}>📸 Foto en vivo requerida</Text>
+              <Text style={styles.nextButtonText}>Continuar</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
             </TouchableOpacity>
-          )}
-        </View>
-
-        {/* CPF Document */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>CPF *</Text>
-          <Text style={styles.sectionSubtitle}>Documento CPF vigente</Text>
-          
-          {cpfImage ? (
-            <View style={styles.imagePreview}>
-              <Image source={{ uri: cpfImage }} style={styles.previewImage} />
-              <TouchableOpacity
-                style={styles.changeImageButton}
-                onPress={() => takePhoto('cpf')}
-              >
-                <Ionicons name="camera" size={20} color="#fff" />
-                <Text style={styles.changeImageText}>Tomar nueva foto</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.uploadButton}
-              onPress={() => takePhoto('cpf')}
-            >
-              <Ionicons name="camera-outline" size={40} color="#2563eb" />
-              <Text style={styles.uploadButtonText}>Tomar foto con cámara</Text>
-              <Text style={styles.uploadButtonSubtext}>Foto en vivo requerida</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Selfie */}
-        <View style={styles.section}>
-          <View style={styles.selfieHeader}>
-            <Ionicons name="person-circle" size={32} color="#2563eb" />
-            <View style={styles.selfieHeaderText}>
-              <Text style={styles.sectionTitle}>Selfie en Vivo *</Text>
-              <Text style={styles.sectionSubtitle}>Cámara frontal - Asegúrate de estar bien iluminado</Text>
-            </View>
           </View>
-          
-          {selfieImage ? (
-            <View style={styles.imagePreview}>
-              <Image source={{ uri: selfieImage }} style={styles.previewImage} />
-              <TouchableOpacity
-                style={styles.changeImageButton}
-                onPress={() => takePhoto('selfie')}
-              >
-                <Ionicons name="camera" size={20} color="#fff" />
-                <Text style={styles.changeImageText}>Tomar nuevo selfie</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.uploadButton, styles.selfieButton]}
-              onPress={() => takePhoto('selfie')}
-            >
-              <Ionicons name="camera-reverse-outline" size={50} color="#2563eb" />
-              <Text style={styles.uploadButtonText}>Tomar selfie con cámara frontal</Text>
-              <Text style={styles.uploadButtonSubtext}>📸 Foto en vivo requerida</Text>
-              <View style={styles.selfieTips}>
-                <Text style={styles.selfieTipText}>✓ Buena iluminación</Text>
-                <Text style={styles.selfieTipText}>✓ Rostro visible</Text>
-                <Text style={styles.selfieTipText}>✓ Sin gafas oscuras</Text>
+        )}
+
+        {/* Step 2: Documents */}
+        {step === 2 && (
+          <View style={styles.stepContent}>
+            <View style={styles.stepHeader}>
+              <View style={styles.stepIconContainer}>
+                <Ionicons name="camera" size={28} color="#F5A623" />
               </View>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Declaration Section - Professional Design */}
-        <View style={styles.declarationSection}>
-          <View style={styles.declarationHeaderPro}>
-            <View style={styles.declarationIconContainer}>
-              <Ionicons name="document-text" size={28} color="#2563eb" />
-            </View>
-            <Text style={styles.declarationTitlePro}>Declaración de Titularidad</Text>
-          </View>
-          
-          <View style={styles.declarationDivider} />
-
-          <Text style={styles.declarationIntro}>
-            Al aceptar esta declaración, yo <Text style={styles.boldText}>{formData.fullName || '[Tu nombre]'}</Text>, declaro bajo juramento que:
-          </Text>
-
-          <View style={styles.declarationPoints}>
-            <View style={styles.pointRow}>
-              <View style={styles.pointNumber}>
-                <Text style={styles.pointNumberText}>1</Text>
-              </View>
-              <Text style={styles.pointText}>
-                Soy el <Text style={styles.boldText}>titular único y exclusivo</Text> de todas las tarjetas de crédito/débito y cuentas bancarias que utilizaré para realizar recargas en la plataforma RIS.
-              </Text>
+              <Text style={styles.stepTitle}>Documentos</Text>
+              <Text style={styles.stepSubtitle}>Toma fotos claras de tus documentos y un selfie</Text>
             </View>
 
-            <View style={styles.pointRow}>
-              <View style={styles.pointNumber}>
-                <Text style={styles.pointNumberText}>2</Text>
-              </View>
-              <Text style={styles.pointText}>
-                Los fondos utilizados para las recargas provienen de <Text style={styles.boldText}>actividades lícitas</Text> y son de mi completa propiedad.
-              </Text>
-            </View>
-
-            <View style={styles.pointRow}>
-              <View style={styles.pointNumber}>
-                <Text style={styles.pointNumberText}>3</Text>
-              </View>
-              <Text style={styles.pointText}>
-                <Text style={styles.boldText}>No utilizaré</Text> tarjetas, cuentas o métodos de pago pertenecientes a terceras personas, incluyendo familiares, amigos o entidades corporativas.
-              </Text>
-            </View>
-
-            <View style={styles.pointRow}>
-              <View style={styles.pointNumber}>
-                <Text style={styles.pointNumberText}>4</Text>
-              </View>
-              <Text style={styles.pointText}>
-                Autorizo a RIS a verificar la titularidad de mis métodos de pago y acepto que las transacciones que no cumplan con esta declaración serán rechazadas.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.consequencesBox}>
-            <View style={styles.consequencesHeader}>
-              <Ionicons name="alert-circle" size={24} color="#dc2626" />
-              <Text style={styles.consequencesTitle}>Consecuencias por Incumplimiento</Text>
-            </View>
-            <View style={styles.consequencesList}>
-              <View style={styles.consequenceItem}>
-                <Ionicons name="close-circle" size={16} color="#dc2626" />
-                <Text style={styles.consequenceText}>Suspensión inmediata de la cuenta</Text>
-              </View>
-              <View style={styles.consequenceItem}>
-                <Ionicons name="close-circle" size={16} color="#dc2626" />
-                <Text style={styles.consequenceText}>Retención de fondos para investigación</Text>
-              </View>
-              <View style={styles.consequenceItem}>
-                <Ionicons name="close-circle" size={16} color="#dc2626" />
-                <Text style={styles.consequenceText}>Reporte a autoridades competentes</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.declarationDivider} />
-
-          <TouchableOpacity
-            style={styles.checkboxContainerPro}
-            onPress={() => setAcceptedDeclaration(!acceptedDeclaration)}
-          >
-            <View style={[styles.checkboxPro, acceptedDeclaration && styles.checkboxCheckedPro]}>
-              {acceptedDeclaration && (
-                <Ionicons name="checkmark" size={24} color="#fff" />
+            {/* ID Document */}
+            <View style={styles.photoSection}>
+              <Text style={styles.photoLabel}>📄 Documento de Identidad</Text>
+              {idImage ? (
+                <View style={styles.photoPreview}>
+                  <Image source={{ uri: idImage }} style={styles.previewImage} />
+                  <TouchableOpacity style={styles.retakeBtn} onPress={() => takePhoto('id')}>
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                  </TouchableOpacity>
+                  <View style={styles.photoCheckBadge}>
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.photoButton} onPress={() => takePhoto('id')}>
+                  <Ionicons name="camera-outline" size={32} color="#F5A623" />
+                  <Text style={styles.photoButtonText}>Tomar foto del documento</Text>
+                </TouchableOpacity>
               )}
             </View>
-            <View style={styles.checkboxTextContainer}>
-              <Text style={styles.checkboxLabelPro}>
-                He leído, comprendido y acepto esta declaración bajo responsabilidad legal
-              </Text>
-              <Text style={styles.checkboxSubtext}>
-                Al marcar esta casilla, confirmo que toda la información proporcionada es verdadera y verificable.
-              </Text>
+
+            {/* CPF Document */}
+            <View style={styles.photoSection}>
+              <Text style={styles.photoLabel}>📋 CPF</Text>
+              {cpfImage ? (
+                <View style={styles.photoPreview}>
+                  <Image source={{ uri: cpfImage }} style={styles.previewImage} />
+                  <TouchableOpacity style={styles.retakeBtn} onPress={() => takePhoto('cpf')}>
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                  </TouchableOpacity>
+                  <View style={styles.photoCheckBadge}>
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.photoButton} onPress={() => takePhoto('cpf')}>
+                  <Ionicons name="camera-outline" size={32} color="#F5A623" />
+                  <Text style={styles.photoButtonText}>Tomar foto del CPF</Text>
+                </TouchableOpacity>
+              )}
             </View>
-          </TouchableOpacity>
-        </View>
 
-        {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={24} color="#fff" />
-              <Text style={styles.submitButtonText}>Enviar Verificación</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            {/* Selfie */}
+            <View style={styles.photoSection}>
+              <Text style={styles.photoLabel}>🤳 Selfie en Vivo</Text>
+              {selfieImage ? (
+                <View style={styles.photoPreview}>
+                  <Image source={{ uri: selfieImage }} style={styles.previewImage} />
+                  <TouchableOpacity style={styles.retakeBtn} onPress={() => takePhoto('selfie')}>
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                  </TouchableOpacity>
+                  <View style={styles.photoCheckBadge}>
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={[styles.photoButton, styles.selfieButton]} onPress={() => takePhoto('selfie')}>
+                  <Ionicons name="camera-reverse-outline" size={40} color="#F5A623" />
+                  <Text style={styles.photoButtonText}>Tomar selfie (cámara frontal)</Text>
+                  <View style={styles.selfieTips}>
+                    <Text style={styles.tipText}>✓ Buena iluminación</Text>
+                    <Text style={styles.tipText}>✓ Sin gafas oscuras</Text>
+                    <Text style={styles.tipText}>✓ Rostro visible</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
 
-        <Text style={styles.disclaimer}>
-          * Campos obligatorios. Tus documentos serán revisados por nuestro equipo en un máximo de 24 horas.
-        </Text>
+            <TouchableOpacity
+              style={[styles.nextButton, !canProceedStep2 && styles.nextButtonDisabled]}
+              onPress={() => setStep(3)}
+              disabled={!canProceedStep2}
+            >
+              <Text style={styles.nextButtonText}>Continuar</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Step 3: Declaration & Submit */}
+        {step === 3 && (
+          <View style={styles.stepContent}>
+            <View style={styles.stepHeader}>
+              <View style={styles.stepIconContainer}>
+                <Ionicons name="shield-checkmark" size={28} color="#F5A623" />
+              </View>
+              <Text style={styles.stepTitle}>Declaración Legal</Text>
+              <Text style={styles.stepSubtitle}>Lee y acepta la declaración de titularidad</Text>
+            </View>
+
+            {/* Summary */}
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Resumen de tu solicitud</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Nombre:</Text>
+                <Text style={styles.summaryValue}>{formData.fullName}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Documento:</Text>
+                <Text style={styles.summaryValue}>{formData.documentNumber}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>CPF:</Text>
+                <Text style={styles.summaryValue}>{formData.cpfNumber}</Text>
+              </View>
+              <View style={styles.summaryPhotos}>
+                <View style={styles.summaryPhotoCheck}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  <Text style={styles.summaryPhotoText}>Documento</Text>
+                </View>
+                <View style={styles.summaryPhotoCheck}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  <Text style={styles.summaryPhotoText}>CPF</Text>
+                </View>
+                <View style={styles.summaryPhotoCheck}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  <Text style={styles.summaryPhotoText}>Selfie</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Declaration */}
+            <View style={styles.declarationBox}>
+              <Text style={styles.declarationTitle}>Declaración de Titularidad</Text>
+              <Text style={styles.declarationText}>
+                Declaro bajo juramento que soy el titular único de todas las tarjetas y cuentas bancarias que utilizaré en esta plataforma. Los fondos provienen de actividades lícitas.
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setAcceptedDeclaration(!acceptedDeclaration)}
+              >
+                <View style={[styles.checkbox, acceptedDeclaration && styles.checkboxChecked]}>
+                  {acceptedDeclaration && <Ionicons name="checkmark" size={18} color="#fff" />}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  Acepto la declaración bajo responsabilidad legal
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitButton, (!acceptedDeclaration || loading) && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={!acceptedDeclaration || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="send" size={20} color="#fff" />
+                  <Text style={styles.submitButtonText}>Enviar Verificación</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.reviewTimeText}>
+              ⚡ Tiempo de revisión: 5-15 minutos
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -417,45 +408,101 @@ export default function VerificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f8fafc',
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 40,
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 24,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 16,
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  progressStep: {
+    alignItems: 'center',
+  },
+  progressDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
+  progressDotActive: {
+    backgroundColor: '#F5A623',
   },
-  section: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+  progressDotText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  progressDotTextActive: {
+    color: '#fff',
+  },
+  progressLabel: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  progressLabelActive: {
+    color: '#F5A623',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepHeader: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  stepIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#fef3c7',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
+  stepTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 8,
   },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 12,
+  stepSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
   },
-  inputContainer: {
+  inputGroup: {
     marginBottom: 16,
   },
   inputLabel: {
@@ -464,253 +511,222 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  uploadButton: {
-    borderWidth: 2,
-    borderColor: '#2563eb',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-  },
-  uploadButtonText: {
-    fontSize: 14,
-    color: '#2563eb',
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  uploadButtonSubtext: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  selfieButton: {
-    paddingVertical: 40,
-  },
-  selfieHeader: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    height: 56,
     gap: 12,
-    marginBottom: 16,
   },
-  selfieHeaderText: {
+  input: {
     flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+  },
+  nextButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5A623',
+    paddingVertical: 18,
+    borderRadius: 16,
+    gap: 10,
+    marginTop: 24,
+  },
+  nextButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+  nextButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  photoSection: {
+    marginBottom: 20,
+  },
+  photoLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 10,
+  },
+  photoButton: {
+    borderWidth: 2,
+    borderColor: '#F5A623',
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+  },
+  selfieButton: {
+    padding: 32,
+  },
+  photoButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F5A623',
+    marginTop: 8,
   },
   selfieTips: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 16,
+  },
+  tipText: {
+    fontSize: 12,
+    color: '#059669',
+  },
+  photoPreview: {
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+  },
+  retakeBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoCheckBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  summaryPhotos: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    width: '100%',
+    borderTopColor: '#f1f5f9',
+  },
+  summaryPhotoCheck: {
+    alignItems: 'center',
     gap: 4,
   },
-  selfieTipText: {
+  summaryPhotoText: {
     fontSize: 12,
     color: '#059669',
     fontWeight: '500',
   },
-  imagePreview: {
-    alignItems: 'center',
+  declarationBox: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  previewImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    resizeMode: 'contain',
-    backgroundColor: '#f3f4f6',
+  declarationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
   },
-  changeImageButton: {
+  declarationText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 12,
-    gap: 8,
+    gap: 12,
+    backgroundColor: '#f8fafc',
+    padding: 14,
+    borderRadius: 12,
   },
-  changeImageText: {
-    color: '#fff',
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  checkboxLabel: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#374151',
   },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10b981',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 8,
-    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 18,
+    borderRadius: 16,
+    gap: 10,
   },
   submitButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: '#94a3b8',
   },
   submitButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
-  disclaimer: {
-    fontSize: 12,
-    color: '#6b7280',
+  reviewTimeText: {
+    fontSize: 14,
+    color: '#059669',
     textAlign: 'center',
     marginTop: 16,
-    lineHeight: 18,
-  },
-  declarationSection: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  declarationHeaderPro: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  declarationIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#eff6ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  declarationTitlePro: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1f2937',
-    flex: 1,
-  },
-  declarationDivider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-    marginVertical: 20,
-  },
-  declarationIntro: {
-    fontSize: 15,
-    color: '#374151',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  boldText: {
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  declarationPoints: {
-    gap: 16,
-    marginBottom: 20,
-  },
-  pointRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  pointNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#2563eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pointNumberText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  pointText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 21,
-  },
-  consequencesBox: {
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    marginBottom: 20,
-  },
-  consequencesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  consequencesTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#dc2626',
-  },
-  consequencesList: {
-    gap: 8,
-  },
-  consequenceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  consequenceText: {
-    fontSize: 13,
-    color: '#991b1b',
-    flex: 1,
-  },
-  checkboxContainerPro: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#f9fafb',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  checkboxPro: {
-    width: 32,
-    height: 32,
-    borderWidth: 2,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxCheckedPro: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-  },
-  checkboxTextContainer: {
-    flex: 1,
-  },
-  checkboxLabelPro: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#1f2937',
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  checkboxSubtext: {
-    fontSize: 12,
-    color: '#6b7280',
-    lineHeight: 18,
   },
 });
