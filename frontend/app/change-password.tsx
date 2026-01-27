@@ -256,13 +256,20 @@ export default function ChangePasswordScreen() {
             </View>
           ) : (
             <TouchableOpacity
-              style={styles.captureButton}
+              style={[styles.captureButton, !cameraReady && styles.captureButtonWaiting]}
               onPress={takeSelfie}
-              disabled={!cameraReady}
             >
-              <View style={styles.captureButtonInner} />
+              {cameraReady ? (
+                <View style={styles.captureButtonInner} />
+              ) : (
+                <ActivityIndicator color="#2563eb" size="small" />
+              )}
             </TouchableOpacity>
           )}
+
+          <Text style={styles.captureHint}>
+            {cameraReady ? 'Toca el botón para capturar' : 'Preparando cámara...'}
+          </Text>
 
           <Text style={styles.privacyNote}>
             Esta foto se usa solo para verificar tu identidad y se guarda de forma segura
