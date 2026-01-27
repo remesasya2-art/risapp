@@ -587,6 +587,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
   },
+  forgotPasswordLink: {
+    alignItems: 'center',
+    marginTop: 20,
+    paddingVertical: 8,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#F5A623',
+    fontWeight: '600',
+  },
   footerText: {
     fontSize: 12,
     color: '#475569',
