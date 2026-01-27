@@ -50,6 +50,7 @@ export default function TabLayout() {
           name="history"
           options={{
             title: 'Historial',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="list" size={size} color={color} />
             ),
@@ -59,6 +60,7 @@ export default function TabLayout() {
           name="profile"
           options={{
             title: 'Perfil',
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="person" size={size} color={color} />
             ),
