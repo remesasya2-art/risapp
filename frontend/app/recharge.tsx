@@ -50,8 +50,7 @@ export default function RechargeScreen() {
   const [uploadingProof, setUploadingProof] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  // Quick amount options
-  const quickAmounts = [50, 100, 200, 500, 1000, 2000];
+  const quickAmounts = [50, 100, 200, 500, 1000];
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -72,300 +71,228 @@ export default function RechargeScreen() {
     const amountNum = parseFloat(amount);
     
     if (!amountNum || amountNum < 10) {
-      showAlert('Error', 'El monto mínimo es R$ 10,00');
+      showAlert('Monto Mínimo', 'El monto mínimo es R$ 10,00');
       return;
     }
     
     if (amountNum > 2000) {
-      showAlert('Error', 'El monto máximo por transacción es R$ 2.000,00');
+      showAlert('Monto Máximo', 'El monto máximo por transacción es R$ 2.000,00');
       return;
     }
     
-    const cpfClean = cpf.replace(/\D/g, '');
-    if (cpfClean.length !== 11) {
-      showAlert('Error', 'Por favor ingresa un CPF válido');
+    const cleanCpf = cpf.replace(/\D/g, '');
+    if (cleanCpf.length !== 11) {
+      showAlert('CPF Inválido', 'Por favor ingresa un CPF válido (11 dígitos)');
       return;
     }
 
-    setLoading(true);
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem('session_token');
+      
       const response = await axios.post(
         `${BACKEND_URL}/api/pix/create`,
-        { amount: amountNum, cpf: cpfClean },
+        { amount_brl: amountNum, payer_cpf: cleanCpf },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
+      
       setPixData(response.data);
     } catch (error: any) {
-      const message = error.response?.data?.detail || 'Error al crear el pago PIX';
-      showAlert('Error', message);
+      showAlert('Error', error.response?.data?.detail || 'Error al generar PIX');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopyPixCode = async () => {
+  const copyPixCode = async () => {
     if (pixData?.qr_code) {
       await Clipboard.setStringAsync(pixData.qr_code);
       showAlert('Copiado', 'Código PIX copiado al portapapeles');
     }
   };
 
-  const pickProofImage = async () => {
+  const takeProofPhoto = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        showAlert('Permiso requerido', 'Necesitamos acceso a tu galería para subir el comprobante');
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        showAlert('Permiso Requerido', 'Necesitamos acceso a la cámara');
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.7,
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
         base64: true,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const base64 = result.assets[0].base64;
-        if (base64) {
-          setProofImage(`data:image/jpeg;base64,${base64}`);
-        }
+      if (!result.canceled && result.assets[0].base64) {
+        setProofImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      showAlert('Error', 'No se pudo seleccionar la imagen');
+      console.error('Error taking photo:', error);
     }
   };
 
-  const submitProofAndVerify = async () => {
-    if (!pixData?.transaction_id) return;
-    if (!proofImage) {
-      showAlert('Comprobante requerido', 'Por favor adjunta el comprobante de pago');
-      return;
-    }
+  const uploadProof = async () => {
+    if (!proofImage || !pixData) return;
 
-    setUploadingProof(true);
     try {
+      setUploadingProof(true);
       const token = await AsyncStorage.getItem('session_token');
       
-      // Upload proof and verify payment
-      const response = await axios.post(
-        `${BACKEND_URL}/api/pix/verify-with-proof`,
-        { 
-          transaction_id: pixData.transaction_id,
-          proof_image: proofImage 
-        },
+      await axios.post(
+        `${BACKEND_URL}/api/pix/upload-proof`,
+        { transaction_id: pixData.transaction_id, proof_image: proofImage },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      if (response.data.status === 'completed' || response.data.status === 'pending_review') {
-        setPaymentCompleted(true);
-        await refreshUser();
-        showAlert(
-          '¡Comprobante Enviado!',
-          response.data.status === 'completed' 
-            ? `Tu recarga de R$ ${pixData.amount_brl.toFixed(2)} fue confirmada.`
-            : 'Tu comprobante está siendo verificado. Recibirás una notificación cuando se confirme.',
-          [{ text: 'OK', onPress: () => router.replace('/') }]
-        );
-      }
+      
+      showAlert('Comprobante Enviado', 'Tu pago está siendo verificado. Recibirás una notificación pronto.', [
+        { text: 'OK', onPress: () => { refreshUser(); router.replace('/'); } }
+      ]);
     } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'No se pudo verificar el pago');
+      showAlert('Error', error.response?.data?.detail || 'Error al enviar comprobante');
     } finally {
       setUploadingProof(false);
     }
   };
 
-  const handleCancelPayment = async () => {
-    if (!pixData?.transaction_id) return;
-
-    // Show confirmation dialog
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm('¿Estás seguro de que deseas cancelar esta recarga? Esta acción no se puede deshacer.');
-      if (!confirmed) return;
-    } else {
-      return new Promise<void>((resolve) => {
-        Alert.alert(
-          'Cancelar Recarga',
-          '¿Estás seguro de que deseas cancelar esta recarga? Esta acción no se puede deshacer.',
-          [
-            { text: 'No', style: 'cancel', onPress: () => resolve() },
-            { 
-              text: 'Sí, cancelar', 
-              style: 'destructive',
-              onPress: async () => {
-                await performCancel();
-                resolve();
-              }
-            }
-          ]
-        );
-      });
-    }
-
-    // Web flow continues here
-    await performCancel();
-  };
-
-  const performCancel = async () => {
-    if (!pixData?.transaction_id) return;
+  const handleCancelRecharge = async () => {
+    if (!pixData) return;
     
-    setCancelling(true);
-    try {
-      const token = await AsyncStorage.getItem('session_token');
-      await axios.post(
-        `${BACKEND_URL}/api/pix/cancel/${pixData.transaction_id}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      showAlert(
-        'Recarga Cancelada',
-        'La recarga ha sido cancelada correctamente.',
-        [{ text: 'OK', onPress: () => router.replace('/') }]
-      );
-    } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'No se pudo cancelar la recarga');
-    } finally {
-      setCancelling(false);
-    }
+    Alert.alert(
+      'Cancelar Recarga',
+      '¿Estás seguro de cancelar esta recarga?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Sí, Cancelar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancelling(true);
+              const token = await AsyncStorage.getItem('session_token');
+              await axios.post(
+                `${BACKEND_URL}/api/pix/cancel`,
+                { transaction_id: pixData.transaction_id },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              showAlert('Recarga Cancelada', 'La recarga ha sido cancelada');
+              setPixData(null);
+              setAmount('');
+              setCpf('');
+              setProofImage(null);
+            } catch (error: any) {
+              showAlert('Error', error.response?.data?.detail || 'Error al cancelar');
+            } finally {
+              setCancelling(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
-  // If showing PIX QR code
-  if (pixData && !paymentCompleted) {
+  // Amount selection screen
+  if (!pixData) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => setPixData(null)} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color="#0f172a" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Pagar con PIX</Text>
-            <View style={{ width: 40 }} />
+            <Text style={styles.headerTitle}>Recargar con PIX</Text>
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Amount */}
-          <View style={styles.amountCard}>
-            <Text style={styles.amountLabel}>Valor a pagar</Text>
-            <Text style={styles.amountValue}>R$ {pixData.amount_brl.toFixed(2)}</Text>
-            <Text style={styles.amountRis}>= {pixData.amount_brl.toFixed(2)} RIS</Text>
-          </View>
-
-          {/* QR Code */}
-          <View style={styles.qrContainer}>
-            <Text style={styles.qrTitle}>Escanea el código QR</Text>
-            {pixData.qr_code_base64 && (
-              <Image
-                source={{ uri: `data:image/png;base64,${pixData.qr_code_base64}` }}
-                style={styles.qrImage}
-                resizeMode="contain"
-              />
-            )}
-            <Text style={styles.qrSubtitle}>
-              Abre la app de tu banco y escanea el código QR
-            </Text>
-          </View>
-
-          {/* Copy PIX Code */}
-          <View style={styles.copySection}>
-            <Text style={styles.copyTitle}>O copia el código PIX:</Text>
-            <View style={styles.codeContainer}>
-              <Text style={styles.pixCode} numberOfLines={2}>
-                {pixData.qr_code?.substring(0, 50)}...
-              </Text>
-              <TouchableOpacity style={styles.copyButton} onPress={handleCopyPixCode}>
-                <Ionicons name="copy-outline" size={20} color="#fff" />
-                <Text style={styles.copyButtonText}>Copiar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Expiration Warning */}
-          <View style={styles.warningContainer}>
-            <Ionicons name="time-outline" size={20} color="#f59e0b" />
-            <Text style={styles.warningText}>
-              Este código expira en 30 minutos
-            </Text>
-          </View>
-
-          {/* Instructions - NOW BEFORE THE BUTTON */}
-          <View style={styles.instructionsContainer}>
-            <Text style={styles.instructionsTitle}>Cómo pagar:</Text>
-            <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>1</Text>
-              <Text style={styles.stepText}>Abre la app de tu banco</Text>
-            </View>
-            <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>2</Text>
-              <Text style={styles.stepText}>Busca la opción "Pagar con PIX"</Text>
-            </View>
-            <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>3</Text>
-              <Text style={styles.stepText}>Escanea el QR o pega el código copiado</Text>
-            </View>
-            <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>4</Text>
-              <Text style={styles.stepText}>Confirma el pago y sube el comprobante</Text>
-            </View>
-          </View>
-
-          {/* Upload Proof Section */}
-          <View style={styles.proofSection}>
-            <Text style={styles.proofTitle}>Adjuntar comprobante de pago</Text>
-            <Text style={styles.proofSubtitle}>
-              Sube una captura de pantalla del comprobante de tu banco
-            </Text>
-            
-            {proofImage ? (
-              <View style={styles.proofImageContainer}>
-                <Image source={{ uri: proofImage }} style={styles.proofImage} />
-                <TouchableOpacity 
-                  style={styles.removeProofButton}
-                  onPress={() => setProofImage(null)}
-                >
-                  <Ionicons name="close-circle" size={28} color="#ef4444" />
-                </TouchableOpacity>
+          {/* Balance Card */}
+          <View style={styles.balanceCard}>
+            <View style={styles.balanceHeader}>
+              <View style={styles.balanceIcon}>
+                <Ionicons name="wallet" size={24} color="#F5A623" />
               </View>
-            ) : (
-              <TouchableOpacity style={styles.uploadButton} onPress={pickProofImage}>
-                <Ionicons name="cloud-upload-outline" size={32} color="#2563eb" />
-                <Text style={styles.uploadButtonText}>Seleccionar imagen</Text>
-              </TouchableOpacity>
-            )}
+              <Text style={styles.balanceLabel}>Tu Saldo Actual</Text>
+            </View>
+            <Text style={styles.balanceAmount}>
+              {user?.balance_ris?.toFixed(2) || '0.00'} <Text style={styles.balanceCurrency}>RIS</Text>
+            </Text>
           </View>
 
-          {/* Submit Button */}
+          {/* Amount Input */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Monto a Recargar</Text>
+            <View style={styles.amountInputContainer}>
+              <Text style={styles.currencyPrefix}>R$</Text>
+              <TextInput
+                style={styles.amountInput}
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+            <Text style={styles.limitText}>Mínimo R$ 10 • Máximo R$ 2.000</Text>
+          </View>
+
+          {/* Quick Amounts */}
+          <View style={styles.quickAmountsContainer}>
+            {quickAmounts.map((quick) => (
+              <TouchableOpacity
+                key={quick}
+                style={[styles.quickAmountBtn, amount === quick.toString() && styles.quickAmountBtnActive]}
+                onPress={() => setAmount(quick.toString())}
+              >
+                <Text style={[styles.quickAmountText, amount === quick.toString() && styles.quickAmountTextActive]}>
+                  R$ {quick}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* CPF Input */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>CPF do Pagador</Text>
+            <View style={styles.cpfInputContainer}>
+              <Ionicons name="person-outline" size={20} color="#64748b" />
+              <TextInput
+                style={styles.cpfInput}
+                value={cpf}
+                onChangeText={handleCPFChange}
+                keyboardType="numeric"
+                placeholder="000.000.000-00"
+                placeholderTextColor="#94a3b8"
+                maxLength={14}
+              />
+            </View>
+            <Text style={styles.cpfHint}>Deve ser o CPF do titular da conta</Text>
+          </View>
+
+          {/* Info Card */}
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle" size={20} color="#0369a1" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>Como funciona?</Text>
+              <Text style={styles.infoText}>1. Ingresa el monto y tu CPF</Text>
+              <Text style={styles.infoText}>2. Escanea el QR Code o copia el código</Text>
+              <Text style={styles.infoText}>3. Realiza el pago en tu app bancaria</Text>
+              <Text style={styles.infoText}>4. Los RIS se acreditarán automáticamente</Text>
+            </View>
+          </View>
+
+          {/* Generate Button */}
           <TouchableOpacity
-            style={[styles.checkButton, !proofImage && styles.checkButtonDisabled]}
-            onPress={submitProofAndVerify}
-            disabled={uploadingProof || !proofImage}
+            style={[styles.generateButton, (!amount || !cpf) && styles.generateButtonDisabled]}
+            onPress={handleCreatePix}
+            disabled={loading || !amount || !cpf}
           >
-            {uploadingProof ? (
+            {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={24} color="#fff" />
-                <Text style={styles.checkButtonText}>Ya pagué, verificar</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Cancel Button */}
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancelPayment}
-            disabled={cancelling}
-          >
-            {cancelling ? (
-              <ActivityIndicator color="#ef4444" />
-            ) : (
-              <>
-                <Ionicons name="close-circle-outline" size={20} color="#ef4444" />
-                <Text style={styles.cancelButtonText}>No pude completar el pago, cancelar</Text>
+                <Ionicons name="qr-code" size={20} color="#fff" />
+                <Text style={styles.generateButtonText}>Generar Código PIX</Text>
               </>
             )}
           </TouchableOpacity>
@@ -374,118 +301,100 @@ export default function RechargeScreen() {
     );
   }
 
+  // QR Code display screen
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          <TouchableOpacity style={styles.backButton} onPress={() => setPixData(null)}>
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recargar con PIX</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.headerTitle}>Pagar con PIX</Text>
+          <View style={{ width: 44 }} />
         </View>
 
-        {/* Balance Card */}
-        <View style={styles.balanceCard}>
-          <Ionicons name="wallet-outline" size={32} color="#2563eb" />
-          <View style={styles.balanceInfo}>
-            <Text style={styles.balanceLabel}>Tu saldo actual</Text>
-            <Text style={styles.balanceValue}>{user?.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
+        {/* Amount Display */}
+        <View style={styles.pixAmountCard}>
+          <Text style={styles.pixAmountLabel}>Valor a Pagar</Text>
+          <Text style={styles.pixAmountValue}>R$ {pixData.amount_brl.toFixed(2)}</Text>
+          <View style={styles.pixExpirationBadge}>
+            <Ionicons name="time-outline" size={14} color="#d97706" />
+            <Text style={styles.pixExpirationText}>Válido por 30 minutos</Text>
           </View>
         </View>
 
-        {/* Amount Input */}
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Monto a recargar (BRL)</Text>
-          <View style={styles.amountInputContainer}>
-            <Text style={styles.currencySymbol}>R$</Text>
-            <TextInput
-              style={styles.amountInput}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-          <Text style={styles.conversionText}>
-            = {amount ? parseFloat(amount).toFixed(2) : '0.00'} RIS
-          </Text>
+        {/* QR Code */}
+        <View style={styles.qrSection}>
+          {pixData.qr_code_base64 && (
+            <View style={styles.qrContainer}>
+              <Image
+                source={{ uri: `data:image/png;base64,${pixData.qr_code_base64}` }}
+                style={styles.qrImage}
+                resizeMode="contain"
+              />
+            </View>
+          )}
+          
+          <TouchableOpacity style={styles.copyButton} onPress={copyPixCode}>
+            <Ionicons name="copy-outline" size={20} color="#0f172a" />
+            <Text style={styles.copyButtonText}>Copiar Código PIX</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Quick Amount Buttons */}
-        <View style={styles.quickAmountsContainer}>
-          <Text style={styles.quickAmountsLabel}>Valores rápidos:</Text>
-          <View style={styles.quickAmountsGrid}>
-            {quickAmounts.map((quickAmount) => (
-              <TouchableOpacity
-                key={quickAmount}
-                style={[
-                  styles.quickAmountButton,
-                  amount === String(quickAmount) && styles.quickAmountButtonActive,
-                ]}
-                onPress={() => setAmount(String(quickAmount))}
-              >
-                <Text
-                  style={[
-                    styles.quickAmountText,
-                    amount === String(quickAmount) && styles.quickAmountTextActive,
-                  ]}
-                >
-                  R$ {quickAmount}
-                </Text>
+        {/* Upload Proof Section */}
+        <View style={styles.proofSection}>
+          <Text style={styles.proofTitle}>Comprobante de Pago</Text>
+          <Text style={styles.proofSubtitle}>Sube la captura de tu transferencia para acelerar la verificación</Text>
+          
+          {proofImage ? (
+            <View style={styles.proofPreview}>
+              <Image source={{ uri: proofImage }} style={styles.proofImage} />
+              <TouchableOpacity style={styles.retakeButton} onPress={takeProofPhoto}>
+                <Ionicons name="camera" size={18} color="#fff" />
+                <Text style={styles.retakeButtonText}>Tomar otra</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.uploadProofButton} onPress={takeProofPhoto}>
+              <Ionicons name="camera-outline" size={32} color="#F5A623" />
+              <Text style={styles.uploadProofText}>Tomar foto del comprobante</Text>
+            </TouchableOpacity>
+          )}
+
+          {proofImage && (
+            <TouchableOpacity
+              style={styles.sendProofButton}
+              onPress={uploadProof}
+              disabled={uploadingProof}
+            >
+              {uploadingProof ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-upload" size={20} color="#fff" />
+                  <Text style={styles.sendProofButtonText}>Enviar Comprobante</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* CPF Input */}
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>CPF del pagador</Text>
-          <TextInput
-            style={styles.cpfInput}
-            value={cpf}
-            onChangeText={handleCPFChange}
-            placeholder="000.000.000-00"
-            keyboardType="number-pad"
-            placeholderTextColor="#9ca3af"
-          />
-          <Text style={styles.cpfNote}>
-            El CPF debe coincidir con el titular del banco
-          </Text>
-        </View>
-
-        {/* Limits Info */}
-        <View style={styles.limitsContainer}>
-          <Ionicons name="information-circle-outline" size={20} color="#6b7280" />
-          <View style={styles.limitsTextContainer}>
-            <Text style={styles.limitsText}>Mínimo: R$ 10,00 | Máximo: R$ 2.000,00</Text>
-            <Text style={styles.limitsText}>Conversión: 1 BRL = 1 RIS</Text>
-          </View>
-        </View>
-
-        {/* Create PIX Button */}
+        {/* Cancel Button */}
         <TouchableOpacity
-          style={[styles.createButton, (!amount || !cpf) && styles.createButtonDisabled]}
-          onPress={handleCreatePix}
-          disabled={loading || !amount || !cpf}
+          style={styles.cancelButton}
+          onPress={handleCancelRecharge}
+          disabled={cancelling}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
+          {cancelling ? (
+            <ActivityIndicator color="#dc2626" size="small" />
           ) : (
             <>
-              <Ionicons name="qr-code-outline" size={24} color="#fff" />
-              <Text style={styles.createButtonText}>Generar código PIX</Text>
+              <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
+              <Text style={styles.cancelButtonText}>Cancelar Recarga</Text>
             </>
           )}
         </TouchableOpacity>
-
-        {/* PIX Logo */}
-        <View style={styles.pixLogoContainer}>
-          <Text style={styles.pixLogoText}>Pago instantáneo via</Text>
-          <Text style={styles.pixBrand}>PIX</Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -497,114 +406,121 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   balanceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: '#0f172a',
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 24,
   },
-  balanceInfo: {
-    marginLeft: 12,
+  balanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  balanceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(245, 166, 35, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   balanceLabel: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#94a3b8',
   },
-  balanceValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2563eb',
+  balanceAmount: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#fff',
   },
-  inputSection: {
+  balanceCurrency: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#F5A623',
+  },
+  section: {
     marginBottom: 20,
   },
-  inputLabel: {
-    fontSize: 16,
+  sectionTitle: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
+    color: '#374151',
+    marginBottom: 10,
   },
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#e2e8f0',
+    borderColor: '#F5A623',
     paddingHorizontal: 16,
+    height: 64,
   },
-  currencySymbol: {
+  currencyPrefix: {
     fontSize: 24,
-    fontWeight: '600',
-    color: '#64748b',
+    fontWeight: '700',
+    color: '#F5A623',
     marginRight: 8,
   },
   amountInput: {
     flex: 1,
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    paddingVertical: 16,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  conversionText: {
-    fontSize: 14,
-    color: '#10b981',
+  limitText: {
+    fontSize: 12,
+    color: '#64748b',
     marginTop: 8,
-    fontWeight: '500',
+    textAlign: 'center',
   },
   quickAmountsContainer: {
-    marginBottom: 20,
-  },
-  quickAmountsLabel: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 8,
-  },
-  quickAmountsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
+    marginBottom: 24,
   },
-  quickAmountButton: {
-    paddingVertical: 10,
+  quickAmountBtn: {
     paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  quickAmountButtonActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+  quickAmountBtnActive: {
+    backgroundColor: '#F5A623',
+    borderColor: '#F5A623',
   },
   quickAmountText: {
     fontSize: 14,
@@ -614,207 +530,155 @@ const styles = StyleSheet.create({
   quickAmountTextActive: {
     color: '#fff',
   },
-  cpfInput: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
-    color: '#1e293b',
-  },
-  cpfNote: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  limitsContainer: {
+  cpfInputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#f1f5f9',
-    padding: 12,
-    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    height: 56,
+    gap: 12,
+  },
+  cpfInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+  },
+  cpfHint: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 6,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: '#e0f2fe',
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
     marginBottom: 24,
   },
-  limitsTextContainer: {
-    marginLeft: 8,
+  infoContent: {
     flex: 1,
   },
-  limitsText: {
-    fontSize: 13,
-    color: '#6b7280',
-  },
-  createButton: {
-    backgroundColor: '#2563eb',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  createButtonDisabled: {
-    backgroundColor: '#94a3b8',
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  pixLogoContainer: {
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  pixLogoText: {
-    fontSize: 12,
-    color: '#9ca3af',
-  },
-  pixBrand: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#32bcad',
-  },
-  // PIX Payment Screen Styles
-  amountCard: {
-    backgroundColor: '#2563eb',
-    padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  amountLabel: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  amountValue: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 4,
-  },
-  amountRis: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-  },
-  qrContainer: {
-    backgroundColor: '#fff',
-    padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  qrTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 16,
-  },
-  qrImage: {
-    width: 200,
-    height: 200,
-    marginBottom: 16,
-  },
-  qrSubtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-  },
-  copySection: {
-    marginBottom: 16,
-  },
-  copyTitle: {
+  infoTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#0369a1',
     marginBottom: 8,
   },
-  codeContainer: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    padding: 12,
+  infoText: {
+    fontSize: 13,
+    color: '#0369a1',
+    lineHeight: 20,
+  },
+  generateButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5A623',
+    paddingVertical: 18,
+    borderRadius: 16,
+    gap: 10,
+    shadowColor: '#F5A623',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  pixCode: {
-    flex: 1,
-    fontSize: 12,
-    color: '#64748b',
-    marginRight: 8,
+  generateButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    shadowOpacity: 0,
   },
-  copyButton: {
-    backgroundColor: '#2563eb',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    gap: 4,
-  },
-  copyButtonText: {
+  generateButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
-  warningContainer: {
+  // QR Screen Styles
+  pixAmountCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  pixAmountLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  pixAmountValue: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#059669',
+    marginBottom: 12,
+  },
+  pixExpirationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fef3c7',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
   },
-  warningText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#92400e',
-  },
-  instructionsContainer: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  instructionsTitle: {
-    fontSize: 16,
+  pixExpirationText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 12,
+    color: '#d97706',
   },
-  instructionStep: {
+  qrSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  qrContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    marginBottom: 16,
+  },
+  qrImage: {
+    width: 220,
+    height: 220,
+  },
+  copyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  stepNumber: {
-    width: 24,
-    height: 24,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#2563eb',
-    color: '#fff',
-    textAlign: 'center',
-    lineHeight: 24,
-    fontSize: 14,
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  copyButtonText: {
+    fontSize: 15,
     fontWeight: '600',
-    marginRight: 12,
+    color: '#0f172a',
   },
-  stepText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#475569',
-  },
-  // Proof upload styles
   proofSection: {
     backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 16,
   },
   proofTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '700',
+    color: '#0f172a',
     marginBottom: 4,
   },
   proofSubtitle: {
@@ -822,72 +686,73 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 16,
   },
-  uploadButton: {
+  uploadProofButton: {
     borderWidth: 2,
-    borderColor: '#2563eb',
+    borderColor: '#F5A623',
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 24,
     alignItems: 'center',
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#fffbeb',
   },
-  uploadButtonText: {
+  uploadProofText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F5A623',
     marginTop: 8,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#2563eb',
   },
-  proofImageContainer: {
-    position: 'relative',
+  proofPreview: {
     alignItems: 'center',
   },
   proofImage: {
     width: '100%',
-    height: 200,
+    height: 180,
     borderRadius: 12,
-    resizeMode: 'contain',
-    backgroundColor: '#f1f5f9',
+    marginBottom: 12,
   },
-  removeProofButton: {
-    position: 'absolute',
-    top: -10,
-    right: -10,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-  },
-  checkButton: {
-    backgroundColor: '#10b981',
+  retakeButton: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: '#64748b',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     gap: 8,
-    marginBottom: 24,
   },
-  checkButtonDisabled: {
-    backgroundColor: '#94a3b8',
-  },
-  checkButtonText: {
-    color: '#fff',
-    fontSize: 18,
+  retakeButtonText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#fff',
+  },
+  sendProofButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 16,
+    borderRadius: 14,
+    gap: 10,
+    marginTop: 16,
+  },
+  sendProofButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
   cancelButton: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
-    marginBottom: 32,
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#fecaca',
   },
   cancelButtonText: {
-    color: '#ef4444',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#dc2626',
   },
 });
