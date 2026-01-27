@@ -74,9 +74,9 @@ export default function TabLayout() {
         <Tabs.Screen name="beneficiaries" options={{ href: null }} />
         <Tabs.Screen name="support" options={{ href: null }} />
         <Tabs.Screen name="admin-panel" options={{ href: null }} />
-        <Tabs.Screen name="set-password" options={{ href: null }} />
-        <Tabs.Screen name="change-password" options={{ href: null }} />
-        <Tabs.Screen name="forgot-password" options={{ href: null }} />
+        <Tabs.Screen name="set-password" options={{ href: null, headerShown: false }} />
+        <Tabs.Screen name="change-password" options={{ href: null, headerShown: false }} />
+        <Tabs.Screen name="forgot-password" options={{ href: null, headerShown: false }} />
       </Tabs>
     </AuthProvider>
   );
