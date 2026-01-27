@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useFocusEffect } from '@react-navigation/native';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -46,6 +47,23 @@ export default function ChangePasswordScreen() {
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Clear all fields when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Reset all states when entering the screen
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+      setStep('password');
+      setSelfieImage(null);
+      setLivenessStep(0);
+      setLoading(false);
+    }, [])
+  );
   
   // Liveness detection states
   const [livenessStep, setLivenessStep] = useState(0);
