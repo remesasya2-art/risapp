@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect } from '@react-navigation/native';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -33,7 +33,7 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
-  const cameraRef = useRef<any>(null);
+  const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   
   const [currentPassword, setCurrentPassword] = useState('');
@@ -47,11 +47,11 @@ export default function ChangePasswordScreen() {
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   // Clear all fields when screen is focused
   useFocusEffect(
     useCallback(() => {
-      // Reset all states when entering the screen
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -60,18 +60,11 @@ export default function ChangePasswordScreen() {
       setShowConfirmPassword(false);
       setStep('password');
       setSelfieImage(null);
-      setLivenessStep(0);
+      setCameraReady(false);
       setLoading(false);
+      setCapturing(false);
     }, [])
   );
-  
-  // Liveness detection states
-  const [livenessStep, setLivenessStep] = useState(0);
-  const [livenessInstructions] = useState([
-    'Mira directamente a la cámara',
-    'Parpadea dos veces',
-    'Sonríe ligeramente',
-  ]);
 
   const validatePassword = (pass: string): string[] => {
     const errs: string[] = [];
@@ -98,35 +91,43 @@ export default function ChangePasswordScreen() {
 
   const takeSelfie = async () => {
     if (!cameraRef.current) {
-      showAlert('Error', 'Cámara no disponible');
+      showAlert('Error', 'La cámara no está disponible. Por favor, reinicia la pantalla.');
       return;
     }
+
+    if (capturing) return;
+    
+    setCapturing(true);
     
     try {
-      console.log('Taking picture...');
+      console.log('Iniciando captura de selfie...');
+      
+      // Use lower quality for faster capture on Android
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.5,
         base64: true,
-        skipProcessing: true,
+        exif: false,
+        skipProcessing: Platform.OS === 'android',
       });
       
-      console.log('Photo taken:', photo ? 'success' : 'failed');
+      console.log('Foto capturada:', photo ? 'éxito' : 'fallo');
       
-      if (photo && photo.base64) {
-        const imageData = `data:image/jpeg;base64,${photo.base64}`;
-        setSelfieImage(imageData);
-        // Move to final step
-        setLivenessStep(livenessInstructions.length - 1);
-      } else if (photo && photo.uri) {
-        // Fallback if base64 not available
-        setSelfieImage(photo.uri);
-        setLivenessStep(livenessInstructions.length - 1);
+      if (photo) {
+        if (photo.base64) {
+          setSelfieImage(`data:image/jpeg;base64,${photo.base64}`);
+          console.log('Selfie guardada con base64');
+        } else if (photo.uri) {
+          setSelfieImage(photo.uri);
+          console.log('Selfie guardada con URI:', photo.uri);
+        }
       } else {
-        showAlert('Error', 'No se pudo procesar la foto');
+        showAlert('Error', 'No se pudo capturar la foto. Intenta de nuevo.');
       }
     } catch (error: any) {
-      console.error('Error taking photo:', error);
+      console.error('Error capturando selfie:', error);
       showAlert('Error', `No se pudo capturar la foto: ${error.message || 'Error desconocido'}`);
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -160,6 +161,7 @@ export default function ChangePasswordScreen() {
     }
   };
 
+  // Selfie Step
   if (step === 'selfie') {
     if (!permission?.granted) {
       return (
@@ -193,9 +195,9 @@ export default function ChangePasswordScreen() {
           </View>
 
           <View style={styles.instructionBox}>
-            <Ionicons name="information-circle" size={20} color="#2563eb" />
+            <Ionicons name="person-circle" size={24} color="#2563eb" />
             <Text style={styles.instructionText}>
-              {livenessInstructions[livenessStep]}
+              Toma una selfie mirando directamente a la cámara
             </Text>
           </View>
 
@@ -207,34 +209,23 @@ export default function ChangePasswordScreen() {
                 ref={cameraRef}
                 style={styles.camera}
                 facing="front"
-                onCameraReady={() => setCameraReady(true)}
-              />
+                onCameraReady={() => {
+                  console.log('Cámara lista');
+                  setCameraReady(true);
+                }}
+              >
+                <View style={styles.cameraOverlay}>
+                  <View style={styles.faceGuide} />
+                </View>
+              </CameraView>
             )}
-            <View style={styles.cameraOverlay}>
-              <View style={styles.faceGuide} />
-            </View>
           </View>
 
-          <View style={styles.livenessProgress}>
-            {livenessInstructions.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.livenessStep,
-                  index <= livenessStep && styles.livenessStepActive,
-                ]}
-              />
-            ))}
-          </View>
-
-          {selfieImage && livenessStep === livenessInstructions.length - 1 ? (
+          {selfieImage ? (
             <View style={styles.selfieActions}>
               <TouchableOpacity
                 style={styles.retakeButton}
-                onPress={() => {
-                  setSelfieImage(null);
-                  setLivenessStep(0);
-                }}
+                onPress={() => setSelfieImage(null)}
               >
                 <Ionicons name="refresh" size={20} color="#6b7280" />
                 <Text style={styles.retakeButtonText}>Repetir</Text>
@@ -255,21 +246,23 @@ export default function ChangePasswordScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.captureButton, !cameraReady && styles.captureButtonWaiting]}
-              onPress={takeSelfie}
-            >
-              {cameraReady ? (
-                <View style={styles.captureButtonInner} />
-              ) : (
-                <ActivityIndicator color="#2563eb" size="small" />
-              )}
-            </TouchableOpacity>
+            <View style={styles.captureArea}>
+              <Text style={styles.captureHint}>
+                {cameraReady ? 'Presiona el botón para capturar' : 'Preparando cámara...'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.captureButton, capturing && styles.captureButtonDisabled]}
+                onPress={takeSelfie}
+                disabled={capturing}
+              >
+                {capturing ? (
+                  <ActivityIndicator color="#2563eb" size="large" />
+                ) : (
+                  <View style={styles.captureButtonInner} />
+                )}
+              </TouchableOpacity>
+            </View>
           )}
-
-          <Text style={styles.captureHint}>
-            {cameraReady ? 'Toca el botón para capturar' : 'Preparando cámara...'}
-          </Text>
 
           <Text style={styles.privacyNote}>
             Esta foto se usa solo para verificar tu identidad y se guarda de forma segura
@@ -279,6 +272,7 @@ export default function ChangePasswordScreen() {
     );
   }
 
+  // Password Step
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
@@ -523,7 +517,7 @@ const styles = StyleSheet.create({
   // Selfie step styles
   selfieContainer: {
     flex: 1,
-    padding: 24,
+    padding: 20,
   },
   selfieHeader: {
     flexDirection: 'row',
@@ -543,27 +537,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   instructionText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#1e40af',
   },
   cameraContainer: {
     aspectRatio: 3/4,
     backgroundColor: '#000',
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: 'hidden',
-    position: 'relative',
   },
   camera: {
     flex: 1,
   },
   selfiePreview: {
     flex: 1,
-    resizeMode: 'cover',
   },
   cameraOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -578,47 +570,38 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.5)',
     borderStyle: 'dashed',
   },
-  livenessProgress: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 16,
+  captureArea: {
+    alignItems: 'center',
+    marginTop: 24,
   },
-  livenessStep: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 2,
-  },
-  livenessStepActive: {
-    backgroundColor: '#2563eb',
+  captureHint: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 16,
   },
   captureButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 24,
     borderWidth: 4,
     borderColor: '#2563eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  captureButtonWaiting: {
+  captureButtonDisabled: {
     borderColor: '#94a3b8',
   },
   captureButtonInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#2563eb',
-  },
-  captureHint: {
-    fontSize: 13,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 12,
   },
   selfieActions: {
     flexDirection: 'row',
@@ -659,7 +642,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 20,
   },
   // Permission styles
   permissionContainer: {
