@@ -7,38 +7,48 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useAuth } from '../contexts/AuthContext';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 interface Notification {
-  _id: string;
+  notification_id: string;
   title: string;
   message: string;
   type: string;
+  priority?: string;
   read: boolean;
   created_at: string;
   data?: any;
 }
 
 export default function NotificationsScreen() {
+  const { user } = useAuth();
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadNotifications = async () => {
+  const loadNotifications = async (isRefresh = false) => {
     try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      
       const token = await AsyncStorage.getItem('session_token');
       const response = await axios.get(`${BACKEND_URL}/api/notifications`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setNotifications(response.data.notifications);
+      setNotifications(response.data);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -48,136 +58,174 @@ export default function NotificationsScreen() {
   };
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadNotifications();
-  }, []);
+    if (user) {
+      loadNotifications();
+      // Auto-refresh every 30 seconds
+      const interval = setInterval(() => loadNotifications(), 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const markAsRead = async (notificationId: string) => {
     try {
       const token = await AsyncStorage.getItem('session_token');
-      await axios.post(`${BACKEND_URL}/api/notifications/${notificationId}/read`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(
+        `${BACKEND_URL}/api/notifications/${notificationId}/read`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       setNotifications(prev => 
-        prev.map(n => n._id === notificationId ? { ...n, read: true } : n)
+        prev.map(n => n.notification_id === notificationId ? { ...n, read: true } : n)
       );
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error('Error marking as read:', error);
     }
   };
 
   const markAllAsRead = async () => {
     try {
       const token = await AsyncStorage.getItem('session_token');
-      await axios.post(`${BACKEND_URL}/api/notifications/read-all`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(
+        `${BACKEND_URL}/api/notifications/read-all`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
+  const handleNotificationPress = (notification: Notification) => {
+    markAsRead(notification.notification_id);
+    
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'kyc_pending':
+        router.push('/admin-panel');
+        break;
+      case 'verification_approved':
+      case 'verification_rejected':
+        router.push('/verification');
+        break;
       case 'withdrawal_completed':
-        return { name: 'checkmark-circle', color: '#10b981' };
       case 'recharge_completed':
-        return { name: 'wallet', color: '#2563eb' };
-      case 'kyc_approved':
-        return { name: 'shield-checkmark', color: '#10b981' };
-      case 'kyc_rejected':
-        return { name: 'close-circle', color: '#ef4444' };
+        router.push('/history');
+        break;
       default:
-        return { name: 'notifications', color: '#6b7280' };
+        break;
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Ahora';
-    if (minutes < 60) return `Hace ${minutes} min`;
-    if (hours < 24) return `Hace ${hours}h`;
-    if (days < 7) return `Hace ${days}d`;
-    return date.toLocaleDateString();
-  };
-
-  const renderNotification = ({ item }: { item: Notification }) => {
-    const icon = getIcon(item.type);
+  const getNotificationIcon = (type: string, priority?: string) => {
+    const iconConfig: { [key: string]: { name: string; color: string; bg: string } } = {
+      'kyc_pending': { name: 'person-add', color: '#F5A623', bg: '#fef3c7' },
+      'verification_approved': { name: 'checkmark-circle', color: '#059669', bg: '#ecfdf5' },
+      'verification_rejected': { name: 'close-circle', color: '#dc2626', bg: '#fef2f2' },
+      'verification_submitted': { name: 'document-text', color: '#2563eb', bg: '#eff6ff' },
+      'withdrawal_completed': { name: 'arrow-up-circle', color: '#059669', bg: '#ecfdf5' },
+      'recharge_completed': { name: 'arrow-down-circle', color: '#2563eb', bg: '#eff6ff' },
+      'default': { name: 'notifications', color: '#64748b', bg: '#f1f5f9' },
+    };
     
-    return (
-      <TouchableOpacity
-        style={[styles.notificationItem, !item.read && styles.unreadItem]}
-        onPress={() => markAsRead(item._id)}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.iconContainer, { backgroundColor: `${icon.color}20` }]}>
-          <Ionicons name={icon.name as any} size={24} color={icon.color} />
-        </View>
-        <View style={styles.contentContainer}>
-          <View style={styles.headerRow}>
-            <Text style={[styles.title, !item.read && styles.unreadTitle]}>{item.title}</Text>
-            {!item.read && <View style={styles.unreadDot} />}
-          </View>
-          <Text style={styles.message}>{item.message}</Text>
-          <Text style={styles.time}>{formatDate(item.created_at)}</Text>
-        </View>
-      </TouchableOpacity>
-    );
+    return iconConfig[type] || iconConfig['default'];
   };
 
-  if (loading) {
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  if (!user) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
+        <View style={styles.centerContainer}>
+          <Ionicons name="notifications-off" size={48} color="#94a3b8" />
+          <Text style={styles.emptyTitle}>Inicia sesión</Text>
+          <Text style={styles.emptyText}>Para ver tus notificaciones</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const renderNotification = ({ item }: { item: Notification }) => {
+    const icon = getNotificationIcon(item.type, item.priority);
+    const timeAgo = formatDistanceToNow(new Date(item.created_at), { addSuffix: true, locale: es });
+    
+    return (
+      <TouchableOpacity
+        style={[styles.notificationCard, !item.read && styles.notificationUnread]}
+        onPress={() => handleNotificationPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.iconContainer, { backgroundColor: icon.bg }]}>
+          <Ionicons name={icon.name as any} size={22} color={icon.color} />
+        </View>
+        
+        <View style={styles.notificationContent}>
+          <View style={styles.notificationHeader}>
+            <Text style={[styles.notificationTitle, !item.read && styles.titleUnread]}>
+              {item.title}
+            </Text>
+            {!item.read && <View style={styles.unreadDot} />}
+          </View>
+          <Text style={styles.notificationMessage} numberOfLines={2}>
+            {item.message}
+          </Text>
+          <Text style={styles.notificationTime}>{timeAgo}</Text>
+        </View>
+        
+        <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1e293b" />
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notificaciones</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Notificaciones</Text>
+          {unreadCount > 0 && (
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>{unreadCount}</Text>
+            </View>
+          )}
+        </View>
         {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
+          <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
             <Text style={styles.markAllText}>Marcar leídas</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Notifications List */}
-      {notifications.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="notifications-off-outline" size={64} color="#cbd5e1" />
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#F5A623" />
+          <Text style={styles.loadingText}>Cargando...</Text>
+        </View>
+      ) : notifications.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="notifications-outline" size={48} color="#94a3b8" />
+          </View>
           <Text style={styles.emptyTitle}>Sin notificaciones</Text>
-          <Text style={styles.emptySubtitle}>Las notificaciones aparecerán aquí</Text>
+          <Text style={styles.emptyText}>Te avisaremos cuando haya novedades</Text>
         </View>
       ) : (
         <FlatList
           data={notifications}
           renderItem={renderNotification}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item.notification_id}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadNotifications(true)}
+              tintColor="#F5A623"
+              colors={['#F5A623']}
+            />
           }
         />
       )}
@@ -190,120 +238,150 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  headerBadge: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  headerBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
   markAllButton: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   markAllText: {
-    fontSize: 14,
-    color: '#2563eb',
-    fontWeight: '500',
-  },
-  listContent: {
-    padding: 16,
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  unreadItem: {
-    backgroundColor: '#eff6ff',
-    borderLeftWidth: 3,
-    borderLeftColor: '#2563eb',
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#1e293b',
-    flex: 1,
-  },
-  unreadTitle: {
+    fontSize: 13,
     fontWeight: '600',
+    color: '#F5A623',
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563eb',
-    marginLeft: 8,
-  },
-  message: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 4,
-    lineHeight: 20,
-  },
-  time: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 8,
-  },
-  emptyContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
   },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#64748b',
-    marginTop: 16,
+    color: '#0f172a',
+    marginBottom: 8,
   },
-  emptySubtitle: {
+  emptyText: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 12,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+  notificationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  notificationUnread: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#F5A623',
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#374151',
+    flex: 1,
+  },
+  titleUnread: {
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F5A623',
+  },
+  notificationMessage: {
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 18,
     marginTop: 4,
+  },
+  notificationTime: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 6,
   },
 });
