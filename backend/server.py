@@ -974,12 +974,58 @@ async def submit_verification(request: VerificationRequest, current_user: User =
             "cpf_image": request.cpf_image,
             "selfie_image": request.selfie_image,
             "verification_status": "pending",
+            "verification_submitted_at": datetime.now(timezone.utc),
             "accepted_declaration": True,
             "declaration_accepted_at": datetime.now(timezone.utc)
         }}
     )
     
-    return {"message": "Verification submitted successfully. Please wait for admin approval."}
+    # Create notification for all admins about new verification
+    admins = await db.users.find({"role": {"$in": ["admin", "super_admin"]}}).to_list(100)
+    for admin in admins:
+        admin_notification = {
+            "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+            "user_id": admin["user_id"],
+            "title": "🆕 Nueva Verificación KYC",
+            "message": f"{request.full_name} ha enviado documentos para verificación. Requiere revisión urgente.",
+            "type": "kyc_pending",
+            "priority": "high",
+            "data": {
+                "target_user_id": current_user.user_id,
+                "user_name": request.full_name,
+                "user_email": current_user.email
+            },
+            "read": False,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.notifications.insert_one(admin_notification)
+        
+        # Send push notification to admin
+        if admin.get("fcm_token"):
+            try:
+                await send_push_notification(
+                    admin["fcm_token"],
+                    "🆕 Nueva Verificación KYC",
+                    f"{request.full_name} necesita verificación urgente"
+                )
+            except Exception as e:
+                logger.error(f"Error sending push to admin: {e}")
+    
+    # Create notification for user
+    user_notification = {
+        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+        "user_id": current_user.user_id,
+        "title": "📄 Documentación Enviada",
+        "message": "Tu documentación ha sido enviada exitosamente. Recibirás una respuesta en minutos.",
+        "type": "verification_submitted",
+        "read": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.notifications.insert_one(user_notification)
+    
+    logger.info(f"Verification submitted by {current_user.user_id}, admins notified")
+    
+    return {"message": "Verificación enviada exitosamente. Recibirás una respuesta pronto."}
 
 @api_router.get("/verification/status")
 async def get_verification_status(current_user: User = Depends(get_current_user)):
@@ -991,9 +1037,9 @@ async def get_verification_status(current_user: User = Depends(get_current_user)
 
 @api_router.get("/admin/verifications/pending")
 async def get_pending_verifications(admin_user: User = Depends(get_admin_user)):
-    """Admin: Get all pending verifications"""
+    """Admin: Get all pending verifications with full data"""
     users = await db.users.find(
-        {"verification_status": "pending"},
+        {"verification_status": "pending", "id_document_image": {"$ne": None}},
         {
             "_id": 0,
             "user_id": 1,
@@ -1004,9 +1050,11 @@ async def get_pending_verifications(admin_user: User = Depends(get_admin_user)):
             "cpf_number": 1,
             "id_document_image": 1,
             "cpf_image": 1,
-            "created_at": 1
+            "selfie_image": 1,
+            "created_at": 1,
+            "verification_submitted_at": 1
         }
-    ).to_list(1000)
+    ).sort("verification_submitted_at", -1).to_list(1000)
     return users
 
 @api_router.post("/admin/verifications/decide")
@@ -1027,7 +1075,47 @@ async def decide_verification(decision: VerificationDecision, admin_user: User =
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     
-    return {"message": f"User {'approved' if decision.approved else 'rejected'} successfully"}
+    # Get user info for notification
+    user = await db.users.find_one({"user_id": decision.user_id})
+    
+    # Send notification to user about verification result
+    if decision.approved:
+        notification = {
+            "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+            "user_id": decision.user_id,
+            "title": "✅ ¡Cuenta Verificada!",
+            "message": "Felicidades! Tu cuenta ha sido verificada exitosamente. Ya puedes realizar todas las operaciones.",
+            "type": "verification_approved",
+            "priority": "high",
+            "read": False,
+            "created_at": datetime.now(timezone.utc)
+        }
+    else:
+        notification = {
+            "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+            "user_id": decision.user_id,
+            "title": "❌ Verificación Rechazada",
+            "message": f"Tu verificación fue rechazada. Motivo: {decision.rejection_reason or 'Documentos no válidos'}. Por favor, vuelve a enviar los documentos.",
+            "type": "verification_rejected",
+            "priority": "high",
+            "read": False,
+            "created_at": datetime.now(timezone.utc)
+        }
+    
+    await db.notifications.insert_one(notification)
+    
+    # Send push notification to user
+    if user and user.get("fcm_token"):
+        try:
+            title = "✅ ¡Cuenta Verificada!" if decision.approved else "❌ Verificación Rechazada"
+            message = "Ya puedes operar" if decision.approved else "Revisa tus documentos"
+            await send_push_notification(user["fcm_token"], title, message)
+        except Exception as e:
+            logger.error(f"Error sending push to user: {e}")
+    
+    logger.info(f"Verification {'approved' if decision.approved else 'rejected'} for user {decision.user_id} by admin {admin_user.user_id}")
+    
+    return {"message": f"Usuario {'aprobado' if decision.approved else 'rechazado'} exitosamente"}
 
 # =======================
 # USER ROUTES
