@@ -97,26 +97,36 @@ export default function ChangePasswordScreen() {
   };
 
   const takeSelfie = async () => {
-    if (!cameraRef.current || !cameraReady) return;
+    if (!cameraRef.current) {
+      showAlert('Error', 'Cámara no disponible');
+      return;
+    }
     
     try {
+      console.log('Taking picture...');
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.7,
         base64: true,
+        skipProcessing: true,
       });
       
-      if (photo.base64) {
-        setSelfieImage(`data:image/jpeg;base64,${photo.base64}`);
-        
-        // Simulate liveness progression
-        if (livenessStep < livenessInstructions.length - 1) {
-          setLivenessStep(prev => prev + 1);
-          setSelfieImage(null); // Reset for next step
-        }
+      console.log('Photo taken:', photo ? 'success' : 'failed');
+      
+      if (photo && photo.base64) {
+        const imageData = `data:image/jpeg;base64,${photo.base64}`;
+        setSelfieImage(imageData);
+        // Move to final step
+        setLivenessStep(livenessInstructions.length - 1);
+      } else if (photo && photo.uri) {
+        // Fallback if base64 not available
+        setSelfieImage(photo.uri);
+        setLivenessStep(livenessInstructions.length - 1);
+      } else {
+        showAlert('Error', 'No se pudo procesar la foto');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error taking photo:', error);
-      showAlert('Error', 'No se pudo capturar la foto');
+      showAlert('Error', `No se pudo capturar la foto: ${error.message || 'Error desconocido'}`);
     }
   };
 
