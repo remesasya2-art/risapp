@@ -69,7 +69,7 @@
     },
     "notification": {
       "icon": "./assets/images/notification-icon.png",
-      "color": "#2563eb"
+      "color": "#F5A623"
     }
   }
 }
