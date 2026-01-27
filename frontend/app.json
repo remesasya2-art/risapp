@@ -20,7 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#2563eb"
+        "backgroundColor": "#F5A623"
       },
       "package": "com.remesasya.app",
       "edgeToEdgeEnabled": true,
@@ -43,14 +43,14 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#2563eb"
+          "backgroundColor": "#F5A623"
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
-          "color": "#2563eb",
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#F5A623",
           "sounds": [],
           "mode": "production"
         }
