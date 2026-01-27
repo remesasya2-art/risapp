@@ -12,7 +12,7 @@ from datetime import datetime
 import sys
 
 # Configuration
-BASE_URL = "https://risadmin-dash.preview.emergentagent.com/api"
+BASE_URL = "https://moneyhub-42.preview.emergentagent.com/api"
 ADMIN_EMAIL = "marshalljulio46@gmail.com"
 
 class RISAPITester:

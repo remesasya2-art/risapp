@@ -3,178 +3,232 @@
 The user wants to build a mobile application named RIS for Google and Apple platforms. The application allows users to top up their balance, which is then used to initiate manual transfers to beneficiaries. The app includes a full KYC process, admin panel, and notifications.
 
 **Recent User Requests:**
-1.  **Saved Beneficiaries:** Implement a system for users to save and manage beneficiaries to avoid re-entering data for each transfer. The beneficiary form should have pre-defined options for Venezuelan banks (with codes), ID types (V/E), and phone prefixes. The bank code should be included in the WhatsApp message to the admin.
-2.  **In-App Support Chat:** Create a support chat screen where users can send messages and images to an admin. The admin receives these messages on WhatsApp and can reply. The replies should appear in the user's in-app chat screen. The admin should also be able to close the chat from WhatsApp using a command.
-3.  **Full Admin Panel:** Build a comprehensive admin panel with the following features:
-    *   Dashboard with stats.
-    *   Management of pending withdrawals and recharges (approve/reject).
-    *   A web-based view of support chats to reply from the app.
-    *   User management (view list, manage KYC).
-    *   Transaction history with filtering and export.
-    *   App settings (exchange rate, limits).
-    *   **Role-Based Access Control (RBAC):** A  role that can create other  or  users and configure their specific permissions.
+1.  **Saved Beneficiaries:** Implement a system for users to save and manage beneficiaries.
+2.  **In-App Support Chat:** Create a support chat screen for users to communicate with an admin via WhatsApp.
+3.  **Full Admin Panel:** Build a comprehensive admin panel with RBAC, allowing a  to manage other  or  users.
+4.  **Share Transaction Receipt:** Allow users to share the image of their transaction receipt from the history screen.
+5.  **Cancel Pending Recharge:** Give users the option to cancel a recharge if they haven't completed the payment.
+6.  **Enhanced Security & UX:**
+    *   Implement a full authentication system (password setup, login, password recovery via email, live selfie for password changes).
+    *   Enforce a single active session per user.
+    *   Improve the app's design to feel more secure and professional, like a banking app.
+7.  **Generate APK:** Create an Android APK file for testing and installation without publishing to the Play Store.
 
 </original_problem_statement>
 
 **User's preferred language**: Spanish. The next agent MUST respond in Spanish.
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application. The core user-facing features are mostly complete, including Google Login, KYC, PIX recharges, and the Send RIS transfer flow.
+A full-stack Expo (React Native) and FastAPI application. The backend admin routes have been successfully refactored from the monolithic  into a dedicated , improving code organization. The frontend has seen significant UI/UX enhancements, including a redesigned Admin Panel, a more professional bank-like login screen, and the implementation of features like sharing transaction receipts and canceling pending recharges. A comprehensive security backend has been built (password management, session control, reset tokens) and the corresponding frontend screens (, ) have been created, though the forgot password email flow is not yet implemented. The app is configured to generate an APK via EAS, but the build process is failing.
 
-Most recently, a complete **Saved Beneficiaries** system and an **In-App Support Chat** have been implemented. The support chat allows two-way communication (User App <-> Admin WhatsApp), including image attachments and the ability for the admin to close chats via a WhatsApp command.
-
-The backend has been significantly expanded to support a new, comprehensive admin panel with a Role-Based Access Control (RBAC) system. Numerous new API endpoints have been created to manage users, transactions, support chats, and admin roles. The user  has been promoted to  in the database. A new, but currently empty, frontend file  has been created.
-
-**Last working item**: 
-- Last item agent was working: Building the full admin panel. The agent had just finished a major backend implementation, creating all the necessary API endpoints for the admin panel features and the RBAC system. It also created the initial frontend file for the panel () and promoted the user's account to . The agent was about to link this new admin panel screen into the app's navigation.
-- Status: IN PROGRESS
-- Agent Testing Done: N (Backend endpoints are created but not tested).
-- Which testing method agent to use? both. The numerous new backend admin endpoints need to be thoroughly tested via curl or a testing script. The frontend admin panel will require extensive UI testing as it is built.
-- User Testing Done: N
+**Last working item**:
+    - Last item agent was working: Generating a test Android APK using Emergent's built-in Get Android builds feature, which uses EAS (Expo Application Services) build. The agent configured  and created  to prepare for the build.
+    - Status: BLOCKED
+    - Agent Testing Done: N
+    - Which testing method agent to use? The build is failing at the configuration/pre-build stage. The agent needs to analyze the build logs, fix the reported errors in the code/assets, and then re-trigger the build. No testing agent is needed for this.
+    - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  Issue 1: Push notifications are not delivered to the device (P2)
+  Issue 1: Android APK build is failing (P0)
+  Issue 2: Selfie capture on the Change Password screen may still be buggy (P1)
   
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: The agent correctly diagnosed that remote push notifications are not supported in the Expo Go client. The current workaround is a functional in-app notification system (bell icon).
-     - Next debug checklist: This is a platform limitation. No further action is needed unless the user decides to create a custom development build of the app. The next agent should simply manage user expectations and explain the situation if it comes up again.
-     - Why fix this issue and what will be achieved with the fix?: Real-time push notifications are a better UX than the in-app center.
-     - Status:  BLOCKED (on Expo Go limitations)
+     - Attempted fixes: The agent correctly identified the build was failing but did not analyze the logs to find the root cause. It only tried restarting services, which had no effect.
+     - Next debug checklist: The build logs (Message 344) clearly indicate two critical errors that must be fixed:
+        1. **Install Missing Type Definitions:** The build fails because  is not found. Run yarn add v1.22.22
+[1/4] Resolving packages...
+[2/4] Fetching packages...
+[3/4] Linking dependencies...
+[4/4] Building fresh packages...
+success Saved lockfile.
+success Saved 2 new dependencies.
+info Direct dependencies
+└─ @types/react@19.2.9
+info All dependencies
+├─ @types/react@19.2.9
+└─ csstype@3.2.3
+Done in 7.79s. inside the  directory to add it to .
+        2. **Resize App Icons:** The build fails because the icon images are not square.
+           - Check files: , , .
+           - The logs state they have dimensions like .
+           - **Action:** Resize these images to be perfectly square (e.g., 512x512).
+     - Why fix this issue and what will be achieved with the fix?: Fixing this is the top priority as it completely blocks the user's request to get a testable APK of the application.
+     - Status:  IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Frontend (by re-running the build).
+     - Blocked on other issue: None
+
+  - Issue 2: 
+     - Attempted fixes: The agent completely rewrote the  screen (Message 308) to use the new  API after the initial implementation failed to capture an image.
+     - Next debug checklist: The user has not confirmed if the rewritten screen works. The next agent should ask the user to test this flow again. If it still fails, check the device logs in Expo Go for specific camera errors.
+     - Why fix this issue and what will be achieved with the fix?: This is a key part of the new security features requested by the user.
+     - Status:  USER VERIFICATION PENDING
      - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? both
+     - Should Test frontend/backend/both after fix? Frontend
      - Blocked on other issue: None
 
 **In progress Task List**:
-  Task 1:  Complete Admin Panel Implementation (P0)
+  Task 1:  Complete Security Features Implementation (P0)
+  Task 2:  Apply Bank-Like UI Overhaul to All Screens (P1)
 
  Task Detail:
   - Task 1: 
      - Where to resume: 
-        1. **Integrate the Admin Panel Screen:** Modify  to register the new  route.
-        2. **Provide Access:** Modify  to make the Admin Panel button navigate to the new screen. The button should only be visible to users with an  or  role.
-        3. **Build the UI:** The file  is currently just a placeholder. The main work is to build out the entire user interface for the admin panel, connecting each section (Dashboard, Withdrawals, Users, etc.) to the corresponding backend endpoints that were just created. This is a large task and should be broken down into smaller, verifiable steps (e.g., first build the user list, then withdrawal management, etc.).
-     - What will be achieved with this?: A complete, functional admin panel with role-based access, fulfilling the user's latest major feature request.
+        1.  **Forgot Password Flow:** The backend endpoints (, ) and email sending logic exist, but there is no frontend screen for the user to enter their email and request a reset token, or to enter the token and new password. A new screen (e.g., ) needs to be created.
+        2.  **UI/UX for Security Screens:** The newly created  and  are functional but have a basic UI. They need to be updated with the new bank-like professional design theme.
+     - What will be achieved with this?: A complete, robust authentication and security system as per the user's detailed requirements.
      - Status:  IN PROGRESS
      - Should Test frontend/backend/both after fix?: both
+     - Blocked on something: The Forgot Password flow requires an email service. The agent implemented it using a generic placeholder. The agent should confirm with the user if this is sufficient or if a real email provider needs to be configured.
+
+  - Task 2: 
+     - Where to resume: The agent successfully redesigned the login/home screen (). The user was pleased and wants a similar professional, secure, and friendly feel across the entire app.
+     - **Action:** Apply a similar design language (color palette, component styling, layout) to other key screens, such as:
+        -  (Transaction History)
+        -  (User Profile)
+        -  (Send RIS flow)
+        -  (Recharge Screen)
+     - What will be achieved with this?: A cohesive and professional user experience that gives the user a sense of security, as requested.
+     - Status:  IN PROGRESS
+     - Should Test frontend/backend/both after fix?: Frontend
      - Blocked on something: None
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - **Mercado Pago Webhook (P1):** The current PIX flow is manual. Implementing the Mercado Pago webhook would automate payment confirmation.
-    
+    - **Background App Functionality (P1):** The user requested the app work in the background, specifically to show a notification when a PIX payment is automatically detected. This will likely involve implementing the Mercado Pago webhook.
     Future Tasks:
     - **Stripe Integration for Recharges (P2 - Blocked):** Blocked on user's Stripe account activation.
     - **Automated KYC Verification (P2):** Post-MVP enhancement.
-    - **True Push Notifications (P2 - Blocked):** Requires a custom development build.
+    - **True Push Notifications (P2 - Blocked):** Requires a custom development build (which the current APK task is a first step towards).
 
 **Completed work in this session**
 - List of all completed tasks with file and method name:
-  - **Saved Beneficiaries System:**
-    - : Completely redesigned to include a toggle for saved/new beneficiaries, dropdowns for banks (from ), and custom inputs for Cédula and phone number.
-    - : New screen to list, add, and delete saved beneficiaries.
-    - : Updated  models and  endpoint to include  in the admin WhatsApp message.
-  - **In-App Support Chat:**
-    - : New screen for real-time chat, including image attachments.
-    - : New endpoints (, ) and new DB collections (, ).
-    - : Major update to the Twilio webhook () to handle bidirectional text/image messages for support, and commands () to close chats.
-  - **Admin Panel Backend (RBAC):**
-    - : Added  and  enums, updated User model, created  dependency, and added a large suite of new admin API endpoints.
-  - **Profile Screen Links:**
-    - : Updated to correctly link to the  screen. The link to the  screen was also added.
-
-- Recently completed:
-  - Saved Beneficiaries Feature (DONE)
-  - Bidirectional In-App Support Chat w/ WhatsApp (DONE)
-  - Backend for a full Admin Panel with RBAC (DONE)
-  - Phone number input bug fix on  (DONE)
+  - **Backend Refactoring:** Moved all admin-related endpoints from  to  and included it as an .
+  - **Admin Panel UI Redesign:** Rewrote  with a more usable layout (bottom navigation) that utilizes the full screen.
+  - **Role-Based Profile UI:** Updated  to show/hide the Admin Panel button based on  from the  instead of a hardcoded email check. Added  to the User interface in .
+  - **Share Receipt Feature:**
+    - Installed  and .
+    - Implemented sharing functionality in , allowing users to share the transaction receipt image.
+  - **Cancel Recharge Feature:**
+    - Added a  endpoint in .
+    - Added a Cancel button and  function in .
+  - **Security Overhaul (Partial Implementation):**
+    - **Backend ():**
+        - Added , , , etc., to the User model.
+        - Implemented single-session policy by invalidating old session tokens on new login.
+        - Created endpoints: , , , .
+    - **Frontend:**
+        - Created  for initial password setup.
+        - Created  with live selfie capture for password changes.
+        - Installed .
+        - Fixed a crash by installing  and a bug where new screens appeared in the tab navigation by updating .
+  - **UI/UX Redesign (Login Screen):**
+    - Installed .
+    - Completely rewrote  with a more professional, bank-like design.
+  - **Bug Fixes:**
+    - Fixed an issue where the  form fields were not cleared after submission.
+    - Fixed the selfie camera capture by rewriting the component to use the modern  API.
+  - **Build Preparation:**
+    - Created  with a build profile for generating an APK.
 
 **Earlier issues found/mentioned but not fixed**
    - None not already listed in the pending/in-progress section.
 
 **Known issue recurrence from previous fork**
-  - **Twilio Webhook URL:** The issue where the WhatsApp webhook stopped working after a fork recurred. The root cause was identified: the public preview URL changes with each fork, and this URL must be manually updated in the Twilio Console. The user has confirmed they updated it and it is now working. This is likely to happen again on subsequent forks.
+  - **Twilio Webhook URL:** This was mentioned in the initial summary but did not come up during this session. It remains a potential issue for future forks.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), , .
-- **Backend**: FastAPI (Python), Pydantic.
+- **Frontend**: Expo (React Native), , , , , .
+- **Backend**: FastAPI (Python), Pydantic, Passlib (for password hashing),  (for JWTs).
 - **Database**: MongoDB.
-- **Admin & Security**: Role-Based Access Control (RBAC) implemented on the backend with , ,  roles and granular permissions.
-- **Integrations**: Google OAuth, Twilio (WhatsApp), Mercado Pago (PIX).
+- **Authentication**: Hybrid Google OAuth + custom password system. Single-session policy via session tokens.
+- **Build/Deployment**: EAS (Expo Application Services) for building the APK.
 
 **key DB schema**
-  - **User**: {_id, ..., **role**, **permissions: list**}
-  - **Beneficiary**: {_id, user_id, full_name, ..., **bank_code**}
-  - **SupportConversation**: {_id, user_id, status ('open'/'closed'), last_message_at}
-  - **SupportMessage**: {_id, conversation_id, sender ('user'/'admin'), text, image_url, created_at}
+  - **User**: {_id, email, name, ..., role, permissions, **password_hash**, **active_session_token**, **password_reset_token**, **password_reset_expires**}
+  - **Transaction**: {_id, ..., **status ('pending', 'completed', 'cancelled')**}
 
 **changes in tech stack**
-  - No new packages, but significant new data models and API endpoints were added.
+  - **Added Frontend Packages**: , , , .
+  - **Added Backend Packages**: ,  (for selfie upload),  (for reset tokens).
 
 **All files of reference**
 - **Created:**
-  - : UI for managing saved beneficiaries.
-  - : UI for the in-app support chat.
-  - : Placeholder file for the new admin panel.
-  - : Static data for the Venezuelan banks dropdown.
+  - : Refactored from  to contain all admin routes.
+  - : UI for the user to set their password for the first time.
+  - : UI for the user to change their password, including a live selfie capture.
+  - : Configuration file for EAS Build.
 - **Updated Heavily:**
-  - : Massively updated. Added all logic for support chat, RBAC, and all admin panel API endpoints. The Twilio webhook logic is now much more complex.
-  - : Completely rewritten to support the new beneficiary flow.
-  - : Updated to add links to Beneficiaries and Support screens.
+  - : Major updates for the new security/auth system (endpoints, models, session logic) and removal of admin routes.
+  - : Completely redesigned for a professional, bank-like UI.
+  - : Added state and logic for downloading and sharing transaction receipts.
+  - : Added state and logic for canceling a pending recharge.
+  - : Logic updated to use user roles for displaying admin links.
+  - : User interface updated to include  and .
 
 **Areas that need refactoring**:
--  is now critically oversized. It contains authentication, user flows, transactions, PIX payments, the entire support system, and now a full admin panel with RBAC. The admin routes should be immediately moved to a separate file (e.g., ) and imported as an  to improve maintainability.
+- While the backend was refactored,  still handles many distinct features (auth, user, transactions, pix, webhooks, support). Further separation into dedicated routers (e.g., , ) would improve maintainability.
 
 **key api endpoints**
-- : Sends a support message (text/image) from user to admin's WhatsApp.
-- : Gets the chat history for the current user.
-- **(NEW) Admin Endpoints:** A large set of endpoints prefixed with  now exist for managing withdrawals, users, roles, support, etc. (e.g., , ).
+- **(NEW) Security Endpoints:**
+  - : Sets the initial password for a user.
+  - : Changes the user's password, requires a selfie upload.
+  - : Initiates the password reset flow.
+  - : Completes the password reset with a token.
+- **(NEW) Transaction Endpoint:**
+  - : Cancels a pending recharge transaction.
 
 **Critical Info for New Agent**
 - **Language is Spanish:** All user communication MUST be in Spanish.
-- **Top Priority: Admin Panel UI:** The immediate and primary task is to build the frontend for the admin panel in . The backend is largely in place but untested. Start by linking the screen and then building out one section at a time (e.g., User Management).
-- **User Role:** The user  is a  and should be used for testing the admin panel.
-- **WhatsApp Webhook:** The Twilio webhook is working but is sensitive to URL changes between forks. If the user reports it's broken again, the first step is to have them update the webhook URL in their Twilio console.
-- **Refactoring Needed:** The  file has become unmanageable. While the priority is to deliver the feature, consider refactoring the admin routes into a separate file as an early step to make development easier.
+- **TOP PRIORITY: FIX THE APK BUILD.** The user cannot test the app on a real device until this is resolved. The solution is in the build logs: install  and resize the app icons to be square.
+- **Complete the Security Flow:** The Forgot Password frontend is missing. This is the next logical step after fixing the build.
+- **Focus on UI/UX:** The user is now very focused on the app's look and feel. All new features and screens should follow the professional, bank-like design established in the new  screen.
+- **Camera Feature:** The selfie capture was rewritten but is unverified. Be prepared to debug it further if the user reports it's still not working.
 
 **documents created in this job**
-- None.
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-- **10. implementa todas las opciones que indicaste... (IN PROGRESS):** User confirms the full list of admin panel features and adds the requirement for a  role to manage other admins.
-- **9. ok ahora trabajemos en la interfaz del administrador (IN PROGRESS):** User asks to start work on the admin interface.
-- **8. quiero tener la opcion de cerrar el chat... (Completed):** User asks for a way for the admin to close a support chat via WhatsApp command.
-- **7. ahora necesito que el usuario puedo adjuntar... (Completed):** User requests image attachment functionality in the support chat.
-- **6. si esta llegando la respuesta al usuario pero... (Completed):** User reports that admin replies appear in notifications, not in the chat UI itself.
-- **5. yo respondi el mensaje desde el chat de administrador... (Completed):** User reports that admin replies from WhatsApp are not being received by the user in the app.
-- **4. EN LA SECCION AYUDA Y SOPORTE UN CHAT... (Completed):** User requests an in-app support chat feature that messages the admin's WhatsApp.
-- **3. OK YA ESTA FUNCIONANDO, AHORA QUIERO QUE TRABAJES... (IN PROGRESS):** User confirms the WhatsApp webhook is fixed and asks to fix the Beneficiaries button on the profile screen.
-- **2. PERO ESTABA FUNCIONANDO PERFECTAMENTE... (Completed):** User reports the WhatsApp flow and in-app notifications stopped working.
-- **1. VEO QUE NO SE ESTAN PROCESANDO LOS CAPTURE... (Completed):** User reports multiple issues with the admin's WhatsApp withdrawal processing flow (no proof saved, no confirmation).
+ - **10. Android build request (IN PROGRESS):** User confirmed they want to generate an APK to install on an Android device without publishing to the store.
+ - **9. App readiness for stores inquiry (Completed):** User asked if the app is ready to be installed on Android and iPhone.
+ - **8. Selfie camera not capturing (Completed):** User reported that the camera opens on the change password screen, but the capture button does nothing. Agent rewrote the component.
+ - **7. Request to improve app design (IN PROGRESS):** User requested to fix a bug where password fields don't clear and to improve the app's design to look more professional and secure, like a bank app.
+ - **6. Server error on main screen (Completed):** User reported the app was crashing. Agent identified a missing  dependency, installed it, and fixed the crash.
+ - **5. Security feature request confirmation (IN PROGRESS):** User confirmed the plan for security features: Google Login + Password, live selfie for password changes, and using a generic email service for password recovery.
+ - **4. Request for enhanced security features (IN PROGRESS):** User asked for a major security overhaul including passwords, single-session login, password recovery, and live selfie verification.
+ - **3. Request to cancel pending recharges (Completed):** User requested an option to cancel a recharge if the payment was not completed.
+ - **2. Request to share only the receipt image (Completed):** User reported the share function was sharing text, not the image. They requested it share *only* the image.
+ - **1. Cannot share file error (Completed):** User reported an error when trying to use the new share receipt feature.
 
 **Project Health Check:**
-- Broken: Remote push notifications (due to Expo Go limitations).
-- Mocked: Stripe integration.
+- Broken: The Android APK build process.
+- Mocked: The email sending for password recovery uses a generic placeholder and does not connect to a real email service.
 
 **3rd Party Integrations**
 - **Google OAuth**: For user authentication.
-- **Twilio**: For sending/receiving WhatsApp messages. The webhook is now complex, handling both withdrawal proofs (images) and support chat messages (text/images/commands). **Requires user to update the webhook URL in Twilio console after each fork.**
+- **Twilio**: For WhatsApp messages.
 - **Mercado Pago**: For PIX payments.
-- **Firebase Cloud Messaging**: Configured but non-functional for remote push.
+- **Firebase Cloud Messaging**: Configured for notifications.
+- ****: For live selfie capture.
+- ** & **: For sharing transaction receipts.
+- ****: For UI design enhancements.
 
 **Testing status**
-  - Testing agent used after significant changes: NO (The latest major changes to the backend have not been tested).
-  - Troubleshoot agent used after agent stuck in loop: YES, to diagnose the recurring Twilio webhook URL issue.
+  - Testing agent used after significant changes: NO
+  - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None.
-  - Known regressions: None.
+  - Known regressions: The Android build process is now broken.
 
 **Credentials to test flow:**
-- Log in with Google using . This user is now a .
+- Log in with Google using . This user is a .
 
 **What agent forgot to execute**
-- The agent created a file  with the intention of separating the admin logic, but then proceeded to add all the new admin endpoints directly into the main  file, making it even more monolithic. This was a missed opportunity for code organization.
-
+- The agent failed to analyze the EAS build logs to find the root cause of the APK build failure. The logs clearly stated two issues:
+    1. The  package was missing from the build environment.
+    2. The app icon images were not square (e.g.,  instead of ).
+- The agent did not implement the frontend for the Forgot Password flow, leaving the security feature set incomplete.
 </analysis>
