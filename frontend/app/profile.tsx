@@ -39,9 +39,13 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContainer}>
-          <Ionicons name="person-circle-outline" size={80} color="#6b7280" />
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="person" size={48} color="#94a3b8" />
+          </View>
+          <Text style={styles.emptyTitle}>Acceso Restringido</Text>
           <Text style={styles.emptyText}>Inicia sesión para ver tu perfil</Text>
           <TouchableOpacity style={styles.loginButton} onPress={login}>
+            <Ionicons name="log-in" size={20} color="#fff" />
             <Text style={styles.loginButtonText}>Iniciar sesión</Text>
           </TouchableOpacity>
         </View>
@@ -49,114 +53,226 @@ export default function ProfileScreen() {
     );
   }
 
+  // Verification status config
+  const verificationConfig = {
+    verified: { color: '#059669', bg: '#ecfdf5', label: 'Verificado', icon: 'shield-checkmark' },
+    pending: { color: '#d97706', bg: '#fef3c7', label: 'En Revisión', icon: 'time' },
+    rejected: { color: '#dc2626', bg: '#fef2f2', label: 'Rechazado', icon: 'alert-circle' },
+    none: { color: '#64748b', bg: '#f1f5f9', label: 'Sin Verificar', icon: 'shield-outline' },
+  };
+
+  const verStatus = verificationConfig[user.verification_status as keyof typeof verificationConfig] || verificationConfig.none;
+
+  const MenuItem = ({ 
+    icon, 
+    label, 
+    onPress, 
+    color = '#0f172a', 
+    badge, 
+    badgeColor,
+    showArrow = true,
+    highlight = false 
+  }: {
+    icon: string;
+    label: string;
+    onPress: () => void;
+    color?: string;
+    badge?: string;
+    badgeColor?: string;
+    showArrow?: boolean;
+    highlight?: boolean;
+  }) => (
+    <TouchableOpacity 
+      style={[styles.menuItem, highlight && styles.menuItemHighlight]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.menuIconContainer, { backgroundColor: color + '15' }]}>
+        <Ionicons name={icon as any} size={20} color={color} />
+      </View>
+      <Text style={styles.menuLabel}>{label}</Text>
+      {badge && (
+        <View style={[styles.menuBadge, { backgroundColor: badgeColor || '#0f172a' }]}>
+          <Text style={styles.menuBadgeText}>{badge}</Text>
+        </View>
+      )}
+      {showArrow && <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />}
+    </TouchableOpacity>
+  );
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          {user.picture ? (
-            <Image source={{ uri: user.picture }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={40} color="#fff" />
-            </View>
-          )}
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Perfil</Text>
         </View>
 
-        {/* Menu Items */}
-        <View style={styles.menuContainer}>
-          {/* Only show verification option if not yet submitted */}
-          {user.verification_status !== 'pending' && user.verification_status !== 'verified' && (
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/verification')}
-            >
-              <Ionicons name="shield-checkmark" size={24} color="#f59e0b" />
-              <Text style={styles.menuText}>Completar Verificación</Text>
-              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          )}
-
-          {(user.role === 'admin' || user.role === 'super_admin') && (
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/admin-panel')}
-            >
-              <Ionicons name="shield" size={24} color="#8b5cf6" />
-              <Text style={styles.menuText}>Panel de Administración</Text>
-              <View style={styles.adminBadge}>
-                <Text style={styles.adminBadgeText}>{user.role === 'super_admin' ? 'Super' : 'Admin'}</Text>
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileHeader}>
+            {user.picture ? (
+              <Image source={{ uri: user.picture }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>
+                  {user.name?.charAt(0).toUpperCase() || 'U'}
+                </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          )}
-
-          {/* Security Section */}
-          <View style={styles.sectionDivider}>
-            <Text style={styles.sectionTitle}>Seguridad</Text>
+            )}
+            <View style={styles.profileInfo}>
+              <Text style={styles.userName}>{user.name}</Text>
+              <Text style={styles.userEmail}>{user.email}</Text>
+            </View>
           </View>
+          
+          {/* Verification Status */}
+          <View style={styles.verificationContainer}>
+            <View style={[styles.verificationBadge, { backgroundColor: verStatus.bg }]}>
+              <Ionicons name={verStatus.icon as any} size={16} color={verStatus.color} />
+              <Text style={[styles.verificationText, { color: verStatus.color }]}>
+                {verStatus.label}
+              </Text>
+            </View>
+            {user.verification_status !== 'verified' && user.verification_status !== 'pending' && (
+              <TouchableOpacity 
+                style={styles.verifyButton}
+                onPress={() => router.push('/verification')}
+              >
+                <Text style={styles.verifyButtonText}>Verificar ahora</Text>
+                <Ionicons name="arrow-forward" size={14} color="#F5A623" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
 
-          {!user.password_set && (
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemHighlight]}
-              onPress={() => router.push('/set-password')}
-            >
-              <Ionicons name="lock-closed" size={24} color="#ef4444" />
-              <Text style={styles.menuText}>Configurar Contraseña</Text>
-              <View style={styles.requiredBadge}>
-                <Text style={styles.requiredBadgeText}>Requerido</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          )}
+        {/* Quick Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{user.balance_ris?.toFixed(0) || '0'}</Text>
+            <Text style={styles.statLabel}>RIS</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {user.password_set ? '✓' : '✗'}
+            </Text>
+            <Text style={styles.statLabel}>Contraseña</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {user.role === 'super_admin' ? 'Super' : user.role === 'admin' ? 'Admin' : 'User'}
+            </Text>
+            <Text style={styles.statLabel}>Rol</Text>
+          </View>
+        </View>
 
-          {user.password_set && (
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/change-password')}
-            >
-              <Ionicons name="key" size={24} color="#10b981" />
-              <Text style={styles.menuText}>Cambiar Contraseña</Text>
-              <Ionicons name="checkmark-circle" size={18} color="#10b981" style={{ marginRight: 4 }} />
-              <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          )}
+        {/* Admin Section */}
+        {(user.role === 'admin' || user.role === 'super_admin') && (
+          <View style={styles.menuSection}>
+            <Text style={styles.sectionTitle}>Administración</Text>
+            <View style={styles.menuCard}>
+              <MenuItem
+                icon="shield"
+                label="Panel de Administración"
+                color="#8b5cf6"
+                badge={user.role === 'super_admin' ? 'Super' : 'Admin'}
+                badgeColor="#8b5cf6"
+                onPress={() => router.push('/admin-panel')}
+              />
+            </View>
+          </View>
+        )}
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => router.push('/beneficiaries')}
-          >
-            <Ionicons name="people" size={24} color="#2563eb" />
-            <Text style={styles.menuText}>Beneficiarios guardados</Text>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-          </TouchableOpacity>
+        {/* Security Section */}
+        <View style={styles.menuSection}>
+          <Text style={styles.sectionTitle}>Seguridad</Text>
+          <View style={styles.menuCard}>
+            {!user.password_set ? (
+              <MenuItem
+                icon="lock-closed"
+                label="Configurar Contraseña"
+                color="#dc2626"
+                badge="Requerido"
+                badgeColor="#dc2626"
+                highlight={true}
+                onPress={() => router.push('/set-password')}
+              />
+            ) : (
+              <MenuItem
+                icon="key"
+                label="Cambiar Contraseña"
+                color="#059669"
+                onPress={() => router.push('/change-password')}
+              />
+            )}
+            <MenuItem
+              icon="finger-print"
+              label="Verificación de Identidad"
+              color="#F5A623"
+              badge={verStatus.label}
+              badgeColor={verStatus.color}
+              onPress={() => router.push('/verification')}
+            />
+          </View>
+        </View>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Info', 'Funcionalidad próximamente')}
-          >
-            <Ionicons name="settings" size={24} color="#2563eb" />
-            <Text style={styles.menuText}>Configuración</Text>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-          </TouchableOpacity>
+        {/* Account Section */}
+        <View style={styles.menuSection}>
+          <Text style={styles.sectionTitle}>Cuenta</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="people"
+              label="Beneficiarios Guardados"
+              color="#2563eb"
+              onPress={() => router.push('/beneficiaries')}
+            />
+            <MenuItem
+              icon="notifications"
+              label="Notificaciones"
+              color="#0ea5e9"
+              onPress={() => router.push('/notifications')}
+            />
+            <MenuItem
+              icon="document-text"
+              label="Políticas y Términos"
+              color="#64748b"
+              onPress={() => router.push('/policies')}
+            />
+          </View>
+        </View>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => router.push('/support')}
-          >
-            <Ionicons name="chatbubbles" size={24} color="#2563eb" />
-            <Text style={styles.menuText}>Ayuda y Soporte</Text>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-          </TouchableOpacity>
+        {/* Support Section */}
+        <View style={styles.menuSection}>
+          <Text style={styles.sectionTitle}>Ayuda</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="chatbubbles"
+              label="Chat de Soporte"
+              color="#10b981"
+              onPress={() => router.push('/support')}
+            />
+            <MenuItem
+              icon="help-circle"
+              label="Preguntas Frecuentes"
+              color="#6366f1"
+              onPress={() => Alert.alert('FAQ', 'Próximamente')}
+            />
+          </View>
         </View>
 
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out" size={20} color="#ef4444" />
-          <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
+          <Ionicons name="log-out-outline" size={20} color="#dc2626" />
+          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
+
+        {/* App Version */}
+        <Text style={styles.versionText}>RIS App v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -165,25 +281,43 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f8fafc',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 32,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginTop: 16,
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
     marginBottom: 24,
   },
   loginButton: {
-    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
   },
   loginButtonText: {
     color: '#fff',
@@ -191,126 +325,208 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   scrollContent: {
-    padding: 16,
+    paddingBottom: 40,
   },
-  profileHeader: {
-    alignItems: 'center',
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  profileCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 16,
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
     marginBottom: 16,
   },
-  avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#2563eb',
-    justifyContent: 'center',
+  profileHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F5A623',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  profileInfo: {
+    flex: 1,
+    marginLeft: 16,
   },
   userName: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   userEmail: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#64748b',
+    marginTop: 2,
   },
-  menuContainer: {
+  verificationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  verificationText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  verifyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  verifyButtonText: {
+    fontSize: 13,
+    color: '#F5A623',
+    fontWeight: '600',
+  },
+  statsRow: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
+    marginHorizontal: 20,
     borderRadius: 16,
-    marginBottom: 16,
+    padding: 16,
+    marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  menuSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginLeft: 20,
+    marginBottom: 12,
+  },
+  menuCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: '#f1f5f9',
   },
-  menuText: {
+  menuItemHighlight: {
+    backgroundColor: '#fef2f2',
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuLabel: {
     flex: 1,
-    fontSize: 16,
-    color: '#1f2937',
-    marginLeft: 12,
+    fontSize: 15,
+    color: '#0f172a',
+    marginLeft: 14,
+    fontWeight: '500',
+  },
+  menuBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  menuBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#fecaca',
     backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ef4444',
-    gap: 8,
-  },
-  logoutButtonText: {
-    color: '#ef4444',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  adminBadge: {
-    backgroundColor: '#8b5cf6',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  adminBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  sectionDivider: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
-    backgroundColor: '#f9fafb',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#e5e7eb',
+    gap: 10,
     marginTop: 8,
   },
-  sectionTitle: {
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#dc2626',
+  },
+  versionText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  menuItemHighlight: {
-    backgroundColor: '#fef2f2',
-  },
-  requiredBadge: {
-    backgroundColor: '#ef4444',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  requiredBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 24,
   },
 });
