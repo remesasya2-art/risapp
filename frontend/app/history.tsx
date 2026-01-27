@@ -11,7 +11,7 @@ import {
   Dimensions,
   Platform,
   Alert,
-  Share,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -52,6 +52,7 @@ export default function HistoryScreen() {
   const [filter, setFilter] = useState<'all' | 'recharge' | 'withdrawal'>('all');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [proofModalVisible, setProofModalVisible] = useState(false);
   const [selectedProof, setSelectedProof] = useState<{
     image: string;
@@ -68,9 +69,13 @@ export default function HistoryScreen() {
     }
   }, [user, filter]);
 
-  const loadTransactions = async () => {
+  const loadTransactions = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const token = await AsyncStorage.getItem('session_token');
       const url = filter === 'all' 
         ? `${BACKEND_URL}/api/transactions`
@@ -84,17 +89,18 @@ export default function HistoryScreen() {
       console.error('Error loading transactions:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Share proof image function
+  const onRefresh = () => loadTransactions(true);
+
   const shareProof = async () => {
     if (!selectedProof) return;
 
     setSharing(true);
     try {
       if (Platform.OS === 'web') {
-        // Web: Download image
         const link = document.createElement('a');
         link.href = selectedProof.image;
         link.download = `comprobante_${selectedProof.transactionId.substring(0, 8)}.jpg`;
@@ -103,21 +109,17 @@ export default function HistoryScreen() {
         document.body.removeChild(link);
         showAlert('Descargado', 'La imagen del comprobante se ha descargado');
       } else {
-        // Mobile: Check if sharing is available
         const isAvailable = await Sharing.isAvailableAsync();
         
         if (isAvailable) {
-          // Extract base64 data from the image
           const base64Data = selectedProof.image.replace(/^data:image\/\w+;base64,/, '');
           const fileName = `comprobante_RIS_${selectedProof.transactionId.substring(0, 8)}.jpg`;
           const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
           
-          // Write base64 image to file
           await FileSystem.writeAsStringAsync(fileUri, base64Data, {
             encoding: 'base64',
           });
 
-          // Share only the image file
           await Sharing.shareAsync(fileUri, {
             mimeType: 'image/jpeg',
             dialogTitle: 'Compartir Comprobante',
@@ -164,13 +166,26 @@ export default function HistoryScreen() {
     }
   };
 
+  // Calculate totals
+  const totalRecharges = transactions
+    .filter(t => t.type === 'recharge' && t.status === 'completed')
+    .reduce((sum, t) => sum + t.amount_output, 0);
+  
+  const totalWithdrawals = transactions
+    .filter(t => t.type === 'withdrawal' && t.status === 'completed')
+    .reduce((sum, t) => sum + t.amount_input, 0);
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContainer}>
-          <Ionicons name="lock-closed" size={60} color="#6b7280" />
-          <Text style={styles.emptyText}>Inicia sesión para ver tu historial</Text>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="lock-closed" size={48} color="#94a3b8" />
+          </View>
+          <Text style={styles.emptyTitle}>Acceso Restringido</Text>
+          <Text style={styles.emptyText}>Inicia sesión para ver tu historial de transacciones</Text>
           <TouchableOpacity style={styles.loginButton} onPress={login}>
+            <Ionicons name="log-in" size={20} color="#fff" />
             <Text style={styles.loginButtonText}>Iniciar sesión</Text>
           </TouchableOpacity>
         </View>
@@ -180,119 +195,157 @@ export default function HistoryScreen() {
 
   const renderTransaction = ({ item }: { item: Transaction }) => {
     const isRecharge = item.type === 'recharge';
-    const isWithdrawal = item.type === 'withdrawal';
-    const icon = isRecharge ? 'arrow-down-circle' : 'arrow-up-circle';
-    const iconColor = isRecharge ? '#10b981' : '#f59e0b';
-    const statusColor = item.status === 'completed' ? '#10b981' : 
-                       item.status === 'pending' ? '#f59e0b' : 
-                       item.status === 'pending_review' ? '#3b82f6' : '#ef4444';
+    const iconName = isRecharge ? 'arrow-down' : 'arrow-up';
+    const iconBgColor = isRecharge ? '#ecfdf5' : '#fef3c7';
+    const iconColor = isRecharge ? '#059669' : '#d97706';
+    const amountColor = isRecharge ? '#059669' : '#dc2626';
     
-    // Show "Ver Comprobante" button for completed withdrawals
-    const canViewProof = isWithdrawal && item.status === 'completed';
+    const statusConfig = {
+      completed: { color: '#059669', bg: '#ecfdf5', label: 'Completado', icon: 'checkmark-circle' },
+      pending: { color: '#d97706', bg: '#fef3c7', label: 'Pendiente', icon: 'time' },
+      pending_review: { color: '#2563eb', bg: '#eff6ff', label: 'En Revisión', icon: 'eye' },
+      cancelled: { color: '#6b7280', bg: '#f3f4f6', label: 'Cancelado', icon: 'close-circle' },
+      rejected: { color: '#dc2626', bg: '#fef2f2', label: 'Rechazado', icon: 'close-circle' },
+    };
+    
+    const status = statusConfig[item.status as keyof typeof statusConfig] || statusConfig.pending;
+    const canViewProof = !isRecharge && item.status === 'completed';
 
     return (
-      <View style={styles.transactionCard}>
-        <View style={styles.transactionHeader}>
-          <View style={styles.transactionIcon}>
-            <Ionicons name={icon} size={24} color={iconColor} />
+      <TouchableOpacity 
+        style={styles.transactionCard}
+        onPress={() => canViewProof && viewProof(item.transaction_id)}
+        activeOpacity={canViewProof ? 0.7 : 1}
+      >
+        <View style={styles.transactionRow}>
+          {/* Icon */}
+          <View style={[styles.transactionIcon, { backgroundColor: iconBgColor }]}>
+            <Ionicons name={iconName} size={20} color={iconColor} />
           </View>
+          
+          {/* Info */}
           <View style={styles.transactionInfo}>
             <Text style={styles.transactionType}>
-              {isRecharge ? 'Recarga' : 'Envío'}
+              {isRecharge ? 'Recarga PIX' : 'Envío a Venezuela'}
             </Text>
             <Text style={styles.transactionDate}>
-              {format(new Date(item.created_at), 'dd/MM/yyyy HH:mm')}
+              {format(new Date(item.created_at), 'dd MMM yyyy • HH:mm')}
             </Text>
+            {item.beneficiary_data && (
+              <Text style={styles.beneficiaryName}>
+                → {item.beneficiary_data.full_name}
+              </Text>
+            )}
           </View>
+          
+          {/* Amount */}
           <View style={styles.transactionAmounts}>
-            <Text style={[styles.transactionAmount, { color: iconColor }]}>
-              {isRecharge ? '+' : '-'}{item.amount_input.toFixed(2)} {isRecharge ? 'REAIS' : 'RIS'}
+            <Text style={[styles.transactionAmount, { color: amountColor }]}>
+              {isRecharge ? '+' : '-'}{item.amount_input.toFixed(2)}
             </Text>
-            <Text style={styles.transactionOutput}>
-              {item.amount_output.toFixed(2)} {isRecharge ? 'RIS' : 'VES'}
+            <Text style={styles.transactionCurrency}>
+              {isRecharge ? 'BRL' : 'RIS'}
             </Text>
           </View>
         </View>
         
-        {/* Transaction ID - Always visible */}
-        <View style={styles.transactionIdContainer}>
-          <Text style={styles.transactionIdLabel}>ID:</Text>
-          <Text style={styles.transactionIdValue}>{item.transaction_id.substring(0, 8)}...</Text>
-        </View>
-        
+        {/* Footer */}
         <View style={styles.transactionFooter}>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {item.status === 'completed' ? 'Completado' : 
-               item.status === 'pending' ? 'Pendiente' : 
-               item.status === 'pending_review' ? 'En Revisión' : 'Rechazado'}
+          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+            <Ionicons name={status.icon as any} size={12} color={status.color} />
+            <Text style={[styles.statusText, { color: status.color }]}>
+              {status.label}
             </Text>
           </View>
           
-          <View style={styles.footerRight}>
-            {item.beneficiary_data && (
-              <Text style={styles.beneficiaryText}>
-                Para: {item.beneficiary_data.full_name}
-              </Text>
-            )}
-            
-            {/* View Proof Button for completed withdrawals */}
+          <View style={styles.transactionMeta}>
+            <Text style={styles.transactionId}>
+              #{item.transaction_id.substring(0, 8)}
+            </Text>
             {canViewProof && (
-              <TouchableOpacity 
-                style={styles.viewProofButton}
-                onPress={() => viewProof(item.transaction_id)}
-                disabled={loadingProof}
-              >
-                {loadingProof ? (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                ) : (
-                  <Ionicons name="eye-outline" size={18} color="#2563eb" />
-                )}
-              </TouchableOpacity>
+              <View style={styles.viewProofHint}>
+                <Ionicons name="receipt-outline" size={14} color="#2563eb" />
+              </View>
             )}
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
-            Todos
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'recharge' && styles.filterButtonActive]}
-          onPress={() => setFilter('recharge')}
-        >
-          <Text style={[styles.filterText, filter === 'recharge' && styles.filterTextActive]}>
-            Ingresos
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'withdrawal' && styles.filterButtonActive]}
-          onPress={() => setFilter('withdrawal')}
-        >
-          <Text style={[styles.filterText, filter === 'withdrawal' && styles.filterTextActive]}>
-            Egresos
-          </Text>
-        </TouchableOpacity>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Historial</Text>
+        <Text style={styles.headerSubtitle}>Tus movimientos recientes</Text>
       </View>
 
+      {/* Stats Cards */}
+      <View style={styles.statsContainer}>
+        <View style={[styles.statCard, { backgroundColor: '#ecfdf5' }]}>
+          <View style={styles.statIconContainer}>
+            <Ionicons name="arrow-down" size={18} color="#059669" />
+          </View>
+          <Text style={styles.statLabel}>Ingresos</Text>
+          <Text style={[styles.statAmount, { color: '#059669' }]}>
+            +{totalRecharges.toFixed(0)} RIS
+          </Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: '#fef3c7' }]}>
+          <View style={styles.statIconContainer}>
+            <Ionicons name="arrow-up" size={18} color="#d97706" />
+          </View>
+          <Text style={styles.statLabel}>Egresos</Text>
+          <Text style={[styles.statAmount, { color: '#d97706' }]}>
+            -{totalWithdrawals.toFixed(0)} RIS
+          </Text>
+        </View>
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        {[
+          { key: 'all', label: 'Todos', icon: 'list' },
+          { key: 'recharge', label: 'Ingresos', icon: 'arrow-down' },
+          { key: 'withdrawal', label: 'Egresos', icon: 'arrow-up' },
+        ].map((item) => (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.filterTab, filter === item.key && styles.filterTabActive]}
+            onPress={() => setFilter(item.key as any)}
+          >
+            <Ionicons 
+              name={item.icon as any} 
+              size={16} 
+              color={filter === item.key ? '#fff' : '#64748b'} 
+            />
+            <Text style={[styles.filterText, filter === item.key && styles.filterTextActive]}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Transactions List */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#F5A623" />
+          <Text style={styles.loadingText}>Cargando transacciones...</Text>
         </View>
       ) : transactions.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="document-text-outline" size={60} color="#6b7280" />
-          <Text style={styles.emptyText}>No hay transacciones</Text>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="receipt-outline" size={48} color="#94a3b8" />
+          </View>
+          <Text style={styles.emptyTitle}>Sin transacciones</Text>
+          <Text style={styles.emptyText}>
+            {filter === 'all' 
+              ? 'Aún no tienes movimientos registrados' 
+              : filter === 'recharge' 
+                ? 'No tienes recargas registradas'
+                : 'No tienes envíos registrados'}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -300,6 +353,15 @@ export default function HistoryScreen() {
           renderItem={renderTransaction}
           keyExtractor={(item) => item.transaction_id}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#F5A623"
+              colors={['#F5A623']}
+            />
+          }
         />
       )}
 
@@ -307,36 +369,53 @@ export default function HistoryScreen() {
       <Modal
         visible={proofModalVisible}
         transparent={true}
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setProofModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Comprobante de Pago</Text>
+              <View style={styles.modalHeaderLeft}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="receipt" size={24} color="#059669" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Comprobante</Text>
+                  <Text style={styles.modalSubtitle}>Transferencia completada</Text>
+                </View>
+              </View>
               <TouchableOpacity 
                 style={styles.modalCloseButton}
                 onPress={() => setProofModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#1f2937" />
+                <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
             
             {selectedProof && (
               <>
-                <View style={styles.proofInfoContainer}>
-                  <Text style={styles.proofInfoLabel}>ID Transacción:</Text>
-                  <Text style={styles.proofInfoValue}>{selectedProof.transactionId.substring(0, 12)}...</Text>
-                </View>
-                <View style={styles.proofInfoContainer}>
-                  <Text style={styles.proofInfoLabel}>Monto:</Text>
-                  <Text style={styles.proofInfoValue}>{selectedProof.amount}</Text>
-                </View>
-                <View style={styles.proofInfoContainer}>
-                  <Text style={styles.proofInfoLabel}>Completado:</Text>
-                  <Text style={styles.proofInfoValue}>{selectedProof.completedAt}</Text>
+                {/* Info */}
+                <View style={styles.proofInfoSection}>
+                  <View style={styles.proofInfoRow}>
+                    <Text style={styles.proofInfoLabel}>ID Transacción</Text>
+                    <Text style={styles.proofInfoValue}>
+                      #{selectedProof.transactionId.substring(0, 12)}
+                    </Text>
+                  </View>
+                  <View style={styles.proofInfoRow}>
+                    <Text style={styles.proofInfoLabel}>Monto</Text>
+                    <Text style={[styles.proofInfoValue, { color: '#059669', fontWeight: '700' }]}>
+                      {selectedProof.amount}
+                    </Text>
+                  </View>
+                  <View style={styles.proofInfoRow}>
+                    <Text style={styles.proofInfoLabel}>Fecha</Text>
+                    <Text style={styles.proofInfoValue}>{selectedProof.completedAt}</Text>
+                  </View>
                 </View>
                 
+                {/* Image */}
                 <View style={styles.proofImageContainer}>
                   <Image 
                     source={{ uri: selectedProof.image }} 
@@ -345,8 +424,8 @@ export default function HistoryScreen() {
                   />
                 </View>
 
-                {/* Action Buttons */}
-                <View style={styles.modalButtonsContainer}>
+                {/* Actions */}
+                <View style={styles.modalActions}>
                   <TouchableOpacity 
                     style={styles.shareButton}
                     onPress={shareProof}
@@ -363,10 +442,10 @@ export default function HistoryScreen() {
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={styles.modalCloseButtonFull}
+                    style={styles.closeButton}
                     onPress={() => setProofModalVisible(false)}
                   >
-                    <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+                    <Text style={styles.closeButtonText}>Cerrar</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -381,232 +460,322 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+  },
+  statIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  statAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  filterTabActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  filterTextActive: {
+    color: '#fff',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 32,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginTop: 16,
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 24,
   },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 12,
+  },
   loginButton: {
-    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
   },
   loginButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  filterContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 8,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  filterText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  filterTextActive: {
-    color: '#fff',
-  },
   listContent: {
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
   },
   transactionCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 12,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  transactionHeader: {
+  transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   transactionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   transactionInfo: {
     flex: 1,
   },
   transactionType: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
+    color: '#0f172a',
   },
   transactionDate: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  beneficiaryName: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    fontWeight: '500',
   },
   transactionAmounts: {
     alignItems: 'flex-end',
   },
   transactionAmount: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 4,
   },
-  transactionOutput: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  transactionIdContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#f9fafb',
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  transactionIdLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginRight: 6,
-  },
-  transactionIdValue: {
-    fontSize: 12,
-    color: '#1f2937',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  transactionCurrency: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '500',
+    marginTop: 2,
   },
   transactionFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  footerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 5,
   },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  beneficiaryText: {
-    fontSize: 12,
-    color: '#6b7280',
+  transactionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  viewProofButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  transactionId: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  viewProofHint: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#eff6ff',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2563eb',
   },
-  // Modal styles
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    width: SCREEN_WIDTH - 40,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
     maxHeight: '90%',
-    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#ecfdf5',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1f2937',
+    color: '#0f172a',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
   },
   modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f3f4f6',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  proofInfoContainer: {
+  proofInfoSection: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  proofInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: '#e2e8f0',
   },
   proofInfoLabel: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: 13,
+    color: '#64748b',
   },
   proofInfoValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#0f172a',
   },
   proofImageContainer: {
-    marginTop: 16,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
     overflow: 'hidden',
+    marginBottom: 20,
   },
   proofImage: {
     width: '100%',
-    height: 300,
+    height: 280,
   },
-  modalButtonsContainer: {
+  modalActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 16,
   },
   shareButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10b981',
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: '#059669',
+    paddingVertical: 16,
+    borderRadius: 14,
     gap: 8,
   },
   shareButtonText: {
@@ -614,15 +783,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  modalCloseButtonFull: {
+  closeButton: {
     flex: 1,
-    backgroundColor: '#6b7280',
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
   },
-  modalCloseButtonText: {
-    color: '#fff',
+  closeButtonText: {
+    color: '#64748b',
     fontSize: 16,
     fontWeight: '600',
   },
