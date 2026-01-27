@@ -174,14 +174,25 @@ export default function HomeScreen() {
             
             <Text style={styles.welcomeTitle}>Bienvenido</Text>
             <Text style={styles.welcomeSubtitle}>
-              Inicia sesión para acceder a tu cuenta y realizar transferencias de forma segura.
+              Crea tu cuenta o inicia sesión para realizar transferencias de forma segura.
             </Text>
 
-            <TouchableOpacity style={styles.googleButton} onPress={login}>
-              <View style={styles.googleIconContainer}>
-                <Ionicons name="logo-google" size={20} color="#4285F4" />
-              </View>
-              <Text style={styles.googleButtonText}>Continuar con Google</Text>
+            {/* Register Button - Primary */}
+            <TouchableOpacity 
+              style={styles.registerButton} 
+              onPress={() => router.push('/register')}
+            >
+              <Ionicons name="person-add" size={20} color="#fff" />
+              <Text style={styles.registerButtonText}>Crear Cuenta</Text>
+            </TouchableOpacity>
+
+            {/* Login Button - Secondary */}
+            <TouchableOpacity 
+              style={styles.loginButtonSecondary} 
+              onPress={() => router.push('/login')}
+            >
+              <Ionicons name="log-in" size={20} color="#0f172a" />
+              <Text style={styles.loginButtonSecondaryText}>Ya tengo cuenta</Text>
             </TouchableOpacity>
 
             <View style={styles.securityInfo}>
