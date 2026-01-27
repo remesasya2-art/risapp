@@ -605,11 +605,20 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: '#2563eb',
   },
+  captureButtonWaiting: {
+    borderColor: '#94a3b8',
+  },
   captureButtonInner: {
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: '#2563eb',
+  },
+  captureHint: {
+    fontSize: 13,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 12,
   },
   selfieActions: {
     flexDirection: 'row',
