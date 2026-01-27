@@ -194,6 +194,14 @@ export default function HomeScreen() {
                 <Text style={styles.securityItemText}>Autenticación segura</Text>
               </View>
             </View>
+
+            {/* Forgot Password Link */}
+            <TouchableOpacity 
+              style={styles.forgotPasswordLink}
+              onPress={() => router.push('/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Footer */}
