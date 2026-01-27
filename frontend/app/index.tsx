@@ -8,6 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,8 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user, loading: authLoading, login, refreshUser } = useAuth();
@@ -45,18 +49,15 @@ export default function HomeScreen() {
         return;
       }
 
-      // Check if user has accepted policies
       const response = await axios.get(`${BACKEND_URL}/api/policies/status`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.data.needs_acceptance) {
-        // Redirect to policies screen
         router.replace('/policies');
         return;
       }
 
-      // Check verification status
       checkVerificationStatus();
     } catch (error) {
       console.error('Error checking policies:', error);
@@ -66,19 +67,9 @@ export default function HomeScreen() {
   };
 
   const checkVerificationStatus = () => {
-    if (user && user.verification_status === 'pending') {
-      // User has submitted but waiting approval - don't redirect
-      return;
-    }
-    if (user && user.verification_status === 'rejected') {
-      // User was rejected - allow retry
-      return;
-    }
-    if (user && !user.verification_status) {
-      // User needs to submit verification - show alert but don't auto-redirect
-      // They can access it from profile if needed
-      return;
-    }
+    if (user && user.verification_status === 'pending') return;
+    if (user && user.verification_status === 'rejected') return;
+    if (user && !user.verification_status) return;
   };
 
   const loadRate = async () => {
@@ -103,11 +94,10 @@ export default function HomeScreen() {
     }
   };
 
-  // Load notifications periodically
   useEffect(() => {
     if (user) {
       loadUnreadNotifications();
-      const interval = setInterval(loadUnreadNotifications, 30000); // Every 30 seconds
+      const interval = setInterval(loadUnreadNotifications, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -150,161 +140,303 @@ export default function HomeScreen() {
 
   if (authLoading || checkingPolicies) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>
-          {checkingPolicies ? 'Verificando políticas...' : 'Cargando...'}
-        </Text>
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color="#0f172a" />
+          <Text style={styles.loadingText}>
+            {checkingPolicies ? 'Verificando...' : 'Cargando...'}
+          </Text>
+        </View>
       </View>
     );
   }
 
+  // Login Screen - Bank Style
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Ionicons name="wallet" size={80} color="#2563eb" />
-          <Text style={styles.welcomeTitle}>Bienvenido a RIS</Text>
-          <Text style={styles.welcomeSubtitle}>
-            La forma más fácil de recargar y enviar dinero
+        <View style={styles.loginContainer}>
+          {/* Logo Area */}
+          <View style={styles.logoArea}>
+            <View style={styles.logoContainer}>
+              <Ionicons name="wallet" size={40} color="#fff" />
+            </View>
+            <Text style={styles.brandName}>RIS</Text>
+            <Text style={styles.brandTagline}>Transferencias Seguras</Text>
+          </View>
+
+          {/* Welcome Card */}
+          <View style={styles.welcomeCard}>
+            <View style={styles.securityBadge}>
+              <Ionicons name="shield-checkmark" size={16} color="#059669" />
+              <Text style={styles.securityText}>Conexión Segura</Text>
+            </View>
+            
+            <Text style={styles.welcomeTitle}>Bienvenido</Text>
+            <Text style={styles.welcomeSubtitle}>
+              Inicia sesión para acceder a tu cuenta y realizar transferencias de forma segura.
+            </Text>
+
+            <TouchableOpacity style={styles.googleButton} onPress={login}>
+              <View style={styles.googleIconContainer}>
+                <Ionicons name="logo-google" size={20} color="#4285F4" />
+              </View>
+              <Text style={styles.googleButtonText}>Continuar con Google</Text>
+            </TouchableOpacity>
+
+            <View style={styles.securityInfo}>
+              <View style={styles.securityItem}>
+                <Ionicons name="lock-closed" size={14} color="#64748b" />
+                <Text style={styles.securityItemText}>Datos encriptados</Text>
+              </View>
+              <View style={styles.securityItem}>
+                <Ionicons name="finger-print" size={14} color="#64748b" />
+                <Text style={styles.securityItemText}>Autenticación segura</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Footer */}
+          <Text style={styles.footerText}>
+            Protegido por cifrado de extremo a extremo
           </Text>
-          <TouchableOpacity style={styles.loginButton} onPress={login}>
-            <Ionicons name="logo-google" size={20} color="#fff" />
-            <Text style={styles.loginButtonText}>Iniciar sesión con Google</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Show verification status
+  // Pending Verification
   if (user.verification_status === 'pending') {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Ionicons name="time-outline" size={80} color="#f59e0b" />
-          <Text style={styles.welcomeTitle}>Verificación Pendiente</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Tu documentación está siendo revisada.{'\n'}
-            Te notificaremos cuando esté aprobada.
+        <View style={styles.statusContainer}>
+          <View style={styles.statusIconContainer}>
+            <Ionicons name="hourglass" size={48} color="#f59e0b" />
+          </View>
+          <Text style={styles.statusTitle}>En Revisión</Text>
+          <Text style={styles.statusSubtitle}>
+            Tu documentación está siendo verificada por nuestro equipo de seguridad.
           </Text>
           <View style={styles.statusCard}>
-            <Text style={styles.statusText}>Estado: En revisión ⏳</Text>
+            <View style={styles.statusRow}>
+              <Ionicons name="document-text" size={20} color="#64748b" />
+              <Text style={styles.statusRowText}>Documentos recibidos</Text>
+              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+            </View>
+            <View style={styles.statusRow}>
+              <Ionicons name="search" size={20} color="#64748b" />
+              <Text style={styles.statusRowText}>Verificación en proceso</Text>
+              <ActivityIndicator size="small" color="#f59e0b" />
+            </View>
           </View>
+          <Text style={styles.statusNote}>
+            Te notificaremos cuando tu cuenta esté verificada
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Rejected Verification
   if (user.verification_status === 'rejected') {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Ionicons name="close-circle-outline" size={80} color="#ef4444" />
-          <Text style={styles.welcomeTitle}>Verificación Rechazada</Text>
-          <Text style={styles.welcomeSubtitle}>
-            {user.rejection_reason || 'Tu documentación fue rechazada'}
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusIconContainer, { backgroundColor: '#fef2f2' }]}>
+            <Ionicons name="alert-circle" size={48} color="#ef4444" />
+          </View>
+          <Text style={styles.statusTitle}>Verificación Rechazada</Text>
+          <Text style={styles.statusSubtitle}>
+            {user.rejection_reason || 'No pudimos verificar tu documentación'}
           </Text>
           <TouchableOpacity
-            style={styles.loginButton}
+            style={styles.retryButton}
             onPress={() => router.push('/verification')}
           >
-            <Text style={styles.loginButtonText}>Intentar Nuevamente</Text>
+            <Ionicons name="refresh" size={20} color="#fff" />
+            <Text style={styles.retryButtonText}>Intentar Nuevamente</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Main Dashboard
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Verification Badge */}
-        {user.verification_status === 'verified' && (
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="shield-checkmark" size={20} color="#10b981" />
-            <Text style={styles.verifiedText}>Cuenta Verificada ✓</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Hola,</Text>
+            <Text style={styles.userName}>{user.name?.split(' ')[0]}</Text>
           </View>
-        )}
-
-        {/* Header with notification bell */}
-        <View style={styles.headerRow}>
-          <Text style={styles.welcomeText}>Hola, {user.name?.split(' ')[0]}</Text>
-          <TouchableOpacity 
-            style={styles.notificationButton}
-            onPress={() => router.push('/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={26} color="#1e293b" />
-            {unreadNotifications > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.badgeText}>
-                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                </Text>
+          <View style={styles.headerActions}>
+            {user.verification_status === 'verified' && (
+              <View style={styles.verifiedChip}>
+                <Ionicons name="shield-checkmark" size={14} color="#059669" />
+                <Text style={styles.verifiedChipText}>Verificado</Text>
               </View>
             )}
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.notificationBtn}
+              onPress={() => router.push('/notifications')}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#0f172a" />
+              {unreadNotifications > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Balance Card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Balance Disponible</Text>
-          <Text style={styles.balanceAmount}>{user.balance_ris.toFixed(2)} RIS</Text>
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={refreshUser}
-          >
-            <Ionicons name="refresh" size={20} color="#2563eb" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Calculator Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Calculadora de Cambio</Text>
-          <Text style={styles.rateText}>Tasa actual: 1 RIS = {rate.toFixed(2)} VES</Text>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>RIS</Text>
-            <TextInput
-              style={styles.input}
-              value={risAmount}
-              onChangeText={handleRisChange}
-              keyboardType="numeric"
-              placeholder="0.00"
-            />
+          <View style={styles.balanceHeader}>
+            <Text style={styles.balanceLabel}>Balance Disponible</Text>
+            <TouchableOpacity onPress={refreshUser} style={styles.refreshBtn}>
+              <Ionicons name="refresh" size={18} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.exchangeIcon}>
-            <Ionicons name="swap-vertical" size={24} color="#6b7280" />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>VES (Bolívares)</Text>
-            <TextInput
-              style={styles.input}
-              value={vesAmount}
-              onChangeText={handleVesChange}
-              keyboardType="numeric"
-              placeholder="0.00"
-            />
+          <Text style={styles.balanceAmount}>
+            <Text style={styles.currencySymbol}>RIS </Text>
+            {user.balance_ris.toFixed(2)}
+          </Text>
+          <View style={styles.balanceFooter}>
+            <Ionicons name="trending-up" size={16} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.balanceRate}>1 RIS = {rate.toFixed(2)} VES</Text>
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.primaryButton]}
-            onPress={handleRecharge}
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleRecharge}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#ecfdf5' }]}>
+              <Ionicons name="add-circle" size={28} color="#059669" />
+            </View>
+            <Text style={styles.quickActionText}>Recargar</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleSend}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#eff6ff' }]}>
+              <Ionicons name="paper-plane" size={26} color="#2563eb" />
+            </View>
+            <Text style={styles.quickActionText}>Enviar</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/history')}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="time" size={26} color="#d97706" />
+            </View>
+            <Text style={styles.quickActionText}>Historial</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/support')}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#f3e8ff' }]}>
+              <Ionicons name="chatbubbles" size={26} color="#7c3aed" />
+            </View>
+            <Text style={styles.quickActionText}>Soporte</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Calculator */}
+        <View style={styles.calculatorCard}>
+          <View style={styles.calculatorHeader}>
+            <Ionicons name="calculator" size={20} color="#0f172a" />
+            <Text style={styles.calculatorTitle}>Calculadora</Text>
+          </View>
+          
+          <View style={styles.calculatorInputs}>
+            <View style={styles.calcInputGroup}>
+              <Text style={styles.calcInputLabel}>RIS</Text>
+              <View style={styles.calcInputContainer}>
+                <TextInput
+                  style={styles.calcInput}
+                  value={risAmount}
+                  onChangeText={handleRisChange}
+                  keyboardType="numeric"
+                  placeholder="0.00"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+            </View>
+
+            <View style={styles.exchangeArrow}>
+              <Ionicons name="swap-vertical" size={24} color="#94a3b8" />
+            </View>
+
+            <View style={styles.calcInputGroup}>
+              <Text style={styles.calcInputLabel}>VES (Bolívares)</Text>
+              <View style={styles.calcInputContainer}>
+                <TextInput
+                  style={styles.calcInput}
+                  value={vesAmount}
+                  onChangeText={handleVesChange}
+                  keyboardType="numeric"
+                  placeholder="0.00"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.rateInfo}>
+            <Ionicons name="information-circle" size={16} color="#64748b" />
+            <Text style={styles.rateInfoText}>Tasa actualizada en tiempo real</Text>
+          </View>
+        </View>
+
+        {/* Password Setup Alert */}
+        {!user.password_set && (
+          <TouchableOpacity 
+            style={styles.securityAlert}
+            onPress={() => router.push('/set-password')}
           >
-            <Ionicons name="qr-code" size={24} color="#fff" />
-            <Text style={styles.actionButtonText}>Recargar con PIX</Text>
+            <View style={styles.alertIconContainer}>
+              <Ionicons name="warning" size={24} color="#dc2626" />
+            </View>
+            <View style={styles.alertContent}>
+              <Text style={styles.alertTitle}>Configura tu contraseña</Text>
+              <Text style={styles.alertText}>Aumenta la seguridad de tu cuenta</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#dc2626" />
+          </TouchableOpacity>
+        )}
+
+        {/* Main Action Buttons */}
+        <View style={styles.mainActions}>
+          <TouchableOpacity style={styles.rechargeBtn} onPress={handleRecharge}>
+            <View style={styles.actionBtnContent}>
+              <View style={styles.actionBtnIcon}>
+                <Ionicons name="qr-code" size={24} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.actionBtnTitle}>Recargar con PIX</Text>
+                <Text style={styles.actionBtnSubtitle}>Instantáneo y seguro</Text>
+              </View>
+            </View>
+            <Ionicons name="arrow-forward-circle" size={28} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.secondaryButton]}
-            onPress={handleSend}
-          >
-            <Ionicons name="send" size={24} color="#fff" />
-            <Text style={styles.actionButtonText}>Enviar RIS</Text>
+          <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+            <View style={styles.actionBtnContent}>
+              <View style={[styles.actionBtnIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                <Ionicons name="send" size={22} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.actionBtnTitle}>Enviar a Venezuela</Text>
+                <Text style={styles.actionBtnSubtitle}>Transferencia directa</Text>
+              </View>
+            </View>
+            <Ionicons name="arrow-forward-circle" size={28} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -315,34 +447,258 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f8fafc',
   },
-  centerContainer: {
+  loadingContainer: {
     flex: 1,
+    backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+  },
+  loadingCard: {
+    backgroundColor: '#fff',
+    padding: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6b7280',
+    marginTop: 16,
+    fontSize: 15,
+    color: '#64748b',
+    fontWeight: '500',
   },
-  scrollContent: {
-    padding: 16,
+  
+  // Login Screen
+  loginContainer: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 24,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  logoArea: {
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: '#1e40af',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
-  welcomeText: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#1e293b',
+  brandName: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 2,
   },
-  notificationButton: {
+  brandTagline: {
+    fontSize: 14,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  welcomeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 20,
+    gap: 6,
+  },
+  securityText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  welcomeSubtitle: {
+    fontSize: 15,
+    color: '#64748b',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    gap: 12,
+  },
+  googleIconContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  securityInfo: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 24,
+  },
+  securityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  securityItemText: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 32,
+  },
+
+  // Status Screens
+  statusContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  statusIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fef3c7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  statusTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  statusSubtitle: {
+    fontSize: 15,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  statusCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    marginTop: 32,
+    gap: 16,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusRowText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#475569',
+  },
+  statusNote: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 24,
+    textAlign: 'center',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 32,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Main Dashboard
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 32,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  greeting: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  verifiedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  verifiedChipText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  notificationBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -351,14 +707,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  notificationBadge: {
+  notifBadge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: -2,
+    right: -2,
     backgroundColor: '#ef4444',
     width: 20,
     height: 20,
@@ -366,161 +722,219 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#f8fafc',
   },
-  badgeText: {
+  notifBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
-  welcomeTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  loginButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#d1fae5',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 8,
-  },
-  verifiedText: {
-    color: '#065f46',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statusCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 24,
-  },
-  statusText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
+
+  // Balance Card
   balanceCard: {
-    backgroundColor: '#2563eb',
-    borderRadius: 16,
+    backgroundColor: '#0f172a',
+    borderRadius: 20,
     padding: 24,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 24,
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   balanceLabel: {
-    color: '#dbeafe',
     fontSize: 14,
-    marginBottom: 8,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  refreshBtn: {
+    padding: 4,
   },
   balanceAmount: {
+    fontSize: 40,
+    fontWeight: '700',
     color: '#fff',
-    fontSize: 36,
-    fontWeight: 'bold',
+    marginBottom: 16,
   },
-  refreshButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  balanceFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  balanceRate: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+  },
+
+  // Quick Actions
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  quickActionBtn: {
+    alignItems: 'center',
+    width: (SCREEN_WIDTH - 60) / 4,
+  },
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  card: {
+  quickActionText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+
+  // Calculator
+  calculatorCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  rateText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 16,
-  },
-  inputContainer: {
-    marginBottom: 8,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  exchangeIcon: {
+  calculatorHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 8,
+    gap: 8,
+    marginBottom: 20,
   },
-  actionsContainer: {
+  calculatorTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  calculatorInputs: {
     gap: 12,
   },
-  actionButton: {
+  calcInputGroup: {
+    gap: 8,
+  },
+  calcInputLabel: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  calcInputContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  calcInput: {
+    padding: 14,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  exchangeArrow: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  rateInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  rateInfoText: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+
+  // Security Alert
+  securityAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderRadius: 14,
     padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  alertIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  alertContent: {
+    flex: 1,
+  },
+  alertTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#991b1b',
+  },
+  alertText: {
+    fontSize: 13,
+    color: '#b91c1c',
+    marginTop: 2,
+  },
+
+  // Main Action Buttons
+  mainActions: {
+    gap: 12,
+  },
+  rechargeBtn: {
+    backgroundColor: '#059669',
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sendBtn: {
+    backgroundColor: '#2563eb',
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  actionBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  actionBtnIcon: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  primaryButton: {
-    backgroundColor: '#10b981',
-  },
-  secondaryButton: {
-    backgroundColor: '#f59e0b',
-  },
-  actionButtonText: {
-    color: '#fff',
+  actionBtnTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
+  },
+  actionBtnSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
 });
