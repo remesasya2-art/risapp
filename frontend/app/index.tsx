@@ -742,6 +742,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  // Verification Banner
+  verificationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+  },
+  verificationBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fef3c7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  verificationBannerContent: {
+    flex: 1,
+  },
+  verificationBannerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  verificationBannerText: {
+    fontSize: 13,
+    color: '#b45309',
+    marginTop: 2,
+  },
+
   // Main Dashboard
   scrollView: {
     flex: 1,
