@@ -131,7 +131,7 @@ export default function NotificationsScreen() {
     return iconConfig[type] || iconConfig['default'];
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = (notifications || []).filter(n => !n.read).length;
 
   if (!user) {
     return (
