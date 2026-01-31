@@ -367,6 +367,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  avatarWrapper: {
+    position: 'relative',
+  },
   avatar: {
     width: 64,
     height: 64,
@@ -385,6 +388,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  verifiedBadgeAvatar: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
   profileInfo: {
     flex: 1,
     marginLeft: 16,
@@ -398,6 +414,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     marginTop: 2,
+  },
+  photoLockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  photoLockedText: {
+    fontSize: 11,
+    color: '#64748b',
   },
   verificationContainer: {
     flexDirection: 'row',
