@@ -716,16 +716,19 @@ function SupportTab() {
   );
 }
 
-// Users Tab
+// Users Tab - Complete User Management
 function UsersTab() {
   const [users, setUsers] = useState<any[]>([]);
   const [stats, setStats] = useState<{ total: number; online: number; verified: number }>({ total: 0, online: 0, verified: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [userDetails, setUserDetails] = useState<any>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'recharges' | 'withdrawals' | 'beneficiaries' | 'kyc'>('info');
 
   useEffect(() => {
     loadUsers();
-    // Auto-refresh every 30 seconds for online status
     const interval = setInterval(loadUsers, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -748,6 +751,28 @@ function UsersTab() {
     }
   };
 
+  const loadUserDetails = async (userId: string) => {
+    setLoadingDetails(true);
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await axios.get(`${BACKEND_URL}/api/admin/users/${userId}/complete`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUserDetails(response.data);
+    } catch (error) {
+      console.error('Error loading user details:', error);
+      showAlert('Error', 'No se pudo cargar la información del usuario');
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const openUserDetail = (user: any) => {
+    setSelectedUser(user);
+    setActiveDetailTab('info');
+    loadUserDetails(user.user_id);
+  };
+
   const formatLastSeen = (lastSeen: string) => {
     if (!lastSeen) return 'Nunca';
     const date = new Date(lastSeen);
@@ -761,6 +786,268 @@ function UsersTab() {
     return `Hace ${Math.floor(diffMins / 1440)} días`;
   };
 
+  const formatDate = (date: string) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleString('es', { 
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    });
+  };
+
+  const formatShortDate = (date: string) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('es', { day: '2-digit', month: 'short', year: '2-digit' });
+  };
+
+  // ============ USER DETAIL VIEW ============
+  if (selectedUser && userDetails) {
+    return (
+      <View style={styles.tabContent}>
+        {/* Header */}
+        <View style={styles.userDetailHeader}>
+          <TouchableOpacity onPress={() => { setSelectedUser(null); setUserDetails(null); }} style={styles.userDetailBackBtn}>
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.userDetailTitle}>Perfil Completo</Text>
+          <TouchableOpacity onPress={() => loadUserDetails(selectedUser.user_id)} style={styles.userDetailRefresh}>
+            <Ionicons name="refresh" size={20} color="#2563eb" />
+          </TouchableOpacity>
+        </View>
+
+        {loadingDetails ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 }}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={{ marginTop: 12, color: '#6b7280' }}>Cargando información...</Text>
+          </View>
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* User Profile Card */}
+            <View style={styles.userProfileCard}>
+              <View style={styles.userProfileTop}>
+                <View style={styles.userProfileAvatarContainer}>
+                  {userDetails.profile.picture ? (
+                    <Image source={{ uri: userDetails.profile.picture }} style={styles.userProfileAvatar} />
+                  ) : (
+                    <View style={styles.userProfileAvatarPlaceholder}>
+                      <Text style={styles.userProfileAvatarText}>{userDetails.profile.name?.charAt(0)?.toUpperCase()}</Text>
+                    </View>
+                  )}
+                  {userDetails.profile.is_online && <View style={styles.userProfileOnline} />}
+                </View>
+                <View style={styles.userProfileInfo}>
+                  <Text style={styles.userProfileName}>{userDetails.profile.name}</Text>
+                  <Text style={styles.userProfileEmail}>{userDetails.profile.email}</Text>
+                  <View style={styles.userProfileBadges}>
+                    <View style={[styles.profileBadge, userDetails.kyc.verification_status === 'verified' ? styles.badgeGreen : styles.badgeYellow]}>
+                      <Ionicons name={userDetails.kyc.verification_status === 'verified' ? 'checkmark-circle' : 'time'} size={12} color={userDetails.kyc.verification_status === 'verified' ? '#059669' : '#d97706'} />
+                      <Text style={[styles.profileBadgeText, userDetails.kyc.verification_status === 'verified' ? { color: '#059669' } : { color: '#d97706' }]}>
+                        {userDetails.kyc.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}
+                      </Text>
+                    </View>
+                    {userDetails.kyc.email_verified && (
+                      <View style={[styles.profileBadge, styles.badgeBlue]}>
+                        <Ionicons name="mail" size={12} color="#2563eb" />
+                        <Text style={[styles.profileBadgeText, { color: '#2563eb' }]}>Email</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+              <View style={styles.userProfileBalance}>
+                <Text style={styles.userProfileBalanceLabel}>Saldo Actual</Text>
+                <Text style={styles.userProfileBalanceValue}>{userDetails.profile.balance_ris?.toFixed(2)} RIS</Text>
+              </View>
+            </View>
+
+            {/* Stats Summary */}
+            <View style={styles.userStatsGrid}>
+              <View style={[styles.userStatBox, { backgroundColor: '#eff6ff' }]}>
+                <Text style={[styles.userStatBoxValue, { color: '#2563eb' }]}>{userDetails.stats.total_recharges}</Text>
+                <Text style={styles.userStatBoxLabel}>Recargas</Text>
+              </View>
+              <View style={[styles.userStatBox, { backgroundColor: '#fef3c7' }]}>
+                <Text style={[styles.userStatBoxValue, { color: '#d97706' }]}>{userDetails.stats.total_withdrawals}</Text>
+                <Text style={styles.userStatBoxLabel}>Envíos</Text>
+              </View>
+              <View style={[styles.userStatBox, { backgroundColor: '#f0fdf4' }]}>
+                <Text style={[styles.userStatBoxValue, { color: '#059669' }]}>{userDetails.stats.total_recharged_ris?.toFixed(0)}</Text>
+                <Text style={styles.userStatBoxLabel}>RIS Cargados</Text>
+              </View>
+              <View style={[styles.userStatBox, { backgroundColor: '#fef2f2' }]}>
+                <Text style={[styles.userStatBoxValue, { color: '#dc2626' }]}>{userDetails.stats.total_ves_sent?.toFixed(0)}</Text>
+                <Text style={styles.userStatBoxLabel}>VES Enviados</Text>
+              </View>
+            </View>
+
+            {/* Detail Tabs */}
+            <View style={styles.detailTabs}>
+              {[
+                { key: 'info', label: 'Info', icon: 'person' },
+                { key: 'recharges', label: 'Recargas', icon: 'add-circle' },
+                { key: 'withdrawals', label: 'Envíos', icon: 'send' },
+                { key: 'beneficiaries', label: 'Beneficiarios', icon: 'people' },
+                { key: 'kyc', label: 'KYC', icon: 'document' },
+              ].map(tab => (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.detailTab, activeDetailTab === tab.key && styles.detailTabActive]}
+                  onPress={() => setActiveDetailTab(tab.key as any)}
+                >
+                  <Ionicons name={tab.icon as any} size={16} color={activeDetailTab === tab.key ? '#2563eb' : '#6b7280'} />
+                  <Text style={[styles.detailTabText, activeDetailTab === tab.key && styles.detailTabTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Tab Content */}
+            {activeDetailTab === 'info' && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Información del Perfil</Text>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>ID:</Text><Text style={styles.infoValue}>{userDetails.profile.user_id}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Nombre:</Text><Text style={styles.infoValue}>{userDetails.profile.full_name || userDetails.profile.name}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Teléfono:</Text><Text style={styles.infoValue}>{userDetails.profile.phone || 'No registrado'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Registro:</Text><Text style={styles.infoValue}>{formatDate(userDetails.profile.created_at)}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Método:</Text><Text style={styles.infoValue}>{userDetails.profile.registration_method === 'email' ? 'Email/Contraseña' : 'Google'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Último login:</Text><Text style={styles.infoValue}>{formatDate(userDetails.profile.last_login)}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Última actividad:</Text><Text style={styles.infoValue}>{formatLastSeen(userDetails.profile.last_seen)}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Contraseña:</Text><Text style={styles.infoValue}>{userDetails.security.password_set ? 'Configurada' : 'No configurada'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Notificaciones:</Text><Text style={styles.infoValue}>{userDetails.security.fcm_token}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Políticas:</Text><Text style={styles.infoValue}>{userDetails.kyc.accepted_policies ? 'Aceptadas' : 'No aceptadas'}</Text></View>
+              </View>
+            )}
+
+            {activeDetailTab === 'recharges' && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Historial de Recargas ({userDetails.recharges.length})</Text>
+                {userDetails.recharges.length === 0 ? (
+                  <Text style={styles.noDataText}>Sin recargas registradas</Text>
+                ) : (
+                  userDetails.recharges.map((r: any, idx: number) => (
+                    <View key={idx} style={styles.historyCard}>
+                      <View style={styles.historyCardTop}>
+                        <View>
+                          <Text style={styles.historyAmount}>R$ {r.amount_brl?.toFixed(2)}</Text>
+                          <Text style={styles.historySubtext}>→ {r.amount_ris?.toFixed(2)} RIS</Text>
+                        </View>
+                        <View style={[styles.historyStatus, r.status === 'completed' ? styles.statusCompleted : r.status === 'pending' ? styles.statusPending : styles.statusRejected]}>
+                          <Text style={styles.historyStatusText}>{r.status === 'completed' ? 'Completada' : r.status === 'pending' ? 'Pendiente' : 'Rechazada'}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.historyDate}>{formatDate(r.created_at)}</Text>
+                      <Text style={styles.historyMeta}>ID: {r.transaction_id?.substring(0, 12)}... • {r.payment_method?.toUpperCase()}</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {activeDetailTab === 'withdrawals' && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Historial de Envíos ({userDetails.withdrawals.length})</Text>
+                {userDetails.withdrawals.length === 0 ? (
+                  <Text style={styles.noDataText}>Sin envíos registrados</Text>
+                ) : (
+                  userDetails.withdrawals.map((w: any, idx: number) => (
+                    <View key={idx} style={styles.historyCard}>
+                      <View style={styles.historyCardTop}>
+                        <View>
+                          <Text style={styles.historyAmount}>{w.amount_ris?.toFixed(2)} RIS</Text>
+                          <Text style={styles.historySubtext}>→ {w.amount_ves?.toFixed(2)} VES</Text>
+                        </View>
+                        <View style={[styles.historyStatus, w.status === 'completed' ? styles.statusCompleted : w.status === 'pending' ? styles.statusPending : styles.statusRejected]}>
+                          <Text style={styles.historyStatusText}>{w.status === 'completed' ? 'Completado' : w.status === 'pending' ? 'Pendiente' : 'Rechazado'}</Text>
+                        </View>
+                      </View>
+                      {w.beneficiary && (
+                        <View style={styles.beneficiaryPreview}>
+                          <Ionicons name="person" size={12} color="#6b7280" />
+                          <Text style={styles.beneficiaryPreviewText}>{w.beneficiary.full_name} • {w.beneficiary.bank}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.historyDate}>{formatDate(w.created_at)}</Text>
+                      {w.rejection_reason && <Text style={styles.rejectionText}>Motivo: {w.rejection_reason}</Text>}
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {activeDetailTab === 'beneficiaries' && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Beneficiarios Guardados ({userDetails.beneficiaries.length})</Text>
+                {userDetails.beneficiaries.length === 0 ? (
+                  <Text style={styles.noDataText}>Sin beneficiarios registrados</Text>
+                ) : (
+                  userDetails.beneficiaries.map((b: any, idx: number) => (
+                    <View key={idx} style={styles.beneficiaryCard}>
+                      <View style={styles.beneficiaryCardHeader}>
+                        <Ionicons name="person-circle" size={32} color="#2563eb" />
+                        <View style={styles.beneficiaryCardInfo}>
+                          <Text style={styles.beneficiaryCardName}>{b.full_name}</Text>
+                          <Text style={styles.beneficiaryCardBank}>{b.bank_code} - {b.bank}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.beneficiaryCardDetails}>
+                        <View style={styles.beneficiaryDetailRow}>
+                          <Ionicons name="card" size={14} color="#6b7280" />
+                          <Text style={styles.beneficiaryDetailText}>{b.account_number}</Text>
+                        </View>
+                        <View style={styles.beneficiaryDetailRow}>
+                          <Ionicons name="id-card" size={14} color="#6b7280" />
+                          <Text style={styles.beneficiaryDetailText}>{b.id_document}</Text>
+                        </View>
+                        <View style={styles.beneficiaryDetailRow}>
+                          <Ionicons name="call" size={14} color="#6b7280" />
+                          <Text style={styles.beneficiaryDetailText}>{b.phone_number}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.beneficiaryCardDate}>Agregado: {formatShortDate(b.created_at)}</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {activeDetailTab === 'kyc' && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Documentos KYC</Text>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Estado:</Text><Text style={[styles.infoValue, { fontWeight: '600', color: userDetails.kyc.verification_status === 'verified' ? '#059669' : '#d97706' }]}>{userDetails.kyc.verification_status?.toUpperCase()}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Documento:</Text><Text style={styles.infoValue}>{userDetails.kyc.document_number || 'No registrado'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>CPF:</Text><Text style={styles.infoValue}>{userDetails.kyc.cpf_number || 'No registrado'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Enviado:</Text><Text style={styles.infoValue}>{formatDate(userDetails.kyc.verification_submitted_at)}</Text></View>
+                {userDetails.kyc.verified_at && <View style={styles.infoRow}><Text style={styles.infoLabel}>Verificado:</Text><Text style={styles.infoValue}>{formatDate(userDetails.kyc.verified_at)}</Text></View>}
+                {userDetails.kyc.rejection_reason && <View style={styles.infoRow}><Text style={styles.infoLabel}>Motivo rechazo:</Text><Text style={[styles.infoValue, { color: '#dc2626' }]}>{userDetails.kyc.rejection_reason}</Text></View>}
+                
+                {userDetails.kyc.id_document_image && (
+                  <>
+                    <Text style={styles.kycDocTitle}>📄 Documento de Identidad</Text>
+                    <Image source={{ uri: userDetails.kyc.id_document_image }} style={styles.kycDocImage} resizeMode="contain" />
+                  </>
+                )}
+                
+                {userDetails.kyc.cpf_image && (
+                  <>
+                    <Text style={styles.kycDocTitle}>📋 CPF</Text>
+                    <Image source={{ uri: userDetails.kyc.cpf_image }} style={styles.kycDocImage} resizeMode="contain" />
+                  </>
+                )}
+                
+                {userDetails.kyc.selfie_image && (
+                  <>
+                    <Text style={styles.kycDocTitle}>🤳 Selfie</Text>
+                    <Image source={{ uri: userDetails.kyc.selfie_image }} style={styles.kycSelfieSmall} resizeMode="contain" />
+                  </>
+                )}
+              </View>
+            )}
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )}
+      </View>
+    );
+  }
+
+  // ============ USERS LIST VIEW ============
   return (
     <View style={styles.tabContent}>
       {/* Stats Cards */}
@@ -783,6 +1070,7 @@ function UsersTab() {
       </View>
 
       <Text style={styles.sectionTitle}>Lista de Usuarios</Text>
+      <Text style={styles.sectionSubtitle}>Toca un usuario para ver toda su información</Text>
       
       <View style={styles.searchBox}>
         <Ionicons name="search" size={20} color="#9ca3af" />
@@ -810,12 +1098,16 @@ function UsersTab() {
         </View>
       ) : (
         users.map((u) => (
-          <View key={u.user_id} style={styles.userCard}>
+          <TouchableOpacity key={u.user_id} style={styles.userCard} onPress={() => openUserDetail(u)}>
             <View style={styles.userCardHeader}>
               <View style={styles.userAvatarContainer}>
-                <View style={styles.userAvatar}>
-                  <Text style={styles.userAvatarText}>{u.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-                </View>
+                {u.picture ? (
+                  <Image source={{ uri: u.picture }} style={styles.userAvatarImage} />
+                ) : (
+                  <View style={styles.userAvatar}>
+                    <Text style={styles.userAvatarText}>{u.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                  </View>
+                )}
                 {u.is_online && <View style={styles.onlineIndicator} />}
               </View>
               <View style={styles.userCardInfo}>
@@ -837,6 +1129,7 @@ function UsersTab() {
                   {u.is_online ? '🟢 En línea' : `⚫ ${formatLastSeen(u.last_seen)}`}
                 </Text>
               </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </View>
             <View style={styles.userCardFooter}>
               <View style={styles.userFooterLeft}>
@@ -863,7 +1156,7 @@ function UsersTab() {
                 </Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         ))
       )}
     </View>
