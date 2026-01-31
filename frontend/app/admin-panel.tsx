@@ -870,6 +870,236 @@ function UsersTab() {
   );
 }
 
+// KYC Verifications Tab - Review and approve user documents
+function KYCVerificationsTab() {
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [processing, setProcessing] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+
+  useEffect(() => {
+    loadVerifications();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(loadVerifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadVerifications = async () => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await axios.get(`${BACKEND_URL}/api/admin/verifications/pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVerifications(response.data);
+    } catch (error) {
+      console.error('Error loading verifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDecision = async (approved: boolean) => {
+    if (!selectedUser) return;
+    if (!approved && !rejectionReason.trim()) {
+      showAlert('Error', 'Ingresa el motivo del rechazo');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      await axios.post(
+        `${BACKEND_URL}/api/admin/verifications/decide`,
+        {
+          user_id: selectedUser.user_id,
+          approved,
+          rejection_reason: approved ? null : rejectionReason.trim()
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      showAlert('Éxito', approved ? 'Usuario verificado correctamente' : 'Usuario rechazado');
+      setSelectedUser(null);
+      setRejectionReason('');
+      loadVerifications();
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'Error al procesar');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const formatDate = (date: string) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleString('es', { 
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    });
+  };
+
+  // Document review modal
+  if (selectedUser) {
+    return (
+      <View style={styles.tabContent}>
+        <View style={styles.kycReviewHeader}>
+          <TouchableOpacity onPress={() => setSelectedUser(null)} style={styles.kycBackBtn}>
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.kycReviewTitle}>Revisar Documentos</Text>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* User Info */}
+          <View style={styles.kycUserCard}>
+            <View style={styles.kycUserInfo}>
+              <Text style={styles.kycUserName}>{selectedUser.full_name || selectedUser.name}</Text>
+              <Text style={styles.kycUserEmail}>{selectedUser.email}</Text>
+              <Text style={styles.kycUserDate}>Enviado: {formatDate(selectedUser.verification_submitted_at)}</Text>
+            </View>
+          </View>
+
+          {/* Document Details */}
+          <View style={styles.kycDocSection}>
+            <Text style={styles.kycDocLabel}>Número de Documento</Text>
+            <Text style={styles.kycDocValue}>{selectedUser.document_number || 'N/A'}</Text>
+          </View>
+
+          <View style={styles.kycDocSection}>
+            <Text style={styles.kycDocLabel}>CPF</Text>
+            <Text style={styles.kycDocValue}>{selectedUser.cpf_number || 'N/A'}</Text>
+          </View>
+
+          {/* Document Images */}
+          <Text style={styles.kycSectionTitle}>📄 Documento de Identidad</Text>
+          {selectedUser.id_document_image ? (
+            <Image source={{ uri: selectedUser.id_document_image }} style={styles.kycDocImage} resizeMode="contain" />
+          ) : (
+            <Text style={styles.kycNoImage}>No disponible</Text>
+          )}
+
+          <Text style={styles.kycSectionTitle}>📋 CPF</Text>
+          {selectedUser.cpf_image ? (
+            <Image source={{ uri: selectedUser.cpf_image }} style={styles.kycDocImage} resizeMode="contain" />
+          ) : (
+            <Text style={styles.kycNoImage}>No disponible</Text>
+          )}
+
+          <Text style={styles.kycSectionTitle}>🤳 Selfie (Foto de Perfil)</Text>
+          {selectedUser.selfie_image ? (
+            <Image source={{ uri: selectedUser.selfie_image }} style={styles.kycSelfieImage} resizeMode="contain" />
+          ) : (
+            <Text style={styles.kycNoImage}>No disponible</Text>
+          )}
+
+          {/* Rejection Reason Input */}
+          <View style={styles.kycRejectSection}>
+            <Text style={styles.kycRejectLabel}>Motivo de rechazo (si aplica):</Text>
+            <TextInput
+              style={styles.kycRejectInput}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              placeholder="Ej: Documento ilegible, foto borrosa..."
+              multiline
+            />
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.kycActionButtons}>
+            <TouchableOpacity
+              style={styles.kycRejectBtn}
+              onPress={() => handleDecision(false)}
+              disabled={processing}
+            >
+              {processing ? (
+                <ActivityIndicator color="#dc2626" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="close-circle" size={20} color="#dc2626" />
+                  <Text style={styles.kycRejectBtnText}>Rechazar</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.kycApproveBtn}
+              onPress={() => handleDecision(true)}
+              disabled={processing}
+            >
+              {processing ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={styles.kycApproveBtnText}>Aprobar</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Verificaciones KYC Pendientes</Text>
+      
+      {loading ? (
+        <ActivityIndicator size="large" color="#F5A623" style={{ marginTop: 40 }} />
+      ) : verifications.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="document-text-outline" size={48} color="#9ca3af" />
+          <Text style={styles.emptyStateText}>No hay verificaciones pendientes</Text>
+          <Text style={styles.emptyStateSubtext}>Las nuevas solicitudes aparecerán aquí</Text>
+        </View>
+      ) : (
+        verifications.map((v) => (
+          <TouchableOpacity
+            key={v.user_id}
+            style={styles.kycCard}
+            onPress={() => setSelectedUser(v)}
+          >
+            <View style={styles.kycCardHeader}>
+              <View style={styles.kycAvatar}>
+                {v.selfie_image ? (
+                  <Image source={{ uri: v.selfie_image }} style={styles.kycAvatarImage} />
+                ) : (
+                  <Text style={styles.kycAvatarText}>{v.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                )}
+              </View>
+              <View style={styles.kycCardInfo}>
+                <Text style={styles.kycCardName}>{v.full_name || v.name}</Text>
+                <Text style={styles.kycCardEmail}>{v.email}</Text>
+                <Text style={styles.kycCardDate}>
+                  {formatDate(v.verification_submitted_at || v.created_at)}
+                </Text>
+              </View>
+              <View style={styles.kycPendingBadge}>
+                <Text style={styles.kycPendingText}>Pendiente</Text>
+              </View>
+            </View>
+            <View style={styles.kycCardFooter}>
+              <View style={styles.kycDocIndicator}>
+                <Ionicons name={v.id_document_image ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={v.id_document_image ? '#059669' : '#9ca3af'} />
+                <Text style={styles.kycDocIndicatorText}>DNI</Text>
+              </View>
+              <View style={styles.kycDocIndicator}>
+                <Ionicons name={v.cpf_image ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={v.cpf_image ? '#059669' : '#9ca3af'} />
+                <Text style={styles.kycDocIndicatorText}>CPF</Text>
+              </View>
+              <View style={styles.kycDocIndicator}>
+                <Ionicons name={v.selfie_image ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={v.selfie_image ? '#059669' : '#9ca3af'} />
+                <Text style={styles.kycDocIndicatorText}>Selfie</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </View>
+          </TouchableOpacity>
+        ))
+      )}
+    </View>
+  );
+}
+
 // Admins Tab (Super Admin Only)
 function AdminsTab() {
   const [admins, setAdmins] = useState<any[]>([]);
