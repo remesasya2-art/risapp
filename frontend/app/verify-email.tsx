@@ -102,8 +102,8 @@ export default function VerifyEmailScreen() {
       // Refresh user data
       await refreshUser();
 
-      showAlert('✅ ¡Verificación Exitosa!', 'Tu cuenta ha sido creada correctamente.', [
-        { text: 'Continuar', onPress: () => router.replace('/') }
+      showAlert('✅ ¡Email Verificado!', 'Ahora debes verificar tu identidad para poder operar.', [
+        { text: 'Verificar Identidad', onPress: () => router.replace('/verification') }
       ]);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Código inválido');
