@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  // Heartbeat to track online status
+  // MODO PRUEBA: Heartbeat reducido a cada 2 minutos
   useEffect(() => {
     if (!user) return;
     
@@ -68,20 +68,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const token = await AsyncStorage.getItem('session_token');
         if (token) {
-          await axios.post(`${BACKEND_URL}/api/auth/heartbeat`, {}, {
+          axios.post(`${BACKEND_URL}/api/auth/heartbeat`, {}, {
             headers: { Authorization: `Bearer ${token}` }
-          });
+          }).catch(() => {}); // No esperar respuesta
         }
       } catch (error) {
-        // Silently fail heartbeat
+        // Silenciar
       }
     };
     
-    // Send initial heartbeat
-    sendHeartbeat();
+    // Enviar heartbeat después de 5 segundos (no bloquear inicio)
+    setTimeout(sendHeartbeat, 5000);
     
-    // Send heartbeat every 30 seconds
-    const interval = setInterval(sendHeartbeat, 30000);
+    // Heartbeat cada 2 minutos (antes era 30 segundos)
+    const interval = setInterval(sendHeartbeat, 120000);
     
     return () => clearInterval(interval);
   }, [user]);
