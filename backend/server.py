@@ -1152,9 +1152,15 @@ async def submit_verification(request: VerificationRequest, current_user: User =
 @api_router.get("/verification/status")
 async def get_verification_status(current_user: User = Depends(get_current_user)):
     """Get current verification status"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    
+    # Check if documents were submitted
+    documents_submitted = user.get("verification_submitted_at") is not None or user.get("id_document_image") is not None
+    
     return {
         "status": current_user.verification_status,
-        "rejection_reason": current_user.rejection_reason
+        "rejection_reason": current_user.rejection_reason,
+        "documents_submitted": documents_submitted
     }
 
 @api_router.get("/admin/verifications/pending")
