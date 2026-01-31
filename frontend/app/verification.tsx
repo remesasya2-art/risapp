@@ -44,18 +44,41 @@ export default function VerificationScreen() {
   const [cpfImage, setCpfImage] = useState<string | null>(null);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [acceptedDeclaration, setAcceptedDeclaration] = useState(false);
+  const [hasSubmittedDocs, setHasSubmittedDocs] = useState(false);
 
   useEffect(() => {
-    if (user?.verification_status === 'verified') {
+    checkVerificationStatus();
+  }, [user]);
+
+  const checkVerificationStatus = async () => {
+    if (!user) return;
+    
+    if (user.verification_status === 'verified') {
       showAlert('✅ Verificado', 'Tu cuenta ya está verificada.', [
         { text: 'OK', onPress: () => router.replace('/') }
       ]);
-    } else if (user?.verification_status === 'pending') {
-      showAlert('⏳ En Revisión', 'Tu documentación está siendo revisada. Recibirás una notificación pronto.', [
-        { text: 'OK', onPress: () => router.replace('/') }
-      ]);
+      return;
     }
-  }, [user]);
+    
+    // Check if user has already submitted documents
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await axios.get(`${BACKEND_URL}/api/verification/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // If documents were submitted (verification_submitted_at exists), show pending message
+      if (response.data.documents_submitted) {
+        setHasSubmittedDocs(true);
+        showAlert('⏳ En Revisión', 'Tu documentación está siendo revisada. Recibirás una notificación en minutos.', [
+          { text: 'OK', onPress: () => router.replace('/') }
+        ]);
+      }
+    } catch (error) {
+      // If error, just let user submit documents
+      console.log('Error checking verification status');
+    }
+  };
 
   const takePhoto = async (type: 'id' | 'cpf' | 'selfie') => {
     try {
