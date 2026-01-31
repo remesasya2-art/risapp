@@ -213,6 +213,13 @@ class RegisterUserRequest(BaseModel):
     confirm_password: str
     phone: Optional[str] = None
 
+class VerifyEmailCodeRequest(BaseModel):
+    email: str
+    code: str
+
+class ResendVerificationCodeRequest(BaseModel):
+    email: str
+
 class RequestPasswordResetRequest(BaseModel):
     email: str
 
