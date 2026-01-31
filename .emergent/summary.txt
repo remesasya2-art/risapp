@@ -1,234 +1,218 @@
 <analysis>
-<original_problem_statement>
-The user wants to build a mobile application named RIS for Google and Apple platforms. The application allows users to top up their balance, which is then used to initiate manual transfers to beneficiaries. The app includes a full KYC process, admin panel, and notifications.
 
-**Recent User Requests:**
-1.  **Saved Beneficiaries:** Implement a system for users to save and manage beneficiaries.
-2.  **In-App Support Chat:** Create a support chat screen for users to communicate with an admin via WhatsApp.
-3.  **Full Admin Panel:** Build a comprehensive admin panel with RBAC, allowing a  to manage other  or  users.
-4.  **Share Transaction Receipt:** Allow users to share the image of their transaction receipt from the history screen.
-5.  **Cancel Pending Recharge:** Give users the option to cancel a recharge if they haven't completed the payment.
-6.  **Enhanced Security & UX:**
-    *   Implement a full authentication system (password setup, login, password recovery via email, live selfie for password changes).
-    *   Enforce a single active session per user.
-    *   Improve the app's design to feel more secure and professional, like a banking app.
-7.  **Generate APK:** Create an Android APK file for testing and installation without publishing to the Play Store.
+<original_problem_statement>
+The user wants to build a mobile application named RIS for Google and Apple platforms. The application allows users to top up their balance, which is then used to initiate manual transfers to beneficiaries.
+
+**Recent & Evolved User Requests:**
+1.  **Complete Auth System Overhaul:** The user has pivoted from a Google-first login to a **traditional email/password registration flow**.
+    *   Users must register with their name, email, and password.
+    *   A **6-digit verification code** must be sent to the user's email, which they must enter in the app to confirm their account. This is to prevent duplicate email usage.
+    *   The login screen should be for email and password entry.
+2.  **Full Admin Panel & KYC Flow:** A comprehensive admin panel with a robust KYC (Know Your Customer) approval process.
+    *   When a user submits their KYC documents (ID, CPF, Selfie), a **notification** should be sent to the .
+    *   The admin panel must have a dedicated KYC Verifications tab showing a list of pending users.
+    *   The admin must be able to view the submitted documents and **approve or reject** the user.
+    *   The entire verification process (user submission to admin approval) should be as fast as possible.
+3.  **Real-time User Presence:** The admin panel should display a list of all registered users and indicate in **real-time which users are currently online** and active in the app.
+4.  **Permanent Profile Picture:** The selfie image taken during the KYC process should automatically become the user's permanent and unchangeable profile picture (avatar).
+5.  **Professional Bank-Like UI/UX:** The entire application interface must be improved to look and feel professional, secure, and similar to a modern banking app.
+6.  **Generate a functional APK:** The top priority is to successfully generate a downloadable Android APK for testing and installation.
 
 </original_problem_statement>
 
 **User's preferred language**: Spanish. The next agent MUST respond in Spanish.
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application. The backend admin routes have been successfully refactored from the monolithic  into a dedicated , improving code organization. The frontend has seen significant UI/UX enhancements, including a redesigned Admin Panel, a more professional bank-like login screen, and the implementation of features like sharing transaction receipts and canceling pending recharges. A comprehensive security backend has been built (password management, session control, reset tokens) and the corresponding frontend screens (, ) have been created, though the forgot password email flow is not yet implemented. The app is configured to generate an APK via EAS, but the build process is failing.
+A full-stack Expo (React Native) and FastAPI application that has undergone significant changes in this session. The authentication system has been completely refactored from Google-only to a traditional email/password system, including a new multi-step registration flow with email verification via a 6-digit code.
+
+Several screens have been redesigned with a more professional bank-like UI (, , , , , , and the new auth screens). New features like real-time user online status (via a heartbeat mechanism) and setting the KYC selfie as a permanent profile picture have been implemented on both the backend and frontend.
+
+However, the main goal of generating an APK is **severely blocked**. The build process on the Emergent platform has been stuck for an extremely long time (over 4 days), indicating a platform-level issue rather than a code issue. The agent has optimized project assets and configuration files in an attempt to mitigate this, but the problem persists.
 
 **Last working item**:
-    - Last item agent was working: Generating a test Android APK using Emergent's built-in Get Android builds feature, which uses EAS (Expo Application Services) build. The agent configured  and created  to prepare for the build.
-    - Status: BLOCKED
+    - Last item agent was working: Building the UI for the admin to approve/reject KYC submissions. The user pointed out that it wasn't clear where an admin would go to approve new users. The agent was in the middle of creating a new **** component within the  file.
+    - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? The build is failing at the configuration/pre-build stage. The agent needs to analyze the build logs, fix the reported errors in the code/assets, and then re-trigger the build. No testing agent is needed for this.
+    - Which testing method agent to use? After completing the UI, the agent should perform a manual test of the full flow:
+        1. Register a new user.
+        2. Submit KYC documents for that user.
+        3. Log in as the  ().
+        4. Navigate to the new KYC Verifications tab in the Admin Panel.
+        5. Verify the pending user and their documents are displayed.
+        6. Test the Approve and Reject functionality.
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  Issue 1: Android APK build is failing (P0)
-  Issue 2: Selfie capture on the Change Password screen may still be buggy (P1)
+  Issue 1:  (CRITICAL BLOCKER) Android APK build is stuck and has been running for over 4 days. (P0)
   
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: The agent correctly identified the build was failing but did not analyze the logs to find the root cause. It only tried restarting services, which had no effect.
-     - Next debug checklist: The build logs (Message 344) clearly indicate two critical errors that must be fixed:
-        1. **Install Missing Type Definitions:** The build fails because  is not found. Run yarn add v1.22.22
-[1/4] Resolving packages...
-[2/4] Fetching packages...
-[3/4] Linking dependencies...
-[4/4] Building fresh packages...
-success Saved lockfile.
-success Saved 2 new dependencies.
-info Direct dependencies
-└─ @types/react@19.2.9
-info All dependencies
-├─ @types/react@19.2.9
-└─ csstype@3.2.3
-Done in 7.79s. inside the  directory to add it to .
-        2. **Resize App Icons:** The build fails because the icon images are not square.
-           - Check files: , , .
-           - The logs state they have dimensions like .
-           - **Action:** Resize these images to be perfectly square (e.g., 512x512).
-     - Why fix this issue and what will be achieved with the fix?: Fixing this is the top priority as it completely blocks the user's request to get a testable APK of the application.
-     - Status:  IN PROGRESS
-     - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Frontend (by re-running the build).
-     - Blocked on other issue: None
-
-  - Issue 2: 
-     - Attempted fixes: The agent completely rewrote the  screen (Message 308) to use the new  API after the initial implementation failed to capture an image.
-     - Next debug checklist: The user has not confirmed if the rewritten screen works. The next agent should ask the user to test this flow again. If it still fails, check the device logs in Expo Go for specific camera errors.
-     - Why fix this issue and what will be achieved with the fix?: This is a key part of the new security features requested by the user.
-     - Status:  USER VERIFICATION PENDING
+     - Attempted fixes:
+        - Replaced all non-square app icons with a valid, square icon provided by the user.
+        - Optimized project assets, reducing image sizes from 456KB to 156KB.
+        - Simplified  configuration to potentially speed up the build.
+        - Cleaned Metro cache and project dependencies.
+        - Ran a full health check and fixed an auth redirect URL issue.
+        - Consulted the , which confirmed this is a platform issue requiring human intervention.
+     - Next debug checklist: The problem is not with the code but with the build service.
+        1.  **Instruct the user to contact Emergent support.** Provide them with the  and a summary of the problem (build stuck for days despite a small project size and multiple optimization attempts).
+        2.  **Suggest the user cancel the current stuck build** (by refreshing the page or finding a cancel button) and try starting **one more new build**.
+        3.  Reiterate that **Expo Go is the immediate and reliable way to test** all new functionality while the APK issue is being resolved by support.
+     - Why fix this issue and what will be achieved with the fix?: This is the user's primary goal. Without a functional APK, the user cannot test the application on a real device as intended.
+     - Status:  BLOCKED
      - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? Frontend
-     - Blocked on other issue: None
+     - Should Test frontend/backend/both after fix? N/A (Platform issue)
+     - Blocked on other issue: N/A
 
 **In progress Task List**:
-  Task 1:  Complete Security Features Implementation (P0)
-  Task 2:  Apply Bank-Like UI Overhaul to All Screens (P1)
+  Task 1:  Complete the Admin KYC Approval Flow (P0)
+  Task 2:  Apply Bank-Like UI Overhaul to All Remaining Screens (P1)
 
  Task Detail:
   - Task 1: 
-     - Where to resume: 
-        1.  **Forgot Password Flow:** The backend endpoints (, ) and email sending logic exist, but there is no frontend screen for the user to enter their email and request a reset token, or to enter the token and new password. A new screen (e.g., ) needs to be created.
-        2.  **UI/UX for Security Screens:** The newly created  and  are functional but have a basic UI. They need to be updated with the new bank-like professional design theme.
-     - What will be achieved with this?: A complete, robust authentication and security system as per the user's detailed requirements.
+     - Where to resume: The file . The agent just added the  component structure but it's empty.
+     - **Next Steps:**
+        1.  Flesh out the  component to fetch data from a new backend endpoint (e.g., ).
+        2.  Display a list of users with  and  not null.
+        3.  For each user, show their details and the images they submitted (DNI, CPF, Selfie).
+        4.  Add Approve and Reject buttons.
+        5.  Implement the  and  functions to call the corresponding backend endpoints (e.g., ).
+     - What will be achieved with this?: A complete, functional KYC process as requested by the user, allowing the admin to manage new user onboarding.
      - Status:  IN PROGRESS
      - Should Test frontend/backend/both after fix?: both
-     - Blocked on something: The Forgot Password flow requires an email service. The agent implemented it using a generic placeholder. The agent should confirm with the user if this is sufficient or if a real email provider needs to be configured.
+     - Blocked on something: No
 
   - Task 2: 
-     - Where to resume: The agent successfully redesigned the login/home screen (). The user was pleased and wants a similar professional, secure, and friendly feel across the entire app.
-     - **Action:** Apply a similar design language (color palette, component styling, layout) to other key screens, such as:
-        -  (Transaction History)
-        -  (User Profile)
+     - Where to resume: The agent has successfully redesigned many key screens. The user wants this applied to the *entire* app for consistency.
+     - **Action:** Review the remaining screens and apply the same professional design language (color palette, component styling, layout). Key screens to check are:
         -  (Send RIS flow)
-        -  (Recharge Screen)
-     - What will be achieved with this?: A cohesive and professional user experience that gives the user a sense of security, as requested.
+        - The remaining tabs within  (, , , etc.)
+     - What will be achieved with this?: A cohesive and professional user experience across the entire application, fulfilling a core user requirement.
      - Status:  IN PROGRESS
      - Should Test frontend/backend/both after fix?: Frontend
-     - Blocked on something: None
+     - Blocked on something: No
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - **Background App Functionality (P1):** The user requested the app work in the background, specifically to show a notification when a PIX payment is automatically detected. This will likely involve implementing the Mercado Pago webhook.
+    - **Background App Functionality (P1):** The user requested the app work in the background to show notifications. This was partially addressed by implementing notifications for KYC, but the original request for PIX payment detection via webhooks is still pending.
     Future Tasks:
     - **Stripe Integration for Recharges (P2 - Blocked):** Blocked on user's Stripe account activation.
     - **Automated KYC Verification (P2):** Post-MVP enhancement.
-    - **True Push Notifications (P2 - Blocked):** Requires a custom development build (which the current APK task is a first step towards).
+    - **True Push Notifications (P2 - Blocked):** Requires a custom development build, which is currently blocked by the APK build issue.
 
 **Completed work in this session**
-- List of all completed tasks with file and method name:
-  - **Backend Refactoring:** Moved all admin-related endpoints from  to  and included it as an .
-  - **Admin Panel UI Redesign:** Rewrote  with a more usable layout (bottom navigation) that utilizes the full screen.
-  - **Role-Based Profile UI:** Updated  to show/hide the Admin Panel button based on  from the  instead of a hardcoded email check. Added  to the User interface in .
-  - **Share Receipt Feature:**
-    - Installed  and .
-    - Implemented sharing functionality in , allowing users to share the transaction receipt image.
-  - **Cancel Recharge Feature:**
-    - Added a  endpoint in .
-    - Added a Cancel button and  function in .
-  - **Security Overhaul (Partial Implementation):**
-    - **Backend ():**
-        - Added , , , etc., to the User model.
-        - Implemented single-session policy by invalidating old session tokens on new login.
-        - Created endpoints: , , , .
-    - **Frontend:**
-        - Created  for initial password setup.
-        - Created  with live selfie capture for password changes.
-        - Installed .
-        - Fixed a crash by installing  and a bug where new screens appeared in the tab navigation by updating .
-  - **UI/UX Redesign (Login Screen):**
-    - Installed .
-    - Completely rewrote  with a more professional, bank-like design.
-  - **Bug Fixes:**
-    - Fixed an issue where the  form fields were not cleared after submission.
-    - Fixed the selfie camera capture by rewriting the component to use the modern  API.
-  - **Build Preparation:**
-    - Created  with a build profile for generating an APK.
-
-**Earlier issues found/mentioned but not fixed**
-   - None not already listed in the pending/in-progress section.
-
-**Known issue recurrence from previous fork**
-  - **Twilio Webhook URL:** This was mentioned in the initial summary but did not come up during this session. It remains a potential issue for future forks.
+- **Complete Auth System Overhaul:**
+  - Implemented a full traditional registration flow (, ).
+  - Added backend endpoints for registration ().
+  - Implemented email verification with a 6-digit code ( and backend endpoints , ).
+  - Redesigned the main landing screen () to support the new auth flow.
+- **Major UI/UX Redesign (Bank-Like Style):**
+  - Redesigned screens: , , , , , .
+  - Removed default headers for a cleaner look on several screens.
+- **Enhanced Admin & User Features:**
+  - Implemented real-time online status for users in the Admin Panel ().
+    - Added  to User model and a  endpoint.
+    - Added  to fetch the user list.
+    -  was updated to send a periodic heartbeat.
+  - Implemented the KYC selfie as the permanent, non-changeable user profile picture ().
+- **Improved KYC Flow:**
+  - Modified the flow to navigate users directly from email verification to the KYC document submission screen.
+  - Differentiated backend user status to distinguish between users who haven't submitted docs vs. those pending review.
+- **APK Build Troubleshooting & Optimization:**
+  - Fixed initial build blocker by replacing non-square app icons.
+  - Optimized project by reducing asset size from 456KB to 156KB.
+  - Simplified  configuration.
+  - Diagnosed the extremely long build times as a platform issue and escalated via the .
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), , , , , .
-- **Backend**: FastAPI (Python), Pydantic, Passlib (for password hashing),  (for JWTs).
-- **Database**: MongoDB.
-- **Authentication**: Hybrid Google OAuth + custom password system. Single-session policy via session tokens.
-- **Build/Deployment**: EAS (Expo Application Services) for building the APK.
+- **Frontend**: Expo (React Native), ,  for API calls, React Context () for session management.
+- **Backend**: FastAPI (Python), MongoDB, Passlib, .
+- **Authentication**: Custom email/password registration with a 6-digit email verification code. Session management via JWTs stored in AsyncStorage.
+- **Real-time Presence**: A heartbeat system where the frontend periodically pings a backend endpoint to update a  timestamp on the User model.
+- **Build/Deployment**: EAS (Expo Application Services) - **Currently Blocked/Stuck**.
 
 **key DB schema**
-  - **User**: {_id, email, name, ..., role, permissions, **password_hash**, **active_session_token**, **password_reset_token**, **password_reset_expires**}
-  - **Transaction**: {_id, ..., **status ('pending', 'completed', 'cancelled')**}
+  - **User**: {_id, email, name, password_hash, role, ..., **email_verified (bool)**, **last_seen (datetime)**, **profile_picture_url (str)**, **documents_submitted_at (datetime)**, verification_status ('unverified', 'pending', 'verified', 'rejected')}
 
 **changes in tech stack**
-  - **Added Frontend Packages**: , , , .
-  - **Added Backend Packages**: ,  (for selfie upload),  (for reset tokens).
+- No new packages, but a fundamental shift in application logic from Google OAuth-first to a custom email/password authentication system.
 
 **All files of reference**
 - **Created:**
-  - : Refactored from  to contain all admin routes.
-  - : UI for the user to set their password for the first time.
-  - : UI for the user to change their password, including a live selfie capture.
-  - : Configuration file for EAS Build.
+  - 
+  - 
+  - 
+  - 
 - **Updated Heavily:**
-  - : Major updates for the new security/auth system (endpoints, models, session logic) and removal of admin routes.
-  - : Completely redesigned for a professional, bank-like UI.
-  - : Added state and logic for downloading and sharing transaction receipts.
-  - : Added state and logic for canceling a pending recharge.
-  - : Logic updated to use user roles for displaying admin links.
-  - : User interface updated to include  and .
+  - : All new auth, verification, and admin endpoints.
+  - : Completely changed to be a landing page with Register and Login buttons.
+  - : Overhauled to include a real-time user list and the new (in-progress) KYC tab.
+  - : Rewired for the new auth flow and to include the heartbeat logic.
+  - : Updated to handle routing for all the new screens.
+  - : Redesigned to show the permanent, verified profile picture.
+  - : Logic updated to reflect the new state ().
+  - : Simplified for build optimization.
 
 **Areas that need refactoring**:
-- While the backend was refactored,  still handles many distinct features (auth, user, transactions, pix, webhooks, support). Further separation into dedicated routers (e.g., , ) would improve maintainability.
+- The  file is becoming very large again. The new authentication and admin endpoints could be moved to their own dedicated routers (e.g., , ) for better organization.
 
 **key api endpoints**
-- **(NEW) Security Endpoints:**
-  - : Sets the initial password for a user.
-  - : Changes the user's password, requires a selfie upload.
-  - : Initiates the password reset flow.
-  - : Completes the password reset with a token.
-- **(NEW) Transaction Endpoint:**
-  - : Cancels a pending recharge transaction.
+- **(NEW) Auth Endpoints:**
+  - : Creates a new user with .
+  - : Sends a 6-digit code (currently logged to console).
+  - : Verifies the code and sets .
+  - : Traditional email/password login.
+  - : Updates the user's  timestamp.
+- **(NEW) Admin Endpoints:**
+  - : Gets a list of all users and their online status.
 
 **Critical Info for New Agent**
 - **Language is Spanish:** All user communication MUST be in Spanish.
-- **TOP PRIORITY: FIX THE APK BUILD.** The user cannot test the app on a real device until this is resolved. The solution is in the build logs: install  and resize the app icons to be square.
-- **Complete the Security Flow:** The Forgot Password frontend is missing. This is the next logical step after fixing the build.
-- **Focus on UI/UX:** The user is now very focused on the app's look and feel. All new features and screens should follow the professional, bank-like design established in the new  screen.
-- **Camera Feature:** The selfie capture was rewritten but is unverified. Be prepared to debug it further if the user reports it's still not working.
+- **CRITICAL BLOCKER: APK BUILD.** The build is stuck at the platform level. The top priority is to guide the user to **contact Emergent support with Job ID **. Do not spend significant time trying to fix this from code. Recommend Expo Go for all testing in the meantime.
+- **Immediate Task:** Your first coding task is to complete the  in  so the  can review and approve new users.
+- **Auth Flow is New:** The entire login/registration process has been rebuilt. Familiarize yourself with the new flow: Register -> Verify Email -> Submit KYC -> Admin Approval.
+- **User is UX-Focused:** The bank-like professional design is very important to the user. Ensure all new UI and modifications follow this style.
 
 **documents created in this job**
-  - 
+- None.
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - **10. Android build request (IN PROGRESS):** User confirmed they want to generate an APK to install on an Android device without publishing to the store.
- - **9. App readiness for stores inquiry (Completed):** User asked if the app is ready to be installed on Android and iPhone.
- - **8. Selfie camera not capturing (Completed):** User reported that the camera opens on the change password screen, but the capture button does nothing. Agent rewrote the component.
- - **7. Request to improve app design (IN PROGRESS):** User requested to fix a bug where password fields don't clear and to improve the app's design to look more professional and secure, like a bank app.
- - **6. Server error on main screen (Completed):** User reported the app was crashing. Agent identified a missing  dependency, installed it, and fixed the crash.
- - **5. Security feature request confirmation (IN PROGRESS):** User confirmed the plan for security features: Google Login + Password, live selfie for password changes, and using a generic email service for password recovery.
- - **4. Request for enhanced security features (IN PROGRESS):** User asked for a major security overhaul including passwords, single-session login, password recovery, and live selfie verification.
- - **3. Request to cancel pending recharges (Completed):** User requested an option to cancel a recharge if the payment was not completed.
- - **2. Request to share only the receipt image (Completed):** User reported the share function was sharing text, not the image. They requested it share *only* the image.
- - **1. Cannot share file error (Completed):** User reported an error when trying to use the new share receipt feature.
+ - **10. Where to approve users? (IN PROGRESS):** User correctly pointed out it's unclear where the admin approves KYC documents. Agent started building the .
+ - **9. Can't re-register user (RESOLVED):** User reported being unable to use an email that was supposedly deleted. Agent re-ran the deletion and cleared the DB, resolving the issue.
+ - **8. Permanent profile picture request (Completed):** User requested the KYC selfie become the permanent profile pic. Agent implemented this.
+ - **7. Delete user & add online status (Completed):** User asked to delete a test user to repeat the flow and to add a real-time online status list for the admin. Agent implemented both.
+ - **6. Feedback on KYC flow (IN PROGRESS):** After a successful test, user requested the flow navigate directly to document submission after email verification. Agent implemented this.
+ - **5. Test user created (Completed):** User confirmed they created the test account. Agent found the verification code in the logs.
+ - **4. Request for real test (Completed):** User asked to do a real end-to-end test of the new registration flow.
+ - **3. Request for email verification (Completed):** User requested to add email verification with a code to the registration process.
+ - **2. Health check request (Completed):** Agent initiated a health check to diagnose platform readiness.
+ - **1. APK build is still stuck (ONGOING/BLOCKED):** User reported the build has been stuck for over 4 days (6438 mins).
 
 **Project Health Check:**
-- Broken: The Android APK build process.
-- Mocked: The email sending for password recovery uses a generic placeholder and does not connect to a real email service.
+- Broken: The EAS Get Android builds process is completely stuck and non-functional. This is a platform-level issue.
+- Mocked: The email service for sending verification codes. It currently only s the code to the backend logs.
 
 **3rd Party Integrations**
-- **Google OAuth**: For user authentication.
-- **Twilio**: For WhatsApp messages.
-- **Mercado Pago**: For PIX payments.
-- **Firebase Cloud Messaging**: Configured for notifications.
+- **Google OAuth**: Still present in code but **no longer the primary login method**.
+- **Twilio**: For WhatsApp messages (existing).
+- **Mercado Pago**: For PIX payments (existing).
+- **Firebase Cloud Messaging**: Configured for notifications (existing).
 - ****: For live selfie capture.
 - ** & **: For sharing transaction receipts.
-- ****: For UI design enhancements.
 
 **Testing status**
   - Testing agent used after significant changes: NO
-  - Troubleshoot agent used after agent stuck in loop: NO
+  - Troubleshoot agent used after agent stuck in loop: YES (for the build issue, which led to calling the )
   - Test files created: None.
-  - Known regressions: The Android build process is now broken.
+  - Known regressions: The APK build process is non-functional.
 
 **Credentials to test flow:**
-- Log in with Google using . This user is a .
+- **Super Admin:** Login with Google using . (Note: The primary flow is now email/password, but this Google account is still hardcoded as a super_admin if it logs in). The user has also created  via the new flow. The agent should probably make this user a super_admin as well for testing.
 
 **What agent forgot to execute**
-- The agent failed to analyze the EAS build logs to find the root cause of the APK build failure. The logs clearly stated two issues:
-    1. The  package was missing from the build environment.
-    2. The app icon images were not square (e.g.,  instead of ).
-- The agent did not implement the frontend for the Forgot Password flow, leaving the security feature set incomplete.
+- The agent hasn't yet created the backend endpoints required for the  to function (e.g., getting pending verifications, approving/rejecting them). This would be the immediate next step after building the frontend shell.
+
 </analysis>
