@@ -2908,6 +2908,200 @@ async def get_user_detail(user_id: str, admin_user: User = Depends(get_admin_use
     
     return user
 
+@api_router.get("/admin/users/{user_id}/complete")
+async def get_user_complete_info(user_id: str, admin_user: User = Depends(get_admin_user)):
+    """
+    Super Admin: Get COMPLETE user information including:
+    - Full profile data
+    - Registration date and method
+    - KYC documents and status
+    - All transactions (recharges and withdrawals)
+    - All beneficiaries
+    - Account activity (logins, last seen)
+    - Balance history
+    """
+    if not has_permission(admin_user, "users.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Get user with all fields (except password hash)
+    user = await db.users.find_one(
+        {"user_id": user_id},
+        {"password_hash": 0, "password_reset_token": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    user['_id'] = str(user['_id'])
+    
+    # ========== TRANSACTIONS ==========
+    # Get ALL transactions for this user
+    all_transactions = await db.transactions.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    
+    # Separate by type
+    recharges = [tx for tx in all_transactions if tx.get('type') == 'recharge']
+    withdrawals = [tx for tx in all_transactions if tx.get('type') == 'withdrawal']
+    
+    # Calculate stats
+    completed_recharges = [tx for tx in recharges if tx.get('status') == 'completed']
+    completed_withdrawals = [tx for tx in withdrawals if tx.get('status') == 'completed']
+    pending_recharges = [tx for tx in recharges if tx.get('status') == 'pending']
+    pending_withdrawals = [tx for tx in withdrawals if tx.get('status') == 'pending']
+    
+    total_recharged = sum(tx.get('amount_output', 0) for tx in completed_recharges)
+    total_withdrawn = sum(tx.get('amount_input', 0) for tx in completed_withdrawals)
+    total_ves_sent = sum(tx.get('amount_output', 0) for tx in completed_withdrawals)
+    
+    # ========== BENEFICIARIES ==========
+    beneficiaries = await db.beneficiaries.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    # ========== NOTIFICATIONS ==========
+    notifications = await db.notifications.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    
+    # ========== SUPPORT MESSAGES ==========
+    support_messages = await db.support_messages.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    # ========== ADMIN BALANCE ADJUSTMENTS ==========
+    balance_adjustments = await db.admin_logs.find(
+        {"user_id": user_id, "type": "admin_adjustment"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    # Build complete response
+    return {
+        # ===== PROFILE INFO =====
+        "profile": {
+            "user_id": user.get("user_id"),
+            "email": user.get("email"),
+            "name": user.get("name"),
+            "full_name": user.get("full_name"),
+            "phone": user.get("phone"),
+            "picture": user.get("picture"),
+            "role": user.get("role", "user"),
+            "balance_ris": user.get("balance_ris", 0),
+            "registration_method": user.get("registration_method", "google"),
+            "created_at": user.get("created_at"),
+            "last_login": user.get("last_login"),
+            "last_seen": user.get("last_seen"),
+            "is_online": user.get("is_online", False),
+            "is_active": user.get("is_active", True),
+        },
+        
+        # ===== KYC / VERIFICATION =====
+        "kyc": {
+            "verification_status": user.get("verification_status", "pending"),
+            "email_verified": user.get("email_verified", False),
+            "email_verified_at": user.get("email_verified_at"),
+            "document_number": user.get("document_number"),
+            "cpf_number": user.get("cpf_number"),
+            "id_document_image": user.get("id_document_image"),
+            "cpf_image": user.get("cpf_image"),
+            "selfie_image": user.get("selfie_image"),
+            "verification_submitted_at": user.get("verification_submitted_at"),
+            "verified_at": user.get("verified_at"),
+            "verified_by": user.get("verified_by"),
+            "rejection_reason": user.get("rejection_reason"),
+            "accepted_declaration": user.get("accepted_declaration", False),
+            "declaration_accepted_at": user.get("declaration_accepted_at"),
+            "accepted_policies": user.get("accepted_policies", False),
+            "policies_accepted_at": user.get("policies_accepted_at"),
+        },
+        
+        # ===== SECURITY =====
+        "security": {
+            "password_set": user.get("password_set", False),
+            "password_changed_at": user.get("password_changed_at"),
+            "failed_login_attempts": user.get("failed_login_attempts", 0),
+            "locked_until": user.get("locked_until"),
+            "fcm_token": "Configurado" if user.get("fcm_token") else "No configurado",
+        },
+        
+        # ===== TRANSACTION STATISTICS =====
+        "stats": {
+            "total_transactions": len(all_transactions),
+            "total_recharges": len(recharges),
+            "total_withdrawals": len(withdrawals),
+            "completed_recharges": len(completed_recharges),
+            "completed_withdrawals": len(completed_withdrawals),
+            "pending_recharges": len(pending_recharges),
+            "pending_withdrawals": len(pending_withdrawals),
+            "total_recharged_ris": total_recharged,
+            "total_withdrawn_ris": total_withdrawn,
+            "total_ves_sent": total_ves_sent,
+            "total_beneficiaries": len(beneficiaries),
+        },
+        
+        # ===== RECHARGE HISTORY =====
+        "recharges": [{
+            "transaction_id": tx.get("transaction_id"),
+            "amount_brl": tx.get("amount_input"),
+            "amount_ris": tx.get("amount_output"),
+            "status": tx.get("status"),
+            "payment_method": tx.get("payment_method", "pix"),
+            "created_at": tx.get("created_at"),
+            "completed_at": tx.get("completed_at"),
+            "has_proof": bool(tx.get("proof_image")),
+        } for tx in recharges],
+        
+        # ===== WITHDRAWAL HISTORY =====
+        "withdrawals": [{
+            "transaction_id": tx.get("transaction_id"),
+            "amount_ris": tx.get("amount_input"),
+            "amount_ves": tx.get("amount_output"),
+            "status": tx.get("status"),
+            "beneficiary": tx.get("beneficiary_data", {}),
+            "created_at": tx.get("created_at"),
+            "completed_at": tx.get("completed_at"),
+            "processed_by": tx.get("processed_by"),
+            "has_proof": bool(tx.get("proof_image")),
+            "rejection_reason": tx.get("rejection_reason"),
+        } for tx in withdrawals],
+        
+        # ===== BENEFICIARIES =====
+        "beneficiaries": [{
+            "beneficiary_id": b.get("beneficiary_id"),
+            "full_name": b.get("full_name"),
+            "bank": b.get("bank"),
+            "bank_code": b.get("bank_code"),
+            "account_number": b.get("account_number"),
+            "id_document": b.get("id_document"),
+            "phone_number": b.get("phone_number"),
+            "created_at": b.get("created_at"),
+        } for b in beneficiaries],
+        
+        # ===== RECENT NOTIFICATIONS =====
+        "notifications": [{
+            "notification_id": n.get("notification_id"),
+            "title": n.get("title"),
+            "message": n.get("message"),
+            "type": n.get("type"),
+            "read": n.get("read", False),
+            "created_at": n.get("created_at"),
+        } for n in notifications],
+        
+        # ===== SUPPORT HISTORY =====
+        "support_messages": [{
+            "message_id": m.get("message_id"),
+            "sender": m.get("sender"),
+            "text": m.get("text"),
+            "created_at": m.get("created_at"),
+        } for m in support_messages],
+        
+        # ===== BALANCE ADJUSTMENTS BY ADMIN =====
+        "balance_adjustments": balance_adjustments,
+    }
+
 @api_router.put("/admin/users/{user_id}/balance")
 async def update_user_balance(user_id: str, amount: float, admin_user: User = Depends(get_admin_user)):
     """Manually adjust user balance"""
