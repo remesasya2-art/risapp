@@ -99,11 +99,6 @@ export default function RegisterScreen() {
         pathname: '/verify-email',
         params: { email: email.toLowerCase().trim() }
       });
-      await refreshUser();
-
-      showAlert('¡Registro Exitoso!', 'Tu cuenta ha sido creada. Bienvenido a RIS.', [
-        { text: 'Continuar', onPress: () => router.replace('/') }
-      ]);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo completar el registro');
     } finally {
