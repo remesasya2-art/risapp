@@ -105,6 +105,7 @@ export default function AdminPanelScreen() {
     { key: 'dashboard', icon: 'grid', label: 'Inicio' },
     { key: 'withdrawals', icon: 'arrow-up-circle', label: 'Retiros', badge: dashboard?.transactions.pending_withdrawals },
     { key: 'recharges', icon: 'arrow-down-circle', label: 'Recargas', badge: dashboard?.transactions.pending_recharges },
+    { key: 'kyc', icon: 'document-text', label: 'KYC', badge: dashboard?.users.pending_kyc },
     { key: 'support', icon: 'chatbubbles', label: 'Soporte', badge: dashboard?.support.open_chats },
     { key: 'users', icon: 'people', label: 'Usuarios' },
     ...(userRole === 'super_admin' ? [{ key: 'admins', icon: 'shield', label: 'Admins' }] : []),
