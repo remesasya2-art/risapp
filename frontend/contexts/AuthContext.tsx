@@ -53,11 +53,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkExistingSession();
   }, []);
 
-  // Register for push notifications when user logs in
+  // MODO PRUEBA: Notificaciones push desactivadas para mayor velocidad
   useEffect(() => {
-    if (user && Platform.OS !== 'web') {
-      setupPushNotifications();
-    }
+    // if (user && Platform.OS !== 'web') {
+    //   setupPushNotifications();
+    // }
   }, [user]);
 
   // MODO PRUEBA: Heartbeat reducido a cada 2 minutos
