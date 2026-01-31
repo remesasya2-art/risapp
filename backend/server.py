@@ -1157,6 +1157,7 @@ async def get_policies_status(current_user: User = Depends(get_current_user)):
 async def submit_verification(request: VerificationRequest, current_user: User = Depends(get_current_user)):
     """Submit documents for verification"""
     # Update user with verification data
+    # The selfie becomes the user's profile picture (cannot be changed later)
     await db.users.update_one(
         {"user_id": current_user.user_id},
         {"$set": {
@@ -1166,6 +1167,8 @@ async def submit_verification(request: VerificationRequest, current_user: User =
             "id_document_image": request.id_document_image,
             "cpf_image": request.cpf_image,
             "selfie_image": request.selfie_image,
+            "picture": request.selfie_image,  # Selfie becomes permanent profile picture
+            "picture_locked": True,  # Mark picture as locked/unchangeable
             "verification_status": "pending",
             "verification_submitted_at": datetime.now(timezone.utc),
             "accepted_declaration": True,
