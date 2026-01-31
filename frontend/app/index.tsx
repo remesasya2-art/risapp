@@ -32,45 +32,15 @@ export default function HomeScreen() {
   const [checkingPolicies, setCheckingPolicies] = useState(true);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+  // MODO PRUEBA: Carga rápida sin verificaciones extras
   useEffect(() => {
     if (user) {
-      checkPoliciesAndVerification();
       loadRate();
-    } else {
-      setCheckingPolicies(false);
+      // Solo cargar notificaciones después de 2 segundos para no bloquear
+      setTimeout(() => loadUnreadNotifications(), 2000);
     }
+    setCheckingPolicies(false);
   }, [user]);
-
-  const checkPoliciesAndVerification = async () => {
-    try {
-      const token = await AsyncStorage.getItem('session_token');
-      if (!token) {
-        setCheckingPolicies(false);
-        return;
-      }
-
-      const response = await axios.get(`${BACKEND_URL}/api/policies/status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.needs_acceptance) {
-        router.replace('/policies');
-        return;
-      }
-
-      checkVerificationStatus();
-    } catch (error) {
-      console.error('Error checking policies:', error);
-    } finally {
-      setCheckingPolicies(false);
-    }
-  };
-
-  const checkVerificationStatus = () => {
-    if (user && user.verification_status === 'pending') return;
-    if (user && user.verification_status === 'rejected') return;
-    if (user && !user.verification_status) return;
-  };
 
   const loadRate = async () => {
     try {
@@ -90,14 +60,14 @@ export default function HomeScreen() {
       });
       setUnreadNotifications(response.data.count);
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      // Silenciar error para no bloquear
     }
   };
 
+  // Actualizar notificaciones cada 60 segundos (antes era 30)
   useEffect(() => {
     if (user) {
-      loadUnreadNotifications();
-      const interval = setInterval(loadUnreadNotifications, 30000);
+      const interval = setInterval(loadUnreadNotifications, 60000);
       return () => clearInterval(interval);
     }
   }, [user]);
