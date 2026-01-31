@@ -1937,4 +1937,85 @@ const styles = StyleSheet.create({
   kycRejectBtnText: { fontSize: 15, fontWeight: '600', color: '#dc2626' },
   kycApproveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#059669', paddingVertical: 14, borderRadius: 12, gap: 8 },
   kycApproveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // User Detail View Styles
+  sectionSubtitle: { fontSize: 13, color: '#6b7280', marginTop: -12, marginBottom: 16 },
+  userAvatarImage: { width: 40, height: 40, borderRadius: 20 },
+  userDetailHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 12 },
+  userDetailBackBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' },
+  userDetailTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  userDetailRefresh: { padding: 8 },
+  
+  // User Profile Card
+  userProfileCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  userProfileTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  userProfileAvatarContainer: { position: 'relative' },
+  userProfileAvatar: { width: 70, height: 70, borderRadius: 35 },
+  userProfileAvatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  userProfileAvatarText: { fontSize: 28, fontWeight: '700', color: '#fff' },
+  userProfileOnline: { position: 'absolute', bottom: 2, right: 2, width: 16, height: 16, borderRadius: 8, backgroundColor: '#10b981', borderWidth: 3, borderColor: '#fff' },
+  userProfileInfo: { flex: 1, marginLeft: 16 },
+  userProfileName: { fontSize: 20, fontWeight: '700', color: '#0f172a' },
+  userProfileEmail: { fontSize: 14, color: '#64748b', marginTop: 2 },
+  userProfileBadges: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  profileBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  badgeGreen: { backgroundColor: '#ecfdf5' },
+  badgeYellow: { backgroundColor: '#fef3c7' },
+  badgeBlue: { backgroundColor: '#eff6ff' },
+  profileBadgeText: { fontSize: 11, fontWeight: '600' },
+  userProfileBalance: { backgroundColor: '#f0fdf4', borderRadius: 12, padding: 16, alignItems: 'center' },
+  userProfileBalanceLabel: { fontSize: 12, color: '#6b7280' },
+  userProfileBalanceValue: { fontSize: 32, fontWeight: '700', color: '#059669', marginTop: 4 },
+  
+  // Stats Grid
+  userStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  userStatBox: { width: (SCREEN_WIDTH - 52) / 2, borderRadius: 12, padding: 14, alignItems: 'center' },
+  userStatBoxValue: { fontSize: 24, fontWeight: '700' },
+  userStatBoxLabel: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  
+  // Detail Tabs
+  detailTabs: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, padding: 4, marginBottom: 16 },
+  detailTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 4, borderRadius: 8 },
+  detailTabActive: { backgroundColor: '#eff6ff' },
+  detailTabText: { fontSize: 11, color: '#6b7280', fontWeight: '500' },
+  detailTabTextActive: { color: '#2563eb', fontWeight: '600' },
+  
+  // Detail Section
+  detailSection: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 16 },
+  detailSectionTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 16 },
+  infoRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  infoLabel: { width: 120, fontSize: 13, color: '#64748b' },
+  infoValue: { flex: 1, fontSize: 13, color: '#0f172a', fontWeight: '500' },
+  noDataText: { fontSize: 14, color: '#9ca3af', textAlign: 'center', paddingVertical: 24 },
+  
+  // History Card
+  historyCard: { backgroundColor: '#f8fafc', borderRadius: 10, padding: 14, marginBottom: 10 },
+  historyCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  historyAmount: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  historySubtext: { fontSize: 13, color: '#059669', marginTop: 2 },
+  historyStatus: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusCompleted: { backgroundColor: '#ecfdf5' },
+  statusPending: { backgroundColor: '#fef3c7' },
+  statusRejected: { backgroundColor: '#fef2f2' },
+  historyStatusText: { fontSize: 11, fontWeight: '600', color: '#0f172a' },
+  historyDate: { fontSize: 12, color: '#64748b' },
+  historyMeta: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  beneficiaryPreview: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  beneficiaryPreviewText: { fontSize: 12, color: '#6b7280' },
+  rejectionText: { fontSize: 12, color: '#dc2626', marginTop: 4 },
+  
+  // Beneficiary Card
+  beneficiaryCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, marginBottom: 12 },
+  beneficiaryCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  beneficiaryCardInfo: { flex: 1, marginLeft: 10 },
+  beneficiaryCardName: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  beneficiaryCardBank: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  beneficiaryCardDetails: { backgroundColor: '#fff', borderRadius: 8, padding: 10, marginBottom: 8 },
+  beneficiaryDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  beneficiaryDetailText: { fontSize: 13, color: '#374151' },
+  beneficiaryCardDate: { fontSize: 11, color: '#9ca3af' },
+  
+  // KYC Document in Detail
+  kycDocTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a', marginTop: 16, marginBottom: 8 },
+  kycSelfieSmall: { width: 150, height: 150, borderRadius: 75, alignSelf: 'center', backgroundColor: '#f1f5f9' },
 });
