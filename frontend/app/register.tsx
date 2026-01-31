@@ -86,7 +86,7 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/auth/register`, {
+      await axios.post(`${BACKEND_URL}/api/auth/register`, {
         name: name.trim(),
         email: email.toLowerCase().trim(),
         password,
@@ -94,10 +94,11 @@ export default function RegisterScreen() {
         phone: phone.trim() || null
       });
 
-      // Save session token
-      await AsyncStorage.setItem('session_token', response.data.session_token);
-      
-      // Refresh user data
+      // Navigate to verify email screen
+      router.push({
+        pathname: '/verify-email',
+        params: { email: email.toLowerCase().trim() }
+      });
       await refreshUser();
 
       showAlert('¡Registro Exitoso!', 'Tu cuenta ha sido creada. Bienvenido a RIS.', [
