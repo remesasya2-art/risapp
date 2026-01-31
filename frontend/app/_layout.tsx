@@ -81,6 +81,7 @@ export default function TabLayout() {
         <Tabs.Screen name="forgot-password" options={{ href: null, headerShown: false }} />
         <Tabs.Screen name="register" options={{ href: null, headerShown: false }} />
         <Tabs.Screen name="login" options={{ href: null, headerShown: false }} />
+        <Tabs.Screen name="verify-email" options={{ href: null, headerShown: false }} />
       </Tabs>
     </AuthProvider>
   );
