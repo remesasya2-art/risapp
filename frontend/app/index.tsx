@@ -280,7 +280,11 @@ export default function HomeScreen() {
     );
   }
 
-  // Main Dashboard
+  // Main Dashboard - For verified users or users who haven't submitted KYC yet
+  const userBalance = user.balance_ris ?? 0;
+  const userName = user.name?.split(' ')[0] || 'Usuario';
+  const isVerified = user.verification_status === 'verified';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView 
@@ -292,10 +296,10 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Hola,</Text>
-            <Text style={styles.userName}>{user.name?.split(' ')[0]}</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
           <View style={styles.headerActions}>
-            {user.verification_status === 'verified' && (
+            {isVerified && (
               <View style={styles.verifiedChip}>
                 <Ionicons name="shield-checkmark" size={14} color="#059669" />
                 <Text style={styles.verifiedChipText}>Verificado</Text>
@@ -317,6 +321,23 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Verification Banner - Show if not verified */}
+        {!isVerified && user.verification_status !== 'pending' && user.verification_status !== 'rejected' && (
+          <TouchableOpacity 
+            style={styles.verificationBanner}
+            onPress={() => router.push('/verification')}
+          >
+            <View style={styles.verificationBannerIcon}>
+              <Ionicons name="shield-outline" size={24} color="#f59e0b" />
+            </View>
+            <View style={styles.verificationBannerContent}>
+              <Text style={styles.verificationBannerTitle}>Verifica tu cuenta</Text>
+              <Text style={styles.verificationBannerText}>Completa la verificación para acceder a todas las funciones</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#f59e0b" />
+          </TouchableOpacity>
+        )}
+
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
@@ -327,7 +348,7 @@ export default function HomeScreen() {
           </View>
           <Text style={styles.balanceAmount}>
             <Text style={styles.currencySymbol}>RIS </Text>
-            {user.balance_ris.toFixed(2)}
+            {userBalance.toFixed(2)}
           </Text>
           <View style={styles.balanceFooter}>
             <Ionicons name="trending-up" size={16} color="rgba(255,255,255,0.7)" />
