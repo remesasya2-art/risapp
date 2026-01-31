@@ -48,9 +48,18 @@ export default function NotificationsScreen() {
       const response = await axios.get(`${BACKEND_URL}/api/notifications`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setNotifications(response.data);
+      // Asegurar que siempre sea un array
+      const data = response.data;
+      if (Array.isArray(data)) {
+        setNotifications(data);
+      } else if (data && Array.isArray(data.notifications)) {
+        setNotifications(data.notifications);
+      } else {
+        setNotifications([]);
+      }
     } catch (error) {
       console.error('Error loading notifications:', error);
+      setNotifications([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
