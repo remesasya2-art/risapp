@@ -139,6 +139,7 @@ export default function AdminPanelScreen() {
         {activeTab === 'dashboard' && <DashboardTab data={dashboard} />}
         {activeTab === 'withdrawals' && <WithdrawalsTab />}
         {activeTab === 'recharges' && <RechargesTab />}
+        {activeTab === 'kyc' && <KYCVerificationsTab />}
         {activeTab === 'support' && <SupportTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'admins' && userRole === 'super_admin' && <AdminsTab />}
