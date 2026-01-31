@@ -717,15 +717,18 @@ function SupportTab() {
 // Users Tab
 function UsersTab() {
   const [users, setUsers] = useState<any[]>([]);
+  const [stats, setStats] = useState<{ total: number; online: number; verified: number }>({ total: 0, online: 0, verified: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     loadUsers();
+    // Auto-refresh every 30 seconds for online status
+    const interval = setInterval(loadUsers, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadUsers = async (searchTerm?: string) => {
-    setLoading(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
       const url = searchTerm 
@@ -735,6 +738,7 @@ function UsersTab() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUsers(response.data.users);
+      setStats(response.data.stats);
     } catch (error) {
       console.error('Error loading users:', error);
     } finally {
@@ -742,9 +746,41 @@ function UsersTab() {
     }
   };
 
+  const formatLastSeen = (lastSeen: string) => {
+    if (!lastSeen) return 'Nunca';
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 2) return 'Ahora';
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    if (diffMins < 1440) return `Hace ${Math.floor(diffMins / 60)} hrs`;
+    return `Hace ${Math.floor(diffMins / 1440)} días`;
+  };
+
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Usuarios</Text>
+      {/* Stats Cards */}
+      <View style={styles.userStatsRow}>
+        <View style={[styles.userStatCard, { backgroundColor: '#eff6ff' }]}>
+          <Ionicons name="people" size={20} color="#2563eb" />
+          <Text style={[styles.userStatValue, { color: '#2563eb' }]}>{stats.total}</Text>
+          <Text style={styles.userStatLabel}>Total</Text>
+        </View>
+        <View style={[styles.userStatCard, { backgroundColor: '#ecfdf5' }]}>
+          <View style={styles.onlineDotLarge} />
+          <Text style={[styles.userStatValue, { color: '#059669' }]}>{stats.online}</Text>
+          <Text style={styles.userStatLabel}>En línea</Text>
+        </View>
+        <View style={[styles.userStatCard, { backgroundColor: '#fef3c7' }]}>
+          <Ionicons name="shield-checkmark" size={20} color="#d97706" />
+          <Text style={[styles.userStatValue, { color: '#d97706' }]}>{stats.verified}</Text>
+          <Text style={styles.userStatLabel}>Verificados</Text>
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>Lista de Usuarios</Text>
       
       <View style={styles.searchBox}>
         <Ionicons name="search" size={20} color="#9ca3af" />
@@ -765,22 +801,65 @@ function UsersTab() {
 
       {loading ? (
         <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 20 }} />
+      ) : users.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="people-outline" size={48} color="#9ca3af" />
+          <Text style={styles.emptyStateText}>No hay usuarios registrados</Text>
+        </View>
       ) : (
         users.map((u) => (
           <View key={u.user_id} style={styles.userCard}>
             <View style={styles.userCardHeader}>
-              <View style={styles.userAvatar}>
-                <Text style={styles.userAvatarText}>{u.name?.charAt(0)?.toUpperCase()}</Text>
+              <View style={styles.userAvatarContainer}>
+                <View style={styles.userAvatar}>
+                  <Text style={styles.userAvatarText}>{u.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                </View>
+                {u.is_online && <View style={styles.onlineIndicator} />}
               </View>
               <View style={styles.userCardInfo}>
-                <Text style={styles.userCardName}>{u.name}</Text>
+                <View style={styles.userNameRow}>
+                  <Text style={styles.userCardName}>{u.name || 'Sin nombre'}</Text>
+                  {u.role === 'super_admin' && (
+                    <View style={styles.adminBadge}>
+                      <Text style={styles.adminBadgeText}>Super</Text>
+                    </View>
+                  )}
+                  {u.role === 'admin' && (
+                    <View style={[styles.adminBadge, { backgroundColor: '#dbeafe' }]}>
+                      <Text style={[styles.adminBadgeText, { color: '#2563eb' }]}>Admin</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.userCardEmail}>{u.email}</Text>
+                <Text style={styles.userLastSeen}>
+                  {u.is_online ? '🟢 En línea' : `⚫ ${formatLastSeen(u.last_seen)}`}
+                </Text>
               </View>
-              <View style={[styles.statusDot, u.verification_status === 'verified' ? styles.dotVerified : styles.dotPending]} />
             </View>
             <View style={styles.userCardFooter}>
-              <Text style={styles.userBalance}>{u.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
-              <Text style={styles.userStatus}>{u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}</Text>
+              <View style={styles.userFooterLeft}>
+                <Text style={styles.userBalance}>{u.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
+                {u.email_verified && (
+                  <View style={styles.emailVerifiedBadge}>
+                    <Ionicons name="mail" size={10} color="#059669" />
+                    <Text style={styles.emailVerifiedText}>Email</Text>
+                  </View>
+                )}
+              </View>
+              <View style={[
+                styles.verificationBadge, 
+                u.verification_status === 'verified' ? styles.badgeVerified : 
+                u.verification_status === 'pending' ? styles.badgePending : styles.badgeNone
+              ]}>
+                <Text style={[
+                  styles.verificationBadgeText,
+                  u.verification_status === 'verified' ? styles.textVerified : 
+                  u.verification_status === 'pending' ? styles.textPending : styles.textNone
+                ]}>
+                  {u.verification_status === 'verified' ? '✓ KYC Verificado' : 
+                   u.verification_status === 'pending' ? '⏳ KYC Pendiente' : '○ Sin KYC'}
+                </Text>
+              </View>
             </View>
           </View>
         ))
