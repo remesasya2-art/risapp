@@ -114,18 +114,31 @@ export default function ProfileScreen() {
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
-            {user.picture ? (
-              <Image source={{ uri: user.picture }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>
-                  {user.name?.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </View>
-            )}
+            <View style={styles.avatarWrapper}>
+              {user.picture ? (
+                <Image source={{ uri: user.picture }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarText}>
+                    {user.name?.charAt(0).toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
+              {user.verification_status === 'verified' && (
+                <View style={styles.verifiedBadgeAvatar}>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                </View>
+              )}
+            </View>
             <View style={styles.profileInfo}>
               <Text style={styles.userName}>{user.name}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
+              {user.picture && (
+                <View style={styles.photoLockedBadge}>
+                  <Ionicons name="lock-closed" size={10} color="#64748b" />
+                  <Text style={styles.photoLockedText}>Foto verificada</Text>
+                </View>
+              )}
             </View>
           </View>
           
