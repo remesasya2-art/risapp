@@ -527,6 +527,77 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
         logger.error(f"Error registering FCM token: {e}")
         raise HTTPException(status_code=500, detail="Error registering FCM token")
 
+@api_router.post("/auth/heartbeat")
+async def user_heartbeat(current_user: User = Depends(get_current_user)):
+    """Update user's last seen timestamp (call every 30 seconds to show online status)"""
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"last_seen": datetime.now(timezone.utc), "is_online": True}}
+    )
+    return {"status": "ok"}
+
+@api_router.post("/auth/offline")
+async def user_offline(current_user: User = Depends(get_current_user)):
+    """Mark user as offline"""
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"is_online": False, "last_seen": datetime.now(timezone.utc)}}
+    )
+    return {"status": "ok"}
+
+@api_router.get("/admin/users")
+async def get_all_users(admin_user: User = Depends(get_admin_user)):
+    """Admin: Get all registered users with online status"""
+    # Consider users online if last_seen within 2 minutes
+    online_threshold = datetime.now(timezone.utc) - timedelta(minutes=2)
+    
+    users = await db.users.find(
+        {},
+        {
+            "_id": 0,
+            "user_id": 1,
+            "email": 1,
+            "name": 1,
+            "phone": 1,
+            "picture": 1,
+            "balance_ris": 1,
+            "role": 1,
+            "verification_status": 1,
+            "email_verified": 1,
+            "is_online": 1,
+            "last_seen": 1,
+            "created_at": 1,
+            "registration_method": 1
+        }
+    ).sort("created_at", -1).to_list(1000)
+    
+    # Update online status based on last_seen
+    for user in users:
+        last_seen = user.get("last_seen")
+        if last_seen:
+            if isinstance(last_seen, datetime):
+                if last_seen.tzinfo is None:
+                    last_seen = last_seen.replace(tzinfo=timezone.utc)
+                user["is_online"] = last_seen > online_threshold
+            else:
+                user["is_online"] = False
+        else:
+            user["is_online"] = False
+    
+    # Count stats
+    total_users = len(users)
+    online_users = sum(1 for u in users if u.get("is_online"))
+    verified_users = sum(1 for u in users if u.get("verification_status") == "verified")
+    
+    return {
+        "users": users,
+        "stats": {
+            "total": total_users,
+            "online": online_users,
+            "verified": verified_users
+        }
+    }
+
 # =======================
 # PASSWORD/SECURITY ROUTES
 # =======================
