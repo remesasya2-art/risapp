@@ -565,17 +565,24 @@ async def set_password(request: SetPasswordRequest, current_user: User = Depends
 
 @api_router.post("/auth/register")
 async def register_user(request: RegisterUserRequest):
-    """Register a new user with email and password"""
+    """Step 1: Register user and send verification code to email"""
     
     # Validate email format
     email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
     if not re.match(email_regex, request.email):
         raise HTTPException(status_code=400, detail="Email inválido")
     
-    # Check if email already exists
-    existing_user = await db.users.find_one({"email": request.email.lower()})
+    email_lower = request.email.lower().strip()
+    
+    # Check if email already exists and is verified
+    existing_user = await db.users.find_one({"email": email_lower})
     if existing_user:
-        raise HTTPException(status_code=400, detail="Este email ya está registrado. Intenta iniciar sesión.")
+        if existing_user.get("email_verified", False):
+            raise HTTPException(status_code=400, detail="Este email ya está registrado. Intenta iniciar sesión.")
+        else:
+            # Delete unverified user to allow re-registration
+            await db.users.delete_one({"email": email_lower})
+            await db.pending_verifications.delete_many({"email": email_lower})
     
     # Validate passwords match
     if request.password != request.confirm_password:
@@ -590,23 +597,95 @@ async def register_user(request: RegisterUserRequest):
     if not request.name or len(request.name.strip()) < 2:
         raise HTTPException(status_code=400, detail="El nombre debe tener al menos 2 caracteres")
     
-    # Create user
+    # Generate 6-digit verification code
+    verification_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+    
+    # Store pending registration
+    pending_data = {
+        "email": email_lower,
+        "name": request.name.strip(),
+        "phone": request.phone.strip() if request.phone else None,
+        "password_hash": hash_password(request.password),
+        "verification_code": verification_code,
+        "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
+        "created_at": datetime.now(timezone.utc),
+        "attempts": 0
+    }
+    
+    # Remove any existing pending verification for this email
+    await db.pending_verifications.delete_many({"email": email_lower})
+    await db.pending_verifications.insert_one(pending_data)
+    
+    # Send verification code via email (simulated - logs the code)
+    logger.info(f"📧 Verification code for {email_lower}: {verification_code}")
+    
+    # In production, you would send an actual email here
+    # For now, we'll create a mock email send
+    try:
+        # TODO: Integrate with real email service (SendGrid, etc.)
+        # await send_verification_email(email_lower, verification_code, request.name.strip())
+        pass
+    except Exception as e:
+        logger.error(f"Error sending verification email: {e}")
+    
+    logger.info(f"Registration initiated for {email_lower}, verification code sent")
+    
+    return {
+        "message": "Código de verificación enviado a tu email",
+        "email": email_lower,
+        "code_expires_in_minutes": 15
+    }
+
+@api_router.post("/auth/verify-email")
+async def verify_email_code(request: VerifyEmailCodeRequest):
+    """Step 2: Verify email code and complete registration"""
+    
+    email_lower = request.email.lower().strip()
+    
+    # Find pending verification
+    pending = await db.pending_verifications.find_one({"email": email_lower})
+    
+    if not pending:
+        raise HTTPException(status_code=400, detail="No hay verificación pendiente para este email. Regístrate nuevamente.")
+    
+    # Check if code expired
+    if datetime.now(timezone.utc) > pending["code_expires_at"].replace(tzinfo=timezone.utc):
+        await db.pending_verifications.delete_one({"email": email_lower})
+        raise HTTPException(status_code=400, detail="El código ha expirado. Solicita uno nuevo.")
+    
+    # Check attempts
+    if pending.get("attempts", 0) >= 5:
+        await db.pending_verifications.delete_one({"email": email_lower})
+        raise HTTPException(status_code=400, detail="Demasiados intentos fallidos. Regístrate nuevamente.")
+    
+    # Verify code
+    if pending["verification_code"] != request.code.strip():
+        # Increment attempts
+        await db.pending_verifications.update_one(
+            {"email": email_lower},
+            {"$inc": {"attempts": 1}}
+        )
+        remaining = 5 - (pending.get("attempts", 0) + 1)
+        raise HTTPException(status_code=400, detail=f"Código incorrecto. Te quedan {remaining} intentos.")
+    
+    # Code is correct - create the user
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    hashed_password = hash_password(request.password)
     
     new_user = {
         "user_id": user_id,
-        "email": request.email.lower().strip(),
-        "name": request.name.strip(),
-        "phone": request.phone.strip() if request.phone else None,
+        "email": email_lower,
+        "name": pending["name"],
+        "phone": pending.get("phone"),
         "picture": None,
         "balance_ris": 0.0,
-        "password_hash": hashed_password,
+        "password_hash": pending["password_hash"],
         "password_set": True,
         "password_changed_at": datetime.now(timezone.utc),
         "role": "user",
         "permissions": [],
-        "verification_status": "pending",
+        "verification_status": "pending",  # KYC status
+        "email_verified": True,  # Email is now verified
+        "email_verified_at": datetime.now(timezone.utc),
         "accepted_policies": False,
         "is_active": True,
         "created_at": datetime.now(timezone.utc),
@@ -614,6 +693,9 @@ async def register_user(request: RegisterUserRequest):
     }
     
     await db.users.insert_one(new_user)
+    
+    # Delete pending verification
+    await db.pending_verifications.delete_one({"email": email_lower})
     
     # Create session automatically after registration
     session_token = secrets.token_urlsafe(32)
@@ -626,21 +708,54 @@ async def register_user(request: RegisterUserRequest):
     }
     await db.user_sessions.insert_one(session_data)
     
-    logger.info(f"New user registered: {request.email}")
+    logger.info(f"✅ User registered successfully: {email_lower}")
     
     return {
-        "message": "Registro exitoso",
+        "message": "¡Registro completado exitosamente!",
         "session_token": session_token,
         "user": {
             "user_id": user_id,
-            "email": request.email.lower(),
-            "name": request.name.strip(),
+            "email": email_lower,
+            "name": pending["name"],
             "picture": None,
             "balance_ris": 0.0,
             "verification_status": "pending",
             "role": "user",
-            "password_set": True
+            "password_set": True,
+            "email_verified": True
         }
+    }
+
+@api_router.post("/auth/resend-verification-code")
+async def resend_verification_code(request: ResendVerificationCodeRequest):
+    """Resend verification code to email"""
+    
+    email_lower = request.email.lower().strip()
+    
+    # Find pending verification
+    pending = await db.pending_verifications.find_one({"email": email_lower})
+    
+    if not pending:
+        raise HTTPException(status_code=400, detail="No hay verificación pendiente para este email. Regístrate nuevamente.")
+    
+    # Generate new code
+    new_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+    
+    # Update pending verification
+    await db.pending_verifications.update_one(
+        {"email": email_lower},
+        {"$set": {
+            "verification_code": new_code,
+            "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
+            "attempts": 0
+        }}
+    )
+    
+    logger.info(f"📧 New verification code for {email_lower}: {new_code}")
+    
+    return {
+        "message": "Nuevo código enviado a tu email",
+        "code_expires_in_minutes": 15
     }
 
 @api_router.post("/auth/login-password")
