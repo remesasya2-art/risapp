@@ -60,6 +60,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
+  // Heartbeat to track online status
+  useEffect(() => {
+    if (!user) return;
+    
+    const sendHeartbeat = async () => {
+      try {
+        const token = await AsyncStorage.getItem('session_token');
+        if (token) {
+          await axios.post(`${BACKEND_URL}/api/auth/heartbeat`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+      } catch (error) {
+        // Silently fail heartbeat
+      }
+    };
+    
+    // Send initial heartbeat
+    sendHeartbeat();
+    
+    // Send heartbeat every 30 seconds
+    const interval = setInterval(sendHeartbeat, 30000);
+    
+    return () => clearInterval(interval);
+  }, [user]);
+
   const setupPushNotifications = async () => {
     try {
       const token = await registerForPushNotificationsAsync();
