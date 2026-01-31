@@ -27,7 +27,7 @@ import * as ImagePicker from 'expo-image-picker';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type TabType = 'dashboard' | 'withdrawals' | 'recharges' | 'support' | 'users' | 'admins' | 'settings';
+type TabType = 'dashboard' | 'withdrawals' | 'recharges' | 'kyc' | 'support' | 'users' | 'admins' | 'settings';
 
 interface DashboardData {
   users: { total: number; verified: number; pending_kyc: number };
