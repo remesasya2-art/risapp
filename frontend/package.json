@@ -22,7 +22,7 @@
     "@stripe/stripe-react-native": "^0.57.2",
     "axios": "^1.13.2",
     "date-fns": "^4.1.0",
-    "expo": "^54.0.32",
+    "expo": "^54.0.33",
     "expo-blur": "~14.1.5",
     "expo-camera": "^17.0.10",
     "expo-clipboard": "^8.0.8",
