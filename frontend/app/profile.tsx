@@ -613,4 +613,69 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 24,
   },
+
+  // ========== ESTILOS PARA INFORMACIÓN BLOQUEADA ==========
+  lockedSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  lockedBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  lockedInfoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  lockedInfoNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  lockedInfoNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#64748b',
+    lineHeight: 18,
+  },
+  lockedInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 14,
+  },
+  lockedInfoContent: {
+    flex: 1,
+  },
+  lockedInfoLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 2,
+  },
+  lockedInfoValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
 });
