@@ -234,6 +234,51 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Personal Info Section - LOCKED if verified */}
+        {user.verification_status === 'verified' && (
+          <View style={styles.menuSection}>
+            <View style={styles.lockedSectionHeader}>
+              <Text style={styles.sectionTitle}>Información Personal</Text>
+              <View style={styles.lockedBadge}>
+                <Ionicons name="lock-closed" size={12} color="#059669" />
+                <Text style={styles.lockedBadgeText}>Bloqueado</Text>
+              </View>
+            </View>
+            <View style={styles.lockedInfoCard}>
+              <View style={styles.lockedInfoNote}>
+                <Ionicons name="information-circle" size={18} color="#64748b" />
+                <Text style={styles.lockedInfoNoteText}>
+                  Tu información personal está verificada y no puede ser modificada.
+                </Text>
+              </View>
+              
+              <View style={styles.lockedInfoRow}>
+                <Ionicons name="person" size={18} color="#F5A623" />
+                <View style={styles.lockedInfoContent}>
+                  <Text style={styles.lockedInfoLabel}>Nombre</Text>
+                  <Text style={styles.lockedInfoValue}>{user.name}</Text>
+                </View>
+              </View>
+              
+              <View style={styles.lockedInfoRow}>
+                <Ionicons name="mail" size={18} color="#F5A623" />
+                <View style={styles.lockedInfoContent}>
+                  <Text style={styles.lockedInfoLabel}>Email</Text>
+                  <Text style={styles.lockedInfoValue}>{user.email}</Text>
+                </View>
+              </View>
+              
+              <View style={[styles.lockedInfoRow, { borderBottomWidth: 0 }]}>
+                <Ionicons name="shield-checkmark" size={18} color="#059669" />
+                <View style={styles.lockedInfoContent}>
+                  <Text style={styles.lockedInfoLabel}>Estado</Text>
+                  <Text style={[styles.lockedInfoValue, { color: '#059669' }]}>Cuenta Verificada</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Account Section */}
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Cuenta</Text>
