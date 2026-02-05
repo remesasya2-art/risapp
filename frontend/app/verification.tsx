@@ -45,6 +45,7 @@ export default function VerificationScreen() {
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [acceptedDeclaration, setAcceptedDeclaration] = useState(false);
   const [hasSubmittedDocs, setHasSubmittedDocs] = useState(false);
+  const [verifiedUserData, setVerifiedUserData] = useState<any>(null);
 
   useEffect(() => {
     checkVerificationStatus();
@@ -53,32 +54,180 @@ export default function VerificationScreen() {
   const checkVerificationStatus = async () => {
     if (!user) return;
     
+    // Si ya está verificado, cargar sus datos para mostrar
     if (user.verification_status === 'verified') {
-      showAlert('✅ Verificado', 'Tu cuenta ya está verificada.', [
-        { text: 'OK', onPress: () => router.replace('/') }
-      ]);
+      try {
+        const token = await AsyncStorage.getItem('session_token');
+        const response = await axios.get(`${BACKEND_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setVerifiedUserData(response.data);
+      } catch (error) {
+        console.log('Error loading user data');
+      }
       return;
     }
     
-    // Check if user has already submitted documents
+    // Check if user has already submitted documents (pending review)
     try {
       const token = await AsyncStorage.getItem('session_token');
       const response = await axios.get(`${BACKEND_URL}/api/verification/status`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // If documents were submitted (verification_submitted_at exists), show pending message
       if (response.data.documents_submitted) {
         setHasSubmittedDocs(true);
-        showAlert('⏳ En Revisión', 'Tu documentación está siendo revisada. Recibirás una notificación en minutos.', [
-          { text: 'OK', onPress: () => router.replace('/') }
-        ]);
       }
     } catch (error) {
-      // If error, just let user submit documents
       console.log('Error checking verification status');
     }
   };
+
+  // ========== PANTALLA PARA USUARIO YA VERIFICADO ==========
+  if (user?.verification_status === 'verified') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Mi Verificación</Text>
+            <View style={{ width: 44 }} />
+          </View>
+
+          {/* Verified Status Card */}
+          <View style={styles.verifiedCard}>
+            <View style={styles.verifiedIconContainer}>
+              <Ionicons name="shield-checkmark" size={48} color="#059669" />
+            </View>
+            <Text style={styles.verifiedTitle}>Cuenta Verificada</Text>
+            <Text style={styles.verifiedSubtitle}>
+              Tu identidad ha sido verificada exitosamente. Esta información no puede ser modificada.
+            </Text>
+          </View>
+
+          {/* Verified User Data - Read Only */}
+          <View style={styles.verifiedDataContainer}>
+            <View style={styles.verifiedDataHeader}>
+              <Ionicons name="lock-closed" size={18} color="#64748b" />
+              <Text style={styles.verifiedDataTitle}>Información Verificada</Text>
+            </View>
+
+            <View style={styles.verifiedDataRow}>
+              <View style={styles.verifiedDataIcon}>
+                <Ionicons name="person" size={18} color="#F5A623" />
+              </View>
+              <View style={styles.verifiedDataContent}>
+                <Text style={styles.verifiedDataLabel}>Nombre Completo</Text>
+                <Text style={styles.verifiedDataValue}>{verifiedUserData?.full_name || user?.name || 'N/A'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.verifiedDataRow}>
+              <View style={styles.verifiedDataIcon}>
+                <Ionicons name="mail" size={18} color="#F5A623" />
+              </View>
+              <View style={styles.verifiedDataContent}>
+                <Text style={styles.verifiedDataLabel}>Correo Electrónico</Text>
+                <Text style={styles.verifiedDataValue}>{user?.email || 'N/A'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.verifiedDataRow}>
+              <View style={styles.verifiedDataIcon}>
+                <Ionicons name="card" size={18} color="#F5A623" />
+              </View>
+              <View style={styles.verifiedDataContent}>
+                <Text style={styles.verifiedDataLabel}>Documento</Text>
+                <Text style={styles.verifiedDataValue}>{verifiedUserData?.document_number || '••••••••'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.verifiedDataRow}>
+              <View style={styles.verifiedDataIcon}>
+                <Ionicons name="document-text" size={18} color="#F5A623" />
+              </View>
+              <View style={styles.verifiedDataContent}>
+                <Text style={styles.verifiedDataLabel}>CPF</Text>
+                <Text style={styles.verifiedDataValue}>{verifiedUserData?.cpf_number || '•••.•••.•••-••'}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.verifiedDataRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.verifiedDataIcon}>
+                <Ionicons name="calendar" size={18} color="#F5A623" />
+              </View>
+              <View style={styles.verifiedDataContent}>
+                <Text style={styles.verifiedDataLabel}>Fecha de Verificación</Text>
+                <Text style={styles.verifiedDataValue}>
+                  {verifiedUserData?.verified_at 
+                    ? new Date(verifiedUserData.verified_at).toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })
+                    : 'Verificado'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Info Note */}
+          <View style={styles.infoNote}>
+            <Ionicons name="information-circle" size={20} color="#64748b" />
+            <Text style={styles.infoNoteText}>
+              Si necesitas actualizar tu información, contacta a soporte.
+            </Text>
+          </View>
+
+          {/* Back to Home Button */}
+          <TouchableOpacity style={styles.homeButton} onPress={() => router.replace('/')}>
+            <Ionicons name="home" size={20} color="#fff" />
+            <Text style={styles.homeButtonText}>Volver al Inicio</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ========== PANTALLA PARA USUARIO CON DOCUMENTOS PENDIENTES ==========
+  if (hasSubmittedDocs || user?.verification_status === 'pending') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.pendingContainer}>
+          <View style={styles.pendingIconContainer}>
+            <Ionicons name="hourglass" size={64} color="#f59e0b" />
+          </View>
+          <Text style={styles.pendingTitle}>En Revisión</Text>
+          <Text style={styles.pendingSubtitle}>
+            Tu documentación está siendo verificada por nuestro equipo de seguridad.
+          </Text>
+          
+          <View style={styles.pendingSteps}>
+            <View style={styles.pendingStep}>
+              <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+              <Text style={styles.pendingStepText}>Documentos recibidos</Text>
+            </View>
+            <View style={styles.pendingStep}>
+              <ActivityIndicator size="small" color="#f59e0b" />
+              <Text style={styles.pendingStepText}>Verificación en proceso</Text>
+            </View>
+            <View style={styles.pendingStep}>
+              <Ionicons name="ellipse-outline" size={24} color="#d1d5db" />
+              <Text style={[styles.pendingStepText, { color: '#9ca3af' }]}>Aprobación</Text>
+            </View>
+          </View>
+
+          <Text style={styles.pendingNote}>
+            Te notificaremos en cuanto tu cuenta esté verificada
+          </Text>
+
+          <TouchableOpacity style={styles.homeButton} onPress={() => router.replace('/')}>
+            <Ionicons name="home" size={20} color="#fff" />
+            <Text style={styles.homeButtonText}>Volver al Inicio</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const takePhoto = async (type: 'id' | 'cpf' | 'selfie') => {
     try {
