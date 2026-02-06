@@ -100,10 +100,13 @@ export default function RegisterScreen() {
         phone: phone.trim() || null
       });
 
-      // Navigate to verify email screen
+      // Navigate to verify email screen with phone number
       router.push({
         pathname: '/verify-email',
-        params: { email: email.toLowerCase().trim() }
+        params: { 
+          email: email.toLowerCase().trim(),
+          phone: phone.trim()
+        }
       });
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo completar el registro');
