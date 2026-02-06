@@ -114,10 +114,14 @@ export default function ProfileScreen() {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F5A623']} />
+        }
       >
-        {/* Header */}
+        {/* Header with notification bell */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Perfil</Text>
+          <GlobalHeader showBack={false} showNotifications={true} />
         </View>
 
         {/* Profile Card */}
