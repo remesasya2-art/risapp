@@ -844,6 +844,44 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         }
     }
 
+class UpdatePhoneRequest(BaseModel):
+    email: str
+    phone: str
+
+@api_router.post("/auth/update-phone")
+async def update_phone_number(request: UpdatePhoneRequest):
+    """Update phone number for pending verification"""
+    
+    email_lower = request.email.lower().strip()
+    new_phone = request.phone.strip()
+    
+    # Validate phone
+    if not new_phone or len(new_phone) < 10:
+        raise HTTPException(status_code=400, detail="Número de teléfono inválido")
+    
+    # Ensure phone has country code
+    if not new_phone.startswith('+'):
+        new_phone = '+55' + new_phone.lstrip('0')
+    
+    # Find pending verification
+    pending = await db.pending_verifications.find_one({"email": email_lower})
+    
+    if not pending:
+        raise HTTPException(status_code=400, detail="No hay verificación pendiente para este email")
+    
+    # Update phone in pending verification
+    await db.pending_verifications.update_one(
+        {"email": email_lower},
+        {"$set": {"phone": new_phone}}
+    )
+    
+    logger.info(f"📱 Phone updated for {email_lower}: {new_phone}")
+    
+    return {
+        "message": "Número actualizado",
+        "phone": new_phone
+    }
+
 @api_router.post("/auth/resend-verification-code")
 async def resend_verification_code(request: ResendVerificationCodeRequest):
     """Resend verification code via SMS"""
