@@ -846,7 +846,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
 
 @api_router.post("/auth/resend-verification-code")
 async def resend_verification_code(request: ResendVerificationCodeRequest):
-    """Resend verification code to email"""
+    """Resend verification code via SMS"""
     
     email_lower = request.email.lower().strip()
     
@@ -871,8 +871,14 @@ async def resend_verification_code(request: ResendVerificationCodeRequest):
     
     logger.info(f"📧 New verification code for {email_lower}: {new_code}")
     
+    # Send SMS if phone is available
+    sms_sent = False
+    if pending.get("phone"):
+        sms_sent = await send_verification_sms(pending["phone"], new_code, pending.get("name", "Usuario"))
+    
     return {
-        "message": "Nuevo código enviado a tu email",
+        "message": "Nuevo código enviado" + (" por SMS" if sms_sent else ""),
+        "sms_sent": sms_sent,
         "code_expires_in_minutes": 15
     }
 
