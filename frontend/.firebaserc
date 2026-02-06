@@ -1,1 +1,5 @@
-remesas-ya-d2940
+{
+  "projects": {
+    "default": "remesas-ya-d2940"
+  }
+}
