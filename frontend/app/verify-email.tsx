@@ -206,10 +206,67 @@ export default function VerifyEmailScreen() {
             </View>
             <Text style={styles.title}>Verificar Teléfono</Text>
             <Text style={styles.subtitle}>
-              Enviamos un código de 6 dígitos por SMS a tu teléfono
+              Enviamos un código de 6 dígitos por SMS a
             </Text>
-            <Text style={styles.emailText}>{email}</Text>
+            <View style={styles.phoneContainer}>
+              <Text style={styles.phoneText}>{formatPhoneDisplay(phone)}</Text>
+              <TouchableOpacity 
+                style={styles.editPhoneBtn}
+                onPress={() => {
+                  setNewPhone(phone);
+                  setShowEditPhone(true);
+                }}
+              >
+                <Ionicons name="pencil" size={16} color="#F5A623" />
+                <Text style={styles.editPhoneBtnText}>Cambiar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* Edit Phone Modal */}
+          <Modal
+            visible={showEditPhone}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowEditPhone(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Cambiar Número</Text>
+                  <TouchableOpacity onPress={() => setShowEditPhone(false)}>
+                    <Ionicons name="close" size={24} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalSubtitle}>
+                  Ingresa tu número con código de país (ej: +5511999999999)
+                </Text>
+                <TextInput
+                  style={styles.phoneInput}
+                  value={newPhone}
+                  onChangeText={setNewPhone}
+                  placeholder="+5511999999999"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="phone-pad"
+                  autoFocus
+                />
+                <TouchableOpacity 
+                  style={[styles.updatePhoneBtn, updatingPhone && styles.btnDisabled]}
+                  onPress={handleUpdatePhone}
+                  disabled={updatingPhone}
+                >
+                  {updatingPhone ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                      <Text style={styles.updatePhoneBtnText}>Actualizar y Reenviar Código</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
           {/* Code Input */}
           <View style={styles.codeContainer}>
