@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { Platform, View, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import WebWrapper from '../components/WebWrapper';
 
 // Pantallas de autenticación donde NO se muestra la barra de tabs
 const AUTH_SCREENS = ['login', 'register', 'verify-email', 'forgot-password', 'set-password', 'change-password', 'policies'];
@@ -25,32 +26,33 @@ function TabsLayout() {
   const hideTabBar = !user;
   
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: '#F5A623',
-        tabBarInactiveTintColor: '#9ca3af',
-        tabBarStyle: hideTabBar ? { display: 'none' } : {
-          backgroundColor: '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          paddingBottom: Platform.OS === 'ios' ? insets.bottom + 10 : 25,
-          paddingTop: 10,
-          height: Platform.OS === 'ios' ? 100 + insets.bottom : 90,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-          marginBottom: Platform.OS === 'android' ? 15 : 5,
-        },
-        headerStyle: {
-          backgroundColor: '#2563eb',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-      }}
-    >
+    <WebWrapper showBranding={!user}>
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: '#F5A623',
+          tabBarInactiveTintColor: '#9ca3af',
+          tabBarStyle: hideTabBar ? { display: 'none' } : {
+            backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom + 10 : 25,
+            paddingTop: 10,
+            height: Platform.OS === 'ios' ? 100 + insets.bottom : 90,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '500',
+            marginBottom: Platform.OS === 'android' ? 15 : 5,
+          },
+          headerStyle: {
+            backgroundColor: '#2563eb',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      >
       <Tabs.Screen
         name="index"
         options={{
