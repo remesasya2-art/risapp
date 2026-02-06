@@ -274,6 +274,14 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            colors={['#F5A623']}
+            tintColor="#F5A623"
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
