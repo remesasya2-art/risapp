@@ -801,7 +801,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         "password_changed_at": datetime.now(timezone.utc),
         "role": "user",
         "permissions": [],
-        "verification_status": "pending",  # KYC status
+        "verification_status": "unverified",  # KYC status - starts as unverified until docs submitted
         "email_verified": True,  # Email is now verified
         "email_verified_at": datetime.now(timezone.utc),
         "accepted_policies": False,
