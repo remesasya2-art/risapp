@@ -188,8 +188,9 @@ export default function VerificationScreen() {
     );
   }
 
-  // ========== PANTALLA PARA USUARIO CON DOCUMENTOS PENDIENTES ==========
-  if (hasSubmittedDocs || user?.verification_status === 'pending') {
+  // ========== PANTALLA PARA USUARIO CON DOCUMENTOS PENDIENTES DE REVISIÓN ==========
+  // Solo mostrar "En Revisión" si el usuario tiene verification_status === 'pending' Y ya envió documentos
+  if (user?.verification_status === 'pending' && (hasSubmittedDocs || user?.id_document_image)) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.pendingContainer}>
