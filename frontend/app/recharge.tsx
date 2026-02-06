@@ -112,7 +112,20 @@ export default function RechargeScreen() {
       
       setPixData(response.data);
     } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'Error al generar PIX');
+      // Handle different error formats
+      let errorMessage = 'Error al generar PIX';
+      if (error.response?.data) {
+        const data = error.response.data;
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          // Pydantic validation errors
+          errorMessage = data.detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join('\n');
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+      }
+      showAlert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
