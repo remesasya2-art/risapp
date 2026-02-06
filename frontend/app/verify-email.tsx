@@ -55,6 +55,44 @@ export default function VerifyEmailScreen() {
     }
   }, [countdown]);
 
+  // Format phone for display (mask middle digits)
+  const formatPhoneDisplay = (phoneNum: string) => {
+    if (!phoneNum) return '';
+    const cleaned = phoneNum.replace(/\D/g, '');
+    if (cleaned.length < 8) return phoneNum;
+    const start = cleaned.slice(0, 4);
+    const end = cleaned.slice(-2);
+    return `+${start}****${end}`;
+  };
+
+  // Update phone number
+  const handleUpdatePhone = async () => {
+    if (!newPhone.trim() || newPhone.trim().length < 10) {
+      showAlert('Error', 'Ingresa un número de teléfono válido con código de país');
+      return;
+    }
+    
+    setUpdatingPhone(true);
+    try {
+      await axios.post(`${BACKEND_URL}/api/auth/update-phone`, {
+        email,
+        phone: newPhone.trim()
+      });
+      
+      setPhone(newPhone.trim());
+      setShowEditPhone(false);
+      
+      // Resend code to new number
+      await axios.post(`${BACKEND_URL}/api/auth/resend-verification-code`, { email });
+      showAlert('✅ Actualizado', 'Se envió un nuevo código al número actualizado');
+      setCountdown(60);
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'No se pudo actualizar el número');
+    } finally {
+      setUpdatingPhone(false);
+    }
+  };
+
   const handleCodeChange = (text: string, index: number) => {
     const newCode = [...code];
     
