@@ -158,11 +158,11 @@ export default function VerifyEmailScreen() {
           {/* Icon and Title */}
           <View style={styles.titleSection}>
             <View style={styles.iconContainer}>
-              <Ionicons name="mail-open" size={48} color="#F5A623" />
+              <Ionicons name="chatbubble-ellipses" size={48} color="#F5A623" />
             </View>
-            <Text style={styles.title}>Verifica tu Email</Text>
+            <Text style={styles.title}>Verificar Teléfono</Text>
             <Text style={styles.subtitle}>
-              Enviamos un código de 6 dígitos a
+              Enviamos un código de 6 dígitos por SMS a tu teléfono
             </Text>
             <Text style={styles.emailText}>{email}</Text>
           </View>
