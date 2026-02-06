@@ -73,6 +73,12 @@ export default function RegisterScreen() {
       return;
     }
 
+    // Phone is required for SMS verification
+    if (!phone.trim() || phone.trim().length < 8) {
+      showAlert('Error', 'Ingresa tu número de teléfono para recibir el código de verificación por SMS');
+      return;
+    }
+
     if (password !== confirmPassword) {
       showAlert('Error', 'Las contraseñas no coinciden');
       return;
