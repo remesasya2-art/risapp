@@ -8,15 +8,24 @@ import {
   Alert,
   Image,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import GlobalHeader from '../components/GlobalHeader';
 
 export default function ProfileScreen() {
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, refreshUser } = useAuth();
   const router = useRouter();
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshUser();
+    setRefreshing(false);
+  };
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
