@@ -114,6 +114,7 @@ export default function RegisterScreen() {
 
   const isValid = name.trim().length >= 2 && 
                   validateEmail(email) &&
+                  phone.trim().length >= 8 &&
                   password.length >= 7 && 
                   password === confirmPassword && 
                   errors.length === 0;
