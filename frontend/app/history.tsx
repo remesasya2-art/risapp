@@ -284,6 +284,7 @@ export default function HistoryScreen() {
           <Text style={styles.headerSubtitle}>Tus movimientos recientes</Text>
         </View>
         <GlobalHeader showBack={false} showNotifications={true} />
+      </View>
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
