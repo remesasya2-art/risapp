@@ -277,11 +277,13 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* Header with notification bell */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Historial</Text>
-        <Text style={styles.headerSubtitle}>Tus movimientos recientes</Text>
-      </View>
+        <View>
+          <Text style={styles.headerTitle}>Historial</Text>
+          <Text style={styles.headerSubtitle}>Tus movimientos recientes</Text>
+        </View>
+        <GlobalHeader showBack={false} showNotifications={true} />
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
