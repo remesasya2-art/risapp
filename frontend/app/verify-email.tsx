@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,12 +34,17 @@ export default function VerifyEmailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const email = params.email as string || '';
+  const initialPhone = params.phone as string || '';
   const { refreshUser } = useAuth();
   
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [phone, setPhone] = useState(initialPhone);
+  const [showEditPhone, setShowEditPhone] = useState(false);
+  const [newPhone, setNewPhone] = useState(initialPhone);
+  const [updatingPhone, setUpdatingPhone] = useState(false);
   
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
