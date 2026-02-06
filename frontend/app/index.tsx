@@ -32,6 +32,18 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [checkingPolicies, setCheckingPolicies] = useState(true);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull to refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      loadRate(),
+      loadUnreadNotifications(),
+      refreshUser()
+    ]);
+    setRefreshing(false);
+  };
 
   // MODO PRUEBA: Carga rápida sin verificaciones extras
   useEffect(() => {
