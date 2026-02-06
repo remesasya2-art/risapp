@@ -204,6 +204,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
   },
+  rateCard: {
+    borderWidth: 2,
+    borderColor: '#F5A623',
+  },
+  rateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+  },
+  liveText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  rateValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5A623',
+  },
   infoTitle: {
     fontSize: 16,
     fontWeight: '600',
