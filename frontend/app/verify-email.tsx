@@ -123,7 +123,7 @@ export default function VerifyEmailScreen() {
         email
       });
       
-      showAlert('Código Enviado', 'Revisa tu correo electrónico');
+      showAlert('Código Enviado', 'Revisa tus mensajes SMS');
       setCountdown(60);
       setCode(['', '', '', '', '', '']);
     } catch (error: any) {
