@@ -22,12 +22,26 @@ import { useAuth } from '../contexts/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
-const showAlert = (title: string, message: string, buttons?: any[]) => {
+const showAlert = (title: string, message: string | any, buttons?: any[]) => {
+  // Ensure message is a string
+  let displayMessage = message;
+  if (typeof message === 'object') {
+    if (Array.isArray(message)) {
+      displayMessage = message.map(m => typeof m === 'object' ? JSON.stringify(m) : m).join('\n');
+    } else if (message?.msg) {
+      displayMessage = message.msg;
+    } else if (message?.detail) {
+      displayMessage = message.detail;
+    } else {
+      displayMessage = JSON.stringify(message);
+    }
+  }
+  
   if (Platform.OS === 'web') {
-    alert(`${title}\n\n${message}`);
+    alert(`${title}\n\n${displayMessage}`);
     if (buttons && buttons[0]?.onPress) buttons[0].onPress();
   } else {
-    Alert.alert(title, message, buttons);
+    Alert.alert(title, String(displayMessage), buttons);
   }
 };
 
