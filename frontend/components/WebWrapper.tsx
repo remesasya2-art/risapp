@@ -1,7 +1,9 @@
-import React from 'react';
-import { View, StyleSheet, Platform, Dimensions, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Platform, Dimensions, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 const isLargeScreen = SCREEN_WIDTH >= 768;
@@ -12,6 +14,30 @@ interface WebWrapperProps {
 }
 
 export default function WebWrapper({ children, showBranding = true }: WebWrapperProps) {
+  const [rate, setRate] = useState<number | null>(null);
+  const [loadingRate, setLoadingRate] = useState(true);
+
+  // Cargar tasa del backend
+  useEffect(() => {
+    if (isWeb && isLargeScreen) {
+      loadRate();
+      // Actualizar cada 30 segundos
+      const interval = setInterval(loadRate, 30000);
+      return () => clearInterval(interval);
+    }
+  }, []);
+
+  const loadRate = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/rate`);
+      setRate(response.data.ris_to_ves);
+    } catch (error) {
+      console.log('Error loading rate in WebWrapper');
+    } finally {
+      setLoadingRate(false);
+    }
+  };
+
   // On mobile or small screens, just render children
   if (!isWeb || !isLargeScreen) {
     return <>{children}</>;
@@ -59,7 +85,7 @@ export default function WebWrapper({ children, showBranding = true }: WebWrapper
         </View>
       </View>
 
-      {/* Right side - Could be used for ads or info */}
+      {/* Right side - Info cards with live rate */}
       {SCREEN_WIDTH >= 1200 && (
         <View style={styles.infoSection}>
           <View style={styles.infoCard}>
@@ -69,12 +95,22 @@ export default function WebWrapper({ children, showBranding = true }: WebWrapper
               Nuestro equipo de soporte está disponible para asistirte.
             </Text>
           </View>
-          <View style={styles.infoCard}>
-            <Ionicons name="star" size={24} color="#f59e0b" />
+          <View style={[styles.infoCard, styles.rateCard]}>
+            <View style={styles.rateHeader}>
+              <Ionicons name="trending-up" size={24} color="#F5A623" />
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>EN VIVO</Text>
+              </View>
+            </View>
             <Text style={styles.infoTitle}>Tasa del día</Text>
-            <Text style={styles.infoText}>
-              1 RIS = 80+ VES
-            </Text>
+            {loadingRate ? (
+              <ActivityIndicator size="small" color="#F5A623" />
+            ) : (
+              <Text style={styles.rateValue}>
+                1 RIS = {rate?.toFixed(2) || '---'} VES
+              </Text>
+            )}
             <Text style={styles.infoSubtext}>Actualizado en tiempo real</Text>
           </View>
         </View>
