@@ -727,17 +727,24 @@ async def register_user(request: RegisterUserRequest):
     await db.pending_verifications.delete_many({"email": email_lower})
     await db.pending_verifications.insert_one(pending_data)
     
-    # Send verification code via email (simulated - logs the code)
+    # Send verification code via SMS
     logger.info(f"📧 Verification code for {email_lower}: {verification_code}")
     
-    # In production, you would send an actual email here
-    # For now, we'll create a mock email send
-    try:
-        # TODO: Integrate with real email service (SendGrid, etc.)
-        # await send_verification_email(email_lower, verification_code, request.name.strip())
-        pass
-    except Exception as e:
-        logger.error(f"Error sending verification email: {e}")
+    # Send SMS if phone provided
+    sms_sent = False
+    if request.phone:
+        sms_sent = await send_verification_sms(request.phone.strip(), verification_code, request.name.strip())
+        if sms_sent:
+            logger.info(f"📱 SMS verification code sent to {request.phone}")
+        else:
+            logger.warning(f"⚠️ SMS could not be sent, code logged above")
+    
+    return {
+        "message": "Código de verificación enviado" + (" por SMS" if sms_sent else ". Revisa los logs."),
+        "email": email_lower,
+        "sms_sent": sms_sent,
+        "code_expires_in_minutes": 15
+    }
     
     logger.info(f"Registration initiated for {email_lower}, verification code sent")
     
