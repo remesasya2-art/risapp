@@ -99,7 +99,8 @@ function TabsLayout() {
       <Tabs.Screen name="register" options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="login" options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="verify-email" options={{ href: null, headerShown: false }} />
-    </Tabs>
+      </Tabs>
+    </WebWrapper>
   );
 }
 
