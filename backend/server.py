@@ -22,6 +22,7 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from twilio.rest import Client as TwilioClient
 from whatsapp_service import whatsapp_service
 from mercadopago_service import mercadopago_service
 from admin_routes import admin_router
@@ -34,6 +35,16 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Twilio SMS Configuration
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
+
+# Initialize Twilio client
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
 # Stripe configuration (disabled - using Mercado Pago PIX)
 # stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test_placeholder')
 
@@ -44,6 +55,35 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer()
+
+# =======================
+# SMS VERIFICATION SERVICE
+# =======================
+async def send_verification_sms(phone_number: str, code: str, name: str) -> bool:
+    """Send verification code via SMS using Twilio"""
+    if not twilio_client or not TWILIO_PHONE_NUMBER:
+        logger.warning("Twilio not configured - SMS not sent")
+        return False
+    
+    try:
+        # Format phone number (ensure it has country code)
+        formatted_phone = phone_number.strip()
+        if not formatted_phone.startswith('+'):
+            # Assume Brazil if no country code
+            formatted_phone = '+55' + formatted_phone.lstrip('0')
+        
+        message = twilio_client.messages.create(
+            body=f"🔐 RIS App - Hola {name}!\n\nTu código de verificación es: {code}\n\nEste código expira en 15 minutos.",
+            from_=TWILIO_PHONE_NUMBER,
+            to=formatted_phone
+        )
+        
+        logger.info(f"📱 SMS sent to {formatted_phone} - SID: {message.sid}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error sending SMS: {e}")
+        return False
 
 # =======================
 # MODELS
