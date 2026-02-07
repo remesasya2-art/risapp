@@ -163,9 +163,21 @@ class UserSession(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ExchangeRate(BaseModel):
-    ris_to_ves: float = 78.0
+    ris_to_ves: float = 92.0        # 1 RIS = 92 VES (para enviar a Venezuela)
+    ves_to_ris: float = 102.0       # 102 VES = 1 RIS (para recargar con Bolívares)
+    ris_to_brl: float = 1.0         # 1 RIS = 1 BRL (para enviar a Brasil)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_by: Optional[str] = None
+
+# Bank info for VES payments
+class VESPaymentInfo(BaseModel):
+    bank_name: str = "Banco de Venezuela"
+    bank_code: str = "0102"
+    account_holder: str = "RIS REMESAS C.A."
+    account_number: str = "01020123456789012345"
+    account_type: str = "Corriente"
+    phone_number: str = "04121234567"
+    id_document: str = "J-12345678-9"
 
 class Beneficiary(BaseModel):
     beneficiary_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
