@@ -1199,6 +1199,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  rechargeVesBtn: {
+    backgroundColor: '#F5A623',
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   sendBtn: {
     backgroundColor: '#2563eb',
     borderRadius: 16,
