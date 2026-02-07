@@ -1436,24 +1436,52 @@ async def get_balance(current_user: User = Depends(get_current_user)):
 
 @api_router.get("/rate")
 async def get_rate():
-    """Get current RIS to VES exchange rate"""
+    """Get all exchange rates"""
     rate_doc = await db.exchange_rates.find_one({}, {"_id": 0})
     if not rate_doc:
-        # Create default rate
+        # Create default rates
         default_rate = ExchangeRate()
         await db.exchange_rates.insert_one(default_rate.dict())
-        return default_rate
-    return ExchangeRate(**rate_doc)
+        return default_rate.dict()
+    
+    # Ensure all rate fields exist
+    result = {
+        "ris_to_ves": rate_doc.get("ris_to_ves", 92.0),
+        "ves_to_ris": rate_doc.get("ves_to_ris", 102.0),
+        "ris_to_brl": rate_doc.get("ris_to_brl", 1.0),
+        "updated_at": rate_doc.get("updated_at"),
+        "updated_by": rate_doc.get("updated_by")
+    }
+    return result
+
+@api_router.get("/ves-payment-info")
+async def get_ves_payment_info():
+    """Get bank info for VES payments (Pago Móvil / Transferencia)"""
+    info = await db.ves_payment_info.find_one({}, {"_id": 0})
+    if not info:
+        # Default payment info
+        default_info = VESPaymentInfo()
+        await db.ves_payment_info.insert_one(default_info.dict())
+        return default_info.dict()
+    return info
+
+class UpdateAllRatesRequest(BaseModel):
+    ris_to_ves: float
+    ves_to_ris: Optional[float] = None
+    ris_to_brl: Optional[float] = None
 
 @api_router.post("/rate")
-async def update_rate(request: UpdateRateRequest, admin_user: User = Depends(get_admin_user)):
-    """Admin: Update exchange rate"""
-    new_rate = ExchangeRate(
-        ris_to_ves=request.ris_to_ves,
-        updated_by=admin_user.user_id
-    )
+async def update_rate(request: UpdateAllRatesRequest, admin_user: User = Depends(get_admin_user)):
+    """Admin: Update exchange rates"""
+    new_rate = {
+        "ris_to_ves": request.ris_to_ves,
+        "ves_to_ris": request.ves_to_ris if request.ves_to_ris else request.ris_to_ves + 10,
+        "ris_to_brl": request.ris_to_brl if request.ris_to_brl else 1.0,
+        "updated_at": datetime.now(timezone.utc),
+        "updated_by": admin_user.user_id
+    }
     await db.exchange_rates.delete_many({})
-    await db.exchange_rates.insert_one(new_rate.dict())
+    await db.exchange_rates.insert_one(new_rate)
     return new_rate
 
 # =======================
