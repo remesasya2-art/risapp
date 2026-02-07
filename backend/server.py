@@ -1644,7 +1644,6 @@ class VESRechargeRequest(BaseModel):
     amount_ves: float
     amount_ris: float
     payment_method: str  # 'pago_movil' or 'transferencia'
-    reference_number: str
     voucher_image: str  # base64
 
 @api_router.post("/recharge/ves")
