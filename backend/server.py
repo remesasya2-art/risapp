@@ -1688,7 +1688,7 @@ async def create_ves_recharge(request: VESRechargeRequest, current_user: User = 
             "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
             "user_id": admin["user_id"],
             "title": "💵 Nueva Recarga VES Pendiente",
-            "message": f"{current_user.name} ha enviado una recarga de {request.amount_ves:.2f} VES ({request.amount_ris:.2f} RIS). Ref: {request.reference_number}",
+            "message": f"{current_user.name} ha enviado una recarga de {request.amount_ves:.2f} VES ({request.amount_ris:.2f} RIS)",
             "type": "ves_recharge_pending",
             "priority": "high",
             "data": {
