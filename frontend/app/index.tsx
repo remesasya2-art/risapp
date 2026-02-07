@@ -555,6 +555,19 @@ export default function HomeScreen() {
             <Ionicons name="arrow-forward-circle" size={28} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.rechargeVesBtn} onPress={handleRechargeVES}>
+            <View style={styles.actionBtnContent}>
+              <View style={[styles.actionBtnIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                <Ionicons name="cash" size={24} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.actionBtnTitle}>Recargar con Bolívares</Text>
+                <Text style={styles.actionBtnSubtitle}>Pago Móvil o Transferencia</Text>
+              </View>
+            </View>
+            <Ionicons name="arrow-forward-circle" size={28} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
             <View style={styles.actionBtnContent}>
               <View style={[styles.actionBtnIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
