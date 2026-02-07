@@ -1637,6 +1637,191 @@ async def process_withdrawal(request: ProcessWithdrawalRequest, admin_user: User
     return {"message": "Withdrawal processed successfully"}
 
 # =======================
+# VES RECHARGE ROUTES (Manual Payment)
+# =======================
+
+class VESRechargeRequest(BaseModel):
+    amount_ves: float
+    amount_ris: float
+    payment_method: str  # 'pago_movil' or 'transferencia'
+    reference_number: str
+    voucher_image: str  # base64
+
+@api_router.post("/recharge/ves")
+async def create_ves_recharge(request: VESRechargeRequest, current_user: User = Depends(get_current_user)):
+    """Create a VES recharge request (manual payment with voucher upload)"""
+    
+    # Validate amounts
+    if request.amount_ves <= 0 or request.amount_ris <= 0:
+        raise HTTPException(status_code=400, detail="Los montos deben ser mayores a 0")
+    
+    # Check verification status
+    if current_user.verification_status != "verified":
+        raise HTTPException(status_code=403, detail="Debes completar la verificación de tu cuenta primero")
+    
+    # Validate voucher image
+    if not request.voucher_image or not request.voucher_image.startswith('data:image'):
+        raise HTTPException(status_code=400, detail="Debes adjuntar el comprobante de pago")
+    
+    # Generate transaction ID
+    transaction_id = str(uuid.uuid4())
+    
+    # Create transaction with pending_manual_approval status
+    transaction_data = {
+        "transaction_id": transaction_id,
+        "user_id": current_user.user_id,
+        "type": "recharge_ves",
+        "payment_method": request.payment_method,
+        "status": "pending_manual_approval",
+        "amount_input": request.amount_ves,  # VES paid
+        "amount_output": request.amount_ris,  # RIS to receive
+        "reference_number": request.reference_number,
+        "voucher_image": request.voucher_image,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    await db.transactions.insert_one(transaction_data)
+    
+    # Create notification for admins
+    admins = await db.users.find({"role": {"$in": ["admin", "super_admin"]}}).to_list(100)
+    for admin in admins:
+        admin_notification = {
+            "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+            "user_id": admin["user_id"],
+            "title": "💵 Nueva Recarga VES Pendiente",
+            "message": f"{current_user.name} ha enviado una recarga de {request.amount_ves:.2f} VES ({request.amount_ris:.2f} RIS). Ref: {request.reference_number}",
+            "type": "ves_recharge_pending",
+            "priority": "high",
+            "data": {
+                "transaction_id": transaction_id,
+                "user_name": current_user.name,
+                "amount_ves": request.amount_ves,
+                "amount_ris": request.amount_ris
+            },
+            "read": False,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.notifications.insert_one(admin_notification)
+    
+    # Create notification for user
+    user_notification = {
+        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+        "user_id": current_user.user_id,
+        "title": "📤 Recarga Enviada",
+        "message": f"Tu recarga de {request.amount_ves:.2f} VES está siendo procesada. Te notificaremos cuando sea aprobada.",
+        "type": "ves_recharge_submitted",
+        "read": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.notifications.insert_one(user_notification)
+    
+    logger.info(f"VES recharge created: {transaction_id} by user {current_user.user_id} - {request.amount_ves} VES -> {request.amount_ris} RIS")
+    
+    return {
+        "message": "Solicitud de recarga enviada correctamente",
+        "transaction_id": transaction_id,
+        "status": "pending_manual_approval"
+    }
+
+# Admin endpoint to get pending VES recharges
+@api_router.get("/admin/recharges/ves/pending")
+async def get_pending_ves_recharges(admin_user: User = Depends(get_admin_user)):
+    """Admin: Get all VES recharges pending manual approval"""
+    recharges = await db.transactions.find(
+        {"type": "recharge_ves", "status": "pending_manual_approval"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    
+    # Get user info for each recharge
+    result = []
+    for r in recharges:
+        user = await db.users.find_one({"user_id": r["user_id"]}, {"_id": 0, "name": 1, "email": 1, "picture": 1})
+        r["user_name"] = user.get("name") if user else "Usuario"
+        r["user_email"] = user.get("email") if user else ""
+        r["user_picture"] = user.get("picture") if user else None
+        result.append(r)
+    
+    return {"recharges": result}
+
+# Admin endpoint to approve/reject VES recharge
+class ApproveVESRechargeRequest(BaseModel):
+    transaction_id: str
+    approved: bool
+    rejection_reason: Optional[str] = None
+
+@api_router.post("/admin/recharges/ves/approve")
+async def approve_ves_recharge(request: ApproveVESRechargeRequest, admin_user: User = Depends(get_admin_user)):
+    """Admin: Approve or reject a VES recharge"""
+    
+    # Find the transaction
+    transaction = await db.transactions.find_one({"transaction_id": request.transaction_id})
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    if transaction.get("status") != "pending_manual_approval":
+        raise HTTPException(status_code=400, detail="Esta transacción ya fue procesada")
+    
+    user_id = transaction["user_id"]
+    amount_ris = transaction["amount_output"]
+    amount_ves = transaction["amount_input"]
+    
+    if request.approved:
+        # Approve: add RIS to user balance
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balance_ris": amount_ris}}
+        )
+        
+        # Update transaction status
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "completed",
+                "processed_by": admin_user.user_id,
+                "completed_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        
+        # Notify user
+        await create_notification(
+            user_id=user_id,
+            title="✅ Recarga Aprobada",
+            message=f"Tu recarga de {amount_ves:.2f} VES ha sido aprobada. Se han acreditado {amount_ris:.2f} RIS a tu cuenta.",
+            notification_type="ves_recharge_approved",
+            data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
+        )
+        
+        logger.info(f"VES recharge approved: {request.transaction_id} - {amount_ris} RIS credited to {user_id}")
+        return {"message": "Recarga aprobada y RIS acreditados"}
+    
+    else:
+        # Reject: update status only
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "rejected",
+                "rejection_reason": request.rejection_reason or "Rechazado por administrador",
+                "processed_by": admin_user.user_id,
+                "completed_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        
+        # Notify user
+        await create_notification(
+            user_id=user_id,
+            title="❌ Recarga Rechazada",
+            message=f"Tu recarga de {amount_ves:.2f} VES fue rechazada. Motivo: {request.rejection_reason or 'Datos del comprobante incorrectos'}",
+            notification_type="ves_recharge_rejected",
+            data={"transaction_id": request.transaction_id, "reason": request.rejection_reason}
+        )
+        
+        logger.info(f"VES recharge rejected: {request.transaction_id} - Reason: {request.rejection_reason}")
+        return {"message": "Recarga rechazada"}
+
+# =======================
 # PIX RECHARGE ROUTES
 # =======================
 
