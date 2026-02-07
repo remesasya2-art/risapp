@@ -59,7 +59,6 @@ export default function RechargeVESScreen() {
   const [amountRIS, setAmountRIS] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pago_movil' | 'transferencia' | null>(null);
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
-  const [referenceNumber, setReferenceNumber] = useState('');
 
   useEffect(() => {
     loadPaymentInfo();
