@@ -166,6 +166,15 @@ export default function RechargeVESScreen() {
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      showAlert('✅ Copiado', `"${text}" copiado al portapapeles`);
+    } catch (error) {
+      console.error('Error copying:', error);
+    }
+  };
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
