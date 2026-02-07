@@ -452,23 +452,36 @@ function WithdrawalsTab() {
   );
 }
 
-// Recharges Tab
+// Recharges Tab - Now includes both PIX and VES recharges
 function RechargesTab() {
-  const [recharges, setRecharges] = useState<any[]>([]);
+  const [pixRecharges, setPixRecharges] = useState<any[]>([]);
+  const [vesRecharges, setVesRecharges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [selectedVES, setSelectedVES] = useState<any>(null);
+  const [voucherFullscreen, setVoucherFullscreen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [activeSubTab, setActiveSubTab] = useState<'ves' | 'pix'>('ves');
 
   useEffect(() => {
-    loadRecharges();
+    loadAllRecharges();
   }, []);
 
-  const loadRecharges = async () => {
+  const loadAllRecharges = async () => {
     try {
       const token = await AsyncStorage.getItem('session_token');
-      const response = await axios.get(`${BACKEND_URL}/api/admin/recharges/pending`, {
+      
+      // Load PIX recharges
+      const pixResponse = await axios.get(`${BACKEND_URL}/api/admin/recharges/pending`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setRecharges(response.data.recharges || []);
+      setPixRecharges(pixResponse.data.recharges || []);
+      
+      // Load VES recharges
+      const vesResponse = await axios.get(`${BACKEND_URL}/api/admin/recharges/ves/pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVesRecharges(vesResponse.data.recharges || []);
     } catch (error) {
       console.error('Error loading recharges:', error);
     } finally {
@@ -476,7 +489,7 @@ function RechargesTab() {
     }
   };
 
-  const processRecharge = async (txId: string, approved: boolean) => {
+  const processPixRecharge = async (txId: string, approved: boolean) => {
     setProcessing(txId);
     try {
       const token = await AsyncStorage.getItem('session_token');
@@ -485,8 +498,8 @@ function RechargesTab() {
         { transaction_id: txId, approved },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      showAlert('Éxito', approved ? 'Recarga aprobada' : 'Recarga rechazada');
-      loadRecharges();
+      showAlert('Éxito', approved ? 'Recarga PIX aprobada' : 'Recarga PIX rechazada');
+      loadAllRecharges();
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo procesar');
     } finally {
@@ -494,61 +507,330 @@ function RechargesTab() {
     }
   };
 
+  const processVESRecharge = async (approved: boolean) => {
+    if (!selectedVES) return;
+    if (!approved && !rejectionReason.trim()) {
+      showAlert('Error', 'Ingresa el motivo del rechazo');
+      return;
+    }
+    
+    setProcessing(selectedVES.transaction_id);
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      await axios.post(
+        `${BACKEND_URL}/api/admin/recharges/ves/approve`,
+        { 
+          transaction_id: selectedVES.transaction_id, 
+          approved,
+          rejection_reason: approved ? null : rejectionReason.trim()
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showAlert('Éxito', approved ? 'Recarga VES aprobada - RIS acreditados' : 'Recarga VES rechazada');
+      setSelectedVES(null);
+      setRejectionReason('');
+      loadAllRecharges();
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'No se pudo procesar');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const formatDate = (date: string) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+
   if (loading) {
     return <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />;
   }
+
+  // Fullscreen Voucher Modal
+  if (voucherFullscreen && selectedVES?.voucher_image) {
+    return (
+      <Modal visible={true} animationType="fade" transparent>
+        <View style={styles.voucherFullscreenOverlay}>
+          <TouchableOpacity 
+            style={styles.voucherFullscreenClose} 
+            onPress={() => setVoucherFullscreen(false)}
+          >
+            <Ionicons name="close-circle" size={40} color="#fff" />
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: selectedVES.voucher_image }} 
+            style={styles.voucherFullscreenImage} 
+            resizeMode="contain" 
+          />
+          <View style={styles.voucherFullscreenInfo}>
+            <Text style={styles.voucherFullscreenAmount}>{selectedVES.amount_input?.toLocaleString()} VES</Text>
+            <Text style={styles.voucherFullscreenRef}>Ref: {selectedVES.reference_number}</Text>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // VES Recharge Detail Modal
+  if (selectedVES) {
+    return (
+      <View style={styles.tabContent}>
+        <View style={styles.vesDetailHeader}>
+          <TouchableOpacity onPress={() => { setSelectedVES(null); setRejectionReason(''); }} style={styles.vesBackBtn}>
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.vesDetailTitle}>Revisar Recarga VES</Text>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* User Info */}
+          <View style={styles.vesUserCard}>
+            {selectedVES.user_picture ? (
+              <Image source={{ uri: selectedVES.user_picture }} style={styles.vesUserAvatar} />
+            ) : (
+              <View style={styles.vesUserAvatarPlaceholder}>
+                <Text style={styles.vesUserAvatarText}>{selectedVES.user_name?.charAt(0)?.toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.vesUserInfo}>
+              <Text style={styles.vesUserName}>{selectedVES.user_name}</Text>
+              <Text style={styles.vesUserEmail}>{selectedVES.user_email}</Text>
+              <Text style={styles.vesDate}>{formatDate(selectedVES.created_at)}</Text>
+            </View>
+          </View>
+
+          {/* Amount Summary */}
+          <View style={styles.vesAmountCard}>
+            <View style={styles.vesAmountRow}>
+              <View style={styles.vesAmountItem}>
+                <Text style={styles.vesAmountLabel}>Pagó</Text>
+                <Text style={styles.vesAmountValue}>{selectedVES.amount_input?.toLocaleString()} VES</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={24} color="#F5A623" />
+              <View style={styles.vesAmountItem}>
+                <Text style={styles.vesAmountLabel}>Recibirá</Text>
+                <Text style={[styles.vesAmountValue, { color: '#059669' }]}>{selectedVES.amount_output?.toFixed(2)} RIS</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Payment Details */}
+          <View style={styles.vesDetailsCard}>
+            <Text style={styles.vesDetailsTitle}>Detalles del Pago</Text>
+            <View style={styles.vesDetailRow}>
+              <Text style={styles.vesDetailLabel}>Método:</Text>
+              <Text style={styles.vesDetailValue}>
+                {selectedVES.payment_method === 'pago_movil' ? 'Pago Móvil' : 'Transferencia Bancaria'}
+              </Text>
+            </View>
+            <View style={styles.vesDetailRow}>
+              <Text style={styles.vesDetailLabel}>Referencia:</Text>
+              <Text style={[styles.vesDetailValue, { fontWeight: '700', color: '#2563eb' }]}>{selectedVES.reference_number}</Text>
+            </View>
+            <View style={styles.vesDetailRow}>
+              <Text style={styles.vesDetailLabel}>ID Transacción:</Text>
+              <Text style={styles.vesDetailValue}>{selectedVES.transaction_id?.substring(0, 12)}...</Text>
+            </View>
+          </View>
+
+          {/* Voucher Image - Tap to fullscreen */}
+          <Text style={styles.voucherSectionTitle}>📸 Comprobante de Pago</Text>
+          <Text style={styles.voucherTapHint}>Toca la imagen para verla en pantalla completa</Text>
+          <TouchableOpacity 
+            style={styles.voucherContainer} 
+            onPress={() => setVoucherFullscreen(true)}
+            activeOpacity={0.9}
+          >
+            <Image 
+              source={{ uri: selectedVES.voucher_image }} 
+              style={styles.voucherPreviewImage} 
+              resizeMode="contain" 
+            />
+            <View style={styles.voucherExpandIcon}>
+              <Ionicons name="expand" size={24} color="#fff" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Rejection Reason */}
+          <View style={styles.vesRejectSection}>
+            <Text style={styles.vesRejectLabel}>Motivo de rechazo (si aplica):</Text>
+            <TextInput
+              style={styles.vesRejectInput}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              placeholder="Ej: Monto incorrecto, referencia no coincide..."
+              multiline
+            />
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.vesActionButtons}>
+            <TouchableOpacity
+              style={styles.vesRejectBtn}
+              onPress={() => processVESRecharge(false)}
+              disabled={processing === selectedVES.transaction_id}
+            >
+              {processing === selectedVES.transaction_id ? (
+                <ActivityIndicator color="#dc2626" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="close-circle" size={20} color="#dc2626" />
+                  <Text style={styles.vesRejectBtnText}>Rechazar</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.vesApproveBtn}
+              onPress={() => processVESRecharge(true)}
+              disabled={processing === selectedVES.transaction_id}
+            >
+              {processing === selectedVES.transaction_id ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={styles.vesApproveBtnText}>Aprobar y Acreditar</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  const totalPending = pixRecharges.length + vesRecharges.length;
 
   return (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recargas Pendientes</Text>
         <View style={styles.countBadge}>
-          <Text style={styles.countText}>{recharges.length}</Text>
+          <Text style={styles.countText}>{totalPending}</Text>
         </View>
       </View>
+
+      {/* Sub-tabs for PIX vs VES */}
+      <View style={styles.subTabsContainer}>
+        <TouchableOpacity 
+          style={[styles.subTab, activeSubTab === 'ves' && styles.subTabActive]}
+          onPress={() => setActiveSubTab('ves')}
+        >
+          <Ionicons name="cash" size={18} color={activeSubTab === 'ves' ? '#F5A623' : '#6b7280'} />
+          <Text style={[styles.subTabText, activeSubTab === 'ves' && styles.subTabTextActive]}>
+            VES ({vesRecharges.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.subTab, activeSubTab === 'pix' && styles.subTabActive]}
+          onPress={() => setActiveSubTab('pix')}
+        >
+          <Ionicons name="qr-code" size={18} color={activeSubTab === 'pix' ? '#F5A623' : '#6b7280'} />
+          <Text style={[styles.subTabText, activeSubTab === 'pix' && styles.subTabTextActive]}>
+            PIX ({pixRecharges.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
       
-      {recharges.length === 0 ? (
+      {totalPending === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-circle" size={64} color="#10b981" />
           <Text style={styles.emptyTitle}>¡Todo al día!</Text>
           <Text style={styles.emptyText}>No hay recargas pendientes</Text>
         </View>
-      ) : (
-        recharges.map((tx) => (
-          <View key={tx.transaction_id} style={styles.rechargeCard}>
-            <View style={styles.rechargeHeader}>
-              <View>
-                <Text style={styles.rechargeAmount}>R$ {tx.amount_input?.toFixed(2)}</Text>
-                <Text style={styles.rechargeUser}>{tx.user_name}</Text>
-              </View>
-              <Text style={styles.rechargeRis}>+{tx.amount_output?.toFixed(2)} RIS</Text>
-            </View>
-            <View style={styles.rechargeActions}>
-              <TouchableOpacity 
-                style={[styles.rechargeBtn, styles.rejectBtn]} 
-                onPress={() => processRecharge(tx.transaction_id, false)}
-                disabled={processing === tx.transaction_id}
-              >
-                {processing === tx.transaction_id ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.rechargeBtnText}>Rechazar</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.rechargeBtn, styles.approveBtn]} 
-                onPress={() => processRecharge(tx.transaction_id, true)}
-                disabled={processing === tx.transaction_id}
-              >
-                {processing === tx.transaction_id ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.rechargeBtnText}>Aprobar</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+      ) : activeSubTab === 'ves' ? (
+        // VES Recharges List
+        vesRecharges.length === 0 ? (
+          <View style={styles.emptyStateSmall}>
+            <Ionicons name="cash-outline" size={40} color="#9ca3af" />
+            <Text style={styles.emptyTextSmall}>No hay recargas VES pendientes</Text>
           </View>
-        ))
+        ) : (
+          vesRecharges.map((tx) => (
+            <TouchableOpacity 
+              key={tx.transaction_id} 
+              style={styles.vesRechargeCard}
+              onPress={() => setSelectedVES(tx)}
+            >
+              <View style={styles.vesRechargeHeader}>
+                <View style={styles.vesRechargeUser}>
+                  {tx.user_picture ? (
+                    <Image source={{ uri: tx.user_picture }} style={styles.vesRechargeAvatar} />
+                  ) : (
+                    <View style={styles.vesRechargeAvatarPlaceholder}>
+                      <Text style={styles.vesRechargeAvatarText}>{tx.user_name?.charAt(0)?.toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <View>
+                    <Text style={styles.vesRechargeName}>{tx.user_name}</Text>
+                    <Text style={styles.vesRechargeDate}>{formatDate(tx.created_at)}</Text>
+                  </View>
+                </View>
+                <View style={styles.vesRechargeAmounts}>
+                  <Text style={styles.vesRechargeVES}>{tx.amount_input?.toLocaleString()} VES</Text>
+                  <Text style={styles.vesRechargeRIS}>+{tx.amount_output?.toFixed(2)} RIS</Text>
+                </View>
+              </View>
+              <View style={styles.vesRechargeFooter}>
+                <View style={styles.vesRechargeMethod}>
+                  <Ionicons name={tx.payment_method === 'pago_movil' ? 'phone-portrait' : 'business'} size={14} color="#6b7280" />
+                  <Text style={styles.vesRechargeMethodText}>
+                    {tx.payment_method === 'pago_movil' ? 'Pago Móvil' : 'Transferencia'}
+                  </Text>
+                </View>
+                <View style={styles.vesRechargeRef}>
+                  <Text style={styles.vesRechargeRefText}>Ref: {tx.reference_number}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              </View>
+            </TouchableOpacity>
+          ))
+        )
+      ) : (
+        // PIX Recharges List
+        pixRecharges.length === 0 ? (
+          <View style={styles.emptyStateSmall}>
+            <Ionicons name="qr-code-outline" size={40} color="#9ca3af" />
+            <Text style={styles.emptyTextSmall}>No hay recargas PIX pendientes</Text>
+          </View>
+        ) : (
+          pixRecharges.map((tx) => (
+            <View key={tx.transaction_id} style={styles.rechargeCard}>
+              <View style={styles.rechargeHeader}>
+                <View>
+                  <Text style={styles.rechargeAmount}>R$ {tx.amount_input?.toFixed(2)}</Text>
+                  <Text style={styles.rechargeUser}>{tx.user_name}</Text>
+                </View>
+                <Text style={styles.rechargeRis}>+{tx.amount_output?.toFixed(2)} RIS</Text>
+              </View>
+              <View style={styles.rechargeActions}>
+                <TouchableOpacity 
+                  style={[styles.rechargeBtn, styles.rejectBtn]} 
+                  onPress={() => processPixRecharge(tx.transaction_id, false)}
+                  disabled={processing === tx.transaction_id}
+                >
+                  {processing === tx.transaction_id ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.rechargeBtnText}>Rechazar</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.rechargeBtn, styles.approveBtn]} 
+                  onPress={() => processPixRecharge(tx.transaction_id, true)}
+                  disabled={processing === tx.transaction_id}
+                >
+                  {processing === tx.transaction_id ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.rechargeBtnText}>Aprobar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )
       )}
     </View>
   );
