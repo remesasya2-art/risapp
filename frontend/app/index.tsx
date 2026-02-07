@@ -418,77 +418,108 @@ export default function HomeScreen() {
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickActionBtn} onPress={handleRecharge}>
             <View style={[styles.quickActionIcon, { backgroundColor: '#ecfdf5' }]}>
-              <Ionicons name="add-circle" size={28} color="#059669" />
+              <Ionicons name="add-circle" size={24} color="#059669" />
             </View>
-            <Text style={styles.quickActionText}>Recargar</Text>
+            <Text style={styles.quickActionText}>PIX</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleRechargeVES}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="cash" size={24} color="#d97706" />
+            </View>
+            <Text style={styles.quickActionText}>Bolívares</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.quickActionBtn} onPress={handleSend}>
             <View style={[styles.quickActionIcon, { backgroundColor: '#eff6ff' }]}>
-              <Ionicons name="paper-plane" size={26} color="#2563eb" />
+              <Ionicons name="paper-plane" size={24} color="#2563eb" />
             </View>
             <Text style={styles.quickActionText}>Enviar</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/history')}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="time" size={26} color="#d97706" />
+            <View style={[styles.quickActionIcon, { backgroundColor: '#f3e8ff' }]}>
+              <Ionicons name="time" size={24} color="#7c3aed" />
             </View>
             <Text style={styles.quickActionText}>Historial</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/support')}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#f3e8ff' }]}>
-              <Ionicons name="chatbubbles" size={26} color="#7c3aed" />
-            </View>
-            <Text style={styles.quickActionText}>Soporte</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Calculator */}
+        {/* Calculator with conversion type selector */}
         <View style={styles.calculatorCard}>
           <View style={styles.calculatorHeader}>
-            <Ionicons name="calculator" size={20} color="#0f172a" />
+            <Ionicons name="calculator" size={18} color="#0f172a" />
             <Text style={styles.calculatorTitle}>Calculadora</Text>
           </View>
           
-          <View style={styles.calculatorInputs}>
-            <View style={styles.calcInputGroup}>
-              <Text style={styles.calcInputLabel}>RIS</Text>
-              <View style={styles.calcInputContainer}>
-                <TextInput
-                  style={styles.calcInput}
-                  value={risAmount}
-                  onChangeText={handleRisChange}
-                  keyboardType="numeric"
-                  placeholder="0.00"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-            </View>
-
-            <View style={styles.exchangeArrow}>
-              <Ionicons name="swap-vertical" size={24} color="#94a3b8" />
-            </View>
-
-            <View style={styles.calcInputGroup}>
-              <Text style={styles.calcInputLabel}>VES (Bolívares)</Text>
-              <View style={styles.calcInputContainer}>
-                <TextInput
-                  style={styles.calcInput}
-                  value={vesAmount}
-                  onChangeText={handleVesChange}
-                  keyboardType="numeric"
-                  placeholder="0.00"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-            </View>
+          {/* Conversion Type Selector */}
+          <View style={styles.conversionSelector}>
+            <TouchableOpacity 
+              style={[styles.conversionOption, conversionType === 'ris_to_ves' && styles.conversionOptionActive]}
+              onPress={() => { setConversionType('ris_to_ves'); setRisAmount(''); setVesAmount(''); }}
+            >
+              <Text style={[styles.conversionOptionText, conversionType === 'ris_to_ves' && styles.conversionOptionTextActive]}>
+                RIS → VES
+              </Text>
+              <Text style={[styles.conversionRate, conversionType === 'ris_to_ves' && styles.conversionRateActive]}>
+                {rates.ris_to_ves}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.conversionOption, conversionType === 'ves_to_ris' && styles.conversionOptionActive]}
+              onPress={() => { setConversionType('ves_to_ris'); setRisAmount(''); setVesAmount(''); }}
+            >
+              <Text style={[styles.conversionOptionText, conversionType === 'ves_to_ris' && styles.conversionOptionTextActive]}>
+                VES → RIS
+              </Text>
+              <Text style={[styles.conversionRate, conversionType === 'ves_to_ris' && styles.conversionRateActive]}>
+                {rates.ves_to_ris}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.conversionOption, conversionType === 'ris_to_brl' && styles.conversionOptionActive]}
+              onPress={() => { setConversionType('ris_to_brl'); setRisAmount(''); setVesAmount(''); }}
+            >
+              <Text style={[styles.conversionOptionText, conversionType === 'ris_to_brl' && styles.conversionOptionTextActive]}>
+                RIS → BRL
+              </Text>
+              <Text style={[styles.conversionRate, conversionType === 'ris_to_brl' && styles.conversionRateActive]}>
+                {rates.ris_to_brl}
+              </Text>
+            </TouchableOpacity>
           </View>
+          
+          {/* Calculator Inputs */}
+          <View style={styles.calculatorInputsCompact}>
+            <View style={styles.calcInputGroupCompact}>
+              <Text style={styles.calcInputLabelCompact}>{getConversionLabels().from}</Text>
+              <TextInput
+                style={styles.calcInputCompact}
+                value={risAmount}
+                onChangeText={handleRisChange}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
 
-          <View style={styles.rateInfo}>
-            <Ionicons name="information-circle" size={16} color="#64748b" />
-            <Text style={styles.rateInfoText}>Tasa actualizada en tiempo real</Text>
+            <View style={styles.exchangeArrowCompact}>
+              <Ionicons name="arrow-forward" size={20} color="#F5A623" />
+            </View>
+
+            <View style={styles.calcInputGroupCompact}>
+              <Text style={styles.calcInputLabelCompact}>{getConversionLabels().to}</Text>
+              <TextInput
+                style={styles.calcInputCompact}
+                value={vesAmount}
+                onChangeText={handleVesChange}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
           </View>
         </View>
 
