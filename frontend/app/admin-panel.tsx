@@ -2300,4 +2300,81 @@ const styles = StyleSheet.create({
   // KYC Document in Detail
   kycDocTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a', marginTop: 16, marginBottom: 8 },
   kycSelfieSmall: { width: 150, height: 150, borderRadius: 75, alignSelf: 'center', backgroundColor: '#f1f5f9' },
+
+  // VES Recharge Styles
+  subTabsContainer: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, padding: 4, marginBottom: 16, gap: 4 },
+  subTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 8, gap: 6 },
+  subTabActive: { backgroundColor: '#fffbeb' },
+  subTabText: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
+  subTabTextActive: { color: '#F5A623', fontWeight: '600' },
+  emptyStateSmall: { alignItems: 'center', paddingVertical: 32 },
+  emptyTextSmall: { fontSize: 13, color: '#9ca3af', marginTop: 8 },
+  
+  // VES Recharge Card
+  vesRechargeCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  vesRechargeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  vesRechargeUser: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  vesRechargeAvatar: { width: 40, height: 40, borderRadius: 20 },
+  vesRechargeAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5A623', justifyContent: 'center', alignItems: 'center' },
+  vesRechargeAvatarText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  vesRechargeName: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  vesRechargeDate: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  vesRechargeAmounts: { alignItems: 'flex-end' },
+  vesRechargeVES: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
+  vesRechargeRIS: { fontSize: 14, fontWeight: '600', color: '#059669', marginTop: 2 },
+  vesRechargeFooter: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 12 },
+  vesRechargeMethod: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  vesRechargeMethodText: { fontSize: 12, color: '#6b7280' },
+  vesRechargeRef: { flex: 1 },
+  vesRechargeRefText: { fontSize: 12, color: '#2563eb', fontWeight: '500' },
+  
+  // VES Detail View
+  vesDetailHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  vesBackBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' },
+  vesDetailTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  vesUserCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 16 },
+  vesUserAvatar: { width: 50, height: 50, borderRadius: 25 },
+  vesUserAvatarPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F5A623', justifyContent: 'center', alignItems: 'center' },
+  vesUserAvatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  vesUserInfo: { flex: 1, marginLeft: 14 },
+  vesUserName: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
+  vesUserEmail: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  vesDate: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  
+  vesAmountCard: { backgroundColor: '#f0fdf4', borderRadius: 14, padding: 20, marginBottom: 16 },
+  vesAmountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  vesAmountItem: { alignItems: 'center' },
+  vesAmountLabel: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
+  vesAmountValue: { fontSize: 24, fontWeight: '700', color: '#0f172a' },
+  
+  vesDetailsCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 16 },
+  vesDetailsTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  vesDetailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  vesDetailLabel: { fontSize: 13, color: '#64748b' },
+  vesDetailValue: { fontSize: 13, color: '#0f172a', fontWeight: '500' },
+  
+  // Voucher Section
+  voucherSectionTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginTop: 8 },
+  voucherTapHint: { fontSize: 12, color: '#6b7280', marginBottom: 10 },
+  voucherContainer: { position: 'relative', borderRadius: 14, overflow: 'hidden', marginBottom: 20 },
+  voucherPreviewImage: { width: '100%', height: 250, backgroundColor: '#f1f5f9' },
+  voucherExpandIcon: { position: 'absolute', bottom: 12, right: 12, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  
+  // Fullscreen Voucher Modal
+  voucherFullscreenOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  voucherFullscreenClose: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
+  voucherFullscreenImage: { width: SCREEN_WIDTH, height: '70%' },
+  voucherFullscreenInfo: { position: 'absolute', bottom: 50, alignItems: 'center' },
+  voucherFullscreenAmount: { fontSize: 28, fontWeight: '700', color: '#fff' },
+  voucherFullscreenRef: { fontSize: 16, color: 'rgba(255,255,255,0.8)', marginTop: 8 },
+  
+  // VES Action Buttons
+  vesRejectSection: { marginBottom: 16 },
+  vesRejectLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  vesRejectInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 14, minHeight: 80, textAlignVertical: 'top', fontSize: 14 },
+  vesActionButtons: { flexDirection: 'row', gap: 12, marginBottom: 40 },
+  vesRejectBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 2, borderColor: '#fecaca', paddingVertical: 16, borderRadius: 14, gap: 8 },
+  vesRejectBtnText: { fontSize: 15, fontWeight: '600', color: '#dc2626' },
+  vesApproveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#059669', paddingVertical: 16, borderRadius: 14, gap: 8 },
+  vesApproveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
