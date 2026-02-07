@@ -343,41 +343,45 @@ export default function RechargeVESScreen() {
             <View style={styles.bankInfoCard}>
               {paymentMethod === 'pago_movil' ? (
                 <>
-                  <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>Teléfono</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.phone_number || '04121234567'}</Text>
-                  </View>
-                  <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>Cédula / RIF</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.id_document || 'J-12345678-9'}</Text>
-                  </View>
+                  <CopyableField 
+                    label="Teléfono" 
+                    value={paymentInfo?.pago_movil_phone || '04249311288'} 
+                    onCopy={copyToClipboard} 
+                  />
+                  <CopyableField 
+                    label="Cédula" 
+                    value={paymentInfo?.id_document || 'V-24560778'} 
+                    onCopy={copyToClipboard} 
+                  />
                   <View style={styles.bankInfoRow}>
                     <Text style={styles.bankInfoLabel}>Banco</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.bank_code || '0102'} - {paymentInfo?.bank_name || 'Banco de Venezuela'}</Text>
+                    <Text style={styles.bankInfoValue}>{paymentInfo?.pago_movil_bank_code || '0102'} - {paymentInfo?.pago_movil_bank || 'Banco de Venezuela'}</Text>
                   </View>
                 </>
               ) : (
                 <>
                   <View style={styles.bankInfoRow}>
                     <Text style={styles.bankInfoLabel}>Banco</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.bank_name || 'Banco de Venezuela'}</Text>
+                    <Text style={styles.bankInfoValue}>{paymentInfo?.bank_name || 'Banesco'}</Text>
                   </View>
                   <View style={styles.bankInfoRow}>
                     <Text style={styles.bankInfoLabel}>Titular</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.account_holder || 'RIS REMESAS C.A.'}</Text>
+                    <Text style={styles.bankInfoValue}>{paymentInfo?.account_holder || 'RIS REMESAS'}</Text>
                   </View>
                   <View style={styles.bankInfoRow}>
                     <Text style={styles.bankInfoLabel}>Tipo de Cuenta</Text>
                     <Text style={styles.bankInfoValue}>{paymentInfo?.account_type || 'Corriente'}</Text>
                   </View>
-                  <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>Número de Cuenta</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.account_number || '01020123456789012345'}</Text>
-                  </View>
-                  <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>RIF</Text>
-                    <Text style={styles.bankInfoValue}>{paymentInfo?.id_document || 'J-12345678-9'}</Text>
-                  </View>
+                  <CopyableField 
+                    label="Número de Cuenta" 
+                    value={paymentInfo?.account_number || '01340869688691034659'} 
+                    onCopy={copyToClipboard} 
+                  />
+                  <CopyableField 
+                    label="Cédula" 
+                    value={paymentInfo?.id_document || 'V-24560778'} 
+                    onCopy={copyToClipboard} 
+                  />
                 </>
               )}
             </View>
