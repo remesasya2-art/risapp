@@ -3051,7 +3051,8 @@ async def get_admin_dashboard(admin_user: User = Depends(get_admin_user)):
             "total": total_transactions,
             "completed": completed_transactions,
             "pending_withdrawals": pending_withdrawals,
-            "pending_recharges": pending_recharges
+            "pending_recharges": pending_recharges + pending_ves_recharges,
+            "pending_ves_recharges": pending_ves_recharges
         },
         "support": {
             "open_chats": open_support
