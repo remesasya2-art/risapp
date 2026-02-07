@@ -132,11 +132,6 @@ export default function RechargeVESScreen() {
       return;
     }
 
-    if (!referenceNumber.trim()) {
-      showAlert('Error', 'Ingresa el número de referencia');
-      return;
-    }
-
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
@@ -147,7 +142,6 @@ export default function RechargeVESScreen() {
           amount_ves: parseFloat(amountVES),
           amount_ris: parseFloat(amountRIS),
           payment_method: paymentMethod,
-          reference_number: referenceNumber.trim(),
           voucher_image: voucherImage,
         },
         { headers: { Authorization: `Bearer ${token}` } }
