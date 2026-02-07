@@ -859,4 +859,26 @@ const styles = StyleSheet.create({
   btnDisabled: {
     opacity: 0.5,
   },
+  
+  // Copyable Fields
+  copyableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  copyableInfo: {
+    flex: 1,
+  },
+  copyButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
 });
