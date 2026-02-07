@@ -472,9 +472,9 @@ export default function RechargeVESScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.submitBtn, loading && styles.btnDisabled]}
+                style={[styles.submitBtn, (loading || !voucherImage || !referenceNumber.trim()) && styles.btnDisabled]}
                 onPress={submitRecharge}
-                disabled={loading || !voucherImage || !referenceNumber}
+                disabled={loading}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
