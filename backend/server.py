@@ -87,6 +87,26 @@ async def send_verification_sms(phone_number: str, code: str, name: str) -> bool
         logger.error(f"Error sending SMS: {e}")
         return False
 
+async def send_whatsapp_notification(message_body: str) -> bool:
+    """Send WhatsApp notification to admin using Twilio"""
+    if not twilio_client or not TWILIO_WHATSAPP_TO:
+        logger.warning("Twilio WhatsApp not configured - message not sent")
+        return False
+    
+    try:
+        message = twilio_client.messages.create(
+            body=message_body,
+            from_=TWILIO_WHATSAPP_FROM,
+            to=TWILIO_WHATSAPP_TO
+        )
+        
+        logger.info(f"📲 WhatsApp sent - SID: {message.sid}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error sending WhatsApp: {e}")
+        return False
+
 # =======================
 # MODELS
 # =======================
