@@ -33,6 +33,12 @@ export default function HomeScreen() {
   const [checkingPolicies, setCheckingPolicies] = useState(true);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [rates, setRates] = useState({
+    ris_to_ves: 92,
+    ves_to_ris: 102,
+    ris_to_brl: 1
+  });
+  const [conversionType, setConversionType] = useState<'ris_to_ves' | 'ves_to_ris' | 'ris_to_brl'>('ris_to_ves');
 
   // Pull to refresh
   const onRefresh = async () => {
@@ -58,7 +64,12 @@ export default function HomeScreen() {
   const loadRate = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      setRate(response.data.ris_to_ves);
+      setRates({
+        ris_to_ves: response.data.ris_to_ves || 92,
+        ves_to_ris: response.data.ves_to_ris || 102,
+        ris_to_brl: response.data.ris_to_brl || 1
+      });
+      setRate(response.data.ris_to_ves || 92);
     } catch (error) {
       console.error('Error loading rate:', error);
     }
