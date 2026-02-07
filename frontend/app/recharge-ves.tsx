@@ -408,18 +408,6 @@ export default function RechargeVESScreen() {
               <Text style={styles.stepTitle}>Subir Comprobante</Text>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Número de Referencia</Text>
-              <TextInput
-                style={styles.input}
-                value={referenceNumber}
-                onChangeText={setReferenceNumber}
-                placeholder="Ej: 12345678"
-                placeholderTextColor="#9ca3af"
-                keyboardType="numeric"
-              />
-            </View>
-
             <Text style={styles.uploadLabel}>Comprobante de Pago</Text>
             
             {voucherImage ? (
@@ -465,7 +453,7 @@ export default function RechargeVESScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.submitBtn, (loading || !voucherImage || !referenceNumber.trim()) && styles.btnDisabled]}
+                style={[styles.submitBtn, (loading || !voucherImage) && styles.btnDisabled]}
                 onPress={submitRecharge}
                 disabled={loading}
               >
