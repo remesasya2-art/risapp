@@ -1674,7 +1674,6 @@ async def create_ves_recharge(request: VESRechargeRequest, current_user: User = 
         "status": "pending_manual_approval",
         "amount_input": request.amount_ves,  # VES paid
         "amount_output": request.amount_ris,  # RIS to receive
-        "reference_number": request.reference_number,
         "voucher_image": request.voucher_image,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
