@@ -96,16 +96,60 @@ export default function HomeScreen() {
     }
   }, [user]);
 
+  // Get current rate based on conversion type
+  const getCurrentRate = () => {
+    switch (conversionType) {
+      case 'ris_to_ves':
+        return rates.ris_to_ves;
+      case 'ves_to_ris':
+        return rates.ves_to_ris;
+      case 'ris_to_brl':
+        return rates.ris_to_brl;
+      default:
+        return rates.ris_to_ves;
+    }
+  };
+
+  // Get labels for conversion type
+  const getConversionLabels = () => {
+    switch (conversionType) {
+      case 'ris_to_ves':
+        return { from: 'RIS', to: 'VES', fromLabel: 'Enviar', toLabel: 'Recibe' };
+      case 'ves_to_ris':
+        return { from: 'VES', to: 'RIS', fromLabel: 'Pagas', toLabel: 'Recibes' };
+      case 'ris_to_brl':
+        return { from: 'RIS', to: 'BRL', fromLabel: 'Enviar', toLabel: 'Recibe' };
+      default:
+        return { from: 'RIS', to: 'VES', fromLabel: 'Enviar', toLabel: 'Recibe' };
+    }
+  };
+
   const handleRisChange = (value: string) => {
     setRisAmount(value);
-    const ris = parseFloat(value) || 0;
-    setVesAmount((ris * rate).toFixed(2));
+    const amount = parseFloat(value) || 0;
+    const currentRate = getCurrentRate();
+    
+    if (conversionType === 'ves_to_ris') {
+      // VES to RIS: divide by rate
+      setVesAmount((amount / currentRate).toFixed(2));
+    } else {
+      // RIS to VES/BRL: multiply by rate
+      setVesAmount((amount * currentRate).toFixed(2));
+    }
   };
 
   const handleVesChange = (value: string) => {
     setVesAmount(value);
-    const ves = parseFloat(value) || 0;
-    setRisAmount((ves / rate).toFixed(2));
+    const amount = parseFloat(value) || 0;
+    const currentRate = getCurrentRate();
+    
+    if (conversionType === 'ves_to_ris') {
+      // VES to RIS: multiply by rate
+      setRisAmount((amount * currentRate).toFixed(2));
+    } else {
+      // RIS to VES/BRL: divide by rate
+      setRisAmount((amount / currentRate).toFixed(2));
+    }
   };
 
   const handleRecharge = () => {
@@ -118,6 +162,18 @@ export default function HomeScreen() {
       return;
     }
     router.push('/recharge');
+  };
+
+  const handleRechargeVES = () => {
+    if (user?.verification_status !== 'verified') {
+      Alert.alert(
+        'Verificación Requerida',
+        'Debes completar la verificación de tu cuenta antes de recargar',
+        [{ text: 'Verificar', onPress: () => router.push('/verification') }]
+      );
+      return;
+    }
+    router.push('/recharge-ves');
   };
 
   const handleSend = () => {
