@@ -3024,6 +3024,7 @@ async def get_admin_dashboard(admin_user: User = Depends(get_admin_user)):
     total_transactions = await db.transactions.count_documents({})
     pending_withdrawals = await db.transactions.count_documents({"type": "withdrawal", "status": "pending"})
     pending_recharges = await db.transactions.count_documents({"type": "recharge", "status": "pending_review"})
+    pending_ves_recharges = await db.transactions.count_documents({"type": "recharge_ves", "status": "pending_manual_approval"})
     completed_transactions = await db.transactions.count_documents({"status": "completed"})
     
     open_support = await db.support_messages.count_documents({"status": {"$ne": "closed"}})
