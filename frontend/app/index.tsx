@@ -1007,9 +1007,9 @@ const styles = StyleSheet.create({
   // Calculator
   calculatorCard: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1019,14 +1019,85 @@ const styles = StyleSheet.create({
   calculatorHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 20,
+    gap: 6,
+    marginBottom: 12,
   },
   calculatorTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#0f172a',
   },
+  
+  // Conversion Type Selector
+  conversionSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  conversionOption: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  conversionOptionActive: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#F5A623',
+  },
+  conversionOptionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  conversionOptionTextActive: {
+    color: '#92400e',
+  },
+  conversionRate: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  conversionRateActive: {
+    color: '#F5A623',
+  },
+  
+  // Compact Calculator Inputs
+  calculatorInputsCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  calcInputGroupCompact: {
+    flex: 1,
+  },
+  calcInputLabelCompact: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  calcInputCompact: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  exchangeArrowCompact: {
+    paddingHorizontal: 4,
+    paddingTop: 16,
+  },
+  
+  // Legacy calculator styles (keep for compatibility)
   calculatorInputs: {
     gap: 12,
   },
