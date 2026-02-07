@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -31,6 +32,19 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
     Alert.alert(title, message, buttons);
   }
 };
+
+// Componente para mostrar dato copiable
+const CopyableField = ({ label, value, onCopy }: { label: string; value: string; onCopy: (text: string) => void }) => (
+  <View style={styles.copyableRow}>
+    <View style={styles.copyableInfo}>
+      <Text style={styles.bankInfoLabel}>{label}</Text>
+      <Text style={styles.bankInfoValue}>{value}</Text>
+    </View>
+    <TouchableOpacity style={styles.copyButton} onPress={() => onCopy(value)}>
+      <Ionicons name="copy-outline" size={18} color="#2563eb" />
+    </TouchableOpacity>
+  </View>
+);
 
 export default function RechargeVESScreen() {
   const router = useRouter();
