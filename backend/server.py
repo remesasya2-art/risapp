@@ -1738,6 +1738,22 @@ async def create_ves_recharge(request: VESRechargeRequest, current_user: User = 
     
     logger.info(f"VES recharge created: {transaction_id} by user {current_user.user_id} - {request.amount_ves} VES -> {request.amount_ris} RIS")
     
+    # Send WhatsApp notification to admin
+    whatsapp_message = f"""💵 *Nueva Recarga VES*
+
+👤 Usuario: {current_user.name}
+📧 Email: {current_user.email}
+
+💰 Monto: {request.amount_ves:,.2f} VES
+🪙 RIS a acreditar: {request.amount_ris:.2f} RIS
+💳 Método: {'Pago Móvil' if request.payment_method == 'pago_movil' else 'Transferencia'}
+
+⏳ Estado: Pendiente de aprobación
+
+🔗 Revisa en el panel de admin"""
+    
+    await send_whatsapp_notification(whatsapp_message)
+    
     return {
         "message": "Solicitud de recarga enviada correctamente",
         "transaction_id": transaction_id,
