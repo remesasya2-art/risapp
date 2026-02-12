@@ -61,6 +61,17 @@ export default function HomeScreen() {
     setCheckingPolicies(false);
   }, [user]);
 
+  // Auto-actualizar tasas cada 30 segundos
+  useEffect(() => {
+    if (user) {
+      const rateInterval = setInterval(() => {
+        loadRate();
+        console.log('📊 Tasas actualizadas automáticamente');
+      }, 30000); // 30 segundos
+      return () => clearInterval(rateInterval);
+    }
+  }, [user]);
+
   const loadRate = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/rate`);
