@@ -1504,7 +1504,14 @@ async def update_rate(request: UpdateAllRatesRequest, admin_user: User = Depends
     }
     await db.exchange_rates.delete_many({})
     await db.exchange_rates.insert_one(new_rate)
-    return new_rate
+    # Return without _id
+    return {
+        "ris_to_ves": new_rate["ris_to_ves"],
+        "ves_to_ris": new_rate["ves_to_ris"],
+        "ris_to_brl": new_rate["ris_to_brl"],
+        "updated_at": new_rate["updated_at"],
+        "updated_by": new_rate["updated_by"]
+    }
 
 # =======================
 # BENEFICIARY ROUTES
