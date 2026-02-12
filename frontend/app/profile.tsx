@@ -118,10 +118,22 @@ export default function ProfileScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F5A623']} />
         }
       >
-        {/* Header with notification bell */}
+        {/* Header with back and home buttons */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Perfil</Text>
-          <GlobalHeader showBack={false} showNotifications={true} />
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+              <Ionicons name="arrow-back" size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Perfil</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={() => router.replace('/')} style={styles.headerBtn}>
+              <Ionicons name="home" size={22} color="#0f172a" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.headerBtn}>
+              <Ionicons name="notifications-outline" size={22} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Profile Card */}
