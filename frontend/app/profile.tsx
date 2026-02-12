@@ -16,6 +16,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import GlobalHeader from '../components/GlobalHeader';
 
+// Funciones para ocultar datos sensibles
+const maskEmail = (email: string): string => {
+  if (!email) return '***@***.com';
+  const [localPart, domain] = email.split('@');
+  if (!domain) return '***@***.com';
+  
+  const maskedLocal = localPart.length > 4 
+    ? localPart.slice(0, 3) + '****' + localPart.slice(-2)
+    : localPart.slice(0, 1) + '****';
+  
+  const domainParts = domain.split('.');
+  const maskedDomain = domainParts[0].slice(0, 2) + '***.' + domainParts.slice(1).join('.');
+  
+  return maskedLocal + '@' + maskedDomain;
+};
+
+const maskPhone = (phone: string): string => {
+  if (!phone) return '+**********';
+  // Mostrar código de país y últimos 3 dígitos
+  const cleaned = phone.replace(/\s/g, '');
+  if (cleaned.length < 6) return '+**********';
+  return cleaned.slice(0, 3) + '*******' + cleaned.slice(-3);
+};
+
+const maskCPF = (cpf: string): string => {
+  if (!cpf) return '***.***.***-**';
+  const cleaned = cpf.replace(/\D/g, '');
+  if (cleaned.length < 11) return '***.***.***-**';
+  return cleaned.slice(0, 3) + '.***.***-' + cleaned.slice(-2);
+};
+
 export default function ProfileScreen() {
   const { user, login, logout, refreshUser } = useAuth();
   const router = useRouter();
