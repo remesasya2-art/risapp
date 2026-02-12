@@ -423,6 +423,13 @@ export default function HomeScreen() {
             <Text style={styles.quickActionText}>PIX</Text>
           </TouchableOpacity>
           
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/history')}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#f3e8ff' }]}>
+              <Ionicons name="time" size={24} color="#7c3aed" />
+            </View>
+            <Text style={styles.quickActionText}>Historial</Text>
+          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.quickActionBtn} onPress={handleRechargeVES}>
             <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
               <Ionicons name="cash" size={24} color="#d97706" />
@@ -435,13 +442,6 @@ export default function HomeScreen() {
               <Ionicons name="paper-plane" size={24} color="#2563eb" />
             </View>
             <Text style={styles.quickActionText}>Enviar</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/history')}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#f3e8ff' }]}>
-              <Ionicons name="time" size={24} color="#7c3aed" />
-            </View>
-            <Text style={styles.quickActionText}>Historial</Text>
           </TouchableOpacity>
         </View>
 
