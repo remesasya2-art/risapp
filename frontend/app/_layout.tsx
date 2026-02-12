@@ -86,6 +86,7 @@ function TabsLayout() {
       {/* Hidden screens */}
       <Tabs.Screen name="send" options={{ href: null }} />
       <Tabs.Screen name="recharge" options={{ href: null }} />
+      <Tabs.Screen name="recharge-ves" options={{ href: null }} />
       <Tabs.Screen name="verification" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
       <Tabs.Screen name="policies" options={{ href: null }} />
