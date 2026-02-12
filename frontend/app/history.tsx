@@ -178,21 +178,9 @@ export default function HistoryScreen() {
     .reduce((sum, t) => sum + t.amount_input, 0);
 
   if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <View style={styles.emptyIconContainer}>
-            <Ionicons name="lock-closed" size={48} color="#94a3b8" />
-          </View>
-          <Text style={styles.emptyTitle}>Acceso Restringido</Text>
-          <Text style={styles.emptyText}>Inicia sesión para ver tu historial de transacciones</Text>
-          <TouchableOpacity style={styles.loginButton} onPress={login}>
-            <Ionicons name="log-in" size={20} color="#fff" />
-            <Text style={styles.loginButtonText}>Iniciar sesión</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+    // Redirigir a login en lugar de mostrar "Acceso Restringido"
+    router.replace('/login');
+    return null;
   }
 
   const renderTransaction = ({ item }: { item: Transaction }) => {
