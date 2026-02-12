@@ -1836,24 +1836,52 @@ function AdminsTab() {
 
 // Settings Tab
 function SettingsTab({ currentRate, onRateUpdated }: { currentRate: number; onRateUpdated: () => void }) {
-  const [rate, setRate] = useState(currentRate.toString());
+  const [risToVes, setRisToVes] = useState('92');
+  const [vesToRis, setVesToRis] = useState('102');
+  const [risToBrl, setRisToBrl] = useState('1');
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const saveRate = async () => {
-    const newRate = parseFloat(rate);
-    if (isNaN(newRate) || newRate <= 0) {
-      showAlert('Error', 'Ingresa una tasa válida');
+  useEffect(() => {
+    loadCurrentRates();
+  }, []);
+
+  const loadCurrentRates = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/rate`);
+      setRisToVes(response.data.ris_to_ves?.toString() || '92');
+      setVesToRis(response.data.ves_to_ris?.toString() || '102');
+      setRisToBrl(response.data.ris_to_brl?.toString() || '1');
+    } catch (error) {
+      console.error('Error loading rates:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveRates = async () => {
+    const risVes = parseFloat(risToVes);
+    const vesRis = parseFloat(vesToRis);
+    const risBrl = parseFloat(risToBrl);
+
+    if (isNaN(risVes) || risVes <= 0 || isNaN(vesRis) || vesRis <= 0) {
+      showAlert('Error', 'Ingresa tasas válidas');
       return;
     }
+
     setSaving(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
         `${BACKEND_URL}/api/rate`,
-        { ris_to_ves: newRate },
+        { 
+          ris_to_ves: risVes,
+          ves_to_ris: vesRis,
+          ris_to_brl: risBrl || 1
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      showAlert('Éxito', 'Tasa actualizada');
+      showAlert('Éxito', 'Tasas actualizadas correctamente');
       onRateUpdated();
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo guardar');
@@ -1862,37 +1890,81 @@ function SettingsTab({ currentRate, onRateUpdated }: { currentRate: number; onRa
     }
   };
 
+  if (loading) {
+    return <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />;
+  }
+
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Configuración</Text>
+      <Text style={styles.sectionTitle}>Configuración de Tasas</Text>
       
+      {/* Tasa RIS → VES (Enviar a Venezuela) */}
       <View style={styles.settingCard}>
         <View style={styles.settingHeader}>
-          <Ionicons name="swap-horizontal" size={24} color="#2563eb" />
-          <Text style={styles.settingTitle}>Tasa de Cambio</Text>
+          <Ionicons name="arrow-forward" size={24} color="#2563eb" />
+          <Text style={styles.settingTitle}>RIS → VES</Text>
         </View>
-        <Text style={styles.settingDesc}>1 RIS equivale a:</Text>
+        <Text style={styles.settingDesc}>Para enviar a Venezuela (1 RIS = X VES)</Text>
         <View style={styles.rateInputRow}>
           <TextInput
             style={styles.rateInput}
-            value={rate}
-            onChangeText={setRate}
+            value={risToVes}
+            onChangeText={setRisToVes}
             keyboardType="numeric"
-            placeholder="0"
+            placeholder="92"
           />
           <Text style={styles.rateUnit}>VES</Text>
         </View>
-        <TouchableOpacity style={styles.saveButton} onPress={saveRate} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="save" size={18} color="#fff" />
-              <Text style={styles.saveButtonText}>Guardar</Text>
-            </>
-          )}
-        </TouchableOpacity>
       </View>
+
+      {/* Tasa VES → RIS (Recarga con Bolívares) */}
+      <View style={styles.settingCard}>
+        <View style={styles.settingHeader}>
+          <Ionicons name="arrow-back" size={24} color="#F5A623" />
+          <Text style={styles.settingTitle}>VES → RIS</Text>
+        </View>
+        <Text style={styles.settingDesc}>Para recargas con Bolívares (X VES = 1 RIS)</Text>
+        <View style={styles.rateInputRow}>
+          <TextInput
+            style={styles.rateInput}
+            value={vesToRis}
+            onChangeText={setVesToRis}
+            keyboardType="numeric"
+            placeholder="102"
+          />
+          <Text style={styles.rateUnit}>VES</Text>
+        </View>
+      </View>
+
+      {/* Tasa RIS → BRL (PIX) */}
+      <View style={styles.settingCard}>
+        <View style={styles.settingHeader}>
+          <Ionicons name="qr-code" size={24} color="#059669" />
+          <Text style={styles.settingTitle}>RIS → BRL</Text>
+        </View>
+        <Text style={styles.settingDesc}>Para recargas PIX (1 RIS = X BRL)</Text>
+        <View style={styles.rateInputRow}>
+          <TextInput
+            style={styles.rateInput}
+            value={risToBrl}
+            onChangeText={setRisToBrl}
+            keyboardType="numeric"
+            placeholder="1"
+          />
+          <Text style={styles.rateUnit}>BRL</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity style={styles.saveButton} onPress={saveRates} disabled={saving}>
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <>
+            <Ionicons name="save" size={18} color="#fff" />
+            <Text style={styles.saveButtonText}>Guardar Todas las Tasas</Text>
+          </>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
