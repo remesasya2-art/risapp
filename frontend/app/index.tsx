@@ -1130,6 +1130,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  historyBtn: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   actionBtnContent: {
     flexDirection: 'row',
     alignItems: 'center',
