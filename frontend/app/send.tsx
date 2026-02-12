@@ -274,70 +274,132 @@ export default function SendRISScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => step === 1 ? router.back() : setStep(1)}>
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Enviar RIS</Text>
+          <Text style={styles.headerTitle}>Enviar a Venezuela</Text>
           <TouchableOpacity onPress={() => router.push('/beneficiaries')}>
             <Ionicons name="people" size={24} color="#2563eb" />
           </TouchableOpacity>
         </View>
 
-        {/* Balance Card */}
-        <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Tu Balance</Text>
-          <Text style={styles.balanceAmount}>{user?.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
-        </View>
+        {/* Step 1: Calculator */}
+        {step === 1 && (
+          <>
+            {/* Rate Card */}
+            <View style={styles.rateCard}>
+              <View style={styles.rateHeader}>
+                <Ionicons name="swap-horizontal" size={24} color="#F5A623" />
+                <Text style={styles.rateTitle}>Tasa del día</Text>
+              </View>
+              <Text style={styles.rateValue}>1 RIS = {rate.toFixed(2)} VES</Text>
+            </View>
 
-        {/* Amount Input */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Monto a Enviar</Text>
-          <Text style={styles.rateText}>Tasa: 1 RIS = {rate.toFixed(2)} VES</Text>
+            {/* Calculator */}
+            <View style={styles.calculatorCard}>
+              <Text style={styles.calculatorTitle}>¿Cuánto deseas enviar?</Text>
+              
+              <View style={styles.calcInputGroup}>
+                <Text style={styles.calcInputLabel}>Envías (RIS)</Text>
+                <TextInput
+                  style={styles.calcInput}
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  keyboardType="numeric"
+                  placeholder="0.00"
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Cantidad en RIS</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={handleAmountChange}
-              keyboardType="numeric"
-              placeholder="0.00"
-            />
-          </View>
+              <View style={styles.calcArrow}>
+                <Ionicons name="arrow-down" size={28} color="#F5A623" />
+              </View>
 
-          <View style={styles.conversionRow}>
-            <Ionicons name="arrow-down" size={20} color="#6b7280" />
-            <Text style={styles.conversionText}>
-              Recibirá: <Text style={styles.conversionAmount}>{vesAmount} VES</Text>
-            </Text>
-          </View>
-        </View>
+              <View style={styles.calcInputGroup}>
+                <Text style={styles.calcInputLabel}>Recibe (VES)</Text>
+                <TextInput
+                  style={[styles.calcInput, styles.calcInputResult]}
+                  value={vesAmount}
+                  editable={false}
+                  placeholder="0.00"
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
 
-        {/* Beneficiary Selection */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Beneficiario</Text>
-          
-          {/* Toggle between saved and new */}
-          <View style={styles.beneficiaryToggle}>
-            <TouchableOpacity
-              style={[styles.toggleButton, !useNewBeneficiary && styles.toggleButtonActive]}
-              onPress={() => beneficiaries.length > 0 && setShowBeneficiaries(true)}
-              disabled={beneficiaries.length === 0}
-            >
-              <Ionicons name="bookmark" size={18} color={!useNewBeneficiary ? '#fff' : '#6b7280'} />
-              <Text style={[styles.toggleButtonText, !useNewBeneficiary && styles.toggleButtonTextActive]}>
-                Guardados ({beneficiaries.length})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleButton, useNewBeneficiary && styles.toggleButtonActive]}
-              onPress={clearForm}
-            >
-              <Ionicons name="person-add" size={18} color={useNewBeneficiary ? '#fff' : '#6b7280'} />
-              <Text style={[styles.toggleButtonText, useNewBeneficiary && styles.toggleButtonTextActive]}>
-                Nuevo
-              </Text>
-            </TouchableOpacity>
+              {/* Balance Info */}
+              <View style={styles.balanceInfo}>
+                <Ionicons name="wallet" size={16} color="#64748b" />
+                <Text style={styles.balanceInfoText}>
+                  Tu balance: <Text style={styles.balanceInfoAmount}>{user?.balance_ris?.toFixed(2) || '0.00'} RIS</Text>
+                </Text>
+              </View>
+
+              {/* Continue Button */}
+              {parseFloat(amount) > 0 && (
+                <TouchableOpacity 
+                  style={[
+                    styles.continueBtn,
+                    parseFloat(amount) > (user?.balance_ris || 0) && styles.continueBtnDisabled
+                  ]}
+                  onPress={() => {
+                    if (parseFloat(amount) > (user?.balance_ris || 0)) {
+                      showMessage('Saldo Insuficiente', 'No tienes suficiente balance para este envío');
+                      return;
+                    }
+                    setStep(2);
+                  }}
+                >
+                  <Text style={styles.continueBtnText}>
+                    Enviar {amount} RIS → {vesAmount} VES
+                  </Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Step 2: Beneficiary Form */}
+        {step === 2 && (
+          <>
+            {/* Amount Summary */}
+            <View style={styles.amountSummary}>
+              <View style={styles.amountSummaryRow}>
+                <Text style={styles.amountSummaryLabel}>Envías:</Text>
+                <Text style={styles.amountSummaryValue}>{amount} RIS</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color="#F5A623" />
+              <View style={styles.amountSummaryRow}>
+                <Text style={styles.amountSummaryLabel}>Recibe:</Text>
+                <Text style={[styles.amountSummaryValue, { color: '#059669' }]}>{vesAmount} VES</Text>
+              </View>
+            </View>
+
+            {/* Beneficiary Selection */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Datos del Beneficiario</Text>
+              
+              {/* Toggle between saved and new */}
+              <View style={styles.beneficiaryToggle}>
+                <TouchableOpacity
+                  style={[styles.toggleButton, !useNewBeneficiary && styles.toggleButtonActive]}
+                  onPress={() => beneficiaries.length > 0 && setShowBeneficiaries(true)}
+                  disabled={beneficiaries.length === 0}
+                >
+                  <Ionicons name="bookmark" size={18} color={!useNewBeneficiary ? '#fff' : '#6b7280'} />
+                  <Text style={[styles.toggleButtonText, !useNewBeneficiary && styles.toggleButtonTextActive]}>
+                    Guardados ({beneficiaries.length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleButton, useNewBeneficiary && styles.toggleButtonActive]}
+                  onPress={clearForm}
+                >
+                  <Ionicons name="person-add" size={18} color={useNewBeneficiary ? '#fff' : '#6b7280'} />
+                  <Text style={[styles.toggleButtonText, useNewBeneficiary && styles.toggleButtonTextActive]}>
+                    Nuevo
+                  </Text>
+                </TouchableOpacity>
           </View>
 
           {/* Selected beneficiary indicator */}
