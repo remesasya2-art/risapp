@@ -375,12 +375,8 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.profileLink}>
-            <Text style={styles.greeting}>Hola,</Text>
-            <View style={styles.profileNameRow}>
-              <Text style={styles.userName}>{userName}</Text>
-              <Ionicons name="chevron-forward" size={16} color="#64748b" />
-            </View>
+          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.menuButton}>
+            <Ionicons name="menu" size={28} color="#64748b" />
           </TouchableOpacity>
           <View style={styles.headerActions}>
             {isVerified && (
@@ -403,6 +399,12 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Greeting - moved below header */}
+        <View style={styles.greetingSection}>
+          <Text style={styles.greeting}>Hola,</Text>
+          <Text style={styles.userName}>{userName}</Text>
         </View>
 
         {/* Verification Banner - Show if not verified */}
