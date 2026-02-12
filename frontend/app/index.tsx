@@ -312,6 +312,18 @@ export default function HomeScreen() {
           <Text style={styles.statusNote}>
             Te notificaremos cuando tu cuenta esté verificada
           </Text>
+          
+          {/* Botón Cerrar Sesión */}
+          <TouchableOpacity
+            style={styles.logoutBtnPending}
+            onPress={async () => {
+              await AsyncStorage.removeItem('session_token');
+              router.replace('/login');
+            }}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#64748b" />
+            <Text style={styles.logoutBtnPendingText}>Cerrar Sesión</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
