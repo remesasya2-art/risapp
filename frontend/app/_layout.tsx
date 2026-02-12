@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { Platform, View, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WebWrapper from '../components/WebWrapper';
+import * as Font from 'expo-font';
 
 // Pantallas de autenticación donde NO se muestra la barra de tabs
 const AUTH_SCREENS = ['login', 'register', 'verify-email', 'forgot-password', 'set-password', 'change-password', 'policies'];
@@ -12,9 +13,23 @@ const AUTH_SCREENS = ['login', 'register', 'verify-email', 'forgot-password', 's
 function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { user, loading } = useAuth();
+  const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  // Mostrar loading mientras se verifica la sesión
-  if (loading) {
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        await Font.loadAsync(Ionicons.font);
+        setFontsLoaded(true);
+      } catch (e) {
+        console.error('Error loading fonts:', e);
+        setFontsLoaded(true); // Continue anyway
+      }
+    }
+    loadFonts();
+  }, []);
+
+  // Mostrar loading mientras se verifica la sesión o cargan fuentes
+  if (loading || !fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
         <ActivityIndicator size="large" color="#2563eb" />
