@@ -352,10 +352,13 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
+          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.profileLink}>
             <Text style={styles.greeting}>Hola,</Text>
-            <Text style={styles.userName}>{userName}</Text>
-          </View>
+            <View style={styles.profileNameRow}>
+              <Text style={styles.userName}>{userName}</Text>
+              <Ionicons name="chevron-forward" size={16} color="#64748b" />
+            </View>
+          </TouchableOpacity>
           <View style={styles.headerActions}>
             {isVerified && (
               <View style={styles.verifiedChip}>
