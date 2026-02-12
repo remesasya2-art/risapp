@@ -554,6 +554,8 @@ export default function SendRISScreen() {
         <Text style={styles.disclaimer}>
           El monto será descontado inmediatamente. El equipo procesará la transferencia y te notificará cuando esté completada.
         </Text>
+          </>
+        )}
       </ScrollView>
 
       {/* Bank Selection Modal */}
