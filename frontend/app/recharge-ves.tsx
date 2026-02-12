@@ -63,6 +63,10 @@ export default function RechargeVESScreen() {
   useEffect(() => {
     loadPaymentInfo();
     loadRate();
+    
+    // Auto-actualizar tasa cada 30 segundos
+    const rateInterval = setInterval(loadRate, 30000);
+    return () => clearInterval(rateInterval);
   }, []);
 
   const loadPaymentInfo = async () => {
