@@ -821,6 +821,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
   },
+  profileLink: {
+    flexDirection: 'column',
+  },
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   userName: {
     fontSize: 24,
     fontWeight: '700',
