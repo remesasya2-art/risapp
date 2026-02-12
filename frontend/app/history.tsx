@@ -51,6 +51,7 @@ interface Transaction {
 
 export default function HistoryScreen() {
   const { user, login } = useAuth();
+  const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'recharge' | 'withdrawal'>('all');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
