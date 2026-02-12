@@ -474,6 +474,19 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="arrow-forward-circle" size={28} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.historyBtn} onPress={() => router.push('/history')}>
+            <View style={styles.actionBtnContent}>
+              <View style={[styles.actionBtnIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                <Ionicons name="time" size={24} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.actionBtnTitle}>Historial</Text>
+                <Text style={styles.actionBtnSubtitle}>Ver mis transacciones</Text>
+              </View>
+            </View>
+            <Ionicons name="arrow-forward-circle" size={28} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
