@@ -417,37 +417,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={handleRecharge}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#ecfdf5' }]}>
-              <Ionicons name="add-circle" size={24} color="#059669" />
-            </View>
-            <Text style={styles.quickActionText}>PIX</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push('/history')}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#f3e8ff' }]}>
-              <Ionicons name="time" size={24} color="#7c3aed" />
-            </View>
-            <Text style={styles.quickActionText}>Historial</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionBtn} onPress={handleRechargeVES}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="cash" size={24} color="#d97706" />
-            </View>
-            <Text style={styles.quickActionText}>Bolívares</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionBtn} onPress={handleSend}>
-            <View style={[styles.quickActionIcon, { backgroundColor: '#eff6ff' }]}>
-              <Ionicons name="paper-plane" size={24} color="#2563eb" />
-            </View>
-            <Text style={styles.quickActionText}>Enviar</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Password Setup Alert */}
         {!user.password_set && (
           <TouchableOpacity 
