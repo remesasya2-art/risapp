@@ -22,8 +22,8 @@ function TabsLayout() {
     );
   }
 
-  // Si no hay usuario, ocultar las tabs (pantallas de auth)
-  const hideTabBar = !user;
+  // Ocultar tabs siempre - navegación por botones
+  const hideTabBar = true;
   
   return (
     <WebWrapper showBranding={!user}>
@@ -31,14 +31,7 @@ function TabsLayout() {
         screenOptions={{
           tabBarActiveTintColor: '#F5A623',
           tabBarInactiveTintColor: '#9ca3af',
-          tabBarStyle: hideTabBar ? { display: 'none' } : {
-            backgroundColor: '#ffffff',
-            borderTopWidth: 1,
-            borderTopColor: '#e5e7eb',
-            paddingBottom: Platform.OS === 'ios' ? insets.bottom + 10 : 25,
-            paddingTop: 10,
-            height: Platform.OS === 'ios' ? 100 + insets.bottom : 90,
-          },
+          tabBarStyle: { display: 'none' },
           tabBarLabelStyle: {
             fontSize: 12,
             fontWeight: '500',
