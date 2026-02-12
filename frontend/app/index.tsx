@@ -758,6 +758,22 @@ const styles = StyleSheet.create({
     marginTop: 24,
     textAlign: 'center',
   },
+  logoutBtnPending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 32,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  logoutBtnPendingText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
