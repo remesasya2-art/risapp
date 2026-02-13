@@ -107,6 +107,74 @@ async def send_whatsapp_notification(message_body: str) -> bool:
         logger.error(f"Error sending WhatsApp: {e}")
         return False
 
+async def send_push_notification(push_token: str, title: str, body: str, data: dict = None) -> bool:
+    """Send push notification using Expo Push API"""
+    if not push_token:
+        logger.warning("No push token provided")
+        return False
+    
+    try:
+        # Expo Push API endpoint
+        expo_push_url = "https://exp.host/--/api/v2/push/send"
+        
+        message = {
+            "to": push_token,
+            "sound": "default",
+            "title": title,
+            "body": body,
+            "priority": "high",
+        }
+        
+        if data:
+            message["data"] = data
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                expo_push_url,
+                json=message,
+                headers={
+                    "Accept": "application/json",
+                    "Accept-encoding": "gzip, deflate",
+                    "Content-Type": "application/json",
+                }
+            )
+            
+            result = response.json()
+            
+            if response.status_code == 200:
+                logger.info(f"🔔 Push notification sent to {push_token[:20]}...")
+                return True
+            else:
+                logger.error(f"Push notification failed: {result}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error sending push notification: {e}")
+        return False
+
+async def send_push_to_user(user_id: str, title: str, body: str, data: dict = None) -> bool:
+    """Send push notification to a specific user by user_id"""
+    user = await db.users.find_one({"user_id": user_id}, {"fcm_token": 1})
+    if user and user.get("fcm_token"):
+        return await send_push_notification(user["fcm_token"], title, body, data)
+    return False
+
+async def send_push_to_admins(title: str, body: str, data: dict = None) -> int:
+    """Send push notification to all admins with FCM tokens"""
+    sent_count = 0
+    admins = await db.users.find(
+        {"role": {"$in": ["admin", "super_admin"]}, "fcm_token": {"$exists": True, "$ne": None}},
+        {"fcm_token": 1}
+    ).to_list(100)
+    
+    for admin in admins:
+        if admin.get("fcm_token"):
+            success = await send_push_notification(admin["fcm_token"], title, body, data)
+            if success:
+                sent_count += 1
+    
+    return sent_count
+
 # =======================
 # MODELS
 # =======================
