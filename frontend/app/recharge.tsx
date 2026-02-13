@@ -470,44 +470,69 @@ export default function RechargeScreen() {
           </View>
         )}
 
-        {/* Upload Proof Section - Only show if not pending_review */}
+        {/* Action Buttons - Only show if not pending_review */}
         {pixData.status !== 'pending_review' && (
-          <View style={styles.proofSection}>
-            <Text style={styles.proofTitle}>Comprobante de Pago</Text>
-            <Text style={styles.proofSubtitle}>Sube la captura de tu transferencia para acelerar la verificación</Text>
-            
-            {proofImage ? (
-              <View style={styles.proofPreview}>
-                <Image source={{ uri: proofImage }} style={styles.proofImage} />
-                <TouchableOpacity style={styles.retakeButton} onPress={pickProofFromGallery}>
-                  <Ionicons name="images" size={18} color="#fff" />
-                  <Text style={styles.retakeButtonText}>Cambiar imagen</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.uploadProofButtonSingle} onPress={pickProofFromGallery}>
-                <Ionicons name="images-outline" size={32} color="#F5A623" />
-                <Text style={styles.uploadProofText}>Adjuntar comprobante</Text>
-              </TouchableOpacity>
-            )}
+          <>
+            {/* Primary Action: I already paid */}
+            <TouchableOpacity
+              style={styles.paidButton}
+              onPress={() => {
+                showAlert(
+                  'Pago Registrado', 
+                  'Tu pago será verificado automáticamente por Mercado Pago. Te notificaremos cuando se acredite.',
+                  [{ text: 'OK', onPress: () => { refreshUser(); router.replace('/'); } }]
+                );
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={22} color="#fff" />
+              <Text style={styles.paidButtonText}>Listo, ya pagué</Text>
+            </TouchableOpacity>
 
-            {proofImage && (
-              <TouchableOpacity
-                style={styles.sendProofButton}
-                onPress={uploadProof}
-                disabled={uploadingProof}
-              >
-                {uploadingProof ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="cloud-upload" size={20} color="#fff" />
-                    <Text style={styles.sendProofButtonText}>Enviar Comprobante</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
+            {/* Optional: Upload Proof Section */}
+            <View style={styles.proofSection}>
+              <View style={styles.proofHeaderRow}>
+                <Text style={styles.proofTitle}>Comprobante (opcional)</Text>
+                <View style={styles.optionalBadge}>
+                  <Text style={styles.optionalBadgeText}>Acelera la verificación</Text>
+                </View>
+              </View>
+              <Text style={styles.proofSubtitle}>
+                Si deseas, puedes subir el comprobante para que un administrador verifique tu pago más rápido
+              </Text>
+              
+              {proofImage ? (
+                <View style={styles.proofPreview}>
+                  <Image source={{ uri: proofImage }} style={styles.proofImage} />
+                  <TouchableOpacity style={styles.retakeButton} onPress={pickProofFromGallery}>
+                    <Ionicons name="images" size={18} color="#fff" />
+                    <Text style={styles.retakeButtonText}>Cambiar imagen</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.uploadProofButtonSingle} onPress={pickProofFromGallery}>
+                  <Ionicons name="images-outline" size={28} color="#64748b" />
+                  <Text style={styles.uploadProofTextOptional}>Adjuntar comprobante</Text>
+                </TouchableOpacity>
+              )}
+
+              {proofImage && (
+                <TouchableOpacity
+                  style={styles.sendProofButton}
+                  onPress={uploadProof}
+                  disabled={uploadingProof}
+                >
+                  {uploadingProof ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload" size={20} color="#fff" />
+                      <Text style={styles.sendProofButtonText}>Enviar Comprobante</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
         )}
 
         {/* Cancel Button */}
