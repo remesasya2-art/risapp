@@ -189,11 +189,25 @@ export default function AdminPanelScreen() {
 }
 
 // Dashboard Tab - Professional layout
-function DashboardTab({ data }: { data: DashboardData | null }) {
+function DashboardTab({ data, onNavigateToRates }: { data: DashboardData | null; onNavigateToRates: () => void }) {
   if (!data) return null;
 
   return (
     <View style={styles.tabContent}>
+      {/* Quick Access to Rates */}
+      <TouchableOpacity style={styles.ratesQuickAccess} onPress={onNavigateToRates}>
+        <View style={styles.ratesQuickAccessLeft}>
+          <View style={styles.ratesQuickAccessIcon}>
+            <Ionicons name="cash" size={24} color="#fff" />
+          </View>
+          <View>
+            <Text style={styles.ratesQuickAccessTitle}>Configurar Tasas</Text>
+            <Text style={styles.ratesQuickAccessSubtitle}>Tasa actual: {data.current_rate} VES/RIS</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color="#fff" />
+      </TouchableOpacity>
+
       {/* Welcome Card */}
       <View style={styles.welcomeCard}>
         <View style={styles.welcomeContent}>
