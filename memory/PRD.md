@@ -46,6 +46,21 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
   - Shows "pending_review" status when proof has been uploaded
   - User can cancel pending transaction and create a new one
 
+- **Optional PIX Voucher Upload**:
+  - Added "Listo, ya pagué" primary button for users who completed payment
+  - Voucher upload section now marked as "optional" with "Acelera la verificación" badge
+  - Users can rely on automatic Mercado Pago verification without uploading proof
+
+- **Enhanced Support Chat**:
+  - Real-time connection status indicator (online/reconnecting/offline)
+  - Automatic message retry with exponential backoff (up to 3 retries)
+  - Quick reply buttons for common questions
+  - Visual feedback for message status (sending/sent/error)
+  - Tap-to-retry for failed messages
+  - Connection warning banner when offline
+  - Vibration notification for new admin messages (mobile)
+  - Improved UI with better styling and animations
+
 ### Previous Sessions
 - Full infrastructure migration to Railway (backend + database)
 - Admin panel redesign with professional dark theme
