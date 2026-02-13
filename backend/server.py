@@ -712,6 +712,60 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
         logger.error(f"❌ Error registrando FCM token: {e}")
         raise HTTPException(status_code=500, detail="Error registering FCM token")
 
+@api_router.get("/push/status")
+async def get_push_status(current_user: User = Depends(get_current_user)):
+    """Get push notification status for current user"""
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"fcm_token": 1, "email": 1})
+    
+    if not user:
+        return {"status": "error", "message": "Usuario no encontrado"}
+    
+    fcm_token = user.get("fcm_token")
+    
+    if not fcm_token:
+        return {
+            "status": "not_configured",
+            "message": "No tienes notificaciones configuradas",
+            "token_type": None,
+            "action_required": "Abre la app en tu dispositivo móvil y acepta los permisos de notificaciones."
+        }
+    
+    is_expo_token = fcm_token.startswith('ExponentPushToken')
+    is_fcm_token = not is_expo_token and len(fcm_token) > 100
+    
+    if is_expo_token:
+        return {
+            "status": "ready",
+            "message": "Notificaciones configuradas correctamente",
+            "token_type": "expo",
+            "token_preview": f"{fcm_token[:30]}..."
+        }
+    elif is_fcm_token:
+        return {
+            "status": "needs_update",
+            "message": "Tu token de notificaciones necesita actualizarse",
+            "token_type": "fcm_native",
+            "action_required": "Cierra y vuelve a abrir la app RIS en tu dispositivo móvil para actualizar el token."
+        }
+    else:
+        return {
+            "status": "unknown",
+            "message": "Token de formato desconocido",
+            "token_type": "unknown"
+        }
+
+
+@api_router.delete("/push/token")
+async def clear_push_token(current_user: User = Depends(get_current_user)):
+    """Clear push token to force re-registration"""
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$unset": {"fcm_token": ""}}
+    )
+    logger.info(f"🔔 Token push eliminado para usuario {current_user.user_id}")
+    return {"status": "success", "message": "Token eliminado. Abre la app móvil para registrar uno nuevo."}
+
+
 @api_router.post("/push/test")
 async def test_push_notification(current_user: User = Depends(get_current_user)):
     """Test push notification for current user"""
