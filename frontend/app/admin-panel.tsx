@@ -2175,68 +2175,102 @@ const styles = StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#6b7280', fontSize: 14 },
   
-  // Header
+  // Header - Professional Dark Theme
   header: { 
     flexDirection: 'row', 
-    alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#fff', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#e5e7eb' 
-  },
-  backButton: { padding: 8 },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1f2937' },
-  roleBadge: { backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
-  superBadge: { backgroundColor: '#fef3c7' },
-  roleBadgeText: { fontSize: 11, fontWeight: '600', color: '#1f2937' },
-  refreshButton: { padding: 8 },
-
-  // Content
-  content: { flex: 1 },
-  contentContainer: { paddingBottom: 100 },
-  tabContent: { padding: 16 },
-
-  // Bottom Navigation
-  bottomNav: { 
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff', 
-    borderTopWidth: 1, 
-    borderTopColor: '#e5e7eb',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-  },
-  bottomNavContent: { 
-    flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  navItem: { 
     alignItems: 'center', 
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    minWidth: 60,
+    paddingHorizontal: 16, 
+    paddingVertical: 16,
+    backgroundColor: '#0f172a',
   },
-  navItemActive: {},
-  navIconContainer: { position: 'relative' },
-  navBadge: { 
-    position: 'absolute', 
-    top: -6, 
-    right: -10, 
-    backgroundColor: '#ef4444', 
-    borderRadius: 10, 
-    minWidth: 18, 
-    height: 18, 
+  headerLeft: { width: 44 },
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 12, 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
     justifyContent: 'center', 
     alignItems: 'center' 
   },
-  navBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-  navLabel: { fontSize: 11, color: '#6b7280', marginTop: 4 },
-  navLabelActive: { color: '#2563eb', fontWeight: '600' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  roleBadge: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59,130,246,0.3)', 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: 20,
+    marginTop: 4,
+    gap: 4,
+  },
+  superBadge: { backgroundColor: 'rgba(245,158,11,0.3)' },
+  roleBadgeText: { fontSize: 11, fontWeight: '600', color: '#fff' },
+  headerRight: { width: 44, alignItems: 'flex-end' },
+  refreshButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 12, 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+
+  // Tabs Navigation
+  tabsWrapper: {
+    backgroundColor: '#0f172a',
+    paddingBottom: 12,
+  },
+  tabsContainer: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  tabItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    gap: 6,
+  },
+  tabItemActive: {
+    backgroundColor: '#2563eb',
+  },
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#94a3b8',
+  },
+  tabLabelActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  tabBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  tabBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  tabBadgeTextActive: {
+    color: '#fff',
+  },
+
+  // Content
+  content: { flex: 1, backgroundColor: '#f8fafc' },
+  contentContainer: { paddingBottom: 20 },
+  tabContent: { padding: 16 },
 
   // Section Headers
   sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1f2937', marginBottom: 16 },
