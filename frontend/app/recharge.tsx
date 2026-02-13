@@ -406,78 +406,109 @@ export default function RechargeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setPixData(null)}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#0f172a" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Pagar con PIX</Text>
+          <Text style={styles.headerTitle}>
+            {pixData.status === 'pending_review' ? 'En Revisión' : 'Pagar con PIX'}
+          </Text>
           <View style={{ width: 44 }} />
         </View>
+
+        {/* Pending Review Banner */}
+        {pixData.status === 'pending_review' && (
+          <View style={styles.pendingReviewBanner}>
+            <Ionicons name="time" size={24} color="#d97706" />
+            <View style={styles.pendingReviewContent}>
+              <Text style={styles.pendingReviewTitle}>Comprobante Enviado</Text>
+              <Text style={styles.pendingReviewText}>
+                Tu comprobante está siendo revisado por un administrador. Te notificaremos cuando se apruebe.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Amount Display */}
         <View style={styles.pixAmountCard}>
           <Text style={styles.pixAmountLabel}>Valor a Pagar</Text>
           <Text style={styles.pixAmountValue}>R$ {pixData.amount_brl.toFixed(2)}</Text>
-          <View style={styles.pixExpirationBadge}>
-            <Ionicons name="time-outline" size={14} color="#d97706" />
-            <Text style={styles.pixExpirationText}>Válido por 30 minutos</Text>
+          <View style={[
+            styles.pixExpirationBadge, 
+            pixData.status === 'pending_review' && styles.pendingBadge
+          ]}>
+            <Ionicons 
+              name={pixData.status === 'pending_review' ? 'checkmark-circle' : 'time-outline'} 
+              size={14} 
+              color={pixData.status === 'pending_review' ? '#059669' : '#d97706'} 
+            />
+            <Text style={[
+              styles.pixExpirationText,
+              pixData.status === 'pending_review' && styles.pendingBadgeText
+            ]}>
+              {pixData.status === 'pending_review' ? 'Pendiente de aprobación' : 'Válido por 30 minutos'}
+            </Text>
           </View>
         </View>
 
-        {/* QR Code */}
-        <View style={styles.qrSection}>
-          {pixData.qr_code_base64 && (
-            <View style={styles.qrContainer}>
-              <Image
-                source={{ uri: `data:image/png;base64,${pixData.qr_code_base64}` }}
-                style={styles.qrImage}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-          
-          <TouchableOpacity style={styles.copyButton} onPress={copyPixCode}>
-            <Ionicons name="copy-outline" size={20} color="#0f172a" />
-            <Text style={styles.copyButtonText}>Copiar Código PIX</Text>
-          </TouchableOpacity>
-        </View>
+        {/* QR Code - Only show if not pending_review */}
+        {pixData.status !== 'pending_review' && (
+          <View style={styles.qrSection}>
+            {pixData.qr_code_base64 && (
+              <View style={styles.qrContainer}>
+                <Image
+                  source={{ uri: `data:image/png;base64,${pixData.qr_code_base64}` }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+            
+            <TouchableOpacity style={styles.copyButton} onPress={copyPixCode}>
+              <Ionicons name="copy-outline" size={20} color="#0f172a" />
+              <Text style={styles.copyButtonText}>Copiar Código PIX</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-        {/* Upload Proof Section */}
-        <View style={styles.proofSection}>
-          <Text style={styles.proofTitle}>Comprobante de Pago</Text>
-          <Text style={styles.proofSubtitle}>Sube la captura de tu transferencia para acelerar la verificación</Text>
-          
-          {proofImage ? (
-            <View style={styles.proofPreview}>
-              <Image source={{ uri: proofImage }} style={styles.proofImage} />
-              <TouchableOpacity style={styles.retakeButton} onPress={pickProofFromGallery}>
-                <Ionicons name="images" size={18} color="#fff" />
-                <Text style={styles.retakeButtonText}>Cambiar imagen</Text>
+        {/* Upload Proof Section - Only show if not pending_review */}
+        {pixData.status !== 'pending_review' && (
+          <View style={styles.proofSection}>
+            <Text style={styles.proofTitle}>Comprobante de Pago</Text>
+            <Text style={styles.proofSubtitle}>Sube la captura de tu transferencia para acelerar la verificación</Text>
+            
+            {proofImage ? (
+              <View style={styles.proofPreview}>
+                <Image source={{ uri: proofImage }} style={styles.proofImage} />
+                <TouchableOpacity style={styles.retakeButton} onPress={pickProofFromGallery}>
+                  <Ionicons name="images" size={18} color="#fff" />
+                  <Text style={styles.retakeButtonText}>Cambiar imagen</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.uploadProofButtonSingle} onPress={pickProofFromGallery}>
+                <Ionicons name="images-outline" size={32} color="#F5A623" />
+                <Text style={styles.uploadProofText}>Adjuntar comprobante</Text>
               </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.uploadProofButtonSingle} onPress={pickProofFromGallery}>
-              <Ionicons name="images-outline" size={32} color="#F5A623" />
-              <Text style={styles.uploadProofText}>Adjuntar comprobante</Text>
-            </TouchableOpacity>
-          )}
+            )}
 
-          {proofImage && (
-            <TouchableOpacity
-              style={styles.sendProofButton}
-              onPress={uploadProof}
-              disabled={uploadingProof}
-            >
-              {uploadingProof ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="cloud-upload" size={20} color="#fff" />
-                  <Text style={styles.sendProofButtonText}>Enviar Comprobante</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
+            {proofImage && (
+              <TouchableOpacity
+                style={styles.sendProofButton}
+                onPress={uploadProof}
+                disabled={uploadingProof}
+              >
+                {uploadingProof ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload" size={20} color="#fff" />
+                    <Text style={styles.sendProofButtonText}>Enviar Comprobante</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Cancel Button */}
         <TouchableOpacity
