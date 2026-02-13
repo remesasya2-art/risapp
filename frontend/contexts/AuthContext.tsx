@@ -57,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Setup push notifications when user is logged in (mobile only)
   useEffect(() => {
     if (user && Platform.OS !== 'web') {
+      console.log('🔔 Usuario logueado, configurando push notifications...');
       setupPushNotifications();
     }
   }, [user]);
