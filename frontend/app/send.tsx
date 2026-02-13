@@ -72,6 +72,14 @@ export default function SendRISScreen() {
     return () => clearInterval(rateInterval);
   }, []);
 
+  // Recalcular VES cuando cambia la tasa
+  useEffect(() => {
+    if (rate && amount) {
+      const ris = parseFloat(amount) || 0;
+      setVesAmount((ris * rate).toFixed(2));
+    }
+  }, [rate]);
+
   useEffect(() => {
     // If coming from beneficiaries screen with a specific beneficiary
     if (params.beneficiaryId && beneficiaries.length > 0) {
