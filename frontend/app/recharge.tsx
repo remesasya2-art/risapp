@@ -279,6 +279,18 @@ export default function RechargeScreen() {
     );
   };
 
+  // Loading screen while checking for pending transactions
+  if (loadingPending) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F5A623" />
+          <Text style={styles.loadingText}>Verificando transacciones...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Amount selection screen
   if (!pixData) {
     return (
