@@ -160,6 +160,29 @@ export default function RechargeScreen() {
     }
   };
 
+  const pickProofFromGallery = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        showAlert('Permiso Requerido', 'Necesitamos acceso a tu galería de fotos');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        setProofImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+    }
+  };
+
   const uploadProof = async () => {
     if (!proofImage || !pixData) return;
 
