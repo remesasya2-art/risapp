@@ -157,6 +157,7 @@ export default function LoginScreen() {
               style={[styles.loginButton, (!email.trim() || !password) && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={loading || !email.trim() || !password}
+              testID="login-submit-button"
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
