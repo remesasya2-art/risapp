@@ -61,6 +61,17 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
   - Vibration notification for new admin messages (mobile)
   - Improved UI with better styling and animations
 
+- **Push Notifications System**:
+  - Implemented Expo Push Notifications API for mobile devices
+  - Added `send_push_notification()` function in backend using Expo Push API
+  - Added `send_push_to_user()` and `send_push_to_admins()` helper functions
+  - Modified `create_notification()` to automatically send push notifications
+  - New endpoints:
+    - `POST /api/push/test` - Test push notification for current user
+    - `POST /api/push/send-to-user/{user_id}` - Admin endpoint to send push to specific user
+  - Re-enabled push notification setup in AuthContext.tsx
+  - Push notifications triggered on: transaction updates, support messages, verifications
+
 ### Previous Sessions
 - Full infrastructure migration to Railway (backend + database)
 - Admin panel redesign with professional dark theme
