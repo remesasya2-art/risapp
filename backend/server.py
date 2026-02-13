@@ -110,8 +110,13 @@ async def send_whatsapp_notification(message_body: str) -> bool:
 async def send_push_notification(push_token: str, title: str, body: str, data: dict = None) -> bool:
     """Send push notification using Expo Push API"""
     if not push_token:
-        logger.warning("No push token provided")
+        logger.warning("⚠️ No push token provided")
         return False
+    
+    logger.info(f"🔔 Enviando push notification...")
+    logger.info(f"   Token: {push_token[:30]}...")
+    logger.info(f"   Title: {title}")
+    logger.info(f"   Body: {body}")
     
     try:
         # Expo Push API endpoint
@@ -128,6 +133,8 @@ async def send_push_notification(push_token: str, title: str, body: str, data: d
         if data:
             message["data"] = data
         
+        logger.info(f"📤 Mensaje a enviar: {message}")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 expo_push_url,
@@ -140,16 +147,29 @@ async def send_push_notification(push_token: str, title: str, body: str, data: d
             )
             
             result = response.json()
+            logger.info(f"📥 Respuesta de Expo Push API: status={response.status_code}, result={result}")
             
             if response.status_code == 200:
-                logger.info(f"🔔 Push notification sent to {push_token[:20]}...")
+                # Verificar si hay errores en la respuesta
+                if isinstance(result, dict) and result.get("data"):
+                    ticket = result["data"]
+                    if isinstance(ticket, list) and len(ticket) > 0:
+                        ticket = ticket[0]
+                    if ticket.get("status") == "error":
+                        logger.error(f"❌ Error en ticket: {ticket.get('message')} - {ticket.get('details')}")
+                        return False
+                    elif ticket.get("status") == "ok":
+                        logger.info(f"✅ Push notification enviada exitosamente. Ticket ID: {ticket.get('id')}")
+                        return True
+                
+                logger.info(f"✅ Push notification enviada (status 200)")
                 return True
             else:
-                logger.error(f"Push notification failed: {result}")
+                logger.error(f"❌ Push notification failed: {result}")
                 return False
                 
     except Exception as e:
-        logger.error(f"Error sending push notification: {e}")
+        logger.error(f"❌ Error sending push notification: {e}")
         return False
 
 async def send_push_to_user(user_id: str, title: str, body: str, data: dict = None) -> bool:
