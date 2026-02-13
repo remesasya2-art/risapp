@@ -1950,17 +1950,20 @@ async def approve_ves_recharge(request: ApproveVESRechargeRequest, admin_user: U
 # =======================
 
 class PixRechargeRequest(BaseModel):
-    amount: float
-    cpf: str
+    amount_brl: float = Field(alias="amount_brl")
+    payer_cpf: str = Field(alias="payer_cpf")
+    
+    class Config:
+        populate_by_name = True
 
 @api_router.post("/pix/create")
 async def create_pix_payment(request: PixRechargeRequest, current_user: User = Depends(get_current_user)):
     """Create a PIX payment for recharging RIS balance"""
     
     # Validate amount (min 10, max 2000 BRL)
-    if request.amount < 10:
+    if request.amount_brl < 10:
         raise HTTPException(status_code=400, detail="El monto mínimo es R$ 10,00")
-    if request.amount > 2000:
+    if request.amount_brl > 2000:
         raise HTTPException(status_code=400, detail="El monto máximo por transacción es R$ 2.000,00")
     
     # Check verification status
@@ -1973,7 +1976,7 @@ async def create_pix_payment(request: PixRechargeRequest, current_user: User = D
             "user_id": current_user.user_id,
             "type": "recharge",
             "status": "pending",
-            "amount_input": request.amount
+            "amount_input": request.amount_brl
         },
         sort=[("created_at", -1)]
     )
@@ -1981,7 +1984,7 @@ async def create_pix_payment(request: PixRechargeRequest, current_user: User = D
     if last_pending_recharge:
         raise HTTPException(
             status_code=400, 
-            detail=f"Ya tienes una recarga pendiente de R$ {request.amount:.2f}. Completa o cancela esa transacción primero, o elige un monto diferente."
+            detail=f"Ya tienes una recarga pendiente de R$ {request.amount_brl:.2f}. Completa o cancela esa transacción primero, o elige un monto diferente."
         )
     
     # Generate unique transaction ID
