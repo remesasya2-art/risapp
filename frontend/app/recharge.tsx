@@ -772,6 +772,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
+  proofButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  proofOptionsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   retakeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -785,6 +793,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  uploadProofButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff8f0',
+    borderWidth: 2,
+    borderColor: '#F5A623',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 24,
+    gap: 8,
+  },
+  uploadProofText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F5A623',
+    textAlign: 'center',
   },
   sendProofButton: {
     flexDirection: 'row',
