@@ -84,12 +84,29 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 
 ## Pending Tasks
 
-### P1 - Verification
-- WhatsApp webhook URL updated by user - needs verification that notifications work
+### P1 - High Priority
+- None - all critical features completed
 
-### P2 - Future
+### P2 - Future Enhancements
 - Stripe integration for recharges (blocked on user's Stripe account)
-- Push notifications implementation
+- Fix icon rendering on Cloudflare Pages web build (known recurring issue)
+
+### P3 - Low Priority
+- Refactor GlobalHeader.tsx usage across all screens
+- Configure ESLint properly for TypeScript
+
+## Recent Fixes (2026-02-13)
+
+### Logout Flow Fixed
+- Logout now redirects automatically to `/login` without page freeze
+- Removed blocking `await` calls that caused "page not responding" error
+- Heartbeat improved with proper cleanup and timeout handling
+
+### Push Notifications Enhanced
+- Better error handling and logging
+- Auto-detection of FCM vs Expo token types
+- Clear user feedback when token needs to be refreshed
+- NOTE: User needs to re-open mobile app to get new Expo push token
 
 ## Key Endpoints
 
