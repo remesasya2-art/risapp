@@ -972,16 +972,33 @@ function SupportTab() {
         </ScrollView>
 
         <View style={styles.responseContainer}>
-          <TextInput
-            style={styles.responseInput}
-            value={responseText}
-            onChangeText={setResponseText}
-            placeholder="Escribe tu respuesta..."
-            multiline
-          />
-          <TouchableOpacity style={styles.sendButton} onPress={sendResponse} disabled={sending}>
-            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={20} color="#fff" />}
-          </TouchableOpacity>
+          {responseImage && (
+            <View style={styles.imagePreviewContainer}>
+              <Image source={{ uri: responseImage }} style={styles.imagePreview} />
+              <TouchableOpacity style={styles.removeImageBtn} onPress={() => setResponseImage(null)}>
+                <Ionicons name="close-circle" size={24} color="#dc2626" />
+              </TouchableOpacity>
+            </View>
+          )}
+          <View style={styles.inputRow}>
+            <TouchableOpacity style={styles.attachImageBtn} onPress={pickImage}>
+              <Ionicons name="image-outline" size={24} color="#6b7280" />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.responseInput}
+              value={responseText}
+              onChangeText={setResponseText}
+              placeholder="Escribe tu respuesta..."
+              multiline
+            />
+            <TouchableOpacity 
+              style={[styles.sendButton, (!responseText.trim() && !responseImage) && styles.sendButtonDisabled]} 
+              onPress={sendResponse} 
+              disabled={sending || (!responseText.trim() && !responseImage)}
+            >
+              {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={20} color="#fff" />}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
