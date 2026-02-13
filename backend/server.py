@@ -672,6 +672,75 @@ async def get_all_users(admin_user: User = Depends(get_admin_user)):
         }
     }
 
+@api_router.delete("/admin/users/{user_id}")
+async def delete_user(user_id: str, admin_user: User = Depends(get_super_admin)):
+    """Super Admin: Soft delete a user"""
+    # Cannot delete yourself
+    if user_id == admin_user.user_id:
+        raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo")
+    
+    # Check if user exists
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Cannot delete other super_admins
+    if user.get("role") == "super_admin":
+        raise HTTPException(status_code=403, detail="No puedes eliminar a otro super administrador")
+    
+    # Soft delete - mark as deleted
+    await db.users.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "deleted": True,
+                "deleted_at": datetime.now(timezone.utc),
+                "deleted_by": admin_user.user_id
+            }
+        }
+    )
+    
+    return {"message": f"Usuario {user.get('name', user.get('email'))} eliminado correctamente"}
+
+@api_router.get("/admin/users/deleted")
+async def get_deleted_users(admin_user: User = Depends(get_super_admin)):
+    """Super Admin: Get all deleted users"""
+    users = await db.users.find(
+        {"deleted": True},
+        {
+            "_id": 0,
+            "user_id": 1,
+            "email": 1,
+            "name": 1,
+            "phone": 1,
+            "picture": 1,
+            "balance_ris": 1,
+            "role": 1,
+            "verification_status": 1,
+            "created_at": 1,
+            "deleted_at": 1,
+            "deleted_by": 1
+        }
+    ).sort("deleted_at", -1).to_list(1000)
+    
+    return {"users": users}
+
+@api_router.post("/admin/users/{user_id}/restore")
+async def restore_user(user_id: str, admin_user: User = Depends(get_super_admin)):
+    """Super Admin: Restore a deleted user"""
+    user = await db.users.find_one({"user_id": user_id, "deleted": True})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario eliminado no encontrado")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {
+            "$unset": {"deleted": "", "deleted_at": "", "deleted_by": ""},
+        }
+    )
+    
+    return {"message": f"Usuario {user.get('name', user.get('email'))} restaurado correctamente"}
+
 # =======================
 # PASSWORD/SECURITY ROUTES
 # =======================
