@@ -699,22 +699,46 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
 @api_router.post("/push/test")
 async def test_push_notification(current_user: User = Depends(get_current_user)):
     """Test push notification for current user"""
-    user = await db.users.find_one({"user_id": current_user.user_id}, {"fcm_token": 1})
+    logger.info(f"🔔 Probando push notification para usuario {current_user.user_id}")
     
-    if not user or not user.get("fcm_token"):
-        return {"status": "error", "message": "No push token registered for this user"}
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"fcm_token": 1, "email": 1, "name": 1})
+    
+    if not user:
+        logger.warning(f"⚠️ Usuario no encontrado: {current_user.user_id}")
+        return {"status": "error", "message": "Usuario no encontrado"}
+    
+    fcm_token = user.get("fcm_token")
+    logger.info(f"   Token del usuario: {fcm_token[:30] if fcm_token else 'No configurado'}...")
+    
+    if not fcm_token:
+        logger.warning(f"⚠️ No hay token push para usuario {current_user.user_id}")
+        return {
+            "status": "error", 
+            "message": "No tienes un token de notificaciones registrado. Asegúrate de haber dado permisos de notificaciones en la app.",
+            "token_configured": False
+        }
     
     success = await send_push_notification(
-        user["fcm_token"],
-        "Prueba de Notificación",
-        "¡Las notificaciones push funcionan correctamente!",
+        fcm_token,
+        "🔔 Prueba de Notificación",
+        f"¡Hola {user.get('name', 'Usuario')}! Las notificaciones funcionan correctamente.",
         {"type": "test", "timestamp": datetime.now(timezone.utc).isoformat()}
     )
     
     if success:
-        return {"status": "success", "message": "Push notification sent successfully"}
+        logger.info(f"✅ Push notification de prueba enviada a {current_user.user_id}")
+        return {
+            "status": "success", 
+            "message": "Notificación enviada exitosamente. Deberías recibirla en tu dispositivo.",
+            "token_configured": True
+        }
     else:
-        return {"status": "error", "message": "Failed to send push notification"}
+        logger.error(f"❌ Error enviando push notification de prueba a {current_user.user_id}")
+        return {
+            "status": "error", 
+            "message": "Error al enviar la notificación. El token puede ser inválido o el dispositivo no está disponible.",
+            "token_configured": True
+        }
 
 @api_router.post("/push/send-to-user/{user_id}")
 async def send_push_to_specific_user(
