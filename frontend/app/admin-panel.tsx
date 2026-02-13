@@ -102,39 +102,77 @@ export default function AdminPanelScreen() {
   }
 
   const tabs = [
-    { key: 'dashboard', icon: 'grid', label: 'Inicio' },
-    { key: 'withdrawals', icon: 'arrow-up-circle', label: 'Retiros', badge: dashboard?.transactions.pending_withdrawals },
-    { key: 'recharges', icon: 'arrow-down-circle', label: 'Recargas', badge: dashboard?.transactions.pending_recharges },
-    { key: 'kyc', icon: 'document-text', label: 'KYC', badge: dashboard?.users.pending_kyc },
-    { key: 'support', icon: 'chatbubbles', label: 'Soporte', badge: dashboard?.support.open_chats },
-    { key: 'users', icon: 'people', label: 'Usuarios' },
-    ...(userRole === 'super_admin' ? [{ key: 'admins', icon: 'shield', label: 'Admins' }] : []),
-    { key: 'settings', icon: 'settings', label: 'Config' },
+    { key: 'dashboard', icon: 'grid-outline', label: 'Dashboard' },
+    { key: 'withdrawals', icon: 'trending-up-outline', label: 'Retiros', badge: dashboard?.transactions.pending_withdrawals },
+    { key: 'recharges', icon: 'trending-down-outline', label: 'Recargas', badge: dashboard?.transactions.pending_recharges },
+    { key: 'kyc', icon: 'shield-checkmark-outline', label: 'KYC', badge: dashboard?.users.pending_kyc },
+    { key: 'support', icon: 'chatbubble-ellipses-outline', label: 'Soporte', badge: dashboard?.support.open_chats },
+    { key: 'users', icon: 'people-outline', label: 'Usuarios' },
+    ...(userRole === 'super_admin' ? [{ key: 'admins', icon: 'key-outline', label: 'Admins' }] : []),
+    { key: 'settings', icon: 'cog-outline', label: 'Ajustes' },
   ];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Compact Header */}
+      {/* Modern Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#1f2937" />
-        </TouchableOpacity>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Admin</Text>
+          <Text style={styles.headerTitle}>Panel de Control</Text>
           <View style={[styles.roleBadge, userRole === 'super_admin' && styles.superBadge]}>
-            <Text style={styles.roleBadgeText}>{userRole === 'super_admin' ? 'Super' : 'Admin'}</Text>
+            <Ionicons name={userRole === 'super_admin' ? 'diamond' : 'shield'} size={12} color="#fff" />
+            <Text style={styles.roleBadgeText}>{userRole === 'super_admin' ? 'Super Admin' : 'Admin'}</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={22} color="#2563eb" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+            <Ionicons name="sync-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Main Content - Takes full remaining space */}
+      {/* Navigation Tabs */}
+      <View style={styles.tabsWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContainer}
+        >
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+              onPress={() => setActiveTab(tab.key as TabType)}
+            >
+              <Ionicons 
+                name={tab.icon as any} 
+                size={18} 
+                color={activeTab === tab.key ? '#fff' : '#64748b'} 
+              />
+              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>
+                    {tab.badge > 99 ? '99+' : tab.badge}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Main Content */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />}
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 'dashboard' && <DashboardTab data={dashboard} />}
@@ -146,39 +184,6 @@ export default function AdminPanelScreen() {
         {activeTab === 'admins' && userRole === 'super_admin' && <AdminsTab />}
         {activeTab === 'settings' && <SettingsTab currentRate={dashboard?.current_rate || 78} onRateUpdated={onRefresh} />}
       </ScrollView>
-
-      {/* Bottom Navigation - Fixed at bottom */}
-      <View style={styles.bottomNav}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.bottomNavContent}
-        >
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.navItem, activeTab === tab.key && styles.navItemActive]}
-              onPress={() => setActiveTab(tab.key as TabType)}
-            >
-              <View style={styles.navIconContainer}>
-                <Ionicons 
-                  name={tab.icon as any} 
-                  size={22} 
-                  color={activeTab === tab.key ? '#2563eb' : '#6b7280'} 
-                />
-                {tab.badge !== undefined && tab.badge > 0 && (
-                  <View style={styles.navBadge}>
-                    <Text style={styles.navBadgeText}>{tab.badge > 9 ? '9+' : tab.badge}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.navLabel, activeTab === tab.key && styles.navLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
     </SafeAreaView>
   );
 }
