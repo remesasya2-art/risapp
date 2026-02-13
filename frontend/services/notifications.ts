@@ -110,22 +110,26 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
 export async function sendPushTokenToServer(token: string): Promise<boolean> {
   try {
+    console.log('📤 Enviando token al servidor...');
     const sessionToken = await AsyncStorage.getItem('session_token');
     if (!sessionToken) {
-      console.log('No session token, cannot register FCM token');
+      console.log('❌ No hay session token, no se puede registrar FCM token');
       return false;
     }
 
-    await axios.post(
+    console.log('📤 Session token encontrado, enviando FCM token...');
+    console.log('📤 Backend URL:', BACKEND_URL);
+    
+    const response = await axios.post(
       `${BACKEND_URL}/api/auth/register-fcm-token`,
       { fcm_token: token },
       { headers: { Authorization: `Bearer ${sessionToken}` } }
     );
 
-    console.log('FCM token registered with server');
+    console.log('✅ FCM token registrado con el servidor:', response.data);
     return true;
-  } catch (error) {
-    console.error('Error sending push token to server:', error);
+  } catch (error: any) {
+    console.error('❌ Error enviando push token al servidor:', error?.response?.data || error.message);
     return false;
   }
 }
