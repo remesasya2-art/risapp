@@ -1418,6 +1418,57 @@ function UsersTab() {
     );
   }
 
+  // ============ DELETED USERS VIEW ============
+  if (showDeletedUsers) {
+    return (
+      <View style={styles.tabContent}>
+        <View style={styles.deletedUsersHeader}>
+          <TouchableOpacity onPress={() => setShowDeletedUsers(false)} style={styles.userDetailBackBtn}>
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.deletedUsersTitle}>Usuarios Eliminados</Text>
+          <TouchableOpacity onPress={loadDeletedUsers} style={styles.userDetailRefresh}>
+            <Ionicons name="refresh" size={20} color="#2563eb" />
+          </TouchableOpacity>
+        </View>
+
+        {loadingDeleted ? (
+          <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />
+        ) : deletedUsers.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+            <Text style={styles.emptyTitle}>Sin usuarios eliminados</Text>
+            <Text style={styles.emptyText}>No hay usuarios en la papelera</Text>
+          </View>
+        ) : (
+          deletedUsers.map((u) => (
+            <View key={u.user_id} style={styles.deletedUserCard}>
+              <View style={styles.deletedUserInfo}>
+                <View style={styles.deletedUserAvatar}>
+                  <Text style={styles.deletedUserAvatarText}>{u.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                </View>
+                <View style={styles.deletedUserDetails}>
+                  <Text style={styles.deletedUserName}>{u.name || 'Sin nombre'}</Text>
+                  <Text style={styles.deletedUserEmail}>{u.email}</Text>
+                  <Text style={styles.deletedUserDate}>
+                    Eliminado: {u.deleted_at ? new Date(u.deleted_at).toLocaleDateString('es') : 'N/A'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.restoreUserBtn}
+                onPress={() => restoreUser(u.user_id, u.name)}
+              >
+                <Ionicons name="refresh" size={18} color="#059669" />
+                <Text style={styles.restoreUserBtnText}>Restaurar</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </View>
+    );
+  }
+
   // ============ USERS LIST VIEW ============
   return (
     <View style={styles.tabContent}>
