@@ -1491,6 +1491,16 @@ function UsersTab() {
         </View>
       </View>
 
+      {/* Deleted Users Button */}
+      <TouchableOpacity 
+        style={styles.deletedUsersBtn}
+        onPress={() => { setShowDeletedUsers(true); loadDeletedUsers(); }}
+      >
+        <Ionicons name="trash-outline" size={18} color="#dc2626" />
+        <Text style={styles.deletedUsersBtnText}>Ver Usuarios Eliminados</Text>
+        <Ionicons name="chevron-forward" size={18} color="#dc2626" />
+      </TouchableOpacity>
+
       <Text style={styles.sectionTitle}>Lista de Usuarios</Text>
       <Text style={styles.sectionSubtitle}>Toca un usuario para ver toda su información</Text>
       
