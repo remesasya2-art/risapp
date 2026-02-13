@@ -3923,8 +3923,9 @@ async def startup_db_client():
     try:
         # Create unique index for email (sparse to allow nulls)
         await db.users.create_index("email", unique=True, sparse=True)
-        # Create unique index for cpf_number (sparse to allow users without CPF)
-        await db.users.create_index("cpf_number", unique=True, sparse=True)
+        # Create index for cpf_number (not unique due to existing duplicates)
+        # Validation is done at application level
+        await db.users.create_index("cpf_number", sparse=True)
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.warning(f"Index creation warning (may already exist): {e}")
