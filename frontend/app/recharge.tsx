@@ -779,6 +779,17 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     gap: 8,
   },
+  uploadProofButtonSingle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff8f0',
+    borderWidth: 2,
+    borderColor: '#F5A623',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 28,
+    gap: 8,
+  },
   uploadProofText: {
     fontSize: 14,
     fontWeight: '600',
