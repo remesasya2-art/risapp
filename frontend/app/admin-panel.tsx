@@ -1209,6 +1209,24 @@ function UsersTab() {
                 <Text style={styles.userProfileBalanceLabel}>Saldo Actual</Text>
                 <Text style={styles.userProfileBalanceValue}>{userDetails.profile.balance_ris?.toFixed(2)} RIS</Text>
               </View>
+              
+              {/* Delete User Button */}
+              {userDetails.profile.role !== 'super_admin' && (
+                <TouchableOpacity 
+                  style={styles.deleteUserBtn}
+                  onPress={() => deleteUser(userDetails.profile.user_id, userDetails.profile.name)}
+                  disabled={deletingUser}
+                >
+                  {deletingUser ? (
+                    <ActivityIndicator size="small" color="#dc2626" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={18} color="#dc2626" />
+                      <Text style={styles.deleteUserBtnText}>Eliminar Usuario</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Stats Summary */}
