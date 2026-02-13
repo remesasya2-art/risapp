@@ -108,15 +108,27 @@ async def send_whatsapp_notification(message_body: str) -> bool:
         return False
 
 async def send_push_notification(push_token: str, title: str, body: str, data: dict = None) -> bool:
-    """Send push notification using Expo Push API"""
+    """Send push notification using Expo Push API or Firebase FCM"""
     if not push_token:
         logger.warning("⚠️ No push token provided")
         return False
     
     logger.info(f"🔔 Enviando push notification...")
-    logger.info(f"   Token: {push_token[:30]}...")
+    logger.info(f"   Token: {push_token[:40]}...")
     logger.info(f"   Title: {title}")
     logger.info(f"   Body: {body}")
+    
+    # Detectar tipo de token
+    is_expo_token = push_token.startswith('ExponentPushToken')
+    is_fcm_token = not is_expo_token and len(push_token) > 100  # FCM tokens son largos
+    
+    logger.info(f"   Tipo de token: {'Expo' if is_expo_token else 'FCM' if is_fcm_token else 'Desconocido'}")
+    
+    if not is_expo_token and is_fcm_token:
+        # Token de FCM - intentar usar Firebase Admin SDK
+        logger.warning("⚠️ Token de FCM detectado. Se requiere Firebase Admin SDK para enviar.")
+        logger.warning("⚠️ El usuario necesita volver a abrir la app para registrar un token de Expo válido.")
+        return False
     
     try:
         # Expo Push API endpoint
@@ -133,7 +145,7 @@ async def send_push_notification(push_token: str, title: str, body: str, data: d
         if data:
             message["data"] = data
         
-        logger.info(f"📤 Mensaje a enviar: {message}")
+        logger.info(f"📤 Enviando a Expo Push API...")
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -156,7 +168,11 @@ async def send_push_notification(push_token: str, title: str, body: str, data: d
                     if isinstance(ticket, list) and len(ticket) > 0:
                         ticket = ticket[0]
                     if ticket.get("status") == "error":
-                        logger.error(f"❌ Error en ticket: {ticket.get('message')} - {ticket.get('details')}")
+                        error_type = ticket.get("details", {}).get("error", "")
+                        if error_type == "DeviceNotRegistered":
+                            logger.error(f"❌ Token inválido o dispositivo no registrado")
+                        else:
+                            logger.error(f"❌ Error en ticket: {ticket.get('message')} - {ticket.get('details')}")
                         return False
                     elif ticket.get("status") == "ok":
                         logger.info(f"✅ Push notification enviada exitosamente. Ticket ID: {ticket.get('id')}")
