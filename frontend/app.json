@@ -13,8 +13,8 @@
       "bundleIdentifier": "com.remesasya.app",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSCameraUsageDescription": "Necesitamos la cámara para verificar tu identidad con fotos en vivo",
-        "NSPhotoLibraryUsageDescription": "Necesitamos acceso a tu galería para mostrar tus fotos"
+        "NSCameraUsageDescription": "Necesitamos la c\u00e1mara para verificar tu identidad con fotos en vivo",
+        "NSPhotoLibraryUsageDescription": "Necesitamos acceso a tu galer\u00eda para mostrar tus fotos"
       }
     },
     "android": {
@@ -70,6 +70,12 @@
     "notification": {
       "icon": "./assets/images/notification-icon.png",
       "color": "#F5A623"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ce29f6a2-8f24-4c3b-8b93-8f94bb1c8f1d"
+      }
+    },
+    "owner": "remesasya"
   }
 }
