@@ -188,41 +188,112 @@ export default function AdminPanelScreen() {
   );
 }
 
-// Dashboard Tab - Optimized layout
+// Dashboard Tab - Professional layout
 function DashboardTab({ data }: { data: DashboardData | null }) {
   if (!data) return null;
 
   return (
     <View style={styles.tabContent}>
-      {/* Quick Stats Row */}
-      <View style={styles.quickStatsRow}>
-        <QuickStat icon="arrow-up" value={data.transactions.pending_withdrawals} label="Retiros" color="#ef4444" />
-        <QuickStat icon="arrow-down" value={data.transactions.pending_recharges} label="Recargas" color="#10b981" />
-        <QuickStat icon="chatbubble" value={data.support.open_chats} label="Soporte" color="#8b5cf6" />
-        <QuickStat icon="person-add" value={data.users.pending_kyc} label="KYC" color="#f59e0b" />
+      {/* Welcome Card */}
+      <View style={styles.welcomeCard}>
+        <View style={styles.welcomeContent}>
+          <Text style={styles.welcomeTitle}>Panel de Administración</Text>
+          <Text style={styles.welcomeSubtitle}>Gestiona tu plataforma RIS</Text>
+        </View>
+        <View style={styles.welcomeIcon}>
+          <Ionicons name="analytics" size={32} color="#2563eb" />
+        </View>
       </View>
 
-      {/* Stats Cards */}
-      <Text style={styles.sectionTitle}>Estadísticas</Text>
-      <View style={styles.statsGrid}>
-        <StatCard icon="people" title="Total Usuarios" value={data.users.total} color="#2563eb" />
-        <StatCard icon="checkmark-circle" title="Verificados" value={data.users.verified} color="#10b981" />
-        <StatCard icon="swap-horizontal" title="Tasa RIS/VES" value={data.current_rate} color="#06b6d4" />
-        <StatCard icon="receipt" title="Transacciones" value={data.transactions.completed} color="#8b5cf6" />
+      {/* Pending Actions - Alert Style */}
+      <View style={styles.pendingSection}>
+        <Text style={styles.pendingSectionTitle}>Acciones Pendientes</Text>
+        <View style={styles.pendingGrid}>
+          <View style={[styles.pendingCard, { borderLeftColor: '#ef4444' }]}>
+            <View style={styles.pendingCardIcon}>
+              <Ionicons name="trending-up" size={20} color="#ef4444" />
+            </View>
+            <View style={styles.pendingCardContent}>
+              <Text style={styles.pendingCardValue}>{data.transactions.pending_withdrawals}</Text>
+              <Text style={styles.pendingCardLabel}>Retiros</Text>
+            </View>
+          </View>
+          <View style={[styles.pendingCard, { borderLeftColor: '#10b981' }]}>
+            <View style={styles.pendingCardIcon}>
+              <Ionicons name="trending-down" size={20} color="#10b981" />
+            </View>
+            <View style={styles.pendingCardContent}>
+              <Text style={styles.pendingCardValue}>{data.transactions.pending_recharges}</Text>
+              <Text style={styles.pendingCardLabel}>Recargas</Text>
+            </View>
+          </View>
+          <View style={[styles.pendingCard, { borderLeftColor: '#f59e0b' }]}>
+            <View style={styles.pendingCardIcon}>
+              <Ionicons name="shield-checkmark" size={20} color="#f59e0b" />
+            </View>
+            <View style={styles.pendingCardContent}>
+              <Text style={styles.pendingCardValue}>{data.users.pending_kyc}</Text>
+              <Text style={styles.pendingCardLabel}>KYC</Text>
+            </View>
+          </View>
+          <View style={[styles.pendingCard, { borderLeftColor: '#8b5cf6' }]}>
+            <View style={styles.pendingCardIcon}>
+              <Ionicons name="chatbubble-ellipses" size={20} color="#8b5cf6" />
+            </View>
+            <View style={styles.pendingCardContent}>
+              <Text style={styles.pendingCardValue}>{data.support.open_chats}</Text>
+              <Text style={styles.pendingCardLabel}>Soporte</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Stats Overview */}
+      <View style={styles.statsSection}>
+        <Text style={styles.statsSectionTitle}>Resumen General</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <View style={[styles.statBoxIcon, { backgroundColor: '#eff6ff' }]}>
+              <Ionicons name="people" size={22} color="#2563eb" />
+            </View>
+            <Text style={styles.statBoxValue}>{data.users.total}</Text>
+            <Text style={styles.statBoxLabel}>Usuarios</Text>
+          </View>
+          <View style={styles.statBox}>
+            <View style={[styles.statBoxIcon, { backgroundColor: '#ecfdf5' }]}>
+              <Ionicons name="checkmark-done" size={22} color="#10b981" />
+            </View>
+            <Text style={styles.statBoxValue}>{data.users.verified}</Text>
+            <Text style={styles.statBoxLabel}>Verificados</Text>
+          </View>
+          <View style={styles.statBox}>
+            <View style={[styles.statBoxIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="swap-horizontal" size={22} color="#f59e0b" />
+            </View>
+            <Text style={styles.statBoxValue}>{data.current_rate}</Text>
+            <Text style={styles.statBoxLabel}>Tasa RIS/VES</Text>
+          </View>
+        </View>
       </View>
 
       {/* Volume Summary */}
-      <View style={styles.volumeCard}>
-        <Text style={styles.volumeTitle}>Volumen Total</Text>
-        <View style={styles.volumeGrid}>
-          <View style={styles.volumeItem}>
-            <Text style={styles.volumeValue}>{data.volume.withdrawals.toFixed(0)}</Text>
-            <Text style={styles.volumeLabel}>RIS Enviados</Text>
+      <View style={styles.volumeSection}>
+        <Text style={styles.volumeSectionTitle}>Volumen de Operaciones</Text>
+        <View style={styles.volumeCards}>
+          <View style={styles.volumeCardNew}>
+            <Ionicons name="arrow-up-circle" size={28} color="#ef4444" />
+            <Text style={styles.volumeCardValue}>{data.volume.withdrawals.toFixed(0)}</Text>
+            <Text style={styles.volumeCardLabel}>RIS Enviados</Text>
           </View>
-          <View style={styles.volumeDivider} />
-          <View style={styles.volumeItem}>
-            <Text style={styles.volumeValue}>{data.volume.recharges.toFixed(0)}</Text>
-            <Text style={styles.volumeLabel}>BRL Recargados</Text>
+          <View style={styles.volumeCardNew}>
+            <Ionicons name="arrow-down-circle" size={28} color="#10b981" />
+            <Text style={styles.volumeCardValue}>{data.volume.recharges.toFixed(0)}</Text>
+            <Text style={styles.volumeCardLabel}>BRL Recargados</Text>
+          </View>
+          <View style={styles.volumeCardNew}>
+            <Ionicons name="receipt" size={28} color="#2563eb" />
+            <Text style={styles.volumeCardValue}>{data.transactions.completed}</Text>
+            <Text style={styles.volumeCardLabel}>Completadas</Text>
           </View>
         </View>
       </View>
