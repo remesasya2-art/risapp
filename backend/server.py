@@ -3840,7 +3840,8 @@ async def get_support_chat_detail(user_id: str, admin_user: User = Depends(get_a
 
 class AdminSupportResponse(BaseModel):
     user_id: str
-    message: str
+    message: str = ""
+    image: Optional[str] = None
 
 @api_router.post("/admin/support/respond")
 async def admin_respond_support(request: AdminSupportResponse, admin_user: User = Depends(get_admin_user)):
@@ -3848,10 +3849,15 @@ async def admin_respond_support(request: AdminSupportResponse, admin_user: User 
     if not has_permission(admin_user, "support.respond"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
+    # Validate that at least message or image is provided
+    if not request.message.strip() and not request.image:
+        raise HTTPException(status_code=400, detail="Debes enviar un mensaje o una imagen")
+    
     # Save response
     admin_response = {
         "user_id": request.user_id,
         "message": request.message,
+        "image": request.image,
         "sender": "admin",
         "admin_id": admin_user.user_id,
         "admin_name": admin_user.name,
@@ -3860,12 +3866,16 @@ async def admin_respond_support(request: AdminSupportResponse, admin_user: User 
     await db.support_responses.insert_one(admin_response)
     
     # Create notification
+    notification_message = request.message[:200] if request.message else "📷 Te enviaron una imagen"
+    if request.message and len(request.message) > 200:
+        notification_message += "..."
+    
     await create_notification(
         user_id=request.user_id,
         title="💬 Respuesta de Soporte",
-        message=request.message[:200] + ("..." if len(request.message) > 200 else ""),
+        message=notification_message,
         notification_type="support_response",
-        data={"full_message": request.message}
+        data={"full_message": request.message, "has_image": bool(request.image)}
     )
     
     return {"message": "Respuesta enviada"}
