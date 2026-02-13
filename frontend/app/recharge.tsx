@@ -51,12 +51,15 @@ export default function RechargeScreen() {
   const [amount, setAmount] = useState('');
   const [cpf, setCpf] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingPending, setLoadingPending] = useState(true);
   const [pixData, setPixData] = useState<{
     qr_code: string;
     qr_code_base64: string;
     transaction_id: string;
     expiration: string;
     amount_brl: number;
+    status?: string;
+    proof_uploaded?: boolean;
   } | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
@@ -65,6 +68,40 @@ export default function RechargeScreen() {
   const [cancelling, setCancelling] = useState(false);
 
   const quickAmounts = [50, 100, 200, 500, 1000];
+
+  // Check for pending PIX transactions on component mount
+  useEffect(() => {
+    checkPendingTransaction();
+  }, []);
+
+  const checkPendingTransaction = async () => {
+    try {
+      setLoadingPending(true);
+      const token = await AsyncStorage.getItem('session_token');
+      
+      const response = await axios.get(
+        `${BACKEND_URL}/api/pix/pending`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.has_pending && response.data.pending_transaction) {
+        const pending = response.data.pending_transaction;
+        setPixData({
+          qr_code: pending.qr_code,
+          qr_code_base64: pending.qr_code_base64,
+          transaction_id: pending.transaction_id,
+          expiration: pending.expiration,
+          amount_brl: pending.amount_brl,
+          status: pending.status,
+          proof_uploaded: pending.proof_uploaded
+        });
+      }
+    } catch (error) {
+      console.error('Error checking pending transaction:', error);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, '');
