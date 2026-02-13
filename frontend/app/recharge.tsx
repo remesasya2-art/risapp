@@ -400,28 +400,16 @@ export default function RechargeScreen() {
           {proofImage ? (
             <View style={styles.proofPreview}>
               <Image source={{ uri: proofImage }} style={styles.proofImage} />
-              <View style={styles.proofButtonsRow}>
-                <TouchableOpacity style={styles.retakeButton} onPress={takeProofPhoto}>
-                  <Ionicons name="camera" size={18} color="#fff" />
-                  <Text style={styles.retakeButtonText}>Cámara</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.retakeButton} onPress={pickProofFromGallery}>
-                  <Ionicons name="images" size={18} color="#fff" />
-                  <Text style={styles.retakeButtonText}>Galería</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.retakeButton} onPress={pickProofFromGallery}>
+                <Ionicons name="images" size={18} color="#fff" />
+                <Text style={styles.retakeButtonText}>Cambiar imagen</Text>
+              </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.proofOptionsContainer}>
-              <TouchableOpacity style={styles.uploadProofButton} onPress={takeProofPhoto}>
-                <Ionicons name="camera-outline" size={32} color="#F5A623" />
-                <Text style={styles.uploadProofText}>Tomar foto</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.uploadProofButton} onPress={pickProofFromGallery}>
-                <Ionicons name="images-outline" size={32} color="#F5A623" />
-                <Text style={styles.uploadProofText}>Elegir de galería</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.uploadProofButtonSingle} onPress={pickProofFromGallery}>
+              <Ionicons name="images-outline" size={32} color="#F5A623" />
+              <Text style={styles.uploadProofText}>Adjuntar comprobante</Text>
+            </TouchableOpacity>
           )}
 
           {proofImage && (
