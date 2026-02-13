@@ -748,21 +748,6 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 16,
   },
-  uploadProofButton: {
-    borderWidth: 2,
-    borderColor: '#F5A623',
-    borderStyle: 'dashed',
-    borderRadius: 14,
-    padding: 24,
-    alignItems: 'center',
-    backgroundColor: '#fffbeb',
-  },
-  uploadProofText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#F5A623',
-    marginTop: 8,
-  },
   proofPreview: {
     alignItems: 'center',
   },
