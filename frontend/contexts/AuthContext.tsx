@@ -66,26 +66,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!user) return;
     
-    const sendHeartbeat = async () => {
-      try {
-        const token = await AsyncStorage.getItem('session_token');
-        if (token) {
+    let isActive = true;
+    let timeoutId: NodeJS.Timeout | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    const sendHeartbeat = () => {
+      if (!isActive) return;
+      
+      AsyncStorage.getItem('session_token').then(token => {
+        if (token && isActive) {
           axios.post(`${BACKEND_URL}/api/auth/heartbeat`, {}, {
-            headers: { Authorization: `Bearer ${token}` }
-          }).catch(() => {}); // No esperar respuesta
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 5000 // 5 segundos máximo
+          }).catch(() => {}); // Ignorar errores
         }
-      } catch (error) {
-        // Silenciar
-      }
+      }).catch(() => {});
     };
     
-    // Enviar heartbeat después de 5 segundos (no bloquear inicio)
-    setTimeout(sendHeartbeat, 5000);
+    // Enviar heartbeat después de 5 segundos
+    timeoutId = setTimeout(sendHeartbeat, 5000);
     
-    // Heartbeat cada 2 minutos (antes era 30 segundos)
-    const interval = setInterval(sendHeartbeat, 120000);
+    // Heartbeat cada 2 minutos
+    intervalId = setInterval(sendHeartbeat, 120000);
     
-    return () => clearInterval(interval);
+    return () => {
+      isActive = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [user]);
 
   const setupPushNotifications = async () => {
