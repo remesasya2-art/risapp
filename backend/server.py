@@ -1997,12 +1997,12 @@ async def create_pix_payment(request: PixRechargeRequest, current_user: User = D
     
     # Create PIX payment with Mercado Pago
     pix_result = mercadopago_service.create_pix_payment(
-        amount=request.amount,
-        description=f"Recarga RIS - {request.amount} BRL",
+        amount=request.amount_brl,
+        description=f"Recarga RIS - {request.amount_brl} BRL",
         payer_email=current_user.email,
         payer_first_name=first_name,
         payer_last_name=last_name,
-        payer_cpf=request.cpf,
+        payer_cpf=request.payer_cpf,
         external_reference=transaction_id
     )
     
@@ -2017,8 +2017,8 @@ async def create_pix_payment(request: PixRechargeRequest, current_user: User = D
         "type": "recharge",
         "payment_method": "pix",
         "status": "pending",
-        "amount_input": request.amount,  # BRL
-        "amount_output": request.amount,  # RIS (1:1)
+        "amount_input": request.amount_brl,  # BRL
+        "amount_output": request.amount_brl,  # RIS (1:1)
         "mercadopago_payment_id": pix_result.get("payment_id"),
         "pix_qr_code": pix_result.get("qr_code"),
         "pix_qr_code_base64": pix_result.get("qr_code_base64"),
@@ -2038,8 +2038,8 @@ async def create_pix_payment(request: PixRechargeRequest, current_user: User = D
         "qr_code": pix_result.get("qr_code"),
         "qr_code_base64": pix_result.get("qr_code_base64"),
         "expiration": pix_result.get("expiration"),
-        "amount_brl": request.amount,
-        "amount_ris": request.amount
+        "amount_brl": request.amount_brl,
+        "amount_ris": request.amount_brl
     }
 
 @api_router.get("/pix/status/{transaction_id}")
