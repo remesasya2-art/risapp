@@ -2599,4 +2599,108 @@ const styles = StyleSheet.create({
   vesRejectBtnText: { fontSize: 15, fontWeight: '600', color: '#dc2626' },
   vesApproveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#059669', paddingVertical: 16, borderRadius: 14, gap: 8 },
   vesApproveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Delete User Button
+  deleteUserBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#fef2f2', 
+    borderWidth: 1, 
+    borderColor: '#fecaca', 
+    paddingVertical: 12, 
+    borderRadius: 10, 
+    marginTop: 12,
+    gap: 8 
+  },
+  deleteUserBtnText: { fontSize: 14, fontWeight: '600', color: '#dc2626' },
+
+  // Deleted Users Button
+  deletedUsersBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#fef2f2', 
+    borderWidth: 1, 
+    borderColor: '#fecaca', 
+    paddingVertical: 12, 
+    borderRadius: 10, 
+    marginBottom: 16,
+    gap: 8 
+  },
+  deletedUsersBtnText: { fontSize: 14, fontWeight: '500', color: '#dc2626' },
+
+  // Deleted Users View
+  deletedUsersHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 20 
+  },
+  deletedUsersTitle: { 
+    flex: 1, 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: '#0f172a', 
+    textAlign: 'center' 
+  },
+  deletedUserCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: 12, 
+    padding: 14, 
+    marginBottom: 10, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between' 
+  },
+  deletedUserInfo: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    flex: 1 
+  },
+  deletedUserAvatar: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: '#fee2e2', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  deletedUserAvatarText: { 
+    color: '#dc2626', 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  deletedUserDetails: { 
+    marginLeft: 12, 
+    flex: 1 
+  },
+  deletedUserName: { 
+    fontSize: 15, 
+    fontWeight: '600', 
+    color: '#374151' 
+  },
+  deletedUserEmail: { 
+    fontSize: 12, 
+    color: '#6b7280', 
+    marginTop: 2 
+  },
+  deletedUserDate: { 
+    fontSize: 11, 
+    color: '#9ca3af', 
+    marginTop: 4 
+  },
+  restoreUserBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#ecfdf5', 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 8, 
+    gap: 6 
+  },
+  restoreUserBtnText: { 
+    fontSize: 13, 
+    fontWeight: '600', 
+    color: '#059669' 
+  },
 });
