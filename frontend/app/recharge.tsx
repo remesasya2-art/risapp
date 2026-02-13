@@ -738,6 +738,35 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   // QR Screen Styles
+  pendingReviewBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#fef3c7',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  pendingReviewContent: {
+    flex: 1,
+  },
+  pendingReviewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  pendingReviewText: {
+    fontSize: 14,
+    color: '#78350f',
+    lineHeight: 20,
+  },
+  pendingBadge: {
+    backgroundColor: '#d1fae5',
+  },
+  pendingBadgeText: {
+    color: '#059669',
+  },
   pixAmountCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
