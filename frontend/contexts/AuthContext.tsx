@@ -222,23 +222,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await AsyncStorage.getItem('session_token');
       if (token) {
-        await axios.post(`${BACKEND_URL}/api/auth/logout`, {}, {
+        // No esperar la respuesta del servidor para evitar bloqueos
+        axios.post(`${BACKEND_URL}/api/auth/logout`, {}, {
           headers: { Authorization: `Bearer ${token}` }
-        });
+        }).catch(() => {}); // Ignorar errores silenciosamente
       }
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
-      await AsyncStorage.removeItem('session_token');
-      setUser(null);
-      
-      // Redirigir a login en web automáticamente
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        // Usar setTimeout para asegurar que el estado se limpie primero
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 100);
-      }
+    }
+    
+    // Limpiar estado inmediatamente sin await
+    AsyncStorage.removeItem('session_token').catch(() => {});
+    setUser(null);
+    
+    // Redirigir a login en web
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.replace('/login');
     }
   };
 
