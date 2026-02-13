@@ -226,8 +226,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await AsyncStorage.getItem('session_token');
       if (token) {
-        const response = await axios.get(`${BACKEND_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` }
+        // Add timestamp to prevent caching
+        const response = await axios.get(`${BACKEND_URL}/api/auth/me?_t=${Date.now()}`, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         });
         setUser(response.data);
       }
