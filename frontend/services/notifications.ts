@@ -78,24 +78,46 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   try {
     // Get the Expo push token (works with Expo Go)
     console.log('📱 Obteniendo Expo Push Token...');
-    console.log('📱 Project ID:', Constants.expoConfig?.extra?.eas?.projectId);
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    console.log('📱 Project ID:', projectId);
     
-    const expoPushToken = await Notifications.getExpoPushTokenAsync({
-      projectId: Constants.expoConfig?.extra?.eas?.projectId,
-    });
+    // Si no hay projectId, intentar obtener el token sin él
+    let expoPushToken;
+    if (projectId) {
+      expoPushToken = await Notifications.getExpoPushTokenAsync({
+        projectId: projectId,
+      });
+    } else {
+      // Intentar sin projectId (puede funcionar en algunos casos con Expo Go)
+      console.log('⚠️ No hay projectId configurado, intentando sin él...');
+      expoPushToken = await Notifications.getExpoPushTokenAsync();
+    }
+    
     token = expoPushToken.data;
     console.log('✅ Expo Push Token obtenido:', token);
-  } catch (error) {
-    console.log('⚠️ Error obteniendo Expo push token:', error);
+  } catch (error: any) {
+    console.log('⚠️ Error obteniendo Expo push token:', error?.message || error);
     
-    // Try to get FCM token for production builds
+    // Try to get device token for standalone/production builds
     try {
-      console.log('📱 Intentando obtener token del dispositivo...');
-      const fcmToken = await Notifications.getDevicePushTokenAsync();
-      token = fcmToken.data;
+      console.log('📱 Intentando obtener token nativo del dispositivo...');
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      token = deviceToken.data;
       console.log('✅ Device Push Token obtenido:', token);
-    } catch (fcmError) {
-      console.log('❌ Error obteniendo device push token:', fcmError);
+    } catch (deviceError: any) {
+      console.log('❌ Error obteniendo device push token:', deviceError?.message || deviceError);
+      
+      // Última alternativa: crear un token de experiencia Expo
+      try {
+        console.log('📱 Último intento: Token de experiencia...');
+        const experienceToken = await Notifications.getExpoPushTokenAsync({
+          experienceId: '@remesasya/ris-app'
+        });
+        token = experienceToken.data;
+        console.log('✅ Experience Token obtenido:', token);
+      } catch (expError: any) {
+        console.log('❌ No se pudo obtener ningún token:', expError?.message || expError);
+      }
     }
   }
 
