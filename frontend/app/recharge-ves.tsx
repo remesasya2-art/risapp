@@ -164,7 +164,7 @@ export default function RechargeVESScreen() {
       showAlert(
         '✅ Solicitud Enviada',
         'Tu recarga está siendo procesada. Te notificaremos cuando sea aprobada.',
-        [{ text: 'OK', onPress: () => router.replace('/') }]
+        [{ text: 'OK', onPress: () => { refreshUser(); router.replace('/'); } }]
       );
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Error al procesar la recarga');
