@@ -2366,9 +2366,15 @@ const styles = StyleSheet.create({
   messageImage: { width: 180, height: 120, borderRadius: 8, marginBottom: 8 },
   messageText: { fontSize: 14, color: '#1f2937', lineHeight: 20 },
   adminMessageText: { color: '#fff' },
-  responseContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, gap: 8, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  responseContainer: { padding: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  imagePreviewContainer: { position: 'relative', marginBottom: 10, alignSelf: 'flex-start' },
+  imagePreview: { width: 100, height: 100, borderRadius: 10 },
+  removeImageBtn: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  attachImageBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
   responseInput: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: 14 },
   sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  sendButtonDisabled: { backgroundColor: '#9ca3af' },
 
   // Users
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, marginBottom: 16, height: 44 },
