@@ -115,7 +115,8 @@ export default function SendRISScreen() {
   const handleAmountChange = (value: string) => {
     setAmount(value);
     const ris = parseFloat(value) || 0;
-    setVesAmount((ris * rate).toFixed(2));
+    const currentRate = rate || 0;
+    setVesAmount((ris * currentRate).toFixed(2));
   };
 
   const selectBeneficiary = (beneficiary: Beneficiary) => {
