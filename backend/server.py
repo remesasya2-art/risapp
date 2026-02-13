@@ -3917,6 +3917,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@app.on_event("startup")
+async def startup_db_client():
+    """Create database indexes on startup"""
+    try:
+        # Create unique index for email (sparse to allow nulls)
+        await db.users.create_index("email", unique=True, sparse=True)
+        # Create unique index for cpf_number (sparse to allow users without CPF)
+        await db.users.create_index("cpf_number", unique=True, sparse=True)
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Index creation warning (may already exist): {e}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
