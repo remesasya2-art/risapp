@@ -1,218 +1,238 @@
 <analysis>
-
 <original_problem_statement>
-The user wants to build a mobile application named RIS for Google and Apple platforms. The application allows users to top up their balance, which is then used to initiate manual transfers to beneficiaries.
+The user wants to build and enhance a mobile and web money transfer application named RIS.
 
-**Recent & Evolved User Requests:**
-1.  **Complete Auth System Overhaul:** The user has pivoted from a Google-first login to a **traditional email/password registration flow**.
-    *   Users must register with their name, email, and password.
-    *   A **6-digit verification code** must be sent to the user's email, which they must enter in the app to confirm their account. This is to prevent duplicate email usage.
-    *   The login screen should be for email and password entry.
-2.  **Full Admin Panel & KYC Flow:** A comprehensive admin panel with a robust KYC (Know Your Customer) approval process.
-    *   When a user submits their KYC documents (ID, CPF, Selfie), a **notification** should be sent to the .
-    *   The admin panel must have a dedicated KYC Verifications tab showing a list of pending users.
-    *   The admin must be able to view the submitted documents and **approve or reject** the user.
-    *   The entire verification process (user submission to admin approval) should be as fast as possible.
-3.  **Real-time User Presence:** The admin panel should display a list of all registered users and indicate in **real-time which users are currently online** and active in the app.
-4.  **Permanent Profile Picture:** The selfie image taken during the KYC process should automatically become the user's permanent and unchangeable profile picture (avatar).
-5.  **Professional Bank-Like UI/UX:** The entire application interface must be improved to look and feel professional, secure, and similar to a modern banking app.
-6.  **Generate a functional APK:** The top priority is to successfully generate a downloadable Android APK for testing and installation.
-
+In this session, the following key features and changes were requested and worked on:
+1.  **UI Redesign**:
+    *   Replace the profile access button on the home screen with a hamburger menu icon.
+    *   Complete redesign of the super admin panel for a more professional look and feel.
+    *   Rename the Ajustes (Settings) tab to Tasas (Rates) and add a shortcut button for it on the admin dashboard.
+2.  **Feature: Delete/Manage Users**: Implement functionality for the  to soft-delete users and view a list of deleted users.
+3.  **Feature: Unique User Data**: Enforce that  and  (Brazilian tax ID) are unique across all users in the database.
+4.  **Feature: Image Uploads**:
+    *   Allow users to upload PIX payment proofs from their device's gallery instead of only from the camera.
+    *   Allow the  to send images in the support chat.
+5.  **Feature: Pending PIX Transactions**: When a user initiates a PIX recharge but doesn't complete it, the app should show the pending transaction upon their return to the recharge screen, with options to either upload the proof or cancel the operation.
+6.  **Bug Fixes**:
+    *   Address login failures on the production deployment ().
+    *   Fix recurring issues with icons (fonts) not loading on the Cloudflare Pages deployment.
+    *   Resolve an error during PIX recharge creation due to mismatched field names between frontend and backend.
+    *   Fix an error when uploading PIX proofs due to a missing backend endpoint.
+    *   Correct inconsistent exchange rate calculations on the Send and Recharge VES screens.
+7.  **Improvement: Pull-to-Refresh**: Improve the pull-to-refresh functionality to ensure user balances and data update immediately after transactions by bypassing browser/server cache.
+8.  **Infrastructure Migration**: Migrate the entire backend and database from the Emergent environment to a fully independent setup on **Railway** to ensure 24/7 availability.
+9.  **Data Management**: Clean the entire database of all test data (transactions, balances, etc.) to prepare for production launch with real users.
+10. **User Management**: Manually verify specific users upon request.
+11. **Configuration**: Fix the WhatsApp webhook URL in the Twilio sandbox settings.
 </original_problem_statement>
 
 **User's preferred language**: Spanish. The next agent MUST respond in Spanish.
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application that has undergone significant changes in this session. The authentication system has been completely refactored from Google-only to a traditional email/password system, including a new multi-step registration flow with email verification via a 6-digit code.
+A full-stack Expo (React Native) and FastAPI application. The application's infrastructure has been completely migrated to be independent of the Emergent environment.
+- **Frontend**: A responsive web app deployed on **Cloudflare Pages**.
+- **Backend**: The FastAPI server is deployed on **Railway**.
+- **Database**: The MongoDB database is hosted on **Railway**.
 
-Several screens have been redesigned with a more professional bank-like UI (, , , , , , and the new auth screens). New features like real-time user online status (via a heartbeat mechanism) and setting the KYC selfie as a permanent profile picture have been implemented on both the backend and frontend.
-
-However, the main goal of generating an APK is **severely blocked**. The build process on the Emergent platform has been stuck for an extremely long time (over 4 days), indicating a platform-level issue rather than a code issue. The agent has optimized project assets and configuration files in an attempt to mitigate this, but the problem persists.
+The application features email/password auth, SMS verification, manual recharge flows (VES and PIX), and a redesigned professional-style admin panel with user management (including soft-delete), transaction history, rate management, and a support chat that now supports image uploads. The codebase is version-controlled in a GitHub repository connected to Railway for CI/CD.
 
 **Last working item**:
-    - Last item agent was working: Building the UI for the admin to approve/reject KYC submissions. The user pointed out that it wasn't clear where an admin would go to approve new users. The agent was in the middle of creating a new **** component within the  file.
+    - Last item agent was working: The user requested two things simultaneously:
+        1.  **WhatsApp Webhook Fix**: The agent identified that the webhook URL in the user's Twilio settings was incorrect (pointing to the old Emergent backend) and provided the correct new Railway URL.
+        2.  **Pending PIX Flow**: The user wants to allow users to resume or cancel pending PIX transactions. The agent acknowledged the request and had just started investigating the code by viewing .
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? After completing the UI, the agent should perform a manual test of the full flow:
-        1. Register a new user.
-        2. Submit KYC documents for that user.
-        3. Log in as the  ().
-        4. Navigate to the new KYC Verifications tab in the Admin Panel.
-        5. Verify the pending user and their documents are displayed.
-        6. Test the Approve and Reject functionality.
+    - Which testing method agent to use? both. This feature will require significant changes to both the frontend (, ) and the backend () to fetch, display, and handle the state of pending transactions. The agent should test the UI flow with the screenshot tool and the new/modified API endpoints with .
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  Issue 1:  (CRITICAL BLOCKER) Android APK build is stuck and has been running for over 4 days. (P0)
+  Issue 1: Implement the Resume Pending PIX Transaction feature (P0)
+  Issue 2: Verify WhatsApp notifications are working after the user updates the webhook URL (P1)
   
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes:
-        - Replaced all non-square app icons with a valid, square icon provided by the user.
-        - Optimized project assets, reducing image sizes from 456KB to 156KB.
-        - Simplified  configuration to potentially speed up the build.
-        - Cleaned Metro cache and project dependencies.
-        - Ran a full health check and fixed an auth redirect URL issue.
-        - Consulted the , which confirmed this is a platform issue requiring human intervention.
-     - Next debug checklist: The problem is not with the code but with the build service.
-        1.  **Instruct the user to contact Emergent support.** Provide them with the  and a summary of the problem (build stuck for days despite a small project size and multiple optimization attempts).
-        2.  **Suggest the user cancel the current stuck build** (by refreshing the page or finding a cancel button) and try starting **one more new build**.
-        3.  Reiterate that **Expo Go is the immediate and reliable way to test** all new functionality while the APK issue is being resolved by support.
-     - Why fix this issue and what will be achieved with the fix?: This is the user's primary goal. Without a functional APK, the user cannot test the application on a real device as intended.
+     - Attempted fixes: The agent has only just begun by viewing the relevant frontend file (). No code has been written yet.
+     - Next debug checklist:
+        1.  **Backend:** Create a new endpoint (e.g., ) in  that returns any pending PIX transaction for the currently logged-in user.
+        2.  **Frontend ():**
+            *   On screen load, call the new  endpoint.
+            *   If a pending transaction is found, render a different UI view that shows the pending amount and two buttons: Upload Proof and Cancel Transaction.
+            *   The Upload Proof button should reuse the existing upload logic.
+            *   The Cancel Transaction button needs to call a new backend endpoint to cancel the PIX payment.
+        3.  **Backend:** Create a  endpoint that updates the transaction status to cancelled in the database.
+        4.  **Frontend ():** Ensure that pending and cancelled PIX transactions appear correctly in the user's history.
+     - Why fix this issue and what will be achieved with the fix?: It will significantly improve the user experience for PIX recharges, allowing users to complete payments later or start over without needing admin intervention.
+     - Status:  NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: No
+  - Issue 2: 
+     - Attempted fixes: The agent identified the incorrect webhook URL in the user's Twilio console and provided the correct Railway URL ().
+     - Next debug checklist:
+        1.  Ask the user to confirm they have updated the URL in their Twilio Sandbox settings.
+        2.  If they have, trigger an event that should send a WhatsApp message (e.g., a new VES recharge request).
+        3.  Ask the user to confirm if they received the notification.
+        4.  If not, check the Railway backend logs for any errors related to Twilio.
+     - Why fix this issue and what will be achieved with the fix?: This will enable a key feature requested by the user for real-time admin alerts.
      - Status:  BLOCKED
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? N/A (Platform issue)
-     - Blocked on other issue: N/A
+     - Is recurring issue? Y (The underlying issue of Twilio sandbox limitations for Brazil still exists, but this specific task is about fixing the webhook URL).
+     - Should Test frontend/backend/both after fix?: backend
+     - Blocked on other issue: Awaiting user action to update the URL in Twilio.
 
 **In progress Task List**:
-  Task 1:  Complete the Admin KYC Approval Flow (P0)
-  Task 2:  Apply Bank-Like UI Overhaul to All Remaining Screens (P1)
-
- Task Detail:
-  - Task 1: 
-     - Where to resume: The file . The agent just added the  component structure but it's empty.
-     - **Next Steps:**
-        1.  Flesh out the  component to fetch data from a new backend endpoint (e.g., ).
-        2.  Display a list of users with  and  not null.
-        3.  For each user, show their details and the images they submitted (DNI, CPF, Selfie).
-        4.  Add Approve and Reject buttons.
-        5.  Implement the  and  functions to call the corresponding backend endpoints (e.g., ).
-     - What will be achieved with this?: A complete, functional KYC process as requested by the user, allowing the admin to manage new user onboarding.
-     - Status:  IN PROGRESS
+  - Task 1:  Implement the Resume Pending PIX Transaction feature (P0)
+     - Where to resume: The task has just been planned. The agent should start by creating the new backend endpoint in  to fetch pending PIX transactions.
+     - What will be achieved with this?: Users will be able to see and act upon their incomplete PIX recharges, improving the payment flow.
+     - Status:  NOT STARTED
      - Should Test frontend/backend/both after fix?: both
-     - Blocked on something: No
-
-  - Task 2: 
-     - Where to resume: The agent has successfully redesigned many key screens. The user wants this applied to the *entire* app for consistency.
-     - **Action:** Review the remaining screens and apply the same professional design language (color palette, component styling, layout). Key screens to check are:
-        -  (Send RIS flow)
-        - The remaining tabs within  (, , , etc.)
-     - What will be achieved with this?: A cohesive and professional user experience across the entire application, fulfilling a core user requirement.
-     - Status:  IN PROGRESS
-     - Should Test frontend/backend/both after fix?: Frontend
      - Blocked on something: No
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - **Background App Functionality (P1):** The user requested the app work in the background to show notifications. This was partially addressed by implementing notifications for KYC, but the original request for PIX payment detection via webhooks is still pending.
+    - None
     Future Tasks:
     - **Stripe Integration for Recharges (P2 - Blocked):** Blocked on user's Stripe account activation.
-    - **Automated KYC Verification (P2):** Post-MVP enhancement.
-    - **True Push Notifications (P2 - Blocked):** Requires a custom development build, which is currently blocked by the APK build issue.
+    - **True Push Notifications (P2):** The push notification setup was temporarily disabled to improve performance. It needs to be re-enabled and implemented correctly.
 
 **Completed work in this session**
-- **Complete Auth System Overhaul:**
-  - Implemented a full traditional registration flow (, ).
-  - Added backend endpoints for registration ().
-  - Implemented email verification with a 6-digit code ( and backend endpoints , ).
-  - Redesigned the main landing screen () to support the new auth flow.
-- **Major UI/UX Redesign (Bank-Like Style):**
-  - Redesigned screens: , , , , , .
-  - Removed default headers for a cleaner look on several screens.
-- **Enhanced Admin & User Features:**
-  - Implemented real-time online status for users in the Admin Panel ().
-    - Added  to User model and a  endpoint.
-    - Added  to fetch the user list.
-    -  was updated to send a periodic heartbeat.
-  - Implemented the KYC selfie as the permanent, non-changeable user profile picture ().
-- **Improved KYC Flow:**
-  - Modified the flow to navigate users directly from email verification to the KYC document submission screen.
-  - Differentiated backend user status to distinguish between users who haven't submitted docs vs. those pending review.
-- **APK Build Troubleshooting & Optimization:**
-  - Fixed initial build blocker by replacing non-square app icons.
-  - Optimized project by reducing asset size from 456KB to 156KB.
-  - Simplified  configuration.
-  - Diagnosed the extremely long build times as a platform issue and escalated via the .
+- **Infrastructure Migration to Railway:**
+  - Deployed the FastAPI backend to a service on Railway.
+  - Created a new MongoDB database on Railway.
+  - Migrated all existing users, transactions, and settings from the Emergent DB to the Railway DB using a  script.
+  - Pushed the backend code to a new GitHub repository () and connected it to Railway for CI/CD.
+  - Debugged and resolved multiple deployment failures on Railway related to Python versions, missing dependencies (, ), and incorrect port configurations.
+  - Updated the frontend's  to point to the new live Railway URL and redeployed to Cloudflare.
+- **Critical Deployment Fixes:**
+  - Resolved a persistent font/icon loading issue on Cloudflare Pages. The root cause was  ignoring the  directory. The fix involved renaming  to  as part of the build process before deployment.
+  - Fixed login failures on production by rebuilding the frontend to remove a cached, outdated backend URL.
+- **Feature Implementation:**
+  - **Admin User Deletion:** Added endpoints and UI for  to soft-delete users and view a list of deleted users.
+  - **Admin Chat Images:** Enabled image sending for the  in the support chat.
+  - **Gallery Upload for PIX:** Added the option for users to upload payment proofs from their device's gallery.
+- **UI/UX Redesign:**
+  - Overhauled the Admin Panel with a more professional, dark-themed UI.
+  - Replaced the home screen profile button with a hamburger menu icon.
+  - Added a Manage Rates shortcut to the admin dashboard.
+- **Data Integrity & Bug Fixes:**
+  - Implemented unique constraints for  and  on the backend and in the database.
+  - Cleaned the entire production database of test data.
+  - Fixed bugs related to PIX recharges (mismatched fields, missing endpoint).
+  - Fixed bugs related to incorrect exchange rate calculations.
+  - Improved the pull-to-refresh mechanism by adding cache-busting headers.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), ,  for API calls, React Context () for session management.
-- **Backend**: FastAPI (Python), MongoDB, Passlib, .
-- **Authentication**: Custom email/password registration with a 6-digit email verification code. Session management via JWTs stored in AsyncStorage.
-- **Real-time Presence**: A heartbeat system where the frontend periodically pings a backend endpoint to update a  timestamp on the User model.
-- **Build/Deployment**: EAS (Expo Application Services) - **Currently Blocked/Stuck**.
+- **Frontend**: Expo (React Native), .
+- **Backend**: FastAPI (Python).
+- **Database**: MongoDB.
+- **Deployment (NEW ARCHITECTURE)**:
+  - **Frontend**: **Cloudflare Pages**, deployed via .
+  - **Backend**: **Railway**, deployed via a connected **GitHub** repository.
+  - **Database**: **Railway** (MongoDB service).
+- **CI/CD**:  to the main branch of the GitHub repo automatically triggers a new backend deployment on Railway.
+- **Data Migration**: Used  scripts to transfer data between MongoDB instances.
 
 **key DB schema**
-  - **User**: {_id, email, name, password_hash, role, ..., **email_verified (bool)**, **last_seen (datetime)**, **profile_picture_url (str)**, **documents_submitted_at (datetime)**, verification_status ('unverified', 'pending', 'verified', 'rejected')}
+  - **users**: Added  (defaults to ). Added unique, sparse indexes on  and .
+  - All other collections (, , , ) were cleared of test data.
 
 **changes in tech stack**
-- No new packages, but a fundamental shift in application logic from Google OAuth-first to a custom email/password authentication system.
+- **MAJOR INFRASTRUCTURE MIGRATION:** The backend and database have been moved from the temporary Emergent environment to a permanent, independent hosting solution on **Railway**.
 
 **All files of reference**
 - **Created:**
-  - 
-  - 
-  - 
-  - 
+  - : To specify the Python version for the Railway buildpack.
 - **Updated Heavily:**
-  - : All new auth, verification, and admin endpoints.
-  - : Completely changed to be a landing page with Register and Login buttons.
-  - : Overhauled to include a real-time user list and the new (in-progress) KYC tab.
-  - : Rewired for the new auth flow and to include the heartbeat logic.
-  - : Updated to handle routing for all the new screens.
-  - : Redesigned to show the permanent, verified profile picture.
-  - : Logic updated to reflect the new state ().
-  - : Simplified for build optimization.
+  - : To add multiple new features and bug fixes.
+  - : Total redesign and feature implementation.
+  - : To point to the new Railway backend.
+  - : To be compatible with Railway's build environment.
 
 **Areas that need refactoring**:
-- The  file is becoming very large again. The new authentication and admin endpoints could be moved to their own dedicated routers (e.g., , ) for better organization.
-
-**key api endpoints**
-- **(NEW) Auth Endpoints:**
-  - : Creates a new user with .
-  - : Sends a 6-digit code (currently logged to console).
-  - : Verifies the code and sets .
-  - : Traditional email/password login.
-  - : Updates the user's  timestamp.
-- **(NEW) Admin Endpoints:**
-  - : Gets a list of all users and their online status.
+- A shared  component was created in a previous session but is not being used, leading to duplicated header code in  and . Refactoring to use this shared component would improve code maintainability.
 
 **Critical Info for New Agent**
 - **Language is Spanish:** All user communication MUST be in Spanish.
-- **CRITICAL BLOCKER: APK BUILD.** The build is stuck at the platform level. The top priority is to guide the user to **contact Emergent support with Job ID **. Do not spend significant time trying to fix this from code. Recommend Expo Go for all testing in the meantime.
-- **Immediate Task:** Your first coding task is to complete the  in  so the  can review and approve new users.
-- **Auth Flow is New:** The entire login/registration process has been rebuilt. Familiarize yourself with the new flow: Register -> Verify Email -> Submit KYC -> Admin Approval.
-- **User is UX-Focused:** The bank-like professional design is very important to the user. Ensure all new UI and modifications follow this style.
+- **NEW DEPLOYMENT ARCHITECTURE:** The app is now fully independent.
+  - **Frontend:** Deployed to **Cloudflare Pages**. To deploy, run env: load .env
+env: export EXPO_TUNNEL_SUBDOMAIN EXPO_PACKAGER_HOSTNAME EXPO_PUBLIC_BACKEND_URL EXPO_USE_FAST_RESOLVER METRO_CACHE_ROOT EXPO_PUBLIC_FIREBASE_API_KEY EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN EXPO_PUBLIC_FIREBASE_PROJECT_ID EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID EXPO_PUBLIC_FIREBASE_APP_ID, then a script to rename  to , then 
+wrangler pages deploy [directory]
+
+Deploy a directory of static assets as a Pages deployment
+
+POSITIONALS
+  directory  The directory of static files to upload  [string]
+
+GLOBAL FLAGS
+      --cwd       Run as if Wrangler was started in the specified directory instead of the current working directory  [string]
+      --env-file  Path to an .env file to load - can be specified multiple times - values from earlier files are overridden by values in later files  [array]
+  -h, --help      Show help  [boolean]
+  -v, --version   Show version number  [boolean]
+
+OPTIONS
+      --project-name        The name of the project you want to deploy to  [string]
+      --branch              The name of the branch you want to deploy to  [string]
+      --commit-hash         The SHA to attach to this deployment  [string]
+      --commit-message      The commit message to attach to this deployment  [string]
+      --commit-dirty        Whether or not the workspace should be considered dirty for this deployment  [boolean]
+      --skip-caching        Skip asset caching which speeds up builds  [boolean]
+      --no-bundle           Whether to run bundling on `_worker.js` before deploying  [boolean]
+      --upload-source-maps  Whether to upload any server-side sourcemaps with this deployment  [boolean] [default: false].
+  - **Backend:** Deployed on **Railway**. Deployments are triggered automatically by  to the  branch of the user's GitHub repo ().
+  - **Database:** Is a MongoDB service on Railway, connected to the backend via the  environment variable.
+- **GitHub is the Source of Truth for Backend:** All backend changes must be committed and pushed to the  repository to be deployed.
+- **WhatsApp Webhook is Blocked on User:** The user needs to update the webhook URL in their Twilio account to . You should confirm with them if they have done this.
 
 **documents created in this job**
-- None.
+- 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - **10. Where to approve users? (IN PROGRESS):** User correctly pointed out it's unclear where the admin approves KYC documents. Agent started building the .
- - **9. Can't re-register user (RESOLVED):** User reported being unable to use an email that was supposedly deleted. Agent re-ran the deletion and cleared the DB, resolving the issue.
- - **8. Permanent profile picture request (Completed):** User requested the KYC selfie become the permanent profile pic. Agent implemented this.
- - **7. Delete user & add online status (Completed):** User asked to delete a test user to repeat the flow and to add a real-time online status list for the admin. Agent implemented both.
- - **6. Feedback on KYC flow (IN PROGRESS):** After a successful test, user requested the flow navigate directly to document submission after email verification. Agent implemented this.
- - **5. Test user created (Completed):** User confirmed they created the test account. Agent found the verification code in the logs.
- - **4. Request for real test (Completed):** User asked to do a real end-to-end test of the new registration flow.
- - **3. Request for email verification (Completed):** User requested to add email verification with a code to the registration process.
- - **2. Health check request (Completed):** Agent initiated a health check to diagnose platform readiness.
- - **1. APK build is still stuck (ONGOING/BLOCKED):** User reported the build has been stuck for over 4 days (6438 mins).
+- **10. Pending Request (IN PROGRESS):** User requested two things: 1) fix for WhatsApp webhook (agent provided the correct URL) and 2) a new feature to let users resume or cancel pending PIX transactions.
+- **9. User Authorized (COMPLETED):** User asked to manually verify a user named Ronaldo Garcia Hernandez. Agent updated the user's status in the database.
+- **8. Unverified User Flow (COMPLETED):** User asked to limit unverified users. Agent checked the code and confirmed this functionality was already in place.
+- **7. Clean Database (COMPLETED):** User asked to wipe all test data (balances, transactions, etc.) to prepare for real users. Agent executed a script to clean the database on Railway.
+- **6. Railway Migration (COMPLETED):** A long series of interactions where the user agreed to migrate the backend to Railway. The agent guided the user through creating accounts, getting tokens, creating a DB, creating a GitHub repo, and debugging numerous deployment issues until the backend was successfully live on Railway.
+- **5. Admin Panel Shortcut (COMPLETED):** User asked to rename Ajustes to Tasas and add a shortcut button on the admin dashboard.
+- **4. Admin Panel Redesign (COMPLETED):** User asked for a more professional-looking admin panel. Agent implemented a major redesign.
+- **3. Admin Chat Images (COMPLETED):** User asked to allow the super admin to send images in the support chat.
+- **2. Pull-to-Refresh Fix (COMPLETED):** User reported that balances were not updating quickly. Agent fixed it by adding cache-busting headers.
+- **1. Exchange Rate Bugs (COMPLETED):** User reported two separate screens where the displayed exchange rate did not match the calculation. Agent fixed both.
 
 **Project Health Check:**
-- Broken: The EAS Get Android builds process is completely stuck and non-functional. This is a platform-level issue.
-- Mocked: The email service for sending verification codes. It currently only s the code to the backend logs.
+- Broken: None
+- Mocked: None
 
 **3rd Party Integrations**
-- **Google OAuth**: Still present in code but **no longer the primary login method**.
-- **Twilio**: For WhatsApp messages (existing).
+- **Cloudflare Pages**: **Live and functional** for frontend web app deployment.
+- **Railway**: **Live and functional** for backend (FastAPI) and database (MongoDB) hosting.
+- **GitHub**: **Live and functional** for backend CI/CD with Railway.
+- **Twilio**: **Live and functional** for SMS. WhatsApp messaging is configured but pending user action to fix the webhook URL.
 - **Mercado Pago**: For PIX payments (existing).
-- **Firebase Cloud Messaging**: Configured for notifications (existing).
-- ****: For live selfie capture.
-- ** & **: For sharing transaction receipts.
+- **Netlify**: Decommissioned.
+- **Emergent Backend Hosting**: Decommissioned.
 
 **Testing status**
   - Testing agent used after significant changes: NO
-  - Troubleshoot agent used after agent stuck in loop: YES (for the build issue, which led to calling the )
-  - Test files created: None.
-  - Known regressions: The APK build process is non-functional.
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created:
+    - 
+  - Known regressions: None.
 
 **Credentials to test flow:**
-- **Super Admin:** Login with Google using . (Note: The primary flow is now email/password, but this Google account is still hardcoded as a super_admin if it logs in). The user has also created  via the new flow. The agent should probably make this user a super_admin as well for testing.
+- **Super Admin:**
+  - Email: 
+  - Password: 
+- **Test User 1:**
+  - Email: 
+  - Password: 
+- **Test User 2:**
+  - Email: 
+  - Password: 
+- **Note:** All user balances have been reset to 0.
 
 **What agent forgot to execute**
-- The agent hasn't yet created the backend endpoints required for the  to function (e.g., getting pending verifications, approving/rejecting them). This would be the immediate next step after building the frontend shell.
+The agent was in the middle of implementing the user's last request (pending PIX flow) when the session ended. All other requested tasks were completed.
 
 </analysis>
