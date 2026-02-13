@@ -788,10 +788,12 @@ async def register_user(request: RegisterUserRequest):
     
     email_lower = request.email.lower().strip()
     
-    # Check if email already exists and is verified
+    # Check if email already exists (including deleted users - they can be restored)
     existing_user = await db.users.find_one({"email": email_lower})
     if existing_user:
-        if existing_user.get("email_verified", False):
+        if existing_user.get("deleted"):
+            raise HTTPException(status_code=400, detail="Este email pertenece a una cuenta eliminada. Contacta al administrador para restaurarla.")
+        elif existing_user.get("email_verified", False):
             raise HTTPException(status_code=400, detail="Este email ya está registrado. Intenta iniciar sesión.")
         else:
             # Delete unverified user to allow re-registration
