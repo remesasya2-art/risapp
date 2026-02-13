@@ -109,7 +109,7 @@ export default function AdminPanelScreen() {
     { key: 'support', icon: 'chatbubble-ellipses-outline', label: 'Soporte', badge: dashboard?.support.open_chats },
     { key: 'users', icon: 'people-outline', label: 'Usuarios' },
     ...(userRole === 'super_admin' ? [{ key: 'admins', icon: 'key-outline', label: 'Admins' }] : []),
-    { key: 'settings', icon: 'cog-outline', label: 'Ajustes' },
+    { key: 'settings', icon: 'cash-outline', label: 'Tasas' },
   ];
 
   return (
