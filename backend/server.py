@@ -2103,6 +2103,135 @@ async def get_pix_status(transaction_id: str, current_user: User = Depends(get_c
     
     return {"status": "pending"}
 
+# Upload proof endpoint (alias for verify-with-proof for frontend compatibility)
+class PixUploadProofRequest(BaseModel):
+    transaction_id: str
+    proof_image: str  # base64
+
+@api_router.post("/pix/upload-proof")
+async def upload_pix_proof(request: PixUploadProofRequest, current_user: User = Depends(get_current_user)):
+    """Upload proof of PIX payment for manual verification"""
+    
+    # Find transaction
+    transaction = await db.transactions.find_one({
+        "transaction_id": request.transaction_id,
+        "user_id": current_user.user_id,
+        "type": "recharge",
+        "status": "pending"
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
+    
+    # First, check with Mercado Pago if payment is already approved
+    payment_id = transaction.get("mercadopago_payment_id")
+    is_auto_approved = False
+    
+    if payment_id:
+        payment_status = mercadopago_service.get_payment_status(payment_id)
+        if payment_status and payment_status.get("status") == "approved":
+            is_auto_approved = True
+    
+    amount_ris = transaction.get("amount_output", 0)
+    
+    if is_auto_approved:
+        # Payment already approved by Mercado Pago - complete immediately
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$inc": {"balance_ris": amount_ris}}
+        )
+        
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {
+                "status": "completed",
+                "proof_image": request.proof_image,
+                "completed_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+                "auto_approved": True
+            }}
+        )
+        
+        # Notify user
+        await create_notification(
+            user_id=current_user.user_id,
+            title="✅ Recarga Completada",
+            message=f"Tu recarga de R$ {transaction.get('amount_input', 0):.2f} fue aprobada. +{amount_ris:.2f} RIS",
+            notification_type="recharge_completed",
+            data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
+        )
+        
+        logger.info(f"PIX payment auto-approved for user {current_user.user_id}: +{amount_ris} RIS")
+        
+        return {
+            "status": "completed",
+            "message": "Pago verificado automáticamente",
+            "amount_ris": amount_ris
+        }
+    
+    # Payment not auto-approved - save proof for manual review
+    await db.transactions.update_one(
+        {"transaction_id": request.transaction_id},
+        {"$set": {
+            "status": "pending_review",
+            "proof_image": request.proof_image,
+            "proof_uploaded_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Notify admins about pending review
+    admins = await db.users.find({"role": {"$in": ["admin", "super_admin"]}}).to_list(100)
+    for admin in admins:
+        await create_notification(
+            user_id=admin["user_id"],
+            title="📝 Recarga PIX Pendiente",
+            message=f"{current_user.name} envió comprobante de R$ {transaction.get('amount_input', 0):.2f}. Requiere revisión.",
+            notification_type="pix_review_pending",
+            data={"transaction_id": request.transaction_id, "user_id": current_user.user_id}
+        )
+    
+    logger.info(f"PIX proof uploaded for review: {request.transaction_id} by user {current_user.user_id}")
+    
+    return {
+        "status": "pending_review",
+        "message": "Comprobante enviado. Un administrador revisará tu pago pronto."
+    }
+
+# Cancel PIX payment
+class PixCancelRequest(BaseModel):
+    transaction_id: str
+
+@api_router.post("/pix/cancel")
+async def cancel_pix_payment(request: PixCancelRequest, current_user: User = Depends(get_current_user)):
+    """Cancel a pending PIX payment"""
+    
+    # Find transaction
+    transaction = await db.transactions.find_one({
+        "transaction_id": request.transaction_id,
+        "user_id": current_user.user_id,
+        "type": "recharge",
+        "status": {"$in": ["pending", "pending_review"]}
+    })
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
+    
+    # Update transaction status
+    await db.transactions.update_one(
+        {"transaction_id": request.transaction_id},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc),
+            "cancelled_by": "user",
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    logger.info(f"PIX payment cancelled by user: {request.transaction_id}")
+    
+    return {"message": "Recarga cancelada correctamente"}
+
 # =======================
 # PIX VERIFICATION WITH PROOF
 # =======================
