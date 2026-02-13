@@ -175,7 +175,7 @@ export default function AdminPanelScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'dashboard' && <DashboardTab data={dashboard} />}
+        {activeTab === 'dashboard' && <DashboardTab data={dashboard} onNavigateToRates={() => setActiveTab('settings')} />}
         {activeTab === 'withdrawals' && <WithdrawalsTab />}
         {activeTab === 'recharges' && <RechargesTab />}
         {activeTab === 'kyc' && <KYCVerificationsTab />}
