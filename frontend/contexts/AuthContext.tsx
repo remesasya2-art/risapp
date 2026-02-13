@@ -220,6 +220,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       await AsyncStorage.removeItem('session_token');
       setUser(null);
+      
+      // Redirigir a login en web automáticamente
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Usar setTimeout para asegurar que el estado se limpie primero
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
     }
   };
 
