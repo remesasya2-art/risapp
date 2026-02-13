@@ -90,23 +90,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setupPushNotifications = async () => {
     try {
+      console.log('🔔 Registrando token de notificaciones push...');
       const token = await registerForPushNotificationsAsync();
+      
       if (token) {
-        await sendPushTokenToServer(token);
+        console.log('🔔 Token obtenido, enviando al servidor...');
+        const success = await sendPushTokenToServer(token);
+        if (success) {
+          console.log('✅ Token de notificaciones registrado exitosamente');
+        } else {
+          console.log('⚠️ No se pudo registrar el token en el servidor');
+        }
+      } else {
+        console.log('⚠️ No se pudo obtener token de notificaciones');
       }
 
       // Setup notification listeners
       const notificationListener = addNotificationReceivedListener((notification) => {
-        console.log('Notification received:', notification);
+        console.log('🔔 Notificación recibida:', notification);
       });
 
       const responseListener = addNotificationResponseReceivedListener((response) => {
-        console.log('Notification response:', response);
+        console.log('🔔 Respuesta a notificación:', response);
         // Handle notification tap - could navigate to specific screen
         const data = response.notification.request.content.data;
         if (data?.type === 'withdrawal_completed') {
           // Could navigate to transaction history
-          console.log('User tapped withdrawal completion notification');
+          console.log('👆 Usuario tocó notificación de retiro completado');
         }
       });
 
@@ -115,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         responseListener.remove();
       };
     } catch (error) {
-      console.error('Error setting up push notifications:', error);
+      console.error('❌ Error configurando push notifications:', error);
     }
   };
 
