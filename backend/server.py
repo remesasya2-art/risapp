@@ -1350,6 +1350,16 @@ async def get_policies_status(current_user: User = Depends(get_current_user)):
 @api_router.post("/verification/submit")
 async def submit_verification(request: VerificationRequest, current_user: User = Depends(get_current_user)):
     """Submit documents for verification"""
+    
+    # Check if CPF is already used by another user
+    cpf_normalized = request.cpf_number.replace(".", "").replace("-", "").strip()
+    existing_cpf = await db.users.find_one({
+        "cpf_number": {"$regex": f"^{cpf_normalized}$|^{request.cpf_number}$", "$options": "i"},
+        "user_id": {"$ne": current_user.user_id}
+    })
+    if existing_cpf:
+        raise HTTPException(status_code=400, detail="Este CPF ya está registrado por otro usuario")
+    
     # Update user with verification data
     # The selfie becomes the user's profile picture (cannot be changed later)
     await db.users.update_one(
@@ -1357,7 +1367,7 @@ async def submit_verification(request: VerificationRequest, current_user: User =
         {"$set": {
             "full_name": request.full_name,
             "document_number": request.document_number,
-            "cpf_number": request.cpf_number,
+            "cpf_number": cpf_normalized,  # Store normalized CPF
             "id_document_image": request.id_document_image,
             "cpf_image": request.cpf_image,
             "selfie_image": request.selfie_image,
