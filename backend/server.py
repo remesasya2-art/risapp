@@ -2232,6 +2232,61 @@ async def cancel_pix_payment(request: PixCancelRequest, current_user: User = Dep
     
     return {"message": "Recarga cancelada correctamente"}
 
+@api_router.get("/pix/pending")
+async def get_pending_pix(current_user: User = Depends(get_current_user)):
+    """Get any pending PIX transaction for the current user"""
+    
+    # Find pending PIX transaction (either pending or pending_review)
+    pending_tx = await db.transactions.find_one(
+        {
+            "user_id": current_user.user_id,
+            "type": "recharge",
+            "payment_method": "pix",
+            "status": {"$in": ["pending", "pending_review"]}
+        },
+        {"_id": 0},
+        sort=[("created_at", -1)]
+    )
+    
+    if not pending_tx:
+        return {"has_pending": False, "pending_transaction": None}
+    
+    # Check if PIX has expired (30 minutes from creation)
+    created_at = pending_tx.get("created_at")
+    if created_at:
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        expiration_time = created_at + timedelta(minutes=30)
+        
+        if datetime.now(timezone.utc) > expiration_time:
+            # Mark as expired if not already
+            if pending_tx.get("status") == "pending":
+                await db.transactions.update_one(
+                    {"transaction_id": pending_tx["transaction_id"]},
+                    {"$set": {
+                        "status": "expired",
+                        "expired_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc)
+                    }}
+                )
+                return {"has_pending": False, "pending_transaction": None}
+    
+    # Return pending transaction with PIX data
+    return {
+        "has_pending": True,
+        "pending_transaction": {
+            "transaction_id": pending_tx.get("transaction_id"),
+            "amount_brl": pending_tx.get("amount_input"),
+            "amount_ris": pending_tx.get("amount_output"),
+            "status": pending_tx.get("status"),
+            "qr_code": pending_tx.get("pix_qr_code"),
+            "qr_code_base64": pending_tx.get("pix_qr_code_base64"),
+            "expiration": pending_tx.get("pix_expiration"),
+            "created_at": pending_tx.get("created_at").isoformat() if pending_tx.get("created_at") else None,
+            "proof_uploaded": pending_tx.get("proof_image") is not None
+        }
+    }
+
 # =======================
 # PIX VERIFICATION WITH PROOF
 # =======================
