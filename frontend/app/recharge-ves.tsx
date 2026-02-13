@@ -228,7 +228,7 @@ export default function RechargeVESScreen() {
 
             <View style={styles.rateCard}>
               <Text style={styles.rateLabel}>Tasa del día</Text>
-              <Text style={styles.rateValue}>{rate} VES = 1 RIS</Text>
+              <Text style={styles.rateValue}>{rate ? rate : '...'} VES = 1 RIS</Text>
             </View>
 
             <View style={styles.inputGroup}>
