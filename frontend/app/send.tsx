@@ -37,7 +37,7 @@ export default function SendRISScreen() {
   const params = useLocalSearchParams();
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [rate, setRate] = useState(92);
+  const [rate, setRate] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   const [step, setStep] = useState(1); // 1 = calculadora, 2 = formulario
