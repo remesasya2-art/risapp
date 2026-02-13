@@ -669,6 +669,47 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
         logger.error(f"Error registering FCM token: {e}")
         raise HTTPException(status_code=500, detail="Error registering FCM token")
 
+@api_router.post("/push/test")
+async def test_push_notification(current_user: User = Depends(get_current_user)):
+    """Test push notification for current user"""
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"fcm_token": 1})
+    
+    if not user or not user.get("fcm_token"):
+        return {"status": "error", "message": "No push token registered for this user"}
+    
+    success = await send_push_notification(
+        user["fcm_token"],
+        "Prueba de Notificación",
+        "¡Las notificaciones push funcionan correctamente!",
+        {"type": "test", "timestamp": datetime.now(timezone.utc).isoformat()}
+    )
+    
+    if success:
+        return {"status": "success", "message": "Push notification sent successfully"}
+    else:
+        return {"status": "error", "message": "Failed to send push notification"}
+
+@api_router.post("/push/send-to-user/{user_id}")
+async def send_push_to_specific_user(
+    user_id: str,
+    request: Request,
+    admin_user: User = Depends(get_admin_user)
+):
+    """Admin: Send push notification to a specific user"""
+    data = await request.json()
+    title = data.get("title", "Notificación RIS")
+    body = data.get("body", "")
+    
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body is required")
+    
+    success = await send_push_to_user(user_id, title, body, {"type": "admin_message"})
+    
+    if success:
+        return {"status": "success", "message": f"Push notification sent to user {user_id}"}
+    else:
+        return {"status": "error", "message": "User doesn't have push notifications enabled"}
+
 @api_router.post("/auth/heartbeat")
 async def user_heartbeat(current_user: User = Depends(get_current_user)):
     """Update user's last seen timestamp (call every 30 seconds to show online status)"""
