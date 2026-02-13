@@ -626,7 +626,7 @@ async def get_all_users(admin_user: User = Depends(get_admin_user)):
     online_threshold = datetime.now(timezone.utc) - timedelta(minutes=2)
     
     users = await db.users.find(
-        {},
+        {"deleted": {"$ne": True}},
         {
             "_id": 0,
             "user_id": 1,
