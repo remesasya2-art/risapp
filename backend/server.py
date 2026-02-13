@@ -674,19 +674,26 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
         data = await request.json()
         fcm_token = data.get('fcm_token')
         
+        logger.info(f"📱 Registrando FCM token para usuario {current_user.user_id}")
+        logger.info(f"   Token recibido: {fcm_token[:30] if fcm_token else 'None'}...")
+        
         if not fcm_token:
+            logger.warning(f"⚠️ FCM token vacío para usuario {current_user.user_id}")
             raise HTTPException(status_code=400, detail="FCM token is required")
         
-        await db.users.update_one(
+        result = await db.users.update_one(
             {"user_id": current_user.user_id},
             {"$set": {"fcm_token": fcm_token}}
         )
         
-        logger.info(f"FCM token registered for user {current_user.user_id}")
-        return {"message": "FCM token registered successfully"}
+        logger.info(f"✅ FCM token registrado para usuario {current_user.user_id}")
+        logger.info(f"   Modified count: {result.modified_count}")
+        return {"message": "FCM token registered successfully", "success": True}
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error registering FCM token: {e}")
+        logger.error(f"❌ Error registrando FCM token: {e}")
         raise HTTPException(status_code=500, detail="Error registering FCM token")
 
 @api_router.post("/push/test")
