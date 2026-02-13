@@ -724,14 +724,29 @@ async def test_push_notification(current_user: User = Depends(get_current_user))
         return {"status": "error", "message": "Usuario no encontrado"}
     
     fcm_token = user.get("fcm_token")
-    logger.info(f"   Token del usuario: {fcm_token[:30] if fcm_token else 'No configurado'}...")
+    logger.info(f"   Token del usuario: {fcm_token[:40] if fcm_token else 'No configurado'}...")
     
     if not fcm_token:
         logger.warning(f"⚠️ No hay token push para usuario {current_user.user_id}")
         return {
             "status": "error", 
             "message": "No tienes un token de notificaciones registrado. Asegúrate de haber dado permisos de notificaciones en la app.",
-            "token_configured": False
+            "token_configured": False,
+            "action_required": "Abre la app en tu dispositivo móvil y acepta los permisos de notificaciones."
+        }
+    
+    # Verificar tipo de token
+    is_expo_token = fcm_token.startswith('ExponentPushToken')
+    is_fcm_token = not is_expo_token and len(fcm_token) > 100
+    
+    if is_fcm_token:
+        logger.warning(f"⚠️ Token de FCM detectado para usuario {current_user.user_id}")
+        return {
+            "status": "error",
+            "message": "Tu token de notificaciones es un token de Firebase antiguo. Necesitas actualizar la app.",
+            "token_configured": True,
+            "token_type": "fcm_native",
+            "action_required": "Cierra y vuelve a abrir la app RIS en tu dispositivo móvil para actualizar el token de notificaciones."
         }
     
     success = await send_push_notification(
@@ -745,15 +760,17 @@ async def test_push_notification(current_user: User = Depends(get_current_user))
         logger.info(f"✅ Push notification de prueba enviada a {current_user.user_id}")
         return {
             "status": "success", 
-            "message": "Notificación enviada exitosamente. Deberías recibirla en tu dispositivo.",
-            "token_configured": True
+            "message": "¡Notificación enviada exitosamente! Deberías recibirla en tu dispositivo.",
+            "token_configured": True,
+            "token_type": "expo"
         }
     else:
         logger.error(f"❌ Error enviando push notification de prueba a {current_user.user_id}")
         return {
             "status": "error", 
-            "message": "Error al enviar la notificación. El token puede ser inválido o el dispositivo no está disponible.",
-            "token_configured": True
+            "message": "Error al enviar la notificación. Por favor, cierra y vuelve a abrir la app para actualizar tu token.",
+            "token_configured": True,
+            "action_required": "Cierra y vuelve a abrir la app RIS en tu dispositivo móvil."
         }
 
 @api_router.post("/push/send-to-user/{user_id}")
