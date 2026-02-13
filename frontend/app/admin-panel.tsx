@@ -1037,6 +1037,73 @@ function UsersTab() {
     }
   };
 
+  const loadDeletedUsers = async () => {
+    setLoadingDeleted(true);
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await axios.get(`${BACKEND_URL}/api/admin/users/deleted`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDeletedUsers(response.data.users);
+    } catch (error) {
+      console.error('Error loading deleted users:', error);
+    } finally {
+      setLoadingDeleted(false);
+    }
+  };
+
+  const deleteUser = async (userId: string, userName: string) => {
+    if (Platform.OS === 'web') {
+      if (!confirm(`¿Estás seguro de eliminar a ${userName}?\n\nEsta acción se puede revertir desde "Usuarios Eliminados".`)) {
+        return;
+      }
+    } else {
+      // For native, use Alert
+      Alert.alert(
+        'Eliminar Usuario',
+        `¿Estás seguro de eliminar a ${userName}?\n\nEsta acción se puede revertir desde "Usuarios Eliminados".`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Eliminar', style: 'destructive', onPress: () => performDelete(userId) }
+        ]
+      );
+      return;
+    }
+    await performDelete(userId);
+  };
+
+  const performDelete = async (userId: string) => {
+    setDeletingUser(true);
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      await axios.delete(`${BACKEND_URL}/api/admin/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showAlert('Éxito', 'Usuario eliminado correctamente');
+      setSelectedUser(null);
+      setUserDetails(null);
+      loadUsers();
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'No se pudo eliminar el usuario');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
+  const restoreUser = async (userId: string, userName: string) => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      await axios.post(`${BACKEND_URL}/api/admin/users/${userId}/restore`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showAlert('Éxito', `Usuario ${userName} restaurado correctamente`);
+      loadDeletedUsers();
+      loadUsers();
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'No se pudo restaurar el usuario');
+    }
+  };
+
   const loadUserDetails = async (userId: string) => {
     setLoadingDetails(true);
     try {
