@@ -2775,8 +2775,8 @@ async def mark_all_read(current_user: User = Depends(get_current_user)):
     )
     return {"message": "All notifications marked as read"}
 
-async def create_notification(user_id: str, title: str, message: str, notification_type: str, data: dict = None):
-    """Helper function to create a notification"""
+async def create_notification(user_id: str, title: str, message: str, notification_type: str, data: dict = None, send_push: bool = True):
+    """Helper function to create a notification and optionally send push notification"""
     notification = {
         "user_id": user_id,
         "title": title,
@@ -2788,6 +2788,16 @@ async def create_notification(user_id: str, title: str, message: str, notificati
     }
     await db.notifications.insert_one(notification)
     logger.info(f"Notification created for user {user_id}: {title}")
+    
+    # Also send push notification if user has a token
+    if send_push:
+        try:
+            push_data = {"type": notification_type}
+            if data:
+                push_data.update(data)
+            await send_push_to_user(user_id, title, message, push_data)
+        except Exception as e:
+            logger.error(f"Error sending push notification: {e}")
 
 # =======================
 # TRANSACTION ROUTES
