@@ -843,6 +843,7 @@ function SupportTab() {
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [responseText, setResponseText] = useState('');
+  const [responseImage, setResponseImage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -876,18 +877,46 @@ function SupportTab() {
     }
   };
 
+  const pickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        showAlert('Permiso Requerido', 'Necesitamos acceso a tu galería');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        setResponseImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+    }
+  };
+
   const sendResponse = async () => {
-    if (!responseText.trim() || !selectedChat) return;
+    if ((!responseText.trim() && !responseImage) || !selectedChat) return;
 
     setSending(true);
     try {
       const token = await AsyncStorage.getItem('session_token');
       await axios.post(
         `${BACKEND_URL}/api/admin/support/respond`,
-        { user_id: selectedChat.user_id, message: responseText.trim() },
+        { 
+          user_id: selectedChat.user_id, 
+          message: responseText.trim(),
+          image: responseImage 
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setResponseText('');
+      setResponseImage(null);
       loadChatDetail(selectedChat.user_id);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo enviar');
