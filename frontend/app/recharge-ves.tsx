@@ -52,7 +52,7 @@ export default function RechargeVESScreen() {
   const [step, setStep] = useState(1); // 1: amount, 2: payment method, 3: bank info, 4: upload voucher
   const [loading, setLoading] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
-  const [rate, setRate] = useState(102);
+  const [rate, setRate] = useState<number | null>(null);
   
   // Form data
   const [amountVES, setAmountVES] = useState('');
@@ -69,6 +69,14 @@ export default function RechargeVESScreen() {
     return () => clearInterval(rateInterval);
   }, []);
 
+  // Recalcular cuando cambia la tasa
+  useEffect(() => {
+    if (rate && amountVES) {
+      const ves = parseFloat(amountVES) || 0;
+      setAmountRIS((ves / rate).toFixed(2));
+    }
+  }, [rate]);
+
   const loadPaymentInfo = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/ves-payment-info`);
@@ -81,7 +89,7 @@ export default function RechargeVESScreen() {
   const loadRate = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      setRate(response.data.ves_to_ris || 102);
+      setRate(response.data.ves_to_ris);
     } catch (error) {
       console.error('Error loading rate:', error);
     }
@@ -90,13 +98,15 @@ export default function RechargeVESScreen() {
   const handleVESChange = (value: string) => {
     setAmountVES(value);
     const ves = parseFloat(value) || 0;
-    setAmountRIS((ves / rate).toFixed(2));
+    const currentRate = rate || 1;
+    setAmountRIS((ves / currentRate).toFixed(2));
   };
 
   const handleRISChange = (value: string) => {
     setAmountRIS(value);
     const ris = parseFloat(value) || 0;
-    setAmountVES((ris * rate).toFixed(2));
+    const currentRate = rate || 1;
+    setAmountVES((ris * currentRate).toFixed(2));
   };
 
   const pickImage = async () => {
