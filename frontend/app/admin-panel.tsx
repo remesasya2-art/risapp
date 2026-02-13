@@ -1008,6 +1008,10 @@ function UsersTab() {
   const [userDetails, setUserDetails] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'recharges' | 'withdrawals' | 'beneficiaries' | 'kyc'>('info');
+  const [deletingUser, setDeletingUser] = useState(false);
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
+  const [deletedUsers, setDeletedUsers] = useState<any[]>([]);
+  const [loadingDeleted, setLoadingDeleted] = useState(false);
 
   useEffect(() => {
     loadUsers();
