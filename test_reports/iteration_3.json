@@ -1,5 +1,5 @@
 {
-  "summary": "Tested logout freeze bug fix and icons display issue. Logout is FIXED and works correctly. Icons are still showing as SQUARES due to font loading failure (520 CDN error).",
+  "summary": "Tested logout freeze bug fix and icons display issue. LOGOUT is FIXED and works correctly (no freeze, redirects in ~2s). ICONS are still showing as SQUARES due to Expo CLI CORS middleware rejecting requests from preview URL - this is an infrastructure issue.",
   "backend_issues": {
     "critical": [],
     "minor": []
