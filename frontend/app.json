@@ -33,8 +33,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png",
-      "head": "<link href=\"https://cdn.jsdelivr.net/npm/ionicons@7.2.2/dist/ionicons/ionicons.esm.min.js\" rel=\"modulepreload\"><link href=\"https://unpkg.com/ionicons@7.2.2/dist/css/ionicons.min.css\" rel=\"stylesheet\"><style>@font-face{font-family:Ionicons;src:url(https://unpkg.com/ionicons@7.2.2/dist/fonts/ionicons.woff2) format('woff2'),url(https://unpkg.com/ionicons@7.2.2/dist/fonts/ionicons.woff) format('woff'),url(https://unpkg.com/ionicons@7.2.2/dist/fonts/ionicons.ttf) format('truetype');font-weight:normal;font-style:normal}</style>"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
