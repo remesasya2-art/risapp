@@ -4,15 +4,14 @@ const path = require('path');
 
 const distDir = path.join(__dirname, '..', 'dist');
 
-// CSS para cargar Ionicons desde CDN
+// CSS para cargar Ionicons desde los assets locales del bundle
+// Usamos la ruta relativa a los assets que ya están en dist/
 const ioniconsCSS = `
 <link rel="preconnect" href="https://unpkg.com">
 <style>
 @font-face {
   font-family: 'Ionicons';
-  src: url('https://unpkg.com/ionicons@7.2.2/dist/fonts/ionicons.woff2') format('woff2'),
-       url('https://unpkg.com/ionicons@7.2.2/dist/fonts/ionicons.woff') format('woff'),
-       url('https://unpkg.com/ionicons@7.2.2/dist/fonts/ionicons.ttf') format('truetype');
+  src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.6148e7019854f3bde85b633cb88f3c25.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
