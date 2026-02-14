@@ -25,10 +25,10 @@
     "/app/test_reports/iteration_3.json"
   ],
   "action_items": [
-    "FIX REQUIRED: Ionicons font not loading. The fonts are being served from expo-font but Cloudflare returns 520 error. Console shows: 'Error loading fonts: NetworkError: A network error occurred.'",
-    "The bundled font exists at /app/frontend/dist/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.*.ttf but returns 404 when accessed via CDN",
-    "Current dist/index.html has wrong CDN URLs for fonts (unpkg.com which doesn't have ionicons 7 fonts)",
-    "Consider: 1) Self-host the font file, 2) Use a different CDN, or 3) Configure proper CORS/CDN headers for font files"
+    "FIX REQUIRED: Ionicons font not loading due to Expo CLI CORS middleware rejecting requests from preview URL. Error: 'Unauthorized request from https://push-notify-fix-8.preview.emergentagent.com'",
+    "Root cause: Expo CLI's CorsMiddleware.ts is blocking font asset requests from the preview domain",
+    "The font file exists in both node_modules and dist/assets but Metro asset server returns 520 due to CORS rejection",
+    "Solutions: 1) Configure Expo CLI to allow preview URL origin, 2) Use inline base64 fonts, 3) Self-host fonts on backend static server, or 4) Pre-load fonts in HTML with correct CDN"
   ],
   "critical_code_review_comments": [
     "Logout fix in AuthContext.tsx is correctly implemented using window.location.href before setUser(null)",
