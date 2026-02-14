@@ -76,9 +76,13 @@ export default function ProfileScreen() {
   };
 
   if (!user) {
-    // Redirigir a login en lugar de mostrar "Acceso Restringido"
-    router.replace('/login');
-    return null;
+    // Si no hay usuario, mostrar loading en lugar de intentar redirigir
+    // La redirección se maneja en AuthContext.logout() o en _layout.tsx
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.emptyText}>Redirigiendo...</Text>
+      </View>
+    );
   }
 
   // Verification status config

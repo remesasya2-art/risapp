@@ -226,26 +226,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    // En web, redirigir PRIMERO antes de cambiar el estado para evitar re-renders
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // Limpiar storage de forma síncrona
+      try {
+        localStorage.removeItem('session_token');
+      } catch (e) {}
+      
+      // Notificar al servidor (fire and forget)
+      const token = localStorage.getItem('session_token');
+      if (token) {
+        fetch(`${BACKEND_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
+      }
+      
+      // Redirigir inmediatamente antes de cambiar React state
+      window.location.href = '/login';
+      return; // Salir para evitar cualquier actualización de estado
+    }
+    
+    // Mobile: comportamiento original
     try {
       const token = await AsyncStorage.getItem('session_token');
       if (token) {
-        // No esperar la respuesta del servidor para evitar bloqueos
         axios.post(`${BACKEND_URL}/api/auth/logout`, {}, {
           headers: { Authorization: `Bearer ${token}` }
-        }).catch(() => {}); // Ignorar errores silenciosamente
+        }).catch(() => {});
       }
     } catch (error) {
       console.error('Logout error:', error);
     }
     
-    // Limpiar estado inmediatamente sin await
-    AsyncStorage.removeItem('session_token').catch(() => {});
+    await AsyncStorage.removeItem('session_token');
     setUser(null);
-    
-    // Redirigir a login en web
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.location.replace('/login');
-    }
   };
 
   const refreshUser = async () => {
