@@ -4371,4 +4371,4 @@ async def startup_db_client():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    client.close()# Last update: 2026-02-22T21:10:38Z - Support chat fix
