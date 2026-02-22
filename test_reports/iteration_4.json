@@ -1,0 +1,102 @@
+{
+  "summary": "Tested login/logout on PRODUCTION (risapp.pages.dev). LOGIN IS BROKEN - calls wrong backend URL. Icons are displaying correctly. Production build has inconsistent backend URLs baked in.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Login with email/password",
+        "issue": "Login API call goes to WRONG URL (support-chat-21.preview.emergentagent.com instead of risapp-production.up.railway.app)",
+        "affected_selectors": ["[data-testid='login-submit-button']"],
+        "priority": "CRITICAL"
+      },
+      {
+        "flow": "PIX Recharge",
+        "issue": "Calls wrong backend URL (preview URL instead of production)",
+        "affected_selectors": [],
+        "priority": "HIGH"
+      },
+      {
+        "flow": "VES Recharge",
+        "issue": "Calls wrong backend URL (preview URL instead of production)",
+        "affected_selectors": [],
+        "priority": "HIGH"
+      },
+      {
+        "flow": "Support Chat",
+        "issue": "Calls wrong backend URL (preview URL instead of production)",
+        "affected_selectors": [],
+        "priority": "HIGH"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_4.json"],
+  "action_items": [
+    "CRITICAL: Rebuild and redeploy frontend to Cloudflare Pages with correct EXPO_PUBLIC_BACKEND_URL=https://risapp-production.up.railway.app",
+    "Root cause: The dist build at risapp.pages.dev was built with wrong .env value (https://support-chat-21.preview.emergentagent.com)",
+    "Multiple modules affected: login.tsx, pix.tsx, recharge-ves.tsx, support.tsx, notifications.ts",
+    "Some modules (AuthContext, WebWrapper, admin-panel) have the correct URL hardcoded"
+  ],
+  "critical_code_review_comments": [
+    "The production dist bundle has INCONSISTENT backend URLs - some files use Railway (correct), others use preview URL (wrong)",
+    "login.tsx in dist uses: https://support-chat-21.preview.emergentagent.com (WRONG)",
+    "AuthContext.tsx in dist uses: https://risapp-production.up.railway.app (CORRECT)",
+    "This suggests the build was done with incorrect .env configuration"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (API at Railway works correctly)",
+    "frontend": "0% - Login broken on production deployment"
+  },
+  "test_credentials": {
+    "email": "marshalljulio46@gmail.com",
+    "password": "Admin2025!",
+    "backend_verified": "curl to https://risapp-production.up.railway.app/api/auth/login-password works correctly"
+  },
+  "seed_data_creation": "No seed data created",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Production at risapp.pages.dev has broken login due to wrong backend URL in compiled JS bundle. Need to rebuild with correct EXPO_PUBLIC_BACKEND_URL. Icons are NOW WORKING (confirmed visually - checkmark, lightning, wallet icons visible). Logout functionality was previously tested and working in preview URL.",
+  "tests_performed": [
+    {
+      "test": "Icons display",
+      "result": "PASS",
+      "details": "Icons now displaying correctly on risapp.pages.dev - checkmark, lightning bolt, wallet, mobile phone icons all visible"
+    },
+    {
+      "test": "Login form filling",
+      "result": "PASS",
+      "details": "Email and password fields fill correctly, button becomes enabled"
+    },
+    {
+      "test": "Login API call",
+      "result": "FAIL",
+      "details": "API call goes to https://support-chat-21.preview.emergentagent.com/api/auth/login-password (404) instead of https://risapp-production.up.railway.app"
+    },
+    {
+      "test": "Backend API direct test",
+      "result": "PASS",
+      "details": "curl to https://risapp-production.up.railway.app/api/auth/login-password returns valid session_token"
+    },
+    {
+      "test": "Logout flow",
+      "result": "NOT TESTED",
+      "details": "Cannot test logout because login is broken"
+    }
+  ],
+  "rca_of_the_issue": {
+    "issue": "Login fails on production with 404 error",
+    "root_cause": "Production dist bundle (risapp.pages.dev) was built with wrong EXPO_PUBLIC_BACKEND_URL value. The value 'support-chat-21.preview.emergentagent.com' was baked into multiple JS modules during build.",
+    "evidence": [
+      "Network capture shows POST to https://support-chat-21.preview.emergentagent.com/api/auth/login-password",
+      "Grep of dist bundle shows login.tsx module has const k='https://support-chat-21.preview.emergentagent.com'",
+      "Direct curl to Railway backend (https://risapp-production.up.railway.app) works correctly",
+      "Rate API correctly calls Railway - only some modules have wrong URL"
+    ],
+    "fix": "Rebuild frontend with EXPO_PUBLIC_BACKEND_URL=https://risapp-production.up.railway.app and redeploy to Cloudflare Pages"
+  }
+}
