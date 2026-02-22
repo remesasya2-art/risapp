@@ -80,3 +80,7 @@ agenthub/agents/youtube/db
 android-sdk/ 
 # Local Netlify folder
 .netlify
+-e 
+# Environment files
+*.env
+*.env.*
