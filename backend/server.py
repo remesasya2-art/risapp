@@ -613,6 +613,22 @@ async def get_verified_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 # =======================
+# DOWNLOAD BUILD ROUTE
+# =======================
+
+@api_router.get("/download-build")
+async def download_build():
+    """Download frontend build zip"""
+    build_path = Path(__file__).parent / "frontend_build.zip"
+    if not build_path.exists():
+        raise HTTPException(status_code=404, detail="Build file not found")
+    return FileResponse(
+        path=str(build_path),
+        filename="frontend_build.zip",
+        media_type="application/zip"
+    )
+
+# =======================
 # AUTH ROUTES
 # =======================
 
