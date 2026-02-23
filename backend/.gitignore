@@ -3,3 +3,5 @@ __pycache__/
 .env
 secrets/
 *.log
+frontend_build.zip
+static_dist/
