@@ -93,10 +93,17 @@ export default function SendRISScreen() {
 
   const loadRate = async () => {
     try {
+      console.log('Loading rate from:', `${BACKEND_URL}/api/rate`);
       const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      setRate(response.data.ris_to_ves);
+      console.log('Rate response:', response.data);
+      const risRate = response.data.ris_to_ves;
+      if (risRate) {
+        setRate(risRate);
+      }
     } catch (error) {
       console.error('Error loading rate:', error);
+      // Intentar de nuevo en 5 segundos si falla
+      setTimeout(loadRate, 5000);
     }
   };
 
