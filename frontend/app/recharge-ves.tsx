@@ -88,10 +88,17 @@ export default function RechargeVESScreen() {
 
   const loadRate = async () => {
     try {
+      console.log('Loading rate from:', `${BACKEND_URL}/api/rate`);
       const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      setRate(response.data.ves_to_ris);
+      console.log('Rate response:', response.data);
+      const vesRate = response.data.ves_to_ris;
+      if (vesRate) {
+        setRate(vesRate);
+      }
     } catch (error) {
       console.error('Error loading rate:', error);
+      // Intentar de nuevo en 5 segundos si falla
+      setTimeout(loadRate, 5000);
     }
   };
 
