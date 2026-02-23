@@ -154,7 +154,7 @@ export default function WebWrapper({ children, showBranding = true }: WebWrapper
         <View style={styles.brandingSection}>
           <View style={styles.brandingContent}>
             <View style={styles.logoContainer}>
-              <Ionicons name="swap-horizontal" size={48} color="#fff" />
+              <Ionicons name="swap-horizontal" size={48} color="#F5A623" />
             </View>
             <Text style={styles.brandTitle}>RIS</Text>
             <Text style={styles.brandSubtitle}>Remesas Internacionales Seguras</Text>
