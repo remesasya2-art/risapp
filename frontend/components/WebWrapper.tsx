@@ -186,12 +186,11 @@ export default function WebWrapper({ children, showBranding = true }: WebWrapper
               </View>
             </View>
 
-            {/* Botón de soporte sin login */}
             <TouchableOpacity 
               style={styles.guestSupportButton}
               onPress={() => setShowGuestSupport(true)}
             >
-              <Ionicons name="headset-outline" size={20} color={colors.primary.main} />
+              <Ionicons name="headset-outline" size={20} color="#fff" />
               <Text style={styles.guestSupportText}>¿No puedes acceder? Solicita ayuda</Text>
             </TouchableOpacity>
           </View>
