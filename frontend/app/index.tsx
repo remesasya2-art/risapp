@@ -74,15 +74,19 @@ export default function HomeScreen() {
 
   const loadRate = async () => {
     try {
+      console.log('Loading rate from:', `${BACKEND_URL}/api/rate`);
       const response = await axios.get(`${BACKEND_URL}/api/rate`);
+      console.log('Rate response:', response.data);
       setRates({
-        ris_to_ves: response.data.ris_to_ves || 92,
-        ves_to_ris: response.data.ves_to_ris || 102,
+        ris_to_ves: response.data.ris_to_ves || 100,
+        ves_to_ris: response.data.ves_to_ris || 120,
         ris_to_brl: response.data.ris_to_brl || 1
       });
-      setRate(response.data.ris_to_ves || 92);
+      setRate(response.data.ris_to_ves || 100);
     } catch (error) {
       console.error('Error loading rate:', error);
+      // Intentar de nuevo en 5 segundos si falla
+      setTimeout(loadRate, 5000);
     }
   };
 
