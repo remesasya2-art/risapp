@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#F5A623',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 25,
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   guestSupportText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.primary.main,
+    color: '#fff',
   },
   
   // App Container (Center)
