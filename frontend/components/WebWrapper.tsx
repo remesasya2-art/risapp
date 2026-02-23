@@ -344,10 +344,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   
-  // Branding Section (Left) - Nubank style
+  // Branding Section (Left) - Professional dark blue style
   brandingSection: {
     width: 340,
-    backgroundColor: colors.primary.main,
+    backgroundColor: '#1e3a5f',
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(245, 166, 35, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
