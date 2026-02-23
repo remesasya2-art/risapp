@@ -26,7 +26,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function HomeScreen() {
   const { user, loading: authLoading, login, refreshUser } = useAuth();
   const router = useRouter();
-  const [rate, setRate] = useState(78);
+  const [rate, setRate] = useState<number | null>(null);  // Null hasta que cargue
   const [risAmount, setRisAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   const [loading, setLoading] = useState(false);
