@@ -1,13 +1,13 @@
-// Theme constants for RIS App - Nubank-inspired Fintech design
+// Theme constants for RIS App - Professional Fintech design
 export const colors = {
   primary: {
-    main: '#820AD1',
-    light: '#A744F2',
-    dark: '#5F00A3',
+    main: '#1e3a5f',      // Azul oscuro profesional
+    light: '#2d5a8a',
+    dark: '#0f172a',
     contrast: '#FFFFFF',
   },
   secondary: {
-    main: '#F5A623',
+    main: '#F5A623',      // Dorado/Naranja - color de acento
     light: '#FFC966',
     dark: '#D98C00',
     contrast: '#0F172A',
@@ -28,11 +28,6 @@ export const colors = {
     error: '#EF4444',
     warning: '#F59E0B',
     info: '#3B82F6',
-  },
-  // Legacy colors for gradual migration
-  legacy: {
-    darkBlue: '#0f172a',
-    gold: '#eab308',
   },
 };
 
