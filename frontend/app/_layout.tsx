@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { RateProvider } from '../contexts/RateContext';
 import { Platform, View, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WebWrapper from '../components/WebWrapper';
