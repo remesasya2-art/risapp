@@ -18,6 +18,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
+import { useRate } from '../contexts/RateContext';
 import { VENEZUELA_BANKS, CEDULA_TYPES, PHONE_PREFIXES, BankOption } from '../constants/venezuelaBanks';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -36,8 +37,8 @@ export default function SendRISScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, refreshUser } = useAuth();
+  const { rates } = useRate();
   const [loading, setLoading] = useState(false);
-  const [rate, setRate] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   const [step, setStep] = useState(1); // 1 = calculadora, 2 = formulario
