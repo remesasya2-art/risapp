@@ -26,7 +26,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user, loading: authLoading, login, refreshUser } = useAuth();
-  const { rates, loading: rateLoading, refreshRate } = useRate();
   const router = useRouter();
   const [risAmount, setRisAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
@@ -35,12 +34,45 @@ export default function HomeScreen() {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [conversionType, setConversionType] = useState<'ris_to_ves' | 'ves_to_ris' | 'ris_to_brl'>('ris_to_ves');
+  
+  // Estado local para las tasas (más confiable que el contexto)
+  const [rates, setRates] = useState({
+    ris_to_ves: 0,
+    ves_to_ris: 0,
+    ris_to_brl: 1,
+  });
+  const [rateLoading, setRateLoading] = useState(true);
+
+  // Cargar tasas directamente desde la API
+  const loadRates = async () => {
+    try {
+      console.log('[HomeScreen] Loading rates from API...');
+      const response = await axios.get(`${BACKEND_URL}/api/rate`);
+      console.log('[HomeScreen] Rates loaded:', response.data);
+      setRates({
+        ris_to_ves: response.data.ris_to_ves || 0,
+        ves_to_ris: response.data.ves_to_ris || 0,
+        ris_to_brl: response.data.ris_to_brl || 1,
+      });
+    } catch (error) {
+      console.error('[HomeScreen] Error loading rates:', error);
+    } finally {
+      setRateLoading(false);
+    }
+  };
+
+  // Cargar tasas al montar y cada 10 segundos
+  useEffect(() => {
+    loadRates();
+    const interval = setInterval(loadRates, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Pull to refresh
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      refreshRate(),
+      loadRates(),
       loadUnreadNotifications(),
       refreshUser()
     ]);
