@@ -4217,6 +4217,70 @@ async def admin_close_support(request: CloseSupportRequest, admin_user: User = D
     
     return {"message": "Chat cerrado"}
 
+# --- Admin Withdrawals/Remittances Endpoints ---
+@api_router.get("/admin/withdrawals/all")
+async def get_all_withdrawals(admin_user: User = Depends(get_admin_user)):
+    """Get all withdrawals/remittances with all statuses"""
+    if not has_permission(admin_user, "withdrawals.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # Get all withdrawal transactions
+    cursor = db.transactions.find({
+        "type": "withdrawal"
+    }).sort("created_at", -1).limit(500)
+    
+    withdrawals = []
+    async for tx in cursor:
+        # Get user info
+        user = await db.users.find_one({"user_id": tx.get("user_id")})
+        withdrawals.append({
+            "transaction_id": tx.get("transaction_id"),
+            "user_id": tx.get("user_id"),
+            "user_name": user.get("full_name") if user else "Unknown",
+            "user_email": user.get("email") if user else "",
+            "amount_input": tx.get("amount_input", 0),
+            "amount_output": tx.get("amount_output", 0),
+            "rate": tx.get("rate", 0),
+            "commission": tx.get("commission", 0),
+            "status": tx.get("status", "pending"),
+            "beneficiary_data": tx.get("beneficiary_data", {}),
+            "created_at": tx.get("created_at"),
+            "updated_at": tx.get("updated_at"),
+            "completed_at": tx.get("completed_at"),
+            "proof_image": tx.get("proof_image"),
+            "processed_by": tx.get("processed_by"),
+        })
+    
+    return withdrawals
+
+@api_router.get("/admin/withdrawals/pending")
+async def get_pending_withdrawals(admin_user: User = Depends(get_admin_user)):
+    """Get only pending withdrawals for processing"""
+    if not has_permission(admin_user, "withdrawals.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    cursor = db.transactions.find({
+        "type": "withdrawal",
+        "status": "pending"
+    }).sort("created_at", 1)  # Oldest first
+    
+    withdrawals = []
+    async for tx in cursor:
+        user = await db.users.find_one({"user_id": tx.get("user_id")})
+        withdrawals.append({
+            "transaction_id": tx.get("transaction_id"),
+            "user_id": tx.get("user_id"),
+            "user_name": user.get("full_name") if user else "Unknown",
+            "amount_input": tx.get("amount_input", 0),
+            "amount_output": tx.get("amount_output", 0),
+            "rate": tx.get("rate", 0),
+            "status": tx.get("status"),
+            "beneficiary_data": tx.get("beneficiary_data", {}),
+            "created_at": tx.get("created_at"),
+        })
+    
+    return withdrawals
+
 # --- Process Withdrawal from Admin Panel ---
 class ProcessWithdrawalAdminRequest(BaseModel):
     transaction_id: str
