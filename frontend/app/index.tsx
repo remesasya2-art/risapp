@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
+import { useRate } from '../contexts/RateContext';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
@@ -25,19 +26,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user, loading: authLoading, login, refreshUser } = useAuth();
+  const { rates, loading: rateLoading, refreshRate } = useRate();
   const router = useRouter();
-  const [rate, setRate] = useState<number | null>(null);  // Null hasta que cargue
   const [risAmount, setRisAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingPolicies, setCheckingPolicies] = useState(true);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [rates, setRates] = useState({
-    ris_to_ves: 92,
-    ves_to_ris: 102,
-    ris_to_brl: 1
-  });
   const [conversionType, setConversionType] = useState<'ris_to_ves' | 'ves_to_ris' | 'ris_to_brl'>('ris_to_ves');
 
   // Pull to refresh
