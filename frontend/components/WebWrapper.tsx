@@ -342,6 +342,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.default,
     justifyContent: 'center',
   },
+  fullWidthContainer: {
+    flex: 1,
+    backgroundColor: colors.background.default,
+    width: '100%',
+  },
   
   // Branding Section (Left) - Professional dark blue style
   brandingSection: {
