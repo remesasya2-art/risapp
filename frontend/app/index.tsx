@@ -410,7 +410,7 @@ export default function HomeScreen() {
           </Text>
           <View style={styles.balanceFooter}>
             <Ionicons name="trending-up" size={16} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.balanceRate}>1 RIS = {rate ? rate.toFixed(2) : '...'} VES</Text>
+            <Text style={styles.balanceRate}>1 RIS = {rates.ris_to_ves.toFixed(2)} VES</Text>
           </View>
         </View>
 
