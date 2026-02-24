@@ -215,7 +215,7 @@ export default function RechargeVESScreen() {
 
             <View style={styles.rateCard}>
               <Text style={styles.rateLabel}>Tasa del día</Text>
-              <Text style={styles.rateValue}>{rates.ves_to_ris ? rates.ves_to_ris.toFixed(2) : '...'} VES = 1 RIS</Text>
+              <Text style={styles.rateValue}>{rates.ves_to_ris > 0 ? rates.ves_to_ris.toFixed(2) : '...'} VES = 1 RIS</Text>
             </View>
 
             <View style={styles.inputGroup}>
