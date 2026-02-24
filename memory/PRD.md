@@ -13,7 +13,7 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 ### Money Transfer
 - **Recharges**: PIX payments (Brazil) and VES bank transfers (Venezuela)
 - **Withdrawals**: Send RIS to Venezuelan bank accounts
-- Real-time exchange rates
+- Real-time exchange rates (auto-updates every 10 seconds)
 
 ### Admin Panel
 - User management (view, verify KYC, soft-delete)
@@ -37,6 +37,17 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 - **Payments**: Mercado Pago (PIX)
 
 ## What's Been Implemented
+
+### Session: 2026-02-24
+- **Real-Time Exchange Rate System COMPLETED**:
+  - Created `RateContext.tsx` - Global context that polls `/api/rate` every 10 seconds
+  - Wrapped entire app with `RateProvider` in `_layout.tsx`
+  - Refactored `index.tsx` (Dashboard) to use `useRate()` hook
+  - Refactored `send.tsx` (Enviar a Venezuela) to use `useRate()` hook
+  - Refactored `recharge-ves.tsx` (Recargar con Bolívares) to use `useRate()` hook
+  - Removed all duplicate rate-fetching logic from individual pages
+  - All screens now show consistent rates: ris_to_ves and ves_to_ris
+  - Sidebar widget shows "EN VIVO" (live) indicator with real-time rates
 
 ### Session: 2026-02-13
 - **PIX Pending Transaction Feature**:
@@ -85,30 +96,31 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 ## Pending Tasks
 
 ### P1 - High Priority
-- None - all critical features completed
+- **Professional Design Improvements**: Update UI of all user screens to match "Nubank" banking app aesthetic (user requested)
+- **Support Button for Unauthenticated Users**: Complete modal for users who cannot log in to contact support
 
 ### P2 - Future Enhancements
 - Stripe integration for recharges (blocked on user's Stripe account)
-- Fix icon rendering on Cloudflare Pages web build (known recurring issue)
+- Push notifications verification (waiting for user to re-open mobile app)
+- Automate Cloudflare deployment from GitHub
 
 ### P3 - Low Priority
 - Refactor GlobalHeader.tsx usage across all screens
 - Configure ESLint properly for TypeScript
 
-## Recent Fixes (2026-02-13)
+## Recent Fixes (2026-02-24)
 
-### Logout Flow Fixed
-- Logout now redirects automatically to `/login` without page freeze
-- Removed blocking `await` calls that caused "page not responding" error
-- Heartbeat improved with proper cleanup and timeout handling
-
-### Push Notifications Enhanced
-- Better error handling and logging
-- Auto-detection of FCM vs Expo token types
-- Clear user feedback when token needs to be refreshed
-- NOTE: User needs to re-open mobile app to get new Expo push token
+### Real-Time Exchange Rates Fixed
+- All screens now use centralized `RateContext` for consistent rate display
+- Rate polling every 10 seconds ensures near real-time updates
+- Dashboard shows: "1 RIS = X VES" 
+- Recharge VES shows: "X VES = 1 RIS" (for VES to RIS conversion)
+- Send screen shows: "1 RIS = X VES" (for RIS to VES conversion)
 
 ## Key Endpoints
+
+### Exchange Rates
+- `GET /api/rate` - Get current exchange rates (ris_to_ves, ves_to_ris, ris_to_brl)
 
 ### PIX Payments
 - `POST /api/pix/create` - Create PIX payment
