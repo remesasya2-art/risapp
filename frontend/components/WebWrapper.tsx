@@ -204,19 +204,9 @@ export default function WebWrapper({ children, showBranding = true }: WebWrapper
         </View>
       </View>
 
-      {/* Right side - Info cards with live rate */}
+      {/* Right side - Live rate card only */}
       {SCREEN_WIDTH >= 1200 && (
         <View style={styles.infoSection}>
-          <TouchableOpacity 
-            style={styles.infoCard}
-            onPress={() => setShowGuestSupport(true)}
-          >
-            <Ionicons name="help-circle" size={24} color={colors.primary.main} />
-            <Text style={styles.infoTitle}>¿Necesitas ayuda?</Text>
-            <Text style={styles.infoText}>
-              Nuestro equipo de soporte está disponible para asistirte.
-            </Text>
-          </TouchableOpacity>
           <View style={[styles.infoCard, styles.rateCard]}>
             <View style={styles.rateHeader}>
               <Ionicons name="trending-up" size={24} color={colors.secondary.main} />
