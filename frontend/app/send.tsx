@@ -18,7 +18,6 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
-import { useRate } from '../contexts/RateContext';
 import { VENEZUELA_BANKS, CEDULA_TYPES, PHONE_PREFIXES, BankOption } from '../constants/venezuelaBanks';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -37,11 +36,17 @@ export default function SendRISScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, refreshUser } = useAuth();
-  const { rates } = useRate();
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState('');
   const [vesAmount, setVesAmount] = useState('');
   const [step, setStep] = useState(1); // 1 = calculadora, 2 = formulario
+  
+  // Estado local para las tasas (carga directa de API)
+  const [rates, setRates] = useState({
+    ris_to_ves: 0,
+    ves_to_ris: 0,
+    ris_to_brl: 1,
+  });
   
   // Beneficiaries
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
@@ -64,8 +69,28 @@ export default function SendRISScreen() {
   const [showPrefixModal, setShowPrefixModal] = useState(false);
   const [bankSearch, setBankSearch] = useState('');
 
+  // Cargar tasas directamente desde la API
+  const loadRates = async () => {
+    try {
+      console.log('[SendScreen] Loading rates from API...');
+      const response = await axios.get(`${BACKEND_URL}/api/rate`);
+      console.log('[SendScreen] Rates loaded:', response.data);
+      setRates({
+        ris_to_ves: response.data.ris_to_ves || 0,
+        ves_to_ris: response.data.ves_to_ris || 0,
+        ris_to_brl: response.data.ris_to_brl || 1,
+      });
+    } catch (error) {
+      console.error('[SendScreen] Error loading rates:', error);
+    }
+  };
+
   useEffect(() => {
     loadBeneficiaries();
+    loadRates();
+    // Auto-refresh rates every 10 seconds
+    const interval = setInterval(loadRates, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Recalcular VES cuando cambia la tasa (desde el contexto global)
