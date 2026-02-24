@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { RateProvider } from '../contexts/RateContext';
@@ -11,10 +11,17 @@ import * as Font from 'expo-font';
 // Pantallas de autenticación donde NO se muestra la barra de tabs
 const AUTH_SCREENS = ['login', 'register', 'verify-email', 'forgot-password', 'set-password', 'change-password', 'policies'];
 
+// Pantallas que necesitan ancho completo (sin sidebars)
+const FULL_WIDTH_SCREENS = ['admin-panel'];
+
 function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { user, loading } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const pathname = usePathname();
+  
+  // Detectar si la pantalla actual necesita ancho completo
+  const isFullWidthScreen = FULL_WIDTH_SCREENS.some(screen => pathname?.includes(screen));
 
   useEffect(() => {
     async function loadFonts() {
