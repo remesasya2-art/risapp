@@ -2992,7 +2992,19 @@ function SettingsTab({ currentRate, onRateUpdated }: { currentRate: number; onRa
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f8fafc',
+    ...(Platform.OS === 'web' && { 
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100%',
+      zIndex: 100,
+    }),
+  },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#6b7280', fontSize: 14 },
   
