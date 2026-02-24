@@ -429,8 +429,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 24,
   },
+  appContainerFullWidth: {
+    maxWidth: '100%',
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+  },
   appInner: {
     flex: 1,
+  },
+  appInnerFullWidth: {
+    flex: 1,
+    width: '100%',
   },
   
   // Info Section (Right)
