@@ -338,30 +338,123 @@ function StatCard({ icon, title, value, color }: { icon: string; title: string; 
   );
 }
 
-// Withdrawals Tab - Full screen
+// VENEZUELA BANKS for filtering
+const BANK_FILTERS = [
+  { code: '0102', name: 'BANCO DE VENEZUELA S.A' },
+  { code: '0105', name: 'BANCO MERCANTIL C.A' },
+  { code: '0108', name: 'BANCO PROVINCIAL BBVA' },
+  { code: '0134', name: 'BANESCO BANCO UNIVERSAL' },
+];
+
+// Status types for remittances
+type RemittanceStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'claimed' | 'refunded';
+
+// Withdrawals Tab - Full Professional Interface
 function WithdrawalsTab() {
-  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [allWithdrawals, setAllWithdrawals] = useState<any[]>([]);
+  const [filteredWithdrawals, setFilteredWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTx, setSelectedTx] = useState<any>(null);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  
+  // Filter states
+  const [activeStatus, setActiveStatus] = useState<RemittanceStatus | 'all'>('pending');
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
+  const [searchId, setSearchId] = useState('');
+  const [searchName, setSearchName] = useState('');
+  const [searchDate, setSearchDate] = useState('');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Selection for bulk actions
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  
+  // Detail/Edit modal
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
-    loadWithdrawals();
+    loadAllWithdrawals();
   }, []);
 
-  const loadWithdrawals = async () => {
+  useEffect(() => {
+    applyFilters();
+  }, [allWithdrawals, activeStatus, selectedBank, searchId, searchName, searchDate]);
+
+  const loadAllWithdrawals = async () => {
     try {
       const token = await AsyncStorage.getItem('session_token');
-      const response = await axios.get(`${BACKEND_URL}/api/admin/withdrawals/pending`, {
+      // Load all withdrawals (pending, processing, completed, etc.)
+      const response = await axios.get(`${BACKEND_URL}/api/admin/withdrawals/all`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setWithdrawals(response.data || []);
+      setAllWithdrawals(response.data || []);
     } catch (error) {
       console.error('Error loading withdrawals:', error);
+      // Fallback to pending only if /all endpoint doesn't exist
+      try {
+        const token = await AsyncStorage.getItem('session_token');
+        const response = await axios.get(`${BACKEND_URL}/api/admin/withdrawals/pending`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setAllWithdrawals(response.data || []);
+      } catch (e) {
+        console.error('Error loading pending withdrawals:', e);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let result = [...allWithdrawals];
+    
+    // Filter by status
+    if (activeStatus !== 'all') {
+      result = result.filter(tx => tx.status === activeStatus);
+    }
+    
+    // Filter by bank
+    if (selectedBank) {
+      result = result.filter(tx => tx.beneficiary_data?.bank_code === selectedBank);
+    }
+    
+    // Filter by ID
+    if (searchId.trim()) {
+      result = result.filter(tx => 
+        tx.transaction_id?.toLowerCase().includes(searchId.toLowerCase())
+      );
+    }
+    
+    // Filter by name
+    if (searchName.trim()) {
+      result = result.filter(tx => 
+        tx.user_name?.toLowerCase().includes(searchName.toLowerCase()) ||
+        tx.beneficiary_data?.full_name?.toLowerCase().includes(searchName.toLowerCase())
+      );
+    }
+    
+    // Filter by date
+    if (searchDate.trim()) {
+      result = result.filter(tx => {
+        const txDate = new Date(tx.created_at).toLocaleDateString('es-ES');
+        return txDate.includes(searchDate);
+      });
+    }
+    
+    setFilteredWithdrawals(result);
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setSearchId('');
+    setSearchName('');
+    setSearchDate('');
+    setSelectedBank(null);
+    setActiveStatus('pending');
   };
 
   const pickProofImage = async () => {
@@ -397,10 +490,11 @@ function WithdrawalsTab() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      showAlert('Éxito', action === 'approve' ? 'Retiro aprobado' : 'Retiro rechazado');
+      showAlert('Éxito', action === 'approve' ? 'Remesa procesada correctamente' : 'Remesa rechazada');
       setSelectedTx(null);
       setProofImage(null);
-      loadWithdrawals();
+      setShowDetailModal(false);
+      loadAllWithdrawals();
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'No se pudo procesar');
     } finally {
@@ -408,60 +502,403 @@ function WithdrawalsTab() {
     }
   };
 
+  const processQuickPayment = async (tx: any) => {
+    setSelectedTx(tx);
+    setShowDetailModal(true);
+  };
+
+  const exportToExcel = () => {
+    // Create CSV content
+    const headers = ['ID', 'Fecha', 'Pagador', 'Cantidad Enviada', 'Comisión', 'Importe Pagado', 'Tasa', 'Banco', 'Beneficiario', 'CI/CPF', 'Nro. Cuenta', 'Moneda', 'Cantidad a Enviar', 'Estado'];
+    const rows = filteredWithdrawals.map(tx => [
+      tx.transaction_id,
+      new Date(tx.created_at).toLocaleString('es-ES'),
+      tx.user_name || '',
+      tx.amount_input?.toFixed(2) || '',
+      tx.commission?.toFixed(2) || '0.00',
+      tx.amount_input?.toFixed(2) || '',
+      tx.rate?.toFixed(2) || '',
+      tx.beneficiary_data?.bank || '',
+      tx.beneficiary_data?.full_name || '',
+      tx.beneficiary_data?.id_document || '',
+      tx.beneficiary_data?.account_number || '',
+      'VES',
+      tx.amount_output?.toFixed(2) || '',
+      tx.status || ''
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    
+    // Download
+    if (Platform.OS === 'web') {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `remesas_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+    } else {
+      showAlert('Exportar', 'La exportación a Excel está disponible solo en la versión web');
+    }
+  };
+
+  const toggleSelectItem = (id: string) => {
+    setSelectedItems(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const pageItems = getCurrentPageItems();
+    if (selectedItems.length === pageItems.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(pageItems.map(tx => tx.transaction_id));
+    }
+  };
+
+  // Pagination helpers
+  const totalPages = Math.ceil(filteredWithdrawals.length / itemsPerPage);
+  const getCurrentPageItems = () => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredWithdrawals.slice(start, start + itemsPerPage);
+  };
+
+  // Count by status
+  const getStatusCount = (status: string) => {
+    if (status === 'all') return allWithdrawals.length;
+    return allWithdrawals.filter(tx => tx.status === status).length;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#f59e0b';
+      case 'processing': return '#3b82f6';
+      case 'completed': return '#10b981';
+      case 'failed': return '#ef4444';
+      case 'claimed': return '#8b5cf6';
+      case 'refunded': return '#ec4899';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pendiente';
+      case 'processing': return 'Procesando';
+      case 'completed': return 'Completada';
+      case 'failed': return 'No completada';
+      case 'claimed': return 'En reclamación';
+      case 'refunded': return 'En reembolso';
+      default: return status;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getWaitTime = (dateString: string) => {
+    const created = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - created.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 60) return `${diffMins} min`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} h`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} d`;
+  };
+
   if (loading) {
     return <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />;
   }
 
+  const statusTabs = [
+    { key: 'pending', label: 'Remesas Pendiente', color: '#f59e0b' },
+    { key: 'processing', label: 'Remesas Procesando', color: '#f59e0b' },
+    { key: 'completed', label: 'Remesa Completada', color: '#6b7280' },
+    { key: 'failed', label: 'Remesas No completada', color: '#6b7280' },
+    { key: 'claimed', label: 'Remesa En reclamación', color: '#ef4444' },
+    { key: 'refunded', label: 'Remesas En reembolso', color: '#ef4444' },
+  ];
+
   return (
-    <View style={styles.tabContent}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Retiros Pendientes</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>{withdrawals.length}</Text>
+    <View style={wdStyles.container}>
+      {/* Status Tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={wdStyles.statusTabsContainer}>
+        <View style={wdStyles.statusTabs}>
+          {statusTabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                wdStyles.statusTab,
+                activeStatus === tab.key && { backgroundColor: tab.color }
+              ]}
+              onPress={() => setActiveStatus(tab.key as RemittanceStatus)}
+            >
+              <Text style={[
+                wdStyles.statusTabText,
+                activeStatus === tab.key && { color: '#fff' }
+              ]}>
+                {tab.label}
+              </Text>
+              {tab.key === 'claimed' && getStatusCount('claimed') > 0 && (
+                <View style={wdStyles.statusBadge}>
+                  <Text style={wdStyles.statusBadgeText}>{getStatusCount('claimed')}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Bank Filters */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={wdStyles.bankFiltersContainer}>
+        <View style={wdStyles.bankFilters}>
+          {BANK_FILTERS.map((bank) => (
+            <TouchableOpacity
+              key={bank.code}
+              style={[
+                wdStyles.bankFilter,
+                selectedBank === bank.code && wdStyles.bankFilterActive
+              ]}
+              onPress={() => setSelectedBank(selectedBank === bank.code ? null : bank.code)}
+            >
+              <Text style={[
+                wdStyles.bankFilterText,
+                selectedBank === bank.code && wdStyles.bankFilterTextActive
+              ]}>
+                {bank.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={[wdStyles.bankFilter, !selectedBank && wdStyles.bankFilterActive]}
+            onPress={() => setSelectedBank(null)}
+          >
+            <Text style={[wdStyles.bankFilterText, !selectedBank && wdStyles.bankFilterTextActive]}>
+              Todos
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={wdStyles.bankFilter}
+            onPress={() => setSelectedBank('otros')}
+          >
+            <Text style={wdStyles.bankFilterText}>Otros</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* Search Filters */}
+      <View style={wdStyles.searchFilters}>
+        <TextInput
+          style={wdStyles.searchInput}
+          placeholder="ID"
+          placeholderTextColor="#9ca3af"
+          value={searchId}
+          onChangeText={setSearchId}
+        />
+        <TextInput
+          style={[wdStyles.searchInput, { flex: 1.5 }]}
+          placeholder="Nombre"
+          placeholderTextColor="#9ca3af"
+          value={searchName}
+          onChangeText={setSearchName}
+        />
+        <TextInput
+          style={wdStyles.searchInput}
+          placeholder="dd/mm/aaaa"
+          placeholderTextColor="#9ca3af"
+          value={searchDate}
+          onChangeText={setSearchDate}
+        />
+        <TouchableOpacity style={wdStyles.searchButton} onPress={applyFilters}>
+          <Ionicons name="search" size={20} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={wdStyles.clearButton} onPress={clearFilters}>
+          <Ionicons name="close" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Export Button */}
+      <TouchableOpacity style={wdStyles.exportButton} onPress={exportToExcel}>
+        <Ionicons name="download-outline" size={18} color="#fff" />
+        <Text style={wdStyles.exportButtonText}>Excel</Text>
+      </TouchableOpacity>
+
+      {/* Data Table */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+        <View style={wdStyles.table}>
+          {/* Table Header */}
+          <View style={wdStyles.tableHeader}>
+            <TouchableOpacity style={wdStyles.checkboxCell} onPress={toggleSelectAll}>
+              <Ionicons 
+                name={selectedItems.length === getCurrentPageItems().length && selectedItems.length > 0 ? "checkbox" : "square-outline"} 
+                size={20} 
+                color="#6b7280" 
+              />
+            </TouchableOpacity>
+            <Text style={[wdStyles.headerCell, { width: 70 }]}>Id</Text>
+            <Text style={[wdStyles.headerCell, { width: 80 }]}>Espera</Text>
+            <Text style={[wdStyles.headerCell, { width: 100 }]}>Acción</Text>
+            <Text style={[wdStyles.headerCell, { width: 100 }]}>Historial</Text>
+            <Text style={[wdStyles.headerCell, { width: 150 }]}>Fecha</Text>
+            <Text style={[wdStyles.headerCell, { width: 200 }]}>Pagador</Text>
+            <Text style={[wdStyles.headerCell, { width: 100 }]}>Enviado</Text>
+            <Text style={[wdStyles.headerCell, { width: 80 }]}>Comisión</Text>
+            <Text style={[wdStyles.headerCell, { width: 100 }]}>Pagado</Text>
+            <Text style={[wdStyles.headerCell, { width: 80 }]}>Tasa</Text>
+            <Text style={[wdStyles.headerCell, { width: 180 }]}>Banco</Text>
+            <Text style={[wdStyles.headerCell, { width: 180 }]}>Beneficiario</Text>
+            <Text style={[wdStyles.headerCell, { width: 120 }]}>CI/CPF</Text>
+            <Text style={[wdStyles.headerCell, { width: 180 }]}>Nro. Cuenta</Text>
+            <Text style={[wdStyles.headerCell, { width: 70 }]}>Moneda</Text>
+            <Text style={[wdStyles.headerCell, { width: 120 }]}>A enviar</Text>
+          </View>
+
+          {/* Table Body */}
+          {getCurrentPageItems().length === 0 ? (
+            <View style={wdStyles.emptyRow}>
+              <Text style={wdStyles.emptyText}>No hay remesas que coincidan con los filtros</Text>
+            </View>
+          ) : (
+            getCurrentPageItems().map((tx) => (
+              <View key={tx.transaction_id} style={wdStyles.tableRow}>
+                <TouchableOpacity 
+                  style={wdStyles.checkboxCell} 
+                  onPress={() => toggleSelectItem(tx.transaction_id)}
+                >
+                  <Ionicons 
+                    name={selectedItems.includes(tx.transaction_id) ? "checkbox" : "square-outline"} 
+                    size={20} 
+                    color="#6b7280" 
+                  />
+                </TouchableOpacity>
+                <Text style={[wdStyles.cell, { width: 70 }]}>{tx.transaction_id?.substring(0, 6)}</Text>
+                <Text style={[wdStyles.cell, { width: 80 }]}>{getWaitTime(tx.created_at)}</Text>
+                
+                {/* Action Button */}
+                <View style={[wdStyles.cell, { width: 100 }]}>
+                  {tx.status === 'pending' && (
+                    <TouchableOpacity 
+                      style={wdStyles.payNowButton}
+                      onPress={() => processQuickPayment(tx)}
+                    >
+                      <Text style={wdStyles.payNowText}>pago ahora</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                
+                {/* History/Actions */}
+                <View style={[wdStyles.cell, wdStyles.actionsCell, { width: 100 }]}>
+                  <TouchableOpacity onPress={() => { setSelectedTx(tx); setShowDetailModal(true); }}>
+                    <Ionicons name="create-outline" size={18} color="#3b82f6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setSelectedTx(tx); setShowHistoryModal(true); }}>
+                    <Ionicons name="eye-outline" size={18} color="#10b981" />
+                  </TouchableOpacity>
+                  <TouchableOpacity>
+                    <Ionicons name="alert-circle-outline" size={18} color="#f59e0b" />
+                  </TouchableOpacity>
+                  <View style={[wdStyles.statusDot, { backgroundColor: getStatusColor(tx.status) }]} />
+                </View>
+                
+                {/* Status Badge */}
+                <View style={[wdStyles.cell, { width: 100 }]}>
+                  <View style={[wdStyles.statusBadgeInline, { backgroundColor: getStatusColor(tx.status) + '20' }]}>
+                    <Text style={[wdStyles.statusBadgeInlineText, { color: getStatusColor(tx.status) }]}>
+                      {getStatusLabel(tx.status)}
+                    </Text>
+                  </View>
+                </View>
+                
+                <Text style={[wdStyles.cell, { width: 150 }]}>{formatDate(tx.created_at)}</Text>
+                <Text style={[wdStyles.cell, { width: 200 }]} numberOfLines={1}>{tx.user_name || 'N/A'}</Text>
+                <Text style={[wdStyles.cell, { width: 100 }]}>{tx.amount_input?.toFixed(2)} $</Text>
+                <Text style={[wdStyles.cell, { width: 80 }]}>{tx.commission?.toFixed(2) || '0.00'} $</Text>
+                <Text style={[wdStyles.cell, { width: 100 }]}>{tx.amount_input?.toFixed(2)} $</Text>
+                <Text style={[wdStyles.cell, { width: 80 }]}>{tx.rate?.toFixed(2) || '---'}</Text>
+                <Text style={[wdStyles.cell, { width: 180 }]} numberOfLines={1}>{tx.beneficiary_data?.bank || 'N/A'}</Text>
+                <Text style={[wdStyles.cell, { width: 180 }]} numberOfLines={1}>{tx.beneficiary_data?.full_name || 'N/A'}</Text>
+                <Text style={[wdStyles.cell, { width: 120 }]}>{tx.beneficiary_data?.id_document || 'N/A'}</Text>
+                <Text style={[wdStyles.cell, { width: 180 }]}>{tx.beneficiary_data?.account_number || 'N/A'}</Text>
+                <Text style={[wdStyles.cell, { width: 70 }]}>Bs</Text>
+                <Text style={[wdStyles.cell, { width: 120, fontWeight: '600', color: '#10b981' }]}>
+                  {tx.amount_output?.toFixed(2)}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Pagination */}
+      <View style={wdStyles.pagination}>
+        <Text style={wdStyles.paginationInfo}>
+          {selectedItems.length} de {filteredWithdrawals.length} fila(s) seleccionadas
+        </Text>
+        <Text style={wdStyles.paginationInfo}>Total de registros: {filteredWithdrawals.length}</Text>
+        
+        <View style={wdStyles.paginationRight}>
+          <Text style={wdStyles.paginationLabel}>Filas Por Página</Text>
+          <TouchableOpacity 
+            style={wdStyles.paginationSelect}
+            onPress={() => setItemsPerPage(itemsPerPage === 10 ? 25 : itemsPerPage === 25 ? 50 : 10)}
+          >
+            <Text style={wdStyles.paginationSelectText}>{itemsPerPage}</Text>
+            <Ionicons name="chevron-down" size={16} color="#6b7280" />
+          </TouchableOpacity>
+          
+          <Text style={wdStyles.paginationLabel}>Página {currentPage} de {totalPages || 1}</Text>
+          
+          <View style={wdStyles.paginationButtons}>
+            <TouchableOpacity 
+              style={wdStyles.paginationButton}
+              onPress={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              <Ionicons name="play-back" size={16} color={currentPage === 1 ? '#d1d5db' : '#6b7280'} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={wdStyles.paginationButton}
+              onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? '#d1d5db' : '#6b7280'} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={wdStyles.paginationButton}
+              onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? '#d1d5db' : '#6b7280'} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={wdStyles.paginationButton}
+              onPress={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              <Ionicons name="play-forward" size={16} color={currentPage === totalPages ? '#d1d5db' : '#6b7280'} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-      
-      {withdrawals.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="checkmark-circle" size={64} color="#10b981" />
-          <Text style={styles.emptyTitle}>¡Todo al día!</Text>
-          <Text style={styles.emptyText}>No hay retiros pendientes</Text>
-        </View>
-      ) : (
-        withdrawals.map((tx) => (
-          <TouchableOpacity key={tx.transaction_id} style={styles.txCard} onPress={() => setSelectedTx(tx)}>
-            <View style={styles.txCardHeader}>
-              <View>
-                <Text style={styles.txAmount}>{tx.amount_input?.toFixed(2)} RIS</Text>
-                <Text style={styles.txConversion}>→ {tx.amount_output?.toFixed(2)} VES</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </View>
-            <View style={styles.txCardBody}>
-              <View style={styles.txInfoRow}>
-                <Ionicons name="person" size={14} color="#6b7280" />
-                <Text style={styles.txInfoText}>{tx.user_name}</Text>
-              </View>
-              <View style={styles.txInfoRow}>
-                <Ionicons name="business" size={14} color="#6b7280" />
-                <Text style={styles.txInfoText}>{tx.beneficiary_data?.bank_code} - {tx.beneficiary_data?.bank}</Text>
-              </View>
-              <View style={styles.txInfoRow}>
-                <Ionicons name="card" size={14} color="#6b7280" />
-                <Text style={styles.txInfoText}>{tx.beneficiary_data?.account_number}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))
-      )}
 
-      {/* Process Modal */}
-      <Modal visible={!!selectedTx} animationType="slide" transparent>
+      {/* Detail/Process Modal */}
+      <Modal visible={showDetailModal} animationType="slide" transparent>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Procesar Retiro</Text>
-              <TouchableOpacity onPress={() => { setSelectedTx(null); setProofImage(null); }} style={styles.modalClose}>
+              <Text style={styles.modalTitle}>Procesar Remesa</Text>
+              <TouchableOpacity onPress={() => { setShowDetailModal(false); setSelectedTx(null); setProofImage(null); }} style={styles.modalClose}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -538,9 +975,306 @@ function WithdrawalsTab() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* History Modal */}
+      <Modal visible={showHistoryModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 500 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Historial de la Remesa</Text>
+              <TouchableOpacity onPress={() => { setShowHistoryModal(false); setSelectedTx(null); }} style={styles.modalClose}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedTx && (
+              <ScrollView style={styles.modalBody}>
+                <View style={wdStyles.historyItem}>
+                  <View style={wdStyles.historyDot} />
+                  <View style={wdStyles.historyContent}>
+                    <Text style={wdStyles.historyTitle}>Remesa creada</Text>
+                    <Text style={wdStyles.historyDate}>{formatDate(selectedTx.created_at)}</Text>
+                  </View>
+                </View>
+                {selectedTx.status !== 'pending' && (
+                  <View style={wdStyles.historyItem}>
+                    <View style={[wdStyles.historyDot, { backgroundColor: getStatusColor(selectedTx.status) }]} />
+                    <View style={wdStyles.historyContent}>
+                      <Text style={wdStyles.historyTitle}>Estado: {getStatusLabel(selectedTx.status)}</Text>
+                      <Text style={wdStyles.historyDate}>{formatDate(selectedTx.updated_at || selectedTx.created_at)}</Text>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+// Styles for WithdrawalsTab
+const wdStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  statusTabsContainer: {
+    marginBottom: 12,
+  },
+  statusTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  statusTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  statusBadge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  statusBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  bankFiltersContainer: {
+    marginBottom: 12,
+  },
+  bankFilters: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  bankFilter: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#e2e8f0',
+  },
+  bankFilterActive: {
+    backgroundColor: '#f59e0b',
+  },
+  bankFilterText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  bankFilterTextActive: {
+    color: '#fff',
+  },
+  searchFilters: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1f2937',
+  },
+  searchButton: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    gap: 6,
+    marginLeft: 4,
+  },
+  exportButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  table: {
+    minWidth: SCREEN_WIDTH > 1200 ? 1800 : 1400,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingVertical: 12,
+  },
+  headerCell: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    paddingHorizontal: 8,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cell: {
+    fontSize: 13,
+    color: '#374151',
+    paddingHorizontal: 8,
+  },
+  checkboxCell: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionsCell: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusBadgeInline: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeInlineText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  payNowButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  payNowText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyRow: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#9ca3af',
+    fontSize: 14,
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  paginationInfo: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  paginationRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  paginationLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  paginationSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  paginationSelectText: {
+    fontSize: 13,
+    color: '#374151',
+  },
+  paginationButtons: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  paginationButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+  },
+  historyItem: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  historyDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    marginTop: 4,
+  },
+  historyContent: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  historyDate: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+});
 
 // Recharges Tab - Now includes both PIX and VES recharges
 function RechargesTab() {
