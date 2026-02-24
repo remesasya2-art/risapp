@@ -117,14 +117,14 @@ export default function AdminPanelScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Modern Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, IS_DESKTOP && styles.headerDesktop]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Panel de Control</Text>
+          <Text style={[styles.headerTitle, IS_DESKTOP && styles.headerTitleDesktop]}>Panel de Control</Text>
           <View style={[styles.roleBadge, userRole === 'super_admin' && styles.superBadge]}>
             <Ionicons name={userRole === 'super_admin' ? 'diamond' : 'shield'} size={12} color="#fff" />
             <Text style={styles.roleBadgeText}>{userRole === 'super_admin' ? 'Super Admin' : 'Admin'}</Text>
@@ -138,24 +138,24 @@ export default function AdminPanelScreen() {
       </View>
 
       {/* Navigation Tabs */}
-      <View style={styles.tabsWrapper}>
+      <View style={[styles.tabsWrapper, IS_DESKTOP && styles.tabsWrapperDesktop]}>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsContainer}
+          contentContainerStyle={[styles.tabsContainer, IS_DESKTOP && styles.tabsContainerDesktop]}
         >
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+              style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive, IS_DESKTOP && styles.tabItemDesktop]}
               onPress={() => setActiveTab(tab.key as TabType)}
             >
               <Ionicons 
                 name={tab.icon as any} 
-                size={18} 
+                size={IS_DESKTOP ? 20 : 18} 
                 color={activeTab === tab.key ? '#fff' : '#64748b'} 
               />
-              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive, IS_DESKTOP && styles.tabLabelDesktop]}>
                 {tab.label}
               </Text>
               {tab.badge !== undefined && tab.badge > 0 && (
@@ -170,10 +170,10 @@ export default function AdminPanelScreen() {
         </ScrollView>
       </View>
 
-      {/* Main Content */}
+      {/* Main Content - Full Width on Desktop */}
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
+        style={[styles.content, IS_DESKTOP && styles.contentDesktop]}
+        contentContainerStyle={[styles.contentContainer, IS_DESKTOP && styles.contentContainerDesktop]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />}
         showsVerticalScrollIndicator={false}
       >
