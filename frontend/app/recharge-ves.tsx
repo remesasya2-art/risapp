@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
-import { useRate } from '../contexts/RateContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -50,15 +49,16 @@ const CopyableField = ({ label, value, onCopy }: { label: string; value: string;
 export default function RechargeVESScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
-  const { rates, loading: ratesLoading } = useRate(); // Usar el contexto global de tasas
   const [step, setStep] = useState(1); // 1: amount, 2: payment method, 3: bank info, 4: upload voucher
   const [loading, setLoading] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
   
-  // Debug: Log rates when they change
-  useEffect(() => {
-    console.log('[RechargeVES] Rates from context:', rates, 'Loading:', ratesLoading);
-  }, [rates, ratesLoading]);
+  // Estado local para las tasas (carga directa de API)
+  const [rates, setRates] = useState({
+    ris_to_ves: 0,
+    ves_to_ris: 0,
+    ris_to_brl: 1,
+  });
   
   // Form data
   const [amountVES, setAmountVES] = useState('');
@@ -66,11 +66,31 @@ export default function RechargeVESScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'pago_movil' | 'transferencia' | null>(null);
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
 
+  // Cargar tasas directamente desde la API
+  const loadRates = async () => {
+    try {
+      console.log('[RechargeVES] Loading rates from API...');
+      const response = await axios.get(`${BACKEND_URL}/api/rate`);
+      console.log('[RechargeVES] Rates loaded:', response.data);
+      setRates({
+        ris_to_ves: response.data.ris_to_ves || 0,
+        ves_to_ris: response.data.ves_to_ris || 0,
+        ris_to_brl: response.data.ris_to_brl || 1,
+      });
+    } catch (error) {
+      console.error('[RechargeVES] Error loading rates:', error);
+    }
+  };
+
   useEffect(() => {
     loadPaymentInfo();
+    loadRates();
+    // Auto-refresh rates every 10 seconds
+    const interval = setInterval(loadRates, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Recalcular cuando cambia la tasa global (desde RateContext)
+  // Recalcular cuando cambia la tasa
   useEffect(() => {
     if (rates.ves_to_ris && amountVES) {
       const ves = parseFloat(amountVES) || 0;
