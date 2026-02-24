@@ -292,7 +292,7 @@ export default function SendRISScreen() {
                 <Ionicons name="swap-horizontal" size={24} color="#F5A623" />
                 <Text style={styles.rateTitle}>Tasa del día</Text>
               </View>
-              <Text style={styles.rateValue}>1 RIS = {rate ? rate.toFixed(2) : '...'} VES</Text>
+              <Text style={styles.rateValue}>1 RIS = {rates.ris_to_ves.toFixed(2)} VES</Text>
             </View>
 
             {/* Calculator */}
