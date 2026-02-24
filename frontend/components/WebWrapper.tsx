@@ -159,7 +159,7 @@ export default function WebWrapper({ children, showBranding = true, fullWidth = 
   // On large web screens, center content and show branding
   return (
     <View style={styles.outerContainer}>
-      {/* Left side - Branding */}
+      {/* Left side - Branding (only for unauthenticated users) */}
       {showBranding && SCREEN_WIDTH >= 1024 && (
         <View style={styles.brandingSection}>
           <View style={styles.brandingContent}>
@@ -207,15 +207,15 @@ export default function WebWrapper({ children, showBranding = true, fullWidth = 
         </View>
       )}
 
-      {/* Center - App Container */}
-      <View style={styles.appContainer}>
-        <View style={styles.appInner}>
+      {/* Center - App Container (full width when user is authenticated) */}
+      <View style={[styles.appContainer, !showBranding && styles.appContainerFullWidth]}>
+        <View style={[styles.appInner, !showBranding && styles.appInnerFullWidth]}>
           {children}
         </View>
       </View>
 
-      {/* Right side - Live rate card only */}
-      {SCREEN_WIDTH >= 1200 && (
+      {/* Right side - Live rate card only (only for unauthenticated users) */}
+      {showBranding && SCREEN_WIDTH >= 1200 && (
         <View style={styles.infoSection}>
           <View style={[styles.infoCard, styles.rateCard]}>
             <View style={styles.rateHeader}>
