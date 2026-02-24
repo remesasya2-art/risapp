@@ -248,7 +248,7 @@ function DashboardTab({ data, onNavigateToRates }: { data: DashboardData | null;
               <Ionicons name="shield-checkmark" size={20} color="#f59e0b" />
             </View>
             <View style={styles.pendingCardContent}>
-              <Text style={[styles.pendingCardValue, IS_DESKTOP && { fontSize: 28 }]}>{data.transactions.pending_kyc}</Text>
+              <Text style={[styles.pendingCardValue, IS_DESKTOP && { fontSize: 28 }]}>{data.users.pending_kyc}</Text>
               <Text style={styles.pendingCardLabel}>KYC</Text>
             </View>
           </View>
