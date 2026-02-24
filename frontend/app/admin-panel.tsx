@@ -3092,6 +3092,38 @@ const styles = StyleSheet.create({
   content: { flex: 1, backgroundColor: '#f8fafc' },
   contentContainer: { paddingBottom: 20 },
   tabContent: { padding: 16 },
+  
+  // Desktop Styles
+  headerDesktop: {
+    paddingHorizontal: 40,
+    paddingVertical: 20,
+  },
+  headerTitleDesktop: {
+    fontSize: 24,
+  },
+  tabsWrapperDesktop: {
+    paddingHorizontal: 24,
+  },
+  tabsContainerDesktop: {
+    paddingHorizontal: 24,
+    gap: 12,
+    justifyContent: 'center',
+  },
+  tabItemDesktop: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  tabLabelDesktop: {
+    fontSize: 15,
+  },
+  contentDesktop: {
+    paddingHorizontal: 24,
+  },
+  contentContainerDesktop: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    maxWidth: '100%',
+  },
 
   // Section Headers
   sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1f2937', marginBottom: 16 },
