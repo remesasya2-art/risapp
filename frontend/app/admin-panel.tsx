@@ -190,14 +190,14 @@ export default function AdminPanelScreen() {
   );
 }
 
-// Dashboard Tab - Professional layout
+// Dashboard Tab - Professional layout with Desktop Support
 function DashboardTab({ data, onNavigateToRates }: { data: DashboardData | null; onNavigateToRates: () => void }) {
   if (!data) return null;
 
   return (
-    <View style={styles.tabContent}>
+    <View style={[styles.tabContent, IS_DESKTOP && { padding: 24 }]}>
       {/* Quick Access to Rates */}
-      <TouchableOpacity style={styles.ratesQuickAccess} onPress={onNavigateToRates}>
+      <TouchableOpacity style={[styles.ratesQuickAccess, IS_DESKTOP && { maxWidth: 500 }]} onPress={onNavigateToRates}>
         <View style={styles.ratesQuickAccessLeft}>
           <View style={styles.ratesQuickAccessIcon}>
             <Ionicons name="cash" size={24} color="#fff" />
@@ -211,9 +211,9 @@ function DashboardTab({ data, onNavigateToRates }: { data: DashboardData | null;
       </TouchableOpacity>
 
       {/* Welcome Card */}
-      <View style={styles.welcomeCard}>
+      <View style={[styles.welcomeCard, IS_DESKTOP && { maxWidth: 600 }]}>
         <View style={styles.welcomeContent}>
-          <Text style={styles.welcomeTitle}>Panel de Administración</Text>
+          <Text style={[styles.welcomeTitle, IS_DESKTOP && { fontSize: 22 }]}>Panel de Administración</Text>
           <Text style={styles.welcomeSubtitle}>Gestiona tu plataforma RIS</Text>
         </View>
         <View style={styles.welcomeIcon}>
@@ -221,43 +221,43 @@ function DashboardTab({ data, onNavigateToRates }: { data: DashboardData | null;
         </View>
       </View>
 
-      {/* Pending Actions - Alert Style */}
-      <View style={styles.pendingSection}>
-        <Text style={styles.pendingSectionTitle}>Acciones Pendientes</Text>
-        <View style={styles.pendingGrid}>
-          <View style={[styles.pendingCard, { borderLeftColor: '#ef4444' }]}>
+      {/* Pending Actions - Grid Layout for Desktop */}
+      <View style={[styles.pendingSection, IS_DESKTOP && { maxWidth: '100%' }]}>
+        <Text style={[styles.pendingSectionTitle, IS_DESKTOP && { fontSize: 20 }]}>Acciones Pendientes</Text>
+        <View style={[styles.pendingGrid, IS_DESKTOP && { flexDirection: 'row', flexWrap: 'wrap', gap: 16 }]}>
+          <View style={[styles.pendingCard, { borderLeftColor: '#ef4444' }, IS_DESKTOP && { flex: 1, minWidth: 200 }]}>
             <View style={styles.pendingCardIcon}>
               <Ionicons name="trending-up" size={20} color="#ef4444" />
             </View>
             <View style={styles.pendingCardContent}>
-              <Text style={styles.pendingCardValue}>{data.transactions.pending_withdrawals}</Text>
+              <Text style={[styles.pendingCardValue, IS_DESKTOP && { fontSize: 28 }]}>{data.transactions.pending_withdrawals}</Text>
               <Text style={styles.pendingCardLabel}>Retiros</Text>
             </View>
           </View>
-          <View style={[styles.pendingCard, { borderLeftColor: '#10b981' }]}>
+          <View style={[styles.pendingCard, { borderLeftColor: '#10b981' }, IS_DESKTOP && { flex: 1, minWidth: 200 }]}>
             <View style={styles.pendingCardIcon}>
               <Ionicons name="trending-down" size={20} color="#10b981" />
             </View>
             <View style={styles.pendingCardContent}>
-              <Text style={styles.pendingCardValue}>{data.transactions.pending_recharges}</Text>
+              <Text style={[styles.pendingCardValue, IS_DESKTOP && { fontSize: 28 }]}>{data.transactions.pending_recharges}</Text>
               <Text style={styles.pendingCardLabel}>Recargas</Text>
             </View>
           </View>
-          <View style={[styles.pendingCard, { borderLeftColor: '#f59e0b' }]}>
+          <View style={[styles.pendingCard, { borderLeftColor: '#f59e0b' }, IS_DESKTOP && { flex: 1, minWidth: 200 }]}>
             <View style={styles.pendingCardIcon}>
               <Ionicons name="shield-checkmark" size={20} color="#f59e0b" />
             </View>
             <View style={styles.pendingCardContent}>
-              <Text style={styles.pendingCardValue}>{data.users.pending_kyc}</Text>
+              <Text style={[styles.pendingCardValue, IS_DESKTOP && { fontSize: 28 }]}>{data.transactions.pending_kyc}</Text>
               <Text style={styles.pendingCardLabel}>KYC</Text>
             </View>
           </View>
-          <View style={[styles.pendingCard, { borderLeftColor: '#8b5cf6' }]}>
+          <View style={[styles.pendingCard, { borderLeftColor: '#8b5cf6' }, IS_DESKTOP && { flex: 1, minWidth: 200 }]}>
             <View style={styles.pendingCardIcon}>
               <Ionicons name="chatbubble-ellipses" size={20} color="#8b5cf6" />
             </View>
             <View style={styles.pendingCardContent}>
-              <Text style={styles.pendingCardValue}>{data.support.open_chats}</Text>
+              <Text style={[styles.pendingCardValue, IS_DESKTOP && { fontSize: 28 }]}>{data.support.open_chats}</Text>
               <Text style={styles.pendingCardLabel}>Soporte</Text>
             </View>
           </View>
