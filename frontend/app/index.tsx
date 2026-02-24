@@ -40,7 +40,7 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      loadRate(),
+      refreshRate(),
       loadUnreadNotifications(),
       refreshUser()
     ]);
@@ -50,41 +50,13 @@ export default function HomeScreen() {
   // MODO PRUEBA: Carga rápida sin verificaciones extras
   useEffect(() => {
     if (user) {
-      loadRate();
       // Solo cargar notificaciones después de 2 segundos para no bloquear
       setTimeout(() => loadUnreadNotifications(), 2000);
     }
     setCheckingPolicies(false);
   }, [user]);
 
-  // Auto-actualizar tasas cada 30 segundos
-  useEffect(() => {
-    if (user) {
-      const rateInterval = setInterval(() => {
-        loadRate();
-        console.log('📊 Tasas actualizadas automáticamente');
-      }, 30000); // 30 segundos
-      return () => clearInterval(rateInterval);
-    }
-  }, [user]);
-
-  const loadRate = async () => {
-    try {
-      console.log('Loading rate from:', `${BACKEND_URL}/api/rate`);
-      const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      console.log('Rate response:', response.data);
-      setRates({
-        ris_to_ves: response.data.ris_to_ves || 100,
-        ves_to_ris: response.data.ves_to_ris || 120,
-        ris_to_brl: response.data.ris_to_brl || 1
-      });
-      setRate(response.data.ris_to_ves || 100);
-    } catch (error) {
-      console.error('Error loading rate:', error);
-      // Intentar de nuevo en 5 segundos si falla
-      setTimeout(loadRate, 5000);
-    }
-  };
+  // La tasa se actualiza automáticamente desde RateContext cada 10 segundos
 
   const loadUnreadNotifications = async () => {
     try {
