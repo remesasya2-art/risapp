@@ -116,20 +116,20 @@ const GuestSupportModal = ({ visible, onClose }: { visible: boolean; onClose: ()
   );
 };
 
-export default function WebWrapper({ children, showBranding = true }: WebWrapperProps) {
+export default function WebWrapper({ children, showBranding = true, fullWidth = false }: WebWrapperProps) {
   const [rate, setRate] = useState<number | null>(null);
   const [loadingRate, setLoadingRate] = useState(true);
   const [showGuestSupport, setShowGuestSupport] = useState(false);
 
   // Cargar tasa del backend
   useEffect(() => {
-    if (isWeb && isLargeScreen) {
+    if (isWeb && isLargeScreen && !fullWidth) {
       loadRate();
       // Actualizar cada 30 segundos
       const interval = setInterval(loadRate, 30000);
       return () => clearInterval(interval);
     }
-  }, []);
+  }, [fullWidth]);
 
   const loadRate = async () => {
     try {
@@ -145,6 +145,15 @@ export default function WebWrapper({ children, showBranding = true }: WebWrapper
   // On mobile or small screens, just render children
   if (!isWeb || !isLargeScreen) {
     return <>{children}</>;
+  }
+
+  // If fullWidth is true, render children without sidebars (for admin panel, etc)
+  if (fullWidth) {
+    return (
+      <View style={styles.fullWidthContainer}>
+        {children}
+      </View>
+    );
   }
 
   // On large web screens, center content and show branding
