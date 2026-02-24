@@ -2995,6 +2995,18 @@ const styles = StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: '#f8fafc',
+    // Force full screen on web regardless of parent containers
+    ...(Platform.OS === 'web' ? {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100vw',
+      height: '100vh',
+      zIndex: 99999,
+      overflow: 'auto',
+    } : {}),
   },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#6b7280', fontSize: 14 },
