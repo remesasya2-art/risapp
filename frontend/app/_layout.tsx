@@ -18,10 +18,12 @@ function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { user, loading } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   
   // Detectar si la pantalla actual necesita ancho completo
-  const isFullWidthScreen = FULL_WIDTH_SCREENS.some(screen => pathname?.includes(screen));
+  const isFullWidthScreen = FULL_WIDTH_SCREENS.some(screen => pathname.includes(screen));
+  
+  console.log('[Layout] Current pathname:', pathname, 'isFullWidth:', isFullWidthScreen);
 
   useEffect(() => {
     async function loadFonts() {
