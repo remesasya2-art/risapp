@@ -50,10 +50,10 @@ const CopyableField = ({ label, value, onCopy }: { label: string; value: string;
 export default function RechargeVESScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
+  const { rates } = useRate(); // Usar el contexto global de tasas
   const [step, setStep] = useState(1); // 1: amount, 2: payment method, 3: bank info, 4: upload voucher
   const [loading, setLoading] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
-  const [rate, setRate] = useState<number | null>(null);
   
   // Form data
   const [amountVES, setAmountVES] = useState('');
@@ -63,20 +63,15 @@ export default function RechargeVESScreen() {
 
   useEffect(() => {
     loadPaymentInfo();
-    loadRate();
-    
-    // Auto-actualizar tasa cada 30 segundos
-    const rateInterval = setInterval(loadRate, 30000);
-    return () => clearInterval(rateInterval);
   }, []);
 
-  // Recalcular cuando cambia la tasa
+  // Recalcular cuando cambia la tasa global (desde RateContext)
   useEffect(() => {
-    if (rate && amountVES) {
+    if (rates.ves_to_ris && amountVES) {
       const ves = parseFloat(amountVES) || 0;
-      setAmountRIS((ves / rate).toFixed(2));
+      setAmountRIS((ves / rates.ves_to_ris).toFixed(2));
     }
-  }, [rate]);
+  }, [rates.ves_to_ris, amountVES]);
 
   const loadPaymentInfo = async () => {
     try {
@@ -84,22 +79,6 @@ export default function RechargeVESScreen() {
       setPaymentInfo(response.data);
     } catch (error) {
       console.error('Error loading payment info:', error);
-    }
-  };
-
-  const loadRate = async () => {
-    try {
-      console.log('Loading rate from:', `${BACKEND_URL}/api/rate`);
-      const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      console.log('Rate response:', response.data);
-      const vesRate = response.data.ves_to_ris;
-      if (vesRate) {
-        setRate(vesRate);
-      }
-    } catch (error) {
-      console.error('Error loading rate:', error);
-      // Intentar de nuevo en 5 segundos si falla
-      setTimeout(loadRate, 5000);
     }
   };
 
