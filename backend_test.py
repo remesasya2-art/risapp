@@ -12,7 +12,7 @@ from datetime import datetime
 import sys
 
 # Configuration
-BASE_URL = "https://push-notify-fix-8.preview.emergentagent.com/api"
+BASE_URL = "https://realtime-exchange-1.preview.emergentagent.com/api"
 ADMIN_EMAIL = "marshalljulio46@gmail.com"
 
 class RISAPITester:
