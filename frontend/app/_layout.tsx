@@ -117,7 +117,9 @@ function TabsLayout() {
 export default function TabLayout() {
   return (
     <AuthProvider>
-      <TabsLayout />
+      <RateProvider>
+        <TabsLayout />
+      </RateProvider>
     </AuthProvider>
   );
 }
