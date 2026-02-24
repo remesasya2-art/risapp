@@ -25,7 +25,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const IS_LARGE_SCREEN = SCREEN_WIDTH >= 1024;
+const IS_DESKTOP = Platform.OS === 'web' && SCREEN_WIDTH >= 768;
 
 type TabType = 'dashboard' | 'withdrawals' | 'recharges' | 'kyc' | 'support' | 'users' | 'admins' | 'settings';
 
