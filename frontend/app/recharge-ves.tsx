@@ -50,10 +50,15 @@ const CopyableField = ({ label, value, onCopy }: { label: string; value: string;
 export default function RechargeVESScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
-  const { rates } = useRate(); // Usar el contexto global de tasas
+  const { rates, loading: ratesLoading } = useRate(); // Usar el contexto global de tasas
   const [step, setStep] = useState(1); // 1: amount, 2: payment method, 3: bank info, 4: upload voucher
   const [loading, setLoading] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
+  
+  // Debug: Log rates when they change
+  useEffect(() => {
+    console.log('[RechargeVES] Rates from context:', rates, 'Loading:', ratesLoading);
+  }, [rates, ratesLoading]);
   
   // Form data
   const [amountVES, setAmountVES] = useState('');
