@@ -65,21 +65,16 @@ export default function SendRISScreen() {
   const [bankSearch, setBankSearch] = useState('');
 
   useEffect(() => {
-    loadRate();
     loadBeneficiaries();
-    
-    // Auto-actualizar tasa cada 30 segundos
-    const rateInterval = setInterval(loadRate, 30000);
-    return () => clearInterval(rateInterval);
   }, []);
 
-  // Recalcular VES cuando cambia la tasa
+  // Recalcular VES cuando cambia la tasa (desde el contexto global)
   useEffect(() => {
-    if (rate && amount) {
+    if (rates.ris_to_ves && amount) {
       const ris = parseFloat(amount) || 0;
-      setVesAmount((ris * rate).toFixed(2));
+      setVesAmount((ris * rates.ris_to_ves).toFixed(2));
     }
-  }, [rate]);
+  }, [rates.ris_to_ves, amount]);
 
   useEffect(() => {
     // If coming from beneficiaries screen with a specific beneficiary
@@ -91,22 +86,6 @@ export default function SendRISScreen() {
       }
     }
   }, [params.beneficiaryId, beneficiaries]);
-
-  const loadRate = async () => {
-    try {
-      console.log('Loading rate from:', `${BACKEND_URL}/api/rate`);
-      const response = await axios.get(`${BACKEND_URL}/api/rate`);
-      console.log('Rate response:', response.data);
-      const risRate = response.data.ris_to_ves;
-      if (risRate) {
-        setRate(risRate);
-      }
-    } catch (error) {
-      console.error('Error loading rate:', error);
-      // Intentar de nuevo en 5 segundos si falla
-      setTimeout(loadRate, 5000);
-    }
-  };
 
   const loadBeneficiaries = async () => {
     try {
@@ -123,7 +102,7 @@ export default function SendRISScreen() {
   const handleAmountChange = (value: string) => {
     setAmount(value);
     const ris = parseFloat(value) || 0;
-    const currentRate = rate || 0;
+    const currentRate = rates.ris_to_ves || 100;
     setVesAmount((ris * currentRate).toFixed(2));
   };
 
