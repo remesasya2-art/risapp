@@ -49,7 +49,7 @@ function TabsLayout() {
   const hideTabBar = true;
   
   return (
-    <WebWrapper showBranding={!user}>
+    <WebWrapper showBranding={!user} fullWidth={isFullWidthScreen}>
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: '#F5A623',
