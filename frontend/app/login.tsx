@@ -215,8 +215,105 @@ export default function LoginScreen() {
             <Ionicons name="shield-checkmark" size={16} color="#059669" />
             <Text style={styles.securityText}>Conexión segura y encriptada</Text>
           </View>
+
+          {/* Support Button for users without access */}
+          <TouchableOpacity 
+            style={styles.supportButton}
+            onPress={() => setShowSupportModal(true)}
+            data-testid="login-support-button"
+          >
+            <Ionicons name="headset-outline" size={20} color="#fff" />
+            <Text style={styles.supportButtonText}>¿No puedes acceder? Solicita ayuda</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Support Modal */}
+      <Modal
+        visible={showSupportModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSupportModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconContainer}>
+                <Ionicons name="headset" size={28} color="#2563eb" />
+              </View>
+              <Text style={styles.modalTitle}>Centro de Ayuda</Text>
+              <TouchableOpacity 
+                onPress={() => setShowSupportModal(false)} 
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.modalSubtitle}>
+              ¿No puedes acceder a tu cuenta? Completa tus datos y te ayudaremos por WhatsApp.
+            </Text>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalLabel}>Nombre completo *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Tu nombre"
+                placeholderTextColor="#9ca3af"
+                value={supportName}
+                onChangeText={setSupportName}
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalLabel}>Correo electrónico *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="tu@email.com"
+                placeholderTextColor="#9ca3af"
+                value={supportEmail}
+                onChangeText={setSupportEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalLabel}>Teléfono (con código de país) *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="+55 11 99999-9999"
+                placeholderTextColor="#9ca3af"
+                value={supportPhone}
+                onChangeText={setSupportPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalLabel}>¿En qué podemos ayudarte? (opcional)</Text>
+              <TextInput
+                style={[styles.modalInput, styles.modalTextArea]}
+                placeholder="Describe tu problema..."
+                placeholderTextColor="#9ca3af"
+                value={supportMessage}
+                onChangeText={setSupportMessage}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={styles.whatsappButton} 
+              onPress={handleSupportSubmit}
+              data-testid="support-whatsapp-button"
+            >
+              <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+              <Text style={styles.whatsappButtonText}>Contactar por WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
