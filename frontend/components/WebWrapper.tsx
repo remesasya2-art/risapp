@@ -12,6 +12,7 @@ const isLargeScreen = SCREEN_WIDTH >= 768;
 interface WebWrapperProps {
   children: React.ReactNode;
   showBranding?: boolean;
+  fullWidth?: boolean;  // Para pantallas que necesitan todo el ancho (ej: admin-panel)
 }
 
 // Modal de soporte sin login
