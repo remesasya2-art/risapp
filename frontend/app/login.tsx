@@ -38,6 +38,36 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  
+  // Support form state
+  const [supportName, setSupportName] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [supportPhone, setSupportPhone] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+
+  const handleSupportSubmit = () => {
+    if (!supportName || !supportEmail || !supportPhone) {
+      showAlert('Error', 'Por favor completa todos los campos obligatorios');
+      return;
+    }
+    
+    // Crear mensaje para WhatsApp
+    const whatsappMessage = `🆘 *SOLICITUD DE AYUDA - USUARIO SIN ACCESO*%0A%0A👤 Nombre: ${supportName}%0A📧 Email: ${supportEmail}%0A📱 Teléfono: ${supportPhone}%0A%0A💬 Mensaje: ${supportMessage || 'Necesito ayuda para acceder a mi cuenta'}`;
+    
+    // Número de WhatsApp de soporte
+    const supportNumber = '559584098171';
+    const whatsappUrl = `https://wa.me/${supportNumber}?text=${whatsappMessage}`;
+    
+    Linking.openURL(whatsappUrl);
+    setShowSupportModal(false);
+    
+    // Limpiar formulario
+    setSupportName('');
+    setSupportEmail('');
+    setSupportPhone('');
+    setSupportMessage('');
+  };
 
   const handleLogin = async () => {
     if (!email.trim()) {
