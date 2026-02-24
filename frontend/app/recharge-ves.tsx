@@ -85,14 +85,14 @@ export default function RechargeVESScreen() {
   const handleVESChange = (value: string) => {
     setAmountVES(value);
     const ves = parseFloat(value) || 0;
-    const currentRate = rate || 1;
+    const currentRate = rates.ves_to_ris || 1;
     setAmountRIS((ves / currentRate).toFixed(2));
   };
 
   const handleRISChange = (value: string) => {
     setAmountRIS(value);
     const ris = parseFloat(value) || 0;
-    const currentRate = rate || 1;
+    const currentRate = rates.ves_to_ris || 1;
     setAmountVES((ris * currentRate).toFixed(2));
   };
 
