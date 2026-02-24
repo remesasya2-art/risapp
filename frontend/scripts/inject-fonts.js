@@ -3,9 +3,9 @@ const fs = require('fs');
 const path = require('path');
 
 const distDir = path.join(__dirname, '..', 'dist');
+const BUILD_VERSION = Date.now(); // Timestamp único para cada build
 
 // CSS para cargar Ionicons desde los assets locales del bundle
-// Usamos la ruta relativa a los assets que ya están en dist/
 const ioniconsCSS = `
 <link rel="preconnect" href="https://unpkg.com">
 <style>
@@ -16,6 +16,14 @@ const ioniconsCSS = `
   font-style: normal;
 }
 </style>
+`;
+
+// Meta tags para forzar NO CACHE
+const noCacheMeta = `
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="build-version" content="${BUILD_VERSION}">
 `;
 
 // Buscar todos los archivos HTML en dist
@@ -31,18 +39,25 @@ function processHtmlFiles(dir) {
     } else if (file.endsWith('.html')) {
       let content = fs.readFileSync(filePath, 'utf8');
       
-      // Insertar CSS de Ionicons después de </title> o al inicio de <head>
+      // Insertar meta tags de no-cache después de <head>
+      if (!content.includes('build-version')) {
+        content = content.replace('<head>', '<head>' + noCacheMeta);
+      }
+      
+      // Insertar CSS de Ionicons antes de </head>
       if (!content.includes('Ionicons')) {
         if (content.includes('</head>')) {
           content = content.replace('</head>', ioniconsCSS + '</head>');
         }
-        fs.writeFileSync(filePath, content);
-        console.log(`✅ Procesado: ${file}`);
       }
+      
+      fs.writeFileSync(filePath, content);
+      console.log(`✅ Procesado: ${file}`);
     }
   });
 }
 
-console.log('🔧 Inyectando fuentes de Ionicons en archivos HTML...');
+console.log('🔧 Inyectando fuentes y meta tags de no-cache...');
+console.log(`📦 Build version: ${BUILD_VERSION}`);
 processHtmlFiles(distDir);
 console.log('✅ Listo!');
