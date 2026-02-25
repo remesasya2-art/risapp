@@ -1,4 +1,11 @@
 #!/bin/bash
-# Start Vite ignoring any additional arguments
+# Start static server serving the production build
 cd /app/frontend
-exec node_modules/.bin/vite --host 0.0.0.0 --port 3000
+
+# Build first if dist doesn't exist
+if [ ! -d "dist" ]; then
+  yarn build
+fi
+
+# Serve static files
+exec node serve.cjs
