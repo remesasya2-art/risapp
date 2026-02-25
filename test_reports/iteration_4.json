@@ -37,13 +37,13 @@
   "test_report_links": ["/app/test_reports/iteration_4.json"],
   "action_items": [
     "CRITICAL: Rebuild and redeploy frontend to Cloudflare Pages with correct EXPO_PUBLIC_BACKEND_URL=https://risapp-production.up.railway.app",
-    "Root cause: The dist build at risapp.pages.dev was built with wrong .env value (https://realtime-exchange-1.preview.emergentagent.com)",
+    "Root cause: The dist build at risapp.pages.dev was built with wrong .env value (https://responsive-ris.preview.emergentagent.com)",
     "Multiple modules affected: login.tsx, pix.tsx, recharge-ves.tsx, support.tsx, notifications.ts",
     "Some modules (AuthContext, WebWrapper, admin-panel) have the correct URL hardcoded"
   ],
   "critical_code_review_comments": [
     "The production dist bundle has INCONSISTENT backend URLs - some files use Railway (correct), others use preview URL (wrong)",
-    "login.tsx in dist uses: https://realtime-exchange-1.preview.emergentagent.com (WRONG)",
+    "login.tsx in dist uses: https://responsive-ris.preview.emergentagent.com (WRONG)",
     "AuthContext.tsx in dist uses: https://risapp-production.up.railway.app (CORRECT)",
     "This suggests the build was done with incorrect .env configuration"
   ],
@@ -75,7 +75,7 @@
     {
       "test": "Login API call",
       "result": "FAIL",
-      "details": "API call goes to https://realtime-exchange-1.preview.emergentagent.com/api/auth/login-password (404) instead of https://risapp-production.up.railway.app"
+      "details": "API call goes to https://responsive-ris.preview.emergentagent.com/api/auth/login-password (404) instead of https://risapp-production.up.railway.app"
     },
     {
       "test": "Backend API direct test",
@@ -92,8 +92,8 @@
     "issue": "Login fails on production with 404 error",
     "root_cause": "Production dist bundle (risapp.pages.dev) was built with wrong EXPO_PUBLIC_BACKEND_URL value. The value 'support-chat-21.preview.emergentagent.com' was baked into multiple JS modules during build.",
     "evidence": [
-      "Network capture shows POST to https://realtime-exchange-1.preview.emergentagent.com/api/auth/login-password",
-      "Grep of dist bundle shows login.tsx module has const k='https://realtime-exchange-1.preview.emergentagent.com'",
+      "Network capture shows POST to https://responsive-ris.preview.emergentagent.com/api/auth/login-password",
+      "Grep of dist bundle shows login.tsx module has const k='https://responsive-ris.preview.emergentagent.com'",
       "Direct curl to Railway backend (https://risapp-production.up.railway.app) works correctly",
       "Rate API correctly calls Railway - only some modules have wrong URL"
     ],

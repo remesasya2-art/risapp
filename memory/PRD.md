@@ -142,4 +142,4 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 ## Deployment URLs
 - **Frontend**: https://risapp.pages.dev (Cloudflare)
 - **Backend**: https://risapp-production.up.railway.app (Railway)
-- **Preview**: https://realtime-exchange-1.preview.emergentagent.com (Emergent)
+- **Preview**: https://responsive-ris.preview.emergentagent.com (Emergent)
