@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "RIS - Remesas Internacionales",
+    "slug": "ris-remittances",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "ris",
+    "platforms": ["web"],
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
