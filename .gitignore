@@ -220,3 +220,10 @@ android-sdk/
 # Environment files
 *.env
 *.env.*
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
