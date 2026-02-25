@@ -40,7 +40,7 @@ export default function Recharge() {
 
     setLoading(true);
     try {
-      const response = await api.post('/recharge/pix', { amount: parseFloat(amount) });
+      const response = await api.post('/pix/create', { amount: parseFloat(amount) });
       setPixData(response.data);
       setStep(2);
     } catch (error) {
