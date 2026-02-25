@@ -1,11 +1,4 @@
 #!/bin/bash
-# Start static server serving the production build
+# Start Expo with web
 cd /app/frontend
-
-# Build first if dist doesn't exist
-if [ ! -d "dist" ]; then
-  yarn build
-fi
-
-# Serve static files
-exec node serve.cjs
+exec npx expo start --web --port 3000
