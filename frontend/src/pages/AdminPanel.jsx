@@ -136,7 +136,7 @@ export default function AdminPanel() {
       return;
     }
     try {
-      await api.post('/admin/rate', { ris_to_ves: parseFloat(newRate) });
+      await api.post('/rate', { ris_to_ves: parseFloat(newRate) });
       toast.success('Tasa actualizada');
       refreshRates();
       setNewRate('');
