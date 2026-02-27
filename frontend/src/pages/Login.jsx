@@ -81,7 +81,7 @@ export default function Login() {
       <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-140px)] px-4">
         <div className="w-full max-w-md">
           {/* Login Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
             <h1 className="text-2xl font-bold text-gray-900 mb-8">Inicia sesión en tu cuenta</h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">
