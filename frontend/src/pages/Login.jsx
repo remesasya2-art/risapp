@@ -70,7 +70,7 @@ export default function Login() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 flex justify-start px-[10%] pt-16">
+      <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-132px)] px-4">
         <div className="w-full max-w-[420px]">
           {/* Login Card */}
           <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
