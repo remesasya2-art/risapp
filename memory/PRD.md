@@ -96,18 +96,24 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 ## Pending Tasks
 
 ### P1 - High Priority
-- **Professional Design Improvements**: Update UI of all user screens to match "Nubank" banking app aesthetic (user requested)
-- **Full Admin Panel**: Build the complete "Process Remittances" screen (WithdrawalsTab) with tabs, filters, and modals
-- **Profile & History Pages**: Implement user profile and transaction history pages
+- **Stripe Integration**: Blocked on user's Stripe account activation
 
 ### P2 - Future Enhancements
-- Stripe integration for recharges (blocked on user's Stripe account)
 - Push notifications verification (waiting for user to re-open mobile app)
 - Automate Cloudflare deployment from GitHub
 
 ### P3 - Low Priority
 - Refactor GlobalHeader.tsx usage across all screens
 - Configure ESLint properly for TypeScript
+
+## Completed Tasks (2026-02-27)
+- **Dashboard**: Professional redesign with balance card, quick actions, live exchange rate
+- **Recharge Page**: Improved PIX/VES method selection with clear pricing
+- **Support Page**: Enhanced chat interface with quick questions
+- **History Page**: Consistent blue header, better transaction cards
+- **Send Page**: Multi-step wizard for remittances
+- **Profile Page**: User info display with verification status
+- **Admin Panel**: Complete with tabs (Retiros, Recargas, Usuarios, KYC, Tasas), filters, and modals
 
 ## Recent Fixes (2026-02-27)
 
