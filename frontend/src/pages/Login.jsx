@@ -71,10 +71,10 @@ export default function Login() {
 
       {/* Main Content */}
       <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-132px)] px-4">
-        <div className="w-full max-w-[420px]">
+        <div className="w-full max-w-[480px]">
           {/* Login Card */}
-          <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
-            <h1 className="text-[24px] font-semibold text-gray-900 mb-8">Inicia sesión en tu cuenta</h1>
+          <div className="bg-white rounded-xl shadow-2xl p-10 border border-gray-200">
+            <h1 className="text-[28px] font-semibold text-gray-900 mb-10">Inicia sesión en tu cuenta</h1>
 
             <form onSubmit={handleSubmit}>
               {/* Email Field */}
