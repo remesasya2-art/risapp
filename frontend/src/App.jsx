@@ -14,6 +14,7 @@ import History from './pages/History';
 import Verification from './pages/Verification';
 import AdminPanel from './pages/AdminPanel';
 import Notifications from './pages/Notifications';
+import Support from './pages/Support';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -72,6 +73,7 @@ function AppRoutes() {
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
       <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+      <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
