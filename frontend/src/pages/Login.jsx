@@ -68,8 +68,8 @@ export default function Login() {
       {/* Main Content */}
       <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-132px)] px-4">
         <div className="w-full max-w-[520px]">
-          {/* Login Form - No card border */}
-          <div className="bg-white p-12">
+          {/* Login Card - Floating panel */}
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-12">
             <h1 className="text-[32px] font-bold text-gray-900 mb-12">Inicia sesión en tu cuenta</h1>
 
               <form onSubmit={handleSubmit}>
