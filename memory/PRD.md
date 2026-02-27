@@ -97,7 +97,8 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 
 ### P1 - High Priority
 - **Professional Design Improvements**: Update UI of all user screens to match "Nubank" banking app aesthetic (user requested)
-- **Support Button for Unauthenticated Users**: Complete modal for users who cannot log in to contact support
+- **Full Admin Panel**: Build the complete "Process Remittances" screen (WithdrawalsTab) with tabs, filters, and modals
+- **Profile & History Pages**: Implement user profile and transaction history pages
 
 ### P2 - Future Enhancements
 - Stripe integration for recharges (blocked on user's Stripe account)
