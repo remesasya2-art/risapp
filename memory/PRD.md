@@ -108,6 +108,19 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 - Refactor GlobalHeader.tsx usage across all screens
 - Configure ESLint properly for TypeScript
 
+## Recent Fixes (2026-02-27)
+
+### Bug Fixes - PIX Recharge & Support Button
+- **PIX Recharge FIXED**: Frontend now correctly sends `{ amount_brl, payer_cpf }` payload to `/api/pix/create`
+- **Support Button FIXED**: Dashboard support button now navigates to internal `/support` page instead of WhatsApp
+- **Support Route Added**: Added `/support` route to App.jsx, linking to the existing Support.jsx chat page
+
+### Testing Status
+- All frontend tests PASSED (iteration_6.json)
+- Login flow verified
+- Support chat functionality verified
+- PIX form fields verified (amount + CPF)
+
 ## Recent Fixes (2026-02-24)
 
 ### Real-Time Exchange Rates Fixed
