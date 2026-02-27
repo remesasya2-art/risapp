@@ -25,7 +25,7 @@
     "/app/test_reports/iteration_3.json"
   ],
   "action_items": [
-    "FIX REQUIRED: Ionicons font not loading due to Expo CLI CORS middleware rejecting requests from preview URL. Error: 'Unauthorized request from https://responsive-ris.preview.emergentagent.com'",
+    "FIX REQUIRED: Ionicons font not loading due to Expo CLI CORS middleware rejecting requests from preview URL. Error: 'Unauthorized request from https://modern-finance-25.preview.emergentagent.com'",
     "Root cause: Expo CLI's CorsMiddleware.ts is blocking font asset requests from the preview domain",
     "The font file exists in both node_modules and dist/assets but Metro asset server returns 520 due to CORS rejection",
     "Solutions: 1) Configure Expo CLI to allow preview URL origin, 2) Use inline base64 fonts, 3) Self-host fonts on backend static server, or 4) Pre-load fonts in HTML with correct CDN"
@@ -74,6 +74,6 @@
   ],
   "rca_of_the_issue": {
     "logout_freeze": "FIXED - Root cause was React re-render loop when setUser(null) was called before navigation. Fix: window.location.href = '/login' is called BEFORE state change on web platform.",
-    "icons_as_squares": "NOT FIXED - Root cause: Expo CLI's CorsMiddleware rejects font asset requests from preview URL origin. Error: 'Unauthorized request from https://responsive-ris.preview.emergentagent.com'. The font files exist locally but Metro bundler returns 520 when preview domain requests them."
+    "icons_as_squares": "NOT FIXED - Root cause: Expo CLI's CorsMiddleware rejects font asset requests from preview URL origin. Error: 'Unauthorized request from https://modern-finance-25.preview.emergentagent.com'. The font files exist locally but Metro bundler returns 520 when preview domain requests them."
   }
 }
