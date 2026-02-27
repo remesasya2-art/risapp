@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   Home, Send, History, Users, LogOut, Wallet, 
-  ArrowRight, CreditCard, MessageCircle, TrendingUp,
+  ArrowRight, TrendingUp,
   User, Bell, Menu, X, CheckCircle, Settings, Plus, ArrowUpRight, Clock
 } from 'lucide-react';
 import api from '../utils/api';
