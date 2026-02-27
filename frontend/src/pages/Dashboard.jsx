@@ -243,164 +243,74 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Quick Actions Grid */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Acciones rápidas</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <Link 
-                  to="/send" 
-                  className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
-                  data-testid="quick-send"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                    <Send className="w-6 h-6 text-orange-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Enviar</span>
-                </Link>
-                
-                <Link 
-                  to="/recharge" 
-                  className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
-                  data-testid="quick-recharge"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                    <Plus className="w-6 h-6 text-green-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Recargar</span>
-                </Link>
-                
-                <Link 
-                  to="/history" 
-                  className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
-                  data-testid="quick-history"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                    <History className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Historial</span>
-                </Link>
-                
-                <Link 
-                  to="/beneficiaries" 
-                  className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
-                  data-testid="quick-beneficiaries"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                    <Users className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Beneficiarios</span>
-                </Link>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-900">Actividad reciente</h2>
-                <Link to="/history" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                  Ver todo
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-              
-              <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
-                  <Clock className="w-8 h-8 text-gray-300" />
+        {/* Main Content */}
+        <div className="space-y-6">
+          {/* Quick Actions Grid */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Acciones rápidas</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Link 
+                to="/send" 
+                className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
+                data-testid="quick-send"
+              >
+                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                  <Send className="w-6 h-6 text-orange-600" />
                 </div>
-                <p className="font-medium text-gray-500">Sin transacciones recientes</p>
-                <p className="text-sm text-gray-400 mt-1">Tus transacciones aparecerán aquí</p>
-              </div>
+                <span className="text-sm font-medium text-gray-700">Enviar</span>
+              </Link>
+              
+              <Link 
+                to="/recharge" 
+                className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
+                data-testid="quick-recharge"
+              >
+                <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                  <Plus className="w-6 h-6 text-green-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Recargar</span>
+              </Link>
+              
+              <Link 
+                to="/history" 
+                className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
+                data-testid="quick-history"
+              >
+                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                  <History className="w-6 h-6 text-blue-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Historial</span>
+              </Link>
+              
+              <Link 
+                to="/beneficiaries" 
+                className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-orange-50 hover:border-orange-200 border border-gray-100 transition-all group"
+                data-testid="quick-beneficiaries"
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                  <Users className="w-6 h-6 text-purple-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Beneficiarios</span>
+              </Link>
             </div>
           </div>
 
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* User Profile Card */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-md">
-                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{user?.name}</h3>
-                  <p className="text-sm text-gray-500 truncate">{user?.email}</p>
-                </div>
-              </div>
-              
-              {user?.verification_status === 'verified' ? (
-                <div className="flex items-center gap-2 text-green-700 bg-green-50 px-4 py-2.5 rounded-xl border border-green-100">
-                  <CheckCircle className="w-5 h-5" />
-                  <span className="font-medium">Cuenta verificada</span>
-                </div>
-              ) : (
-                <Link 
-                  to="/verification" 
-                  className="flex items-center justify-center gap-2 w-full bg-amber-50 text-amber-700 px-4 py-2.5 rounded-xl font-medium hover:bg-amber-100 transition-colors border border-amber-100"
-                  data-testid="verify-account"
-                >
-                  <CheckCircle className="w-5 h-5" />
-                  Verificar mi cuenta
-                </Link>
-              )}
-            </div>
-
-            {/* Payment Methods */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-4">Métodos de recarga</h3>
-              <div className="space-y-3">
-                <Link 
-                  to="/recharge" 
-                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-green-50 border border-gray-100 hover:border-green-200 transition-all"
-                >
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">PIX (Brasil)</p>
-                    <p className="text-xs text-gray-500">Pago instantáneo</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400" />
-                </Link>
-                
-                <Link 
-                  to="/recharge" 
-                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 transition-all"
-                >
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">Bolívares (VES)</p>
-                    <p className="text-xs text-gray-500">Transferencia bancaria</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Support Card */}
-            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                  <MessageCircle className="w-5 h-5" />
-                </div>
-                <h3 className="font-semibold text-lg">¿Necesitas ayuda?</h3>
-              </div>
-              <p className="text-orange-100 text-sm mb-4">
-                Nuestro equipo de soporte está disponible 24/7 para ayudarte.
-              </p>
-              <Link
-                to="/support"
-                className="flex items-center justify-center gap-2 bg-white text-orange-600 py-3 rounded-xl font-semibold hover:bg-orange-50 transition-colors shadow-sm"
-                data-testid="support-button"
-              >
-                <MessageCircle className="w-5 h-5" />
-                Ir al chat de soporte
+          {/* Recent Activity */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Actividad reciente</h2>
+              <Link to="/history" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
+                Ver todo
+                <ArrowRight className="w-4 h-4" />
               </Link>
+            </div>
+            
+            <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
+                <Clock className="w-8 h-8 text-gray-300" />
+              </div>
+              <p className="font-medium text-gray-500">Sin transacciones recientes</p>
+              <p className="text-sm text-gray-400 mt-1">Tus transacciones aparecerán aquí</p>
             </div>
           </div>
         </div>
