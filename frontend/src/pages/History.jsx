@@ -90,7 +90,7 @@ export default function History() {
     <div className="min-h-screen bg-gray-50" data-testid="history-page">
       {/* Header */}
       <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white sticky top-0 z-10">
-        <div className="max-w-xl mx-auto px-4 py-4">
+        <div className="max-w-lg mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button 
@@ -143,7 +143,7 @@ export default function History() {
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 py-6">
+      <main className="max-w-lg mx-auto px-4 py-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>

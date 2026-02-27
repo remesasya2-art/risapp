@@ -136,7 +136,7 @@ export default function Send() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-        <div className="max-w-xl mx-auto px-4 py-4">
+        <div className="max-w-lg mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-lg">
               <ArrowLeft className="w-5 h-5" />
@@ -149,7 +149,7 @@ export default function Send() {
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 py-6">
+      <main className="max-w-lg mx-auto px-4 py-6">
         {/* Progress Steps */}
         <div className="flex items-center justify-center gap-2 mb-6">
           {[1, 2, 3].map((s) => (
