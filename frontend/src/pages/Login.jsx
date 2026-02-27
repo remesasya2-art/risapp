@@ -93,7 +93,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-gray-900"
+                  className="w-full px-4 py-4 rounded-md border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all text-gray-900 text-base shadow-sm"
                   placeholder=""
                   data-testid="email-input"
                 />
@@ -113,14 +113,14 @@ export default function Login() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all pr-12 text-gray-900"
+                    className="w-full px-4 py-4 rounded-md border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all pr-12 text-gray-900 text-base shadow-sm"
                     placeholder=""
                     data-testid="password-input"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -140,7 +140,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 px-4 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-4 px-4 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-base"
                 data-testid="login-button"
               >
                 {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
