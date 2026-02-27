@@ -333,24 +333,22 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* WhatsApp Support */}
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-5 text-white">
+            {/* Support */}
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-5 text-white">
               <div className="flex items-center gap-3 mb-3">
                 <MessageCircle className="w-6 h-6" />
                 <h3 className="font-semibold">¿Necesitas ayuda?</h3>
               </div>
-              <p className="text-green-100 text-sm mb-4">
-                Contáctanos por WhatsApp para soporte inmediato.
+              <p className="text-orange-100 text-sm mb-4">
+                Nuestro equipo de soporte está disponible para ayudarte.
               </p>
-              <a
-                href="https://wa.me/5511999999999"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 bg-white text-green-600 py-2.5 rounded-xl font-medium hover:bg-green-50 transition-colors"
+              <Link
+                to="/support"
+                className="flex items-center justify-center gap-2 bg-white text-orange-600 py-2.5 rounded-xl font-medium hover:bg-orange-50 transition-colors"
               >
                 <MessageCircle className="w-4 h-4" />
-                Solicitar información
-              </a>
+                Ir al chat de soporte
+              </Link>
             </div>
 
             {/* Activity */}
