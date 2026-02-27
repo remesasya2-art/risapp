@@ -37,22 +37,30 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden" data-testid="login-page">
-      {/* Background wave image - similar to Stripe */}
-      <div className="absolute top-0 right-0 w-3/4 h-full pointer-events-none">
-        <svg className="absolute right-0 top-0 h-full w-auto" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMid slice">
-          {/* Light blue wave */}
-          <path d="M600 0 C650 150, 550 300, 600 450 C650 600, 550 750, 600 900 L800 900 L800 0 Z" fill="#E8F4FD" opacity="0.6"/>
-          {/* Orange wave */}
-          <path d="M650 0 C750 200, 650 400, 750 600 C850 800, 750 900, 800 1000 L900 1000 L900 0 Z" fill="#FDBA74" opacity="0.7"/>
-          {/* Pink wave */}
-          <path d="M700 100 C800 300, 700 500, 800 700 C900 900, 850 1000, 900 1100 L1000 1100 L1000 100 Z" fill="#F472B6" opacity="0.6"/>
-          {/* Purple wave */}
-          <path d="M750 200 C850 400, 780 600, 850 800 C920 1000, 900 1100, 950 1200 L1050 1200 L1050 200 Z" fill="#A78BFA" opacity="0.5"/>
-        </svg>
+      {/* Grid lines like Stripe */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Horizontal line below header */}
+        <div className="absolute top-[72px] left-0 right-0 h-px bg-gray-200"></div>
+        {/* Left vertical line */}
+        <div className="absolute top-0 bottom-0 left-[10%] w-px bg-gray-200"></div>
+        {/* Right vertical line */}
+        <div className="absolute top-0 bottom-0 right-[10%] w-px bg-gray-200"></div>
+        {/* Bottom horizontal line */}
+        <div className="absolute bottom-[60px] left-0 right-0 h-px bg-gray-200"></div>
+      </div>
+
+      {/* Background colorful waves - right side */}
+      <div className="absolute top-0 right-0 w-[55%] h-full pointer-events-none overflow-hidden">
+        <img 
+          src="https://b.stripecdn.com/dashboard-fe-statics-srv/assets/public/login-wave-dpr1-lg-3000x2500.png"
+          alt=""
+          className="absolute top-0 right-0 w-full h-full object-cover object-left"
+          style={{ minHeight: '100%', minWidth: '100%' }}
+        />
       </div>
 
       {/* Header with logo */}
-      <header className="relative z-10 px-8 py-6">
+      <header className="relative z-10 h-[72px] flex items-center px-[10%]">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
             <Wallet className="w-5 h-5 text-white" />
@@ -62,35 +70,35 @@ export default function Login() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 flex justify-center px-4 pt-8 pb-16">
+      <main className="relative z-10 flex justify-start px-[10%] pt-16">
         <div className="w-full max-w-[400px]">
           {/* Login Card */}
-          <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="bg-white rounded-lg shadow-2xl p-8 border border-gray-100">
             <h1 className="text-[22px] font-semibold text-gray-900 mb-8">Inicia sesión en tu cuenta</h1>
 
             <form onSubmit={handleSubmit}>
               {/* Email Field */}
-              <div className="mb-6">
-                <label className="block text-[14px] text-gray-700 mb-2">
+              <div className="mb-5">
+                <label className="block text-[14px] text-gray-600 mb-2">
                   Correo electrónico
                 </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-[44px] px-3 rounded-[4px] border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors text-[16px] text-gray-900"
+                  className="w-full h-[44px] px-3 rounded-[5px] border border-gray-300 focus:border-[#635BFF] focus:ring-1 focus:ring-[#635BFF] focus:outline-none transition-colors text-[16px] text-gray-900 shadow-sm"
                   data-testid="email-input"
                 />
               </div>
 
               {/* Password Field */}
-              <div className="mb-6">
+              <div className="mb-5">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-[14px] text-gray-700">
+                  <label className="block text-[14px] text-gray-600">
                     Contraseña
                   </label>
-                  <Link to="/forgot-password" className="text-[14px] text-blue-600 hover:text-blue-700">
-                    ¿Olvidaste tu contraseña?
+                  <Link to="/forgot-password" className="text-[14px] text-[#635BFF] hover:text-[#5851ea]">
+                    ¿No recuerdas la contraseña?
                   </Link>
                 </div>
                 <div className="relative">
@@ -98,7 +106,7 @@ export default function Login() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-[44px] px-3 pr-10 rounded-[4px] border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors text-[16px] text-gray-900"
+                    className="w-full h-[44px] px-3 pr-10 rounded-[5px] border border-gray-300 focus:border-[#635BFF] focus:ring-1 focus:ring-[#635BFF] focus:outline-none transition-colors text-[16px] text-gray-900 shadow-sm"
                     data-testid="password-input"
                   />
                   <button
@@ -117,16 +125,16 @@ export default function Login() {
                   type="checkbox" 
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded-[3px] border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                  className="w-4 h-4 rounded border-gray-300 text-[#635BFF] focus:ring-[#635BFF] cursor-pointer" 
                 />
-                <span className="text-[14px] text-gray-700">Recuérdame en este dispositivo</span>
+                <span className="text-[14px] text-gray-600">Recuérdame en este dispositivo</span>
               </label>
 
-              {/* Submit Button - Purple/Violet like Stripe */}
+              {/* Submit Button - Purple like Stripe */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-[44px] bg-[#635BFF] hover:bg-[#5851ea] text-white font-medium rounded-[4px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[16px]"
+                className="w-full h-[44px] bg-[#635BFF] hover:bg-[#5851ea] text-white font-medium rounded-[5px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[16px] shadow-sm"
                 data-testid="login-button"
               >
                 {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
@@ -144,7 +152,7 @@ export default function Login() {
             <div className="space-y-3">
               <button
                 onClick={() => setShowSupportModal(true)}
-                className="w-full h-[44px] bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-[4px] border border-gray-300 transition-colors flex items-center justify-center gap-2 text-[14px]"
+                className="w-full h-[44px] bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-[5px] border border-gray-300 transition-colors flex items-center justify-center gap-2 text-[14px] shadow-sm"
               >
                 <Headphones className="w-5 h-5 text-gray-500" />
                 ¿Necesitas ayuda para acceder?
@@ -152,10 +160,10 @@ export default function Login() {
             </div>
 
             {/* Register Section */}
-            <div className="mt-6 pt-6 bg-gray-50 -mx-8 -mb-8 px-8 pb-6 rounded-b-lg">
+            <div className="mt-6 pt-6 bg-[#F7FAFC] -mx-8 -mb-8 px-8 pb-6 rounded-b-lg border-t border-gray-100">
               <p className="text-[14px] text-gray-600 text-center">
                 ¿Eres nuevo en RIS?{' '}
-                <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+                <Link to="/register" className="text-[#635BFF] hover:text-[#5851ea] font-medium">
                   Crea una cuenta
                 </Link>
               </p>
@@ -172,7 +180,7 @@ export default function Login() {
       </main>
 
       {/* Footer */}
-      <footer className="absolute bottom-0 left-0 right-0 z-10 px-8 py-4">
+      <footer className="absolute bottom-0 left-0 right-0 z-10 h-[60px] flex items-center px-[10%] border-t border-transparent">
         <div className="flex items-center gap-4 text-[13px] text-gray-500">
           <a href="#" className="hover:text-gray-700">© RIS</a>
           <a href="#" className="hover:text-gray-700">Privacidad y condiciones</a>
@@ -207,7 +215,7 @@ export default function Login() {
               href="https://wa.me/559584098171?text=Hola,%20necesito%20ayuda%20para%20acceder%20a%20mi%20cuenta%20RIS"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full h-[44px] flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-[4px] transition-colors"
+              className="w-full h-[44px] flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-[5px] transition-colors"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
@@ -217,7 +225,7 @@ export default function Login() {
 
             <button
               onClick={() => setShowSupportModal(false)}
-              className="w-full h-[40px] mt-3 text-gray-600 font-medium hover:bg-gray-50 rounded-[4px] transition-colors text-[14px]"
+              className="w-full h-[40px] mt-3 text-gray-600 font-medium hover:bg-gray-50 rounded-[5px] transition-colors text-[14px]"
             >
               Cancelar
             </button>
