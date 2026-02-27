@@ -149,7 +149,7 @@ export default function Send() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <main className="max-w-xl mx-auto px-4 py-6">
         {/* Progress Steps */}
         <div className="flex items-center justify-center gap-2 mb-6">
           {[1, 2, 3].map((s) => (

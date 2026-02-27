@@ -149,7 +149,7 @@ export default function Recharge() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main className="max-w-xl mx-auto px-4 py-6">
         {/* Method Selection */}
         {!method && (
           <div className="space-y-6">

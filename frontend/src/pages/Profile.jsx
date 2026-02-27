@@ -85,7 +85,7 @@ export default function Profile() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <main className="max-w-xl mx-auto px-4 py-6 space-y-4">
         {/* Profile Card */}
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-4 mb-6">
