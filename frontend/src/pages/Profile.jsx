@@ -75,7 +75,7 @@ export default function Profile() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-        <div className="max-w-2xl mx-auto px-4 py-4">
+        <div className="max-w-xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-lg">
               <ArrowLeft className="w-5 h-5" />
