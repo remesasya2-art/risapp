@@ -154,10 +154,9 @@ export default function Login() {
                 <Headphones className="w-5 h-5 text-gray-500" />
                 ¿Necesitas ayuda para acceder?
               </button>
-            </div>
 
             {/* Register Section */}
-            <div className="bg-[#E8F4FD] px-12 py-6">
+            <div className="mt-8 bg-[#E8F4FD] -mx-12 px-12 py-6 rounded-b-2xl">
               <p className="text-[15px] text-gray-700 text-center">
                 ¿Eres nuevo en RIS?{' '}
                 <Link to="/register" className="text-[#635BFF] hover:text-[#5851ea] font-semibold">
