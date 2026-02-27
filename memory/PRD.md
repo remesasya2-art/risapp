@@ -111,6 +111,13 @@ RIS (Remesas Internacionales Seguras) is a mobile and web money transfer applica
 
 ## Recent Fixes (2026-02-27)
 
+### UI/UX Improvements - Professional Design Update
+- **Dashboard Redesigned**: New layout with prominent balance card, quick actions grid, and improved navigation
+- **Recharge Page Improved**: Better method selection cards with clear pricing, enhanced PIX form
+- **Support Page Enhanced**: Professional chat interface with quick question buttons
+- **History Page Updated**: Changed from purple to blue header for consistency, better transaction cards with status badges
+- **Mobile Responsive**: All pages optimized for mobile devices
+
 ### Bug Fixes - PIX Recharge & Support Button
 - **PIX Recharge FIXED**: Frontend now correctly sends `{ amount_brl, payer_cpf }` payload to `/api/pix/create`
 - **Support Button FIXED**: Dashboard support button now navigates to internal `/support` page instead of WhatsApp
