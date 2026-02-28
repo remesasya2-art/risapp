@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
-import { Eye, EyeOff, Wallet, Headphones, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Wallet, Headphones, Heart, Shield, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// OPCIÓN B: Nubank Kinetic (Dark Mode + Glassmorphism)
+// OPCIÓN C: Human Connection (Cálido/Amigable)
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -35,105 +35,136 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0D001A] relative overflow-hidden font-['Poppins']" data-testid="login-page">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gradient-to-r from-purple-600/30 to-pink-600/30 blur-[120px] animate-pulse"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-gradient-to-r from-blue-600/30 to-purple-600/30 blur-[120px] animate-pulse" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-[40%] right-[20%] w-[30%] h-[30%] rounded-full bg-gradient-to-r from-orange-500/20 to-yellow-500/20 blur-[100px] animate-pulse" style={{animationDelay: '2s'}}></div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-[#FFF9F5] via-[#FFF5EE] to-[#FFEDE3] relative overflow-hidden font-['Nunito']" data-testid="login-page">
+      {/* Decorative shapes */}
+      <div className="absolute top-[-100px] right-[-100px] w-[400px] h-[400px] rounded-full bg-gradient-to-br from-orange-200/50 to-pink-200/50 blur-3xl"></div>
+      <div className="absolute bottom-[-100px] left-[-100px] w-[300px] h-[300px] rounded-full bg-gradient-to-br from-teal-200/50 to-blue-200/50 blur-3xl"></div>
 
       {/* Header */}
       <header className="relative z-10 h-[80px] flex items-center justify-between px-8">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#FF6B35] to-[#FF8E53] flex items-center justify-center shadow-lg shadow-orange-300/50">
             <Wallet className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-bold text-white">RIS</span>
-        </div>
-        <div className="flex items-center gap-2 text-purple-300 text-sm">
-          <Sparkles className="w-4 h-4" />
-          <span>Tasa: 1 RIS = {rates.ris_to_ves.toFixed(2)} VES</span>
+          <div>
+            <span className="text-2xl font-extrabold text-[#2D3436]">RIS</span>
+            <p className="text-xs text-[#636E72]">Conectando familias</p>
+          </div>
         </div>
       </header>
 
       {/* Main */}
       <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-160px)] px-4">
-        <div className="w-full max-w-[480px]">
-          {/* Glassmorphism Card */}
-          <div className="backdrop-blur-xl bg-white/10 rounded-3xl border border-white/20 p-10 shadow-2xl">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2">Bienvenido de vuelta</h1>
-              <p className="text-purple-200">Ingresa a tu cuenta RIS</p>
+        <div className="w-full max-w-[1000px] grid md:grid-cols-2 gap-12 items-center">
+          {/* Left - Illustration/Info */}
+          <div className="hidden md:block">
+            <h2 className="text-4xl font-extrabold text-[#2D3436] mb-4 leading-tight">
+              Envía dinero a tus seres queridos, <span className="text-[#FF6B35]">fácil y seguro</span>
+            </h2>
+            <p className="text-lg text-[#636E72] mb-8">Más de 10,000 familias confían en RIS para sus remesas.</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-4 shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center">
+                  <Shield className="w-6 h-6 text-teal-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-[#2D3436]">100% Seguro</p>
+                  <p className="text-sm text-[#636E72]">Transacciones encriptadas</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-4 shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-[#2D3436]">Súper Rápido</p>
+                  <p className="text-sm text-[#636E72]">Dinero en minutos</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-4 shadow-sm">
+                <div className="w-12 h-12 rounded-xl bg-pink-100 flex items-center justify-center">
+                  <Heart className="w-6 h-6 text-pink-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-[#2D3436]">Con Amor</p>
+                  <p className="text-sm text-[#636E72]">Soporte 24/7 en español</p>
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-purple-200 mb-2">Correo electrónico</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-[56px] px-5 rounded-xl bg-white/5 border border-white/10 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 transition-all text-white placeholder-white/40"
-                  placeholder="tu@email.com"
-                />
+            <p className="mt-8 text-sm text-[#636E72]">Tasa actual: <span className="font-bold text-[#2D3436]">1 RIS = {rates.ris_to_ves.toFixed(2)} VES</span></p>
+          </div>
+
+          {/* Right - Form */}
+          <div className="w-full max-w-[420px] mx-auto">
+            <div className="bg-white rounded-3xl shadow-xl shadow-orange-200/30 p-10 border border-orange-100/50">
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-extrabold text-[#2D3436] mb-2">¡Hola de nuevo! 👋</h1>
+                <p className="text-[#636E72]">Ingresa a tu cuenta</p>
               </div>
 
-              <div>
-                <div className="flex justify-between mb-2">
-                  <label className="text-sm font-medium text-purple-200">Contraseña</label>
-                  <Link to="/forgot-password" className="text-sm text-purple-400 hover:text-purple-300">¿Olvidaste?</Link>
-                </div>
-                <div className="relative">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-bold text-[#2D3436] mb-2">Correo electrónico</label>
                   <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-[56px] px-5 pr-12 rounded-xl bg-white/5 border border-white/10 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 transition-all text-white placeholder-white/40"
-                    placeholder="••••••••"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full h-[56px] px-5 rounded-2xl bg-[#F8F9FA] border-2 border-transparent focus:border-[#FF6B35] focus:bg-white transition-all text-[#2D3436]"
+                    placeholder="tu@email.com"
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white">
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
                 </div>
+
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-sm font-bold text-[#2D3436]">Contraseña</label>
+                    <Link to="/forgot-password" className="text-sm text-[#FF6B35] hover:underline font-medium">¿Olvidaste?</Link>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full h-[56px] px-5 pr-12 rounded-2xl bg-[#F8F9FA] border-2 border-transparent focus:border-[#FF6B35] focus:bg-white transition-all text-[#2D3436]"
+                      placeholder="••••••••"
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#636E72] hover:text-[#2D3436]">
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-5 h-5 rounded-lg border-2 border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]" />
+                  <span className="text-sm text-[#636E72]">Recuérdame</span>
+                </label>
+
+                <button type="submit" disabled={loading} className="w-full h-[56px] bg-gradient-to-r from-[#FF6B35] to-[#FF8E53] hover:from-[#FF5722] hover:to-[#FF6B35] text-white font-bold rounded-2xl transition-all shadow-lg shadow-orange-300/50 hover:shadow-orange-400/50 hover:scale-[1.02] active:scale-[0.98]">
+                  {loading ? 'Ingresando...' : 'Iniciar sesión'}
+                </button>
+              </form>
+
+              <div className="flex items-center gap-4 my-6">
+                <div className="flex-1 h-px bg-gray-200"></div>
+                <span className="text-sm text-gray-400">o</span>
+                <div className="flex-1 h-px bg-gray-200"></div>
               </div>
 
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-5 h-5 rounded bg-white/10 border-white/20 text-purple-500 focus:ring-purple-500" />
-                <span className="text-sm text-purple-200">Recuérdame en este dispositivo</span>
-              </label>
-
-              <button type="submit" disabled={loading} className="w-full h-[56px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-[1.02]">
-                {loading ? 'Ingresando...' : 'Iniciar sesión'}
+              <button className="w-full h-[56px] bg-[#F8F9FA] hover:bg-[#E9ECEF] text-[#2D3436] font-semibold rounded-2xl flex items-center justify-center gap-2 transition-all">
+                <Headphones className="w-5 h-5 text-[#FF6B35]" />
+                ¿Necesitas ayuda?
               </button>
-            </form>
 
-            <div className="flex items-center gap-4 my-6">
-              <div className="flex-1 h-px bg-white/10"></div>
-              <span className="text-sm text-white/40">o</span>
-              <div className="flex-1 h-px bg-white/10"></div>
-            </div>
-
-            <button className="w-full h-[56px] bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl border border-white/10 flex items-center justify-center gap-2 transition-all">
-              <Headphones className="w-5 h-5 text-purple-400" />
-              ¿Necesitas ayuda?
-            </button>
-
-            <div className="mt-8 text-center">
-              <p className="text-purple-200">¿Nuevo en RIS? <Link to="/register" className="text-purple-400 font-semibold hover:text-purple-300">Crear cuenta</Link></p>
+              <div className="mt-6 text-center">
+                <p className="text-[#636E72]">¿Nuevo en RIS? <Link to="/register" className="text-[#FF6B35] font-bold hover:underline">Crear cuenta</Link></p>
+              </div>
             </div>
           </div>
         </div>
       </main>
 
-      <footer className="absolute bottom-6 left-0 right-0 text-center text-sm text-white/30">© 2024 RIS · Privacidad y condiciones</footer>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.7; }
-        }
-      `}</style>
+      <footer className="absolute bottom-4 left-0 right-0 text-center text-sm text-[#636E72]">© 2024 RIS · Hecho con ❤️ para ti</footer>
     </div>
   );
 }
