@@ -82,14 +82,15 @@ export default function Login() {
       </header>
 
       {/* Main content */}
-      <main className="relative z-10 pt-[60px] pl-8 lg:pl-[248px]">
-        {/* Card */}
-        <div 
-          className="w-[400px] max-w-[calc(100vw-32px)] bg-white rounded-[8px]"
-          style={{
-            boxShadow: '0 15px 35px 0 rgba(60,66,87,.08), 0 5px 15px 0 rgba(0,0,0,.12)'
-          }}
-        >
+      <main className="relative z-10 pt-[80px] flex justify-center lg:justify-start px-4 lg:px-0">
+        <div className="lg:ml-[248px]">
+          {/* Card */}
+          <div 
+            className="w-[400px] max-w-[calc(100vw-32px)] bg-white rounded-[8px] overflow-hidden"
+            style={{
+              boxShadow: '0 15px 35px 0 rgba(60,66,87,.08), 0 5px 15px 0 rgba(0,0,0,.12)'
+            }}
+          >
           <div className="p-10">
             {/* Title */}
             <h1 className="text-[24px] font-normal text-[#3c4257] mb-8" style={{letterSpacing: '-0.02em'}}>
