@@ -33,13 +33,33 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden" style={{fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif'}}>
-      {/* Exact Stripe background image */}
-      <div 
-        className="absolute top-0 right-0 w-[50%] h-full bg-no-repeat bg-right bg-cover"
-        style={{
-          backgroundImage: `url('https://b.stripecdn.com/site-statics-srv/assets/assets/img/v3/home-new/login-wave-dpr1-lg-3000x2500-f5c9a2df22d0e3e6ef68bde05c64df0e86e9e83c.webp')`,
-        }}
-      />
+      {/* Background gradient waves - right side */}
+      <div className="absolute top-0 right-0 w-[55%] h-full pointer-events-none overflow-hidden">
+        <svg className="absolute top-0 right-0 w-full h-full" viewBox="0 0 800 1000" preserveAspectRatio="xMaxYMid slice">
+          <defs>
+            <linearGradient id="wave1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#80E5FF" />
+              <stop offset="100%" stopColor="#80E5FF" />
+            </linearGradient>
+            <linearGradient id="wave2" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#EE931F" />
+              <stop offset="100%" stopColor="#F5A623" />
+            </linearGradient>
+            <linearGradient id="wave3" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FF6B9D" />
+              <stop offset="100%" stopColor="#FF8FB1" />
+            </linearGradient>
+            <linearGradient id="wave4" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#C17FFF" />
+              <stop offset="100%" stopColor="#9F6FE8" />
+            </linearGradient>
+          </defs>
+          <path d="M300 0 C400 200, 250 400, 350 600 C450 800, 300 900, 400 1000 L800 1000 L800 0 Z" fill="url(#wave1)" opacity="0.9"/>
+          <path d="M420 0 C520 180, 380 380, 480 580 C580 780, 430 900, 530 1000 L800 1000 L800 0 Z" fill="url(#wave2)" opacity="0.9"/>
+          <path d="M520 0 C620 160, 490 360, 590 560 C690 760, 540 900, 640 1000 L800 1000 L800 0 Z" fill="url(#wave3)" opacity="0.9"/>
+          <path d="M620 0 C720 140, 600 340, 700 540 C800 740, 650 900, 750 1000 L800 1000 L800 0 Z" fill="url(#wave4)" opacity="0.9"/>
+        </svg>
+      </div>
 
       {/* Vertical line - exactly at 200px from left */}
       <div className="absolute top-0 left-[200px] w-px h-full bg-[#e3e8ee] hidden lg:block" />
