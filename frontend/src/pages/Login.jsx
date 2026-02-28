@@ -48,12 +48,10 @@ export default function Login() {
         </svg>
       </div>
 
-      {/* Header with Stripe logo style */}
+      {/* Header with logo */}
       <header className="relative z-10 p-6">
-        <Link to="/" className="inline-flex items-center">
-          <svg className="h-8 w-auto" viewBox="0 0 60 25" fill="none">
-            <path fill="#635bff" d="M5 10.2c0-.7.6-1 1.5-1 1.3 0 3 .4 4.3 1.1V6.5c-1.4-.6-2.9-.8-4.3-.8C3.2 5.7.8 7.5.8 10.5c0 4.7 6.5 3.9 6.5 5.9 0 .8-.7 1.1-1.7 1.1-1.5 0-3.4-.6-4.9-1.4v3.8c1.7.7 3.3 1 4.9 1 3.4 0 5.8-1.7 5.8-4.8 0-5-6.4-4.1-6.4-6zM17.5 20.9h4.2V5.9h-4.2v15zM17.5 4.5h4.2V.8h-4.2v3.7zM28.3 7.4l-.3-1.5h-3.7v15h4.2v-10c1-.6 2.7-.5 3.2-.3V6c-.5-.2-2.5-.5-3.4 1.4zM36.4 20.9h4.2V5.9h-4.2v15zM36.4 4.5h4.2V.8h-4.2v3.7zM47.2 15.8c0 3.3 2.5 5.1 6 5.1 1.8 0 3.2-.4 4.3-1v-3.4c-1.1.5-2.4.8-3.8.8-1.6 0-2.5-.6-2.5-2v-4.9h4.2V6.5h-4.2V2.4l-4 .9v3.2h-2.3v3.9h2.3v5.4z"/>
-          </svg>
+        <Link to="/" className="inline-flex items-center gap-1">
+          <span className="text-2xl font-bold text-[#635bff]" style={{letterSpacing: '-0.03em'}}>RIS</span>
         </Link>
       </header>
 
