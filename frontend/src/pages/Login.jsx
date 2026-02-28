@@ -80,10 +80,10 @@ export default function Login() {
       </header>
 
       {/* Main - Card positioned like Stripe */}
-      <main className="relative z-10 flex justify-center lg:justify-start px-4 lg:px-0 pt-16 lg:pt-24">
-        <div className="w-full max-w-[400px] lg:ml-[280px]">
-          {/* White Card - Simple shadow, no glassmorphism */}
-          <div className="bg-white rounded-lg shadow-xl p-8">
+      <main className="relative z-10 flex justify-center lg:justify-start px-4 lg:px-0 pt-12 lg:pt-20">
+        <div className="w-full max-w-[400px] lg:ml-[240px]">
+          {/* White Card - Simple shadow like Stripe */}
+          <div className="bg-white rounded-lg shadow-[0_15px_35px_rgba(0,0,0,0.1)] border border-gray-100 p-8">
             {/* Title - Left aligned */}
             <h1 className="text-[24px] font-medium text-[#737070] mb-8">
               Inicia sesión en tu cuenta
