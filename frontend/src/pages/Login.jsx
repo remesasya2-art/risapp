@@ -71,7 +71,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
                   data-testid="email-input"
-                  className="w-full h-[50px] pl-12 pr-4 text-[15px] rounded-xl border border-gray-200 bg-white text-[#1a1a2e] placeholder-[#9ca3af] transition-all focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 focus:outline-none"
+                  className="w-full h-[50px] pl-12 pr-4 text-[15px] rounded-xl border border-gray-200 bg-white text-[#1a1a2e] placeholder-[#9ca3af] transition-all focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20"
                 />
               </div>
             </div>
@@ -85,7 +85,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   data-testid="password-input"
-                  className="w-full h-[50px] pl-12 pr-12 text-[15px] rounded-xl border border-gray-200 bg-white text-[#1a1a2e] placeholder-[#9ca3af] transition-all focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 focus:outline-none"
+                  className="w-full h-[50px] pl-12 pr-12 text-[15px] rounded-xl border border-gray-200 bg-white text-[#1a1a2e] placeholder-[#9ca3af] transition-all focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20"
                 />
                 <button
                   type="button"
