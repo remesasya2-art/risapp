@@ -65,7 +65,7 @@ export default function Login() {
           >
             <CreditCard className="w-5 h-5 text-white" strokeWidth={1.5} />
           </div>
-          <span className="text-xl font-semibold text-gray-900">NexPay</span>
+          <span className="text-xl font-semibold text-gray-900">RIS</span>
         </div>
 
         {/* Title */}
