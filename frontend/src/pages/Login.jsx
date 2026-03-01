@@ -115,7 +115,6 @@ export default function Login() {
                   {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                 </button>
               </div>
-              <p className="text-[#9ca3af] text-xs mt-2">Must be at least 6 characters</p>
             </div>
 
             {/* Submit */}
