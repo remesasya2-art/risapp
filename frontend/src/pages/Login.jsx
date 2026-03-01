@@ -30,6 +30,17 @@ export default function Login() {
     }
   };
 
+  const inputStyle = {
+    borderRadius: '14px',
+    border: '1px solid #d1d5db',
+    height: '56px'
+  };
+
+  const buttonStyle = {
+    borderRadius: '14px',
+    height: '56px'
+  };
+
   return (
     <div 
       className="min-h-screen flex items-center justify-center p-4"
@@ -38,12 +49,12 @@ export default function Login() {
         background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)'
       }}
     >
-      {/* Floating Card */}
       <div 
-        className="w-full max-w-md bg-white p-10"
+        className="w-full max-w-md bg-white"
         style={{
           borderRadius: '24px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 12px 24px -8px rgba(0, 0, 0, 0.04)'
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 12px 24px -8px rgba(0, 0, 0, 0.04)',
+          padding: '48px 40px'
         }}
       >
         {/* Logo */}
@@ -67,8 +78,8 @@ export default function Login() {
 
         {/* Google Button */}
         <button 
-          className="w-full h-14 flex items-center justify-center gap-3 text-base font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all mb-6"
-          style={{ borderRadius: '14px' }}
+          className="w-full flex items-center justify-center gap-3 text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all mb-6"
+          style={{ ...buttonStyle, border: '1px solid #d1d5db' }}
           data-testid="google-login-btn"
         >
           <svg width="20" height="20" viewBox="0 0 18 18">
@@ -99,8 +110,8 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
                 data-testid="email-input"
-                className="w-full h-14 pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white border border-gray-200 focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
-                style={{ borderRadius: '14px' }}
+                className="w-full pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
+                style={inputStyle}
               />
             </div>
           </div>
@@ -116,8 +127,8 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 data-testid="password-input"
-                className="w-full h-14 pl-12 pr-12 text-base text-gray-900 placeholder-gray-400 bg-white border border-gray-200 focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
-                style={{ borderRadius: '14px' }}
+                className="w-full pl-12 pr-12 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
+                style={inputStyle}
               />
               <button
                 type="button"
@@ -138,8 +149,8 @@ export default function Login() {
             type="submit"
             disabled={loading}
             data-testid="login-submit-btn"
-            className="w-full h-14 bg-[#6366f1] hover:bg-[#5558e3] text-white font-bold text-base transition-all disabled:opacity-50"
-            style={{ borderRadius: '14px' }}
+            className="w-full bg-[#6366f1] hover:bg-[#5558e3] text-white font-bold text-base transition-all disabled:opacity-50"
+            style={buttonStyle}
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
