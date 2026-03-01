@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, Mail, Lock, CreditCard } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Login() {
@@ -58,14 +58,13 @@ export default function Login() {
         }}
       >
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div 
-            className="w-10 h-10 bg-[#6366f1] flex items-center justify-center"
-            style={{ borderRadius: '12px' }}
-          >
-            <CreditCard className="w-5 h-5 text-white" strokeWidth={1.5} />
-          </div>
-          <span className="text-xl font-semibold text-gray-900">RIS</span>
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <img 
+            src="/logo-ris.jpeg" 
+            alt="RIS" 
+            className="h-10 w-auto"
+            style={{ borderRadius: '10px' }}
+          />
         </div>
 
         {/* Title */}
