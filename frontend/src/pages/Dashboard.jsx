@@ -128,70 +128,55 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          {/* Balance */}
-          <div className="col-span-2 bg-white p-8" style={cardStyle} data-testid="balance-card">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <p className="text-gray-400 text-sm mb-2">Total Balance</p>
-                <p className="text-4xl font-bold text-gray-900">
-                  ${(user?.balance_ris || 0).toFixed(2)}
-                </p>
-              </div>
+        {/* Balance Card */}
+        <div className="bg-white p-8 mb-6" style={cardStyle} data-testid="balance-card">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-gray-400 text-sm mb-2">Total Balance</p>
+              <p className="text-4xl font-bold text-gray-900">
+                ${(user?.balance_ris || 0).toFixed(2)}
+              </p>
             </div>
-            <div className="flex gap-4">
-              <Link
-                to="/recharge"
-                className="flex items-center gap-2 bg-[#6366f1] hover:bg-[#5558e3] text-white px-6 font-semibold text-sm transition-all"
-                style={buttonStyle}
-                data-testid="recharge-button"
-              >
-                <Plus className="w-5 h-5" strokeWidth={1.5} />
-                Add Money
-              </Link>
-              <Link
-                to="/send"
-                className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-6 font-semibold text-sm transition-all"
-                style={{ ...buttonStyle, border: '1px solid #d1d5db' }}
-                data-testid="send-button"
-              >
-                <ArrowUpRight className="w-5 h-5" strokeWidth={1.5} />
-                Send Money
-              </Link>
+            <div className="flex gap-3">
+              <div className="bg-green-50 p-4" style={{ borderRadius: '14px' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-4 h-4 text-green-500" strokeWidth={1.5} />
+                  <span className="text-gray-400 text-xs">Income (30d)</span>
+                </div>
+                <p className="text-lg font-bold text-gray-900">$0.00</p>
+              </div>
+              <div className="bg-red-50 p-4" style={{ borderRadius: '14px' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingDown className="w-4 h-4 text-red-500" strokeWidth={1.5} />
+                  <span className="text-gray-400 text-xs">Spent (30d)</span>
+                </div>
+                <p className="text-lg font-bold text-gray-900">$0.00</p>
+              </div>
             </div>
           </div>
-
-          {/* Stats */}
-          <div className="space-y-4">
-            <div className="bg-white p-6" style={cardStyle}>
-              <div className="flex items-center gap-3 mb-3">
-                <div 
-                  className="w-10 h-10 bg-green-50 flex items-center justify-center"
-                  style={{ borderRadius: '12px' }}
-                >
-                  <TrendingUp className="w-5 h-5 text-green-500" strokeWidth={1.5} />
-                </div>
-                <span className="text-gray-400 text-sm">Income (30d)</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">$0.00</p>
-            </div>
-            <div className="bg-white p-6" style={cardStyle}>
-              <div className="flex items-center gap-3 mb-3">
-                <div 
-                  className="w-10 h-10 bg-red-50 flex items-center justify-center"
-                  style={{ borderRadius: '12px' }}
-                >
-                  <TrendingDown className="w-5 h-5 text-red-500" strokeWidth={1.5} />
-                </div>
-                <span className="text-gray-400 text-sm">Spent (30d)</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">$0.00</p>
-            </div>
+          <div className="flex gap-4">
+            <Link
+              to="/recharge"
+              className="flex items-center gap-2 bg-[#6366f1] hover:bg-[#5558e3] text-white px-6 font-semibold text-sm transition-all"
+              style={buttonStyle}
+              data-testid="recharge-button"
+            >
+              <Plus className="w-5 h-5" strokeWidth={1.5} />
+              Add Money
+            </Link>
+            <Link
+              to="/send"
+              className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-6 font-semibold text-sm transition-all"
+              style={{ ...buttonStyle, border: '1px solid #d1d5db' }}
+              data-testid="send-button"
+            >
+              <ArrowUpRight className="w-5 h-5" strokeWidth={1.5} />
+              Send Money
+            </Link>
           </div>
         </div>
 
-        {/* Bottom */}
+        {/* Bottom Grid */}
         <div className="grid grid-cols-2 gap-6">
           <div className="bg-white p-8" style={cardStyle}>
             <h2 className="text-lg font-bold text-gray-900 mb-6">Activity Overview</h2>
