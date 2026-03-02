@@ -44,6 +44,7 @@ export default function AdminPanel() {
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [proofImage, setProofImage] = useState(null);
   const [newRate, setNewRate] = useState('');
+  const [newRateVesToRis, setNewRateVesToRis] = useState('');
 
   useEffect(() => { loadData(); }, [activeTab]);
 
