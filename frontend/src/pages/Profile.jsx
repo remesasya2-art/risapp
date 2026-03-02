@@ -331,7 +331,7 @@ export default function Profile() {
                 background: 'linear-gradient(45deg, transparent 40%, rgba(168, 216, 234, 0.1) 50%, transparent 60%)',
                 animation: 'shimmer 3s infinite'
               }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1, marginBottom: '16px' }}>
                 <div style={{ 
                   width: '56px', 
                   height: '56px', 
@@ -354,6 +354,32 @@ export default function Profile() {
                   <p style={{ fontSize: '13px', color: '#a8d8ea', margin: 0 }}>Acceso total al sistema • Máximo nivel</p>
                 </div>
               </div>
+              {/* Botón Panel de Administración */}
+              <Link
+                to="/admin"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '14px 20px',
+                  background: 'linear-gradient(135deg, #a8d8ea 0%, #5eb1d8 100%)',
+                  borderRadius: '12px',
+                  color: '#1a1a2e',
+                  fontWeight: '600',
+                  fontSize: '15px',
+                  textDecoration: 'none',
+                  position: 'relative',
+                  zIndex: 1,
+                  boxShadow: '0 4px 15px rgba(168, 216, 234, 0.3)',
+                  transition: 'all 0.2s'
+                }}
+                data-testid="admin-panel-btn"
+              >
+                <Settings style={{ width: '20px', height: '20px' }} />
+                Acceder al Panel de Administración
+              </Link>
               <style>{`
                 @keyframes shimmer {
                   0% { transform: translateX(-100%) rotate(45deg); }
@@ -363,17 +389,32 @@ export default function Profile() {
             </div>
           ) : (
             // Administrador normal
-            <div style={{ marginTop: '16px', padding: '16px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', color: '#ffffff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Shield style={{ width: '20px', height: '20px' }} />
+            <Link
+              to="/admin"
+              style={{ 
+                marginTop: '16px', 
+                padding: '16px', 
+                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
+                borderRadius: '16px', 
+                color: '#ffffff',
+                textDecoration: 'none',
+                display: 'block'
+              }}
+              data-testid="admin-panel-btn"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Shield style={{ width: '20px', height: '20px' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Administrador</p>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Acceder al panel de administración</p>
+                  </div>
                 </div>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Administrador</p>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Acceso al panel de administración</p>
-                </div>
+                <ChevronRight style={{ width: '20px', height: '20px', color: '#94a3b8' }} />
               </div>
-            </div>
+            </Link>
           )
         )}
       </div>
