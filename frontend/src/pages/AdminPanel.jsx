@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
-  ArrowLeft, Users, CreditCard, ArrowUpRight, ArrowDownLeft, TrendingUp, 
-  Search, CheckCircle, XCircle, Clock, Eye, RefreshCw, Shield, 
-  ChevronDown, Filter, MoreHorizontal, DollarSign, Activity
+  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
+  RefreshCw, Shield, Activity
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -25,13 +24,11 @@ export default function AdminPanel() {
   const { rates, refreshRates } = useRate();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
-  
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
   const [withdrawals, setWithdrawals] = useState([]);
   const [recharges, setRecharges] = useState([]);
   const [users, setUsers] = useState([]);
   const [kycPending, setKycPending] = useState([]);
-  
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -39,9 +36,7 @@ export default function AdminPanel() {
   const [proofImage, setProofImage] = useState(null);
   const [newRate, setNewRate] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
+  useEffect(() => { loadData(); }, [activeTab]);
 
   const loadData = async () => {
     setLoading(true);
@@ -56,8 +51,8 @@ export default function AdminPanel() {
           ]);
           setStats({
             pending_withdrawals: (wRes.data || []).length,
-            pending_recharges: (rRes.data.recharges || []).length,
-            users: (uRes.data.users || []).length,
+            pending_recharges: (rRes.data?.recharges || []).length,
+            users: (uRes.data?.users || []).length,
             pending_kyc: (kRes.data || []).length
           });
           break;
@@ -67,11 +62,11 @@ export default function AdminPanel() {
           break;
         case 'recharges':
           const rAllRes = await api.get('/admin/recharges/ves/pending');
-          setRecharges(rAllRes.data.recharges || []);
+          setRecharges(rAllRes.data?.recharges || []);
           break;
         case 'users':
           const usersRes = await api.get('/admin/users');
-          setUsers(usersRes.data.users || []);
+          setUsers(usersRes.data?.users || []);
           break;
         case 'kyc':
           const kycRes = await api.get('/admin/verifications/pending');
@@ -86,82 +81,39 @@ export default function AdminPanel() {
   };
 
   const handleProcessWithdrawal = async () => {
-    if (!selectedItem || !proofImage) {
-      toast.error('Sube el comprobante de pago');
-      return;
-    }
+    if (!selectedItem || !proofImage) { toast.error('Sube el comprobante de pago'); return; }
     try {
-      await api.post('/admin/withdrawals/process', {
-        transaction_id: selectedItem.transaction_id,
-        proof_image: proofImage,
-      });
+      await api.post('/admin/withdrawals/process', { transaction_id: selectedItem.transaction_id, proof_image: proofImage });
       toast.success('Retiro procesado');
-      setShowProcessModal(false);
-      setSelectedItem(null);
-      setProofImage(null);
-      loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al procesar');
-    }
+      setShowProcessModal(false); setSelectedItem(null); setProofImage(null); loadData();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error al procesar'); }
   };
 
   const handleRejectWithdrawal = async (txId) => {
     if (!confirm('¿Rechazar este retiro?')) return;
-    try {
-      await api.post(`/admin/withdrawals/${txId}/reject`);
-      toast.success('Retiro rechazado');
-      loadData();
-    } catch (error) {
-      toast.error('Error al rechazar');
-    }
+    try { await api.post(`/admin/withdrawals/${txId}/reject`); toast.success('Retiro rechazado'); loadData(); } 
+    catch { toast.error('Error al rechazar'); }
   };
 
   const handleApproveRecharge = async (txId) => {
-    try {
-      await api.post('/admin/recharge/approve', { transaction_id: txId, approved: true });
-      toast.success('Recarga aprobada');
-      loadData();
-    } catch (error) {
-      toast.error('Error al aprobar');
-    }
+    try { await api.post('/admin/recharge/approve', { transaction_id: txId, approved: true }); toast.success('Recarga aprobada'); loadData(); } 
+    catch { toast.error('Error al aprobar'); }
   };
 
   const handleKycDecision = async (verificationId, approved, reason = '') => {
-    try {
-      await api.post('/admin/verifications/decide', {
-        verification_id: verificationId,
-        approved,
-        rejection_reason: reason,
-      });
-      toast.success(approved ? 'KYC aprobado' : 'KYC rechazado');
-      loadData();
-    } catch (error) {
-      toast.error('Error al procesar KYC');
-    }
+    try { await api.post('/admin/verifications/decide', { verification_id: verificationId, approved, rejection_reason: reason }); toast.success(approved ? 'KYC aprobado' : 'KYC rechazado'); loadData(); } 
+    catch { toast.error('Error al procesar KYC'); }
   };
 
   const handleUpdateRate = async () => {
-    if (!newRate || parseFloat(newRate) <= 0) {
-      toast.error('Ingresa una tasa válida');
-      return;
-    }
-    try {
-      await api.post('/rate', { ris_to_ves: parseFloat(newRate) });
-      toast.success('Tasa actualizada');
-      refreshRates();
-      setNewRate('');
-    } catch (error) {
-      toast.error('Error al actualizar tasa');
-    }
+    if (!newRate || parseFloat(newRate) <= 0) { toast.error('Ingresa una tasa válida'); return; }
+    try { await api.post('/rate', { ris_to_ves: parseFloat(newRate) }); toast.success('Tasa actualizada'); refreshRates(); setNewRate(''); } 
+    catch { toast.error('Error al actualizar tasa'); }
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => setProofImage(reader.result);
-      reader.readAsDataURL(file);
-    }
+    if (file) { const reader = new FileReader(); reader.onload = () => setProofImage(reader.result); reader.readAsDataURL(file); }
   };
 
   const filteredWithdrawals = withdrawals.filter(w => {
@@ -170,117 +122,89 @@ export default function AdminPanel() {
     return true;
   });
 
+  const pageStyle = { minHeight: '100vh', background: '#f8f9fc', fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' };
+  const cardStyle = { backgroundColor: '#ffffff', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' };
+  const btnPrimary = { backgroundColor: '#6366f1', color: 'white', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
+  const btnSuccess = { backgroundColor: '#16a34a', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
+  const btnDanger = { backgroundColor: '#dc2626', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
+  const btnSecondary = { backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
+
   const getStatusBadge = (status) => {
-    const styles = {
-      completed: 'bg-green-100 text-green-700',
-      pending: 'bg-amber-100 text-amber-700',
-      rejected: 'bg-red-100 text-red-700',
-    };
+    const styles = { completed: { bg: '#dcfce7', color: '#16a34a' }, pending: { bg: '#fef3c7', color: '#d97706' }, rejected: { bg: '#fee2e2', color: '#dc2626' } };
     const labels = { completed: 'Completado', pending: 'Pendiente', rejected: 'Rechazado' };
-    return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-700'}`}>
-        {labels[status] || status}
-      </span>
-    );
+    const s = styles[status] || { bg: '#f3f4f6', color: '#6b7280' };
+    return <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', backgroundColor: s.bg, color: s.color }}>{labels[status] || status}</span>;
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div style={pageStyle} data-testid="admin-panel">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button onClick={() => navigate('/')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                <ArrowLeft className="w-5 h-5 text-slate-600" />
+      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="back-button">
+                <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
               </button>
               <div>
-                <h1 className="font-bold text-slate-900">Panel de Administración</h1>
-                <p className="text-xs text-slate-500">{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</p>
+                <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Panel de Administración</h1>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</p>
               </div>
             </div>
-            <button onClick={loadData} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-              <RefreshCw className={`w-5 h-5 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+            <button onClick={loadData} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
+              <RefreshCw style={{ width: '20px', height: '20px', color: '#374151', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             </button>
           </div>
         </div>
       </header>
 
       {/* Tabs */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex gap-1 overflow-x-auto py-2 scrollbar-hide">
+      <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
             {TABS.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  activeTab === tab.key
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
+                  backgroundColor: activeTab === tab.key ? '#6366f1' : 'transparent', color: activeTab === tab.key ? '#ffffff' : '#6b7280' }}
+                data-testid={`tab-${tab.key}`}
               >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
+                <tab.icon style={{ width: '18px', height: '18px' }} /> {tab.label}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                    <ArrowUpRight className="w-5 h-5 text-amber-600" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              {[
+                { icon: ArrowUpRight, value: stats.pending_withdrawals, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
+                { icon: ArrowDownLeft, value: stats.pending_recharges, label: 'Recargas pendientes', bg: '#dcfce7', iconColor: '#16a34a' },
+                { icon: Users, value: stats.users, label: 'Usuarios totales', bg: '#dbeafe', iconColor: '#2563eb' },
+                { icon: Shield, value: stats.pending_kyc, label: 'KYC pendientes', bg: '#f3e8ff', iconColor: '#9333ea' },
+              ].map((item, i) => (
+                <div key={i} style={{ ...cardStyle, padding: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <item.icon style={{ width: '22px', height: '22px', color: item.iconColor }} />
+                    </div>
+                    <span style={{ fontSize: '28px', fontWeight: '700', color: '#111827' }}>{item.value}</span>
                   </div>
-                  <span className="text-2xl font-bold text-slate-900">{stats.pending_withdrawals}</span>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>{item.label}</p>
                 </div>
-                <p className="text-sm text-slate-600">Retiros pendientes</p>
-              </div>
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                    <ArrowDownLeft className="w-5 h-5 text-green-600" />
-                  </div>
-                  <span className="text-2xl font-bold text-slate-900">{stats.pending_recharges}</span>
-                </div>
-                <p className="text-sm text-slate-600">Recargas pendientes</p>
-              </div>
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <span className="text-2xl font-bold text-slate-900">{stats.users}</span>
-                </div>
-                <p className="text-sm text-slate-600">Usuarios totales</p>
-              </div>
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <span className="text-2xl font-bold text-slate-900">{stats.pending_kyc}</span>
-                </div>
-                <p className="text-sm text-slate-600">KYC pendientes</p>
-              </div>
+              ))}
             </div>
-
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Tasa actual</h3>
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <p className="text-3xl font-bold text-slate-900">1 RIS = {rates.ris_to_ves.toFixed(2)} VES</p>
-                  <p className="text-sm text-slate-500 mt-1">Última actualización: {new Date().toLocaleTimeString()}</p>
+            <div style={{ ...cardStyle, padding: '24px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>Tasa actual</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <p style={{ fontSize: '32px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Última actualización: {new Date().toLocaleTimeString('es-ES')}</p>
                 </div>
-                <button onClick={() => setActiveTab('rates')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
-                  Modificar
-                </button>
+                <button onClick={() => setActiveTab('rates')} style={btnPrimary}>Modificar</button>
               </div>
             </div>
           </div>
@@ -288,86 +212,58 @@ export default function AdminPanel() {
 
         {/* Withdrawals Tab */}
         {activeTab === 'withdrawals' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por beneficiario..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ ...cardStyle, padding: '16px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+                  <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
+                  <input type="text" placeholder="Buscar por beneficiario..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ width: '100%', padding: '10px 10px 10px 40px', borderRadius: '12px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }} />
                 </div>
-                <div className="flex gap-2 overflow-x-auto">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   {['all', 'pending', 'completed', 'rejected'].map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
-                        statusFilter === status ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
+                    <button key={status} onClick={() => setStatusFilter(status)}
+                      style={{ padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500',
+                        backgroundColor: statusFilter === status ? '#6366f1' : '#f3f4f6', color: statusFilter === status ? '#ffffff' : '#374151' }}>
                       {status === 'all' ? 'Todos' : status === 'pending' ? 'Pendientes' : status === 'completed' ? 'Completados' : 'Rechazados'}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
-
             {loading ? (
-              <div className="bg-white rounded-2xl p-12 flex justify-center">
-                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-              </div>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
             ) : filteredWithdrawals.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <p className="text-slate-500">No hay retiros</p>
-              </div>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No hay retiros</p></div>
             ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 border-b border-slate-200">
+              <div style={{ ...cardStyle, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ backgroundColor: '#f8f9fa' }}>
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Fecha</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Beneficiario</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Monto</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Estado</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Acciones</th>
+                        {['Fecha', 'Beneficiario', 'Monto', 'Estado', 'Acciones'].map(h => (
+                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                        ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody>
                       {filteredWithdrawals.map((w) => (
-                        <tr key={w.transaction_id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-4 text-sm text-slate-600">
-                            {new Date(w.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        <tr key={w.transaction_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`withdrawal-${w.transaction_id}`}>
+                          <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>{new Date(w.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                          <td style={{ padding: '16px' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{w.beneficiary_data?.full_name}</p>
+                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{w.beneficiary_data?.bank}</p>
                           </td>
-                          <td className="px-4 py-4">
-                            <p className="text-sm font-medium text-slate-900">{w.beneficiary_data?.full_name}</p>
-                            <p className="text-xs text-slate-500">{w.beneficiary_data?.bank}</p>
+                          <td style={{ padding: '16px' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{w.amount_input?.toFixed(2)} RIS</p>
+                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{w.amount_output?.toFixed(2)} VES</p>
                           </td>
-                          <td className="px-4 py-4">
-                            <p className="text-sm font-semibold text-slate-900">{w.amount_input?.toFixed(2)} RIS</p>
-                            <p className="text-xs text-slate-500">{w.amount_output?.toFixed(2)} VES</p>
-                          </td>
-                          <td className="px-4 py-4">{getStatusBadge(w.status)}</td>
-                          <td className="px-4 py-4">
+                          <td style={{ padding: '16px' }}>{getStatusBadge(w.status)}</td>
+                          <td style={{ padding: '16px' }}>
                             {w.status === 'pending' && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => { setSelectedItem(w); setShowProcessModal(true); }}
-                                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors"
-                                >
-                                  Procesar
-                                </button>
-                                <button
-                                  onClick={() => handleRejectWithdrawal(w.transaction_id)}
-                                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
-                                >
-                                  Rechazar
-                                </button>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => { setSelectedItem(w); setShowProcessModal(true); }} style={btnSuccess}>Procesar</button>
+                                <button onClick={() => handleRejectWithdrawal(w.transaction_id)} style={btnDanger}>Rechazar</button>
                               </div>
                             )}
                           </td>
@@ -383,77 +279,59 @@ export default function AdminPanel() {
 
         {/* Recharges Tab */}
         {activeTab === 'recharges' && (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {loading ? (
-              <div className="bg-white rounded-2xl p-12 flex justify-center">
-                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-              </div>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
             ) : recharges.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <p className="text-slate-500">No hay recargas pendientes</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {recharges.map((r) => (
-                  <div key={r.transaction_id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-slate-900">{r.user_email}</p>
-                        <p className="text-sm text-slate-500">{r.amount_input} VES → {r.amount_output?.toFixed(2)} RIS</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApproveRecharge(r.transaction_id)}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors"
-                        >
-                          Aprobar
-                        </button>
-                        <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors">
-                          Rechazar
-                        </button>
-                      </div>
-                    </div>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No hay recargas pendientes</p></div>
+            ) : recharges.map((r) => (
+              <div key={r.transaction_id} style={{ ...cardStyle, padding: '20px' }} data-testid={`recharge-${r.transaction_id}`}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                  <div>
+                    <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{r.user_email}</p>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{r.amount_input} VES → {r.amount_output?.toFixed(2)} RIS</p>
                   </div>
-                ))}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleApproveRecharge(r.transaction_id)} style={btnSuccess}>Aprobar</button>
+                    <button style={btnDanger}>Rechazar</button>
+                  </div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
         )}
 
         {/* Users Tab */}
         {activeTab === 'users' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div style={{ ...cardStyle, overflow: 'hidden' }}>
             {loading ? (
-              <div className="p-12 flex justify-center">
-                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-              </div>
+              <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ backgroundColor: '#f8f9fa' }}>
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Usuario</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Balance</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Estado</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Rol</th>
+                      {['Usuario', 'Balance', 'Estado', 'Rol'].map(h => (
+                        <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {users.map((u) => (
-                      <tr key={u.user_id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-4">
-                          <p className="text-sm font-medium text-slate-900">{u.name}</p>
-                          <p className="text-xs text-slate-500">{u.email}</p>
+                      <tr key={u.user_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`user-${u.user_id}`}>
+                        <td style={{ padding: '16px' }}>
+                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{u.name}</p>
+                          <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{u.email}</p>
                         </td>
-                        <td className="px-4 py-4 text-sm font-semibold text-slate-900">{u.balance_ris?.toFixed(2)} RIS</td>
-                        <td className="px-4 py-4">
-                          {u.verification_status === 'verified' ? (
-                            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">Verificado</span>
-                          ) : (
-                            <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">Pendiente</span>
-                          )}
+                        <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>{u.balance_ris?.toFixed(2)} RIS</td>
+                        <td style={{ padding: '16px' }}>
+                          <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600',
+                            backgroundColor: u.verification_status === 'verified' ? '#dcfce7' : '#f3f4f6',
+                            color: u.verification_status === 'verified' ? '#16a34a' : '#6b7280' }}>
+                            {u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}
+                          </span>
                         </td>
-                        <td className="px-4 py-4 text-sm text-slate-600 capitalize">{u.role || 'user'}</td>
+                        <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', textTransform: 'capitalize' }}>{u.role || 'user'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -465,77 +343,46 @@ export default function AdminPanel() {
 
         {/* KYC Tab */}
         {activeTab === 'kyc' && (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {loading ? (
-              <div className="bg-white rounded-2xl p-12 flex justify-center">
-                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-              </div>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
             ) : kycPending.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center">
-                <p className="text-slate-500">No hay verificaciones pendientes</p>
-              </div>
-            ) : (
-              kycPending.map((k) => (
-                <div key={k.verification_id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                  <div className="flex items-start gap-4">
-                    {k.selfie_image && (
-                      <img src={k.selfie_image} alt="Selfie" className="w-20 h-20 rounded-xl object-cover" />
-                    )}
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-slate-900">{k.full_name}</h3>
-                      <p className="text-sm text-slate-500">{k.email}</p>
-                      <p className="text-sm text-slate-600 mt-1">CPF: {k.cpf_number} • Doc: {k.document_number}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleKycDecision(k.verification_id, true)}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors"
-                      >
-                        Aprobar
-                      </button>
-                      <button
-                        onClick={() => handleKycDecision(k.verification_id, false, 'Documentos no válidos')}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors"
-                      >
-                        Rechazar
-                      </button>
-                    </div>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No hay verificaciones pendientes</p></div>
+            ) : kycPending.map((k) => (
+              <div key={k.verification_id} style={{ ...cardStyle, padding: '24px' }} data-testid={`kyc-${k.verification_id}`}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                  {k.selfie_image && <img src={k.selfie_image} alt="Selfie" style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover' }} />}
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{k.full_name}</h3>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>{k.email}</p>
+                    <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>CPF: {k.cpf_number} • Doc: {k.document_number}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleKycDecision(k.verification_id, true)} style={btnSuccess}>Aprobar</button>
+                    <button onClick={() => handleKycDecision(k.verification_id, false, 'Documentos no válidos')} style={btnDanger}>Rechazar</button>
                   </div>
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         )}
 
         {/* Rates Tab */}
         {activeTab === 'rates' && (
-          <div className="max-w-lg">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-6">Configurar Tasas de Cambio</h3>
-              
-              <div className="bg-slate-50 rounded-xl p-4 mb-6">
-                <p className="text-sm text-slate-500 mb-1">Tasa actual</p>
-                <p className="text-2xl font-bold text-slate-900">1 RIS = {rates.ris_to_ves.toFixed(2)} VES</p>
+          <div style={{ maxWidth: '500px' }}>
+            <div style={{ ...cardStyle, padding: '24px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>Configurar Tasas de Cambio</h3>
+              <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '24px' }}>
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>Tasa actual</p>
+                <p style={{ fontSize: '28px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
               </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Nueva tasa (VES por 1 RIS)</label>
-                  <input
-                    type="number"
-                    value={newRate}
-                    onChange={(e) => setNewRate(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
-                    placeholder={rates.ris_to_ves.toString()}
-                  />
-                </div>
-                <button
-                  onClick={handleUpdateRate}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
-                >
-                  Actualizar tasa
-                </button>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Nueva tasa (VES por 1 RIS)</label>
+                <input type="number" value={newRate} onChange={(e) => setNewRate(e.target.value)}
+                  style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none' }}
+                  placeholder={rates?.ris_to_ves?.toString() || '0'} data-testid="new-rate-input" />
               </div>
+              <button onClick={handleUpdateRate} style={{ ...btnPrimary, width: '100%', height: '50px' }} data-testid="update-rate-button">Actualizar tasa</button>
             </div>
           </div>
         )}
@@ -543,42 +390,29 @@ export default function AdminPanel() {
 
       {/* Process Withdrawal Modal */}
       {showProcessModal && selectedItem && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md animate-slideUp">
-            <h3 className="font-bold text-slate-900 text-lg mb-4">Procesar Retiro</h3>
-            
-            <div className="bg-slate-50 rounded-xl p-4 mb-4">
-              <p className="text-sm text-slate-500">Beneficiario</p>
-              <p className="font-medium text-slate-900">{selectedItem.beneficiary_data?.full_name}</p>
-              <p className="text-sm text-slate-600">{selectedItem.beneficiary_data?.bank}</p>
-              <p className="text-sm text-slate-600">{selectedItem.beneficiary_data?.account_number}</p>
-              <p className="font-bold text-lg text-slate-900 mt-2">{selectedItem.amount_output?.toFixed(2)} VES</p>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '450px' }}>
+            <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 20px 0' }}>Procesar Retiro</h3>
+            <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
+              <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.full_name}</p>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.bank}</p>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>{selectedItem.beneficiary_data?.account_number}</p>
+              <p style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedItem.amount_output?.toFixed(2)} VES</p>
             </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Comprobante de pago</label>
-              <input type="file" accept="image/*" onChange={handleFileChange} className="w-full" />
-              {proofImage && <img src={proofImage} alt="Comprobante" className="mt-2 rounded-lg max-h-40 object-contain" />}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Comprobante de pago</label>
+              <input type="file" accept="image/*" onChange={handleFileChange} style={{ width: '100%' }} />
+              {proofImage && <img src={proofImage} alt="Comprobante" style={{ marginTop: '12px', borderRadius: '12px', maxHeight: '160px', objectFit: 'contain' }} />}
             </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowProcessModal(false); setSelectedItem(null); setProofImage(null); }}
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleProcessWithdrawal}
-                disabled={!proofImage}
-                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-              >
-                Confirmar
-              </button>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => { setShowProcessModal(false); setSelectedItem(null); setProofImage(null); }} style={{ ...btnSecondary, flex: 1 }}>Cancelar</button>
+              <button onClick={handleProcessWithdrawal} disabled={!proofImage} style={{ ...btnSuccess, flex: 1, opacity: proofImage ? 1 : 0.5 }}>Confirmar</button>
             </div>
           </div>
         </div>
       )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
