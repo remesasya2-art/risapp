@@ -309,17 +309,72 @@ export default function Profile() {
 
         {/* Role Badge */}
         {(user?.role === 'admin' || user?.role === 'super_admin') && (
-          <div style={{ marginTop: '16px', padding: '16px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', color: '#ffffff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Shield style={{ width: '20px', height: '20px' }} />
+          isSuperAdminDiamond(user?.email) ? (
+            // SuperAdministrador Diamante - Diseño Premium
+            <div style={{ 
+              marginTop: '16px', 
+              padding: '20px', 
+              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', 
+              borderRadius: '20px', 
+              color: '#ffffff',
+              position: 'relative',
+              overflow: 'hidden',
+              border: '2px solid rgba(168, 216, 234, 0.3)'
+            }}>
+              {/* Efecto de brillo */}
+              <div style={{
+                position: 'absolute',
+                top: '-50%',
+                left: '-50%',
+                width: '200%',
+                height: '200%',
+                background: 'linear-gradient(45deg, transparent 40%, rgba(168, 216, 234, 0.1) 50%, transparent 60%)',
+                animation: 'shimmer 3s infinite'
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1 }}>
+                <div style={{ 
+                  width: '56px', 
+                  height: '56px', 
+                  borderRadius: '16px', 
+                  background: 'linear-gradient(135deg, #a8d8ea 0%, #89c4e1 50%, #5eb1d8 100%)',
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 15px rgba(168, 216, 234, 0.4)'
+                }}>
+                  <Gem style={{ width: '28px', height: '28px', color: '#1a1a2e' }} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <p style={{ fontSize: '18px', fontWeight: '700', margin: 0, background: 'linear-gradient(90deg, #a8d8ea, #ffffff, #a8d8ea)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                      SuperAdministrador Diamante
+                    </p>
+                    <Crown style={{ width: '18px', height: '18px', color: '#a8d8ea' }} />
+                  </div>
+                  <p style={{ fontSize: '13px', color: '#a8d8ea', margin: 0 }}>Acceso total al sistema • Máximo nivel</p>
+                </div>
               </div>
-              <div>
-                <p style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>{user.role === 'super_admin' ? 'Super Administrador' : 'Administrador'}</p>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Acceso al panel de administración</p>
+              <style>{`
+                @keyframes shimmer {
+                  0% { transform: translateX(-100%) rotate(45deg); }
+                  100% { transform: translateX(100%) rotate(45deg); }
+                }
+              `}</style>
+            </div>
+          ) : (
+            // Administrador normal
+            <div style={{ marginTop: '16px', padding: '16px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', color: '#ffffff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Shield style={{ width: '20px', height: '20px' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Administrador</p>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Acceso al panel de administración</p>
+                </div>
               </div>
             </div>
-          </div>
+          )
         )}
       </div>
 
