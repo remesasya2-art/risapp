@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, 
-  XCircle, Filter, ChevronDown, Search, History as HistoryIcon, Plus
+  XCircle, Filter, ChevronDown, Plus
 } from 'lucide-react';
 import api from '../utils/api';
 
@@ -39,15 +39,11 @@ export default function History() {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'completed':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case 'completed': return <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />;
       case 'pending':
-      case 'pending_manual_approval':
-        return <Clock className="w-5 h-5 text-amber-600" />;
-      case 'rejected':
-        return <XCircle className="w-5 h-5 text-red-600" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-400" />;
+      case 'pending_manual_approval': return <Clock style={{ width: '20px', height: '20px', color: '#d97706' }} />;
+      case 'rejected': return <XCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />;
+      default: return <Clock style={{ width: '20px', height: '20px', color: '#9ca3af' }} />;
     }
   };
 
@@ -61,174 +57,162 @@ export default function History() {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusStyle = (status) => {
     switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-700';
+      case 'completed': return { backgroundColor: '#dcfce7', color: '#16a34a' };
       case 'pending':
-      case 'pending_manual_approval':
-        return 'bg-amber-100 text-amber-700';
-      case 'rejected':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-600';
+      case 'pending_manual_approval': return { backgroundColor: '#fef3c7', color: '#d97706' };
+      case 'rejected': return { backgroundColor: '#fee2e2', color: '#dc2626' };
+      default: return { backgroundColor: '#f3f4f6', color: '#6b7280' };
     }
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   };
 
+  const pageStyle = {
+    minHeight: '100vh',
+    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
+  };
+
+  const cardStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    border: '1px solid #e5e7eb'
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50" data-testid="history-page">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => navigate(-1)} 
-                className="p-2 hover:bg-white/10 rounded-xl transition-colors"
-                data-testid="back-button"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="font-bold text-xl">Historial</h1>
-                <p className="text-blue-200 text-sm">{filteredTransactions.length} transacciones</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-medium transition-colors"
-              data-testid="filter-button"
+    <div style={pageStyle} data-testid="history-page">
+      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate(-1)} 
+              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              data-testid="back-button"
             >
-              <Filter className="w-4 h-4" />
-              Filtrar
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
             </button>
-          </div>
-
-          {/* Filters */}
-          {showFilters && (
-            <div className="flex gap-2 mt-4 pt-4 border-t border-white/10">
-              {[
-                { key: 'all', label: 'Todos', icon: '📋' },
-                { key: 'withdrawals', label: 'Envíos', icon: '📤' },
-                { key: 'recharges', label: 'Recargas', icon: '📥' },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    filter === f.key
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
-                  data-testid={`filter-${f.key}`}
-                >
-                  <span>{f.icon}</span>
-                  {f.label}
-                </button>
-              ))}
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Historial</h1>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{filteredTransactions.length} transacciones</p>
             </div>
-          )}
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
+              backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '12px', border: 'none',
+              cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#374151'
+            }}
+            data-testid="filter-button"
+          >
+            <Filter style={{ width: '16px', height: '16px' }} />
+            Filtrar
+            <ChevronDown style={{ width: '16px', height: '16px', transform: showFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+          </button>
         </div>
-      </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6">
+        {/* Filters */}
+        {showFilters && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+            {[
+              { key: 'all', label: 'Todos' },
+              { key: 'withdrawals', label: 'Envíos' },
+              { key: 'recharges', label: 'Recargas' },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                style={{
+                  padding: '10px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '500', transition: 'all 0.2s',
+                  backgroundColor: filter === f.key ? '#6366f1' : 'rgba(255,255,255,0.8)',
+                  color: filter === f.key ? '#ffffff' : '#374151'
+                }}
+                data-testid={`filter-${f.key}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Content */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-            <p className="text-gray-500 mt-4">Cargando transacciones...</p>
+          <div style={{ ...cardStyle, padding: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '40px', height: '40px', border: '4px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <p style={{ color: '#6b7280', marginTop: '16px' }}>Cargando transacciones...</p>
           </div>
         ) : filteredTransactions.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
-              <HistoryIcon className="w-10 h-10 text-gray-300" />
+          <div style={{ ...cardStyle, padding: '64px', textAlign: 'center' }}>
+            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Clock style={{ width: '40px', height: '40px', color: '#d1d5db' }} />
             </div>
-            <h3 className="font-semibold text-gray-700 text-lg mb-1">Sin transacciones</h3>
-            <p className="text-gray-500 mb-6">
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#374151', margin: '0 0 8px 0' }}>Sin transacciones</h3>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0' }}>
               {filter !== 'all' ? 'Prueba cambiando el filtro' : 'Realiza tu primera operación para verla aquí'}
             </p>
-            <div className="flex justify-center gap-3">
-              <Link 
-                to="/recharge"
-                className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                Recargar saldo
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <Link to="/recharge" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#16a34a', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: '500', fontSize: '14px' }}>
+                <Plus style={{ width: '20px', height: '20px' }} /> Recargar saldo
               </Link>
-              <Link 
-                to="/send"
-                className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
-              >
-                <ArrowUpRight className="w-5 h-5" />
-                Enviar remesa
+              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#6366f1', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: '500', fontSize: '14px' }}>
+                <ArrowUpRight style={{ width: '20px', height: '20px' }} /> Enviar remesa
               </Link>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {filteredTransactions.map((tx) => (
-              <div
-                key={tx.transaction_id}
-                className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all border border-gray-100"
-                data-testid={`transaction-${tx.transaction_id}`}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                    tx.type === 'withdrawal' ? 'bg-blue-100' : 'bg-green-100'
-                  }`}>
+              <div key={tx.transaction_id} style={{ ...cardStyle, padding: '20px' }} data-testid={`transaction-${tx.transaction_id}`}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                  <div style={{
+                    width: '56px', height: '56px', borderRadius: '16px', flexShrink: 0,
+                    backgroundColor: tx.type === 'withdrawal' ? '#dbeafe' : '#dcfce7',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
                     {tx.type === 'withdrawal' ? (
-                      <ArrowUpRight className="w-7 h-7 text-blue-600" />
+                      <ArrowUpRight style={{ width: '28px', height: '28px', color: '#2563eb' }} />
                     ) : (
-                      <ArrowDownLeft className="w-7 h-7 text-green-600" />
+                      <ArrowDownLeft style={{ width: '28px', height: '28px', color: '#16a34a' }} />
                     )}
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
                       <div>
-                        <p className="font-semibold text-gray-900 text-lg">
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
                           {tx.type === 'withdrawal' ? 'Envío a Venezuela' : 'Recarga'}
                         </p>
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          {formatDate(tx.created_at)}
-                        </p>
+                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{formatDate(tx.created_at)}</p>
                       </div>
-                      <div className="text-right">
-                        <p className={`text-xl font-bold ${tx.type === 'withdrawal' ? 'text-red-600' : 'text-green-600'}`}>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: tx.type === 'withdrawal' ? '#dc2626' : '#16a34a' }}>
                           {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount_input?.toFixed(2)} RIS
                         </p>
                         {tx.type === 'withdrawal' && tx.amount_output && (
-                          <p className="text-sm text-gray-500 mt-0.5">{tx.amount_output.toFixed(2)} VES</p>
+                          <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>{tx.amount_output.toFixed(2)} VES</p>
                         )}
                       </div>
                     </div>
-
-                    {/* Beneficiary info for withdrawals */}
                     {tx.type === 'withdrawal' && tx.beneficiary_data && (
-                      <div className="mt-3 p-3 bg-gray-50 rounded-xl">
-                        <p className="text-sm text-gray-600 font-medium">
-                          {tx.beneficiary_data.full_name}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {tx.beneficiary_data.bank}
-                        </p>
+                      <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
+                        <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', margin: 0 }}>{tx.beneficiary_data.full_name}</p>
+                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{tx.beneficiary_data.bank}</p>
                       </div>
                     )}
-
-                    {/* Status Badge */}
-                    <div className="flex items-center gap-2 mt-3">
-                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${getStatusBadge(tx.status)}`}>
+                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                        borderRadius: '9999px', fontSize: '14px', fontWeight: '500', ...getStatusStyle(tx.status)
+                      }}>
                         {getStatusIcon(tx.status)}
                         {getStatusText(tx.status)}
                       </div>
@@ -239,7 +223,8 @@ export default function History() {
             ))}
           </div>
         )}
-      </main>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
