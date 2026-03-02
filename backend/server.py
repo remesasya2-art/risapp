@@ -3020,7 +3020,8 @@ async def get_transactions(type: Optional[str] = None, current_user: User = Depe
         query["type"] = type
     
     transactions = await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [Transaction(**t) for t in transactions]
+    # Return all fields including proof_image for voucher display
+    return transactions
 
 @api_router.get("/transactions/export")
 async def export_transactions(admin_user: User = Depends(get_admin_user)):
