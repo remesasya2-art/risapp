@@ -105,6 +105,12 @@
 - [x] Dashboard balance card not rendering - FIXED (changed to inline styles due to Tailwind v4 compatibility)
 - [x] Admin Panel "Procesar" and "Rechazar" buttons not working - FIXED (corrected API endpoint calls to include `action` parameter)
 
+### New Features (March 2, 2026)
+- [x] **Dual Rate Management:** Added VES → RIS rate input in Admin Panel alongside existing RIS → VES rate
+- [x] **Voucher Viewing for Users:** Added "Ver comprobante" button (eye icon) in History page to view payment proof for completed withdrawals
+- [x] **Voucher Modal:** Professional modal displaying transaction details and proof image
+- [x] **WhatsApp Integration Verified:** Twilio WhatsApp notifications working correctly for new withdrawals
+
 ### Redesign
 - [x] Login.jsx - NexPay style (previously approved)
 - [x] Register.jsx - NexPay style (previously done)
