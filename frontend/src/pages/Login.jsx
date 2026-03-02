@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Login() {
@@ -101,32 +101,26 @@ export default function Login() {
           {/* Email */}
           <div className="mb-5">
             <label className="block text-gray-700 text-sm font-medium mb-2">Correo electrónico</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nombre@ejemplo.com"
-                data-testid="email-input"
-                className="w-full pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
-                style={inputStyle}
-              />
-            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              data-testid="email-input"
+              className="w-full px-4 text-base text-gray-900 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
+              style={inputStyle}
+            />
           </div>
 
           {/* Password */}
-          <div className="mb-2">
+          <div className="mb-6">
             <label className="block text-gray-700 text-sm font-medium mb-2">Contraseña</label>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
                 data-testid="password-input"
-                className="w-full pl-12 pr-12 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
+                className="w-full px-4 pr-12 text-base text-gray-900 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
                 style={inputStyle}
               />
               <button
@@ -139,9 +133,6 @@ export default function Login() {
               </button>
             </div>
           </div>
-
-          {/* Helper text */}
-          <p className="text-gray-400 text-sm mb-6">Mínimo 6 caracteres</p>
 
           {/* Submit Button */}
           <button
