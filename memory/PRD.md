@@ -111,6 +111,8 @@
 - [x] **Voucher Modal:** Professional modal displaying transaction details and proof image
 - [x] **WhatsApp Integration Verified:** Twilio WhatsApp notifications working correctly for new withdrawals
 - [x] **Notification Bell:** Added notification bell icon with unread count to all main pages (Dashboard, Recharge, Send, History) - both desktop and mobile views
+- [x] **Notifications Page Fixed:** Resolved blank page issue and back button navigation
+- [x] **Admin User History:** Admin panel now shows complete user history with detailed modal - includes balance, stats, KYC info, all transactions, and beneficiaries
 
 ### Redesign
 - [x] Login.jsx - NexPay style (previously approved)
