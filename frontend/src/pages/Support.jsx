@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Send, Bot, User, HelpCircle, Headphones } from 'lucide-react';
+import { ArrowLeft, Send, Bot, User, HelpCircle, Headphones, RefreshCw } from 'lucide-react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -11,22 +11,68 @@ export default function Support() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    setMessages([
-      {
-        id: 1,
-        type: 'bot',
-        text: `¡Hola ${user?.name?.split(' ')[0] || 'Usuario'}! Soy el asistente virtual de RIS. ¿En qué puedo ayudarte hoy?`,
-        time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
+    loadConversation();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const loadConversation = async () => {
+    setRefreshing(true);
+    try {
+      const response = await api.get('/support/conversation');
+      const conversation = response.data || [];
+      
+      // Format messages
+      const formattedMessages = conversation.map(msg => ({
+        id: msg.id,
+        type: msg.sender === 'user' ? 'user' : 'admin',
+        text: msg.text,
+        time: msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : ''
+      }));
+
+      // Add welcome message if no messages
+      if (formattedMessages.length === 0) {
+        setMessages([{
+          id: 'welcome',
+          type: 'bot',
+          text: `¡Hola ${user?.name?.split(' ')[0] || 'Usuario'}! Soy el asistente de soporte de RIS. ¿En qué puedo ayudarte hoy?`,
+          time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+        }]);
+      } else {
+        // Add welcome message at the beginning
+        setMessages([
+          {
+            id: 'welcome',
+            type: 'bot',
+            text: `¡Hola ${user?.name?.split(' ')[0] || 'Usuario'}! Aquí está tu historial de soporte.`,
+            time: ''
+          },
+          ...formattedMessages
+        ]);
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      setMessages([{
+        id: 'welcome',
+        type: 'bot',
+        text: `¡Hola ${user?.name?.split(' ')[0] || 'Usuario'}! Soy el asistente de soporte de RIS. ¿En qué puedo ayudarte hoy?`,
+        time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      }]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    await loadConversation();
+    toast.success('Chat actualizado');
+  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -51,7 +97,7 @@ export default function Support() {
           id: Date.now() + 1,
           type: 'bot',
           text: response?.data?.status === 'success' 
-            ? '✅ Tu mensaje ha sido enviado al equipo de soporte. Te responderemos por WhatsApp o aquí en la app lo antes posible.'
+            ? '✅ Tu mensaje ha sido enviado al equipo de soporte. Te responderemos por WhatsApp o aquí en la app. Usa el botón 🔄 para ver nuevas respuestas.'
             : 'Tu mensaje ha sido recibido. Un agente de soporte te responderá pronto.',
           time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
         };
@@ -90,150 +136,217 @@ export default function Support() {
   return (
     <div style={pageStyle} data-testid="support-page">
       {/* Header */}
-      <div style={{ padding: '16px 24px', backgroundColor: 'rgba(255,255,255,0.9)', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ 
+        padding: '16px 24px', 
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderBottom: '1px solid #e5e7eb',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button 
             onClick={() => navigate(-1)} 
-            style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            data-testid="back-button"
+            style={{ 
+              width: '36px', height: '36px', borderRadius: '10px', border: 'none', 
+              backgroundColor: '#f3f4f6', cursor: 'pointer', 
+              display: 'flex', alignItems: 'center', justifyContent: 'center' 
+            }}
           >
-            <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+            <ArrowLeft style={{ width: '18px', height: '18px', color: '#374151' }} />
           </button>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(99, 102, 241, 0.3)' }}>
-            <Headphones style={{ width: '24px', height: '24px', color: '#ffffff' }} />
+          <div style={{ 
+            width: '40px', height: '40px', borderRadius: '50%', 
+            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Headphones style={{ width: '20px', height: '20px', color: '#ffffff' }} />
           </div>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Soporte RIS</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-              <div style={{ width: '8px', height: '8px', backgroundColor: '#22c55e', borderRadius: '50%' }} />
-              <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '500' }}>En línea</span>
-            </div>
+          <div>
+            <h1 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>Soporte RIS</h1>
+            <p style={{ fontSize: '12px', color: '#16a34a', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16a34a' }}></span>
+              En línea
+            </p>
           </div>
         </div>
+        
+        {/* Refresh Button */}
+        <button 
+          onClick={handleRefresh}
+          disabled={refreshing}
+          style={{ 
+            width: '44px', height: '44px', borderRadius: '12px', border: 'none', 
+            backgroundColor: '#dbeafe', cursor: 'pointer', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s'
+          }}
+          data-testid="refresh-chat-btn"
+          title="Actualizar chat"
+        >
+          <RefreshCw style={{ 
+            width: '20px', height: '20px', color: '#2563eb',
+            animation: refreshing ? 'spin 1s linear infinite' : 'none'
+          }} />
+        </button>
       </div>
 
       {/* Messages Area */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {messages.map((msg) => (
-            <div key={msg.id} style={{ display: 'flex', justifyContent: msg.type === 'user' ? 'flex-end' : 'flex-start' }}>
-              {msg.type === 'bot' && (
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', flexShrink: 0 }}>
-                  <Bot style={{ width: '20px', height: '20px', color: '#ffffff' }} />
-                </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+        {messages.map((msg) => (
+          <div 
+            key={msg.id} 
+            style={{ 
+              display: 'flex', 
+              justifyContent: msg.type === 'user' ? 'flex-end' : 'flex-start',
+              marginBottom: '16px'
+            }}
+          >
+            {msg.type !== 'user' && (
+              <div style={{ 
+                width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px',
+                background: msg.type === 'admin' ? 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                {msg.type === 'admin' ? (
+                  <Headphones style={{ width: '16px', height: '16px', color: '#ffffff' }} />
+                ) : (
+                  <Bot style={{ width: '16px', height: '16px', color: '#ffffff' }} />
+                )}
+              </div>
+            )}
+            <div style={{ 
+              maxWidth: '75%', 
+              padding: '12px 16px', 
+              borderRadius: msg.type === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+              backgroundColor: msg.type === 'user' ? '#6366f1' : msg.type === 'admin' ? '#dcfce7' : '#ffffff',
+              color: msg.type === 'user' ? '#ffffff' : '#111827',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              border: msg.type === 'admin' ? '1px solid #bbf7d0' : 'none'
+            }}>
+              {msg.type === 'admin' && (
+                <p style={{ fontSize: '11px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>
+                  📱 Respuesta del Soporte
+                </p>
               )}
-              <div style={{ maxWidth: '75%' }}>
-                <div style={{
-                  padding: '14px 18px',
-                  borderRadius: msg.type === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                  backgroundColor: msg.type === 'user' ? '#6366f1' : '#ffffff',
-                  color: msg.type === 'user' ? '#ffffff' : '#374151',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                  border: msg.type === 'bot' ? '1px solid #e5e7eb' : 'none'
+              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>{msg.text}</p>
+              {msg.time && (
+                <p style={{ 
+                  margin: '6px 0 0 0', fontSize: '11px', 
+                  color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : '#9ca3af',
+                  textAlign: 'right'
                 }}>
-                  <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>{msg.text}</p>
-                </div>
-                <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '6px', textAlign: msg.type === 'user' ? 'right' : 'left' }}>{msg.time}</p>
-              </div>
-              {msg.type === 'user' && (
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: '12px', flexShrink: 0 }}>
-                  <span style={{ color: '#6b7280', fontWeight: '600', fontSize: '14px' }}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</span>
-                </div>
+                  {msg.time}
+                </p>
               )}
             </div>
-          ))}
-          {loading && (
-            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px' }}>
-                <Bot style={{ width: '20px', height: '20px', color: '#ffffff' }} />
+            {msg.type === 'user' && (
+              <div style={{ 
+                width: '32px', height: '32px', borderRadius: '50%', marginLeft: '8px',
+                backgroundColor: '#e5e7eb',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  {user?.name?.charAt(0) || 'U'}
+                </span>
               </div>
-              <div style={{ padding: '16px 20px', backgroundColor: '#ffffff', borderRadius: '20px 20px 20px 4px', border: '1px solid #e5e7eb' }}>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <div style={{ width: '8px', height: '8px', backgroundColor: '#d1d5db', borderRadius: '50%', animation: 'bounce 1s infinite' }} />
-                  <div style={{ width: '8px', height: '8px', backgroundColor: '#d1d5db', borderRadius: '50%', animation: 'bounce 1s infinite 0.15s' }} />
-                  <div style={{ width: '8px', height: '8px', backgroundColor: '#d1d5db', borderRadius: '50%', animation: 'bounce 1s infinite 0.3s' }} />
-                </div>
+            )}
+          </div>
+        ))}
+        
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
+            <div style={{ 
+              width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Bot style={{ width: '16px', height: '16px', color: '#ffffff' }} />
+            </div>
+            <div style={{ 
+              padding: '12px 16px', borderRadius: '18px 18px 18px 4px',
+              backgroundColor: '#ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+            }}>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#6366f1', animation: 'bounce 1s infinite' }}></div>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#6366f1', animation: 'bounce 1s infinite 0.2s' }}></div>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#6366f1', animation: 'bounce 1s infinite 0.4s' }}></div>
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Quick Questions */}
-      {messages.length <= 2 && (
-        <div style={{ padding: '16px 24px', backgroundColor: 'rgba(255,255,255,0.9)', borderTop: '1px solid #e5e7eb' }}>
-          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <HelpCircle style={{ width: '16px', height: '16px', color: '#9ca3af' }} />
-              <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500', margin: 0 }}>Preguntas frecuentes</p>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {quickQuestions.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => setNewMessage(q.text)}
-                  style={{
-                    padding: '10px 16px',
-                    backgroundColor: '#f3f4f6',
-                    border: 'none',
-                    borderRadius: '9999px',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: '#374151',
-                    transition: 'all 0.2s'
-                  }}
-                  data-testid={`quick-question-${i}`}
-                >
-                  {q.text}
-                </button>
-              ))}
-            </div>
-          </div>
+      <div style={{ padding: '12px 24px', backgroundColor: 'rgba(255,255,255,0.5)' }}>
+        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <HelpCircle style={{ width: '14px', height: '14px' }} />
+          Preguntas frecuentes
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {quickQuestions.map((q, i) => (
+            <button 
+              key={i}
+              onClick={() => setNewMessage(q.text)}
+              style={{ 
+                padding: '8px 14px', borderRadius: '20px', border: 'none',
+                backgroundColor: '#ffffff', color: '#374151', fontSize: '13px',
+                cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              {q.text}
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* Input Area */}
-      <div style={{ padding: '16px 24px', backgroundColor: 'rgba(255,255,255,0.95)', borderTop: '1px solid #e5e7eb' }}>
-        <form onSubmit={handleSendMessage} style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', gap: '12px' }}>
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Escribe tu mensaje..."
-            disabled={loading}
-            style={{
-              flex: 1,
-              padding: '14px 20px',
-              borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              fontSize: '14px',
-              outline: 'none',
-              backgroundColor: '#ffffff'
-            }}
-            data-testid="message-input"
-          />
-          <button
-            type="submit"
-            disabled={loading || !newMessage.trim()}
-            style={{
-              padding: '14px 20px',
-              backgroundColor: '#6366f1',
-              color: '#ffffff',
-              borderRadius: '16px',
-              border: 'none',
-              cursor: 'pointer',
-              opacity: loading || !newMessage.trim() ? 0.5 : 1
-            }}
-            data-testid="send-message"
-          >
-            <Send style={{ width: '20px', height: '20px' }} />
-          </button>
-        </form>
       </div>
 
-      <style>{`@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }`}</style>
+      {/* Input Area */}
+      <form 
+        onSubmit={handleSendMessage}
+        style={{ 
+          padding: '16px 24px', 
+          backgroundColor: '#ffffff',
+          borderTop: '1px solid #e5e7eb',
+          display: 'flex',
+          gap: '12px'
+        }}
+      >
+        <input 
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Escribe tu mensaje..."
+          style={{ 
+            flex: 1, padding: '14px 18px', borderRadius: '24px',
+            border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none'
+          }}
+          data-testid="support-input"
+        />
+        <button 
+          type="submit"
+          disabled={!newMessage.trim() || loading}
+          style={{ 
+            width: '50px', height: '50px', borderRadius: '50%',
+            backgroundColor: newMessage.trim() ? '#6366f1' : '#e5e7eb',
+            border: 'none', cursor: newMessage.trim() ? 'pointer' : 'default',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s'
+          }}
+          data-testid="send-support-btn"
+        >
+          <Send style={{ width: '20px', height: '20px', color: newMessage.trim() ? '#ffffff' : '#9ca3af' }} />
+        </button>
+      </form>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes bounce { 
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+      `}</style>
     </div>
   );
 }
