@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, QrCode, Copy, CheckCircle, Upload, Clock, Banknote, AlertCircle,
-  Wallet, ArrowRight, Shield, Zap
+  Wallet, ArrowRight, Shield, Zap, X, XCircle, Timer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -20,6 +20,58 @@ export default function Recharge() {
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState(null);
   const [proofImage, setProofImage] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, completed, expired, cancelled
+  const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutos en segundos
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const timerRef = useRef(null);
+  const pollRef = useRef(null);
+
+  // Timer countdown
+  useEffect(() => {
+    if (step === 2 && pixData && paymentStatus === 'pending') {
+      timerRef.current = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current);
+            setPaymentStatus('expired');
+            toast.error('El código PIX ha expirado');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Poll payment status every 10 seconds
+      pollRef.current = setInterval(() => {
+        checkPaymentStatus();
+      }, 10000);
+
+      return () => {
+        clearInterval(timerRef.current);
+        clearInterval(pollRef.current);
+      };
+    }
+  }, [step, pixData, paymentStatus]);
+
+  const checkPaymentStatus = async () => {
+    if (!pixData?.transaction_id || checkingPayment) return;
+    
+    setCheckingPayment(true);
+    try {
+      const response = await api.get(`/pix/status/${pixData.transaction_id}`);
+      if (response.data.status === 'completed' || response.data.status === 'approved') {
+        setPaymentStatus('completed');
+        clearInterval(timerRef.current);
+        clearInterval(pollRef.current);
+        toast.success('¡Pago recibido exitosamente!');
+        await refreshUser();
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
 
   const vesPaymentInfo = {
     bank_name: 'Banco de Venezuela',
@@ -31,6 +83,12 @@ export default function Recharge() {
   };
 
   const amountRis = method === 'ves' && amount ? parseFloat(amount) / rates.ves_to_ris : parseFloat(amount) || 0;
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const formatCpf = (value) => {
     const numbers = value.replace(/\D/g, '');
@@ -68,6 +126,8 @@ export default function Recharge() {
       });
       setPixData(response.data);
       setStep(2);
+      setTimeRemaining(600); // Reset to 10 minutes
+      setPaymentStatus('pending');
       toast.success('PIX generado correctamente');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al generar PIX');
@@ -80,6 +140,49 @@ export default function Recharge() {
     if (pixData?.pix_code) {
       navigator.clipboard.writeText(pixData.pix_code);
       toast.success('Código PIX copiado');
+    }
+  };
+
+  const handleCancelPix = async () => {
+    if (!pixData?.transaction_id) return;
+    
+    const confirmed = window.confirm('¿Estás seguro de cancelar este pago PIX?');
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      await api.post('/pix/cancel', { transaction_id: pixData.transaction_id });
+      setPaymentStatus('cancelled');
+      clearInterval(timerRef.current);
+      clearInterval(pollRef.current);
+      toast.success('Pago PIX cancelado');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Error al cancelar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadProof = async () => {
+    if (!proofImage) {
+      toast.error('Debes adjuntar el comprobante de pago');
+      return;
+    }
+    if (!pixData?.transaction_id) return;
+
+    setLoading(true);
+    try {
+      await api.post('/pix/upload-proof', {
+        transaction_id: pixData.transaction_id,
+        proof_image: proofImage
+      });
+      toast.success('Comprobante enviado. Verificando pago...');
+      // Check payment status immediately
+      await checkPaymentStatus();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Error al enviar comprobante');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -118,6 +221,15 @@ export default function Recharge() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetPix = () => {
+    setStep(1);
+    setPixData(null);
+    setAmount('');
+    setProofImage(null);
+    setPaymentStatus('pending');
+    setTimeRemaining(600);
   };
 
   const pageStyle = {
@@ -280,7 +392,7 @@ export default function Recharge() {
           </div>
         )}
 
-        {/* PIX Flow - Step 1 */}
+        {/* PIX Flow - Step 1: Enter Amount */}
         {method === 'pix' && step === 1 && (
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
@@ -314,7 +426,6 @@ export default function Recharge() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   style={{ ...inputStyle, fontSize: '24px', fontWeight: '700' }}
-                  placeholder="0.00"
                   min="10"
                   max="2000"
                   data-testid="pix-amount"
@@ -329,7 +440,6 @@ export default function Recharge() {
                   value={cpf}
                   onChange={handleCpfChange}
                   style={inputStyle}
-                  placeholder="000.000.000-00"
                   data-testid="pix-cpf"
                 />
               </div>
@@ -354,45 +464,175 @@ export default function Recharge() {
           </div>
         )}
 
-        {/* PIX Flow - Step 2 (QR Code) */}
+        {/* PIX Flow - Step 2: QR Code & Payment */}
         {method === 'pix' && step === 2 && pixData && (
           <div style={cardStyle}>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <QrCode style={{ width: '40px', height: '40px', color: '#16a34a' }} />
-              </div>
-              <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>PIX generado</h2>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Escanea el QR o copia el código</p>
-            </div>
-
-            {pixData.qr_code_base64 && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '16px', border: '2px solid #e5e7eb' }}>
-                  <img src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" style={{ width: '200px', height: '200px' }} />
+            {/* Payment Completed */}
+            {paymentStatus === 'completed' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <CheckCircle style={{ width: '56px', height: '56px', color: '#16a34a' }} />
+                </div>
+                <h2 style={{ fontSize: '28px', fontWeight: '700', color: '#16a34a', margin: '0 0 8px 0' }}>¡Pago Exitoso!</h2>
+                <p style={{ fontSize: '16px', color: '#6b7280', margin: '0 0 16px 0' }}>Tu recarga ha sido procesada correctamente</p>
+                <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '24px' }}>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto acreditado</p>
+                  <p style={{ fontSize: '36px', fontWeight: '700', color: '#16a34a', margin: 0 }}>{amountRis.toFixed(2)} RIS</p>
+                </div>
+                <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px' }}>
+                  Revisa tu balance actualizado en el Dashboard
+                </p>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button onClick={() => navigate('/')} style={buttonPrimaryStyle}>Ir al Dashboard</button>
                 </div>
               </div>
             )}
 
-            <div style={{ padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '12px', marginBottom: '16px' }}>
-              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px 0', fontWeight: '500' }}>Código PIX (Copia y Pega)</p>
-              <p style={{ fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', margin: '0 0 12px 0' }}>
-                {pixData.pix_code?.substring(0, 80)}...
-              </p>
-              <button onClick={handleCopyPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', height: '48px' }} data-testid="copy-pix">
-                <Copy style={{ width: '20px', height: '20px' }} />
-                Copiar código completo
-              </button>
-            </div>
+            {/* Payment Expired */}
+            {paymentStatus === 'expired' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <XCircle style={{ width: '56px', height: '56px', color: '#dc2626' }} />
+                </div>
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#dc2626', margin: '0 0 8px 0' }}>Código Expirado</h2>
+                <p style={{ fontSize: '16px', color: '#6b7280', margin: '0 0 24px 0' }}>El código PIX ha expirado después de 10 minutos</p>
+                <button onClick={resetPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a' }}>
+                  Generar nuevo PIX
+                </button>
+              </div>
+            )}
 
-            <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '12px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Clock style={{ width: '24px', height: '24px', color: '#d97706' }} />
-              <span style={{ fontWeight: '500', color: '#92400e' }}>Este código expira en 30 minutos</span>
-            </div>
+            {/* Payment Cancelled */}
+            {paymentStatus === 'cancelled' && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <X style={{ width: '56px', height: '56px', color: '#6b7280' }} />
+                </div>
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#374151', margin: '0 0 8px 0' }}>Pago Cancelado</h2>
+                <p style={{ fontSize: '16px', color: '#6b7280', margin: '0 0 24px 0' }}>Has cancelado esta operación de pago</p>
+                <button onClick={resetPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a' }}>
+                  Generar nuevo PIX
+                </button>
+              </div>
+            )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button onClick={() => { refreshUser(); navigate('/history'); }} style={buttonSecondaryStyle}>Ver historial de transacciones</button>
-              <button onClick={() => { setStep(1); setPixData(null); setAmount(''); }} style={{ ...buttonPrimaryStyle, backgroundColor: 'transparent', color: '#16a34a', border: '2px solid #16a34a' }}>Generar otro PIX</button>
-            </div>
+            {/* Payment Pending - Show QR Code */}
+            {paymentStatus === 'pending' && (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                    <QrCode style={{ width: '40px', height: '40px', color: '#16a34a' }} />
+                  </div>
+                  <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>PIX generado</h2>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Escanea el QR o copia el código</p>
+                </div>
+
+                {/* Timer */}
+                <div style={{ 
+                  padding: '16px', 
+                  backgroundColor: timeRemaining <= 60 ? '#fee2e2' : '#fef3c7', 
+                  borderRadius: '12px', 
+                  marginBottom: '16px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  gap: '12px'
+                }}>
+                  <Timer style={{ width: '24px', height: '24px', color: timeRemaining <= 60 ? '#dc2626' : '#d97706' }} />
+                  <span style={{ fontWeight: '700', fontSize: '20px', color: timeRemaining <= 60 ? '#dc2626' : '#92400e' }}>
+                    {formatTime(timeRemaining)}
+                  </span>
+                  <span style={{ fontWeight: '500', color: timeRemaining <= 60 ? '#dc2626' : '#92400e' }}>
+                    restantes
+                  </span>
+                </div>
+
+                {pixData.qr_code_base64 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+                    <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '16px', border: '2px solid #e5e7eb' }}>
+                      <img src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" style={{ width: '200px', height: '200px' }} />
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '12px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px 0', fontWeight: '500' }}>Código PIX (Copia y Pega)</p>
+                  <p style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', margin: '0 0 12px 0' }}>
+                    {pixData.pix_code?.substring(0, 60)}...
+                  </p>
+                  <button onClick={handleCopyPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', height: '48px' }} data-testid="copy-pix">
+                    <Copy style={{ width: '20px', height: '20px' }} />
+                    Copiar código completo
+                  </button>
+                </div>
+
+                {/* Monto */}
+                <div style={{ padding: '16px', backgroundColor: '#dcfce7', borderRadius: '12px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Monto a pagar</p>
+                  <p style={{ fontSize: '28px', fontWeight: '700', color: '#15803d', margin: 0 }}>R$ {parseFloat(amount).toFixed(2)}</p>
+                  <p style={{ fontSize: '14px', color: '#16a34a', margin: '8px 0 0 0' }}>Recibirás: {amountRis.toFixed(2)} RIS</p>
+                </div>
+
+                {/* Upload Proof - OBLIGATORIO */}
+                <div style={{ padding: '20px', backgroundColor: '#eff6ff', borderRadius: '14px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <Upload style={{ width: '20px', height: '20px', color: '#2563eb' }} />
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e40af', margin: 0 }}>Comprobante de pago (OBLIGATORIO)</p>
+                  </div>
+                  <p style={{ fontSize: '13px', color: '#3b82f6', margin: '0 0 12px 0' }}>
+                    Después de realizar el pago, adjunta el comprobante para completar la recarga.
+                  </p>
+                  <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} id="proof-upload-pix" />
+                  <label
+                    htmlFor="proof-upload-pix"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      height: proofImage ? 'auto' : '100px',
+                      border: `2px dashed ${proofImage ? '#16a34a' : '#3b82f6'}`,
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      backgroundColor: proofImage ? '#f0fdf4' : '#ffffff',
+                      transition: 'all 0.2s',
+                      marginBottom: proofImage ? '12px' : '0'
+                    }}
+                  >
+                    {proofImage ? (
+                      <img src={proofImage} alt="Comprobante" style={{ maxHeight: '150px', borderRadius: '8px', margin: '8px' }} />
+                    ) : (
+                      <>
+                        <Upload style={{ width: '32px', height: '32px', color: '#3b82f6', marginBottom: '4px' }} />
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: '#2563eb' }}>Subir comprobante</span>
+                      </>
+                    )}
+                  </label>
+                  {proofImage && (
+                    <button
+                      onClick={handleUploadProof}
+                      disabled={loading}
+                      style={{ ...buttonPrimaryStyle, height: '48px', opacity: loading ? 0.5 : 1 }}
+                    >
+                      {loading ? 'Verificando...' : 'Enviar comprobante y verificar pago'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <button 
+                    onClick={handleCancelPix} 
+                    disabled={loading}
+                    style={{ ...buttonSecondaryStyle, color: '#dc2626', borderColor: '#fecaca', backgroundColor: '#fef2f2' }}
+                  >
+                    <X style={{ width: '20px', height: '20px' }} />
+                    Cancelar pago
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -439,7 +679,6 @@ export default function Recharge() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   style={{ ...inputStyle, fontSize: '24px', fontWeight: '700' }}
-                  placeholder="0.00"
                   data-testid="ves-amount"
                 />
               </div>
