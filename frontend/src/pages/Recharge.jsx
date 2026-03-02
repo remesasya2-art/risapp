@@ -562,7 +562,7 @@ export default function Recharge() {
                 <div style={{ padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '12px', marginBottom: '16px' }}>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px 0', fontWeight: '500' }}>Código PIX (Copia y Pega)</p>
                   <p style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', margin: '0 0 12px 0' }}>
-                    {pixData.pix_code?.substring(0, 60)}...
+                    {(pixData?.qr_code || pixData?.pix_code || 'Código no disponible').substring(0, 60)}...
                   </p>
                   <button onClick={handleCopyPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', height: '48px' }} data-testid="copy-pix">
                     <Copy style={{ width: '20px', height: '20px' }} />
