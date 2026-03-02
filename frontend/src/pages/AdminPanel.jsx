@@ -159,6 +159,34 @@ export default function AdminPanel() {
     catch { toast.error('Error al actualizar tasa'); }
   };
 
+  // Cargar historial completo de un usuario
+  const loadUserHistory = async (userId) => {
+    setLoadingUser(true);
+    try {
+      const response = await api.get(`/admin/users/${userId}/complete`);
+      setUserHistory(response.data);
+      const selectedUserData = users.find(u => u.user_id === userId);
+      setSelectedUser(selectedUserData);
+    } catch (error) {
+      toast.error('Error al cargar historial del usuario');
+      console.error(error);
+    } finally {
+      setLoadingUser(false);
+    }
+  };
+
+  const closeUserModal = () => {
+    setSelectedUser(null);
+    setUserHistory(null);
+  };
+
+  // Filtrar usuarios por búsqueda
+  const filteredUsers = users.filter(u => 
+    userSearchQuery === '' || 
+    u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
+  );
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) { const reader = new FileReader(); reader.onload = () => setProofImage(reader.result); reader.readAsDataURL(file); }
