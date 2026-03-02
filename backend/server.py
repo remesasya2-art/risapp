@@ -55,7 +55,7 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
 
 # Resend Email Configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'onboarding@resend.dev')
+SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'noreply@risappbr.com')
 
 # Initialize Resend
 if RESEND_API_KEY:
