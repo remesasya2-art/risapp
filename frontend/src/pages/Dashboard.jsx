@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   LayoutDashboard, Wallet, ArrowLeftRight, History, 
   LogOut, Plus, ArrowUpRight, TrendingUp, TrendingDown,
-  ChevronRight, Settings, User
+  ChevronRight, Settings, User, HelpCircle
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -20,24 +20,15 @@ export default function Dashboard() {
   };
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: Wallet, label: 'Wallet', path: '/recharge' },
-    { icon: ArrowLeftRight, label: 'Transfer', path: '/send' },
-    { icon: History, label: 'History', path: '/history' },
-    { icon: User, label: 'Profile', path: '/profile' },
+    { icon: LayoutDashboard, label: 'Inicio', path: '/' },
+    { icon: Wallet, label: 'Recargar', path: '/recharge' },
+    { icon: ArrowLeftRight, label: 'Enviar', path: '/send' },
+    { icon: History, label: 'Historial', path: '/history' },
+    { icon: User, label: 'Perfil', path: '/profile' },
+    { icon: HelpCircle, label: 'Soporte', path: '/support' },
   ];
 
   const isActive = (path) => location.pathname === path;
-
-  const cardStyle = {
-    borderRadius: '20px',
-    border: '1px solid #e5e7eb'
-  };
-
-  const buttonStyle = {
-    borderRadius: '14px',
-    height: '48px'
-  };
 
   return (
     <div 
@@ -46,10 +37,7 @@ export default function Dashboard() {
       data-testid="dashboard-page"
     >
       {/* Sidebar */}
-      <aside 
-        className="w-[240px] bg-white border-r border-gray-200 flex flex-col fixed h-full"
-        style={{ boxShadow: '2px 0 8px rgba(0,0,0,0.02)' }}
-      >
+      <aside className="w-[260px] bg-white border-r border-gray-100 flex flex-col fixed h-full">
         {/* Logo */}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
@@ -64,14 +52,14 @@ export default function Dashboard() {
 
         {/* Navigation */}
         <nav className="flex-1 p-4">
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {menuItems.map((item) => (
               <li key={item.path}>
                 <Link
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 transition-all ${
                     isActive(item.path)
-                      ? 'bg-[#6366f1]/10 text-[#6366f1] font-semibold'
+                      ? 'bg-[#6366f1] text-white font-semibold'
                       : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                   style={{ borderRadius: '12px' }}
@@ -94,7 +82,7 @@ export default function Dashboard() {
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-gray-900 text-sm font-medium truncate">{user?.name || 'User'}</p>
+              <p className="text-gray-900 text-sm font-medium truncate">{user?.name || 'Usuario'}</p>
               <p className="text-gray-400 text-xs truncate">{user?.email}</p>
             </div>
           </div>
@@ -105,20 +93,20 @@ export default function Dashboard() {
             data-testid="logout-button"
           >
             <LogOut className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-sm">Logout</span>
+            <span className="text-sm">Cerrar sesión</span>
           </button>
         </div>
       </aside>
 
       {/* Main */}
-      <main className="flex-1 ml-[240px] p-8">
+      <main className="flex-1 ml-[260px] p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
-              Welcome back, {user?.name?.split(' ')[0] || 'User'}
+              ¡Bienvenido, {user?.name?.split(' ')[0] || 'Usuario'}!
             </h1>
-            <p className="text-gray-400 text-base">Here's what's happening with your wallet.</p>
+            <p className="text-gray-400 text-base">Aquí está el resumen de tu billetera.</p>
           </div>
           <button 
             className="w-10 h-10 bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition-all"
@@ -129,26 +117,33 @@ export default function Dashboard() {
         </div>
 
         {/* Balance Card */}
-        <div className="bg-white p-8 mb-6" style={cardStyle} data-testid="balance-card">
-          <div className="flex items-center justify-between mb-6">
+        <div 
+          className="bg-white p-8 mb-6"
+          style={{ borderRadius: '20px', border: '1px solid #e5e7eb' }}
+          data-testid="balance-card"
+        >
+          <div className="flex items-start justify-between mb-6">
             <div>
-              <p className="text-gray-400 text-sm mb-2">Total Balance</p>
-              <p className="text-4xl font-bold text-gray-900">
+              <p className="text-gray-400 text-sm mb-2">Saldo Total</p>
+              <p className="text-5xl font-bold text-gray-900">
                 ${(user?.balance_ris || 0).toFixed(2)}
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                Tasa actual: 1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} Bs
               </p>
             </div>
             <div className="flex gap-3">
               <div className="bg-green-50 p-4" style={{ borderRadius: '14px' }}>
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="w-4 h-4 text-green-500" strokeWidth={1.5} />
-                  <span className="text-gray-400 text-xs">Income (30d)</span>
+                  <span className="text-gray-500 text-xs">Ingresos (30d)</span>
                 </div>
                 <p className="text-lg font-bold text-gray-900">$0.00</p>
               </div>
               <div className="bg-red-50 p-4" style={{ borderRadius: '14px' }}>
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingDown className="w-4 h-4 text-red-500" strokeWidth={1.5} />
-                  <span className="text-gray-400 text-xs">Spent (30d)</span>
+                  <span className="text-gray-500 text-xs">Gastos (30d)</span>
                 </div>
                 <p className="text-lg font-bold text-gray-900">$0.00</p>
               </div>
@@ -157,45 +152,54 @@ export default function Dashboard() {
           <div className="flex gap-4">
             <Link
               to="/recharge"
-              className="flex items-center gap-2 bg-[#6366f1] hover:bg-[#5558e3] text-white px-6 font-semibold text-sm transition-all"
-              style={buttonStyle}
+              className="flex items-center justify-center gap-2 bg-[#6366f1] hover:bg-[#5558e3] text-white px-8 font-semibold text-sm transition-all"
+              style={{ borderRadius: '14px', height: '52px' }}
               data-testid="recharge-button"
             >
-              <Plus className="w-5 h-5" strokeWidth={1.5} />
-              Add Money
+              <Plus className="w-5 h-5" strokeWidth={2} />
+              Recargar Saldo
             </Link>
             <Link
               to="/send"
-              className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-6 font-semibold text-sm transition-all"
-              style={{ ...buttonStyle, border: '1px solid #d1d5db' }}
+              className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-8 font-semibold text-sm transition-all"
+              style={{ borderRadius: '14px', height: '52px', border: '1px solid #d1d5db' }}
               data-testid="send-button"
             >
-              <ArrowUpRight className="w-5 h-5" strokeWidth={1.5} />
-              Send Money
+              <ArrowUpRight className="w-5 h-5" strokeWidth={2} />
+              Enviar Dinero
             </Link>
           </div>
         </div>
 
         {/* Bottom Grid */}
         <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white p-8" style={cardStyle}>
-            <h2 className="text-lg font-bold text-gray-900 mb-6">Activity Overview</h2>
+          {/* Activity */}
+          <div 
+            className="bg-white p-6"
+            style={{ borderRadius: '20px', border: '1px solid #e5e7eb' }}
+          >
+            <h2 className="text-lg font-bold text-gray-900 mb-6">Resumen de Actividad</h2>
             <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
-              No activity data yet.
+              No hay datos de actividad aún.
             </div>
           </div>
-          <div className="bg-white p-8" style={cardStyle}>
+
+          {/* Recent Transactions */}
+          <div 
+            className="bg-white p-6"
+            style={{ borderRadius: '20px', border: '1px solid #e5e7eb' }}
+          >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-gray-900">Recent Transactions</h2>
-              <Link to="/history" className="flex items-center gap-1 text-gray-400 hover:text-[#6366f1] text-sm transition-colors">
-                View All
+              <h2 className="text-lg font-bold text-gray-900">Transacciones Recientes</h2>
+              <Link to="/history" className="flex items-center gap-1 text-[#6366f1] hover:underline text-sm font-medium">
+                Ver todo
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
             <div className="flex flex-col items-center justify-center py-8">
-              <p className="text-gray-400 text-sm mb-3">No transactions yet.</p>
+              <p className="text-gray-400 text-sm mb-3">No hay transacciones aún.</p>
               <Link to="/recharge" className="text-[#6366f1] hover:underline text-sm font-medium">
-                Add funds to get started
+                Recarga saldo para comenzar
               </Link>
             </div>
           </div>
