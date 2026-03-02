@@ -139,11 +139,16 @@
 
 ## Pending/Future Tasks
 
+### P0 - Critical
+- [x] Admin Panel "Procesar" and "Rechazar" buttons - FIXED (2026-03-02)
+
 ### P1 - High Priority
-- [ ] Connect Web Push notifications to transaction events (send notifications when transactions complete)
+- [ ] End-to-End test Web Push Notifications with transaction events
+- [ ] End-to-End test PIX recharge flow with Mercado Pago
 
 ### P2 - Medium Priority
 - [ ] Dark mode support
+- [ ] Stripe integration (deprioritized - using Mercado Pago PIX)
 
 ### P3 - Low Priority
 - [ ] Mobile app (React Native)
