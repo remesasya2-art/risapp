@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, Check, CheckCheck, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCheck } from 'lucide-react';
 import api from '../utils/api';
 
 export default function Notifications() {
@@ -60,97 +60,140 @@ export default function Notifications() {
 
   const getNotificationIcon = (type) => {
     switch (type) {
-      case 'transaction':
-        return '💰';
-      case 'kyc':
-        return '✅';
-      case 'password_reset':
-        return '🔐';
-      case 'support':
-        return '💬';
-      default:
-        return '🔔';
+      case 'transaction': return '💰';
+      case 'kyc': return '✅';
+      case 'password_reset': return '🔐';
+      case 'support': return '💬';
+      default: return '🔔';
     }
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-lg">
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
-              </button>
-              <div>
-                <h1 className="font-bold text-lg text-gray-900">Notificaciones</h1>
-                {unreadCount > 0 && (
-                  <p className="text-sm text-gray-500">{unreadCount} sin leer</p>
-                )}
-              </div>
-            </div>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="flex items-center gap-1 px-3 py-2 text-primary-600 hover:bg-primary-50 rounded-lg text-sm font-medium"
-              >
-                <CheckCheck className="w-4 h-4" />
-                Marcar todas
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+  const pageStyle = {
+    minHeight: '100vh',
+    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
+  };
 
-      <main className="max-w-2xl mx-auto">
+  const cardStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    border: '1px solid #e5e7eb'
+  };
+
+  return (
+    <div style={pageStyle} data-testid="notifications-page">
+      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate('/dashboard')} 
+              style={{ 
+                width: '40px', height: '40px', borderRadius: '12px', border: 'none', 
+                backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center' 
+              }}
+              data-testid="back-button"
+            >
+              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+            </button>
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Notificaciones</h1>
+              {unreadCount > 0 && (
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{unreadCount} sin leer</p>
+              )}
+            </div>
+          </div>
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllAsRead}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+                backgroundColor: '#dbeafe', color: '#2563eb', border: 'none',
+                borderRadius: '12px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+              }}
+              data-testid="mark-all-read"
+            >
+              <CheckCheck style={{ width: '16px', height: '16px' }} />
+              Marcar todas
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-600 border-t-transparent"></div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
+            <div style={{ 
+              width: '32px', height: '32px', borderRadius: '50%', 
+              border: '3px solid #e5e7eb', borderTopColor: '#6366f1',
+              animation: 'spin 1s linear infinite'
+            }} />
           </div>
         ) : notifications.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-              <Bell className="w-8 h-8 text-gray-400" />
+          <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}>
+            <div style={{ 
+              width: '64px', height: '64px', borderRadius: '50%', 
+              backgroundColor: '#f3f4f6', margin: '0 auto 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Bell style={{ width: '32px', height: '32px', color: '#9ca3af' }} />
             </div>
-            <p className="text-gray-500">No tienes notificaciones</p>
+            <p style={{ color: '#6b7280', fontSize: '16px', margin: 0 }}>No tienes notificaciones</p>
           </div>
         ) : (
-          <div className="divide-y">
-            {notifications.map((notification) => (
+          <div style={{ ...cardStyle, overflow: 'hidden' }}>
+            {notifications.map((notification, index) => (
               <div
                 key={notification.notification_id}
                 onClick={() => !notification.read && markAsRead(notification.notification_id)}
-                className={`p-4 transition-colors cursor-pointer ${
-                  notification.read ? 'bg-white' : 'bg-blue-50 hover:bg-blue-100'
-                }`}
+                style={{
+                  padding: '16px 20px',
+                  cursor: notification.read ? 'default' : 'pointer',
+                  backgroundColor: notification.read ? '#ffffff' : '#eff6ff',
+                  borderBottom: index < notifications.length - 1 ? '1px solid #e5e7eb' : 'none',
+                  transition: 'background-color 0.2s'
+                }}
+                data-testid={`notification-${notification.notification_id}`}
               >
-                <div className="flex gap-3">
-                  <div className="text-2xl">{getNotificationIcon(notification.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`font-medium ${notification.read ? 'text-gray-700' : 'text-gray-900'}`}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: '24px' }}>{getNotificationIcon(notification.type)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                      <p style={{ 
+                        fontWeight: notification.read ? '500' : '600', 
+                        color: notification.read ? '#6b7280' : '#111827',
+                        margin: 0, fontSize: '15px'
+                      }}>
                         {notification.title}
                       </p>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                      <span style={{ fontSize: '12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>
                         {formatTime(notification.created_at)}
                       </span>
                     </div>
-                    <p className={`text-sm mt-1 ${notification.read ? 'text-gray-500' : 'text-gray-600'}`}>
+                    <p style={{ 
+                      fontSize: '14px', color: notification.read ? '#9ca3af' : '#6b7280',
+                      margin: '4px 0 0 0', lineHeight: '1.4'
+                    }}>
                       {notification.message}
                     </p>
                   </div>
                   {!notification.read && (
-                    <div className="w-2 h-2 rounded-full bg-primary-600 flex-shrink-0 mt-2"></div>
+                    <div style={{ 
+                      width: '8px', height: '8px', borderRadius: '50%', 
+                      backgroundColor: '#6366f1', flexShrink: 0, marginTop: '6px'
+                    }} />
                   )}
                 </div>
               </div>
             ))}
           </div>
         )}
-      </main>
+      </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
