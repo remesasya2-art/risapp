@@ -293,20 +293,7 @@ export default function Dashboard() {
                 Aquí está el resumen de tu billetera.
               </p>
             </div>
-            <button 
-              style={{
-                width: '40px',
-                height: '40px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <Settings style={{ width: '20px', height: '20px', color: '#6b7280' }} strokeWidth={1.5} />
+            <NotificationBell />
             </button>
           </div>
         )}
