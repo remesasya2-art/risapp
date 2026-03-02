@@ -113,11 +113,12 @@ export default function History() {
               <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{filteredTransactions.length} transacciones</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
-              backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '12px', border: 'none',
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
+                backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '12px', border: 'none',
               cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#374151'
             }}
             data-testid="filter-button"
