@@ -278,19 +278,7 @@ export default function Dashboard() {
               <Menu style={{ width: '22px', height: '22px', color: '#374151' }} />
             </button>
             <img src="/logo-ris.jpeg" alt="RIS" style={{ height: '32px', borderRadius: '8px' }} />
-            <button style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              border: 'none',
-              backgroundColor: '#f3f4f6',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Settings style={{ width: '20px', height: '20px', color: '#6b7280' }} strokeWidth={1.5} />
-            </button>
+            <NotificationBell />
           </div>
         )}
 
