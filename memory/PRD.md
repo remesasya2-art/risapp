@@ -104,6 +104,15 @@
 ### Bug Fixes
 - [x] Dashboard balance card not rendering - FIXED (changed to inline styles due to Tailwind v4 compatibility)
 - [x] Admin Panel "Procesar" and "Rechazar" buttons not working - FIXED (corrected API endpoint calls to include `action` parameter)
+- [x] **Registration Flow - FIXED (2026-03-02):** 
+  - Problem: Page went blank after form submission
+  - Root cause: Frontend was calling `register(name, email, password)` but backend requires two-step verification flow
+  - Solution: Implemented complete two-step registration process:
+    1. Step 1: Fill form → POST /api/auth/register → sends verification code
+    2. Step 2: Enter verification code → POST /api/auth/verify-email → creates account and auto-logs in
+  - Added "Confirm Password" field as requested
+  - Removed placeholder text and icons as requested
+  - Testing: 100% pass rate (5/5 tests)
 
 ### New Features (March 2, 2026)
 - [x] **Dual Rate Management:** Added VES → RIS rate input in Admin Panel alongside existing RIS → VES rate (with independent update buttons)
@@ -158,10 +167,12 @@
 
 ### P0 - Critical
 - [x] Admin Panel "Procesar" and "Rechazar" buttons - FIXED (2026-03-02)
+- [x] Registration Flow - FIXED (2026-03-02) - Two-step verification flow working
 
 ### P1 - High Priority
 - [ ] End-to-End test Web Push Notifications with transaction events
 - [ ] End-to-End test PIX recharge flow with Mercado Pago
+- [ ] End-to-End test Admin-to-User Chat Flow via WhatsApp
 
 ### P2 - Medium Priority
 - [ ] Dark mode support
