@@ -92,16 +92,28 @@ export default function AdminPanel() {
   const handleProcessWithdrawal = async () => {
     if (!selectedItem || !proofImage) { toast.error('Sube el comprobante de pago'); return; }
     try {
-      await api.post('/admin/withdrawals/process', { transaction_id: selectedItem.transaction_id, proof_image: proofImage });
-      toast.success('Retiro procesado');
+      await api.post('/admin/withdrawals/process', { 
+        transaction_id: selectedItem.transaction_id, 
+        action: 'approve',
+        proof_image: proofImage 
+      });
+      toast.success('Retiro procesado exitosamente');
       setShowProcessModal(false); setSelectedItem(null); setProofImage(null); loadData();
     } catch (error) { toast.error(error.response?.data?.detail || 'Error al procesar'); }
   };
 
   const handleRejectWithdrawal = async (txId) => {
-    if (!confirm('¿Rechazar este retiro?')) return;
-    try { await api.post(`/admin/withdrawals/${txId}/reject`); toast.success('Retiro rechazado'); loadData(); } 
-    catch { toast.error('Error al rechazar'); }
+    if (!confirm('¿Rechazar este retiro? El monto será devuelto al usuario.')) return;
+    try { 
+      await api.post('/admin/withdrawals/process', { 
+        transaction_id: txId, 
+        action: 'reject',
+        rejection_reason: 'Rechazado por administrador'
+      }); 
+      toast.success('Retiro rechazado y balance devuelto'); 
+      loadData(); 
+    } 
+    catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar'); }
   };
 
   const handleApproveRecharge = async (txId) => {
