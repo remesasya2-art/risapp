@@ -1992,6 +1992,11 @@ async def get_pending_withdrawals(admin_user: User = Depends(get_admin_user)):
 @api_router.post("/withdrawal/process")
 async def process_withdrawal(request: ProcessWithdrawalRequest, admin_user: User = Depends(get_admin_user)):
     """Admin: Mark withdrawal as completed and upload proof"""
+    # Get transaction first to get user_id
+    transaction = await db.transactions.find_one({"transaction_id": request.transaction_id})
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
     # Update transaction
     result = await db.transactions.update_one(
         {"transaction_id": request.transaction_id},
@@ -2006,7 +2011,13 @@ async def process_withdrawal(request: ProcessWithdrawalRequest, admin_user: User
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # TODO: Send push notification to user
+    # Send push notification to user
+    await send_web_push_to_user(
+        user_id=transaction["user_id"],
+        title="✅ Envío Completado",
+        body=f"Tu envío de {transaction.get('amount_input', 0):.2f} RIS ha sido procesado exitosamente.",
+        url="/history"
+    )
     
     return {"message": "Withdrawal processed successfully"}
 
