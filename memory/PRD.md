@@ -156,6 +156,7 @@
 
 ### Integrations
 - [x] Mercado Pago PIX - Already implemented and working
+- [x] Resend Email - Verification codes sent via email (NEW - 2026-03-02)
 - [ ] Stripe - Removed (user decision to use Mercado Pago instead)
 
 ## Testing Results
