@@ -128,19 +128,31 @@ export default function AdminPanel() {
   };
 
   const handleUpdateRate = async () => {
-    if (!newRate || parseFloat(newRate) <= 0) { toast.error('Ingresa una tasa RIS → VES válida'); return; }
-    if (!newRateVesToRis || parseFloat(newRateVesToRis) <= 0) { toast.error('Ingresa una tasa VES → RIS válida'); return; }
+    if (!newRate || parseFloat(newRate) <= 0) { toast.error('Ingresa una tasa válida'); return; }
     try { 
       await api.post('/rate', { 
         ris_to_ves: parseFloat(newRate),
-        ves_to_ris: parseFloat(newRateVesToRis)
+        ves_to_ris: rates?.ves_to_ris || 0
       }); 
-      toast.success('Tasas actualizadas'); 
+      toast.success('Tasa RIS → VES actualizada'); 
       refreshRates(); 
       setNewRate(''); 
+    } 
+    catch { toast.error('Error al actualizar tasa'); }
+  };
+
+  const handleUpdateRateVesToRis = async () => {
+    if (!newRateVesToRis || parseFloat(newRateVesToRis) <= 0) { toast.error('Ingresa una tasa válida'); return; }
+    try { 
+      await api.post('/rate', { 
+        ris_to_ves: rates?.ris_to_ves || 0,
+        ves_to_ris: parseFloat(newRateVesToRis)
+      }); 
+      toast.success('Tasa VES → RIS actualizada'); 
+      refreshRates(); 
       setNewRateVesToRis('');
     } 
-    catch { toast.error('Error al actualizar tasas'); }
+    catch { toast.error('Error al actualizar tasa'); }
   };
 
   const handleFileChange = (e) => {
