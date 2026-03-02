@@ -4402,6 +4402,127 @@ async def test_whatsapp():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# ====================
+# WEB PUSH NOTIFICATIONS ROUTES
+# ====================
+
+class PushSubscriptionRequest(BaseModel):
+    """Push subscription data from browser"""
+    endpoint: str
+    keys: dict  # contains p256dh and auth keys
+
+class SendNotificationRequest(BaseModel):
+    """Request to send a notification"""
+    title: str
+    body: str
+    url: str = "/"
+
+@api_router.get("/push/vapid-public-key")
+async def get_vapid_public_key():
+    """Get the VAPID public key for client-side subscription"""
+    public_key = web_push_service.get_public_key()
+    if not public_key:
+        raise HTTPException(status_code=503, detail="Push notifications not configured")
+    return {"publicKey": public_key}
+
+@api_router.post("/push/subscribe")
+async def subscribe_to_push(
+    request: PushSubscriptionRequest, 
+    current_user: User = Depends(get_current_user)
+):
+    """Subscribe user to push notifications"""
+    try:
+        subscription_data = {
+            "endpoint": request.endpoint,
+            "keys": request.keys
+        }
+        
+        # Update user's push subscription in database
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {
+                "web_push_subscription": subscription_data,
+                "web_push_enabled": True,
+                "web_push_subscribed_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        logger.info(f"User {current_user.user_id} subscribed to web push notifications")
+        return {"success": True, "message": "Suscripción exitosa a notificaciones"}
+        
+    except Exception as e:
+        logger.error(f"Error subscribing to push: {e}")
+        raise HTTPException(status_code=500, detail="Error al suscribirse a notificaciones")
+
+@api_router.post("/push/unsubscribe")
+async def unsubscribe_from_push(current_user: User = Depends(get_current_user)):
+    """Unsubscribe user from push notifications"""
+    try:
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {
+                "web_push_subscription": None,
+                "web_push_enabled": False
+            }}
+        )
+        
+        logger.info(f"User {current_user.user_id} unsubscribed from web push notifications")
+        return {"success": True, "message": "Desuscripción exitosa"}
+        
+    except Exception as e:
+        logger.error(f"Error unsubscribing from push: {e}")
+        raise HTTPException(status_code=500, detail="Error al desuscribirse")
+
+@api_router.get("/push/status")
+async def get_push_status(current_user: User = Depends(get_current_user)):
+    """Get current push notification subscription status"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    return {
+        "enabled": user.get("web_push_enabled", False),
+        "subscribed": user.get("web_push_subscription") is not None,
+        "subscribed_at": user.get("web_push_subscribed_at")
+    }
+
+@api_router.post("/push/test")
+async def send_test_notification(current_user: User = Depends(get_current_user)):
+    """Send a test push notification to the current user"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    subscription = user.get("web_push_subscription")
+    if not subscription:
+        raise HTTPException(status_code=400, detail="No estás suscrito a notificaciones")
+    
+    success = web_push_service.send_notification(
+        subscription=subscription,
+        title="🔔 Notificación de Prueba",
+        body="¡Las notificaciones push están funcionando correctamente!",
+        url="/profile"
+    )
+    
+    if success:
+        return {"success": True, "message": "Notificación de prueba enviada"}
+    else:
+        raise HTTPException(status_code=500, detail="Error al enviar notificación")
+
+# Helper function to send push notification to a user
+async def send_web_push_to_user(user_id: str, title: str, body: str, url: str = "/"):
+    """Send a web push notification to a specific user"""
+    user = await db.users.find_one({"user_id": user_id})
+    if not user or not user.get("web_push_subscription"):
+        return False
+    
+    return web_push_service.send_notification(
+        subscription=user["web_push_subscription"],
+        title=title,
+        body=body,
+        url=url
+    )
+
 # Include the routers in the main app
 app.include_router(api_router)
 app.include_router(admin_router)
