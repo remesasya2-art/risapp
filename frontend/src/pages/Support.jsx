@@ -40,22 +40,33 @@ export default function Support() {
     };
 
     setMessages(prev => [...prev, userMsg]);
+    const messageToSend = newMessage.trim();
     setNewMessage('');
     setLoading(true);
 
     try {
-      const response = await api.post('/support/message', { message: newMessage.trim() }).catch(() => null);
+      const response = await api.post('/support/send', { message: messageToSend });
       setTimeout(() => {
         const botResponse = {
           id: Date.now() + 1,
           type: 'bot',
-          text: response?.data?.reply || 'Tu mensaje ha sido recibido. Un agente de soporte te responderá pronto. También puedes revisar nuestras preguntas frecuentes mientras esperas.',
+          text: response?.data?.status === 'success' 
+            ? '✅ Tu mensaje ha sido enviado al equipo de soporte. Te responderemos por WhatsApp o aquí en la app lo antes posible.'
+            : 'Tu mensaje ha sido recibido. Un agente de soporte te responderá pronto.',
           time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
         };
         setMessages(prev => [...prev, botResponse]);
         setLoading(false);
       }, 1000);
     } catch (error) {
+      console.error('Support error:', error);
+      const errorMsg = {
+        id: Date.now() + 1,
+        type: 'bot',
+        text: '❌ No se pudo enviar el mensaje. Por favor intenta de nuevo.',
+        time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages(prev => [...prev, errorMsg]);
       toast.error('Error al enviar mensaje');
       setLoading(false);
     }
