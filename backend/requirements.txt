@@ -18,3 +18,4 @@ openpyxl==3.1.2
 py-vapid==1.9.4
 pywebpush==2.3.0
 http-ece==1.2.1
+resend>=2.0.0

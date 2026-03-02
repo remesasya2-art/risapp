@@ -27,6 +27,8 @@ from whatsapp_service import whatsapp_service
 from mercadopago_service import mercadopago_service
 from admin_routes import admin_router
 from web_push_service import web_push_service
+import asyncio
+import resend
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -50,6 +52,14 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
 
 # Stripe configuration (disabled - using Mercado Pago PIX)
 # stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test_placeholder')
+
+# Resend Email Configuration
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
+SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'onboarding@resend.dev')
+
+# Initialize Resend
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -106,6 +116,71 @@ async def send_whatsapp_notification(message_body: str) -> bool:
         
     except Exception as e:
         logger.error(f"Error sending WhatsApp: {e}")
+        return False
+
+async def send_verification_email(email: str, code: str, name: str) -> bool:
+    """Send verification code via email using Resend"""
+    if not RESEND_API_KEY:
+        logger.warning("Resend not configured - email not sent")
+        return False
+    
+    try:
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+        </head>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fc;">
+            <div style="background-color: #ffffff; border-radius: 16px; padding: 40px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #6366f1; margin: 0; font-size: 28px;">RIS App</h1>
+                    <p style="color: #9ca3af; margin: 5px 0 0 0;">Tu billetera digital</p>
+                </div>
+                
+                <h2 style="color: #111827; margin-bottom: 20px;">¡Hola {name}!</h2>
+                
+                <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                    Tu código de verificación es:
+                </p>
+                
+                <div style="background-color: #f3f4f6; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+                    <span style="font-size: 36px; font-weight: bold; color: #6366f1; letter-spacing: 8px;">{code}</span>
+                </div>
+                
+                <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+                    Este código expira en <strong>15 minutos</strong>.
+                </p>
+                
+                <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+                    Si no solicitaste este código, puedes ignorar este mensaje.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                
+                <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+                    © 2026 RIS App - Remesas Internacionales Seguras
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [email],
+            "subject": f"🔐 RIS App - Tu código de verificación: {code}",
+            "html": html_content
+        }
+        
+        # Run sync SDK in thread to keep FastAPI non-blocking
+        email_response = await asyncio.to_thread(resend.Emails.send, params)
+        
+        logger.info(f"📧 Email sent to {email} - ID: {email_response.get('id')}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error sending email via Resend: {e}")
         return False
 
 async def send_push_notification(push_token: str, title: str, body: str, data: dict = None) -> bool:
@@ -1096,30 +1171,36 @@ async def register_user(request: RegisterUserRequest):
     await db.pending_verifications.delete_many({"email": email_lower})
     await db.pending_verifications.insert_one(pending_data)
     
-    # Send verification code via SMS
+    # Log verification code (for debugging)
     logger.info(f"📧 Verification code for {email_lower}: {verification_code}")
     
-    # Send SMS if phone provided
+    # Send verification email
+    email_sent = await send_verification_email(email_lower, verification_code, request.name.strip())
+    
+    # Also send SMS if phone provided
     sms_sent = False
     if request.phone:
         sms_sent = await send_verification_sms(request.phone.strip(), verification_code, request.name.strip())
         if sms_sent:
             logger.info(f"📱 SMS verification code sent to {request.phone}")
-        else:
-            logger.warning(f"⚠️ SMS could not be sent, code logged above")
+    
+    # Build response message
+    if email_sent:
+        message = "Código de verificación enviado a tu correo"
+        if sms_sent:
+            message += " y SMS"
+    elif sms_sent:
+        message = "Código de verificación enviado por SMS"
+    else:
+        message = "Código de verificación generado. Revisa los logs."
+    
+    logger.info(f"Registration initiated for {email_lower}, email_sent={email_sent}, sms_sent={sms_sent}")
     
     return {
-        "message": "Código de verificación enviado" + (" por SMS" if sms_sent else ". Revisa los logs."),
+        "message": message,
         "email": email_lower,
+        "email_sent": email_sent,
         "sms_sent": sms_sent,
-        "code_expires_in_minutes": 15
-    }
-    
-    logger.info(f"Registration initiated for {email_lower}, verification code sent")
-    
-    return {
-        "message": "Código de verificación enviado a tu email",
-        "email": email_lower,
         "code_expires_in_minutes": 15
     }
 
@@ -1253,7 +1334,7 @@ async def update_phone_number(request: UpdatePhoneRequest):
 
 @api_router.post("/auth/resend-verification-code")
 async def resend_verification_code(request: ResendVerificationCodeRequest):
-    """Resend verification code via SMS"""
+    """Resend verification code via email and SMS"""
     
     email_lower = request.email.lower().strip()
     
@@ -1278,13 +1359,27 @@ async def resend_verification_code(request: ResendVerificationCodeRequest):
     
     logger.info(f"📧 New verification code for {email_lower}: {new_code}")
     
+    # Send email
+    email_sent = await send_verification_email(email_lower, new_code, pending.get("name", "Usuario"))
+    
     # Send SMS if phone is available
     sms_sent = False
     if pending.get("phone"):
         sms_sent = await send_verification_sms(pending["phone"], new_code, pending.get("name", "Usuario"))
     
+    # Build response message
+    if email_sent:
+        message = "Nuevo código enviado a tu correo"
+        if sms_sent:
+            message += " y SMS"
+    elif sms_sent:
+        message = "Nuevo código enviado por SMS"
+    else:
+        message = "Nuevo código generado"
+    
     return {
-        "message": "Nuevo código enviado" + (" por SMS" if sms_sent else ""),
+        "message": message,
+        "email_sent": email_sent,
         "sms_sent": sms_sent,
         "code_expires_in_minutes": 15
     }
