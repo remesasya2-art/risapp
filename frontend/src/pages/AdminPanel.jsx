@@ -128,9 +128,19 @@ export default function AdminPanel() {
   };
 
   const handleUpdateRate = async () => {
-    if (!newRate || parseFloat(newRate) <= 0) { toast.error('Ingresa una tasa válida'); return; }
-    try { await api.post('/rate', { ris_to_ves: parseFloat(newRate) }); toast.success('Tasa actualizada'); refreshRates(); setNewRate(''); } 
-    catch { toast.error('Error al actualizar tasa'); }
+    if (!newRate || parseFloat(newRate) <= 0) { toast.error('Ingresa una tasa RIS → VES válida'); return; }
+    if (!newRateVesToRis || parseFloat(newRateVesToRis) <= 0) { toast.error('Ingresa una tasa VES → RIS válida'); return; }
+    try { 
+      await api.post('/rate', { 
+        ris_to_ves: parseFloat(newRate),
+        ves_to_ris: parseFloat(newRateVesToRis)
+      }); 
+      toast.success('Tasas actualizadas'); 
+      refreshRates(); 
+      setNewRate(''); 
+      setNewRateVesToRis('');
+    } 
+    catch { toast.error('Error al actualizar tasas'); }
   };
 
   const handleFileChange = (e) => {
