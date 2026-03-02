@@ -228,6 +228,50 @@ export default function Profile() {
           </button>
         )}
 
+        {/* Notifications Card */}
+        <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: pushEnabled ? '#dcfce7' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+                {pushEnabled ? <Bell style={{ width: '20px', height: '20px', color: '#16a34a' }} /> : <BellOff style={{ width: '20px', height: '20px', color: '#6b7280' }} />}
+              </div>
+              <div>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>Notificaciones Push</p>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                  {!pushSupported ? 'No soportado' : pushEnabled ? 'Activadas' : 'Desactivadas'}
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {pushEnabled && (
+                <button 
+                  onClick={handleTestNotification}
+                  style={{ padding: '8px 12px', backgroundColor: '#f3f4f6', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '500', color: '#374151' }}
+                  data-testid="test-notification-btn"
+                >
+                  Probar
+                </button>
+              )}
+              <button
+                onClick={handleTogglePush}
+                disabled={!pushSupported || pushLoading}
+                style={{
+                  width: '52px', height: '28px', borderRadius: '14px', border: 'none', cursor: pushSupported ? 'pointer' : 'not-allowed',
+                  backgroundColor: pushEnabled ? '#16a34a' : '#d1d5db', position: 'relative', transition: 'all 0.2s',
+                  opacity: pushLoading ? 0.5 : 1
+                }}
+                data-testid="toggle-push-btn"
+              >
+                <div style={{
+                  width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#ffffff',
+                  position: 'absolute', top: '2px', left: pushEnabled ? '26px' : '2px',
+                  transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                }} />
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Actions */}
         <div style={{ ...cardStyle, overflow: 'hidden' }}>
           <button onClick={() => setShowChangePassword(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', backgroundColor: 'transparent', border: 'none', borderBottom: '1px solid #e5e7eb', cursor: 'pointer' }}>
