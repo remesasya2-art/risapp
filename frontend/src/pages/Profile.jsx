@@ -217,7 +217,7 @@ export default function Profile() {
                 <Shield style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>CPF</p>
-                  <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{user.cpf_number}</p>
+                  <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{maskCPF(user.cpf_number)}</p>
                 </div>
               </div>
             )}
