@@ -45,6 +45,10 @@ export default function AdminPanel() {
   const [proofImage, setProofImage] = useState(null);
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userHistory, setUserHistory] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   useEffect(() => { loadData(); }, [activeTab]);
 
