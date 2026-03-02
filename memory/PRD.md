@@ -139,13 +139,12 @@
 ## Pending/Future Tasks
 
 ### P1 - High Priority
-- [ ] Implement Web Push Notifications (user requested)
+- [ ] Connect Web Push notifications to transaction events (send notifications when transactions complete)
 
 ### P2 - Medium Priority
-- [ ] Stripe integration (blocked until user activates Stripe account)
+- [ ] Dark mode support
 
 ### P3 - Low Priority
-- [ ] Dark mode support
 - [ ] Mobile app (React Native)
 - [ ] Analytics dashboard
 
