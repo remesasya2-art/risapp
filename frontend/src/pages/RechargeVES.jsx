@@ -75,6 +75,40 @@ export default function RechargeVES() {
     }
   };
 
+  // Copiar todos los datos de pago
+  const copyAllPaymentData = async () => {
+    if (!selectedBank || !paymentType) return;
+    
+    const bankData = BANK_DATA[selectedBank];
+    let allData = '';
+    
+    if (paymentType === 'pago_movil') {
+      allData = `📱 PAGO MÓVIL - ${bankData.name.toUpperCase()}
+━━━━━━━━━━━━━━━━━━━━
+📞 Teléfono: ${bankData.pago_movil.telefono}
+🪪 Cédula: ${bankData.pago_movil.ci}
+🏦 Banco: ${bankData.pago_movil.banco}
+💰 Monto: ${parseFloat(amountVES).toLocaleString()} VES`;
+    } else {
+      allData = `💳 TRANSFERENCIA - ${bankData.name.toUpperCase()}
+━━━━━━━━━━━━━━━━━━━━
+👤 Titular: ${bankData.transferencia.titular}
+🔢 Cuenta: ${bankData.transferencia.cuenta}
+🪪 Cédula: ${bankData.transferencia.ci}
+🏦 Banco: ${bankData.name}
+💰 Monto: ${parseFloat(amountVES).toLocaleString()} VES`;
+    }
+    
+    try {
+      await navigator.clipboard.writeText(allData);
+      setCopiedField('all');
+      toast.success('¡Todos los datos copiados!');
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      toast.error('Error al copiar');
+    }
+  };
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -500,6 +534,41 @@ export default function RechargeVES() {
                   </div>
                 </div>
               )}
+
+              {/* Copy All Button */}
+              <button
+                onClick={copyAllPaymentData}
+                style={{
+                  width: '100%',
+                  marginTop: '16px',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: copiedField === 'all' ? '#dcfce7' : '#6366f1',
+                  color: copiedField === 'all' ? '#166534' : '#ffffff',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s'
+                }}
+                data-testid="copy-all-btn"
+              >
+                {copiedField === 'all' ? (
+                  <>
+                    <CheckCircle style={{ width: '18px', height: '18px' }} />
+                    ¡Todos los datos copiados!
+                  </>
+                ) : (
+                  <>
+                    <Copy style={{ width: '18px', height: '18px' }} />
+                    Copiar todos los datos
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Upload Proof */}
