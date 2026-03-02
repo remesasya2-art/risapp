@@ -5,7 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "ris",
-    "platforms": ["web"],
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "bundleIdentifier": "com.ris.remittances"
+    },
+    "android": {
+      "package": "com.ris.remittances"
+    },
     "web": {
       "bundler": "metro",
       "output": "single"
