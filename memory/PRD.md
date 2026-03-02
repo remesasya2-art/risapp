@@ -103,6 +103,7 @@
 
 ### Bug Fixes
 - [x] Dashboard balance card not rendering - FIXED (changed to inline styles due to Tailwind v4 compatibility)
+- [x] Admin Panel "Procesar" and "Rechazar" buttons not working - FIXED (corrected API endpoint calls to include `action` parameter)
 
 ### Redesign
 - [x] Login.jsx - NexPay style (previously approved)
