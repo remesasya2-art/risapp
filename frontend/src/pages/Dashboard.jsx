@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -30,182 +29,255 @@ export default function Dashboard() {
 
   const isActive = (path) => location.pathname === path;
 
+  const cardStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '20px',
+    border: '1px solid #e5e7eb',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+  };
+
+  const buttonPrimaryStyle = {
+    backgroundColor: '#6366f1',
+    color: 'white',
+    borderRadius: '14px',
+    height: '52px',
+    padding: '0 32px',
+    fontWeight: '600',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    textDecoration: 'none',
+    transition: 'all 0.2s'
+  };
+
+  const buttonSecondaryStyle = {
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    borderRadius: '14px',
+    height: '52px',
+    padding: '0 32px',
+    fontWeight: '600',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    textDecoration: 'none',
+    border: '1px solid #d1d5db',
+    transition: 'all 0.2s'
+  };
+
   return (
     <div 
-      className="min-h-screen bg-[#f8f9fc] flex"
-      style={{ fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' }}
+      style={{ 
+        minHeight: '100vh', 
+        backgroundColor: '#f8f9fc', 
+        display: 'flex',
+        fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
+      }}
       data-testid="dashboard-page"
     >
       {/* Sidebar */}
-      <aside className="w-[260px] bg-white border-r border-gray-100 flex flex-col fixed h-full" style={{ zIndex: 50 }}>
+      <aside 
+        style={{
+          width: '260px',
+          backgroundColor: '#ffffff',
+          borderRight: '1px solid #f3f4f6',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'fixed',
+          height: '100%',
+          zIndex: 50
+        }}
+      >
         {/* Logo */}
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/logo-ris.jpeg" 
-              alt="RIS" 
-              className="h-10 w-auto"
-              style={{ borderRadius: '10px' }}
-            />
-          </div>
+        <div style={{ padding: '24px', borderBottom: '1px solid #f3f4f6' }}>
+          <img 
+            src="/logo-ris.jpeg" 
+            alt="RIS" 
+            style={{ height: '40px', width: 'auto', borderRadius: '10px' }}
+          />
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-1">
+        <nav style={{ flex: 1, padding: '16px' }}>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {menuItems.map((item) => (
-              <li key={item.path}>
+              <li key={item.path} style={{ marginBottom: '4px' }}>
                 <Link
                   to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 transition-all ${
-                    isActive(item.path)
-                      ? 'bg-[#6366f1] text-white font-semibold'
-                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                  style={{ borderRadius: '12px' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    textDecoration: 'none',
+                    transition: 'all 0.2s',
+                    backgroundColor: isActive(item.path) ? '#6366f1' : 'transparent',
+                    color: isActive(item.path) ? '#ffffff' : '#6b7280',
+                    fontWeight: isActive(item.path) ? '600' : '400',
+                    fontSize: '14px'
+                  }}
                 >
-                  <item.icon className="w-5 h-5" strokeWidth={1.5} />
-                  <span className="text-sm">{item.label}</span>
+                  <item.icon style={{ width: '20px', height: '20px' }} strokeWidth={1.5} />
+                  <span>{item.label}</span>
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
 
-        {/* User */}
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-3 py-2 mb-3">
+        {/* User Section */}
+        <div style={{ padding: '16px', borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', marginBottom: '12px' }}>
             <div 
-              className="w-10 h-10 bg-[#6366f1] flex items-center justify-center text-white font-semibold text-sm"
-              style={{ borderRadius: '12px' }}
+              style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: '#6366f1',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontWeight: '600',
+                fontSize: '14px'
+              }}
             >
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-gray-900 text-sm font-medium truncate">{user?.name || 'Usuario'}</p>
-              <p className="text-gray-400 text-xs truncate">{user?.email}</p>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, color: '#111827', fontSize: '14px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.name || 'Usuario'}
+              </p>
+              <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.email}
+              </p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-red-500 hover:bg-red-50 transition-all w-full"
-            style={{ borderRadius: '12px' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              width: '100%',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              color: '#6b7280',
+              fontSize: '14px',
+              transition: 'all 0.2s'
+            }}
             data-testid="logout-button"
           >
-            <LogOut className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-sm">Cerrar sesión</span>
+            <LogOut style={{ width: '20px', height: '20px' }} strokeWidth={1.5} />
+            <span>Cerrar sesión</span>
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 p-8" style={{ marginLeft: '260px' }}>
+      {/* Main Content */}
+      <main style={{ flex: 1, marginLeft: '260px', padding: '32px' }}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: '0 0 4px 0' }}>
               ¡Bienvenido, {user?.name?.split(' ')[0] || 'Usuario'}!
             </h1>
-            <p className="text-gray-400 text-base">Aquí está el resumen de tu billetera.</p>
+            <p style={{ fontSize: '16px', color: '#9ca3af', margin: 0 }}>
+              Aquí está el resumen de tu billetera.
+            </p>
           </div>
           <button 
-            className="w-10 h-10 bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition-all"
-            style={{ borderRadius: '12px' }}
+            style={{
+              width: '40px',
+              height: '40px',
+              backgroundColor: '#ffffff',
+              border: '1px solid #e5e7eb',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
           >
-            <Settings className="w-5 h-5 text-gray-500" strokeWidth={1.5} />
+            <Settings style={{ width: '20px', height: '20px', color: '#6b7280' }} strokeWidth={1.5} />
           </button>
         </div>
 
         {/* Balance Card */}
-        <div 
-          className="p-8 mb-6"
-          style={{ 
-            borderRadius: '20px', 
-            border: '1px solid #e5e7eb', 
-            backgroundColor: '#ffffff',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            position: 'relative',
-            zIndex: 10
-          }}
-          data-testid="balance-card"
-        >
-          <div className="flex items-start justify-between mb-6">
+        <div style={{ ...cardStyle, padding: '32px', marginBottom: '24px' }} data-testid="balance-card">
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
             <div>
-              <p className="text-gray-400 text-sm mb-2">Saldo Total</p>
-              <p className="text-5xl font-bold text-gray-900">
+              <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 8px 0' }}>Saldo Total</p>
+              <p style={{ fontSize: '48px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>
                 ${(user?.balance_ris || 0).toFixed(2)}
               </p>
-              <p className="text-gray-400 text-sm mt-2">
+              <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>
                 Tasa actual: 1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} Bs
               </p>
             </div>
-            <div className="flex gap-3">
-              <div className="bg-green-50 p-4" style={{ borderRadius: '14px' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-green-500" strokeWidth={1.5} />
-                  <span className="text-gray-500 text-xs">Ingresos (30d)</span>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ backgroundColor: '#f0fdf4', padding: '16px', borderRadius: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <TrendingUp style={{ width: '16px', height: '16px', color: '#22c55e' }} strokeWidth={1.5} />
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>Ingresos (30d)</span>
                 </div>
-                <p className="text-lg font-bold text-gray-900">$0.00</p>
+                <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>$0.00</p>
               </div>
-              <div className="bg-red-50 p-4" style={{ borderRadius: '14px' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingDown className="w-4 h-4 text-red-500" strokeWidth={1.5} />
-                  <span className="text-gray-500 text-xs">Gastos (30d)</span>
+              <div style={{ backgroundColor: '#fef2f2', padding: '16px', borderRadius: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <TrendingDown style={{ width: '16px', height: '16px', color: '#ef4444' }} strokeWidth={1.5} />
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>Gastos (30d)</span>
                 </div>
-                <p className="text-lg font-bold text-gray-900">$0.00</p>
+                <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>$0.00</p>
               </div>
             </div>
           </div>
-          <div className="flex gap-4">
-            <Link
-              to="/recharge"
-              className="flex items-center justify-center gap-2 bg-[#6366f1] hover:bg-[#5558e3] text-white px-8 font-semibold text-sm transition-all"
-              style={{ borderRadius: '14px', height: '52px' }}
-              data-testid="recharge-button"
-            >
-              <Plus className="w-5 h-5" strokeWidth={2} />
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <Link to="/recharge" style={buttonPrimaryStyle} data-testid="recharge-button">
+              <Plus style={{ width: '20px', height: '20px' }} strokeWidth={2} />
               Recargar Saldo
             </Link>
-            <Link
-              to="/send"
-              className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-8 font-semibold text-sm transition-all"
-              style={{ borderRadius: '14px', height: '52px', border: '1px solid #d1d5db' }}
-              data-testid="send-button"
-            >
-              <ArrowUpRight className="w-5 h-5" strokeWidth={2} />
+            <Link to="/send" style={buttonSecondaryStyle} data-testid="send-button">
+              <ArrowUpRight style={{ width: '20px', height: '20px' }} strokeWidth={2} />
               Enviar Dinero
             </Link>
           </div>
         </div>
 
         {/* Bottom Grid */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* Activity */}
-          <div 
-            className="bg-white p-6"
-            style={{ borderRadius: '20px', border: '1px solid #e5e7eb' }}
-          >
-            <h2 className="text-lg font-bold text-gray-900 mb-6">Resumen de Actividad</h2>
-            <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          {/* Activity Summary */}
+          <div style={{ ...cardStyle, padding: '24px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: '0 0 24px 0' }}>
+              Resumen de Actividad
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', color: '#9ca3af', fontSize: '14px' }}>
               No hay datos de actividad aún.
             </div>
           </div>
 
           {/* Recent Transactions */}
-          <div 
-            className="bg-white p-6"
-            style={{ borderRadius: '20px', border: '1px solid #e5e7eb' }}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-gray-900">Transacciones Recientes</h2>
-              <Link to="/history" className="flex items-center gap-1 text-[#6366f1] hover:underline text-sm font-medium">
+          <div style={{ ...cardStyle, padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                Transacciones Recientes
+              </h2>
+              <Link to="/history" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6366f1', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
                 Ver todo
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight style={{ width: '16px', height: '16px' }} />
               </Link>
             </div>
-            <div className="flex flex-col items-center justify-center py-8">
-              <p className="text-gray-400 text-sm mb-3">No hay transacciones aún.</p>
-              <Link to="/recharge" className="text-[#6366f1] hover:underline text-sm font-medium">
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+              <p style={{ color: '#9ca3af', fontSize: '14px', margin: '0 0 12px 0' }}>No hay transacciones aún.</p>
+              <Link to="/recharge" style={{ color: '#6366f1', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
                 Recarga saldo para comenzar
               </Link>
             </div>
