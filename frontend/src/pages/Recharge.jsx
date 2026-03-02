@@ -300,30 +300,33 @@ export default function Recharge() {
     <div style={pageStyle} data-testid="recharge-page">
       {/* Header */}
       <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <button 
-            onClick={() => navigate(-1)} 
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              border: 'none',
-              backgroundColor: 'rgba(255,255,255,0.8)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            data-testid="back-button"
-          >
-            <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
-          </button>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Recargar Saldo</h1>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
-              Saldo actual: {(user?.balance_ris || 0).toFixed(2)} RIS
-            </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate(-1)} 
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                border: 'none',
+                backgroundColor: 'rgba(255,255,255,0.8)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              data-testid="back-button"
+            >
+              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+            </button>
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Recargar Saldo</h1>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                Saldo actual: {(user?.balance_ris || 0).toFixed(2)} RIS
+              </p>
+            </div>
           </div>
+          <NotificationBell />
         </div>
 
         {/* Method Selection */}
