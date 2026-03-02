@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, User, Mail, Phone, Shield, Lock, LogOut, 
-  CheckCircle, AlertCircle, Clock, ChevronRight
+  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import pushService from '../utils/pushService';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -18,6 +19,65 @@ export default function Profile() {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushSupported, setPushSupported] = useState(true);
+
+  useEffect(() => {
+    checkPushStatus();
+  }, []);
+
+  const checkPushStatus = async () => {
+    if (!pushService.isSupported()) {
+      setPushSupported(false);
+      return;
+    }
+    try {
+      const status = await pushService.getStatus();
+      setPushEnabled(status.enabled && status.subscribed);
+    } catch (error) {
+      console.error('Error checking push status:', error);
+    }
+  };
+
+  const handleTogglePush = async () => {
+    if (!pushSupported) {
+      toast.error('Tu navegador no soporta notificaciones push');
+      return;
+    }
+    
+    setPushLoading(true);
+    try {
+      if (pushEnabled) {
+        await pushService.unsubscribe();
+        setPushEnabled(false);
+        toast.success('Notificaciones desactivadas');
+      } else {
+        await pushService.init();
+        await pushService.subscribe();
+        setPushEnabled(true);
+        toast.success('¡Notificaciones activadas!');
+      }
+    } catch (error) {
+      console.error('Push toggle error:', error);
+      if (error.message?.includes('denegado')) {
+        toast.error('Debes permitir las notificaciones en tu navegador');
+      } else {
+        toast.error('Error al cambiar notificaciones');
+      }
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await pushService.sendTestNotification();
+      toast.success('Notificación de prueba enviada');
+    } catch (error) {
+      toast.error('Error al enviar notificación de prueba');
+    }
+  };
 
   const getVerificationStatus = () => {
     switch (user?.verification_status) {
