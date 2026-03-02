@@ -6,6 +6,7 @@ import {
   XCircle, Filter, ChevronDown, Plus, Eye, X
 } from 'lucide-react';
 import api from '../utils/api';
+import NotificationBell from '../components/NotificationBell';
 
 export default function History() {
   const navigate = useNavigate();
