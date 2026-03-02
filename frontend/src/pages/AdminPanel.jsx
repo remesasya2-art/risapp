@@ -364,7 +364,7 @@ export default function AdminPanel() {
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{k.full_name}</h3>
                     <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>{k.email}</p>
-                    <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>CPF: {k.cpf_number} • Doc: {k.document_number}</p>
+                    <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>CPF: {maskCPF(k.cpf_number)} • Doc: {k.document_number}</p>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => handleKycDecision(k.verification_id, true)} style={btnSuccess}>Aprobar</button>
