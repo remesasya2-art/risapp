@@ -1,172 +1,142 @@
 # RIS App - Product Requirements Document
 
-## Project Overview
-RIS (Remesas Internacionales Seguras) is a mobile and web money transfer application for sending remittances between Brazil and Venezuela.
+## Overview
+**Nombre:** RIS - Billetera Digital para Remesas
+**Descripción:** Aplicación web de billetera digital para transferencias de dinero entre Brasil y Venezuela
+**Idioma:** Español
 
-## Core Features
+## User Personas
+- **Usuarios en Brasil:** Trabajadores brasileños o venezolanos en Brasil que envían dinero a Venezuela
+- **Beneficiarios en Venezuela:** Familiares que reciben remesas
+- **Administradores:** Personal de RIS que procesa transacciones y verifica usuarios
 
-### Authentication
-- Email/password registration with SMS verification (Twilio)
-- Google OAuth login (Emergent-managed)
-- KYC verification with document upload and selfie
+## Core Requirements
 
-### Money Transfer
-- **Recharges**: PIX payments (Brazil) and VES bank transfers (Venezuela)
-- **Withdrawals**: Send RIS to Venezuelan bank accounts
-- Real-time exchange rates (auto-updates every 10 seconds)
+### Autenticación
+- [x] Login con email/contraseña
+- [x] Login con Google OAuth
+- [x] Registro de nuevos usuarios
+- [x] Sistema de roles (user, admin, super_admin)
 
-### Admin Panel
-- User management (view, verify KYC, soft-delete)
-- Transaction management (approve/reject recharges and withdrawals)
-- Support chat with image upload capability
-- Rate management
+### Dashboard
+- [x] Balance total en RIS
+- [x] Tasa de cambio actual (RIS/VES)
+- [x] Resumen de ingresos/gastos (30 días)
+- [x] Acceso rápido a Recargar y Enviar
+- [x] Transacciones recientes
+
+### Recargas
+- [x] PIX (Brasil) - Pago instantáneo
+- [x] Bolívares (Venezuela) - Transferencia bancaria
+- [x] Generación de QR Code PIX
+- [x] Subida de comprobante para VES
+
+### Envío de Remesas
+- [x] Wizard de 3 pasos (monto → beneficiario → confirmación)
+- [x] Gestión de beneficiarios guardados
+- [x] Cálculo automático de conversión RIS → VES
+- [x] Lista de bancos venezolanos
+
+### Historial
+- [x] Lista de transacciones con filtros
+- [x] Estados: Completado, Pendiente, Rechazado
+- [x] Detalles de cada transacción
+
+### Perfil
+- [x] Información del usuario
+- [x] Estado de verificación KYC
+- [x] Cambio de contraseña
+- [x] Cerrar sesión
+
+### Soporte
+- [x] Chat con asistente virtual
+- [x] Preguntas frecuentes rápidas
+- [x] Historial de mensajes
+
+### Panel de Administración
+- [x] Resumen de estadísticas
+- [x] Gestión de retiros pendientes
+- [x] Gestión de recargas VES
+- [x] Lista de usuarios
+- [x] Verificaciones KYC pendientes
+- [x] Configuración de tasas de cambio
+
+## Design System - NexPay Style
+
+### Colores
+- **Fondo:** `radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)`
+- **Color primario:** `#6366f1` (índigo)
+- **Color éxito:** `#16a34a` (verde)
+- **Color error:** `#dc2626` (rojo)
+- **Color warning:** `#d97706` (ámbar)
+
+### Tipografía
+- **Fuente:** Inter, Helvetica, -apple-system, sans-serif
+- **Encabezados:** 20-28px, font-weight: 700
+- **Texto:** 14-16px, font-weight: 400-500
+
+### Componentes
+- **Tarjetas:** border-radius: 24px, box-shadow sutil, fondo blanco
+- **Botones:** border-radius: 14px, height: 56px, font-weight: 600
+- **Inputs:** border-radius: 14px, height: 56px, border: 1px solid #d1d5db
+- **Badges:** border-radius: 9999px (pill)
 
 ## Technical Architecture
 
-### Infrastructure (Production)
-- **Frontend**: Cloudflare Pages (web app)
-- **Backend**: Railway (FastAPI)
-- **Database**: Railway (MongoDB)
-- **CI/CD**: GitHub -> Railway auto-deploy
+### Frontend
+- **Framework:** React + Vite
+- **Styling:** Tailwind CSS v4 + Inline styles
+- **State:** React Context API
+- **Router:** React Router v6
 
-### Tech Stack
-- **Frontend**: Expo (React Native), expo-router
-- **Backend**: FastAPI (Python)
-- **Database**: MongoDB (Motor async driver)
-- **SMS**: Twilio
-- **Payments**: Mercado Pago (PIX)
+### Backend
+- **Framework:** FastAPI (Python)
+- **Database:** MongoDB
+- **Authentication:** JWT tokens
 
-## What's Been Implemented
+### Deployment
+- **Frontend:** Cloudflare Pages (Railway de producción)
+- **Backend:** Railway
+- **Preview:** Emergent Platform
 
-### Session: 2026-02-24
-- **Real-Time Exchange Rate System COMPLETED**:
-  - Created `RateContext.tsx` - Global context that polls `/api/rate` every 10 seconds
-  - Wrapped entire app with `RateProvider` in `_layout.tsx`
-  - Refactored `index.tsx` (Dashboard) to use `useRate()` hook
-  - Refactored `send.tsx` (Enviar a Venezuela) to use `useRate()` hook
-  - Refactored `recharge-ves.tsx` (Recargar con Bolívares) to use `useRate()` hook
-  - Removed all duplicate rate-fetching logic from individual pages
-  - All screens now show consistent rates: ris_to_ves and ves_to_ris
-  - Sidebar widget shows "EN VIVO" (live) indicator with real-time rates
+## Completed Work - March 2, 2026
 
-### Session: 2026-02-13
-- **PIX Pending Transaction Feature**:
-  - New endpoint `GET /api/pix/pending` to retrieve pending PIX transactions
-  - Auto-detection of expired transactions (>30 minutes)
-  - Frontend automatically shows pending transaction when user returns to recharge screen
-  - Shows "pending_review" status when proof has been uploaded
-  - User can cancel pending transaction and create a new one
+### Bug Fixes
+- [x] Dashboard balance card not rendering - FIXED (changed to inline styles due to Tailwind v4 compatibility)
 
-- **Optional PIX Voucher Upload**:
-  - Added "Listo, ya pagué" primary button for users who completed payment
-  - Voucher upload section now marked as "optional" with "Acelera la verificación" badge
-  - Users can rely on automatic Mercado Pago verification without uploading proof
+### Redesign
+- [x] Login.jsx - NexPay style (previously approved)
+- [x] Register.jsx - NexPay style (previously done)
+- [x] Dashboard.jsx - Complete redesign with inline styles
+- [x] Recharge.jsx - Complete redesign
+- [x] Send.jsx - Complete redesign
+- [x] History.jsx - Complete redesign
+- [x] Profile.jsx - Complete redesign
+- [x] Support.jsx - Complete redesign
+- [x] AdminPanel.jsx - Complete redesign
 
-- **Enhanced Support Chat**:
-  - Real-time connection status indicator (online/reconnecting/offline)
-  - Automatic message retry with exponential backoff (up to 3 retries)
-  - Quick reply buttons for common questions
-  - Visual feedback for message status (sending/sent/error)
-  - Tap-to-retry for failed messages
-  - Connection warning banner when offline
-  - Vibration notification for new admin messages (mobile)
-  - Improved UI with better styling and animations
+### Localization
+- [x] All UI text translated to Spanish
 
-- **Push Notifications System**:
-  - Implemented Expo Push Notifications API for mobile devices
-  - Added `send_push_notification()` function in backend using Expo Push API
-  - Added `send_push_to_user()` and `send_push_to_admins()` helper functions
-  - Modified `create_notification()` to automatically send push notifications
-  - New endpoints:
-    - `POST /api/push/test` - Test push notification for current user
-    - `POST /api/push/send-to-user/{user_id}` - Admin endpoint to send push to specific user
-  - Re-enabled push notification setup in AuthContext.tsx
-  - Push notifications triggered on: transaction updates, support messages, verifications
+## Testing Results
+- **Frontend Testing:** 100% pass rate (16/16 tests)
+- **All pages verified:** Login, Dashboard, Recharge, Send, History, Profile, Support, Admin Panel
+- **Design consistency verified:** NexPay style applied across all pages
 
-### Previous Sessions
-- Full infrastructure migration to Railway (backend + database)
-- Admin panel redesign with professional dark theme
-- User soft-delete functionality for super_admin
-- Image upload in admin support chat
-- Gallery upload option for PIX proofs
-- Unique constraints for email and CPF
-- Exchange rate bug fixes
-- Pull-to-refresh cache-busting improvements
-
-## Pending Tasks
+## Pending/Future Tasks
 
 ### P1 - High Priority
-- **Stripe Integration**: Blocked on user's Stripe account activation
+- [ ] Implement Web Push Notifications (user requested)
 
-### P2 - Future Enhancements
-- Push notifications verification (waiting for user to re-open mobile app)
-- Automate Cloudflare deployment from GitHub
+### P2 - Medium Priority
+- [ ] Stripe integration (blocked until user activates Stripe account)
 
 ### P3 - Low Priority
-- Refactor GlobalHeader.tsx usage across all screens
-- Configure ESLint properly for TypeScript
+- [ ] Dark mode support
+- [ ] Mobile app (React Native)
+- [ ] Analytics dashboard
 
-## Completed Tasks (2026-02-27)
-- **Dashboard**: Professional redesign with balance card, quick actions, live exchange rate
-- **Recharge Page**: Improved PIX/VES method selection with clear pricing
-- **Support Page**: Enhanced chat interface with quick questions
-- **History Page**: Consistent blue header, better transaction cards
-- **Send Page**: Multi-step wizard for remittances
-- **Profile Page**: User info display with verification status
-- **Admin Panel**: Complete with tabs (Retiros, Recargas, Usuarios, KYC, Tasas), filters, and modals
-
-## Recent Fixes (2026-02-27)
-
-### UI/UX Improvements - Professional Design Update
-- **Dashboard Redesigned**: New layout with prominent balance card, quick actions grid, and improved navigation
-- **Recharge Page Improved**: Better method selection cards with clear pricing, enhanced PIX form
-- **Support Page Enhanced**: Professional chat interface with quick question buttons
-- **History Page Updated**: Changed from purple to blue header for consistency, better transaction cards with status badges
-- **Mobile Responsive**: All pages optimized for mobile devices
-
-### Bug Fixes - PIX Recharge & Support Button
-- **PIX Recharge FIXED**: Frontend now correctly sends `{ amount_brl, payer_cpf }` payload to `/api/pix/create`
-- **Support Button FIXED**: Dashboard support button now navigates to internal `/support` page instead of WhatsApp
-- **Support Route Added**: Added `/support` route to App.jsx, linking to the existing Support.jsx chat page
-
-### Testing Status
-- All frontend tests PASSED (iteration_6.json)
-- Login flow verified
-- Support chat functionality verified
-- PIX form fields verified (amount + CPF)
-
-## Recent Fixes (2026-02-24)
-
-### Real-Time Exchange Rates Fixed
-- All screens now use centralized `RateContext` for consistent rate display
-- Rate polling every 10 seconds ensures near real-time updates
-- Dashboard shows: "1 RIS = X VES" 
-- Recharge VES shows: "X VES = 1 RIS" (for VES to RIS conversion)
-- Send screen shows: "1 RIS = X VES" (for RIS to VES conversion)
-
-## Key Endpoints
-
-### Exchange Rates
-- `GET /api/rate` - Get current exchange rates (ris_to_ves, ves_to_ris, ris_to_brl)
-
-### PIX Payments
-- `POST /api/pix/create` - Create PIX payment
-- `GET /api/pix/pending` - Get pending PIX transaction
-- `POST /api/pix/upload-proof` - Upload payment proof
-- `POST /api/pix/cancel` - Cancel pending PIX
-
-### User Management
-- `POST /api/auth/login-password` - Login
-- `POST /api/auth/register` - Register
-- `GET /api/auth/me` - Get current user
-- `DELETE /api/admin/users/{user_id}` - Soft delete user
-
-## Test Credentials
-- **Super Admin**: marshalljulio46@gmail.com / Admin2025!
-- **Test User 1**: test@ris.app / Test1234!
-- **Test User 2**: prueba@ris.app / Prueba123!
-
-## Deployment URLs
-- **Frontend**: https://risapp.pages.dev (Cloudflare)
-- **Backend**: https://risapp-production.up.railway.app (Railway)
-- **Preview**: https://app-style-update.preview.emergentagent.com (Emergent)
+## Credentials
+- **Super Admin:**
+  - Email: marshalljulio46@gmail.com
+  - Password: Admin2025!
