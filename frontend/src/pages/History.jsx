@@ -127,6 +127,8 @@ export default function History() {
             Filtrar
             <ChevronDown style={{ width: '16px', height: '16px', transform: showFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
           </button>
+            <NotificationBell />
+          </div>
         </div>
 
         {/* Filters */}
