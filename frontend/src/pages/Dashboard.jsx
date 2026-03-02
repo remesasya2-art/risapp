@@ -37,7 +37,7 @@ export default function Dashboard() {
       data-testid="dashboard-page"
     >
       {/* Sidebar */}
-      <aside className="w-[260px] bg-white border-r border-gray-100 flex flex-col fixed h-full">
+      <aside className="w-[260px] bg-white border-r border-gray-100 flex flex-col fixed h-full" style={{ zIndex: 50 }}>
         {/* Logo */}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
