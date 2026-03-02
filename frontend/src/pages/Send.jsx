@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import NotificationBell from '../components/NotificationBell';
 
 const VENEZUELAN_BANKS = [
   { code: '0102', name: 'Banco de Venezuela' },
