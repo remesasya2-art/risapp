@@ -75,7 +75,7 @@ export default function RechargeVES() {
     }
   };
 
-  // Copiar todos los datos de pago
+  // Copiar todos los datos de pago (solo datos relevantes)
   const copyAllPaymentData = async () => {
     if (!selectedBank || !paymentType) return;
     
@@ -83,20 +83,13 @@ export default function RechargeVES() {
     let allData = '';
     
     if (paymentType === 'pago_movil') {
-      allData = `📱 PAGO MÓVIL - ${bankData.name.toUpperCase()}
-━━━━━━━━━━━━━━━━━━━━
-📞 Teléfono: ${bankData.pago_movil.telefono}
-🪪 Cédula: ${bankData.pago_movil.ci}
-🏦 Banco: ${bankData.pago_movil.banco}
-💰 Monto: ${parseFloat(amountVES).toLocaleString()} VES`;
+      allData = `${bankData.pago_movil.telefono}
+${bankData.pago_movil.ci}
+${bankData.code}`;
     } else {
-      allData = `💳 TRANSFERENCIA - ${bankData.name.toUpperCase()}
-━━━━━━━━━━━━━━━━━━━━
-👤 Titular: ${bankData.transferencia.titular}
-🔢 Cuenta: ${bankData.transferencia.cuenta}
-🪪 Cédula: ${bankData.transferencia.ci}
-🏦 Banco: ${bankData.name}
-💰 Monto: ${parseFloat(amountVES).toLocaleString()} VES`;
+      allData = `${bankData.transferencia.titular}
+${bankData.transferencia.cuenta}
+${bankData.transferencia.ci}`;
     }
     
     try {
