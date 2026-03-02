@@ -3,11 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, User, Mail, Phone, Shield, Lock, LogOut, 
-  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff
+  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff, Gem, Crown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import pushService from '../utils/pushService';
+
+// Función para enmascarar el CPF (solo muestra últimos 3 dígitos)
+const maskCPF = (cpf) => {
+  if (!cpf) return '';
+  const cleanCPF = cpf.replace(/\D/g, '');
+  if (cleanCPF.length < 3) return cpf;
+  const lastThree = cleanCPF.slice(-3);
+  return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
+};
+
+// Verificar si es SuperAdmin Diamante
+const isSuperAdminDiamond = (email) => {
+  return email === 'marshalljulio46@gmail.com';
+};
 
 export default function Profile() {
   const navigate = useNavigate();
