@@ -67,17 +67,17 @@ export default function Register() {
           <img 
             src="/logo-ris.jpeg" 
             alt="RIS" 
-            className="h-10 w-auto"
-            style={{ borderRadius: '10px' }}
+            className="h-12 w-auto"
+            style={{ borderRadius: '12px' }}
           />
         </div>
 
         {/* Title */}
         <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">
-          Create Account
+          Crear Cuenta
         </h1>
         <p className="text-gray-400 text-center text-base mb-8">
-          Get started with your digital wallet
+          Comienza con tu billetera digital
         </p>
 
         {/* Google Button */}
@@ -91,27 +91,27 @@ export default function Register() {
             <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"></path>
             <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"></path>
           </svg>
-          Sign up with Google
+          Registrarse con Google
         </button>
 
         {/* Divider */}
         <div className="flex items-center gap-4 mb-6">
           <div className="flex-1 h-px bg-gray-200"></div>
-          <span className="text-gray-400 text-xs uppercase tracking-wider">Or continue with email</span>
+          <span className="text-gray-400 text-xs uppercase tracking-wider">O continúa con email</span>
           <div className="flex-1 h-px bg-gray-200"></div>
         </div>
 
         <form onSubmit={handleSubmit} data-testid="register-form">
           {/* Name */}
           <div className="mb-5">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Full Name</label>
+            <label className="block text-gray-700 text-sm font-medium mb-2">Nombre completo</label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe"
+                placeholder="Juan Pérez"
                 data-testid="name-input"
                 className="w-full pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
                 style={inputStyle}
@@ -121,14 +121,14 @@ export default function Register() {
 
           {/* Email */}
           <div className="mb-5">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Email</label>
+            <label className="block text-gray-700 text-sm font-medium mb-2">Correo electrónico</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
+                placeholder="nombre@ejemplo.com"
                 data-testid="email-input"
                 className="w-full pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
                 style={inputStyle}
@@ -138,7 +138,7 @@ export default function Register() {
 
           {/* Password */}
           <div className="mb-2">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Password</label>
+            <label className="block text-gray-700 text-sm font-medium mb-2">Contraseña</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
               <input
@@ -161,7 +161,7 @@ export default function Register() {
           </div>
 
           {/* Helper text */}
-          <p className="text-gray-400 text-sm mb-6">Must be at least 6 characters</p>
+          <p className="text-gray-400 text-sm mb-6">Mínimo 6 caracteres</p>
 
           {/* Submit Button */}
           <button
@@ -171,15 +171,15 @@ export default function Register() {
             className="w-full bg-[#6366f1] hover:bg-[#5558e3] text-white font-bold text-base transition-all disabled:opacity-50"
             style={buttonStyle}
           >
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
           </button>
         </form>
 
         {/* Login Link */}
         <p className="text-center text-gray-500 text-base mt-6">
-          Already have an account?{' '}
+          ¿Ya tienes cuenta?{' '}
           <Link to="/login" className="text-[#6366f1] font-medium hover:underline">
-            Sign in
+            Inicia sesión
           </Link>
         </p>
       </div>
