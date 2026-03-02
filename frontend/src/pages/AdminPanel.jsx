@@ -401,20 +401,67 @@ export default function AdminPanel() {
 
         {/* Rates Tab */}
         {activeTab === 'rates' && (
-          <div style={{ maxWidth: '500px' }}>
+          <div style={{ maxWidth: '600px' }}>
             <div style={{ ...cardStyle, padding: '24px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>Configurar Tasas de Cambio</h3>
-              <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '24px' }}>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>Tasa actual</p>
-                <p style={{ fontSize: '28px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
+              
+              {/* Current Rates Display */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ padding: '20px', backgroundColor: '#dbeafe', borderRadius: '14px' }}>
+                  <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>ENVÍOS (RIS → VES)</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para retiros a Venezuela</p>
+                </div>
+                <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '14px' }}>
+                  <p style={{ fontSize: '12px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>RECARGAS (VES → RIS)</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>{rates?.ves_to_ris?.toFixed(2) || '0.00'} VES = 1 RIS</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para recargas con Bolívares</p>
+                </div>
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Nueva tasa (VES por 1 RIS)</label>
-                <input type="number" value={newRate} onChange={(e) => setNewRate(e.target.value)}
-                  style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none' }}
-                  placeholder={rates?.ris_to_ves?.toString() || '0'} data-testid="new-rate-input" />
+
+              {/* Update Rates Form */}
+              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '24px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#374151', margin: '0 0 16px 0' }}>Actualizar Tasas</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                      RIS → VES (Envíos)
+                    </label>
+                    <input 
+                      type="number" 
+                      value={newRate} 
+                      onChange={(e) => setNewRate(e.target.value)}
+                      style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none' }}
+                      placeholder={rates?.ris_to_ves?.toString() || '0'} 
+                      data-testid="new-rate-input" 
+                    />
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>VES por cada 1 RIS enviado</p>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                      VES → RIS (Recargas)
+                    </label>
+                    <input 
+                      type="number" 
+                      value={newRateVesToRis} 
+                      onChange={(e) => setNewRateVesToRis(e.target.value)}
+                      style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none' }}
+                      placeholder={rates?.ves_to_ris?.toString() || '0'} 
+                      data-testid="new-rate-ves-input" 
+                    />
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>VES necesarios para obtener 1 RIS</p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleUpdateRate} 
+                  style={{ ...btnPrimary, width: '100%', height: '50px' }} 
+                  data-testid="update-rate-button"
+                >
+                  Actualizar ambas tasas
+                </button>
               </div>
-              <button onClick={handleUpdateRate} style={{ ...btnPrimary, width: '100%', height: '50px' }} data-testid="update-rate-button">Actualizar tasa</button>
             </div>
           </div>
         )}
