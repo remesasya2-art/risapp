@@ -215,7 +215,7 @@ export default function History() {
                         <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{tx.beneficiary_data.bank}</p>
                       </div>
                     )}
-                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <div style={{
                         display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
                         borderRadius: '9999px', fontSize: '14px', fontWeight: '500', ...getStatusStyle(tx.status)
@@ -223,6 +223,23 @@ export default function History() {
                         {getStatusIcon(tx.status)}
                         {getStatusText(tx.status)}
                       </div>
+                      {/* Botón para ver comprobante */}
+                      {tx.type === 'withdrawal' && tx.status === 'completed' && tx.proof_image && (
+                        <button
+                          onClick={() => openVoucher(tx)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                            borderRadius: '9999px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                            backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none',
+                            transition: 'all 0.2s'
+                          }}
+                          data-testid={`view-voucher-${tx.transaction_id}`}
+                          title="Ver comprobante de pago"
+                        >
+                          <Eye style={{ width: '16px', height: '16px' }} />
+                          Ver comprobante
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
