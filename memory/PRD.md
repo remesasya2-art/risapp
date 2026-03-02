@@ -111,12 +111,25 @@
 - [x] Recharge.jsx - Complete redesign
 - [x] Send.jsx - Complete redesign
 - [x] History.jsx - Complete redesign
-- [x] Profile.jsx - Complete redesign
+- [x] Profile.jsx - Complete redesign with push notifications toggle
 - [x] Support.jsx - Complete redesign
 - [x] AdminPanel.jsx - Complete redesign
 
 ### Localization
 - [x] All UI text translated to Spanish
+
+### Web Push Notifications (NEW)
+- [x] Backend service (web_push_service.py) with pywebpush
+- [x] VAPID key generation and configuration
+- [x] API endpoints: /push/vapid-public-key, /push/subscribe, /push/unsubscribe, /push/status, /push/test
+- [x] Service Worker (sw.js) for handling push events
+- [x] Frontend push service (pushService.js)
+- [x] Toggle in Profile page to enable/disable notifications
+- [x] Test notification button
+
+### Integrations
+- [x] Mercado Pago PIX - Already implemented and working
+- [ ] Stripe - Removed (user decision to use Mercado Pago instead)
 
 ## Testing Results
 - **Frontend Testing:** 100% pass rate (16/16 tests)
