@@ -99,7 +99,7 @@ export default function Dashboard() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 ml-[260px] p-8">
+      <main className="flex-1 p-8" style={{ marginLeft: '260px' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
