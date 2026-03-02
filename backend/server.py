@@ -1776,7 +1776,7 @@ async def decide_verification(decision: VerificationDecision, admin_user: User =
     
     await db.notifications.insert_one(notification)
     
-    # Send push notification to user
+    # Send push notification to user (FCM for mobile)
     if user and user.get("fcm_token"):
         try:
             title = "✅ ¡Cuenta Verificada!" if decision.approved else "❌ Verificación Rechazada"
@@ -1784,6 +1784,22 @@ async def decide_verification(decision: VerificationDecision, admin_user: User =
             await send_push_notification(user["fcm_token"], title, message)
         except Exception as e:
             logger.error(f"Error sending push to user: {e}")
+    
+    # Send web push notification
+    if decision.approved:
+        await send_web_push_to_user(
+            user_id=decision.user_id,
+            title="🎉 ¡Cuenta Verificada!",
+            body="Tu identidad ha sido verificada. Ya puedes usar todas las funciones de RIS.",
+            url="/profile"
+        )
+    else:
+        await send_web_push_to_user(
+            user_id=decision.user_id,
+            title="⚠️ Verificación Rechazada",
+            body=f"Tu verificación fue rechazada. Motivo: {decision.rejection_reason or 'Documentos no válidos'}",
+            url="/verification"
+        )
     
     logger.info(f"Verification {'approved' if decision.approved else 'rejected'} for user {decision.user_id} by admin {admin_user.user_id}")
     
