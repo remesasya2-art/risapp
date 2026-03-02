@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, 
-  XCircle, Filter, ChevronDown, Plus
+  XCircle, Filter, ChevronDown, Plus, Eye, X
 } from 'lucide-react';
 import api from '../utils/api';
 
@@ -14,6 +14,8 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [selectedVoucher, setSelectedVoucher] = useState(null);
 
   useEffect(() => {
     loadTransactions();
