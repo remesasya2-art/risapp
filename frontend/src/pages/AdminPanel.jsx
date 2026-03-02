@@ -379,41 +379,77 @@ export default function AdminPanel() {
 
         {/* Users Tab */}
         {activeTab === 'users' && (
-          <div style={{ ...cardStyle, overflow: 'hidden' }}>
-            {loading ? (
-              <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead style={{ backgroundColor: '#f8f9fa' }}>
-                    <tr>
-                      {['Usuario', 'Balance', 'Estado', 'Rol'].map(h => (
-                        <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr key={u.user_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`user-${u.user_id}`}>
-                        <td style={{ padding: '16px' }}>
-                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{u.name}</p>
-                          <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{u.email}</p>
-                        </td>
-                        <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>{u.balance_ris?.toFixed(2)} RIS</td>
-                        <td style={{ padding: '16px' }}>
-                          <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600',
-                            backgroundColor: u.verification_status === 'verified' ? '#dcfce7' : '#f3f4f6',
-                            color: u.verification_status === 'verified' ? '#16a34a' : '#6b7280' }}>
-                            {u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', textTransform: 'capitalize' }}>{u.role || 'user'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Search bar */}
+            <div style={{ ...cardStyle, padding: '16px' }}>
+              <div style={{ position: 'relative' }}>
+                <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar usuario por nombre o email..." 
+                  value={userSearchQuery} 
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '12px 12px 12px 40px', borderRadius: '12px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }} 
+                />
               </div>
-            )}
+            </div>
+
+            {/* Users List */}
+            <div style={{ ...cardStyle, overflow: 'hidden' }}>
+              {loading ? (
+                <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
+              ) : filteredUsers.length === 0 ? (
+                <div style={{ padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No se encontraron usuarios</p></div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ backgroundColor: '#f8f9fa' }}>
+                      <tr>
+                        {['Usuario', 'Balance', 'Estado', 'Rol', 'Acciones'].map(h => (
+                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((u) => (
+                        <tr key={u.user_id} style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} 
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            data-testid={`user-${u.user_id}`}>
+                          <td style={{ padding: '16px' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{u.name}</p>
+                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{u.email}</p>
+                          </td>
+                          <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>{u.balance_ris?.toFixed(2)} RIS</td>
+                          <td style={{ padding: '16px' }}>
+                            <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600',
+                              backgroundColor: u.verification_status === 'verified' ? '#dcfce7' : '#f3f4f6',
+                              color: u.verification_status === 'verified' ? '#16a34a' : '#6b7280' }}>
+                              {u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', textTransform: 'capitalize' }}>{u.role || 'user'}</td>
+                          <td style={{ padding: '16px' }}>
+                            <button 
+                              onClick={() => loadUserHistory(u.user_id)}
+                              style={{ 
+                                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+                                backgroundColor: '#dbeafe', color: '#2563eb', border: 'none',
+                                borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                              }}
+                              data-testid={`view-user-${u.user_id}`}
+                            >
+                              <Eye style={{ width: '14px', height: '14px' }} />
+                              Ver historial
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
