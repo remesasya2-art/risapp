@@ -2192,6 +2192,14 @@ async def approve_ves_recharge(request: ApproveVESRechargeRequest, admin_user: U
             data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
         )
         
+        # Send web push notification
+        await send_web_push_to_user(
+            user_id=user_id,
+            title="💰 Recarga Completada",
+            body=f"Tu recarga de {amount_ris:.2f} RIS ha sido acreditada a tu cuenta.",
+            url="/history"
+        )
+        
         logger.info(f"VES recharge approved: {request.transaction_id} - {amount_ris} RIS credited to {user_id}")
         return {"message": "Recarga aprobada y RIS acreditados"}
     
@@ -2215,6 +2223,14 @@ async def approve_ves_recharge(request: ApproveVESRechargeRequest, admin_user: U
             message=f"Tu recarga de {amount_ves:.2f} VES fue rechazada. Motivo: {request.rejection_reason or 'Datos del comprobante incorrectos'}",
             notification_type="ves_recharge_rejected",
             data={"transaction_id": request.transaction_id, "reason": request.rejection_reason}
+        )
+        
+        # Send web push notification
+        await send_web_push_to_user(
+            user_id=user_id,
+            title="❌ Recarga Rechazada",
+            body=f"Tu recarga fue rechazada. Motivo: {request.rejection_reason or 'Datos incorrectos'}",
+            url="/history"
         )
         
         logger.info(f"VES recharge rejected: {request.transaction_id} - Reason: {request.rejection_reason}")
