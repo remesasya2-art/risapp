@@ -137,9 +137,13 @@ export default function Recharge() {
   };
 
   const handleCopyPix = () => {
-    if (pixData?.pix_code) {
-      navigator.clipboard.writeText(pixData.pix_code);
+    // El backend devuelve qr_code, no pix_code
+    const pixCode = pixData?.qr_code || pixData?.pix_code;
+    if (pixCode) {
+      navigator.clipboard.writeText(pixCode);
       toast.success('Código PIX copiado');
+    } else {
+      toast.error('No hay código PIX disponible');
     }
   };
 
