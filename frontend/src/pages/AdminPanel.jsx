@@ -9,6 +9,15 @@ import {
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 
+// Función para enmascarar el CPF (solo muestra últimos 3 dígitos)
+const maskCPF = (cpf) => {
+  if (!cpf) return '';
+  const cleanCPF = cpf.replace(/\D/g, '');
+  if (cleanCPF.length < 3) return cpf;
+  const lastThree = cleanCPF.slice(-3);
+  return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
+};
+
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
