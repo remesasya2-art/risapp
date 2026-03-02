@@ -21,7 +21,7 @@ const maskCPF = (cpf) => {
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
-  { key: 'recharges', label: 'Recargas', icon: ArrowDownLeft },
+  { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
   { key: 'users', label: 'Usuarios', icon: Users },
   { key: 'kyc', label: 'KYC', icon: Shield },
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
@@ -119,6 +119,30 @@ export default function AdminPanel() {
       loadData(); 
     } 
     catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar'); }
+  };
+
+  // Aprobar recarga VES
+  const handleApproveRechargeVES = async (txId) => {
+    if (!confirm('¿Aprobar esta recarga? Se acreditará el saldo al usuario.')) return;
+    try {
+      await api.post('/admin/recharges/ves/approve', { transaction_id: txId, approved: true });
+      toast.success('Recarga aprobada - Saldo acreditado');
+      loadData();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error al aprobar'); }
+  };
+
+  // Rechazar recarga VES
+  const handleRejectRechargeVES = async (txId) => {
+    if (!confirm('¿Rechazar esta recarga? El usuario será notificado.')) return;
+    try {
+      await api.post('/admin/recharges/ves/approve', { 
+        transaction_id: txId, 
+        approved: false, 
+        rejection_reason: 'Comprobante inválido o datos incorrectos' 
+      });
+      toast.success('Recarga rechazada');
+      loadData();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar'); }
   };
 
   const handleApproveRecharge = async (txId) => {
@@ -354,26 +378,95 @@ export default function AdminPanel() {
         )}
 
         {/* Recharges Tab */}
+        {/* Recharges VES Tab */}
         {activeTab === 'recharges' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ ...cardStyle, padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>Recargas VES Pendientes</h3>
+              <button onClick={loadData} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#dbeafe', color: '#2563eb', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <RefreshCw style={{ width: '14px', height: '14px' }} />
+                Actualizar
+              </button>
+            </div>
+
             {loading ? (
               <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
             ) : recharges.length === 0 ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No hay recargas pendientes</p></div>
-            ) : recharges.map((r) => (
-              <div key={r.transaction_id} style={{ ...cardStyle, padding: '20px' }} data-testid={`recharge-${r.transaction_id}`}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-                  <div>
-                    <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{r.user_email}</p>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{r.amount_input} VES → {r.amount_output?.toFixed(2)} RIS</p>
+              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#f3f4f6', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ArrowDownLeft style={{ width: '28px', height: '28px', color: '#9ca3af' }} />
+                </div>
+                <p style={{ color: '#6b7280', margin: 0 }}>No hay recargas VES pendientes</p>
+              </div>
+            ) : (
+              recharges.map((r) => (
+                <div key={r.transaction_id} style={{ ...cardStyle, padding: '24px', overflow: 'hidden' }} data-testid={`recharge-${r.transaction_id}`}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
+                    <div>
+                      <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{r.user_name || r.user_email}</p>
+                      <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>{r.user_email}</p>
+                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                        {new Date(r.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <span style={{ padding: '6px 14px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', backgroundColor: '#fef3c7', color: '#d97706' }}>
+                      ⏳ Pendiente
+                    </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => handleApproveRecharge(r.transaction_id)} style={btnSuccess}>Aprobar</button>
-                    <button style={btnDanger}>Rechazar</button>
+
+                  {/* Amount Info */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                    <div style={{ padding: '16px', backgroundColor: '#dbeafe', borderRadius: '12px' }}>
+                      <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>PAGADO</p>
+                      <p style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>{parseFloat(r.amount_ves || r.amount_input || 0).toLocaleString()} VES</p>
+                    </div>
+                    <div style={{ padding: '16px', backgroundColor: '#dcfce7', borderRadius: '12px' }}>
+                      <p style={{ fontSize: '12px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>A ACREDITAR</p>
+                      <p style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>{parseFloat(r.amount_ris || r.amount_output || 0).toFixed(2)} RIS</p>
+                    </div>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div style={{ padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px', marginBottom: '16px' }}>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Método de pago</p>
+                    <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', margin: 0 }}>
+                      {r.bank === 'banco_venezuela' ? '🏦 Banco de Venezuela' : r.bank === 'banesco' ? '🏦 Banesco' : r.bank || 'No especificado'} • {r.payment_method === 'pago_movil' ? '📱 Pago Móvil' : r.payment_method === 'transferencia' ? '💳 Transferencia' : r.payment_method || 'No especificado'}
+                    </p>
+                  </div>
+
+                  {/* Voucher Image */}
+                  {r.voucher_image && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <p style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>Comprobante adjunto:</p>
+                      <img 
+                        src={r.voucher_image} 
+                        alt="Comprobante" 
+                        style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', borderRadius: '12px', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button 
+                      onClick={() => handleApproveRechargeVES(r.transaction_id)} 
+                      style={{ ...btnSuccess, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                      <Eye style={{ width: '16px', height: '16px' }} />
+                      Aprobar Recarga
+                    </button>
+                    <button 
+                      onClick={() => handleRejectRechargeVES(r.transaction_id)} 
+                      style={{ ...btnDanger, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                      <X style={{ width: '16px', height: '16px' }} />
+                      Rechazar
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 

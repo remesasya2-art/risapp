@@ -2047,6 +2047,7 @@ class VESRechargeRequest(BaseModel):
     amount_ris: float
     payment_method: str  # 'pago_movil' or 'transferencia'
     voucher_image: str  # base64
+    bank: Optional[str] = None  # banco_venezuela or banesco
 
 @api_router.post("/recharge/ves")
 async def create_ves_recharge(request: VESRechargeRequest, current_user: User = Depends(get_current_user)):

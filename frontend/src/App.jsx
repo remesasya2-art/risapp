@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Send from './pages/Send';
 import Recharge from './pages/Recharge';
+import RechargeVES from './pages/RechargeVES';
 import Profile from './pages/Profile';
 import History from './pages/History';
 import Verification from './pages/Verification';
@@ -71,6 +72,7 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
       <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
+      <Route path="/recharge-ves" element={<ProtectedRoute><RechargeVES /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
       <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />

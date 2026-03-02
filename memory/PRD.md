@@ -113,6 +113,14 @@
 - [x] **Notification Bell:** Added notification bell icon with unread count to all main pages (Dashboard, Recharge, Send, History) - both desktop and mobile views
 - [x] **Notifications Page Fixed:** Resolved blank page issue and back button navigation
 - [x] **Admin User History:** Admin panel now shows complete user history with detailed modal - includes balance, stats, KYC info, all transactions, and beneficiaries
+- [x] **Support Chat with Refresh:** Added refresh button and conversation history loading for support chat with WhatsApp integration
+- [x] **VES Recharge System:** Complete VES recharge flow implemented with:
+  - Bank selection (Banco de Venezuela, Banesco)
+  - Payment type selection (Pago Móvil, Transferencia)
+  - Dynamic payment details with copy buttons
+  - Voucher/proof upload requirement
+  - Pending review status after submission
+  - Admin panel "Recargas VES" tab for approval/rejection
 
 ### Redesign
 - [x] Login.jsx - NexPay style (previously approved)

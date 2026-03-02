@@ -372,7 +372,7 @@ export default function Recharge() {
 
               {/* VES Option */}
               <button
-                onClick={() => setMethod('ves')}
+                onClick={() => navigate('/recharge-ves')}
                 style={{
                   padding: '24px',
                   borderRadius: '16px',
@@ -390,8 +390,8 @@ export default function Recharge() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Bolívares (Venezuela)</span>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Transferencia bancaria</p>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#2563eb', margin: '4px 0 0 0' }}>{rates.ves_to_ris.toFixed(0)} VES = 1 RIS</p>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Pago Móvil o Transferencia</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#2563eb', margin: '4px 0 0 0' }}>{rates?.ves_to_ris?.toFixed(0) || '0'} VES = 1 RIS</p>
                   </div>
                   <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
                 </div>
