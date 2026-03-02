@@ -1920,6 +1920,7 @@ async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(g
 # WITHDRAWAL ROUTES
 # =======================
 
+@api_router.post("/withdrawals")
 @api_router.post("/withdrawal/create")
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
     """Create withdrawal request (RIS -> VES)"""
