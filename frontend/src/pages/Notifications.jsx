@@ -15,9 +15,12 @@ export default function Notifications() {
   const loadNotifications = async () => {
     try {
       const response = await api.get('/notifications');
-      setNotifications(response.data || []);
+      // Handle both { notifications: [...] } and direct array response
+      const data = response.data;
+      setNotifications(Array.isArray(data) ? data : (data.notifications || []));
     } catch (error) {
       console.error('Error loading notifications:', error);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
