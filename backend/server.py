@@ -532,61 +532,72 @@ def generate_temp_password() -> str:
     return secrets.token_urlsafe(8)
 
 async def send_password_reset_email(email: str, temp_password: str):
-    """Send password reset email with temporary password"""
+    """Send password reset email with temporary password using Resend"""
+    if not RESEND_API_KEY:
+        logger.warning("Resend not configured - password reset email not sent")
+        return False
+    
     try:
-        # Simple email sending (you should configure with proper SMTP in production)
-        subject = "RIS App - Código de Recuperación de Contraseña"
-        body = f"""
-Hola,
-
-Has solicitado recuperar tu contraseña en RIS App.
-
-Tu código temporal de acceso es: {temp_password}
-
-Este código expira en 15 minutos.
-
-Si no solicitaste este cambio, ignora este mensaje.
-
-Saludos,
-Equipo RIS
-"""
-        # Log for now (in production, use proper email service)
-        logger.info(f"Password reset email for {email}: Temp password = {temp_password}")
+        # Get user name
+        user = await db.users.find_one({"email": email})
+        user_name = user.get('name', 'Usuario') if user else 'Usuario'
         
-        # Try to send via SMTP if configured
-        smtp_host = os.getenv('SMTP_HOST', '')
-        smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        smtp_user = os.getenv('SMTP_USER', '')
-        smtp_pass = os.getenv('SMTP_PASS', '')
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+        </head>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fc;">
+            <div style="background-color: #ffffff; border-radius: 16px; padding: 40px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #6366f1; margin: 0; font-size: 28px;">RIS App</h1>
+                    <p style="color: #9ca3af; margin: 5px 0 0 0;">Recuperación de Contraseña</p>
+                </div>
+                
+                <h2 style="color: #111827; margin-bottom: 20px;">¡Hola {user_name}!</h2>
+                
+                <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                    Has solicitado recuperar tu contraseña. Tu código temporal es:
+                </p>
+                
+                <div style="background-color: #fef3c7; border: 2px solid #f59e0b; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+                    <span style="font-size: 32px; font-weight: bold; color: #92400e; letter-spacing: 4px;">{temp_password}</span>
+                </div>
+                
+                <p style="color: #dc2626; font-size: 14px; line-height: 1.6; font-weight: 500;">
+                    ⚠️ Este código expira en <strong>15 minutos</strong>.
+                </p>
+                
+                <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+                    Si no solicitaste este cambio, ignora este mensaje. Tu cuenta está segura.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                
+                <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+                    © 2026 RIS App - Remesas Internacionales Seguras
+                </p>
+            </div>
+        </body>
+        </html>
+        """
         
-        if smtp_host and smtp_user:
-            msg = MIMEMultipart()
-            msg['From'] = smtp_user
-            msg['To'] = email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain'))
-            
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-            logger.info(f"Password reset email sent to {email}")
-        else:
-            # Fallback: create notification in-app
-            user = await db.users.find_one({"email": email})
-            if user:
-                await create_notification(
-                    user_id=user['user_id'],
-                    title="🔐 Código de Recuperación",
-                    message=f"Tu código temporal es: {temp_password}. Expira en 15 minutos.",
-                    notification_type="password_reset",
-                    data={"temp_password": temp_password}
-                )
-            logger.info(f"Password reset notification created for {email}")
-            
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [email],
+            "subject": f"🔐 RIS App - Código de Recuperación: {temp_password}",
+            "html": html_content
+        }
+        
+        # Run sync SDK in thread to keep FastAPI non-blocking
+        email_response = await asyncio.to_thread(resend.Emails.send, params)
+        
+        logger.info(f"🔐 Password reset email sent to {email} - ID: {email_response.get('id')}")
         return True
+        
     except Exception as e:
-        logger.error(f"Error sending password reset email: {e}")
+        logger.error(f"Error sending password reset email via Resend: {e}")
         return False
 
 # =======================
