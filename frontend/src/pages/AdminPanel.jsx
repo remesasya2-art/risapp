@@ -646,7 +646,9 @@ export default function AdminPanel() {
                       </div>
                       <div>
                         <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Fecha de registro</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{new Date(userHistory.user?.created_at).toLocaleDateString('es-ES')}</p>
+                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>
+                          {userHistory.user?.created_at ? new Date(userHistory.user.created_at).toLocaleDateString('es-ES') : 'No disponible'}
+                        </p>
                       </div>
                       <div>
                         <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Rol</p>
