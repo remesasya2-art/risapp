@@ -89,6 +89,11 @@ export default function History() {
     border: '1px solid #e5e7eb'
   };
 
+  const openVoucher = (tx) => {
+    setSelectedVoucher(tx);
+    setShowVoucherModal(true);
+  };
+
   return (
     <div style={pageStyle} data-testid="history-page">
       <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
