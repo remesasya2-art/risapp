@@ -413,7 +413,7 @@ export default function AdminPanel() {
 
         {/* Rates Tab */}
         {activeTab === 'rates' && (
-          <div style={{ maxWidth: '600px' }}>
+          <div style={{ maxWidth: '700px' }}>
             <div style={{ ...cardStyle, padding: '24px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>Configurar Tasas de Cambio</h3>
               
@@ -431,48 +431,57 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              {/* Update Rates Form */}
+              {/* Update Rates Form - Independent */}
               <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '24px' }}>
                 <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#374151', margin: '0 0 16px 0' }}>Actualizar Tasas</h4>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                  {/* RIS → VES Rate */}
+                  <div style={{ padding: '20px', backgroundColor: '#f0f9ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#2563eb', marginBottom: '12px' }}>
                       RIS → VES (Envíos)
                     </label>
                     <input 
                       type="number" 
                       value={newRate} 
                       onChange={(e) => setNewRate(e.target.value)}
-                      style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none' }}
+                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px' }}
                       placeholder={rates?.ris_to_ves?.toString() || '0'} 
                       data-testid="new-rate-input" 
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>VES por cada 1 RIS enviado</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>VES por cada 1 RIS enviado</p>
+                    <button 
+                      onClick={handleUpdateRate} 
+                      style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#2563eb' }} 
+                      data-testid="update-rate-button"
+                    >
+                      Actualizar RIS → VES
+                    </button>
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+
+                  {/* VES → RIS Rate */}
+                  <div style={{ padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#16a34a', marginBottom: '12px' }}>
                       VES → RIS (Recargas)
                     </label>
                     <input 
                       type="number" 
                       value={newRateVesToRis} 
                       onChange={(e) => setNewRateVesToRis(e.target.value)}
-                      style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none' }}
+                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px' }}
                       placeholder={rates?.ves_to_ris?.toString() || '0'} 
                       data-testid="new-rate-ves-input" 
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>VES necesarios para obtener 1 RIS</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>VES necesarios para obtener 1 RIS</p>
+                    <button 
+                      onClick={handleUpdateRateVesToRis} 
+                      style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#16a34a' }} 
+                      data-testid="update-rate-ves-button"
+                    >
+                      Actualizar VES → RIS
+                    </button>
                   </div>
                 </div>
-
-                <button 
-                  onClick={handleUpdateRate} 
-                  style={{ ...btnPrimary, width: '100%', height: '50px' }} 
-                  data-testid="update-rate-button"
-                >
-                  Actualizar ambas tasas
-                </button>
               </div>
             </div>
           </div>
