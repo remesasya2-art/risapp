@@ -3,13 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
-  ArrowLeft, ArrowUpRight, User, CreditCard, Phone, Building, 
-  Calculator, AlertCircle, CheckCircle, Plus, X
+  ArrowLeft, User, Calculator, AlertCircle, CheckCircle, Plus, X, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 
-// Venezuelan banks list
 const VENEZUELAN_BANKS = [
   { code: '0102', name: 'Banco de Venezuela' },
   { code: '0104', name: 'Venezolano de Crédito' },
@@ -41,7 +39,7 @@ export default function Send() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const { rates } = useRate();
-  const [step, setStep] = useState(1); // 1: amount, 2: beneficiary, 3: confirm
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [showNewBeneficiary, setShowNewBeneficiary] = useState(false);
@@ -49,17 +47,10 @@ export default function Send() {
   const [amount, setAmount] = useState('');
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [newBeneficiary, setNewBeneficiary] = useState({
-    full_name: '',
-    id_document: '',
-    phone_number: '',
-    bank: '',
-    bank_code: '',
-    account_number: '',
+    full_name: '', id_document: '', phone_number: '', bank: '', bank_code: '', account_number: '',
   });
 
-  useEffect(() => {
-    loadBeneficiaries();
-  }, []);
+  useEffect(() => { loadBeneficiaries(); }, []);
 
   const loadBeneficiaries = async () => {
     try {
@@ -75,11 +66,7 @@ export default function Send() {
 
   const handleBankChange = (bankCode) => {
     const bank = VENEZUELAN_BANKS.find(b => b.code === bankCode);
-    setNewBeneficiary({
-      ...newBeneficiary,
-      bank_code: bankCode,
-      bank: bank?.name || '',
-    });
+    setNewBeneficiary({ ...newBeneficiary, bank_code: bankCode, bank: bank?.name || '' });
   };
 
   const handleSaveBeneficiary = async () => {
@@ -87,7 +74,6 @@ export default function Send() {
       toast.error('Completa todos los campos del beneficiario');
       return;
     }
-
     setLoading(true);
     try {
       const response = await api.post('/beneficiaries', newBeneficiary);
@@ -95,14 +81,7 @@ export default function Send() {
       await loadBeneficiaries();
       setSelectedBeneficiary(response.data);
       setShowNewBeneficiary(false);
-      setNewBeneficiary({
-        full_name: '',
-        id_document: '',
-        phone_number: '',
-        bank: '',
-        bank_code: '',
-        account_number: '',
-      });
+      setNewBeneficiary({ full_name: '', id_document: '', phone_number: '', bank: '', bank_code: '', account_number: '' });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al guardar beneficiario');
     } finally {
@@ -115,13 +94,9 @@ export default function Send() {
       toast.error('Verifica los datos de envío');
       return;
     }
-
     setLoading(true);
     try {
-      await api.post('/withdrawals', {
-        amount_ris: parseFloat(amount),
-        beneficiary_data: selectedBeneficiary,
-      });
+      await api.post('/withdrawals', { amount_ris: parseFloat(amount), beneficiary_data: selectedBeneficiary });
       toast.success('¡Envío registrado! Será procesado pronto.');
       await refreshUser();
       navigate('/history');
@@ -132,81 +107,105 @@ export default function Send() {
     }
   };
 
+  const pageStyle = {
+    minHeight: '100vh',
+    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
+  };
+
+  const cardStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '24px',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08)',
+    padding: '32px'
+  };
+
+  const inputStyle = {
+    width: '100%', padding: '14px 16px', borderRadius: '14px',
+    border: '1px solid #d1d5db', fontSize: '16px', outline: 'none'
+  };
+
+  const buttonPrimaryStyle = {
+    backgroundColor: '#6366f1', color: 'white', borderRadius: '14px', height: '56px',
+    padding: '0 32px', fontWeight: '600', fontSize: '16px', border: 'none', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%'
+  };
+
+  const buttonSecondaryStyle = {
+    backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '14px', height: '56px',
+    padding: '0 32px', fontWeight: '600', fontSize: '16px', border: 'none', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%'
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-        <div className="max-w-lg mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-lg">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="font-bold text-lg">Enviar a Venezuela</h1>
-              <p className="text-blue-200 text-sm">1 RIS = {rates.ris_to_ves.toFixed(2)} VES</p>
-            </div>
+    <div style={pageStyle} data-testid="send-page">
+      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+          <button 
+            onClick={() => navigate(-1)} 
+            style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            data-testid="back-button"
+          >
+            <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+          </button>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar a Venezuela</h1>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6">
         {/* Progress Steps */}
-        <div className="flex items-center justify-center gap-2 mb-6">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
           {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                step >= s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
-              }`}>
-                {s}
-              </div>
-              {s < 3 && <div className={`w-12 h-1 mx-1 ${step > s ? 'bg-blue-600' : 'bg-gray-200'}`} />}
+            <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '50%', fontSize: '14px', fontWeight: '600',
+                backgroundColor: step >= s ? '#6366f1' : '#e5e7eb', color: step >= s ? '#ffffff' : '#6b7280',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>{s}</div>
+              {s < 3 && <div style={{ width: '48px', height: '4px', marginLeft: '4px', marginRight: '4px', borderRadius: '2px', backgroundColor: step > s ? '#6366f1' : '#e5e7eb' }} />}
             </div>
           ))}
         </div>
 
         {/* Step 1: Amount */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm animate-fadeIn">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                <Calculator className="w-6 h-6 text-blue-600" />
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Calculator style={{ width: '28px', height: '28px', color: '#2563eb' }} />
               </div>
               <div>
-                <h2 className="font-bold text-gray-900">Monto a enviar</h2>
-                <p className="text-sm text-gray-500">Balance: {(user?.balance_ris || 0).toFixed(2)} RIS</p>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Monto a enviar</h2>
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Saldo: {(user?.balance_ris || 0).toFixed(2)} RIS</p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Envías (RIS)</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Envías (RIS)</label>
                 <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-4 py-4 text-2xl font-bold rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
+                  type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+                  style={{ ...inputStyle, fontSize: '28px', fontWeight: '700' }} placeholder="0.00"
+                  data-testid="send-amount"
                 />
               </div>
 
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                <p className="text-sm text-green-700">Beneficiario recibe</p>
-                <p className="text-3xl font-bold text-green-800">{amountVes.toFixed(2)} VES</p>
+              <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '16px' }}>
+                <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Beneficiario recibe</p>
+                <p style={{ fontSize: '32px', fontWeight: '700', color: '#15803d', margin: 0 }}>{amountVes.toFixed(2)} VES</p>
               </div>
 
               {amount && parseFloat(amount) > (user?.balance_ris || 0) && (
-                <div className="flex items-center gap-2 text-red-600 text-sm">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Saldo insuficiente</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', backgroundColor: '#fee2e2', borderRadius: '12px' }}>
+                  <AlertCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />
+                  <span style={{ color: '#dc2626', fontSize: '14px' }}>Saldo insuficiente</span>
                 </div>
               )}
 
-              <button
-                onClick={() => setStep(2)}
-                disabled={!isValidAmount}
-                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Continuar
+              <button onClick={() => setStep(2)} disabled={!isValidAmount} style={{ ...buttonPrimaryStyle, opacity: isValidAmount ? 1 : 0.5 }} data-testid="continue-step1">
+                Continuar <ArrowRight style={{ width: '20px', height: '20px' }} />
               </button>
             </div>
           </div>
@@ -214,73 +213,53 @@ export default function Send() {
 
         {/* Step 2: Beneficiary */}
         {step === 2 && (
-          <div className="space-y-4 animate-fadeIn">
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-bold text-gray-900">Seleccionar beneficiario</h2>
-                <button
-                  onClick={() => setShowNewBeneficiary(true)}
-                  className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  Nuevo
-                </button>
-              </div>
-
-              {beneficiaries.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No tienes beneficiarios guardados</p>
-                  <button
-                    onClick={() => setShowNewBeneficiary(true)}
-                    className="mt-3 text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Agregar beneficiario
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {beneficiaries.map((b) => (
-                    <button
-                      key={b.beneficiary_id}
-                      onClick={() => setSelectedBeneficiary(b)}
-                      className={`w-full p-4 rounded-xl border-2 text-left transition-colors ${
-                        selectedBeneficiary?.beneficiary_id === b.beneficiary_id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                          <User className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">{b.full_name}</p>
-                          <p className="text-sm text-gray-500">{b.bank} • {b.account_number.slice(-4)}</p>
-                        </div>
-                        {selectedBeneficiary?.beneficiary_id === b.beneficiary_id && (
-                          <CheckCircle className="w-5 h-5 text-blue-600" />
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Seleccionar beneficiario</h2>
+              <button onClick={() => setShowNewBeneficiary(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#eff6ff', color: '#2563eb', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>
+                <Plus style={{ width: '16px', height: '16px' }} /> Nuevo
+              </button>
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(1)}
-                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors"
-              >
-                Atrás
-              </button>
-              <button
-                onClick={() => setStep(3)}
-                disabled={!selectedBeneficiary}
-                className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-              >
-                Continuar
+            {beneficiaries.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px' }}>
+                <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <User style={{ width: '40px', height: '40px', color: '#d1d5db' }} />
+                </div>
+                <p style={{ color: '#6b7280', margin: '0 0 16px 0' }}>No tienes beneficiarios guardados</p>
+                <button onClick={() => setShowNewBeneficiary(true)} style={{ color: '#6366f1', fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer' }}>Agregar beneficiario</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {beneficiaries.map((b) => (
+                  <button
+                    key={b.beneficiary_id} onClick={() => setSelectedBeneficiary(b)}
+                    style={{
+                      width: '100%', padding: '16px', borderRadius: '16px', cursor: 'pointer', textAlign: 'left',
+                      border: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '2px solid #6366f1' : '2px solid #e5e7eb',
+                      backgroundColor: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '#eff6ff' : '#ffffff'
+                    }}
+                    data-testid={`beneficiary-${b.beneficiary_id}`}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <User style={{ width: '24px', height: '24px', color: '#6b7280' }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{b.full_name}</p>
+                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>{b.bank} • ****{b.account_number?.slice(-4)}</p>
+                      </div>
+                      {selectedBeneficiary?.beneficiary_id === b.beneficiary_id && <CheckCircle style={{ width: '24px', height: '24px', color: '#6366f1' }} />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button onClick={() => setStep(1)} style={buttonSecondaryStyle}>Atrás</button>
+              <button onClick={() => setStep(3)} disabled={!selectedBeneficiary} style={{ ...buttonPrimaryStyle, opacity: selectedBeneficiary ? 1 : 0.5 }} data-testid="continue-step2">
+                Continuar <ArrowRight style={{ width: '20px', height: '20px' }} />
               </button>
             </div>
           </div>
@@ -288,49 +267,36 @@ export default function Send() {
 
         {/* Step 3: Confirm */}
         {step === 3 && (
-          <div className="space-y-4 animate-fadeIn">
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h2 className="font-bold text-gray-900 mb-4">Confirmar envío</h2>
+          <div style={cardStyle}>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 24px 0', textAlign: 'center' }}>Confirmar envío</h2>
 
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <p className="text-sm text-gray-500 mb-1">Envías</p>
-                  <p className="text-2xl font-bold text-gray-900">{parseFloat(amount).toFixed(2)} RIS</p>
-                </div>
-
-                <div className="bg-green-50 rounded-xl p-4">
-                  <p className="text-sm text-green-700 mb-1">Beneficiario recibe</p>
-                  <p className="text-2xl font-bold text-green-800">{amountVes.toFixed(2)} VES</p>
-                </div>
-
-                <div className="border-t pt-4">
-                  <p className="text-sm text-gray-500 mb-2">Beneficiario</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{selectedBeneficiary?.full_name}</p>
-                      <p className="text-sm text-gray-500">{selectedBeneficiary?.bank}</p>
-                      <p className="text-sm text-gray-500">{selectedBeneficiary?.account_number}</p>
-                    </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ padding: '20px', backgroundColor: '#f3f4f6', borderRadius: '14px' }}>
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>Envías</p>
+                <p style={{ fontSize: '28px', fontWeight: '700', color: '#111827', margin: 0 }}>{parseFloat(amount).toFixed(2)} RIS</p>
+              </div>
+              <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '14px' }}>
+                <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Beneficiario recibe</p>
+                <p style={{ fontSize: '28px', fontWeight: '700', color: '#15803d', margin: 0 }}>{amountVes.toFixed(2)} VES</p>
+              </div>
+              <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px' }}>
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 12px 0' }}>Beneficiario</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <User style={{ width: '24px', height: '24px', color: '#2563eb' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{selectedBeneficiary?.full_name}</p>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>{selectedBeneficiary?.bank}</p>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>{selectedBeneficiary?.account_number}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(2)}
-                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors"
-              >
-                Atrás
-              </button>
-              <button
-                onClick={handleSend}
-                disabled={loading}
-                className="flex-1 py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-              >
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => setStep(2)} style={buttonSecondaryStyle}>Atrás</button>
+              <button onClick={handleSend} disabled={loading} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', opacity: loading ? 0.5 : 1 }} data-testid="confirm-send">
                 {loading ? 'Procesando...' : 'Confirmar envío'}
               </button>
             </div>
@@ -339,86 +305,47 @@ export default function Send() {
 
         {/* New Beneficiary Modal */}
         {showNewBeneficiary && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-slideUp">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-900">Nuevo beneficiario</h3>
-                <button onClick={() => setShowNewBeneficiary(false)} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-5 h-5" />
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '450px', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Nuevo beneficiario</h3>
+                <button onClick={() => setShowNewBeneficiary(false)} style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
-                  <input
-                    type="text"
-                    value={newBeneficiary.full_name}
-                    onChange={(e) => setNewBeneficiary({...newBeneficiary, full_name: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nombre del beneficiario"
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Nombre completo *</label>
+                  <input type="text" value={newBeneficiary.full_name} onChange={(e) => setNewBeneficiary({...newBeneficiary, full_name: e.target.value})} style={inputStyle} placeholder="Nombre del beneficiario" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cédula de identidad *</label>
-                  <input
-                    type="text"
-                    value={newBeneficiary.id_document}
-                    onChange={(e) => setNewBeneficiary({...newBeneficiary, id_document: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500"
-                    placeholder="V-12345678"
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Cédula de identidad *</label>
+                  <input type="text" value={newBeneficiary.id_document} onChange={(e) => setNewBeneficiary({...newBeneficiary, id_document: e.target.value})} style={inputStyle} placeholder="V-12345678" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                  <input
-                    type="tel"
-                    value={newBeneficiary.phone_number}
-                    onChange={(e) => setNewBeneficiary({...newBeneficiary, phone_number: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500"
-                    placeholder="0412-1234567"
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Teléfono</label>
+                  <input type="tel" value={newBeneficiary.phone_number} onChange={(e) => setNewBeneficiary({...newBeneficiary, phone_number: e.target.value})} style={inputStyle} placeholder="0412-1234567" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
-                  <select
-                    value={newBeneficiary.bank_code}
-                    onChange={(e) => handleBankChange(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500"
-                  >
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Banco *</label>
+                  <select value={newBeneficiary.bank_code} onChange={(e) => handleBankChange(e.target.value)} style={inputStyle}>
                     <option value="">Seleccionar banco</option>
-                    {VENEZUELAN_BANKS.map((bank) => (
-                      <option key={bank.code} value={bank.code}>{bank.name}</option>
-                    ))}
+                    {VENEZUELAN_BANKS.map((bank) => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
                   </select>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Número de cuenta *</label>
-                  <input
-                    type="text"
-                    value={newBeneficiary.account_number}
-                    onChange={(e) => setNewBeneficiary({...newBeneficiary, account_number: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500"
-                    placeholder="0102-1234-12-1234567890"
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Número de cuenta *</label>
+                  <input type="text" value={newBeneficiary.account_number} onChange={(e) => setNewBeneficiary({...newBeneficiary, account_number: e.target.value})} style={inputStyle} placeholder="01020123456789012345" />
                 </div>
-
-                <button
-                  onClick={handleSaveBeneficiary}
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-                >
+                <button onClick={handleSaveBeneficiary} disabled={loading} style={{ ...buttonPrimaryStyle, marginTop: '8px', opacity: loading ? 0.5 : 1 }} data-testid="save-beneficiary">
                   {loading ? 'Guardando...' : 'Guardar beneficiario'}
                 </button>
               </div>
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
