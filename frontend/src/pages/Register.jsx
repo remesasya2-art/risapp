@@ -1,89 +1,310 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../utils/api';
 
 export default function Register() {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  
+  // Form fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Verification step
+  const [step, setStep] = useState(1); // 1 = form, 2 = verification
+  const [verificationCode, setVerificationCode] = useState('');
+  const [resending, setResending] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name || !email || !password) {
+    
+    if (!name || !email || !password || !confirmPassword) {
       toast.error('Por favor completa todos los campos');
       return;
     }
+    
     if (password.length < 6) {
       toast.error('La contraseña debe tener al menos 6 caracteres');
       return;
     }
+    
+    if (password !== confirmPassword) {
+      toast.error('Las contraseñas no coinciden');
+      return;
+    }
+    
     setLoading(true);
     try {
-      await register(name, email, password);
-      toast.success('¡Cuenta creada exitosamente!');
-      navigate('/');
+      const response = await api.post('/auth/register', {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        confirm_password: confirmPassword
+      });
+      
+      toast.success(response.data.message || 'Código de verificación enviado');
+      setStep(2); // Move to verification step
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al crear cuenta');
+      console.error('Register error:', error);
+      toast.error(error.response?.data?.detail || 'Error al registrar');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    
+    if (!verificationCode || verificationCode.length !== 6) {
+      toast.error('Ingresa el código de 6 dígitos');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const response = await api.post('/auth/verify-email', {
+        email: email.trim().toLowerCase(),
+        code: verificationCode
+      });
+      
+      // Save session token and redirect
+      if (response.data.session_token) {
+        localStorage.setItem('session_token', response.data.session_token);
+        toast.success('¡Cuenta creada exitosamente!');
+        // Force page reload to update auth state
+        window.location.href = '/';
+      } else {
+        toast.success('Registro completado. Por favor inicia sesión.');
+        navigate('/login');
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      toast.error(error.response?.data?.detail || 'Código inválido');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setResending(true);
+    try {
+      const response = await api.post('/auth/resend-verification-code', {
+        email: email.trim().toLowerCase()
+      });
+      toast.success(response.data.message || 'Código reenviado');
+    } catch (error) {
+      console.error('Resend error:', error);
+      toast.error(error.response?.data?.detail || 'Error al reenviar código');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const pageStyle = {
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px',
+    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif',
+    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)'
+  };
+
+  const cardStyle = {
+    width: '100%',
+    maxWidth: '420px',
+    backgroundColor: '#ffffff',
+    borderRadius: '24px',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 12px 24px -8px rgba(0, 0, 0, 0.04)',
+    padding: '48px 40px'
+  };
+
   const inputStyle = {
+    width: '100%',
+    padding: '16px',
     borderRadius: '14px',
     border: '1px solid #d1d5db',
-    height: '56px'
+    fontSize: '16px',
+    color: '#111827',
+    backgroundColor: '#ffffff',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s'
   };
 
   const buttonStyle = {
+    width: '100%',
+    padding: '16px',
     borderRadius: '14px',
-    height: '56px'
+    border: 'none',
+    backgroundColor: '#6366f1',
+    color: '#ffffff',
+    fontSize: '16px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s'
   };
 
+  // Verification Code Step (Step 2)
+  if (step === 2) {
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          {/* Back Button */}
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'none',
+              border: 'none',
+              color: '#6366f1',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              padding: 0,
+              marginBottom: '24px'
+            }}
+          >
+            <ArrowLeft size={18} />
+            Volver
+          </button>
+
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '32px' }}>
+            <img 
+              src="/logo-ris.jpeg" 
+              alt="RIS" 
+              style={{ height: '48px', borderRadius: '12px' }}
+            />
+          </div>
+
+          {/* Title */}
+          <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#111827', textAlign: 'center', margin: '0 0 8px 0' }}>
+            Verifica tu cuenta
+          </h1>
+          <p style={{ fontSize: '16px', color: '#9ca3af', textAlign: 'center', margin: '0 0 32px 0' }}>
+            Ingresa el código de 6 dígitos enviado a <br/>
+            <span style={{ color: '#6366f1', fontWeight: '500' }}>{email}</span>
+          </p>
+
+          <form onSubmit={handleVerifyCode} data-testid="verification-form">
+            {/* Verification Code Input */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                Código de verificación
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                data-testid="verification-code-input"
+                style={{
+                  ...inputStyle,
+                  textAlign: 'center',
+                  fontSize: '24px',
+                  letterSpacing: '8px',
+                  fontWeight: '600'
+                }}
+                onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+              />
+            </div>
+
+            {/* Verify Button */}
+            <button
+              type="submit"
+              disabled={loading || verificationCode.length !== 6}
+              data-testid="verify-submit-btn"
+              style={{
+                ...buttonStyle,
+                opacity: loading || verificationCode.length !== 6 ? 0.6 : 1,
+                cursor: loading || verificationCode.length !== 6 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading ? 'Verificando...' : 'Verificar Código'}
+            </button>
+          </form>
+
+          {/* Resend Code */}
+          <div style={{ textAlign: 'center', marginTop: '24px' }}>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>
+              ¿No recibiste el código?
+            </p>
+            <button
+              type="button"
+              onClick={handleResendCode}
+              disabled={resending}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#6366f1',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: resending ? 'not-allowed' : 'pointer',
+                opacity: resending ? 0.6 : 1
+              }}
+            >
+              {resending ? 'Reenviando...' : 'Reenviar código'}
+            </button>
+          </div>
+
+          {/* Login Link */}
+          <p style={{ textAlign: 'center', fontSize: '15px', color: '#6b7280', marginTop: '24px' }}>
+            ¿Ya tienes cuenta?{' '}
+            <Link to="/login" style={{ color: '#6366f1', fontWeight: '500', textDecoration: 'none' }}>
+              Inicia sesión
+            </Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Registration Form (Step 1)
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        fontFamily: 'Inter, Helvetica, -apple-system, sans-serif',
-        background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)'
-      }}
-    >
-      <div 
-        className="w-full max-w-md bg-white"
-        style={{
-          borderRadius: '24px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 12px 24px -8px rgba(0, 0, 0, 0.04)',
-          padding: '48px 40px'
-        }}
-      >
+    <div style={pageStyle}>
+      <div style={cardStyle}>
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '32px' }}>
           <img 
             src="/logo-ris.jpeg" 
             alt="RIS" 
-            className="h-12 w-auto"
-            style={{ borderRadius: '12px' }}
+            style={{ height: '48px', borderRadius: '12px' }}
           />
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">
+        <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#111827', textAlign: 'center', margin: '0 0 8px 0' }}>
           Crear Cuenta
         </h1>
-        <p className="text-gray-400 text-center text-base mb-8">
+        <p style={{ fontSize: '16px', color: '#9ca3af', textAlign: 'center', margin: '0 0 32px 0' }}>
           Comienza con tu billetera digital
         </p>
 
         {/* Google Button */}
         <button 
-          className="w-full flex items-center justify-center gap-3 text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all mb-6"
-          style={{ ...buttonStyle, border: '1px solid #d1d5db' }}
+          type="button"
+          style={{ 
+            ...buttonStyle, 
+            backgroundColor: '#ffffff', 
+            color: '#374151', 
+            border: '1px solid #d1d5db',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            marginBottom: '24px'
+          }}
         >
           <svg width="20" height="20" viewBox="0 0 18 18">
             <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"></path>
@@ -95,90 +316,148 @@ export default function Register() {
         </button>
 
         {/* Divider */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-gray-200"></div>
-          <span className="text-gray-400 text-xs uppercase tracking-wider">O continúa con email</span>
-          <div className="flex-1 h-px bg-gray-200"></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
+          <span style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>O continúa con email</span>
+          <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
         </div>
 
         <form onSubmit={handleSubmit} data-testid="register-form">
           {/* Name */}
-          <div className="mb-5">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Nombre completo</label>
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Juan Pérez"
-                data-testid="name-input"
-                className="w-full pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
-                style={inputStyle}
-              />
-            </div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              Nombre completo
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              data-testid="name-input"
+              style={inputStyle}
+              onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+              onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+            />
           </div>
 
           {/* Email */}
-          <div className="mb-5">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Correo electrónico</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nombre@ejemplo.com"
-                data-testid="email-input"
-                className="w-full pl-12 pr-4 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
-                style={inputStyle}
-              />
-            </div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              Correo electrónico
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              data-testid="email-input"
+              style={inputStyle}
+              onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+              onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+            />
           </div>
 
           {/* Password */}
-          <div className="mb-2">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Contraseña</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              Contraseña
+            </label>
+            <div style={{ position: 'relative' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
                 data-testid="password-input"
-                className="w-full pl-12 pr-12 text-base text-gray-900 placeholder-gray-400 bg-white focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
-                style={inputStyle}
+                style={{ ...inputStyle, paddingRight: '48px' }}
+                onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  color: '#9ca3af'
+                }}
               >
-                {showPassword ? <EyeOff size={20} strokeWidth={1.5} /> : <Eye size={20} strokeWidth={1.5} />}
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>Mínimo 7 caracteres con letras, números y símbolos</p>
           </div>
 
-          {/* Helper text */}
-          <p className="text-gray-400 text-sm mb-6">Mínimo 6 caracteres</p>
+          {/* Confirm Password */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              Confirmar contraseña
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                data-testid="confirm-password-input"
+                style={{ 
+                  ...inputStyle, 
+                  paddingRight: '48px',
+                  borderColor: confirmPassword && password !== confirmPassword ? '#ef4444' : '#d1d5db'
+                }}
+                onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                onBlur={(e) => { 
+                  e.target.style.borderColor = confirmPassword && password !== confirmPassword ? '#ef4444' : '#d1d5db'; 
+                  e.target.style.boxShadow = 'none'; 
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  color: '#9ca3af'
+                }}
+              >
+                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+            {confirmPassword && password !== confirmPassword && (
+              <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
+            )}
+            {confirmPassword && password === confirmPassword && password.length >= 6 && (
+              <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>Las contraseñas coinciden</p>
+            )}
+          </div>
 
           {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
             data-testid="register-submit-btn"
-            className="w-full bg-[#6366f1] hover:bg-[#5558e3] text-white font-bold text-base transition-all disabled:opacity-50"
-            style={buttonStyle}
+            style={{
+              ...buttonStyle,
+              opacity: loading ? 0.6 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
           >
-            {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
+            {loading ? 'Enviando código...' : 'Continuar'}
           </button>
         </form>
 
         {/* Login Link */}
-        <p className="text-center text-gray-500 text-base mt-6">
+        <p style={{ textAlign: 'center', fontSize: '15px', color: '#6b7280', marginTop: '24px' }}>
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="text-[#6366f1] font-medium hover:underline">
+          <Link to="/login" style={{ color: '#6366f1', fontWeight: '500', textDecoration: 'none' }}>
             Inicia sesión
           </Link>
         </p>
