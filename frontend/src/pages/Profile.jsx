@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, User, Mail, Phone, Shield, Lock, LogOut, 
-  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff, Gem, Crown
+  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff, Gem, Crown, Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
