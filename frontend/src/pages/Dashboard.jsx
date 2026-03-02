@@ -119,7 +119,14 @@ export default function Dashboard() {
         {/* Balance Card */}
         <div 
           className="p-8 mb-6"
-          style={{ borderRadius: '20px', border: '1px solid #e5e7eb', backgroundColor: '#ffffff' }}
+          style={{ 
+            borderRadius: '20px', 
+            border: '1px solid #e5e7eb', 
+            backgroundColor: '#ffffff',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            position: 'relative',
+            zIndex: 10
+          }}
           data-testid="balance-card"
         >
           <div className="flex items-start justify-between mb-6">
