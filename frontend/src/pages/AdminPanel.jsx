@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
-  RefreshCw, Shield, Activity
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
