@@ -248,6 +248,96 @@ export default function History() {
           </div>
         )}
       </div>
+
+      {/* Modal para ver comprobante */}
+      {showVoucherModal && selectedVoucher && (
+        <div 
+          style={{ 
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', 
+            padding: '16px', zIndex: 50 
+          }}
+          onClick={() => setShowVoucherModal(false)}
+        >
+          <div 
+            style={{ 
+              backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', 
+              width: '100%', maxWidth: '500px', maxHeight: '90vh', overflow: 'auto' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                Comprobante de Pago
+              </h3>
+              <button 
+                onClick={() => setShowVoucherModal(false)}
+                style={{ 
+                  width: '36px', height: '36px', borderRadius: '10px', 
+                  border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+              </button>
+            </div>
+
+            {/* Información de la transacción */}
+            <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto enviado</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedVoucher.amount_input?.toFixed(2)} RIS</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>{selectedVoucher.amount_output?.toFixed(2)} VES</p>
+                </div>
+              </div>
+              {selectedVoucher.beneficiary_data && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>{selectedVoucher.beneficiary_data.full_name}</p>
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>{selectedVoucher.beneficiary_data.bank}</p>
+                </div>
+              )}
+              <div style={{ marginTop: '12px' }}>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Fecha de proceso</p>
+                <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>{formatDate(selectedVoucher.completed_at || selectedVoucher.created_at)}</p>
+              </div>
+            </div>
+
+            {/* Imagen del comprobante */}
+            <div>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
+                Imagen del comprobante
+              </p>
+              {selectedVoucher.proof_image ? (
+                <img 
+                  src={selectedVoucher.proof_image} 
+                  alt="Comprobante de pago"
+                  style={{ 
+                    width: '100%', borderRadius: '12px', border: '1px solid #e5e7eb',
+                    maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f9fafb'
+                  }}
+                />
+              ) : (
+                <div style={{ 
+                  padding: '40px', backgroundColor: '#f9fafb', borderRadius: '12px',
+                  textAlign: 'center', border: '1px dashed #d1d5db'
+                }}>
+                  <p style={{ color: '#6b7280', margin: 0 }}>No hay comprobante disponible</p>
+                </div>
+              )}
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginTop: '16px' }}>
+              ID: {selectedVoucher.transaction_id}
+            </p>
+          </div>
+        </div>
+      )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
