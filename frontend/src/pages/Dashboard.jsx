@@ -294,7 +294,6 @@ export default function Dashboard() {
               </p>
             </div>
             <NotificationBell />
-            </button>
           </div>
         )}
 
