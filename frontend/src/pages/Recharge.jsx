@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import NotificationBell from '../components/NotificationBell';
 
 export default function Recharge() {
   const navigate = useNavigate();
