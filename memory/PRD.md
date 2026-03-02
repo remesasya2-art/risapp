@@ -106,10 +106,11 @@
 - [x] Admin Panel "Procesar" and "Rechazar" buttons not working - FIXED (corrected API endpoint calls to include `action` parameter)
 
 ### New Features (March 2, 2026)
-- [x] **Dual Rate Management:** Added VES → RIS rate input in Admin Panel alongside existing RIS → VES rate
+- [x] **Dual Rate Management:** Added VES → RIS rate input in Admin Panel alongside existing RIS → VES rate (with independent update buttons)
 - [x] **Voucher Viewing for Users:** Added "Ver comprobante" button (eye icon) in History page to view payment proof for completed withdrawals
 - [x] **Voucher Modal:** Professional modal displaying transaction details and proof image
 - [x] **WhatsApp Integration Verified:** Twilio WhatsApp notifications working correctly for new withdrawals
+- [x] **Notification Bell:** Added notification bell icon with unread count to all main pages (Dashboard, Recharge, Send, History) - both desktop and mobile views
 
 ### Redesign
 - [x] Login.jsx - NexPay style (previously approved)
