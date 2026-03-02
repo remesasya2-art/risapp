@@ -580,6 +580,167 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* User History Modal */}
+      {selectedUser && (
+        <div 
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}
+          onClick={closeUserModal}
+        >
+          <div 
+            style={{ backgroundColor: '#ffffff', borderRadius: '24px', width: '100%', maxWidth: '800px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedUser.name}</h3>
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{selectedUser.email}</p>
+              </div>
+              <button onClick={closeUserModal} style={{ width: '36px', height: '36px', borderRadius: '10px', border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
+              {loadingUser ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
+                  <RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} />
+                </div>
+              ) : userHistory ? (
+                <>
+                  {/* User Stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+                    <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>BALANCE ACTUAL</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.user?.balance_ris?.toFixed(2)} RIS</p>
+                    </div>
+                    <div style={{ padding: '16px', backgroundColor: '#dbeafe', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL RECARGADO</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.stats?.total_recharged?.toFixed(2)} RIS</p>
+                    </div>
+                    <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: '#d97706', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL ENVIADO</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.stats?.total_withdrawn?.toFixed(2)} RIS</p>
+                    </div>
+                    <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: '#9333ea', margin: '0 0 4px 0', fontWeight: '600' }}>VES ENVIADOS</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.stats?.total_ves_sent?.toFixed(0) || 0}</p>
+                    </div>
+                  </div>
+
+                  {/* User Info */}
+                  <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', margin: '0 0 12px 0' }}>INFORMACIÓN DEL USUARIO</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>CPF</p>
+                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '500' }}>{maskCPF(userHistory.user?.cpf)}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Estado KYC</p>
+                        <p style={{ fontSize: '14px', margin: '2px 0 0 0', fontWeight: '600', color: userHistory.user?.verification_status === 'verified' ? '#16a34a' : '#d97706' }}>
+                          {userHistory.user?.verification_status === 'verified' ? '✅ Verificado' : '⏳ Pendiente'}
+                        </p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Fecha de registro</p>
+                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{new Date(userHistory.user?.created_at).toLocaleDateString('es-ES')}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Rol</p>
+                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', textTransform: 'capitalize' }}>{userHistory.user?.role || 'user'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transactions List */}
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', margin: '0 0 12px 0' }}>
+                      HISTORIAL DE TRANSACCIONES ({(userHistory.recharges?.length || 0) + (userHistory.withdrawals?.length || 0)} total)
+                    </h4>
+                    
+                    {(!userHistory.recharges?.length && !userHistory.withdrawals?.length) ? (
+                      <div style={{ padding: '32px', backgroundColor: '#f8f9fa', borderRadius: '14px', textAlign: 'center' }}>
+                        <p style={{ color: '#6b7280', margin: 0 }}>No hay transacciones</p>
+                      </div>
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '14px', overflow: 'hidden' }}>
+                        {[...(userHistory.withdrawals || []), ...(userHistory.recharges || [])]
+                          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                          .map((tx, index) => (
+                            <div 
+                              key={tx.transaction_id || index} 
+                              style={{ 
+                                padding: '14px 16px', 
+                                borderBottom: index < (userHistory.withdrawals?.length || 0) + (userHistory.recharges?.length || 0) - 1 ? '1px solid #f3f4f6' : 'none',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ 
+                                  width: '36px', height: '36px', borderRadius: '10px', 
+                                  backgroundColor: tx.type === 'withdrawal' ? '#fef3c7' : '#dcfce7',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                  {tx.type === 'withdrawal' ? (
+                                    <ArrowUpRight style={{ width: '18px', height: '18px', color: '#d97706' }} />
+                                  ) : (
+                                    <ArrowDownLeft style={{ width: '18px', height: '18px', color: '#16a34a' }} />
+                                  )}
+                                </div>
+                                <div>
+                                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                                    {tx.type === 'withdrawal' ? 'Envío' : 'Recarga'}
+                                  </p>
+                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                    {new Date(tx.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <p style={{ fontSize: '14px', fontWeight: '600', color: tx.type === 'withdrawal' ? '#d97706' : '#16a34a', margin: 0 }}>
+                                  {tx.type === 'withdrawal' ? '-' : '+'}{tx.type === 'withdrawal' ? tx.amount_input : tx.amount_output}
+                                  {tx.type === 'withdrawal' ? ' RIS' : ' RIS'}
+                                </p>
+                                <span style={{ 
+                                  fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '9999px',
+                                  backgroundColor: tx.status === 'completed' ? '#dcfce7' : tx.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                                  color: tx.status === 'completed' ? '#16a34a' : tx.status === 'pending' ? '#d97706' : '#dc2626'
+                                }}>
+                                  {tx.status === 'completed' ? 'Completado' : tx.status === 'pending' ? 'Pendiente' : 'Rechazado'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Beneficiaries */}
+                  {userHistory.beneficiaries?.length > 0 && (
+                    <div style={{ marginTop: '24px' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', margin: '0 0 12px 0' }}>
+                        BENEFICIARIOS ({userHistory.beneficiaries.length})
+                      </h4>
+                      <div style={{ display: 'grid', gap: '8px' }}>
+                        {userHistory.beneficiaries.map((b, i) => (
+                          <div key={i} style={{ padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{b.full_name}</p>
+                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{b.bank} • {b.account_number}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
