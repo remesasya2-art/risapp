@@ -142,18 +142,21 @@ export default function Send() {
     <div style={pageStyle} data-testid="send-page">
       <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <button 
-            onClick={() => navigate(-1)} 
-            style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            data-testid="back-button"
-          >
-            <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
-          </button>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar a Venezuela</h1>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate(-1)} 
+              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              data-testid="back-button"
+            >
+              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+            </button>
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar a Venezuela</h1>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
+            </div>
           </div>
+          <NotificationBell />
         </div>
 
         {/* Progress Steps */}
