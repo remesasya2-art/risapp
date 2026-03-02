@@ -26,6 +26,7 @@ from twilio.rest import Client as TwilioClient
 from whatsapp_service import whatsapp_service
 from mercadopago_service import mercadopago_service
 from admin_routes import admin_router
+from web_push_service import web_push_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
