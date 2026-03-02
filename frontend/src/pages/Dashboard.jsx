@@ -7,6 +7,7 @@ import {
   LogOut, Plus, ArrowUpRight, TrendingUp, TrendingDown,
   ChevronRight, Settings, User, HelpCircle, Menu, X
 } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
 export default function Dashboard() {
   const navigate = useNavigate();
