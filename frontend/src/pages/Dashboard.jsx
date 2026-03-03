@@ -322,7 +322,7 @@ export default function Dashboard() {
             <div>
               <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 8px 0' }}>Saldo Total</p>
               <p style={{ fontSize: isMobile ? '36px' : '48px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>
-                ${(user?.balance_ris || 0).toFixed(2)}
+                RI${(user?.balance_ris || 0).toFixed(2)}
               </p>
               <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>
                 Tasa actual: 1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} Bs
