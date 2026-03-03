@@ -3107,6 +3107,7 @@ async def mark_notification_read(notification_id: str, current_user: User = Depe
     return {"message": "Notification marked as read"}
 
 @api_router.post("/notifications/read-all")
+@api_router.post("/notifications/mark-all-read")
 async def mark_all_read(current_user: User = Depends(get_current_user)):
     """Mark all notifications as read"""
     await db.notifications.update_many(
