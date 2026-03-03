@@ -334,14 +334,14 @@ export default function Dashboard() {
                   <TrendingUp style={{ width: '16px', height: '16px', color: '#22c55e' }} strokeWidth={1.5} />
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>Ingresos</span>
                 </div>
-                <p style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '700', color: '#111827', margin: 0 }}>$0.00</p>
+                <p style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '700', color: '#111827', margin: 0 }}>RI$0.00</p>
               </div>
               <div style={{ backgroundColor: '#fef2f2', padding: isMobile ? '12px 16px' : '16px', borderRadius: '14px', flex: isMobile ? 1 : 'none', minWidth: isMobile ? '45%' : 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <TrendingDown style={{ width: '16px', height: '16px', color: '#ef4444' }} strokeWidth={1.5} />
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>Gastos</span>
                 </div>
-                <p style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '700', color: '#111827', margin: 0 }}>$0.00</p>
+                <p style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '700', color: '#111827', margin: 0 }}>RI$0.00</p>
               </div>
             </div>
           </div>
