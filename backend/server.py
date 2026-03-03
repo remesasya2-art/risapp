@@ -3058,10 +3058,22 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
         {"user_id": current_user.user_id}
     ).sort("created_at", -1).limit(50).to_list(50)
     
+    result = []
     for n in notifications:
-        n['_id'] = str(n['_id'])
+        # Use notification_id if exists, otherwise use _id
+        notif_id = n.get('notification_id') or str(n['_id'])
+        result.append({
+            "notification_id": notif_id,
+            "user_id": n.get("user_id"),
+            "title": n.get("title"),
+            "message": n.get("message"),
+            "type": n.get("type"),
+            "data": n.get("data", {}),
+            "read": n.get("read", False),
+            "created_at": n.get("created_at")
+        })
     
-    return {"notifications": notifications}
+    return result
 
 @api_router.get("/notifications/unread-count")
 async def get_unread_count(current_user: User = Depends(get_current_user)):
@@ -3075,11 +3087,23 @@ async def get_unread_count(current_user: User = Depends(get_current_user)):
 @api_router.post("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
     """Mark notification as read"""
-    from bson import ObjectId
-    await db.notifications.update_one(
-        {"_id": ObjectId(notification_id), "user_id": current_user.user_id},
+    # Try to find by notification_id first (new format), then by _id (old format)
+    result = await db.notifications.update_one(
+        {"notification_id": notification_id, "user_id": current_user.user_id},
         {"$set": {"read": True}}
     )
+    
+    # If not found by notification_id, try _id for backwards compatibility
+    if result.modified_count == 0:
+        try:
+            from bson import ObjectId
+            await db.notifications.update_one(
+                {"_id": ObjectId(notification_id), "user_id": current_user.user_id},
+                {"$set": {"read": True}}
+            )
+        except Exception:
+            pass
+    
     return {"message": "Notification marked as read"}
 
 @api_router.post("/notifications/read-all")
@@ -3093,7 +3117,9 @@ async def mark_all_read(current_user: User = Depends(get_current_user)):
 
 async def create_notification(user_id: str, title: str, message: str, notification_type: str, data: dict = None, send_push: bool = True):
     """Helper function to create a notification and optionally send push notification"""
+    notification_id = f"notif_{uuid.uuid4().hex[:12]}"
     notification = {
+        "notification_id": notification_id,
         "user_id": user_id,
         "title": title,
         "message": message,
@@ -3105,15 +3131,23 @@ async def create_notification(user_id: str, title: str, message: str, notificati
     await db.notifications.insert_one(notification)
     logger.info(f"Notification created for user {user_id}: {title}")
     
-    # Also send push notification if user has a token
+    # Send push notifications if enabled
     if send_push:
+        push_data = {"type": notification_type, "notification_id": notification_id}
+        if data:
+            push_data.update(data)
+        
+        # Try FCM/Expo push (for native mobile apps)
         try:
-            push_data = {"type": notification_type}
-            if data:
-                push_data.update(data)
             await send_push_to_user(user_id, title, message, push_data)
         except Exception as e:
-            logger.error(f"Error sending push notification: {e}")
+            logger.error(f"Error sending FCM push notification: {e}")
+        
+        # Also send Web Push (for browsers/PWA)
+        try:
+            await send_web_push_to_user(user_id, title, message, url="/notifications")
+        except Exception as e:
+            logger.error(f"Error sending web push notification: {e}")
 
 # =======================
 # TRANSACTION ROUTES
