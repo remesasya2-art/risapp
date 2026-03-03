@@ -4069,13 +4069,17 @@ async def get_user_complete_info(user_id: str, admin_user: User = Depends(get_ad
         # ===== RECHARGE HISTORY =====
         "recharges": [{
             "transaction_id": tx.get("transaction_id"),
+            "recharge_id": tx.get("recharge_id") or tx.get("transaction_id"),
             "amount_brl": tx.get("amount_input"),
             "amount_ris": tx.get("amount_output"),
             "status": tx.get("status"),
             "payment_method": tx.get("payment_method", "pix"),
+            "source": tx.get("source", "pix"),
             "created_at": tx.get("created_at"),
             "completed_at": tx.get("completed_at"),
-            "has_proof": bool(tx.get("proof_image")),
+            "proof_image": tx.get("proof_image"),
+            "voucher_url": tx.get("voucher_url"),
+            "has_proof": bool(tx.get("proof_image") or tx.get("voucher_url")),
         } for tx in recharges],
         
         # ===== WITHDRAWAL HISTORY =====
@@ -4085,10 +4089,14 @@ async def get_user_complete_info(user_id: str, admin_user: User = Depends(get_ad
             "amount_ves": tx.get("amount_output"),
             "status": tx.get("status"),
             "beneficiary": tx.get("beneficiary_data", {}),
+            "beneficiary_name": tx.get("beneficiary_data", {}).get("full_name") or tx.get("beneficiary_name"),
+            "beneficiary_bank": tx.get("beneficiary_data", {}).get("bank") or tx.get("beneficiary_bank"),
             "created_at": tx.get("created_at"),
             "completed_at": tx.get("completed_at"),
             "processed_by": tx.get("processed_by"),
-            "has_proof": bool(tx.get("proof_image")),
+            "proof_image": tx.get("proof_image"),
+            "voucher_url": tx.get("voucher_url"),
+            "has_proof": bool(tx.get("proof_image") or tx.get("voucher_url")),
             "rejection_reason": tx.get("rejection_reason"),
         } for tx in withdrawals],
         

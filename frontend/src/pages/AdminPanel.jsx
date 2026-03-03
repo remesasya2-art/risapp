@@ -188,7 +188,35 @@ export default function AdminPanel() {
     setLoadingUser(true);
     try {
       const response = await api.get(`/admin/users/${userId}/complete`);
-      setUserHistory(response.data);
+      // Map the response to match expected structure
+      const data = response.data;
+      setUserHistory({
+        user: {
+          ...data.profile,
+          cpf: data.kyc?.cpf_number || data.profile?.document_number,
+          verification_status: data.kyc?.verification_status,
+        },
+        stats: {
+          total_recharged: data.stats?.total_recharged_ris || 0,
+          total_withdrawn: data.stats?.total_withdrawn_ris || 0,
+          total_ves_sent: data.stats?.total_ves_sent || 0,
+        },
+        recharges: (data.recharges || []).map(tx => ({
+          ...tx,
+          type: 'recharge',
+          amount_output: tx.amount_ris,
+          amount_ves: tx.amount_brl,
+        })),
+        withdrawals: (data.withdrawals || []).map(tx => ({
+          ...tx,
+          type: 'withdrawal',
+          amount_input: tx.amount_ris,
+          amount_output: tx.amount_ves,
+          beneficiary_name: tx.beneficiary?.full_name,
+          beneficiary_bank: tx.beneficiary?.bank,
+        })),
+        beneficiaries: data.beneficiaries || [],
+      });
       const selectedUserData = users.find(u => u.user_id === userId);
       setSelectedUser(selectedUserData);
     } catch (error) {
@@ -707,19 +735,27 @@ export default function AdminPanel() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                     <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '14px', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>BALANCE ACTUAL</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.user?.balance_ris?.toFixed(2)} RIS</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                        {(userHistory.user?.balance_ris ?? 0).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} RIS
+                      </p>
                     </div>
                     <div style={{ padding: '16px', backgroundColor: '#dbeafe', borderRadius: '14px', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL RECARGADO</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.stats?.total_recharged?.toFixed(2)} RIS</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                        {(userHistory.stats?.total_recharged ?? 0).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} RIS
+                      </p>
                     </div>
                     <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '14px', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: '#d97706', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL ENVIADO</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.stats?.total_withdrawn?.toFixed(2)} RIS</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                        {(userHistory.stats?.total_withdrawn ?? 0).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} RIS
+                      </p>
                     </div>
                     <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '14px', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: '#9333ea', margin: '0 0 4px 0', fontWeight: '600' }}>VES ENVIADOS</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{userHistory.stats?.total_ves_sent?.toFixed(0) || 0}</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                        {(userHistory.stats?.total_ves_sent ?? 0).toLocaleString('es-ES', {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                      </p>
                     </div>
                   </div>
 
@@ -766,47 +802,93 @@ export default function AdminPanel() {
                           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                           .map((tx, index) => (
                             <div 
-                              key={tx.transaction_id || index} 
+                              key={tx.transaction_id || tx.recharge_id || index} 
                               style={{ 
                                 padding: '14px 16px', 
                                 borderBottom: index < (userHistory.withdrawals?.length || 0) + (userHistory.recharges?.length || 0) - 1 ? '1px solid #f3f4f6' : 'none',
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ 
-                                  width: '36px', height: '36px', borderRadius: '10px', 
-                                  backgroundColor: tx.type === 'withdrawal' ? '#fef3c7' : '#dcfce7',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}>
-                                  {tx.type === 'withdrawal' ? (
-                                    <ArrowUpRight style={{ width: '18px', height: '18px', color: '#d97706' }} />
-                                  ) : (
-                                    <ArrowDownLeft style={{ width: '18px', height: '18px', color: '#16a34a' }} />
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  <div style={{ 
+                                    width: '36px', height: '36px', borderRadius: '10px', 
+                                    backgroundColor: tx.type === 'withdrawal' ? '#fef3c7' : '#dcfce7',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                  }}>
+                                    {tx.type === 'withdrawal' ? (
+                                      <ArrowUpRight style={{ width: '18px', height: '18px', color: '#d97706' }} />
+                                    ) : (
+                                      <ArrowDownLeft style={{ width: '18px', height: '18px', color: '#16a34a' }} />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                                      {tx.type === 'withdrawal' ? 'Envío/Retiro' : 'Recarga'}
+                                      {tx.source && <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}> ({tx.source})</span>}
+                                    </p>
+                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                      {new Date(tx.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                    <p style={{ fontSize: '11px', color: '#9ca3af', margin: '2px 0 0 0', fontFamily: 'monospace' }}>
+                                      ID: {tx.transaction_id || tx.recharge_id || 'N/A'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <p style={{ fontSize: '15px', fontWeight: '700', color: tx.type === 'withdrawal' ? '#d97706' : '#16a34a', margin: 0 }}>
+                                    {tx.type === 'withdrawal' ? '-' : '+'}
+                                    {tx.type === 'withdrawal' 
+                                      ? (tx.amount_input || tx.amount || 0).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                                      : (tx.amount_output || tx.amount_ris || tx.amount || 0).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                                    } RIS
+                                  </p>
+                                  {tx.type === 'withdrawal' && tx.amount_output > 0 && (
+                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                      = {tx.amount_output?.toLocaleString('es-ES')} VES
+                                    </p>
                                   )}
-                                </div>
-                                <div>
-                                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
-                                    {tx.type === 'withdrawal' ? 'Envío' : 'Recarga'}
-                                  </p>
-                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
-                                    {new Date(tx.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                  </p>
+                                  {tx.type !== 'withdrawal' && tx.amount_ves > 0 && (
+                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                      Pagó: {tx.amount_ves?.toLocaleString('es-ES')} VES
+                                    </p>
+                                  )}
+                                  <span style={{ 
+                                    fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '9999px',
+                                    backgroundColor: tx.status === 'completed' ? '#dcfce7' : tx.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                                    color: tx.status === 'completed' ? '#16a34a' : tx.status === 'pending' ? '#d97706' : '#dc2626'
+                                  }}>
+                                    {tx.status === 'completed' ? 'Completado' : tx.status === 'pending' ? 'Pendiente' : 'Rechazado'}
+                                  </span>
                                 </div>
                               </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontSize: '14px', fontWeight: '600', color: tx.type === 'withdrawal' ? '#d97706' : '#16a34a', margin: 0 }}>
-                                  {tx.type === 'withdrawal' ? '-' : '+'}{tx.type === 'withdrawal' ? tx.amount_input : tx.amount_output}
-                                  {tx.type === 'withdrawal' ? ' RIS' : ' RIS'}
-                                </p>
-                                <span style={{ 
-                                  fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '9999px',
-                                  backgroundColor: tx.status === 'completed' ? '#dcfce7' : tx.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                                  color: tx.status === 'completed' ? '#16a34a' : tx.status === 'pending' ? '#d97706' : '#dc2626'
-                                }}>
-                                  {tx.status === 'completed' ? 'Completado' : tx.status === 'pending' ? 'Pendiente' : 'Rechazado'}
-                                </span>
-                              </div>
+                              
+                              {/* Voucher/Comprobante */}
+                              {(tx.proof_image || tx.voucher_url) && (
+                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #e5e7eb' }}>
+                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 6px 0' }}>Comprobante:</p>
+                                  <img 
+                                    src={tx.proof_image || tx.voucher_url} 
+                                    alt="Comprobante" 
+                                    style={{ 
+                                      maxWidth: '200px', 
+                                      maxHeight: '150px', 
+                                      borderRadius: '8px', 
+                                      border: '1px solid #e5e7eb',
+                                      cursor: 'pointer'
+                                    }}
+                                    onClick={() => window.open(tx.proof_image || tx.voucher_url, '_blank')}
+                                  />
+                                </div>
+                              )}
+                              
+                              {/* Beneficiario (para retiros) */}
+                              {tx.type === 'withdrawal' && tx.beneficiary_name && (
+                                <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>
+                                  <span>Beneficiario: </span>
+                                  <span style={{ fontWeight: '500', color: '#374151' }}>{tx.beneficiary_name}</span>
+                                  {tx.beneficiary_bank && <span> - {tx.beneficiary_bank}</span>}
+                                </div>
+                              )}
                             </div>
                           ))}
                       </div>
