@@ -20,6 +20,17 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+// Detect if running on iOS
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+// Detect if running as PWA (installed)
+function isPWA() {
+  return window.matchMedia('(display-mode: standalone)').matches || 
+         window.navigator.standalone === true;
+}
+
 class PushNotificationService {
   constructor() {
     this.registration = null;
@@ -29,7 +40,30 @@ class PushNotificationService {
 
   // Check if push notifications are supported
   isSupported() {
-    return 'serviceWorker' in navigator && 'PushManager' in window;
+    // Basic check
+    const hasServiceWorker = 'serviceWorker' in navigator;
+    const hasPushManager = 'PushManager' in window;
+    const hasNotification = 'Notification' in window;
+    
+    // iOS Safari doesn't support web push unless it's a PWA on iOS 16.4+
+    if (isIOS() && !isPWA()) {
+      console.log('iOS detected - Push requires PWA installation');
+      return false;
+    }
+    
+    return hasServiceWorker && hasPushManager && hasNotification;
+  }
+
+  // Get detailed support info
+  getSupportInfo() {
+    return {
+      serviceWorker: 'serviceWorker' in navigator,
+      pushManager: 'PushManager' in window,
+      notification: 'Notification' in window,
+      isIOS: isIOS(),
+      isPWA: isPWA(),
+      permission: 'Notification' in window ? Notification.permission : 'unsupported'
+    };
   }
 
   // Check current permission status
@@ -41,14 +75,19 @@ class PushNotificationService {
   // Initialize service worker
   async init() {
     if (!this.isSupported()) {
-      console.log('Push notifications not supported');
+      console.log('Push notifications not supported on this device');
       return false;
     }
 
     try {
-      // Register service worker
-      this.registration = await navigator.serviceWorker.register('/sw.js');
+      // Register service worker with update check
+      this.registration = await navigator.serviceWorker.register('/sw.js', {
+        updateViaCache: 'none'
+      });
       console.log('Service Worker registered:', this.registration);
+
+      // Check for updates
+      this.registration.update();
 
       // Wait for it to be ready
       await navigator.serviceWorker.ready;
@@ -71,14 +110,22 @@ class PushNotificationService {
   async requestPermission() {
     if (!this.isSupported()) return 'unsupported';
     
-    const permission = await Notification.requestPermission();
-    return permission;
+    try {
+      const permission = await Notification.requestPermission();
+      return permission;
+    } catch (error) {
+      console.error('Permission request failed:', error);
+      return 'denied';
+    }
   }
 
   // Subscribe to push notifications
   async subscribe() {
     if (!this.registration || !this.publicKey) {
-      await this.init();
+      const initialized = await this.init();
+      if (!initialized) {
+        throw new Error('No se pudo inicializar el servicio de notificaciones');
+      }
     }
 
     if (!this.publicKey) {
@@ -89,7 +136,7 @@ class PushNotificationService {
       // Request permission if not granted
       const permission = await this.requestPermission();
       if (permission !== 'granted') {
-        throw new Error('Permiso de notificaciones denegado');
+        throw new Error('Permiso de notificaciones denegado. Por favor, habilita las notificaciones en la configuración de tu navegador.');
       }
 
       // Subscribe to push manager

@@ -36,16 +36,26 @@ export default function Profile() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(true);
+  const [pushMessage, setPushMessage] = useState('');
 
   useEffect(() => {
     checkPushStatus();
   }, []);
 
   const checkPushStatus = async () => {
+    const supportInfo = pushService.getSupportInfo();
+    
     if (!pushService.isSupported()) {
       setPushSupported(false);
+      // Set specific message for iOS
+      if (supportInfo.isIOS && !supportInfo.isPWA) {
+        setPushMessage('En iPhone/iPad, instala la app desde Safari: "Compartir" → "Agregar a inicio"');
+      } else {
+        setPushMessage('Tu navegador no soporta notificaciones');
+      }
       return;
     }
+    
     try {
       const status = await pushService.getStatus();
       setPushEnabled(status.enabled && status.subscribed);
@@ -56,7 +66,7 @@ export default function Profile() {
 
   const handleTogglePush = async () => {
     if (!pushSupported) {
-      toast.error('Tu navegador no soporta notificaciones push');
+      toast.error(pushMessage || 'Tu navegador no soporta notificaciones push');
       return;
     }
     
@@ -70,14 +80,14 @@ export default function Profile() {
         await pushService.init();
         await pushService.subscribe();
         setPushEnabled(true);
-        toast.success('¡Notificaciones activadas!');
+        toast.success('¡Notificaciones activadas! Recibirás alertas de tus transacciones.');
       }
     } catch (error) {
       console.error('Push toggle error:', error);
-      if (error.message?.includes('denegado')) {
-        toast.error('Debes permitir las notificaciones en tu navegador');
+      if (error.message?.includes('denegado') || error.message?.includes('Permiso')) {
+        toast.error('Debes permitir las notificaciones en la configuración de tu navegador');
       } else {
-        toast.error('Error al cambiar notificaciones');
+        toast.error(error.message || 'Error al cambiar notificaciones');
       }
     } finally {
       setPushLoading(false);
@@ -272,7 +282,7 @@ export default function Profile() {
                 style={{
                   width: '52px', height: '28px', borderRadius: '14px', border: 'none', cursor: pushSupported ? 'pointer' : 'not-allowed',
                   backgroundColor: pushEnabled ? '#16a34a' : '#d1d5db', position: 'relative', transition: 'all 0.2s',
-                  opacity: pushLoading ? 0.5 : 1
+                  opacity: pushLoading || !pushSupported ? 0.5 : 1
                 }}
                 data-testid="toggle-push-btn"
               >
@@ -284,6 +294,12 @@ export default function Profile() {
               </button>
             </div>
           </div>
+          {!pushSupported && pushMessage && (
+            <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <AlertCircle style={{ width: '16px', height: '16px', color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
+              <p style={{ fontSize: '12px', color: '#92400e', margin: 0, lineHeight: '1.4' }}>{pushMessage}</p>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

@@ -1,7 +1,7 @@
 // RIS App - Service Worker for Web Push Notifications
 // This file handles push notifications in the browser
 
-const CACHE_NAME = 'ris-app-v1';
+const CACHE_NAME = 'ris-app-v2';
 
 // Install event
 self.addEventListener('install', (event) => {
@@ -25,7 +25,7 @@ self.addEventListener('push', (event) => {
     icon: '/logo-ris.jpeg',
     badge: '/logo-ris.jpeg',
     url: '/',
-    tag: 'ris-notification'
+    tag: 'ris-notification-' + Date.now()
   };
   
   try {
@@ -46,12 +46,14 @@ self.addEventListener('push', (event) => {
       url: data.url,
       ...data.data
     },
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200, 100, 200],
     actions: [
       { action: 'open', title: 'Abrir' },
       { action: 'close', title: 'Cerrar' }
     ],
-    requireInteraction: false
+    requireInteraction: true,
+    renotify: true,
+    silent: false
   };
   
   event.waitUntil(
