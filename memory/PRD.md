@@ -169,9 +169,10 @@
 ### P0 - Critical
 - [x] Admin Panel "Procesar" and "Rechazar" buttons - FIXED (2026-03-02)
 - [x] Registration Flow - FIXED (2026-03-02) - Two-step verification flow working
+- [x] Email integration with Resend - FIXED (2026-03-02) - Custom domain verified
 
 ### P1 - High Priority
-- [ ] End-to-End test Web Push Notifications with transaction events
+- [x] Web Push Notifications E2E - FIXED (2026-03-03) - Route conflict resolved, endpoints now at /push/web/*
 - [ ] End-to-End test PIX recharge flow with Mercado Pago
 - [ ] End-to-End test Admin-to-User Chat Flow via WhatsApp
 

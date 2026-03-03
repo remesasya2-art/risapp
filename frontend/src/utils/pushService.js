@@ -54,7 +54,7 @@ class PushNotificationService {
       await navigator.serviceWorker.ready;
 
       // Get VAPID public key from server
-      const response = await api.get('/push/vapid-public-key');
+      const response = await api.get('/push/web/vapid-public-key');
       this.publicKey = response.data.publicKey;
 
       // Check existing subscription
@@ -100,7 +100,7 @@ class PushNotificationService {
 
       // Send subscription to server
       const subscriptionData = this.subscription.toJSON();
-      await api.post('/push/subscribe', {
+      await api.post('/push/web/subscribe', {
         endpoint: subscriptionData.endpoint,
         keys: subscriptionData.keys
       });
@@ -121,7 +121,7 @@ class PushNotificationService {
         this.subscription = null;
       }
 
-      await api.post('/push/unsubscribe');
+      await api.post('/push/web/unsubscribe');
       console.log('Push unsubscription successful');
       return true;
     } catch (error) {
@@ -143,7 +143,7 @@ class PushNotificationService {
   // Get subscription status from server
   async getStatus() {
     try {
-      const response = await api.get('/push/status');
+      const response = await api.get('/push/web/status');
       return response.data;
     } catch (error) {
       console.error('Failed to get push status:', error);
@@ -154,7 +154,7 @@ class PushNotificationService {
   // Send test notification
   async sendTestNotification() {
     try {
-      const response = await api.post('/push/test');
+      const response = await api.post('/push/web/test');
       return response.data;
     } catch (error) {
       console.error('Failed to send test notification:', error);

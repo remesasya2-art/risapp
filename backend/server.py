@@ -4569,7 +4569,7 @@ class SendNotificationRequest(BaseModel):
     body: str
     url: str = "/"
 
-@api_router.get("/push/vapid-public-key")
+@api_router.get("/push/web/vapid-public-key")
 async def get_vapid_public_key():
     """Get the VAPID public key for client-side subscription"""
     public_key = web_push_service.get_public_key()
@@ -4577,7 +4577,7 @@ async def get_vapid_public_key():
         raise HTTPException(status_code=503, detail="Push notifications not configured")
     return {"publicKey": public_key}
 
-@api_router.post("/push/subscribe")
+@api_router.post("/push/web/subscribe")
 async def subscribe_to_push(
     request: PushSubscriptionRequest, 
     current_user: User = Depends(get_current_user)
@@ -4606,7 +4606,7 @@ async def subscribe_to_push(
         logger.error(f"Error subscribing to push: {e}")
         raise HTTPException(status_code=500, detail="Error al suscribirse a notificaciones")
 
-@api_router.post("/push/unsubscribe")
+@api_router.post("/push/web/unsubscribe")
 async def unsubscribe_from_push(current_user: User = Depends(get_current_user)):
     """Unsubscribe user from push notifications"""
     try:
@@ -4625,9 +4625,9 @@ async def unsubscribe_from_push(current_user: User = Depends(get_current_user)):
         logger.error(f"Error unsubscribing from push: {e}")
         raise HTTPException(status_code=500, detail="Error al desuscribirse")
 
-@api_router.get("/push/status")
-async def get_push_status(current_user: User = Depends(get_current_user)):
-    """Get current push notification subscription status"""
+@api_router.get("/push/web/status")
+async def get_web_push_status(current_user: User = Depends(get_current_user)):
+    """Get current web push notification subscription status"""
     user = await db.users.find_one({"user_id": current_user.user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -4638,9 +4638,9 @@ async def get_push_status(current_user: User = Depends(get_current_user)):
         "subscribed_at": user.get("web_push_subscribed_at")
     }
 
-@api_router.post("/push/test")
-async def send_test_notification(current_user: User = Depends(get_current_user)):
-    """Send a test push notification to the current user"""
+@api_router.post("/push/web/test")
+async def send_web_test_notification(current_user: User = Depends(get_current_user)):
+    """Send a test web push notification to the current user"""
     user = await db.users.find_one({"user_id": current_user.user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
