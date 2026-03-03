@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCheck, X, ExternalLink } from 'lucide-react';
 import api from '../utils/api';
 
 export default function Notifications() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   useEffect(() => {
     loadNotifications();
@@ -26,15 +27,24 @@ export default function Notifications() {
     }
   };
 
-  const markAsRead = async (notificationId) => {
-    try {
-      await api.post(`/notifications/${notificationId}/read`);
-      setNotifications(notifications.map(n => 
-        n.notification_id === notificationId ? { ...n, read: true } : n
-      ));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
+  const openNotification = async (notification) => {
+    setSelectedNotification(notification);
+    
+    // Mark as read when opening
+    if (!notification.read) {
+      try {
+        await api.post(`/notifications/${notification.notification_id}/read`);
+        setNotifications(notifications.map(n => 
+          n.notification_id === notification.notification_id ? { ...n, read: true } : n
+        ));
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
     }
+  };
+
+  const closeNotification = () => {
+    setSelectedNotification(null);
   };
 
   const markAllAsRead = async () => {
@@ -61,13 +71,43 @@ export default function Notifications() {
     return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
   };
 
+  const formatFullDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', { 
+      weekday: 'long',
+      day: '2-digit', 
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'transaction': return '💰';
+      case 'recharge': return '💳';
+      case 'withdrawal': return '📤';
       case 'kyc': return '✅';
       case 'password_reset': return '🔐';
       case 'support': return '💬';
+      case 'rate_change': return '📊';
       default: return '🔔';
+    }
+  };
+
+  const getNotificationAction = (notification) => {
+    switch (notification.type) {
+      case 'transaction':
+      case 'recharge':
+      case 'withdrawal':
+        return { label: 'Ver historial', path: '/history' };
+      case 'kyc':
+        return { label: 'Ver perfil', path: '/profile' };
+      case 'support':
+        return { label: 'Ir a soporte', path: '/support' };
+      default:
+        return null;
     }
   };
 
@@ -151,10 +191,10 @@ export default function Notifications() {
             {notifications.map((notification, index) => (
               <div
                 key={notification.notification_id}
-                onClick={() => !notification.read && markAsRead(notification.notification_id)}
+                onClick={() => openNotification(notification)}
                 style={{
                   padding: '16px 20px',
-                  cursor: notification.read ? 'default' : 'pointer',
+                  cursor: 'pointer',
                   backgroundColor: notification.read ? '#ffffff' : '#eff6ff',
                   borderBottom: index < notifications.length - 1 ? '1px solid #e5e7eb' : 'none',
                   transition: 'background-color 0.2s'
@@ -178,7 +218,9 @@ export default function Notifications() {
                     </div>
                     <p style={{ 
                       fontSize: '14px', color: notification.read ? '#9ca3af' : '#6b7280',
-                      margin: '4px 0 0 0', lineHeight: '1.4'
+                      margin: '4px 0 0 0', lineHeight: '1.4',
+                      overflow: 'hidden', textOverflow: 'ellipsis', 
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
                     }}>
                       {notification.message}
                     </p>
@@ -195,6 +237,104 @@ export default function Notifications() {
           </div>
         )}
       </div>
+
+      {/* Notification Detail Modal */}
+      {selectedNotification && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: '20px',
+            zIndex: 1000
+          }}
+          onClick={closeNotification}
+          data-testid="notification-modal-overlay"
+        >
+          <div 
+            style={{
+              backgroundColor: '#ffffff', borderRadius: '20px', width: '100%',
+              maxWidth: '480px', maxHeight: '80vh', overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.2)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="notification-modal"
+          >
+            {/* Modal Header */}
+            <div style={{ 
+              padding: '20px', borderBottom: '1px solid #e5e7eb',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ fontSize: '32px' }}>{getNotificationIcon(selectedNotification.type)}</div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                    {selectedNotification.title}
+                  </h3>
+                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                    {formatFullDate(selectedNotification.created_at)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeNotification}
+                style={{
+                  width: '36px', height: '36px', borderRadius: '50%',
+                  border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                data-testid="close-notification-modal"
+              >
+                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px', overflowY: 'auto', maxHeight: 'calc(80vh - 160px)' }}>
+              <p style={{ fontSize: '15px', color: '#374151', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
+                {selectedNotification.message}
+              </p>
+              
+              {selectedNotification.data && Object.keys(selectedNotification.data).length > 0 && (
+                <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+                  <p style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', margin: '0 0 8px 0' }}>Detalles:</p>
+                  {selectedNotification.data.amount && (
+                    <p style={{ fontSize: '14px', color: '#111827', margin: '4px 0' }}>
+                      Monto: <strong>RI$ {parseFloat(selectedNotification.data.amount).toFixed(2)}</strong>
+                    </p>
+                  )}
+                  {selectedNotification.data.transaction_id && (
+                    <p style={{ fontSize: '14px', color: '#111827', margin: '4px 0' }}>
+                      ID: <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{selectedNotification.data.transaction_id}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer with Action */}
+            {getNotificationAction(selectedNotification) && (
+              <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
+                <button
+                  onClick={() => {
+                    closeNotification();
+                    navigate(getNotificationAction(selectedNotification).path);
+                  }}
+                  style={{
+                    width: '100%', padding: '14px', backgroundColor: '#6366f1',
+                    color: '#ffffff', border: 'none', borderRadius: '12px',
+                    fontSize: '15px', fontWeight: '600', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                  }}
+                  data-testid="notification-action-btn"
+                >
+                  <ExternalLink style={{ width: '18px', height: '18px' }} />
+                  {getNotificationAction(selectedNotification).label}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
