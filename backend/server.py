@@ -3563,6 +3563,94 @@ async def twilio_whatsapp_webhook(request: Request):
                                         logger.warning(f"Push notification falló: {e}")
                                 
                                 # ============================
+                                # SEND EMAIL NOTIFICATION TO USER
+                                # ============================
+                                if user and user.get('email') and RESEND_API_KEY:
+                                    try:
+                                        beneficiary_name = beneficiary.get('full_name', 'beneficiario')
+                                        user_email = user.get('email')
+                                        user_name = user.get('name', 'Usuario')
+                                        
+                                        email_html = f"""
+                                        <!DOCTYPE html>
+                                        <html>
+                                        <head>
+                                            <meta charset="UTF-8">
+                                            <style>
+                                                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }}
+                                                .container {{ max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+                                                .header {{ background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 30px; text-align: center; }}
+                                                .header h1 {{ margin: 0; font-size: 24px; }}
+                                                .content {{ padding: 30px; }}
+                                                .success-icon {{ font-size: 48px; text-align: center; margin-bottom: 20px; }}
+                                                .message {{ font-size: 16px; color: #374151; line-height: 1.6; text-align: center; margin-bottom: 20px; }}
+                                                .details {{ background: #f9fafb; border-radius: 12px; padding: 20px; margin: 20px 0; }}
+                                                .detail-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }}
+                                                .detail-row:last-child {{ border-bottom: none; }}
+                                                .detail-label {{ color: #6b7280; font-size: 14px; }}
+                                                .detail-value {{ color: #111827; font-weight: 600; font-size: 14px; }}
+                                                .cta {{ text-align: center; margin-top: 25px; }}
+                                                .cta a {{ background: #6366f1; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; display: inline-block; }}
+                                                .footer {{ text-align: center; padding: 20px; color: #9ca3af; font-size: 12px; }}
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <div class="container">
+                                                <div class="header">
+                                                    <h1>RIS App</h1>
+                                                </div>
+                                                <div class="content">
+                                                    <div class="success-icon">✅</div>
+                                                    <p class="message">
+                                                        ¡Hola {user_name}!<br><br>
+                                                        Tu envío al beneficiario <strong>{beneficiary_name}</strong> por un monto de <strong>{amount_ves:.2f} VES</strong> fue enviado con éxito.
+                                                    </p>
+                                                    <div class="details">
+                                                        <div class="detail-row">
+                                                            <span class="detail-label">Beneficiario</span>
+                                                            <span class="detail-value">{beneficiary_name}</span>
+                                                        </div>
+                                                        <div class="detail-row">
+                                                            <span class="detail-label">Monto enviado</span>
+                                                            <span class="detail-value">{amount_ves:.2f} VES</span>
+                                                        </div>
+                                                        <div class="detail-row">
+                                                            <span class="detail-label">Monto debitado</span>
+                                                            <span class="detail-value">{amount_ris:.2f} RIS</span>
+                                                        </div>
+                                                        <div class="detail-row">
+                                                            <span class="detail-label">ID de transacción</span>
+                                                            <span class="detail-value">{tx_id[:12]}...</span>
+                                                        </div>
+                                                    </div>
+                                                    <p class="message" style="font-size: 14px;">
+                                                        Puedes consultar tu voucher en la sección de <strong>Historial</strong> en la web.
+                                                    </p>
+                                                    <div class="cta">
+                                                        <a href="https://www.risappbr.com/history">Ver Historial</a>
+                                                    </div>
+                                                </div>
+                                                <div class="footer">
+                                                    © 2025 RIS App - Todos los derechos reservados
+                                                </div>
+                                            </div>
+                                        </body>
+                                        </html>
+                                        """
+                                        
+                                        email_params = {
+                                            "from": SENDER_EMAIL,
+                                            "to": [user_email],
+                                            "subject": f"✅ Envío exitoso a {beneficiary_name} - {amount_ves:.2f} VES",
+                                            "html": email_html
+                                        }
+                                        
+                                        await asyncio.to_thread(resend.Emails.send, email_params)
+                                        logger.info(f"Email de confirmación enviado a {user_email}")
+                                    except Exception as e:
+                                        logger.warning(f"Error enviando email de confirmación: {e}")
+                                
+                                # ============================
                                 # SEND WHATSAPP CONFIRMATION TO ADMIN
                                 # ============================
                                 from twilio.rest import Client
