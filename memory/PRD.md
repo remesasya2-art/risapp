@@ -22,6 +22,11 @@
 - [x] Campo opcional de código de referido en registro
 - [x] Sistema de roles (user, socio, socio_gestor, admin, super_admin)
 - [x] Recuperación de contraseña via email
+- [x] **Reseteo de contraseña por Admin** - SuperAdmin puede restablecer contraseña de usuarios
+  - Genera contraseña temporal de 8 caracteres
+  - Envía email con contraseña temporal
+  - Usuario forzado a cambiar contraseña en siguiente login
+  - Página /force-change-password para establecer nueva contraseña
 
 ### Dashboard
 - [x] Balance total en RI$ (formato: RI$ 100.00)
@@ -95,6 +100,7 @@
 - [x] Ver lista de Socios y sus referidos
 - [x] Ver lista de Gestores y sus transacciones
 - [x] Configurar comisión de gestores
+- [x] **Resetear contraseña de usuario** - Genera contraseña temporal de un solo uso
 
 ## Technical Stack
 - **Frontend:** React + Vite + Tailwind CSS
@@ -114,7 +120,10 @@
 - POST /api/auth/register
 - POST /api/auth/verify-code
 - POST /api/auth/login
+- POST /api/auth/login-password
 - POST /api/auth/forgot-password
+- POST /api/auth/set-new-password - Establecer nueva contraseña después de reset
+- GET /api/auth/me
 
 ### Partner (Socio)
 - GET /api/partner/dashboard
@@ -137,6 +146,8 @@
 - GET /api/admin/gestors
 - GET /api/admin/gestor-commission
 - POST /api/admin/gestor-commission
+- POST /api/admin/reset-password - Resetear contraseña de usuario (SuperAdmin)
+- POST /api/admin/change-role - Cambiar rol de usuario (SuperAdmin)
 
 ## Database Collections
 - users
@@ -169,4 +180,4 @@
 - VAPID_SUBJECT
 
 ## Last Updated
-2025-03-05 - Sistema de Socios y Socios Gestores implementado
+2026-03-05 - Sistema de Reseteo de Contraseña por Admin implementado y probado

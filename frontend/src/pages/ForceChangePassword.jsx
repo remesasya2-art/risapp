@@ -22,8 +22,26 @@ export default function ForceChangePassword() {
       return;
     }
     
-    if (newPassword.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
+    if (newPassword.length < 7) {
+      toast.error('La contraseña debe tener al menos 7 caracteres');
+      return;
+    }
+    
+    // Check for letters
+    if (!/[a-zA-Z]/.test(newPassword)) {
+      toast.error('La contraseña debe contener al menos una letra');
+      return;
+    }
+    
+    // Check for numbers
+    if (!/[0-9]/.test(newPassword)) {
+      toast.error('La contraseña debe contener al menos un número');
+      return;
+    }
+    
+    // Check for special characters
+    if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
+      toast.error('La contraseña debe contener al menos un carácter especial');
       return;
     }
     
@@ -130,7 +148,7 @@ export default function ForceChangePassword() {
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mín. 7 caracteres, letra, número, carácter especial"
                 style={inputStyle}
                 data-testid="new-password-input"
               />
