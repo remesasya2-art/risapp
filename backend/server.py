@@ -288,6 +288,101 @@ async def send_push_to_admins(title: str, body: str, data: dict = None) -> int:
     return sent_count
 
 # =======================
+# REFERRAL BONUS SYSTEM
+# =======================
+async def process_referral_bonus(user_id: str, recharge_amount: float):
+    """
+    Process referral bonuses when a user recharges.
+    - If user was referred and total reaches 100 RI$: Pay 5 RI$ bonus to partner
+    - After milestone: Pay 1% commission on each recharge
+    """
+    try:
+        # Get the user
+        user = await db.users.find_one({"user_id": user_id})
+        if not user or not user.get("referred_by"):
+            return  # User was not referred
+        
+        partner_id = user.get("referred_by")
+        partner = await db.users.find_one({"user_id": partner_id, "role": "socio"})
+        if not partner:
+            return  # Partner no longer exists or is not a socio
+        
+        # Update user's total recharged
+        new_total = user.get("total_recharged", 0) + recharge_amount
+        bonus_already_paid = user.get("referral_bonus_paid", False)
+        
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"total_recharged": new_total}}
+        )
+        
+        # Check if milestone reached (100 RI$) and bonus not yet paid
+        if not bonus_already_paid and new_total >= 100:
+            # Pay 5 RI$ bonus to partner
+            await db.users.update_one(
+                {"user_id": partner_id},
+                {"$inc": {"balance_ris": 5.0}}
+            )
+            
+            # Mark bonus as paid
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"referral_bonus_paid": True}}
+            )
+            
+            # Record the bonus transaction
+            bonus_record = {
+                "record_id": f"ref_bonus_{uuid.uuid4().hex[:12]}",
+                "type": "referral_milestone_bonus",
+                "partner_id": partner_id,
+                "partner_name": partner.get("name", ""),
+                "referred_user_id": user_id,
+                "referred_user_name": user.get("name", ""),
+                "amount": 5.0,
+                "milestone_reached": 100.0,
+                "created_at": datetime.now(timezone.utc)
+            }
+            await db.referral_earnings.insert_one(bonus_record)
+            
+            # Notify partner
+            await create_notification(
+                user_id=partner_id,
+                title="🎉 ¡Bono de Referido!",
+                message=f"Tu referido {user.get('name', 'Usuario')} alcanzó 100 RI$ en recargas. ¡Ganaste 5 RI$ de bonificación!",
+                notification_type="referral_bonus",
+                data={"bonus_amount": 5.0, "referred_user": user.get("name", "")}
+            )
+            
+            logger.info(f"✅ Referral milestone bonus paid: 5 RI$ to {partner_id} for user {user_id}")
+        
+        # If milestone already reached, pay 1% commission
+        elif bonus_already_paid:
+            commission = recharge_amount * 0.01  # 1%
+            if commission > 0:
+                await db.users.update_one(
+                    {"user_id": partner_id},
+                    {"$inc": {"balance_ris": commission}}
+                )
+                
+                # Record the commission
+                commission_record = {
+                    "record_id": f"ref_comm_{uuid.uuid4().hex[:12]}",
+                    "type": "referral_commission",
+                    "partner_id": partner_id,
+                    "partner_name": partner.get("name", ""),
+                    "referred_user_id": user_id,
+                    "referred_user_name": user.get("name", ""),
+                    "recharge_amount": recharge_amount,
+                    "commission_rate": 0.01,
+                    "amount": commission,
+                    "created_at": datetime.now(timezone.utc)
+                }
+                await db.referral_earnings.insert_one(commission_record)
+                
+                logger.info(f"✅ Referral commission paid: {commission:.2f} RI$ to {partner_id} for recharge of {recharge_amount} RI$")
+    
+    except Exception as e:
+        logger.error(f"Error processing referral bonus: {e}")
 # MODELS
 # =======================
 
@@ -466,6 +561,7 @@ class RegisterUserRequest(BaseModel):
     password: str
     confirm_password: str
     phone: Optional[str] = None
+    referral_code: Optional[str] = None  # Código de referido opcional
 
 class VerifyEmailCodeRequest(BaseModel):
     email: str
@@ -1175,7 +1271,8 @@ async def register_user(request: RegisterUserRequest):
         "verification_code": verification_code,
         "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
         "created_at": datetime.now(timezone.utc),
-        "attempts": 0
+        "attempts": 0,
+        "referral_code": request.referral_code.strip().upper() if request.referral_code else None
     }
     
     # Remove any existing pending verification for this email
@@ -1250,6 +1347,18 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
     # Code is correct - create the user
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     
+    # Check if referral code is valid
+    referred_by_user = None
+    referral_code_used = pending.get("referral_code")
+    if referral_code_used:
+        referred_by_user = await db.users.find_one({
+            "referral_code": referral_code_used,
+            "role": "socio"
+        })
+        if not referred_by_user:
+            logger.warning(f"Código de referido inválido: {referral_code_used}")
+            referral_code_used = None  # Ignore invalid code
+    
     new_user = {
         "user_id": user_id,
         "email": email_lower,
@@ -1268,7 +1377,13 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         "accepted_policies": False,
         "is_active": True,
         "created_at": datetime.now(timezone.utc),
-        "registration_method": "email"
+        "registration_method": "email",
+        # Referral system fields
+        "referred_by": referred_by_user["user_id"] if referred_by_user else None,
+        "referred_by_code": referral_code_used,
+        "total_recharged": 0.0,  # Total recargas acumuladas
+        "referral_bonus_paid": False,  # Si ya se pagó el bono de 5 RI$
+        "referral_code": None  # Solo los socios tienen código
     }
     
     await db.users.insert_one(new_user)
@@ -2296,6 +2411,9 @@ async def approve_ves_recharge(request: ApproveVESRechargeRequest, admin_user: U
             {"$inc": {"balance_ris": amount_ris}}
         )
         
+        # Process referral bonus if applicable
+        await process_referral_bonus(user_id, amount_ris)
+        
         # Update transaction status
         await db.transactions.update_one(
             {"transaction_id": request.transaction_id},
@@ -2555,6 +2673,9 @@ async def upload_pix_proof(request: PixUploadProofRequest, current_user: User = 
             {"user_id": current_user.user_id},
             {"$inc": {"balance_ris": amount_ris}}
         )
+        
+        # Process referral bonus if applicable
+        await process_referral_bonus(current_user.user_id, amount_ris)
         
         await db.transactions.update_one(
             {"transaction_id": request.transaction_id},
@@ -4824,6 +4945,218 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# =======================
+# PARTNER (SOCIO) ENDPOINTS
+# =======================
+
+class AssignPartnerRoleRequest(BaseModel):
+    user_id: str
+    referral_code: Optional[str] = None
+
+@api_router.post("/admin/assign-partner")
+async def assign_partner_role(request: AssignPartnerRoleRequest, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Assign 'socio' role to a user"""
+    user = await db.users.find_one({"user_id": request.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.get("role") == "socio":
+        raise HTTPException(status_code=400, detail="El usuario ya es socio")
+    
+    # Generate unique referral code if not provided
+    referral_code = request.referral_code
+    if not referral_code:
+        # Generate code from name + random
+        name_part = ''.join(user.get("name", "USER").split()).upper()[:4]
+        random_part = uuid.uuid4().hex[:4].upper()
+        referral_code = f"{name_part}{random_part}"
+    
+    # Ensure code is unique
+    existing = await db.users.find_one({"referral_code": referral_code})
+    if existing:
+        referral_code = f"{referral_code}{uuid.uuid4().hex[:2].upper()}"
+    
+    await db.users.update_one(
+        {"user_id": request.user_id},
+        {"$set": {
+            "role": "socio",
+            "referral_code": referral_code.upper(),
+            "became_partner_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Notify the new partner
+    await create_notification(
+        user_id=request.user_id,
+        title="🎉 ¡Eres Socio!",
+        message=f"Tu cuenta ha sido promovida a Socio. Tu código de referido es: {referral_code.upper()}. ¡Compártelo y gana comisiones!",
+        notification_type="partner_assigned",
+        data={"referral_code": referral_code.upper()}
+    )
+    
+    logger.info(f"User {request.user_id} assigned as partner with code {referral_code}")
+    
+    return {
+        "message": "Usuario asignado como socio exitosamente",
+        "referral_code": referral_code.upper()
+    }
+
+@api_router.delete("/admin/remove-partner/{user_id}")
+async def remove_partner_role(user_id: str, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Remove 'socio' role from a user"""
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.get("role") != "socio":
+        raise HTTPException(status_code=400, detail="El usuario no es socio")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "role": "user",
+            "referral_code": None
+        }}
+    )
+    
+    return {"message": "Rol de socio removido exitosamente"}
+
+@api_router.get("/admin/partners")
+async def get_all_partners(admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Get all partners with their stats"""
+    partners = await db.users.find({"role": "socio"}).to_list(500)
+    
+    result = []
+    for partner in partners:
+        partner_id = partner["user_id"]
+        
+        # Count referrals
+        referrals_count = await db.users.count_documents({"referred_by": partner_id})
+        
+        # Calculate total earnings
+        earnings = await db.referral_earnings.find({"partner_id": partner_id}).to_list(1000)
+        total_earnings = sum(e.get("amount", 0) for e in earnings)
+        
+        # This month earnings
+        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_earnings = sum(e.get("amount", 0) for e in earnings if e.get("created_at", datetime.min.replace(tzinfo=timezone.utc)) >= month_start)
+        
+        result.append({
+            "user_id": partner_id,
+            "name": partner.get("name", ""),
+            "email": partner.get("email", ""),
+            "referral_code": partner.get("referral_code", ""),
+            "referrals_count": referrals_count,
+            "total_earnings": round(total_earnings, 2),
+            "month_earnings": round(month_earnings, 2),
+            "balance_ris": partner.get("balance_ris", 0),
+            "became_partner_at": partner.get("became_partner_at"),
+            "created_at": partner.get("created_at")
+        })
+    
+    return result
+
+@api_router.get("/admin/partners/{partner_id}/referrals")
+async def get_partner_referrals(partner_id: str, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Get all users referred by a specific partner"""
+    partner = await db.users.find_one({"user_id": partner_id, "role": "socio"})
+    if not partner:
+        raise HTTPException(status_code=404, detail="Socio no encontrado")
+    
+    referrals = await db.users.find({"referred_by": partner_id}).to_list(500)
+    
+    result = []
+    for user in referrals:
+        result.append({
+            "user_id": user["user_id"],
+            "name": user.get("name", ""),
+            "email": user.get("email", ""),
+            "total_recharged": user.get("total_recharged", 0),
+            "bonus_milestone_reached": user.get("referral_bonus_paid", False),
+            "created_at": user.get("created_at"),
+            "is_active": user.get("is_active", True)
+        })
+    
+    return {
+        "partner": {
+            "user_id": partner_id,
+            "name": partner.get("name", ""),
+            "referral_code": partner.get("referral_code", "")
+        },
+        "referrals": result
+    }
+
+@api_router.get("/partner/dashboard")
+async def get_partner_dashboard(current_user: User = Depends(get_current_user)):
+    """Partner: Get own referral dashboard"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios")
+    
+    partner_id = current_user.user_id
+    referral_code = user.get("referral_code", "")
+    
+    # Get referrals
+    referrals = await db.users.find({"referred_by": partner_id}).to_list(500)
+    
+    # Get earnings
+    earnings = await db.referral_earnings.find({"partner_id": partner_id}).sort("created_at", -1).to_list(100)
+    
+    # Calculate stats
+    total_earnings = sum(e.get("amount", 0) for e in earnings)
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_earnings = sum(e.get("amount", 0) for e in earnings if e.get("created_at", datetime.min.replace(tzinfo=timezone.utc)) >= month_start)
+    
+    # Active referrals (those who have recharged)
+    active_referrals = len([r for r in referrals if r.get("total_recharged", 0) > 0])
+    
+    # Referrals list
+    referrals_list = []
+    for r in referrals:
+        referrals_list.append({
+            "name": r.get("name", "Usuario"),
+            "total_recharged": r.get("total_recharged", 0),
+            "milestone_reached": r.get("referral_bonus_paid", False),
+            "created_at": r.get("created_at")
+        })
+    
+    # Recent earnings
+    recent_earnings = []
+    for e in earnings[:20]:
+        recent_earnings.append({
+            "type": e.get("type"),
+            "amount": e.get("amount", 0),
+            "referred_user_name": e.get("referred_user_name", ""),
+            "created_at": e.get("created_at")
+        })
+    
+    return {
+        "referral_code": referral_code,
+        "referral_link": f"https://www.risappbr.com/register?ref={referral_code}",
+        "stats": {
+            "total_referrals": len(referrals),
+            "active_referrals": active_referrals,
+            "total_earnings": round(total_earnings, 2),
+            "month_earnings": round(month_earnings, 2)
+        },
+        "referrals": referrals_list,
+        "recent_earnings": recent_earnings
+    }
+
+@api_router.get("/partner/referral-link")
+async def get_referral_link(current_user: User = Depends(get_current_user)):
+    """Partner: Get shareable referral link"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios")
+    
+    referral_code = user.get("referral_code", "")
+    
+    return {
+        "referral_code": referral_code,
+        "referral_link": f"https://www.risappbr.com/register?ref={referral_code}"
+    }
 
 @app.on_event("startup")
 async def startup_db_client():

@@ -1,17 +1,19 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff, ArrowLeft, Gift } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   // Form fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,6 +22,14 @@ export default function Register() {
   const [step, setStep] = useState(1); // 1 = form, 2 = verification
   const [verificationCode, setVerificationCode] = useState('');
   const [resending, setResending] = useState(false);
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const refCode = searchParams.get('ref');
+    if (refCode) {
+      setReferralCode(refCode.toUpperCase());
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,7 +55,8 @@ export default function Register() {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        confirm_password: confirmPassword
+        confirm_password: confirmPassword,
+        referral_code: referralCode.trim().toUpperCase() || null
       });
       
       toast.success(response.data.message || 'Código de verificación enviado');
@@ -148,6 +159,14 @@ export default function Register() {
     fontWeight: '700',
     cursor: 'pointer',
     transition: 'background-color 0.2s'
+  };
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: '8px'
   };
 
   // Verification Code Step (Step 2)
@@ -436,6 +455,33 @@ export default function Register() {
             )}
             {confirmPassword && password === confirmPassword && password.length >= 6 && (
               <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>Las contraseñas coinciden</p>
+            )}
+          </div>
+
+          {/* Referral Code Field */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={labelStyle}>Código de referido (opcional)</label>
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                <Gift size={20} />
+              </div>
+              <input
+                type="text"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                placeholder="Ej: JUAN2025"
+                data-testid="register-referral-input"
+                style={{
+                  ...inputStyle,
+                  paddingLeft: '48px',
+                  textTransform: 'uppercase'
+                }}
+              />
+            </div>
+            {referralCode && (
+              <p style={{ fontSize: '13px', color: '#6366f1', margin: '6px 0 0 0' }}>
+                🎁 ¡Código aplicado! Tu referidor recibirá una bonificación.
+              </p>
             )}
           </div>
 

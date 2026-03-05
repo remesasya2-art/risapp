@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, User, Mail, Phone, Shield, Lock, LogOut, 
-  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff, Gem, Crown, Settings
+  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff, Gem, Crown, Settings, Users, Gift
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -301,6 +301,33 @@ export default function Profile() {
             </div>
           )}
         </div>
+
+        {/* Partner Dashboard Button (only for socios) */}
+        {user?.role === 'socio' && (
+          <Link to="/partner" style={{ textDecoration: 'none' }}>
+            <div style={{ 
+              ...cardStyle, 
+              padding: '20px', 
+              marginBottom: '16px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              color: '#ffffff',
+              cursor: 'pointer'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Gift style={{ width: '24px', height: '24px', color: '#ffffff' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Panel de Socio</p>
+                    <p style={{ fontSize: '13px', opacity: 0.9, margin: '4px 0 0 0' }}>Ver referidos y ganancias</p>
+                  </div>
+                </div>
+                <ChevronRight style={{ width: '24px', height: '24px', opacity: 0.9 }} />
+              </div>
+            </div>
+          </Link>
+        )}
 
         {/* Actions */}
         <div style={{ ...cardStyle, overflow: 'hidden' }}>
