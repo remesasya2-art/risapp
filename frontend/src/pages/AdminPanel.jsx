@@ -35,6 +35,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
   const [withdrawals, setWithdrawals] = useState([]);
+  const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0 });
   const [recharges, setRecharges] = useState([]);
   const [users, setUsers] = useState([]);
   const [kycPending, setKycPending] = useState([]);
@@ -74,8 +75,13 @@ export default function AdminPanel() {
           });
           break;
         case 'withdrawals':
-          const wAllRes = await api.get('/admin/withdrawals/all');
+          // Get all withdrawals and queue stats
+          const [wAllRes, queueStatsRes] = await Promise.all([
+            api.get('/admin/withdrawals/all'),
+            api.get('/withdrawal/queue-stats').catch(() => ({ data: { total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0 } }))
+          ]);
           setWithdrawals(wAllRes.data || []);
+          setQueueStats(queueStatsRes.data || { total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0 });
           break;
         case 'recharges':
           const rAllRes = await api.get('/admin/recharges/ves/pending');
@@ -383,6 +389,33 @@ export default function AdminPanel() {
         {/* Withdrawals Tab */}
         {activeTab === 'withdrawals' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* FIFO Queue Status Banner */}
+            <div style={{ ...cardStyle, padding: '16px', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px solid #7dd3fc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '20px' }}>📋</span>
+                  <span style={{ fontWeight: '600', color: '#0369a1' }}>Cola WhatsApp (FIFO)</span>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', marginLeft: 'auto' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#0369a1' }}>{queueStats.total_pending}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Pendientes</p>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#059669' }}>{queueStats.active_in_whatsapp}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Activo WhatsApp</p>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#f59e0b' }}>{queueStats.waiting_in_queue}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>En Cola</p>
+                  </div>
+                </div>
+              </div>
+              <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                ℹ️ El sistema FIFO envía un retiro a la vez por WhatsApp. Cuando completes el retiro activo, se enviará automáticamente el siguiente de la cola. También puedes procesar retiros directamente desde este panel.
+              </p>
+            </div>
+            
             <div style={{ ...cardStyle, padding: '16px' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>

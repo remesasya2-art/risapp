@@ -47,6 +47,9 @@
 - [x] Gestión de beneficiarios guardados
 - [x] Cálculo automático de conversión RIS → VES
 - [x] Lista de bancos venezolanos
+- [x] **Sistema FIFO de Retiros via WhatsApp** - Cola ordenada, un retiro activo a la vez
+- [x] **Panel Web para procesar retiros** - Admin puede aprobar con comprobante directamente
+- [x] Estadísticas de cola en tiempo real (pendientes, activo en WhatsApp, en cola)
 
 ### Historial
 - [x] Lista de transacciones con filtros
@@ -180,4 +183,4 @@
 - VAPID_SUBJECT
 
 ## Last Updated
-2026-03-05 - Sistema de Reseteo de Contraseña por Admin implementado y probado
+2026-03-05 - Sistema FIFO para retiros WhatsApp y Panel Web para procesar retiros implementado

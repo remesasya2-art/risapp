@@ -118,6 +118,89 @@ async def send_whatsapp_notification(message_body: str) -> bool:
         logger.error(f"Error sending WhatsApp: {e}")
         return False
 
+async def send_next_pending_withdrawal_whatsapp():
+    """
+    FIFO System: Send the next pending withdrawal via WhatsApp.
+    Only sends if there's no other withdrawal currently being processed via WhatsApp.
+    """
+    try:
+        # Check if there's already an "active" withdrawal being processed via WhatsApp
+        active_withdrawal = await db.transactions.find_one({
+            "type": "withdrawal",
+            "status": "pending",
+            "whatsapp_notified": True
+        })
+        
+        if active_withdrawal:
+            logger.info(f"📋 FIFO: Ya hay un retiro activo en cola WhatsApp: {active_withdrawal.get('transaction_id')}")
+            return None
+        
+        # Get the oldest pending withdrawal that hasn't been sent to WhatsApp yet
+        next_withdrawal = await db.transactions.find_one(
+            {
+                "type": "withdrawal",
+                "status": "pending",
+                "whatsapp_notified": {"$ne": True}
+            },
+            sort=[("created_at", 1)]  # FIFO: oldest first
+        )
+        
+        if not next_withdrawal:
+            logger.info("📋 FIFO: No hay retiros pendientes en cola")
+            return None
+        
+        # Get user info
+        user = await db.users.find_one({"user_id": next_withdrawal['user_id']})
+        if not user:
+            logger.error(f"Usuario no encontrado para retiro: {next_withdrawal.get('transaction_id')}")
+            return None
+        
+        beneficiary = next_withdrawal.get('beneficiary_data', {})
+        bank_code = beneficiary.get('bank_code', '')
+        bank_name = beneficiary.get('bank', '')
+        bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
+        
+        # Build WhatsApp message
+        message = f"""🔔 *RETIRO EN COLA - PROCESAR AHORA*
+
+💰 Monto: {next_withdrawal['amount_input']:.2f} RIS → {next_withdrawal['amount_output']:.2f} VES
+👤 Usuario: {user.get('name', 'N/A')}
+📧 Email: {user.get('email', 'N/A')}
+
+📋 *DATOS PARA TRANSFERENCIA:*
+🏦 Banco: {bank_info}
+💳 Cuenta: {beneficiary.get('account_number', 'N/A')}
+👤 Titular: {beneficiary.get('full_name', 'N/A')}
+🆔 Cédula: {beneficiary.get('id_document', 'N/A')}
+📱 Teléfono: {beneficiary.get('phone_number', 'N/A')}
+
+🔢 ID: {next_withdrawal['transaction_id']}
+
+---
+✅ Responde con foto del comprobante para completar
+⚠️ Este es el ÚNICO retiro activo. Al completarlo, recibirás el siguiente."""
+        
+        # Send WhatsApp
+        whatsapp_sent = await send_whatsapp_notification(message)
+        
+        if whatsapp_sent:
+            # Mark as notified
+            await db.transactions.update_one(
+                {"transaction_id": next_withdrawal['transaction_id']},
+                {"$set": {
+                    "whatsapp_notified": True,
+                    "whatsapp_notified_at": datetime.now(timezone.utc)
+                }}
+            )
+            logger.info(f"📋 FIFO: Retiro enviado a WhatsApp: {next_withdrawal['transaction_id']}")
+            return next_withdrawal['transaction_id']
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error en FIFO WhatsApp: {e}")
+        return None
+
 async def send_verification_email(email: str, code: str, name: str) -> bool:
     """Send verification code via email using Resend"""
     if not RESEND_API_KEY:
@@ -2217,15 +2300,37 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         {"$inc": {"balance_ris": -request.amount_ris}}
     )
     
-    # Send WhatsApp notification to team with transaction ID
+    # FIFO System: Only send WhatsApp if there's no active withdrawal in queue
     try:
-        # Get bank code if available
-        bank_code = request.beneficiary_data.get('bank_code', '')
-        bank_name = request.beneficiary_data.get('bank', '')
-        bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
+        # Check if there's already an active withdrawal being processed via WhatsApp
+        active_withdrawal = await db.transactions.find_one({
+            "type": "withdrawal",
+            "status": "pending",
+            "whatsapp_notified": True
+        })
         
-        # Enhanced message with clear instructions and bank code for easy payment
-        message = f"""🔔 *NUEVO RETIRO PENDIENTE*
+        if active_withdrawal:
+            # There's already one being processed, don't send WhatsApp yet
+            logger.info(f"📋 FIFO: Retiro {transaction.transaction_id} agregado a cola. Retiro activo: {active_withdrawal.get('transaction_id')}")
+            
+            # Count how many are in queue
+            queue_count = await db.transactions.count_documents({
+                "type": "withdrawal",
+                "status": "pending",
+                "whatsapp_notified": {"$ne": True}
+            })
+            
+            # Notify admin about queue status via simple message (optional)
+            await send_whatsapp_notification(f"📋 *Nuevo retiro en cola*\nID: {transaction.transaction_id[:8]}...\nUsuario: {current_user.name}\nMonto: {request.amount_ris:.2f} RIS\n\n⏳ Posición en cola: {queue_count}\n\n_Se enviará automáticamente cuando completes el retiro actual._")
+        else:
+            # No active withdrawal, this becomes the active one
+            # Get bank code if available
+            bank_code = request.beneficiary_data.get('bank_code', '')
+            bank_name = request.beneficiary_data.get('bank', '')
+            bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
+            
+            # Enhanced message with clear instructions
+            message = f"""🔔 *RETIRO EN COLA - PROCESAR AHORA*
 
 💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} VES
 👤 Usuario: {current_user.name}
@@ -2238,22 +2343,34 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 🆔 Cédula: {request.beneficiary_data.get('id_document')}
 📱 Teléfono: {request.beneficiary_data.get('phone_number')}
 
-🔢 ID Transacción: {transaction.transaction_id}
+🔢 ID: {transaction.transaction_id}
 
 ---
-✅ Responde con foto del comprobante para completar"""
+✅ Responde con foto del comprobante para completar
+⚠️ Este es el ÚNICO retiro activo. Al completarlo, recibirás el siguiente."""
 
-        from twilio.rest import Client
-        twilio_client = Client(
-            os.getenv('TWILIO_ACCOUNT_SID'),
-            os.getenv('TWILIO_AUTH_TOKEN')
-        )
-        
-        twilio_client.messages.create(
-            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-            body=message,
-            to=os.getenv('TWILIO_WHATSAPP_TO')
-        )
+            from twilio.rest import Client
+            twilio_client_local = Client(
+                os.getenv('TWILIO_ACCOUNT_SID'),
+                os.getenv('TWILIO_AUTH_TOKEN')
+            )
+            
+            twilio_client_local.messages.create(
+                from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                body=message,
+                to=os.getenv('TWILIO_WHATSAPP_TO')
+            )
+            
+            # Mark as active in WhatsApp queue
+            await db.transactions.update_one(
+                {"transaction_id": transaction.transaction_id},
+                {"$set": {
+                    "whatsapp_notified": True,
+                    "whatsapp_notified_at": datetime.now(timezone.utc)
+                }}
+            )
+            logger.info(f"📋 FIFO: Retiro {transaction.transaction_id} enviado como activo a WhatsApp")
+            
     except Exception as e:
         logger.error(f"WhatsApp notification error: {e}")
     
@@ -2261,12 +2378,54 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 
 @api_router.get("/withdrawal/pending")
 async def get_pending_withdrawals(admin_user: User = Depends(get_admin_user)):
-    """Admin: Get all pending withdrawals"""
+    """Admin: Get all pending withdrawals with FIFO queue info"""
     withdrawals = await db.transactions.find(
         {"type": "withdrawal", "status": "pending"},
         {"_id": 0}
-    ).to_list(1000)
-    return [Transaction(**w) for w in withdrawals]
+    ).sort("created_at", 1).to_list(1000)  # FIFO order
+    
+    # Add queue position and active status
+    result = []
+    for idx, w in enumerate(withdrawals):
+        tx = dict(w)
+        tx['queue_position'] = idx + 1
+        tx['is_active_in_whatsapp'] = w.get('whatsapp_notified', False)
+        result.append(tx)
+    
+    # Queue stats
+    active_count = sum(1 for w in withdrawals if w.get('whatsapp_notified', False))
+    queue_count = len(withdrawals) - active_count
+    
+    return {
+        "withdrawals": result,
+        "queue_stats": {
+            "total_pending": len(withdrawals),
+            "active_in_whatsapp": active_count,
+            "waiting_in_queue": queue_count
+        }
+    }
+
+@api_router.get("/withdrawal/queue-stats")
+async def get_withdrawal_queue_stats(admin_user: User = Depends(get_admin_user)):
+    """Admin: Get withdrawal queue statistics"""
+    pending_count = await db.transactions.count_documents({
+        "type": "withdrawal",
+        "status": "pending"
+    })
+    
+    active_in_whatsapp = await db.transactions.count_documents({
+        "type": "withdrawal",
+        "status": "pending",
+        "whatsapp_notified": True
+    })
+    
+    waiting_in_queue = pending_count - active_in_whatsapp
+    
+    return {
+        "total_pending": pending_count,
+        "active_in_whatsapp": active_in_whatsapp,
+        "waiting_in_queue": waiting_in_queue
+    }
 
 @api_router.post("/withdrawal/process")
 async def process_withdrawal(request: ProcessWithdrawalRequest, admin_user: User = Depends(get_admin_user)):
@@ -3840,6 +3999,16 @@ async def twilio_whatsapp_webhook(request: Request):
                                 )
                                 logger.info("Confirmación WhatsApp enviada al admin")
                                 
+                                # ============================
+                                # FIFO: SEND NEXT PENDING WITHDRAWAL
+                                # ============================
+                                next_tx = await send_next_pending_withdrawal_whatsapp()
+                                if next_tx:
+                                    logger.info(f"📋 FIFO: Siguiente retiro enviado: {next_tx}")
+                                else:
+                                    # No more pending withdrawals
+                                    await send_whatsapp_notification("📭 *No hay más retiros pendientes en cola*\n\n✅ Todos los retiros han sido procesados.")
+                                
                                 return {"status": "success", "transaction_id": tx_id}
                             else:
                                 logger.warning(f"No se pudo actualizar transacción: {transaction_id}")
@@ -4700,7 +4869,7 @@ async def get_all_withdrawals(admin_user: User = Depends(get_admin_user)):
     return withdrawals
 
 @api_router.get("/admin/withdrawals/pending")
-async def get_pending_withdrawals(admin_user: User = Depends(get_admin_user)):
+async def admin_get_pending_withdrawals(admin_user: User = Depends(get_admin_user)):
     """Get only pending withdrawals for processing"""
     if not has_permission(admin_user, "withdrawals.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -4770,6 +4939,11 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             data={"transaction_id": request.transaction_id}
         )
         
+        # FIFO: Send next pending withdrawal to WhatsApp
+        next_tx = await send_next_pending_withdrawal_whatsapp()
+        if next_tx:
+            logger.info(f"📋 FIFO (Admin Panel): Siguiente retiro enviado a WhatsApp: {next_tx}")
+        
         return {"message": "Retiro aprobado y usuario notificado"}
     
     elif request.action == "reject":
@@ -4796,6 +4970,11 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             notification_type="withdrawal_rejected",
             data={"transaction_id": request.transaction_id}
         )
+        
+        # FIFO: Send next pending withdrawal to WhatsApp (even after rejection)
+        next_tx = await send_next_pending_withdrawal_whatsapp()
+        if next_tx:
+            logger.info(f"📋 FIFO (Admin Panel - Reject): Siguiente retiro enviado a WhatsApp: {next_tx}")
         
         return {"message": "Retiro rechazado y balance devuelto"}
     
