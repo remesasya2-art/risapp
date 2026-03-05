@@ -17,6 +17,7 @@ import AdminPanel from './pages/AdminPanel';
 import Notifications from './pages/Notifications';
 import Support from './pages/Support';
 import PartnerDashboard from './pages/PartnerDashboard';
+import GestorDashboard from './pages/GestorDashboard';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -80,6 +81,7 @@ function AppRoutes() {
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
       <Route path="/partner" element={<ProtectedRoute><PartnerDashboard /></ProtectedRoute>} />
+      <Route path="/gestor" element={<ProtectedRoute><GestorDashboard /></ProtectedRoute>} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />

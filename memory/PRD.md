@@ -4,10 +4,13 @@
 **Nombre:** RIS - Billetera Digital para Remesas
 **Descripción:** Aplicación web de billetera digital para transferencias de dinero entre Brasil y Venezuela
 **Idioma:** Español
+**Dominio:** www.risappbr.com
 
 ## User Personas
 - **Usuarios en Brasil:** Trabajadores brasileños o venezolanos en Brasil que envían dinero a Venezuela
 - **Beneficiarios en Venezuela:** Familiares que reciben remesas
+- **Socios (Referidores):** Usuarios que refieren nuevos clientes y ganan comisiones
+- **Socios Gestores:** Agentes que procesan remesas de terceros
 - **Administradores:** Personal de RIS que procesa transacciones y verifica usuarios
 
 ## Core Requirements
@@ -15,11 +18,13 @@
 ### Autenticación
 - [x] Login con email/contraseña
 - [x] Login con Google OAuth
-- [x] Registro de nuevos usuarios
-- [x] Sistema de roles (user, admin, super_admin)
+- [x] Registro de nuevos usuarios con verificación por email (Resend)
+- [x] Campo opcional de código de referido en registro
+- [x] Sistema de roles (user, socio, socio_gestor, admin, super_admin)
+- [x] Recuperación de contraseña via email
 
 ### Dashboard
-- [x] Balance total en RIS
+- [x] Balance total en RI$ (formato: RI$ 100.00)
 - [x] Tasa de cambio actual (RIS/VES)
 - [x] Resumen de ingresos/gastos (30 días)
 - [x] Acceso rápido a Recargar y Enviar
@@ -27,9 +32,10 @@
 
 ### Recargas
 - [x] PIX (Brasil) - Pago instantáneo
-- [x] Bolívares (Venezuela) - Transferencia bancaria
+- [x] Bolívares (Venezuela) - Transferencia bancaria con voucher
 - [x] Generación de QR Code PIX
 - [x] Subida de comprobante para VES
+- [ ] Recarga con Bitcoin/Lightning (Blink) - Pendiente
 
 ### Envío de Remesas
 - [x] Wizard de 3 pasos (monto → beneficiario → confirmación)
@@ -46,145 +52,121 @@
 - [x] Información del usuario
 - [x] Estado de verificación KYC
 - [x] Cambio de contraseña
+- [x] Notificaciones Push (activar/desactivar)
+- [x] Acceso a Panel de Socio (si es socio)
+- [x] Acceso a Panel Gestor (si es socio_gestor)
 - [x] Cerrar sesión
 
-### Soporte
-- [x] Chat con asistente virtual
-- [x] Preguntas frecuentes rápidas
-- [x] Historial de mensajes
+### Sistema de Notificaciones
+- [x] Notificaciones in-app con modal de detalle
+- [x] Web Push Notifications (sonido, vibración)
+- [x] Notificación por email al completar retiro VES
+- [x] Marcar como leído al abrir notificación
+
+### Sistema de Socios (Referidos)
+- [x] Registro con código de referido opcional
+- [x] URL con código pre-llenado: /register?ref=CODIGO
+- [x] Panel de Socio con:
+  - Link de referido compartible
+  - Estadísticas (referidos, ganancias)
+  - Lista de referidos
+  - Historial de ganancias
+- [x] Bonificación:
+  - 5 RI$ cuando referido acumula 100 RI$ en recargas
+  - 1% de cada recarga posterior del referido
+
+### Sistema de Socios Gestores
+- [x] Panel de Gestor con:
+  - Saldo disponible
+  - Estadísticas de transacciones
+  - Gestión de beneficiarios
+  - Historial de transacciones
+- [x] Agregar beneficiarios en Venezuela (nombre, banco, cuenta, cédula)
+- [x] Procesar transacciones de terceros
+- [x] Comisión configurable por SuperAdmin
 
 ### Panel de Administración
-- [x] Resumen de estadísticas
-- [x] Gestión de retiros pendientes
-- [x] Gestión de recargas VES
-- [x] Lista de usuarios
-- [x] Verificaciones KYC pendientes
+- [x] Gestión de usuarios (búsqueda, historial)
+- [x] Aprobar/Rechazar recargas VES
+- [x] Aprobar/Rechazar retiros
 - [x] Configuración de tasas de cambio
+- [x] Asignar rol de Socio a usuarios
+- [x] Asignar rol de Socio Gestor a usuarios
+- [x] Ver lista de Socios y sus referidos
+- [x] Ver lista de Gestores y sus transacciones
+- [x] Configurar comisión de gestores
 
-## Design System - NexPay Style
-
-### Colores
-- **Fondo:** `radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)`
-- **Color primario:** `#6366f1` (índigo)
-- **Color éxito:** `#16a34a` (verde)
-- **Color error:** `#dc2626` (rojo)
-- **Color warning:** `#d97706` (ámbar)
-
-### Tipografía
-- **Fuente:** Inter, Helvetica, -apple-system, sans-serif
-- **Encabezados:** 20-28px, font-weight: 700
-- **Texto:** 14-16px, font-weight: 400-500
-
-### Componentes
-- **Tarjetas:** border-radius: 24px, box-shadow sutil, fondo blanco
-- **Botones:** border-radius: 14px, height: 56px, font-weight: 600
-- **Inputs:** border-radius: 14px, height: 56px, border: 1px solid #d1d5db
-- **Badges:** border-radius: 9999px (pill)
-
-## Technical Architecture
-
-### Frontend
-- **Framework:** React + Vite
-- **Styling:** Tailwind CSS v4 + Inline styles
-- **State:** React Context API
-- **Router:** React Router v6
-
-### Backend
-- **Framework:** FastAPI (Python)
+## Technical Stack
+- **Frontend:** React + Vite + Tailwind CSS
+- **Backend:** FastAPI + Python
 - **Database:** MongoDB
-- **Authentication:** JWT tokens
+- **Email:** Resend
+- **WhatsApp:** Twilio
+- **Push:** WebPush (pywebpush)
+- **Pagos:** Mercado Pago (PIX)
+- **Hosting Backend:** Railway
+- **Hosting Frontend:** Cloudflare Pages
+- **DNS:** Cloudflare
 
-### Deployment
-- **Frontend:** Cloudflare Pages (Railway de producción)
-- **Backend:** Railway
-- **Preview:** Emergent Platform
+## API Endpoints
 
-## Completed Work - March 2, 2026
+### Auth
+- POST /api/auth/register
+- POST /api/auth/verify-code
+- POST /api/auth/login
+- POST /api/auth/forgot-password
 
-### Bug Fixes
-- [x] Dashboard balance card not rendering - FIXED (changed to inline styles due to Tailwind v4 compatibility)
-- [x] Admin Panel "Procesar" and "Rechazar" buttons not working - FIXED (corrected API endpoint calls to include `action` parameter)
-- [x] **Registration Flow - FIXED (2026-03-02):** 
-  - Problem: Page went blank after form submission
-  - Root cause: Frontend was calling `register(name, email, password)` but backend requires two-step verification flow
-  - Solution: Implemented complete two-step registration process:
-    1. Step 1: Fill form → POST /api/auth/register → sends verification code
-    2. Step 2: Enter verification code → POST /api/auth/verify-email → creates account and auto-logs in
-  - Added "Confirm Password" field as requested
-  - Removed placeholder text and icons as requested
-  - Testing: 100% pass rate (5/5 tests)
+### Partner (Socio)
+- GET /api/partner/dashboard
+- GET /api/partner/referral-link
 
-### New Features (March 2, 2026)
-- [x] **Dual Rate Management:** Added VES → RIS rate input in Admin Panel alongside existing RIS → VES rate (with independent update buttons)
-- [x] **Voucher Viewing for Users:** Added "Ver comprobante" button (eye icon) in History page to view payment proof for completed withdrawals
-- [x] **Voucher Modal:** Professional modal displaying transaction details and proof image
-- [x] **WhatsApp Integration Verified:** Twilio WhatsApp notifications working correctly for new withdrawals
-- [x] **Notification Bell:** Added notification bell icon with unread count to all main pages (Dashboard, Recharge, Send, History) - both desktop and mobile views
-- [x] **Notifications Page Fixed:** Resolved blank page issue and back button navigation
-- [x] **Admin User History:** Admin panel now shows complete user history with detailed modal - includes balance, stats, KYC info, all transactions, and beneficiaries
-- [x] **Support Chat with Refresh:** Added refresh button and conversation history loading for support chat with WhatsApp integration
-- [x] **VES Recharge System:** Complete VES recharge flow implemented with:
-  - Bank selection (Banco de Venezuela, Banesco)
-  - Payment type selection (Pago Móvil, Transferencia)
-  - Dynamic payment details with copy buttons
-  - Voucher/proof upload requirement
-  - Pending review status after submission
-  - Admin panel "Recargas VES" tab for approval/rejection
+### Gestor (Socio Gestor)
+- GET /api/gestor/dashboard
+- GET /api/gestor/beneficiaries
+- POST /api/gestor/beneficiaries
+- POST /api/gestor/process-transaction
+- GET /api/gestor/transactions
 
-### Redesign
-- [x] Login.jsx - NexPay style (previously approved)
-- [x] Register.jsx - NexPay style (previously done)
-- [x] Dashboard.jsx - Complete redesign with inline styles
-- [x] Recharge.jsx - Complete redesign
-- [x] Send.jsx - Complete redesign
-- [x] History.jsx - Complete redesign
-- [x] Profile.jsx - Complete redesign with push notifications toggle
-- [x] Support.jsx - Complete redesign
-- [x] AdminPanel.jsx - Complete redesign
+### Admin
+- POST /api/admin/assign-partner
+- DELETE /api/admin/remove-partner/{user_id}
+- GET /api/admin/partners
+- GET /api/admin/partners/{partner_id}/referrals
+- POST /api/admin/assign-gestor
+- DELETE /api/admin/remove-gestor/{user_id}
+- GET /api/admin/gestors
+- GET /api/admin/gestor-commission
+- POST /api/admin/gestor-commission
 
-### Localization
-- [x] All UI text translated to Spanish
+## Database Collections
+- users
+- transactions
+- beneficiaries
+- notifications
+- pending_registrations
+- referral_earnings
+- gestor_beneficiaries
+- gestor_transactions
+- app_settings
 
-### Web Push Notifications (NEW)
-- [x] Backend service (web_push_service.py) with pywebpush
-- [x] VAPID key generation and configuration
-- [x] API endpoints: /push/vapid-public-key, /push/subscribe, /push/unsubscribe, /push/status, /push/test
-- [x] Service Worker (sw.js) for handling push events
-- [x] Frontend push service (pushService.js)
-- [x] Toggle in Profile page to enable/disable notifications
-- [x] Test notification button
+## Deployment
+- **Backend:** Railway (risapp-production.up.railway.app)
+- **Frontend:** Cloudflare Pages (risapp-brasil.pages.dev)
+- **Custom Domain:** www.risappbr.com / risappbr.com
 
-### Integrations
-- [x] Mercado Pago PIX - Already implemented and working
-- [x] Resend Email - Verification codes sent via email with custom domain `noreply@risappbr.com` (Verified 2026-03-02)
-- [ ] Stripe - Removed (user decision to use Mercado Pago instead)
+## Environment Variables (Railway)
+- MONGO_URL
+- DB_NAME
+- RESEND_API_KEY
+- SENDER_EMAIL
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_WHATSAPP_FROM
+- TWILIO_WHATSAPP_TO
+- MERCADOPAGO_ACCESS_TOKEN
+- VAPID_PUBLIC_KEY
+- VAPID_PRIVATE_KEY
+- VAPID_SUBJECT
 
-## Testing Results
-- **Frontend Testing:** 100% pass rate (16/16 tests)
-- **All pages verified:** Login, Dashboard, Recharge, Send, History, Profile, Support, Admin Panel
-- **Design consistency verified:** NexPay style applied across all pages
-
-## Pending/Future Tasks
-
-### P0 - Critical
-- [x] Admin Panel "Procesar" and "Rechazar" buttons - FIXED (2026-03-02)
-- [x] Registration Flow - FIXED (2026-03-02) - Two-step verification flow working
-- [x] Email integration with Resend - FIXED (2026-03-02) - Custom domain verified
-
-### P1 - High Priority
-- [x] Web Push Notifications E2E - FIXED (2026-03-03) - Route conflict resolved, endpoints now at /push/web/*
-- [ ] End-to-End test PIX recharge flow with Mercado Pago
-- [ ] End-to-End test Admin-to-User Chat Flow via WhatsApp
-
-### P2 - Medium Priority
-- [ ] Dark mode support
-- [ ] Stripe integration (deprioritized - using Mercado Pago PIX)
-
-### P3 - Low Priority
-- [ ] Mobile app (React Native)
-- [ ] Analytics dashboard
-
-## Credentials
-- **Super Admin:**
-  - Email: marshalljulio46@gmail.com
-  - Password: Admin2025!
+## Last Updated
+2025-03-05 - Sistema de Socios y Socios Gestores implementado

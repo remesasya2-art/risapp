@@ -5158,6 +5158,387 @@ async def get_referral_link(current_user: User = Depends(get_current_user)):
         "referral_link": f"https://www.risappbr.com/register?ref={referral_code}"
     }
 
+# =======================
+# SOCIO GESTOR ENDPOINTS
+# =======================
+
+class SetGestorCommissionRequest(BaseModel):
+    commission_percentage: float  # e.g., 5.0 for 5%
+
+class AssignGestorRoleRequest(BaseModel):
+    user_id: str
+
+class GestorBeneficiaryRequest(BaseModel):
+    full_name: str
+    phone: str
+    bank_name: str
+    account_number: str
+    cedula: str
+    notes: Optional[str] = None
+
+class GestorTransactionRequest(BaseModel):
+    third_party_user_id: str  # The user who paid
+    beneficiary_id: str  # Beneficiary in Venezuela
+    amount_ris: float  # Amount in RIS
+    amount_ves: float  # Amount in VES to send
+    third_party_phone: Optional[str] = None  # For WhatsApp notification
+
+@api_router.get("/admin/gestor-commission")
+async def get_gestor_commission(admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Get current gestor commission rate"""
+    settings = await db.app_settings.find_one({"setting_id": "gestor_commission"})
+    if not settings:
+        return {"commission_percentage": 5.0}  # Default 5%
+    return {"commission_percentage": settings.get("value", 5.0)}
+
+@api_router.post("/admin/gestor-commission")
+async def set_gestor_commission(request: SetGestorCommissionRequest, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Set gestor commission rate"""
+    if request.commission_percentage < 0 or request.commission_percentage > 50:
+        raise HTTPException(status_code=400, detail="La comisión debe estar entre 0% y 50%")
+    
+    await db.app_settings.update_one(
+        {"setting_id": "gestor_commission"},
+        {"$set": {
+            "setting_id": "gestor_commission",
+            "value": request.commission_percentage,
+            "updated_at": datetime.now(timezone.utc),
+            "updated_by": admin_user.user_id
+        }},
+        upsert=True
+    )
+    
+    logger.info(f"Gestor commission set to {request.commission_percentage}% by {admin_user.user_id}")
+    return {"message": f"Comisión de gestor establecida en {request.commission_percentage}%"}
+
+@api_router.post("/admin/assign-gestor")
+async def assign_gestor_role(request: AssignGestorRoleRequest, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Assign 'socio_gestor' role to a user"""
+    user = await db.users.find_one({"user_id": request.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.get("role") == "socio_gestor":
+        raise HTTPException(status_code=400, detail="El usuario ya es socio gestor")
+    
+    # Generate unique gestor code
+    name_part = ''.join(user.get("name", "GESTOR").split()).upper()[:4]
+    random_part = uuid.uuid4().hex[:4].upper()
+    gestor_code = f"G{name_part}{random_part}"
+    
+    await db.users.update_one(
+        {"user_id": request.user_id},
+        {"$set": {
+            "role": "socio_gestor",
+            "gestor_code": gestor_code,
+            "became_gestor_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Notify the new gestor
+    await create_notification(
+        user_id=request.user_id,
+        title="🏪 ¡Eres Socio Gestor!",
+        message=f"Tu cuenta ha sido promovida a Socio Gestor. Código: {gestor_code}. Ahora puedes procesar remesas de terceros.",
+        notification_type="gestor_assigned",
+        data={"gestor_code": gestor_code}
+    )
+    
+    logger.info(f"User {request.user_id} assigned as gestor with code {gestor_code}")
+    return {"message": "Usuario asignado como socio gestor exitosamente", "gestor_code": gestor_code}
+
+@api_router.delete("/admin/remove-gestor/{user_id}")
+async def remove_gestor_role(user_id: str, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Remove 'socio_gestor' role from a user"""
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=400, detail="El usuario no es socio gestor")
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"role": "user", "gestor_code": None}}
+    )
+    
+    return {"message": "Rol de socio gestor removido exitosamente"}
+
+@api_router.get("/admin/gestors")
+async def get_all_gestors(admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Get all gestors with their stats"""
+    gestors = await db.users.find({"role": "socio_gestor"}).to_list(500)
+    
+    result = []
+    for gestor in gestors:
+        gestor_id = gestor["user_id"]
+        
+        # Count transactions processed
+        tx_count = await db.gestor_transactions.count_documents({"gestor_id": gestor_id})
+        
+        # Calculate total volume
+        transactions = await db.gestor_transactions.find({"gestor_id": gestor_id}).to_list(1000)
+        total_volume = sum(t.get("amount_ris", 0) for t in transactions)
+        
+        result.append({
+            "user_id": gestor_id,
+            "name": gestor.get("name", ""),
+            "email": gestor.get("email", ""),
+            "gestor_code": gestor.get("gestor_code", ""),
+            "transactions_count": tx_count,
+            "total_volume": round(total_volume, 2),
+            "balance_ris": gestor.get("balance_ris", 0),
+            "became_gestor_at": gestor.get("became_gestor_at"),
+            "created_at": gestor.get("created_at")
+        })
+    
+    return result
+
+# Gestor own endpoints
+@api_router.get("/gestor/dashboard")
+async def get_gestor_dashboard(current_user: User = Depends(get_current_user)):
+    """Gestor: Get own dashboard"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
+    
+    gestor_id = current_user.user_id
+    
+    # Get commission rate
+    settings = await db.app_settings.find_one({"setting_id": "gestor_commission"})
+    commission = settings.get("value", 5.0) if settings else 5.0
+    
+    # Get beneficiaries
+    beneficiaries = await db.gestor_beneficiaries.find({"gestor_id": gestor_id}).to_list(100)
+    
+    # Get recent transactions
+    transactions = await db.gestor_transactions.find({"gestor_id": gestor_id}).sort("created_at", -1).limit(20).to_list(20)
+    
+    # Stats
+    all_tx = await db.gestor_transactions.find({"gestor_id": gestor_id}).to_list(1000)
+    total_volume = sum(t.get("amount_ris", 0) for t in all_tx)
+    
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_tx = [t for t in all_tx if t.get("created_at", datetime.min.replace(tzinfo=timezone.utc)) >= month_start]
+    month_volume = sum(t.get("amount_ris", 0) for t in month_tx)
+    
+    # Format beneficiaries
+    beneficiaries_list = []
+    for b in beneficiaries:
+        beneficiaries_list.append({
+            "beneficiary_id": b.get("beneficiary_id"),
+            "full_name": b.get("full_name"),
+            "phone": b.get("phone"),
+            "bank_name": b.get("bank_name"),
+            "account_number": b.get("account_number")[-4:] if b.get("account_number") else "",
+            "cedula": b.get("cedula"),
+            "created_at": b.get("created_at")
+        })
+    
+    # Format transactions
+    transactions_list = []
+    for t in transactions:
+        transactions_list.append({
+            "transaction_id": t.get("transaction_id"),
+            "third_party_name": t.get("third_party_name"),
+            "beneficiary_name": t.get("beneficiary_name"),
+            "amount_ris": t.get("amount_ris"),
+            "amount_ves": t.get("amount_ves"),
+            "status": t.get("status"),
+            "created_at": t.get("created_at")
+        })
+    
+    return {
+        "gestor_code": user.get("gestor_code", ""),
+        "balance_ris": user.get("balance_ris", 0),
+        "commission_percentage": commission,
+        "stats": {
+            "total_transactions": len(all_tx),
+            "total_volume": round(total_volume, 2),
+            "month_transactions": len(month_tx),
+            "month_volume": round(month_volume, 2)
+        },
+        "beneficiaries": beneficiaries_list,
+        "recent_transactions": transactions_list
+    }
+
+@api_router.post("/gestor/beneficiaries")
+async def add_gestor_beneficiary(request: GestorBeneficiaryRequest, current_user: User = Depends(get_current_user)):
+    """Gestor: Add a new beneficiary"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
+    
+    beneficiary_id = f"gben_{uuid.uuid4().hex[:12]}"
+    
+    beneficiary = {
+        "beneficiary_id": beneficiary_id,
+        "gestor_id": current_user.user_id,
+        "full_name": request.full_name.strip(),
+        "phone": request.phone.strip(),
+        "bank_name": request.bank_name.strip(),
+        "account_number": request.account_number.strip(),
+        "cedula": request.cedula.strip(),
+        "notes": request.notes,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.gestor_beneficiaries.insert_one(beneficiary)
+    
+    logger.info(f"Gestor {current_user.user_id} added beneficiary {beneficiary_id}")
+    return {"message": "Beneficiario agregado exitosamente", "beneficiary_id": beneficiary_id}
+
+@api_router.get("/gestor/beneficiaries")
+async def get_gestor_beneficiaries(current_user: User = Depends(get_current_user)):
+    """Gestor: Get all beneficiaries"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
+    
+    beneficiaries = await db.gestor_beneficiaries.find({"gestor_id": current_user.user_id}).to_list(100)
+    
+    result = []
+    for b in beneficiaries:
+        result.append({
+            "beneficiary_id": b.get("beneficiary_id"),
+            "full_name": b.get("full_name"),
+            "phone": b.get("phone"),
+            "bank_name": b.get("bank_name"),
+            "account_number": b.get("account_number"),
+            "cedula": b.get("cedula"),
+            "notes": b.get("notes"),
+            "created_at": b.get("created_at")
+        })
+    
+    return result
+
+@api_router.post("/gestor/process-transaction")
+async def process_gestor_transaction(request: GestorTransactionRequest, current_user: User = Depends(get_current_user)):
+    """Gestor: Process a third-party transaction"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
+    
+    # Check gestor has enough balance
+    if user.get("balance_ris", 0) < request.amount_ris:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente para procesar esta transacción")
+    
+    # Verify third party user exists
+    third_party = await db.users.find_one({"user_id": request.third_party_user_id})
+    if not third_party:
+        raise HTTPException(status_code=404, detail="Usuario tercero no encontrado")
+    
+    # Verify beneficiary exists
+    beneficiary = await db.gestor_beneficiaries.find_one({
+        "beneficiary_id": request.beneficiary_id,
+        "gestor_id": current_user.user_id
+    })
+    if not beneficiary:
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+    
+    # Get commission rate
+    settings = await db.app_settings.find_one({"setting_id": "gestor_commission"})
+    commission_rate = settings.get("value", 5.0) / 100 if settings else 0.05
+    commission_amount = request.amount_ris * commission_rate
+    
+    # Create transaction
+    tx_id = f"gtx_{uuid.uuid4().hex[:12]}"
+    
+    gestor_transaction = {
+        "transaction_id": tx_id,
+        "gestor_id": current_user.user_id,
+        "gestor_name": user.get("name", ""),
+        "third_party_user_id": request.third_party_user_id,
+        "third_party_name": third_party.get("name", ""),
+        "third_party_phone": request.third_party_phone or third_party.get("phone", ""),
+        "beneficiary_id": request.beneficiary_id,
+        "beneficiary_name": beneficiary.get("full_name", ""),
+        "beneficiary_phone": beneficiary.get("phone", ""),
+        "beneficiary_bank": beneficiary.get("bank_name", ""),
+        "beneficiary_account": beneficiary.get("account_number", ""),
+        "amount_ris": request.amount_ris,
+        "amount_ves": request.amount_ves,
+        "commission_rate": commission_rate * 100,
+        "commission_amount": commission_amount,
+        "status": "pending",  # pending -> processing -> completed
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.gestor_transactions.insert_one(gestor_transaction)
+    
+    # Deduct from gestor balance
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$inc": {"balance_ris": -request.amount_ris}}
+    )
+    
+    # Create corresponding withdrawal transaction for admin to process
+    withdrawal_tx_id = f"tx_{uuid.uuid4().hex[:12]}"
+    withdrawal = {
+        "transaction_id": withdrawal_tx_id,
+        "user_id": current_user.user_id,  # Gestor is the user for admin panel
+        "type": "withdrawal_ves",
+        "status": "pending",
+        "amount_input": request.amount_ris,
+        "amount_output": request.amount_ves,
+        "beneficiary_id": request.beneficiary_id,
+        "gestor_transaction_id": tx_id,  # Link to gestor transaction
+        "is_gestor_transaction": True,
+        "third_party_user_id": request.third_party_user_id,
+        "third_party_name": third_party.get("name", ""),
+        "third_party_phone": request.third_party_phone or third_party.get("phone", ""),
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.transactions.insert_one(withdrawal)
+    
+    # Notify gestor
+    await create_notification(
+        user_id=current_user.user_id,
+        title="📤 Transacción Registrada",
+        message=f"Envío de {request.amount_ves:.2f} VES a {beneficiary.get('full_name')} registrado. Pendiente de procesamiento.",
+        notification_type="gestor_transaction",
+        data={"transaction_id": tx_id, "amount_ves": request.amount_ves}
+    )
+    
+    logger.info(f"Gestor transaction {tx_id} created by {current_user.user_id}")
+    
+    return {
+        "message": "Transacción registrada exitosamente",
+        "transaction_id": tx_id,
+        "withdrawal_id": withdrawal_tx_id,
+        "amount_ris": request.amount_ris,
+        "amount_ves": request.amount_ves,
+        "commission": commission_amount,
+        "beneficiary": beneficiary.get("full_name")
+    }
+
+@api_router.get("/gestor/transactions")
+async def get_gestor_transactions(current_user: User = Depends(get_current_user)):
+    """Gestor: Get all transactions"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
+    
+    transactions = await db.gestor_transactions.find({"gestor_id": current_user.user_id}).sort("created_at", -1).to_list(100)
+    
+    result = []
+    for t in transactions:
+        result.append({
+            "transaction_id": t.get("transaction_id"),
+            "third_party_name": t.get("third_party_name"),
+            "beneficiary_name": t.get("beneficiary_name"),
+            "amount_ris": t.get("amount_ris"),
+            "amount_ves": t.get("amount_ves"),
+            "commission_amount": t.get("commission_amount"),
+            "status": t.get("status"),
+            "voucher_url": t.get("voucher_url"),
+            "created_at": t.get("created_at"),
+            "completed_at": t.get("completed_at")
+        })
+    
+    return result
+
 @app.on_event("startup")
 async def startup_db_client():
     """Create database indexes on startup"""

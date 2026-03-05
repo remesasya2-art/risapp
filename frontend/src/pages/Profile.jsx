@@ -329,6 +329,33 @@ export default function Profile() {
           </Link>
         )}
 
+        {/* Gestor Dashboard Button (only for socio_gestor) */}
+        {user?.role === 'socio_gestor' && (
+          <Link to="/gestor" style={{ textDecoration: 'none' }}>
+            <div style={{ 
+              ...cardStyle, 
+              padding: '20px', 
+              marginBottom: '16px',
+              background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+              color: '#ffffff',
+              cursor: 'pointer'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users style={{ width: '24px', height: '24px', color: '#ffffff' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Panel Gestor</p>
+                    <p style={{ fontSize: '13px', opacity: 0.9, margin: '4px 0 0 0' }}>Procesar remesas de terceros</p>
+                  </div>
+                </div>
+                <ChevronRight style={{ width: '24px', height: '24px', opacity: 0.9 }} />
+              </div>
+            </div>
+          </Link>
+        )}
+
         {/* Actions */}
         <div style={{ ...cardStyle, overflow: 'hidden' }}>
           <button onClick={() => setShowChangePassword(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', backgroundColor: 'transparent', border: 'none', borderBottom: '1px solid #e5e7eb', cursor: 'pointer' }}>
