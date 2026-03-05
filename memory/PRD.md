@@ -183,4 +183,4 @@
 - VAPID_SUBJECT
 
 ## Last Updated
-2026-03-05 - Sistema FIFO para retiros WhatsApp y Panel Web para procesar retiros implementado
+2026-03-05 - Sistema FIFO para retiros WhatsApp con Total Bs pendientes implementado
