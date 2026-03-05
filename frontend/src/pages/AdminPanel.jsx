@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -49,6 +49,9 @@ export default function AdminPanel() {
   const [userHistory, setUserHistory] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [selectedUserForRole, setSelectedUserForRole] = useState(null);
+  const [assigningRole, setAssigningRole] = useState(false);
 
   useEffect(() => { loadData(); }, [activeTab]);
 
@@ -153,6 +156,25 @@ export default function AdminPanel() {
   const handleKycDecision = async (verificationId, approved, reason = '') => {
     try { await api.post('/admin/verifications/decide', { verification_id: verificationId, approved, rejection_reason: reason }); toast.success(approved ? 'KYC aprobado' : 'KYC rechazado'); loadData(); } 
     catch { toast.error('Error al procesar KYC'); }
+  };
+
+  const handleChangeRole = async (newRole) => {
+    if (!selectedUserForRole) return;
+    setAssigningRole(true);
+    try {
+      const response = await api.post('/admin/change-role', {
+        user_id: selectedUserForRole.user_id,
+        new_role: newRole
+      });
+      toast.success(response.data.message);
+      setShowRoleModal(false);
+      setSelectedUserForRole(null);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Error al cambiar rol');
+    } finally {
+      setAssigningRole(false);
+    }
   };
 
   const handleUpdateRate = async () => {
@@ -549,8 +571,19 @@ export default function AdminPanel() {
                               {u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}
                             </span>
                           </td>
-                          <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280', textTransform: 'capitalize' }}>{u.role || 'user'}</td>
-                          <td style={{ padding: '16px' }}>
+                          <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                            <span style={{ 
+                              padding: '4px 10px', 
+                              borderRadius: '8px', 
+                              fontSize: '12px', 
+                              fontWeight: '600',
+                              backgroundColor: u.role === 'socio' ? '#ede9fe' : u.role === 'socio_gestor' ? '#d1fae5' : '#f3f4f6',
+                              color: u.role === 'socio' ? '#7c3aed' : u.role === 'socio_gestor' ? '#059669' : '#6b7280'
+                            }}>
+                              {u.role === 'socio' ? '🎁 Socio' : u.role === 'socio_gestor' ? '🏪 Gestor' : '👤 Usuario'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '16px', display: 'flex', gap: '8px' }}>
                             <button 
                               onClick={() => loadUserHistory(u.user_id)}
                               style={{ 
@@ -561,8 +594,22 @@ export default function AdminPanel() {
                               data-testid={`view-user-${u.user_id}`}
                             >
                               <Eye style={{ width: '14px', height: '14px' }} />
-                              Ver historial
+                              Ver
                             </button>
+                            {u.role !== 'admin' && u.role !== 'super_admin' && (
+                              <button 
+                                onClick={() => { setSelectedUserForRole(u); setShowRoleModal(true); }}
+                                style={{ 
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+                                  backgroundColor: '#fef3c7', color: '#d97706', border: 'none',
+                                  borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                                }}
+                                data-testid={`change-role-${u.user_id}`}
+                              >
+                                <UserCog style={{ width: '14px', height: '14px' }} />
+                                Rol
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -913,6 +960,129 @@ export default function AdminPanel() {
                   )}
                 </>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Role Change Modal */}
+      {showRoleModal && selectedUserForRole && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 1000
+        }} onClick={() => { setShowRoleModal(false); setSelectedUserForRole(null); }}>
+          <div 
+            style={{ 
+              backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', 
+              maxWidth: '400px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Cambiar Rol de Usuario</h3>
+                <button 
+                  onClick={() => { setShowRoleModal(false); setSelectedUserForRole(null); }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X style={{ width: '24px', height: '24px', color: '#6b7280' }} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
+                  {selectedUserForRole.name}
+                </p>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>{selectedUserForRole.email}</p>
+                <div style={{ marginTop: '8px' }}>
+                  <span style={{ 
+                    padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600',
+                    backgroundColor: selectedUserForRole.role === 'socio' ? '#ede9fe' : selectedUserForRole.role === 'socio_gestor' ? '#d1fae5' : '#f3f4f6',
+                    color: selectedUserForRole.role === 'socio' ? '#7c3aed' : selectedUserForRole.role === 'socio_gestor' ? '#059669' : '#6b7280'
+                  }}>
+                    Rol actual: {selectedUserForRole.role === 'socio' ? 'Socio' : selectedUserForRole.role === 'socio_gestor' ? 'Gestor' : 'Usuario'}
+                  </span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '12px' }}>
+                Selecciona el nuevo rol:
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {/* User Role */}
+                <button
+                  onClick={() => handleChangeRole('user')}
+                  disabled={assigningRole || selectedUserForRole.role === 'user'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
+                    backgroundColor: selectedUserForRole.role === 'user' ? '#f3f4f6' : '#ffffff',
+                    border: '2px solid #e5e7eb', borderRadius: '12px', cursor: selectedUserForRole.role === 'user' ? 'not-allowed' : 'pointer',
+                    opacity: selectedUserForRole.role === 'user' ? 0.5 : 1, textAlign: 'left'
+                  }}
+                  data-testid="role-user-btn"
+                >
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users style={{ width: '22px', height: '22px', color: '#6b7280' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>👤 Usuario Normal</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Acceso básico a la app</p>
+                  </div>
+                </button>
+
+                {/* Socio Role */}
+                <button
+                  onClick={() => handleChangeRole('socio')}
+                  disabled={assigningRole || selectedUserForRole.role === 'socio'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
+                    backgroundColor: selectedUserForRole.role === 'socio' ? '#ede9fe' : '#ffffff',
+                    border: '2px solid #8b5cf6', borderRadius: '12px', cursor: selectedUserForRole.role === 'socio' ? 'not-allowed' : 'pointer',
+                    opacity: selectedUserForRole.role === 'socio' ? 0.5 : 1, textAlign: 'left'
+                  }}
+                  data-testid="role-socio-btn"
+                >
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Gift style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>🎁 Socio (Referidor)</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Puede referir usuarios y ganar comisiones</p>
+                  </div>
+                </button>
+
+                {/* Socio Gestor Role */}
+                <button
+                  onClick={() => handleChangeRole('socio_gestor')}
+                  disabled={assigningRole || selectedUserForRole.role === 'socio_gestor'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
+                    backgroundColor: selectedUserForRole.role === 'socio_gestor' ? '#d1fae5' : '#ffffff',
+                    border: '2px solid #10b981', borderRadius: '12px', cursor: selectedUserForRole.role === 'socio_gestor' ? 'not-allowed' : 'pointer',
+                    opacity: selectedUserForRole.role === 'socio_gestor' ? 0.5 : 1, textAlign: 'left'
+                  }}
+                  data-testid="role-gestor-btn"
+                >
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Briefcase style={{ width: '22px', height: '22px', color: '#059669' }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>🏪 Socio Gestor</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Procesa remesas de terceros</p>
+                  </div>
+                </button>
+              </div>
+
+              {assigningRole && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '16px' }}>
+                  <RefreshCw style={{ width: '20px', height: '20px', color: '#6366f1', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ marginLeft: '8px', fontSize: '14px', color: '#6b7280' }}>Cambiando rol...</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

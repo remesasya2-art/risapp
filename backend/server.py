@@ -5057,6 +5057,104 @@ async def get_all_partners(admin_user: User = Depends(get_super_admin)):
     
     return result
 
+class ChangeUserRoleRequest(BaseModel):
+    user_id: str
+    new_role: str  # user, socio, socio_gestor
+    referral_code: Optional[str] = None  # For socio
+    gestor_code: Optional[str] = None  # For socio_gestor
+
+@api_router.post("/admin/change-role")
+async def change_user_role(request: ChangeUserRoleRequest, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Change user role to any allowed role"""
+    allowed_roles = ["user", "socio", "socio_gestor"]
+    if request.new_role not in allowed_roles:
+        raise HTTPException(status_code=400, detail=f"Rol no válido. Roles permitidos: {', '.join(allowed_roles)}")
+    
+    user = await db.users.find_one({"user_id": request.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    current_role = user.get("role", "user")
+    if current_role in ["admin", "super_admin"]:
+        raise HTTPException(status_code=400, detail="No se puede cambiar el rol de administradores")
+    
+    if current_role == request.new_role:
+        raise HTTPException(status_code=400, detail=f"El usuario ya tiene el rol '{request.new_role}'")
+    
+    update_data = {
+        "role": request.new_role,
+        "role_updated_at": datetime.now(timezone.utc),
+        "role_updated_by": admin_user.user_id
+    }
+    
+    # Handle specific role requirements
+    if request.new_role == "socio":
+        # Generate referral code
+        referral_code = request.referral_code
+        if not referral_code:
+            name_part = ''.join(user.get("name", "USER").split()).upper()[:4]
+            random_part = uuid.uuid4().hex[:4].upper()
+            referral_code = f"{name_part}{random_part}"
+        
+        existing = await db.users.find_one({"referral_code": referral_code})
+        if existing:
+            referral_code = f"{referral_code}{uuid.uuid4().hex[:2].upper()}"
+        
+        update_data["referral_code"] = referral_code.upper()
+        update_data["became_partner_at"] = datetime.now(timezone.utc)
+        # Clear gestor fields
+        update_data["gestor_code"] = None
+        
+    elif request.new_role == "socio_gestor":
+        # Generate gestor code
+        gestor_code = request.gestor_code
+        if not gestor_code:
+            name_part = ''.join(user.get("name", "GESTOR").split()).upper()[:4]
+            random_part = uuid.uuid4().hex[:4].upper()
+            gestor_code = f"G{name_part}{random_part}"
+        
+        update_data["gestor_code"] = gestor_code.upper()
+        update_data["became_gestor_at"] = datetime.now(timezone.utc)
+        # Clear socio fields
+        update_data["referral_code"] = None
+        
+    else:  # user
+        # Clear all special role fields
+        update_data["referral_code"] = None
+        update_data["gestor_code"] = None
+    
+    await db.users.update_one({"user_id": request.user_id}, {"$set": update_data})
+    
+    # Send notification to user
+    role_names = {
+        "user": "Usuario",
+        "socio": "Socio (Referidor)",
+        "socio_gestor": "Socio Gestor"
+    }
+    
+    notification_messages = {
+        "user": "Tu rol ha sido cambiado a Usuario normal.",
+        "socio": f"¡Felicidades! Ahora eres Socio. Tu código de referido es: {update_data.get('referral_code', '')}. ¡Compártelo y gana comisiones!",
+        "socio_gestor": f"¡Felicidades! Ahora eres Socio Gestor. Código: {update_data.get('gestor_code', '')}. Puedes procesar remesas de terceros."
+    }
+    
+    await create_notification(
+        user_id=request.user_id,
+        title=f"🎉 Rol Actualizado: {role_names[request.new_role]}",
+        message=notification_messages[request.new_role],
+        notification_type="role_changed",
+        data={"new_role": request.new_role}
+    )
+    
+    logger.info(f"User {request.user_id} role changed from '{current_role}' to '{request.new_role}' by {admin_user.user_id}")
+    
+    return {
+        "message": f"Rol cambiado exitosamente a '{role_names[request.new_role]}'",
+        "new_role": request.new_role,
+        "referral_code": update_data.get("referral_code"),
+        "gestor_code": update_data.get("gestor_code")
+    }
+
 @api_router.get("/admin/partners/{partner_id}/referrals")
 async def get_partner_referrals(partner_id: str, admin_user: User = Depends(get_super_admin)):
     """SuperAdmin: Get all users referred by a specific partner"""
