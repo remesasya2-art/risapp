@@ -168,26 +168,29 @@ async def send_next_pending_withdrawal_whatsapp():
         beneficiary = next_withdrawal.get('beneficiary_data', {})
         bank_code = beneficiary.get('bank_code', '')
         bank_name = beneficiary.get('bank', '')
-        bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
+        account_number = beneficiary.get('account_number', 'N/A')
+        full_name = beneficiary.get('full_name', 'N/A')
+        id_document = beneficiary.get('id_document', 'N/A')
+        amount_ves = next_withdrawal['amount_output']
         
-        # Build WhatsApp message with total VES
-        message = f"""🔔 *RETIRO EN COLA - PROCESAR AHORA*
+        # Build WhatsApp message with total VES - Clean format
+        message = f"""🔔 NUEVO RETIRO PENDIENTE
 
-💰 Monto: {next_withdrawal['amount_input']:.2f} RIS → {next_withdrawal['amount_output']:.2f} VES
+💰 Monto: {next_withdrawal['amount_input']:.2f} RIS → {amount_ves:.2f} Bs
 👤 Usuario: {user.get('name', 'N/A')}
-📧 Email: {user.get('email', 'N/A')}
 
-📋 *DATOS PARA TRANSFERENCIA:*
-🏦 Banco: {bank_info}
-💳 Cuenta: {beneficiary.get('account_number', 'N/A')}
-👤 Titular: {beneficiary.get('full_name', 'N/A')}
-🆔 Cédula: {beneficiary.get('id_document', 'N/A')}
-📱 Teléfono: {beneficiary.get('phone_number', 'N/A')}
 
-🔢 ID: {next_withdrawal['transaction_id']}
+📋 DATOS PARA TRANSFERENCIA:
+{bank_code} - {bank_name} {account_number}
+{full_name}
+{id_document}
+{amount_ves:.2f} Bs
 
----
-💵 *TOTAL VES PENDIENTES: {total_ves:,.2f} VES* ({pending_count} retiros)
+
+🔢 ID Transacción: {next_withdrawal['transaction_id']}
+
+💵 *TOTAL Bs PENDIENTES: {total_ves:,.2f} Bs* ({pending_count} retiros)
+
 ---
 ✅ Responde con foto del comprobante para completar"""
         
@@ -2348,26 +2351,28 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
             # Get bank code if available
             bank_code = request.beneficiary_data.get('bank_code', '')
             bank_name = request.beneficiary_data.get('bank', '')
-            bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
+            account_number = request.beneficiary_data.get('account_number', 'N/A')
+            full_name = request.beneficiary_data.get('full_name', 'N/A')
+            id_document = request.beneficiary_data.get('id_document', 'N/A')
             
-            # Enhanced message with clear instructions and total VES
-            message = f"""🔔 *RETIRO EN COLA - PROCESAR AHORA*
+            # Enhanced message with clear instructions and total VES - Clean format
+            message = f"""🔔 NUEVO RETIRO PENDIENTE
 
-💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} VES
+💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} Bs
 👤 Usuario: {current_user.name}
-📧 Email: {current_user.email}
 
-📋 *DATOS PARA TRANSFERENCIA:*
-🏦 Banco: {bank_info}
-💳 Cuenta: {request.beneficiary_data.get('account_number')}
-👤 Titular: {request.beneficiary_data.get('full_name')}
-🆔 Cédula: {request.beneficiary_data.get('id_document')}
-📱 Teléfono: {request.beneficiary_data.get('phone_number')}
 
-🔢 ID: {transaction.transaction_id}
+📋 DATOS PARA TRANSFERENCIA:
+{bank_code} - {bank_name} {account_number}
+{full_name}
+{id_document}
+{amount_ves:.2f} Bs
 
----
-💵 *TOTAL VES PENDIENTES: {total_ves:,.2f} VES* ({pending_count} retiros)
+
+🔢 ID Transacción: {transaction.transaction_id}
+
+💵 *TOTAL Bs PENDIENTES: {total_ves:,.2f} Bs* ({pending_count} retiros)
+
 ---
 ✅ Responde con foto del comprobante para completar"""
 
