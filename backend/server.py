@@ -1573,9 +1573,13 @@ async def login_with_password(request: LoginWithPasswordRequest):
     
     logger.info(f"User {user['user_id']} logged in with password")
     
+    # Check if user must change password (temporary password)
+    must_change_password = user.get('must_change_password', False)
+    
     return {
         "message": "Login exitoso",
         "session_token": session_token,
+        "must_change_password": must_change_password,
         "user": {
             "user_id": user['user_id'],
             "email": user['email'],
@@ -1690,6 +1694,43 @@ async def reset_password(request: ResetPasswordRequest):
     
     logger.info(f"Password reset for user {user['user_id']}")
     return {"message": "Contraseña actualizada exitosamente. Por favor inicia sesión."}
+
+class SetNewPasswordRequest(BaseModel):
+    new_password: str
+    confirm_password: str
+
+@api_router.post("/auth/set-new-password")
+async def set_new_password(request: SetNewPasswordRequest, current_user: User = Depends(get_current_user)):
+    """Set new password after temporary password login (no current password required)"""
+    
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Check if user actually needs to change password
+    if not user.get('must_change_password'):
+        raise HTTPException(status_code=400, detail="No se requiere cambio de contraseña")
+    
+    # Validate new password
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+    
+    is_valid, message = validate_password(request.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Update password and clear the flag
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {
+            "password_hash": hash_password(request.new_password),
+            "must_change_password": False,
+            "password_changed_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    logger.info(f"User {current_user.user_id} set new password after temporary login")
+    return {"message": "Contraseña establecida exitosamente"}
 
 @api_router.post("/auth/change-password")
 async def change_password(request: ChangePasswordRequest, current_user: User = Depends(get_current_user)):
@@ -4927,9 +4968,7 @@ async def send_web_push_to_user(user_id: str, title: str, body: str, url: str = 
         url=url
     )
 
-# Include the routers in the main app
-app.include_router(api_router)
-app.include_router(admin_router)
+# Note: Routers are included at the end of the file after all endpoints are defined
 
 app.add_middleware(
     CORSMiddleware,
@@ -5153,6 +5192,115 @@ async def change_user_role(request: ChangeUserRoleRequest, admin_user: User = De
         "new_role": request.new_role,
         "referral_code": update_data.get("referral_code"),
         "gestor_code": update_data.get("gestor_code")
+    }
+
+class AdminResetPasswordRequest(BaseModel):
+    user_id: str
+
+@api_router.post("/admin/reset-password")
+async def admin_reset_user_password(request: AdminResetPasswordRequest, admin_user: User = Depends(get_super_admin)):
+    """SuperAdmin: Reset user password to a temporary one-time password"""
+    user = await db.users.find_one({"user_id": request.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if user.get("role") in ["admin", "super_admin"]:
+        raise HTTPException(status_code=400, detail="No se puede restablecer la contraseña de administradores")
+    
+    # Generate temporary password (8 characters: letters and numbers)
+    import random
+    import string
+    temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+    
+    # Hash the temporary password
+    hashed_password = hash_password(temp_password)
+    
+    # Update user with temporary password and flag
+    await db.users.update_one(
+        {"user_id": request.user_id},
+        {"$set": {
+            "password_hash": hashed_password,
+            "must_change_password": True,
+            "password_reset_at": datetime.now(timezone.utc),
+            "password_reset_by": admin_user.user_id
+        }}
+    )
+    
+    # Send notification to user
+    await create_notification(
+        user_id=request.user_id,
+        title="🔐 Contraseña Restablecida",
+        message="Tu contraseña ha sido restablecida por un administrador. Al iniciar sesión, deberás establecer una nueva contraseña.",
+        notification_type="password_reset",
+        data={}
+    )
+    
+    # Also send email with temporary password
+    user_email = user.get("email")
+    user_name = user.get("name", "Usuario")
+    
+    if user_email and RESEND_API_KEY:
+        try:
+            email_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }}
+                    .container {{ max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 30px; text-align: center; }}
+                    .content {{ padding: 30px; }}
+                    .password-box {{ background: #f3f4f6; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; }}
+                    .temp-password {{ font-size: 28px; font-weight: 700; letter-spacing: 3px; color: #111827; font-family: monospace; }}
+                    .warning {{ background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 16px; font-size: 13px; color: #92400e; }}
+                    .footer {{ text-align: center; padding: 20px; color: #9ca3af; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1 style="margin:0;">RIS App</h1>
+                    </div>
+                    <div class="content">
+                        <p style="font-size: 16px; color: #374151;">Hola {user_name},</p>
+                        <p style="font-size: 15px; color: #374151; line-height: 1.6;">
+                            Tu contraseña ha sido restablecida por un administrador. Usa la siguiente contraseña temporal para iniciar sesión:
+                        </p>
+                        <div class="password-box">
+                            <p style="font-size: 12px; color: #6b7280; margin: 0 0 8px 0;">Contraseña temporal:</p>
+                            <p class="temp-password">{temp_password}</p>
+                        </div>
+                        <div class="warning">
+                            ⚠️ Esta contraseña es de <strong>un solo uso</strong>. Al iniciar sesión, deberás establecer una nueva contraseña.
+                        </div>
+                    </div>
+                    <div class="footer">
+                        © 2025 RIS App - Todos los derechos reservados
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            email_params = {
+                "from": SENDER_EMAIL,
+                "to": [user_email],
+                "subject": "🔐 Tu contraseña temporal - RIS App",
+                "html": email_html
+            }
+            
+            await asyncio.to_thread(resend.Emails.send, email_params)
+            logger.info(f"Temporary password email sent to {user_email}")
+        except Exception as e:
+            logger.error(f"Error sending password reset email: {e}")
+    
+    logger.info(f"Password reset for user {request.user_id} by admin {admin_user.user_id}")
+    
+    return {
+        "message": "Contraseña restablecida exitosamente",
+        "temp_password": temp_password,
+        "email_sent": bool(user_email and RESEND_API_KEY)
     }
 
 @api_router.get("/admin/partners/{partner_id}/referrals")
@@ -5636,6 +5784,10 @@ async def get_gestor_transactions(current_user: User = Depends(get_current_user)
         })
     
     return result
+
+# Include the routers in the main app (must be after all endpoints are defined)
+app.include_router(api_router)
+app.include_router(admin_router)
 
 @app.on_event("startup")
 async def startup_db_client():

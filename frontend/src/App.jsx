@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
@@ -18,10 +18,12 @@ import Notifications from './pages/Notifications';
 import Support from './pages/Support';
 import PartnerDashboard from './pages/PartnerDashboard';
 import GestorDashboard from './pages/GestorDashboard';
+import ForceChangePassword from './pages/ForceChangePassword';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, loading } = useAuth();
+  const { user, loading, mustChangePassword } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -34,6 +36,11 @@ function ProtectedRoute({ children, adminOnly = false }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Force redirect to password change if needed (but not if already there)
+  if (mustChangePassword && location.pathname !== '/force-change-password') {
+    return <Navigate to="/force-change-password" replace />;
   }
 
   if (adminOnly && !['admin', 'super_admin'].includes(user.role)) {
@@ -85,6 +92,9 @@ function AppRoutes() {
       
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+      
+      {/* Force Change Password Route */}
+      <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
       
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />

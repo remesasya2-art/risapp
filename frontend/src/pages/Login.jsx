@@ -20,9 +20,15 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      await login(email, password);
-      toast.success('¡Bienvenido!');
-      navigate('/');
+      const response = await login(email, password);
+      // Check if user must change password (temporary password from admin)
+      if (response.must_change_password) {
+        toast.success('Por favor establece una nueva contraseña');
+        navigate('/force-change-password');
+      } else {
+        toast.success('¡Bienvenido!');
+        navigate('/');
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al iniciar sesión');
     } finally {

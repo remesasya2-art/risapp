@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -174,6 +174,26 @@ export default function AdminPanel() {
       toast.error(error.response?.data?.detail || 'Error al cambiar rol');
     } finally {
       setAssigningRole(false);
+    }
+  };
+
+  const handleResetPassword = async (userId, userName) => {
+    if (!confirm(`¿Restablecer contraseña de ${userName}? Se enviará una contraseña temporal por email.`)) return;
+    
+    try {
+      const response = await api.post('/admin/reset-password', { user_id: userId });
+      toast.success(
+        <div>
+          <p><strong>{response.data.message}</strong></p>
+          <p style={{fontSize: '12px', marginTop: '4px'}}>
+            Contraseña temporal: <code style={{background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px'}}>{response.data.temp_password}</code>
+          </p>
+          {response.data.email_sent && <p style={{fontSize: '11px', color: '#6b7280'}}>Email enviado al usuario</p>}
+        </div>,
+        { duration: 10000 }
+      );
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Error al restablecer contraseña');
     }
   };
 
@@ -608,6 +628,20 @@ export default function AdminPanel() {
                               >
                                 <UserCog style={{ width: '14px', height: '14px' }} />
                                 Rol
+                              </button>
+                            )}
+                            {u.role !== 'admin' && u.role !== 'super_admin' && (
+                              <button 
+                                onClick={() => handleResetPassword(u.user_id, u.name)}
+                                style={{ 
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+                                  backgroundColor: '#fee2e2', color: '#dc2626', border: 'none',
+                                  borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                                }}
+                                data-testid={`reset-password-${u.user_id}`}
+                              >
+                                <KeyRound style={{ width: '14px', height: '14px' }} />
+                                Clave
                               </button>
                             )}
                           </td>
