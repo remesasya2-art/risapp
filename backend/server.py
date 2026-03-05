@@ -122,6 +122,7 @@ async def send_next_pending_withdrawal_whatsapp():
     """
     FIFO System: Send the next pending withdrawal via WhatsApp.
     Only sends if there's no other withdrawal currently being processed via WhatsApp.
+    Includes total VES pending for all withdrawals.
     """
     try:
         # Check if there's already an "active" withdrawal being processed via WhatsApp
@@ -155,12 +156,21 @@ async def send_next_pending_withdrawal_whatsapp():
             logger.error(f"Usuario no encontrado para retiro: {next_withdrawal.get('transaction_id')}")
             return None
         
+        # Calculate total VES pending (all pending withdrawals)
+        pipeline = [
+            {"$match": {"type": "withdrawal", "status": "pending"}},
+            {"$group": {"_id": None, "total_ves": {"$sum": "$amount_output"}, "count": {"$sum": 1}}}
+        ]
+        total_result = await db.transactions.aggregate(pipeline).to_list(1)
+        total_ves = total_result[0]['total_ves'] if total_result else 0
+        pending_count = total_result[0]['count'] if total_result else 0
+        
         beneficiary = next_withdrawal.get('beneficiary_data', {})
         bank_code = beneficiary.get('bank_code', '')
         bank_name = beneficiary.get('bank', '')
         bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
         
-        # Build WhatsApp message
+        # Build WhatsApp message with total VES
         message = f"""🔔 *RETIRO EN COLA - PROCESAR AHORA*
 
 💰 Monto: {next_withdrawal['amount_input']:.2f} RIS → {next_withdrawal['amount_output']:.2f} VES
@@ -177,8 +187,9 @@ async def send_next_pending_withdrawal_whatsapp():
 🔢 ID: {next_withdrawal['transaction_id']}
 
 ---
-✅ Responde con foto del comprobante para completar
-⚠️ Este es el ÚNICO retiro activo. Al completarlo, recibirás el siguiente."""
+💵 *TOTAL VES PENDIENTES: {total_ves:,.2f} VES* ({pending_count} retiros)
+---
+✅ Responde con foto del comprobante para completar"""
         
         # Send WhatsApp
         whatsapp_sent = await send_whatsapp_notification(message)
@@ -2324,12 +2335,22 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
             await send_whatsapp_notification(f"📋 *Nuevo retiro en cola*\nID: {transaction.transaction_id[:8]}...\nUsuario: {current_user.name}\nMonto: {request.amount_ris:.2f} RIS\n\n⏳ Posición en cola: {queue_count}\n\n_Se enviará automáticamente cuando completes el retiro actual._")
         else:
             # No active withdrawal, this becomes the active one
+            # Calculate total VES pending (including this new one)
+            pipeline = [
+                {"$match": {"type": "withdrawal", "status": "pending"}},
+                {"$group": {"_id": None, "total_ves": {"$sum": "$amount_output"}, "count": {"$sum": 1}}}
+            ]
+            total_result = await db.transactions.aggregate(pipeline).to_list(1)
+            # Add current withdrawal to totals (it's not in DB yet as pending)
+            total_ves = (total_result[0]['total_ves'] if total_result else 0) + amount_ves
+            pending_count = (total_result[0]['count'] if total_result else 0) + 1
+            
             # Get bank code if available
             bank_code = request.beneficiary_data.get('bank_code', '')
             bank_name = request.beneficiary_data.get('bank', '')
             bank_info = f"{bank_code} - {bank_name}" if bank_code else bank_name
             
-            # Enhanced message with clear instructions
+            # Enhanced message with clear instructions and total VES
             message = f"""🔔 *RETIRO EN COLA - PROCESAR AHORA*
 
 💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} VES
@@ -2346,8 +2367,9 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 🔢 ID: {transaction.transaction_id}
 
 ---
-✅ Responde con foto del comprobante para completar
-⚠️ Este es el ÚNICO retiro activo. Al completarlo, recibirás el siguiente."""
+💵 *TOTAL VES PENDIENTES: {total_ves:,.2f} VES* ({pending_count} retiros)
+---
+✅ Responde con foto del comprobante para completar"""
 
             from twilio.rest import Client
             twilio_client_local = Client(
@@ -2407,7 +2429,7 @@ async def get_pending_withdrawals(admin_user: User = Depends(get_admin_user)):
 
 @api_router.get("/withdrawal/queue-stats")
 async def get_withdrawal_queue_stats(admin_user: User = Depends(get_admin_user)):
-    """Admin: Get withdrawal queue statistics"""
+    """Admin: Get withdrawal queue statistics including total VES"""
     pending_count = await db.transactions.count_documents({
         "type": "withdrawal",
         "status": "pending"
@@ -2421,10 +2443,21 @@ async def get_withdrawal_queue_stats(admin_user: User = Depends(get_admin_user))
     
     waiting_in_queue = pending_count - active_in_whatsapp
     
+    # Calculate total VES pending
+    pipeline = [
+        {"$match": {"type": "withdrawal", "status": "pending"}},
+        {"$group": {"_id": None, "total_ves": {"$sum": "$amount_output"}, "total_ris": {"$sum": "$amount_input"}}}
+    ]
+    total_result = await db.transactions.aggregate(pipeline).to_list(1)
+    total_ves = total_result[0]['total_ves'] if total_result else 0
+    total_ris = total_result[0]['total_ris'] if total_result else 0
+    
     return {
         "total_pending": pending_count,
         "active_in_whatsapp": active_in_whatsapp,
-        "waiting_in_queue": waiting_in_queue
+        "waiting_in_queue": waiting_in_queue,
+        "total_ves_pending": total_ves,
+        "total_ris_pending": total_ris
     }
 
 @api_router.post("/withdrawal/process")

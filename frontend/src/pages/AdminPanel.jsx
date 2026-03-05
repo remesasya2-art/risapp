@@ -35,7 +35,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
   const [withdrawals, setWithdrawals] = useState([]);
-  const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0 });
+  const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   const [recharges, setRecharges] = useState([]);
   const [users, setUsers] = useState([]);
   const [kycPending, setKycPending] = useState([]);
@@ -391,6 +391,24 @@ export default function AdminPanel() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* FIFO Queue Status Banner */}
             <div style={{ ...cardStyle, padding: '16px', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px solid #7dd3fc' }}>
+              {/* Total VES Required - Highlighted */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
+                border: '2px solid #f59e0b', 
+                borderRadius: '12px', 
+                padding: '16px', 
+                marginBottom: '16px',
+                textAlign: 'center'
+              }}>
+                <p style={{ margin: 0, fontSize: '12px', color: '#92400e', fontWeight: '600', textTransform: 'uppercase' }}>💵 Total VES Necesarios</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '28px', fontWeight: '800', color: '#b45309' }}>
+                  {queueStats.total_ves_pending?.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES
+                </p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#78350f' }}>
+                  ({queueStats.total_ris_pending?.toFixed(2)} RIS en {queueStats.total_pending} retiros pendientes)
+                </p>
+              </div>
+              
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '20px' }}>📋</span>
