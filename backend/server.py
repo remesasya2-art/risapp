@@ -160,7 +160,7 @@ async def send_next_pending_withdrawal_whatsapp():
         id_document = beneficiary.get('id_document', 'N/A')
         amount_ves = next_withdrawal['amount_output']
         
-        # Build WhatsApp message with total Bs - Clean format
+        # Build WhatsApp message WITHOUT total Bs (clean format for active withdrawal)
         message = f"""🔔 NUEVO RETIRO PENDIENTE
 
 💰 Monto: {next_withdrawal['amount_input']:.2f} RIS → {amount_ves:.2f} Bs
@@ -176,10 +176,9 @@ async def send_next_pending_withdrawal_whatsapp():
 
 🔢 ID Transacción: {next_withdrawal['transaction_id']}
 
-💵 *TOTAL Bs PENDIENTES: {total_ves:,.2f} Bs* ({pending_count} retiros)
 
 ---
-✅ Responde con foto del comprobante para completar"""
+✅ Responde con foto del comprobante para completar."""
         
         # Send WhatsApp
         whatsapp_sent = await send_whatsapp_notification(message)
@@ -2312,29 +2311,23 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         })
         
         if active_withdrawal:
-            # There's already one being processed, just send a short notification
+            # There's already one being processed, just send a short notification with totals
             logger.info(f"📋 FIFO: Retiro {transaction.transaction_id} agregado a cola. Retiro activo: {active_withdrawal.get('transaction_id')}")
             
-            # Count total pending (including this new one)
-            queue_count = await db.transactions.count_documents({
-                "type": "withdrawal",
-                "status": "pending"
-            })
-            
-            # Send SHORT notification - just the count
-            await send_whatsapp_notification(f"📋 {queue_count} solicitudes pendientes en cola")
-        else:
-            # No active withdrawal, this becomes the active one
             # Calculate total Bs pending (including this new one)
             pipeline = [
                 {"$match": {"type": "withdrawal", "status": "pending"}},
                 {"$group": {"_id": None, "total_ves": {"$sum": "$amount_output"}, "count": {"$sum": 1}}}
             ]
             total_result = await db.transactions.aggregate(pipeline).to_list(1)
-            # Add current withdrawal to totals
             total_ves = (total_result[0]['total_ves'] if total_result else 0) + amount_ves
             pending_count = (total_result[0]['count'] if total_result else 0) + 1
             
+            # Send SHORT notification with count and total Bs
+            await send_whatsapp_notification(f"""📋 {pending_count} solicitudes pendientes en cola.
+💵 TOTAL Bs PENDIENTES: {total_ves:,.2f} Bs ({pending_count} retiros)""")
+        else:
+            # No active withdrawal, this becomes the active one
             # Get bank code if available
             bank_code = request.beneficiary_data.get('bank_code', '')
             bank_name = request.beneficiary_data.get('bank', '')
@@ -2342,7 +2335,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
             full_name = request.beneficiary_data.get('full_name', 'N/A')
             id_document = request.beneficiary_data.get('id_document', 'N/A')
             
-            # Enhanced message with clear instructions and total Bs - Clean format
+            # Message WITHOUT total Bs (only for the active one)
             message = f"""🔔 NUEVO RETIRO PENDIENTE
 
 💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} Bs
@@ -2358,10 +2351,9 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 
 🔢 ID Transacción: {transaction.transaction_id}
 
-💵 *TOTAL Bs PENDIENTES: {total_ves:,.2f} Bs* ({pending_count} retiros)
 
 ---
-✅ Responde con foto del comprobante para completar"""
+✅ Responde con foto del comprobante para completar."""
 
             from twilio.rest import Client
             twilio_client_local = Client(
