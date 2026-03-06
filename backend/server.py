@@ -3728,187 +3728,194 @@ async def twilio_whatsapp_webhook(request: Request):
         logger.info(f"Body: {body}")
         logger.info(f"NumMedia: {num_media}")
         
-        # Check if message has media (image)
+        # Check if message has media (images)
         if num_media > 0:
-            media_url = form_data.get('MediaUrl0', '')
-            media_content_type = form_data.get('MediaContentType0', '')
+            # Download ALL images from the message
+            import base64
+            images_base64 = []
             
-            logger.info(f"Media URL: {media_url}")
-            logger.info(f"Media Type: {media_content_type}")
+            for i in range(int(num_media)):
+                media_url = form_data.get(f'MediaUrl{i}', '')
+                media_content_type = form_data.get(f'MediaContentType{i}', '')
+                
+                logger.info(f"Media {i} URL: {media_url}")
+                logger.info(f"Media {i} Type: {media_content_type}")
+                
+                if media_url and 'image' in media_content_type:
+                    async with httpx.AsyncClient(follow_redirects=True) as client:
+                        # Twilio requires authentication to download media
+                        auth = (
+                            os.getenv('TWILIO_ACCOUNT_SID'),
+                            os.getenv('TWILIO_AUTH_TOKEN')
+                        )
+                        response = await client.get(media_url, auth=auth)
+                        
+                        logger.info(f"Media {i} download status: {response.status_code}")
+                        
+                        if response.status_code == 200:
+                            # Convert to base64
+                            image_base64 = f"data:{media_content_type};base64,{base64.b64encode(response.content).decode()}"
+                            images_base64.append(image_base64)
+                            logger.info(f"Imagen {i+1} descargada y convertida a base64")
             
-            # Download the image
-            if media_url and 'image' in media_content_type:
-                async with httpx.AsyncClient(follow_redirects=True) as client:
-                    # Twilio requires authentication to download media
-                    auth = (
-                        os.getenv('TWILIO_ACCOUNT_SID'),
-                        os.getenv('TWILIO_AUTH_TOKEN')
+            if images_base64:
+                logger.info(f"Total imágenes descargadas: {len(images_base64)}")
+                
+                # Extract transaction ID from message body
+                transaction_id = None
+                if body:
+                    import re
+                    # Try to find transaction_id (UUID format) or MongoDB ObjectId
+                    uuid_match = re.search(r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})', body, re.IGNORECASE)
+                    if uuid_match:
+                        # Search by transaction_id field
+                        tx = await db.transactions.find_one({"transaction_id": uuid_match.group(1), "status": "pending"})
+                        if tx:
+                            transaction_id = str(tx['_id'])
+                            logger.info(f"Transaction found by UUID: {transaction_id}")
+                    
+                    if not transaction_id:
+                        # Try ObjectId format
+                        oid_match = re.search(r'ID[:\s]*([a-f0-9]{24})', body, re.IGNORECASE)
+                        if oid_match:
+                            transaction_id = oid_match.group(1)
+                            logger.info(f"Transaction ID from ObjectId: {transaction_id}")
+                
+                # If no ID in current message, find the ACTIVE withdrawal in WhatsApp queue (FIFO)
+                if not transaction_id:
+                    logger.info("No ID encontrado en mensaje, buscando retiro ACTIVO en cola FIFO...")
+                    # First, try to find the withdrawal that is currently active in WhatsApp
+                    active_withdrawal = await db.transactions.find_one(
+                        {"type": "withdrawal", "status": "pending", "whatsapp_active": True}
                     )
-                    response = await client.get(media_url, auth=auth)
+                    if active_withdrawal:
+                        transaction_id = str(active_withdrawal['_id'])
+                        logger.info(f"Retiro ACTIVO encontrado: {transaction_id} - {active_withdrawal.get('transaction_id')}")
+                    else:
+                        # Fallback: find the OLDEST pending withdrawal (FIFO order)
+                        oldest_withdrawal = await db.transactions.find_one(
+                            {"type": "withdrawal", "status": "pending"},
+                            sort=[("created_at", 1)]  # FIFO: oldest first
+                        )
+                        if oldest_withdrawal:
+                            transaction_id = str(oldest_withdrawal['_id'])
+                            logger.info(f"Retiro más antiguo encontrado: {transaction_id} - {oldest_withdrawal.get('transaction_id')}")
+                
+                if transaction_id:
+                    from bson import ObjectId
                     
-                    logger.info(f"Media download status: {response.status_code}")
+                    # Get transaction before update to have all data
+                    tx_before = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
                     
-                    if response.status_code == 200:
-                        # Convert to base64
-                        import base64
-                        image_base64 = f"data:{media_content_type};base64,{base64.b64encode(response.content).decode()}"
+                    if not tx_before:
+                        logger.error(f"Transacción no encontrada: {transaction_id}")
+                        return {"status": "error", "message": "Transaction not found"}
+                    
+                    if tx_before.get('status') != 'pending':
+                        logger.warning(f"Transacción ya procesada: {transaction_id}")
+                        # Still send confirmation
+                        from twilio.rest import Client
+                        twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                        twilio_client.messages.create(
+                            from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                            body=f"⚠️ Esta transacción ya fue procesada anteriormente.\nID: {tx_before.get('transaction_id', transaction_id)}",
+                            to=from_number
+                        )
+                        return {"status": "already_processed"}
+                    
+                    # Update transaction with ALL images (proof_images array)
+                    result = await db.transactions.update_one(
+                        {"_id": ObjectId(transaction_id), "status": "pending"},
+                        {"$set": {
+                            "status": "completed",
+                            "proof_images": images_base64,  # Array of all images
+                            "proof_image": images_base64[0] if images_base64 else None,  # Keep first for backwards compatibility
+                            "completed_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc),
+                            "processed_via": "whatsapp"
+                        }}
+                    )
+                    
+                    logger.info(f"Update result: modified_count={result.modified_count}, images_count={len(images_base64)}")
+                    
+                    if result.modified_count > 0:
+                        # Get full transaction data
+                        completed_tx = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
+                        user_id = completed_tx.get('user_id')
+                        tx_id = completed_tx.get('transaction_id', transaction_id)
                         
-                        logger.info("Imagen descargada y convertida a base64")
+                        # Get user info
+                        user = await db.users.find_one({"user_id": user_id})
                         
-                        # Extract transaction ID from message body
-                        transaction_id = None
-                        if body:
-                            import re
-                            # Try to find transaction_id (UUID format) or MongoDB ObjectId
-                            uuid_match = re.search(r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})', body, re.IGNORECASE)
-                            if uuid_match:
-                                # Search by transaction_id field
-                                tx = await db.transactions.find_one({"transaction_id": uuid_match.group(1), "status": "pending"})
-                                if tx:
-                                    transaction_id = str(tx['_id'])
-                                    logger.info(f"Transaction found by UUID: {transaction_id}")
-                            
-                            if not transaction_id:
-                                # Try ObjectId format
-                                oid_match = re.search(r'ID[:\s]*([a-f0-9]{24})', body, re.IGNORECASE)
-                                if oid_match:
-                                    transaction_id = oid_match.group(1)
-                                    logger.info(f"Transaction ID from ObjectId: {transaction_id}")
+                        beneficiary = completed_tx.get('beneficiary_data', {})
+                        amount_ris = completed_tx.get('amount_input', 0)
+                        amount_ves = completed_tx.get('amount_output', 0)
                         
-                        # If no ID in current message, find the ACTIVE withdrawal in WhatsApp queue (FIFO)
-                        if not transaction_id:
-                            logger.info("No ID encontrado en mensaje, buscando retiro ACTIVO en cola FIFO...")
-                            # First, try to find the withdrawal that is currently active in WhatsApp
-                            active_withdrawal = await db.transactions.find_one(
-                                {"type": "withdrawal", "status": "pending", "whatsapp_active": True}
-                            )
-                            if active_withdrawal:
-                                transaction_id = str(active_withdrawal['_id'])
-                                logger.info(f"Retiro ACTIVO encontrado: {transaction_id} - {active_withdrawal.get('transaction_id')}")
-                            else:
-                                # Fallback: find the OLDEST pending withdrawal (FIFO order)
-                                oldest_withdrawal = await db.transactions.find_one(
-                                    {"type": "withdrawal", "status": "pending"},
-                                    sort=[("created_at", 1)]  # FIFO: oldest first
+                        logger.info(f"Transacción completada: {tx_id}")
+                        logger.info(f"Usuario: {user_id}, Monto: {amount_ris} RIS -> {amount_ves} VES")
+                        
+                        # ============================
+                        # SAVE ADMIN RECORD
+                        # ============================
+                        admin_record = {
+                            "record_type": "withdrawal_completed",
+                            "transaction_id": tx_id,
+                            "mongo_id": transaction_id,
+                            "user_id": user_id,
+                            "user_name": user.get('name', 'N/A') if user else 'N/A',
+                            "user_email": user.get('email', 'N/A') if user else 'N/A',
+                            "amount_ris": amount_ris,
+                            "amount_ves": amount_ves,
+                            "beneficiary": {
+                                "full_name": beneficiary.get('full_name', 'N/A'),
+                                "bank": beneficiary.get('bank', 'N/A'),
+                                "bank_code": beneficiary.get('bank_code', 'N/A'),
+                                "account_number": beneficiary.get('account_number', 'N/A'),
+                                "id_document": beneficiary.get('id_document', 'N/A'),
+                                "phone_number": beneficiary.get('phone_number', 'N/A')
+                            },
+                            "proof_images": images_base64,
+                            "processed_via": "whatsapp",
+                            "processed_by_phone": from_number,
+                            "whatsapp_message_sid": message_sid,
+                            "created_at": completed_tx.get('created_at'),
+                            "completed_at": datetime.now(timezone.utc),
+                            "recorded_at": datetime.now(timezone.utc)
+                        }
+                        
+                        await db.admin_payment_records.insert_one(admin_record)
+                        logger.info(f"Registro admin guardado para TX: {tx_id}")
+                        
+                        # ============================
+                        # CREATE IN-APP NOTIFICATION
+                        # ============================
+                        await create_notification(
+                            user_id=user_id,
+                            title="✅ Retiro Completado",
+                            message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} VES) a {beneficiary.get('full_name', 'beneficiario')} fue procesado exitosamente. ID: {tx_id[:8]}...",
+                            notification_type="withdrawal_completed",
+                            data={
+                                "transaction_id": tx_id,
+                                "amount_ris": amount_ris,
+                                "amount_ves": amount_ves
+                            }
+                        )
+                        logger.info(f"Notificación in-app creada para usuario {user_id}")
+                        
+                        # Try push notification
+                        if user and user.get('fcm_token'):
+                            try:
+                                from push_service import push_service
+                                await push_service.send_withdrawal_completed_notification(
+                                    push_token=user['fcm_token'],
+                                    transaction_id=tx_id,
+                                    amount_ris=amount_ris,
+                                    amount_ves=amount_ves,
+                                    beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
                                 )
-                                if oldest_withdrawal:
-                                    transaction_id = str(oldest_withdrawal['_id'])
-                                    logger.info(f"Retiro más antiguo encontrado: {transaction_id} - {oldest_withdrawal.get('transaction_id')}")
-                        
-                        if transaction_id:
-                            from bson import ObjectId
-                            
-                            # Get transaction before update to have all data
-                            tx_before = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
-                            
-                            if not tx_before:
-                                logger.error(f"Transacción no encontrada: {transaction_id}")
-                                return {"status": "error", "message": "Transaction not found"}
-                            
-                            if tx_before.get('status') != 'pending':
-                                logger.warning(f"Transacción ya procesada: {transaction_id}")
-                                # Still send confirmation
-                                from twilio.rest import Client
-                                twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
-                                twilio_client.messages.create(
-                                    from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-                                    body=f"⚠️ Esta transacción ya fue procesada anteriormente.\nID: {tx_before.get('transaction_id', transaction_id)}",
-                                    to=from_number
-                                )
-                                return {"status": "already_processed"}
-                            
-                            # Update transaction
-                            result = await db.transactions.update_one(
-                                {"_id": ObjectId(transaction_id), "status": "pending"},
-                                {"$set": {
-                                    "status": "completed",
-                                    "proof_image": image_base64,
-                                    "completed_at": datetime.now(timezone.utc),
-                                    "updated_at": datetime.now(timezone.utc),
-                                    "processed_via": "whatsapp"
-                                }}
-                            )
-                            
-                            logger.info(f"Update result: modified_count={result.modified_count}")
-                            
-                            if result.modified_count > 0:
-                                # Get full transaction data
-                                completed_tx = await db.transactions.find_one({"_id": ObjectId(transaction_id)})
-                                user_id = completed_tx.get('user_id')
-                                tx_id = completed_tx.get('transaction_id', transaction_id)
-                                
-                                # Get user info
-                                user = await db.users.find_one({"user_id": user_id})
-                                
-                                beneficiary = completed_tx.get('beneficiary_data', {})
-                                amount_ris = completed_tx.get('amount_input', 0)
-                                amount_ves = completed_tx.get('amount_output', 0)
-                                
-                                logger.info(f"Transacción completada: {tx_id}")
-                                logger.info(f"Usuario: {user_id}, Monto: {amount_ris} RIS -> {amount_ves} VES")
-                                
-                                # ============================
-                                # SAVE ADMIN RECORD
-                                # ============================
-                                admin_record = {
-                                    "record_type": "withdrawal_completed",
-                                    "transaction_id": tx_id,
-                                    "mongo_id": transaction_id,
-                                    "user_id": user_id,
-                                    "user_name": user.get('name', 'N/A') if user else 'N/A',
-                                    "user_email": user.get('email', 'N/A') if user else 'N/A',
-                                    "amount_ris": amount_ris,
-                                    "amount_ves": amount_ves,
-                                    "beneficiary": {
-                                        "full_name": beneficiary.get('full_name', 'N/A'),
-                                        "bank": beneficiary.get('bank', 'N/A'),
-                                        "bank_code": beneficiary.get('bank_code', 'N/A'),
-                                        "account_number": beneficiary.get('account_number', 'N/A'),
-                                        "id_document": beneficiary.get('id_document', 'N/A'),
-                                        "phone_number": beneficiary.get('phone_number', 'N/A')
-                                    },
-                                    "proof_image": image_base64,
-                                    "processed_via": "whatsapp",
-                                    "processed_by_phone": from_number,
-                                    "whatsapp_message_sid": message_sid,
-                                    "created_at": completed_tx.get('created_at'),
-                                    "completed_at": datetime.now(timezone.utc),
-                                    "recorded_at": datetime.now(timezone.utc)
-                                }
-                                
-                                await db.admin_payment_records.insert_one(admin_record)
-                                logger.info(f"Registro admin guardado para TX: {tx_id}")
-                                
-                                # ============================
-                                # CREATE IN-APP NOTIFICATION
-                                # ============================
-                                await create_notification(
-                                    user_id=user_id,
-                                    title="✅ Retiro Completado",
-                                    message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} VES) a {beneficiary.get('full_name', 'beneficiario')} fue procesado exitosamente. ID: {tx_id[:8]}...",
-                                    notification_type="withdrawal_completed",
-                                    data={
-                                        "transaction_id": tx_id,
-                                        "amount_ris": amount_ris,
-                                        "amount_ves": amount_ves
-                                    }
-                                )
-                                logger.info(f"Notificación in-app creada para usuario {user_id}")
-                                
-                                # Try push notification
-                                if user and user.get('fcm_token'):
-                                    try:
-                                        from push_service import push_service
-                                        await push_service.send_withdrawal_completed_notification(
-                                            push_token=user['fcm_token'],
-                                            transaction_id=tx_id,
-                                            amount_ris=amount_ris,
-                                            amount_ves=amount_ves,
-                                            beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
-                                        )
-                                        logger.info("Push notification enviada")
-                                    except Exception as e:
-                                        logger.warning(f"Push notification falló: {e}")
+                                logger.info("Push notification enviada")
+                            except Exception as e:
+                                logger.warning(f"Push notification falló: {e}")
                                 
                                 # ============================
                                 # SEND EMAIL NOTIFICATION TO USER
