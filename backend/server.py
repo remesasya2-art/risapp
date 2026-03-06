@@ -3806,7 +3806,7 @@ async def twilio_whatsapp_webhook(request: Request):
                 import asyncio
                 asyncio.create_task(process_voucher_buffer(tx_id, from_number))
                 
-                return {"status": "buffering", "message": "Imágenes recibidas, esperando 10 segundos por más..."}
+                return {"status": "buffering", "message": "Imágenes recibidas, esperando 5 segundos por más..."}
         
         # Handle text-only messages (support chat, etc.)
         else:
@@ -3853,7 +3853,7 @@ async def process_voucher_buffer(transaction_id: str, from_number: str):
     """
     import asyncio
     
-    BUFFER_WAIT_SECONDS = 10
+    BUFFER_WAIT_SECONDS = 5
     
     await asyncio.sleep(BUFFER_WAIT_SECONDS)
     
