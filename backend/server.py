@@ -2312,17 +2312,17 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         })
         
         if active_withdrawal:
-            # There's already one being processed, don't send WhatsApp yet
+            # There's already one being processed, just send a short notification
             logger.info(f"📋 FIFO: Retiro {transaction.transaction_id} agregado a cola. Retiro activo: {active_withdrawal.get('transaction_id')}")
             
-            # Count how many are in queue (excluding active one)
+            # Count total pending (including this new one)
             queue_count = await db.transactions.count_documents({
                 "type": "withdrawal",
                 "status": "pending"
             })
             
-            # Notify admin about queue status via simple message
-            await send_whatsapp_notification(f"📋 *Nuevo retiro en cola*\nID: {transaction.transaction_id[:8]}...\nUsuario: {current_user.name}\nMonto: {request.amount_ris:.2f} RIS\n\n⏳ Posición en cola: {queue_count}\n\n_Se enviará automáticamente cuando completes el retiro actual._")
+            # Send SHORT notification - just the count
+            await send_whatsapp_notification(f"📋 {queue_count} solicitudes pendientes en cola")
         else:
             # No active withdrawal, this becomes the active one
             # Calculate total Bs pending (including this new one)
