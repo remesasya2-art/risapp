@@ -3725,6 +3725,7 @@ async def twilio_whatsapp_webhook(request: Request):
         if num_media > 0:
             # Download ALL images from the message
             import base64
+            from bson import ObjectId
             images_base64 = []
             
             for i in range(int(num_media)):
@@ -3766,47 +3767,112 @@ async def twilio_whatsapp_webhook(request: Request):
                 
                 if not active_withdrawal:
                     logger.warning("No hay retiros pendientes para procesar")
+                    # Send message to admin
+                    from twilio.rest import Client
+                    twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                    twilio_client.messages.create(
+                        from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                        body="⚠️ No hay retiros pendientes para procesar.",
+                        to=from_number
+                    )
                     return {"status": "no_pending_withdrawals"}
                 
                 tx_id = active_withdrawal.get('transaction_id')
+                display_id = active_withdrawal.get('display_id', tx_id[:8] if tx_id else 'N/A')
+                mongo_id = active_withdrawal['_id']
                 logger.info(f"Retiro activo encontrado: {tx_id}")
                 
                 # ============================
-                # BUFFER SYSTEM: 10 SECONDS WAIT
+                # PROCESS IMMEDIATELY - NO BUFFER
                 # ============================
-                # Check if there's already a pending buffer for this transaction
-                existing_buffer = await db.pending_vouchers.find_one({"transaction_id": tx_id})
+                # Update transaction with images
+                result = await db.transactions.update_one(
+                    {"_id": mongo_id, "status": "pending"},
+                    {"$set": {
+                        "status": "completed",
+                        "proof_images": images_base64,
+                        "proof_image": images_base64[0] if images_base64 else None,
+                        "completed_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc),
+                        "processed_via": "whatsapp",
+                        "whatsapp_active": False
+                    }}
+                )
                 
-                if existing_buffer:
-                    # Add new images to existing buffer and reset timer
-                    await db.pending_vouchers.update_one(
-                        {"transaction_id": tx_id},
-                        {
-                            "$push": {"images": {"$each": images_base64}},
-                            "$set": {"last_updated": datetime.now(timezone.utc)},
-                            "$inc": {"image_count": len(images_base64)}
-                        }
-                    )
-                    total_images = existing_buffer.get('image_count', 0) + len(images_base64)
-                    logger.info(f"Buffer actualizado: {total_images} imágenes totales para TX {tx_id}")
-                else:
-                    # Create new buffer
-                    await db.pending_vouchers.insert_one({
+                logger.info(f"Update result: modified_count={result.modified_count}")
+                
+                if result.modified_count > 0:
+                    # Get user info
+                    user = await db.users.find_one({"user_id": active_withdrawal['user_id']})
+                    beneficiary = active_withdrawal.get('beneficiary_data', {})
+                    amount_ris = active_withdrawal.get('amount_input', 0)
+                    amount_ves = active_withdrawal.get('amount_output', 0)
+                    
+                    logger.info(f"Transacción completada: {tx_id}")
+                    
+                    # Save admin record
+                    admin_record = {
+                        "record_type": "withdrawal_completed",
                         "transaction_id": tx_id,
-                        "mongo_id": str(active_withdrawal['_id']),
-                        "images": images_base64,
+                        "display_id": display_id,
+                        "user_id": active_withdrawal['user_id'],
+                        "user_name": user.get('name', 'N/A') if user else 'N/A',
+                        "amount_ris": amount_ris,
+                        "amount_ves": amount_ves,
+                        "beneficiary": beneficiary,
+                        "proof_images": images_base64,
                         "image_count": len(images_base64),
-                        "from_number": from_number,
-                        "created_at": datetime.now(timezone.utc),
-                        "last_updated": datetime.now(timezone.utc)
-                    })
-                    logger.info(f"Buffer creado: {len(images_base64)} imágenes para TX {tx_id}")
-                
-                # Start background task to process after 10 seconds
-                import asyncio
-                asyncio.create_task(process_voucher_buffer(tx_id, from_number))
-                
-                return {"status": "buffering", "message": "Imágenes recibidas, esperando 5 segundos por más..."}
+                        "processed_via": "whatsapp",
+                        "completed_at": datetime.now(timezone.utc)
+                    }
+                    await db.admin_payment_records.insert_one(admin_record)
+                    
+                    # Create notification for user
+                    await create_notification(
+                        user_id=active_withdrawal['user_id'],
+                        title="✅ Retiro Completado",
+                        message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} Bs) fue procesado. ID: {display_id}",
+                        notification_type="withdrawal_completed",
+                        data={"transaction_id": tx_id}
+                    )
+                    
+                    # Send confirmation to admin
+                    from twilio.rest import Client
+                    twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                    
+                    confirmation_msg = f"""✅ RETIRO PROCESADO
+
+🔢 ID: {display_id}
+💰 {amount_ris:.2f} RIS → {amount_ves:.2f} Bs
+👤 {beneficiary.get('full_name', 'N/A')}
+📷 {len(images_base64)} imagen(es)
+
+✅ Usuario notificado"""
+                    
+                    twilio_client.messages.create(
+                        from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                        body=confirmation_msg,
+                        to=from_number
+                    )
+                    logger.info("Confirmación enviada al admin")
+                    
+                    # Send next pending withdrawal
+                    next_tx = await send_next_pending_withdrawal_whatsapp()
+                    if next_tx:
+                        logger.info(f"📋 FIFO: Siguiente retiro enviado: {next_tx}")
+                    else:
+                        # Check if there are really no more pending
+                        pending_count = await db.transactions.count_documents({
+                            "type": "withdrawal", 
+                            "status": "pending"
+                        })
+                        if pending_count == 0:
+                            await send_whatsapp_notification("📭 No hay más retiros pendientes.")
+                    
+                    return {"status": "success", "transaction_id": tx_id}
+                else:
+                    logger.error("No se pudo actualizar la transacción")
+                    return {"status": "error", "message": "Could not update transaction"}
         
         # Handle text-only messages (support chat, etc.)
         else:
@@ -3845,216 +3911,6 @@ async def twilio_whatsapp_webhook(request: Request):
         return {"status": "error", "detail": str(e)}
 
 
-async def process_voucher_buffer(transaction_id: str, from_number: str):
-    """
-    Background task to process voucher images after 10 seconds buffer.
-    Waits 10 seconds, then checks if more images were added.
-    If no new images in 10 seconds, processes the transaction.
-    """
-    import asyncio
-    
-    BUFFER_WAIT_SECONDS = 5
-    
-    await asyncio.sleep(BUFFER_WAIT_SECONDS)
-    
-    try:
-        # Get the buffer
-        buffer = await db.pending_vouchers.find_one({"transaction_id": transaction_id})
-        
-        if not buffer:
-            logger.info(f"Buffer no encontrado para TX {transaction_id} - ya procesado?")
-            return
-        
-        # Check if buffer was updated in the last 10 seconds
-        last_updated = buffer.get('last_updated')
-        now = datetime.now(timezone.utc)
-        seconds_since_update = (now - last_updated).total_seconds()
-        
-        if seconds_since_update < BUFFER_WAIT_SECONDS:
-            # More images were added recently, wait again
-            logger.info(f"Buffer actualizado hace {seconds_since_update:.1f}s - esperando más imágenes...")
-            # Reschedule this task
-            asyncio.create_task(process_voucher_buffer(transaction_id, from_number))
-            return
-        
-        # Time to process - get all images
-        images_base64 = buffer.get('images', [])
-        mongo_id = buffer.get('mongo_id')
-        
-        logger.info(f"Procesando buffer: {len(images_base64)} imágenes para TX {transaction_id}")
-        
-        # Get the transaction
-        from bson import ObjectId
-        tx_before = await db.transactions.find_one({"_id": ObjectId(mongo_id)})
-        
-        if not tx_before:
-            logger.error(f"Transacción no encontrada: {mongo_id}")
-            await db.pending_vouchers.delete_one({"transaction_id": transaction_id})
-            return
-        
-        if tx_before.get('status') != 'pending':
-            logger.warning(f"Transacción ya procesada: {transaction_id}")
-            await db.pending_vouchers.delete_one({"transaction_id": transaction_id})
-            return
-        
-        # Update transaction with all images
-        result = await db.transactions.update_one(
-            {"_id": ObjectId(mongo_id), "status": "pending"},
-            {"$set": {
-                "status": "completed",
-                "proof_images": images_base64,
-                "proof_image": images_base64[0] if images_base64 else None,
-                "completed_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
-                "processed_via": "whatsapp"
-            }}
-        )
-        
-        if result.modified_count > 0:
-            # Get full transaction data
-            completed_tx = await db.transactions.find_one({"_id": ObjectId(mongo_id)})
-            user_id = completed_tx.get('user_id')
-            tx_id = completed_tx.get('transaction_id', transaction_id)
-            
-            # Get user info
-            user = await db.users.find_one({"user_id": user_id})
-            
-            beneficiary = completed_tx.get('beneficiary_data', {})
-            amount_ris = completed_tx.get('amount_input', 0)
-            amount_ves = completed_tx.get('amount_output', 0)
-            
-            logger.info(f"Transacción completada: {tx_id}")
-            logger.info(f"Usuario: {user_id}, Monto: {amount_ris} RIS -> {amount_ves} VES")
-            
-            # Save admin record
-            admin_record = {
-                "record_type": "withdrawal_completed",
-                "transaction_id": tx_id,
-                "mongo_id": mongo_id,
-                "user_id": user_id,
-                "user_name": user.get('name', 'N/A') if user else 'N/A',
-                "user_email": user.get('email', 'N/A') if user else 'N/A',
-                "amount_ris": amount_ris,
-                "amount_ves": amount_ves,
-                "beneficiary": {
-                    "full_name": beneficiary.get('full_name', 'N/A'),
-                    "bank": beneficiary.get('bank', 'N/A'),
-                    "bank_code": beneficiary.get('bank_code', 'N/A'),
-                    "account_number": beneficiary.get('account_number', 'N/A'),
-                    "id_document": beneficiary.get('id_document', 'N/A'),
-                    "phone_number": beneficiary.get('phone_number', 'N/A')
-                },
-                "proof_images": images_base64,
-                "image_count": len(images_base64),
-                "processed_via": "whatsapp",
-                "processed_by_phone": from_number,
-                "created_at": completed_tx.get('created_at'),
-                "completed_at": datetime.now(timezone.utc),
-                "recorded_at": datetime.now(timezone.utc)
-            }
-            
-            await db.admin_payment_records.insert_one(admin_record)
-            logger.info(f"Registro admin guardado para TX: {tx_id}")
-            
-            # Create in-app notification
-            await create_notification(
-                user_id=user_id,
-                title="✅ Retiro Completado",
-                message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} Bs) a {beneficiary.get('full_name', 'beneficiario')} fue procesado. ID: {tx_id[:8]}...",
-                notification_type="withdrawal_completed",
-                data={"transaction_id": tx_id, "amount_ris": amount_ris, "amount_ves": amount_ves}
-            )
-            
-            # Try push notification
-            if user and user.get('fcm_token'):
-                try:
-                    from push_service import push_service
-                    await push_service.send_withdrawal_completed_notification(
-                        push_token=user['fcm_token'],
-                        transaction_id=tx_id,
-                        amount_ris=amount_ris,
-                        amount_ves=amount_ves,
-                        beneficiary_name=beneficiary.get('full_name', 'Beneficiario')
-                    )
-                except Exception as e:
-                    logger.warning(f"Push notification falló: {e}")
-            
-            # Send email notification
-            if user and user.get('email') and RESEND_API_KEY:
-                try:
-                    import asyncio as aio
-                    beneficiary_name = beneficiary.get('full_name', 'beneficiario')
-                    user_email = user.get('email')
-                    user_name = user.get('name', 'Usuario')
-                    
-                    email_html = f"""
-                    <!DOCTYPE html>
-                    <html>
-                    <head><meta charset="UTF-8"></head>
-                    <body style="font-family: Arial, sans-serif; padding: 20px;">
-                        <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                            <h2 style="color: #10b981; text-align: center;">✅ Retiro Completado</h2>
-                            <p>¡Hola {user_name}!</p>
-                            <p>Tu envío a <strong>{beneficiary_name}</strong> por <strong>{amount_ves:.2f} Bs</strong> fue procesado exitosamente.</p>
-                            <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <p style="margin: 5px 0;"><strong>Beneficiario:</strong> {beneficiary_name}</p>
-                                <p style="margin: 5px 0;"><strong>Monto:</strong> {amount_ves:.2f} Bs</p>
-                                <p style="margin: 5px 0;"><strong>ID:</strong> {tx_id[:12]}...</p>
-                            </div>
-                            <p style="text-align: center;"><a href="https://www.risappbr.com/history" style="background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">Ver Historial</a></p>
-                        </div>
-                    </body>
-                    </html>
-                    """
-                    
-                    email_params = {
-                        "from": SENDER_EMAIL,
-                        "to": [user_email],
-                        "subject": f"✅ Envío exitoso a {beneficiary_name} - {amount_ves:.2f} Bs",
-                        "html": email_html
-                    }
-                    
-                    await aio.to_thread(resend.Emails.send, email_params)
-                    logger.info(f"Email enviado a {user_email}")
-                except Exception as e:
-                    logger.warning(f"Error enviando email: {e}")
-            
-            # Send WhatsApp confirmation to admin
-            from twilio.rest import Client
-            twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
-            
-            confirmation_msg = f"""✅ RETIRO PROCESADO
-
-🔢 ID: {tx_id[:12]}...
-💰 {amount_ris:.2f} RIS → {amount_ves:.2f} Bs
-👤 {beneficiary.get('full_name', 'N/A')}
-🏦 {beneficiary.get('bank_code', '')} {beneficiary.get('bank', '')}
-📷 {len(images_base64)} imagen(es) adjuntada(s)
-
-✅ Usuario notificado"""
-            
-            twilio_client.messages.create(
-                from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-                body=confirmation_msg,
-                to=from_number
-            )
-            logger.info("Confirmación WhatsApp enviada al admin")
-            
-            # FIFO: Send next pending withdrawal
-            next_tx = await send_next_pending_withdrawal_whatsapp()
-            if next_tx:
-                logger.info(f"📋 FIFO: Siguiente retiro enviado: {next_tx}")
-            else:
-                await send_whatsapp_notification("📭 No hay más retiros pendientes en cola.\n\n✅ Todos los retiros han sido procesados.")
-        
-        # Delete the buffer
-        await db.pending_vouchers.delete_one({"transaction_id": transaction_id})
-        logger.info(f"Buffer eliminado para TX {transaction_id}")
-        
-    except Exception as e:
-        logger.error(f"Error procesando buffer de voucher: {e}")
-        import traceback
-        traceback.print_exc()
 
 # =======================
 # ADMIN PANEL - COMPLETE ENDPOINTS
