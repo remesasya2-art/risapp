@@ -3783,16 +3783,25 @@ async def twilio_whatsapp_webhook(request: Request):
                                     transaction_id = oid_match.group(1)
                                     logger.info(f"Transaction ID from ObjectId: {transaction_id}")
                         
-                        # If no ID in current message, find the most recent pending transaction
+                        # If no ID in current message, find the ACTIVE withdrawal in WhatsApp queue (FIFO)
                         if not transaction_id:
-                            logger.info("No ID encontrado en mensaje, buscando retiro pendiente más reciente...")
-                            recent_withdrawal = await db.transactions.find_one(
-                                {"type": "withdrawal", "status": "pending"},
-                                sort=[("created_at", -1)]
+                            logger.info("No ID encontrado en mensaje, buscando retiro ACTIVO en cola FIFO...")
+                            # First, try to find the withdrawal that is currently active in WhatsApp
+                            active_withdrawal = await db.transactions.find_one(
+                                {"type": "withdrawal", "status": "pending", "whatsapp_active": True}
                             )
-                            if recent_withdrawal:
-                                transaction_id = str(recent_withdrawal['_id'])
-                                logger.info(f"Retiro pendiente encontrado: {transaction_id}")
+                            if active_withdrawal:
+                                transaction_id = str(active_withdrawal['_id'])
+                                logger.info(f"Retiro ACTIVO encontrado: {transaction_id} - {active_withdrawal.get('transaction_id')}")
+                            else:
+                                # Fallback: find the OLDEST pending withdrawal (FIFO order)
+                                oldest_withdrawal = await db.transactions.find_one(
+                                    {"type": "withdrawal", "status": "pending"},
+                                    sort=[("created_at", 1)]  # FIFO: oldest first
+                                )
+                                if oldest_withdrawal:
+                                    transaction_id = str(oldest_withdrawal['_id'])
+                                    logger.info(f"Retiro más antiguo encontrado: {transaction_id} - {oldest_withdrawal.get('transaction_id')}")
                         
                         if transaction_id:
                             from bson import ObjectId
