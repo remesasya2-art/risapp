@@ -159,26 +159,17 @@ async def send_next_pending_withdrawal_whatsapp():
         full_name = beneficiary.get('full_name', 'N/A')
         id_document = beneficiary.get('id_document', 'N/A')
         amount_ves = next_withdrawal['amount_output']
+        display_id = next_withdrawal.get('display_id', next_withdrawal['transaction_id'][:8])
         
-        # Build WhatsApp message WITHOUT total Bs (clean format for active withdrawal)
-        message = f"""🔔 NUEVO RETIRO PENDIENTE
-
-💰 Monto: {next_withdrawal['amount_input']:.2f} RIS → {amount_ves:.2f} Bs
-👤 Usuario: {user.get('name', 'N/A')}
-
-
-📋 DATOS PARA TRANSFERENCIA:
-{bank_code} - {bank_name} {account_number}
-{full_name}
+        # Build WhatsApp message - new clean format
+        message = f"""{full_name}
+{account_number}
 {id_document}
 {amount_ves:.2f} Bs
 
-
-🔢 ID Transacción: {next_withdrawal['transaction_id']}
-
-
----
-✅ Responde con foto del comprobante para completar."""
+👤 Usuario: {user.get('name', 'N/A')}
+🔢 ID: {display_id}
+🔔 NUEVO RETIRO PENDIENTE"""
         
         # Send WhatsApp
         whatsapp_sent = await send_whatsapp_notification(message)
@@ -374,6 +365,17 @@ async def send_push_to_admins(title: str, body: str, data: dict = None) -> int:
 # =======================
 # REFERRAL BONUS SYSTEM
 # =======================
+
+async def get_next_withdrawal_id() -> str:
+    """Generate next incremental withdrawal ID (000001, 000002, etc.)"""
+    counter = await db.counters.find_one_and_update(
+        {"_id": "withdrawal_id"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True
+    )
+    return str(counter["seq"]).zfill(6)  # Format as 000001, 000002, etc.
+
 async def process_referral_bonus(user_id: str, recharge_amount: float):
     """
     Process referral bonuses when a user recharges.
@@ -2284,6 +2286,9 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     # Calculate VES amount
     amount_ves = request.amount_ris * rate
     
+    # Get next incremental display ID
+    display_id = await get_next_withdrawal_id()
+    
     # Create transaction
     transaction = Transaction(
         user_id=current_user.user_id,
@@ -2293,7 +2298,11 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         amount_output=amount_ves,
         beneficiary_data=request.beneficiary_data
     )
-    await db.transactions.insert_one(transaction.dict())
+    
+    # Add display_id to transaction
+    tx_dict = transaction.dict()
+    tx_dict['display_id'] = display_id
+    await db.transactions.insert_one(tx_dict)
     
     # Immediately deduct RIS from balance
     await db.users.update_one(
@@ -2335,25 +2344,15 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
             full_name = request.beneficiary_data.get('full_name', 'N/A')
             id_document = request.beneficiary_data.get('id_document', 'N/A')
             
-            # Message WITHOUT total Bs (only for the active one)
-            message = f"""🔔 NUEVO RETIRO PENDIENTE
-
-💰 Monto: {request.amount_ris:.2f} RIS → {amount_ves:.2f} Bs
-👤 Usuario: {current_user.name}
-
-
-📋 DATOS PARA TRANSFERENCIA:
-{bank_code} - {bank_name} {account_number}
-{full_name}
+            # New clean format message
+            message = f"""{full_name}
+{account_number}
 {id_document}
 {amount_ves:.2f} Bs
 
-
-🔢 ID Transacción: {transaction.transaction_id}
-
-
----
-✅ Responde con foto del comprobante para completar."""
+👤 Usuario: {current_user.name}
+🔢 ID: {display_id}
+🔔 NUEVO RETIRO PENDIENTE"""
 
             from twilio.rest import Client
             twilio_client_local = Client(
