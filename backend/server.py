@@ -122,13 +122,11 @@ async def send_next_pending_withdrawal_whatsapp():
     """
     FIFO System: Send the next pending withdrawal via WhatsApp.
     Only sends if there's no other withdrawal currently being processed via WhatsApp.
-    Includes total Bs pending for all withdrawals.
     """
     try:
         # Get ALL pending withdrawals ordered by date (FIFO)
         pending_withdrawals = await db.transactions.find(
-            {"type": "withdrawal", "status": "pending"},
-            {"_id": 0}
+            {"type": "withdrawal", "status": "pending"}
         ).sort("created_at", 1).to_list(100)
         
         if not pending_withdrawals:
@@ -148,18 +146,12 @@ async def send_next_pending_withdrawal_whatsapp():
             logger.error(f"Usuario no encontrado para retiro: {next_withdrawal.get('transaction_id')}")
             return None
         
-        # Calculate total Bs pending (all pending withdrawals)
-        total_ves = sum(w.get('amount_output', 0) for w in pending_withdrawals)
-        pending_count = len(pending_withdrawals)
-        
         beneficiary = next_withdrawal.get('beneficiary_data', {})
-        bank_code = beneficiary.get('bank_code', '')
-        bank_name = beneficiary.get('bank', '')
         account_number = beneficiary.get('account_number', 'N/A')
         full_name = beneficiary.get('full_name', 'N/A')
         id_document = beneficiary.get('id_document', 'N/A')
         amount_ves = next_withdrawal['amount_output']
-        display_id = next_withdrawal.get('display_id', next_withdrawal['transaction_id'][:8])
+        display_id = next_withdrawal.get('display_id', next_withdrawal.get('transaction_id', 'N/A')[:8])
         
         # Build WhatsApp message - new clean format
         message = f"""{full_name}
@@ -175,22 +167,24 @@ async def send_next_pending_withdrawal_whatsapp():
         whatsapp_sent = await send_whatsapp_notification(message)
         
         if whatsapp_sent:
-            # Mark as active in WhatsApp (not just notified)
+            # Mark as active in WhatsApp using MongoDB _id
             await db.transactions.update_one(
-                {"transaction_id": next_withdrawal['transaction_id']},
+                {"_id": next_withdrawal['_id']},
                 {"$set": {
                     "whatsapp_active": True,
                     "whatsapp_notified": True,
                     "whatsapp_notified_at": datetime.now(timezone.utc)
                 }}
             )
-            logger.info(f"📋 FIFO: Retiro enviado a WhatsApp: {next_withdrawal['transaction_id']}")
-            return next_withdrawal['transaction_id']
+            logger.info(f"📋 FIFO: Retiro enviado a WhatsApp: {next_withdrawal.get('transaction_id')}")
+            return next_withdrawal.get('transaction_id')
         
         return None
         
     except Exception as e:
         logger.error(f"Error en FIFO WhatsApp: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 async def send_verification_email(email: str, code: str, name: str) -> bool:
