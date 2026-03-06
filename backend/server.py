@@ -3728,6 +3728,11 @@ async def twilio_whatsapp_webhook(request: Request):
         logger.info(f"Body: {body}")
         logger.info(f"NumMedia: {num_media}")
         
+        # Check if message is a command to process pending images
+        body_lower = body.strip().lower() if body else ""
+        process_commands = ['listo', 'ok', 'completar', 'procesar', 'enviar', 'done', 'ready']
+        is_process_command = body_lower in process_commands
+        
         # Check if message has media (images)
         if num_media > 0:
             # Download ALL images from the message
@@ -3740,7 +3745,6 @@ async def twilio_whatsapp_webhook(request: Request):
                 media_content_type = form_data.get(f'MediaContentType{i}', '')
                 
                 logger.info(f"Media {i} URL: {media_url}")
-                logger.info(f"Media {i} Type: {media_content_type}")
                 
                 if media_url and 'image' in media_content_type:
                     async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -3750,104 +3754,139 @@ async def twilio_whatsapp_webhook(request: Request):
                         )
                         response = await client.get(media_url, auth=auth)
                         
-                        logger.info(f"Media {i} download status: {response.status_code}")
-                        
                         if response.status_code == 200:
                             image_base64 = f"data:{media_content_type};base64,{base64.b64encode(response.content).decode()}"
                             images_base64.append(image_base64)
-                            logger.info(f"Imagen {i+1} descargada y convertida a base64")
+                            logger.info(f"Imagen {i+1} descargada")
             
             if images_base64:
                 logger.info(f"Total imágenes descargadas: {len(images_base64)}")
                 
-                # Find the ACTIVE withdrawal in WhatsApp queue (FIFO)
+                # Find the ACTIVE withdrawal
                 active_withdrawal = await db.transactions.find_one(
                     {"type": "withdrawal", "status": "pending", "whatsapp_active": True}
                 )
                 
                 if not active_withdrawal:
-                    # Fallback: find the OLDEST pending withdrawal
                     active_withdrawal = await db.transactions.find_one(
                         {"type": "withdrawal", "status": "pending"},
                         sort=[("created_at", 1)]
                     )
                 
                 if not active_withdrawal:
-                    logger.warning("No hay retiros pendientes para procesar")
-                    # Send message to admin
                     from twilio.rest import Client
                     twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
                     twilio_client.messages.create(
                         from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-                        body="⚠️ No hay retiros pendientes para procesar.",
+                        body="⚠️ No hay retiros pendientes.",
                         to=from_number
                     )
-                    return {"status": "no_pending_withdrawals"}
+                    return {"status": "no_pending"}
                 
                 tx_id = active_withdrawal.get('transaction_id')
                 display_id = active_withdrawal.get('display_id', tx_id[:8] if tx_id else 'N/A')
-                mongo_id = active_withdrawal['_id']
-                logger.info(f"Retiro activo encontrado: {tx_id}")
                 
-                # ============================
-                # PROCESS IMMEDIATELY - NO BUFFER
-                # ============================
-                # Update transaction with images
-                result = await db.transactions.update_one(
-                    {"_id": mongo_id, "status": "pending"},
+                # Add images to pending_images array (accumulate)
+                existing_images = active_withdrawal.get('pending_images', [])
+                all_images = existing_images + images_base64
+                
+                await db.transactions.update_one(
+                    {"_id": active_withdrawal['_id']},
                     {"$set": {
-                        "status": "completed",
-                        "proof_images": images_base64,
-                        "proof_image": images_base64[0] if images_base64 else None,
-                        "completed_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc),
-                        "processed_via": "whatsapp",
-                        "whatsapp_active": False
+                        "pending_images": all_images,
+                        "whatsapp_active": True
                     }}
                 )
                 
-                logger.info(f"Update result: modified_count={result.modified_count}")
+                # Send confirmation of images received
+                from twilio.rest import Client
+                twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                twilio_client.messages.create(
+                    from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                    body=f"📷 {len(all_images)} imagen(es) recibida(s) para ID: {display_id}\n\n✅ Escribe *listo* para procesar\n📷 O envía más imágenes",
+                    to=from_number
+                )
                 
-                if result.modified_count > 0:
-                    # Get user info
-                    user = await db.users.find_one({"user_id": active_withdrawal['user_id']})
-                    beneficiary = active_withdrawal.get('beneficiary_data', {})
-                    amount_ris = active_withdrawal.get('amount_input', 0)
-                    amount_ves = active_withdrawal.get('amount_output', 0)
-                    
-                    logger.info(f"Transacción completada: {tx_id}")
-                    
-                    # Save admin record
-                    admin_record = {
-                        "record_type": "withdrawal_completed",
-                        "transaction_id": tx_id,
-                        "display_id": display_id,
-                        "user_id": active_withdrawal['user_id'],
-                        "user_name": user.get('name', 'N/A') if user else 'N/A',
-                        "amount_ris": amount_ris,
-                        "amount_ves": amount_ves,
-                        "beneficiary": beneficiary,
-                        "proof_images": images_base64,
-                        "image_count": len(images_base64),
-                        "processed_via": "whatsapp",
-                        "completed_at": datetime.now(timezone.utc)
-                    }
-                    await db.admin_payment_records.insert_one(admin_record)
-                    
-                    # Create notification for user
-                    await create_notification(
-                        user_id=active_withdrawal['user_id'],
-                        title="✅ Retiro Completado",
-                        message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} Bs) fue procesado. ID: {display_id}",
-                        notification_type="withdrawal_completed",
-                        data={"transaction_id": tx_id}
-                    )
-                    
-                    # Send confirmation to admin
-                    from twilio.rest import Client
-                    twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
-                    
-                    confirmation_msg = f"""✅ RETIRO PROCESADO
+                logger.info(f"Imágenes agregadas al buffer: {len(all_images)} total para TX {display_id}")
+                return {"status": "images_buffered", "count": len(all_images)}
+        
+        # Handle "listo" command to process buffered images
+        elif is_process_command:
+            logger.info(f"Comando de procesar recibido: {body}")
+            from bson import ObjectId
+            
+            # Find active withdrawal with pending images
+            active_withdrawal = await db.transactions.find_one(
+                {"type": "withdrawal", "status": "pending", "whatsapp_active": True, "pending_images": {"$exists": True, "$ne": []}}
+            )
+            
+            if not active_withdrawal:
+                from twilio.rest import Client
+                twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                twilio_client.messages.create(
+                    from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                    body="⚠️ No hay imágenes pendientes para procesar.\nEnvía primero las imágenes del voucher.",
+                    to=from_number
+                )
+                return {"status": "no_pending_images"}
+            
+            # Get pending images
+            images_base64 = active_withdrawal.get('pending_images', [])
+            tx_id = active_withdrawal.get('transaction_id')
+            display_id = active_withdrawal.get('display_id', tx_id[:8] if tx_id else 'N/A')
+            mongo_id = active_withdrawal['_id']
+            
+            logger.info(f"Procesando {len(images_base64)} imágenes para TX {display_id}")
+            
+            # Complete the transaction
+            result = await db.transactions.update_one(
+                {"_id": mongo_id, "status": "pending"},
+                {"$set": {
+                    "status": "completed",
+                    "proof_images": images_base64,
+                    "proof_image": images_base64[0] if images_base64 else None,
+                    "completed_at": datetime.now(timezone.utc),
+                    "processed_via": "whatsapp",
+                    "whatsapp_active": False
+                },
+                "$unset": {"pending_images": ""}}
+            )
+            
+            if result.modified_count > 0:
+                user = await db.users.find_one({"user_id": active_withdrawal['user_id']})
+                beneficiary = active_withdrawal.get('beneficiary_data', {})
+                amount_ris = active_withdrawal.get('amount_input', 0)
+                amount_ves = active_withdrawal.get('amount_output', 0)
+                
+                # Save admin record
+                await db.admin_payment_records.insert_one({
+                    "record_type": "withdrawal_completed",
+                    "transaction_id": tx_id,
+                    "display_id": display_id,
+                    "user_id": active_withdrawal['user_id'],
+                    "amount_ris": amount_ris,
+                    "amount_ves": amount_ves,
+                    "beneficiary": beneficiary,
+                    "proof_images": images_base64,
+                    "image_count": len(images_base64),
+                    "processed_via": "whatsapp",
+                    "completed_at": datetime.now(timezone.utc)
+                })
+                
+                # Notify user
+                await create_notification(
+                    user_id=active_withdrawal['user_id'],
+                    title="✅ Retiro Completado",
+                    message=f"Tu retiro de {amount_ris:.2f} RIS ({amount_ves:.2f} Bs) fue procesado. ID: {display_id}",
+                    notification_type="withdrawal_completed",
+                    data={"transaction_id": tx_id}
+                )
+                
+                # Send confirmation to admin
+                from twilio.rest import Client
+                twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
+                
+                confirmation_msg = f"""✅ RETIRO PROCESADO
 
 🔢 ID: {display_id}
 💰 {amount_ris:.2f} RIS → {amount_ves:.2f} Bs
@@ -3855,31 +3894,25 @@ async def twilio_whatsapp_webhook(request: Request):
 📷 {len(images_base64)} imagen(es)
 
 ✅ Usuario notificado"""
-                    
-                    twilio_client.messages.create(
-                        from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-                        body=confirmation_msg,
-                        to=from_number
-                    )
-                    logger.info("Confirmación enviada al admin")
-                    
-                    # Send next pending withdrawal
-                    next_tx = await send_next_pending_withdrawal_whatsapp()
-                    if next_tx:
-                        logger.info(f"📋 FIFO: Siguiente retiro enviado: {next_tx}")
-                    else:
-                        # Check if there are really no more pending
-                        pending_count = await db.transactions.count_documents({
-                            "type": "withdrawal", 
-                            "status": "pending"
-                        })
-                        if pending_count == 0:
-                            await send_whatsapp_notification("📭 No hay más retiros pendientes.")
-                    
-                    return {"status": "success", "transaction_id": tx_id}
+                
+                twilio_client.messages.create(
+                    from_=os.getenv('TWILIO_WHATSAPP_FROM'),
+                    body=confirmation_msg,
+                    to=from_number
+                )
+                
+                # Send next withdrawal
+                next_tx = await send_next_pending_withdrawal_whatsapp()
+                if next_tx:
+                    logger.info(f"📋 FIFO: Siguiente retiro enviado: {next_tx}")
                 else:
-                    logger.error("No se pudo actualizar la transacción")
-                    return {"status": "error", "message": "Could not update transaction"}
+                    pending_count = await db.transactions.count_documents({"type": "withdrawal", "status": "pending"})
+                    if pending_count == 0:
+                        await send_whatsapp_notification("📭 No hay más retiros pendientes.")
+                
+                return {"status": "success", "images_processed": len(images_base64)}
+            else:
+                return {"status": "error", "message": "No se pudo actualizar"}
         
         # Handle text-only messages (support chat, etc.)
         else:
