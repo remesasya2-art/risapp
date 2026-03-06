@@ -121,23 +121,29 @@ async def send_whatsapp_notification(message_body: str) -> bool:
 async def send_next_pending_withdrawal_whatsapp():
     """
     FIFO System: Send the next pending withdrawal via WhatsApp.
-    Only sends if there's no other withdrawal currently being processed via WhatsApp.
+    Finds the oldest pending withdrawal and sends it, marking it as active.
     """
     try:
-        # Get ALL pending withdrawals ordered by date (FIFO)
-        pending_withdrawals = await db.transactions.find(
-            {"type": "withdrawal", "status": "pending"}
-        ).sort("created_at", 1).to_list(100)
+        # First, clean up: ensure no "ghost" active withdrawals exist
+        # (completed transactions that still have whatsapp_active: true)
+        await db.transactions.update_many(
+            {"status": {"$ne": "pending"}, "whatsapp_active": True},
+            {"$set": {"whatsapp_active": False}}
+        )
         
-        if not pending_withdrawals:
+        # Get the OLDEST pending withdrawal (FIFO)
+        next_withdrawal = await db.transactions.find_one(
+            {"type": "withdrawal", "status": "pending"},
+            sort=[("created_at", 1)]
+        )
+        
+        if not next_withdrawal:
             logger.info("📋 FIFO: No hay retiros pendientes en cola")
             return None
         
-        # Check if the FIRST pending withdrawal is already active in WhatsApp
-        next_withdrawal = pending_withdrawals[0]
-        
+        # Check if this withdrawal is already active
         if next_withdrawal.get('whatsapp_active', False):
-            logger.info(f"📋 FIFO: El retiro {next_withdrawal.get('transaction_id')} ya está activo en WhatsApp")
+            logger.info(f"📋 FIFO: El retiro {next_withdrawal.get('display_id', next_withdrawal.get('transaction_id'))} ya está activo")
             return None
         
         # Get user info
@@ -150,10 +156,10 @@ async def send_next_pending_withdrawal_whatsapp():
         account_number = beneficiary.get('account_number', 'N/A')
         full_name = beneficiary.get('full_name', 'N/A')
         id_document = beneficiary.get('id_document', 'N/A')
-        amount_ves = next_withdrawal['amount_output']
+        amount_ves = next_withdrawal.get('amount_output', 0)
         display_id = next_withdrawal.get('display_id', next_withdrawal.get('transaction_id', 'N/A')[:8])
         
-        # Build WhatsApp message - new clean format
+        # Build WhatsApp message - clean format
         message = f"""{full_name}
 {account_number}
 {id_document}
@@ -167,7 +173,7 @@ async def send_next_pending_withdrawal_whatsapp():
         whatsapp_sent = await send_whatsapp_notification(message)
         
         if whatsapp_sent:
-            # Mark as active in WhatsApp using MongoDB _id
+            # Mark as active in WhatsApp
             await db.transactions.update_one(
                 {"_id": next_withdrawal['_id']},
                 {"$set": {
@@ -176,10 +182,11 @@ async def send_next_pending_withdrawal_whatsapp():
                     "whatsapp_notified_at": datetime.now(timezone.utc)
                 }}
             )
-            logger.info(f"📋 FIFO: Retiro enviado a WhatsApp: {next_withdrawal.get('transaction_id')}")
-            return next_withdrawal.get('transaction_id')
-        
-        return None
+            logger.info(f"📋 FIFO: Retiro enviado a WhatsApp - ID: {display_id}")
+            return display_id
+        else:
+            logger.error("📋 FIFO: Error enviando mensaje WhatsApp")
+            return None
         
     except Exception as e:
         logger.error(f"Error en FIFO WhatsApp: {e}")
