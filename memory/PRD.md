@@ -182,5 +182,17 @@
 - VAPID_PRIVATE_KEY
 - VAPID_SUBJECT
 
+## Changelog
+
+### 2026-03-07 - Fix Multi-Imagen WhatsApp
+- **Bug corregido:** Solo la primera imagen se asignaba a la transacción activa
+- **Causa raíz:** Patrón read-modify-write causaba race conditions entre webhooks
+- **Solución:** Cambio a operación atómica `$push` con `$each` de MongoDB
+- **Tests:** 12/12 tests pasados en `/app/backend/tests/test_whatsapp_image_accumulation.py`
+
+### 2026-03-05 - Sistema FIFO WhatsApp
+- Sistema FIFO para retiros WhatsApp con Total Bs pendientes implementado
+- Panel de admin con estadísticas de cola en tiempo real
+
 ## Last Updated
-2026-03-05 - Sistema FIFO para retiros WhatsApp con Total Bs pendientes implementado
+2026-03-07 - Fix bug multi-imagen WhatsApp con operaciones atómicas MongoDB
