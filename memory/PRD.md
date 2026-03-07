@@ -85,12 +85,17 @@
 
 ### Sistema de Socios Gestores
 - [x] Panel de Gestor con:
-  - Saldo disponible
+  - Saldo personal disponible
+  - **Saldo de Terceros (balance_ris_terceros)** - Separado del saldo personal
   - Estadísticas de transacciones
   - Gestión de beneficiarios
   - Historial de transacciones
-- [x] Agregar beneficiarios en Venezuela (nombre, banco, cuenta, cédula)
-- [x] Procesar transacciones de terceros
+- [x] Agregar beneficiarios con dos tipos de pago:
+  - **Pago Móvil**: Nombre, cédula, banco (código), teléfono
+  - **Transferencia**: Nombre, cédula, banco, número de cuenta (20 dígitos)
+- [x] **Recargar saldo de terceros** - Transferir desde saldo personal
+- [x] Procesar transacciones de terceros (debita de balance_ris_terceros)
+- [x] Flujo de transacción de 4 pasos: Monto → Tipo de Pago → Datos del Cliente → Confirmación
 - [x] Comisión configurable por SuperAdmin
 
 ### Panel de Administración
@@ -100,10 +105,12 @@
 - [x] Configuración de tasas de cambio
 - [x] Asignar rol de Socio a usuarios
 - [x] Asignar rol de Socio Gestor a usuarios
-- [x] Ver lista de Socios y sus referidos
-- [x] Ver lista de Gestores y sus transacciones
+- [x] **Tab "Socios"** con sub-tabs:
+  - Socios Referidos: Lista con código, referidos, ganancias totales, ganancias del mes
+  - Socios Gestores: Lista con código, transacciones, volumen total, saldo terceros
 - [x] Configurar comisión de gestores
 - [x] **Resetear contraseña de usuario** - Genera contraseña temporal de un solo uso
+- [x] **Herramienta de limpieza** - Eliminar transacciones pendientes atascadas
 
 ## Technical Stack
 - **Frontend:** React + Vite + Tailwind CSS
@@ -133,11 +140,12 @@
 - GET /api/partner/referral-link
 
 ### Gestor (Socio Gestor)
-- GET /api/gestor/dashboard
-- GET /api/gestor/beneficiaries
-- POST /api/gestor/beneficiaries
-- POST /api/gestor/process-transaction
-- GET /api/gestor/transactions
+- GET /api/gestor/dashboard - Incluye balance_ris y balance_ris_terceros
+- GET /api/gestor/beneficiaries - Lista beneficiarios con payment_type
+- POST /api/gestor/beneficiaries - Crear beneficiario (Pago Móvil o Transferencia)
+- POST /api/gestor/process-transaction - Procesa transacción de terceros
+- POST /api/gestor/recharge-terceros - Transferir de saldo personal a terceros
+- GET /api/gestor/transactions - Lista transacciones del gestor
 
 ### Admin
 - POST /api/admin/assign-partner
