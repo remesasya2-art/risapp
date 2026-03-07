@@ -227,8 +227,8 @@ export default function History() {
                         {getStatusIcon(tx.status)}
                         {getStatusText(tx.status)}
                       </div>
-                      {/* Botón para ver comprobante */}
-                      {tx.type === 'withdrawal' && tx.status === 'completed' && tx.proof_image && (
+                      {/* Botón para ver comprobante(s) - mostrar si hay proof_images o proof_image */}
+                      {tx.type === 'withdrawal' && tx.status === 'completed' && (tx.proof_images?.length > 0 || tx.proof_image) && (
                         <button
                           onClick={() => openVoucher(tx)}
                           style={{
@@ -238,7 +238,24 @@ export default function History() {
                             transition: 'all 0.2s'
                           }}
                           data-testid={`view-voucher-${tx.transaction_id}`}
-                          title="Ver comprobante de pago"
+                          title="Ver comprobante(s) de pago"
+                        >
+                          <Eye style={{ width: '16px', height: '16px' }} />
+                          Ver {(tx.proof_images?.length || 1)} comprobante{(tx.proof_images?.length || 1) > 1 ? 's' : ''}
+                        </button>
+                      )}
+                      {/* También para recargas VES que tengan voucher */}
+                      {tx.type === 'recharge_ves' && tx.voucher_url && (
+                        <button
+                          onClick={() => openVoucher(tx)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                            borderRadius: '9999px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                            backgroundColor: '#dcfce7', color: '#16a34a', border: 'none',
+                            transition: 'all 0.2s'
+                          }}
+                          data-testid={`view-voucher-${tx.transaction_id}`}
+                          title="Ver comprobante"
                         >
                           <Eye style={{ width: '16px', height: '16px' }} />
                           Ver comprobante
@@ -253,7 +270,7 @@ export default function History() {
         )}
       </div>
 
-      {/* Modal para ver comprobante */}
+      {/* Modal para ver comprobante(s) */}
       {showVoucherModal && selectedVoucher && (
         <div 
           style={{ 
@@ -266,13 +283,13 @@ export default function History() {
           <div 
             style={{ 
               backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', 
-              width: '100%', maxWidth: '500px', maxHeight: '90vh', overflow: 'auto' 
+              width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' 
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>
-                Comprobante de Pago
+                Comprobante{(selectedVoucher.proof_images?.length || 1) > 1 ? 's' : ''} de Pago
               </h3>
               <button 
                 onClick={() => setShowVoucherModal(false)}
@@ -311,19 +328,60 @@ export default function History() {
               </div>
             </div>
 
-            {/* Imagen del comprobante */}
+            {/* Imágenes del comprobante */}
             <div>
               <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
-                Imagen del comprobante
+                📷 {(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante
               </p>
-              {selectedVoucher.proof_image ? (
+              
+              {/* Grid de imágenes */}
+              {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: (selectedVoucher.proof_images?.length || 1) > 1 ? 'repeat(2, 1fr)' : '1fr', 
+                  gap: '12px' 
+                }}>
+                  {(selectedVoucher.proof_images?.length > 0 ? selectedVoucher.proof_images : [selectedVoucher.proof_image]).map((img, idx) => (
+                    <div key={idx} style={{ position: 'relative' }}>
+                      <img 
+                        src={img} 
+                        alt={`Comprobante ${idx + 1}`}
+                        style={{ 
+                          width: '100%', 
+                          borderRadius: '12px', 
+                          border: '1px solid #e5e7eb',
+                          maxHeight: (selectedVoucher.proof_images?.length || 1) > 1 ? '200px' : '400px', 
+                          objectFit: 'contain', 
+                          backgroundColor: '#f9fafb',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => window.open(img, '_blank')}
+                        title="Click para ver en tamaño completo"
+                      />
+                      {(selectedVoucher.proof_images?.length || 0) > 1 && (
+                        <div style={{ 
+                          position: 'absolute', bottom: '8px', left: '8px', 
+                          backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', 
+                          fontSize: '12px', padding: '4px 8px', borderRadius: '6px',
+                          fontWeight: '600'
+                        }}>
+                          #{idx + 1}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : selectedVoucher.voucher_url ? (
                 <img 
-                  src={selectedVoucher.proof_image} 
-                  alt="Comprobante de pago"
+                  src={selectedVoucher.voucher_url} 
+                  alt="Comprobante"
                   style={{ 
                     width: '100%', borderRadius: '12px', border: '1px solid #e5e7eb',
-                    maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f9fafb'
+                    maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f9fafb',
+                    cursor: 'pointer'
                   }}
+                  onClick={() => window.open(selectedVoucher.voucher_url, '_blank')}
+                  title="Click para ver en tamaño completo"
                 />
               ) : (
                 <div style={{ 
@@ -333,10 +391,14 @@ export default function History() {
                   <p style={{ color: '#6b7280', margin: 0 }}>No hay comprobante disponible</p>
                 </div>
               )}
+              
+              <p style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '8px' }}>
+                Toca una imagen para verla en tamaño completo
+              </p>
             </div>
 
             <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginTop: '16px' }}>
-              ID: {selectedVoucher.transaction_id}
+              ID: {selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8)}
             </p>
           </div>
         </div>

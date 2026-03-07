@@ -184,6 +184,12 @@
 
 ## Changelog
 
+### 2026-03-07 - Vista Multi-Imagen para Usuarios
+- **Mejora:** Usuarios pueden ver todas las imágenes de comprobantes en su historial
+- **UI:** Botón "Ver X comprobantes" con ícono de ojo en transacciones completadas
+- **Modal:** Muestra grid de imágenes con numeración, click para ver tamaño completo
+- **Backend:** Endpoint `/transactions` ya incluye `proof_images` array
+
 ### 2026-03-07 - Multi-Imagen Admin Panel
 - **Mejora:** Admin Panel ahora muestra columna "Imágenes" con indicador visual (📷 X)
 - **Mejora:** Modal de procesamiento permite subir múltiples imágenes
@@ -202,4 +208,4 @@
 - Panel de admin con estadísticas de cola en tiempo real
 
 ## Last Updated
-2026-03-07 - Mejoras Admin Panel multi-imagen
+2026-03-07 - Vista multi-imagen para usuarios en historial
