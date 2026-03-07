@@ -22,7 +22,7 @@ from bson import ObjectId
 BASE_URL = os.environ.get('VITE_API_URL', '').rstrip('/')
 if not BASE_URL:
     # Try alternative env var names
-    BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://whatsapp-payments.preview.emergentagent.com/api').rstrip('/')
+    BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pago-movil-app.preview.emergentagent.com/api').rstrip('/')
 
 print(f"Using BASE_URL: {BASE_URL}")
 

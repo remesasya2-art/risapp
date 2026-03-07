@@ -5539,18 +5539,22 @@ class AssignGestorRoleRequest(BaseModel):
 
 class GestorBeneficiaryRequest(BaseModel):
     full_name: str
-    phone: str
-    bank_name: str
-    account_number: str
-    cedula: str
-    notes: Optional[str] = None
+    id_document: str  # Cedula
+    bank: str  # Bank code for pago_movil, bank name for transferencia
+    bank_code: Optional[str] = None
+    phone_number: Optional[str] = None  # For pago_movil (11 digits)
+    account_number: Optional[str] = None  # For transferencia (20 digits)
+    payment_type: str = "pago_movil"  # "pago_movil" or "transferencia"
 
 class GestorTransactionRequest(BaseModel):
-    third_party_user_id: str  # The user who paid
     beneficiary_id: str  # Beneficiary in Venezuela
     amount_ris: float  # Amount in RIS
-    amount_ves: float  # Amount in VES to send
-    third_party_phone: Optional[str] = None  # For WhatsApp notification
+    client_name: str  # Name of the person paying
+    client_phone: Optional[str] = None  # Phone of the person paying
+    payment_type: str  # "pago_movil" or "transferencia"
+
+class GestorRechargeTercerosRequest(BaseModel):
+    amount: float  # Amount to transfer from personal to terceros
 
 @api_router.get("/admin/gestor-commission")
 async def get_gestor_commission(admin_user: User = Depends(get_super_admin)):
@@ -5600,6 +5604,7 @@ async def assign_gestor_role(request: AssignGestorRoleRequest, admin_user: User 
         {"$set": {
             "role": "socio_gestor",
             "gestor_code": gestor_code,
+            "balance_ris_terceros": 0,  # Saldo separado para procesar remesas de terceros
             "became_gestor_at": datetime.now(timezone.utc)
         }}
     )
@@ -5654,9 +5659,10 @@ async def get_all_gestors(admin_user: User = Depends(get_super_admin)):
             "name": gestor.get("name", ""),
             "email": gestor.get("email", ""),
             "gestor_code": gestor.get("gestor_code", ""),
-            "transactions_count": tx_count,
+            "total_transactions": tx_count,
             "total_volume": round(total_volume, 2),
             "balance_ris": gestor.get("balance_ris", 0),
+            "balance_ris_terceros": gestor.get("balance_ris_terceros", 0),
             "became_gestor_at": gestor.get("became_gestor_at"),
             "created_at": gestor.get("created_at")
         })
@@ -5720,7 +5726,8 @@ async def get_gestor_dashboard(current_user: User = Depends(get_current_user)):
     return {
         "gestor_code": user.get("gestor_code", ""),
         "balance_ris": user.get("balance_ris", 0),
-        "commission_percentage": commission,
+        "balance_ris_terceros": user.get("balance_ris_terceros", 0),
+        "commission_rate": commission,
         "stats": {
             "total_transactions": len(all_tx),
             "total_volume": round(total_volume, 2),
@@ -5744,11 +5751,12 @@ async def add_gestor_beneficiary(request: GestorBeneficiaryRequest, current_user
         "beneficiary_id": beneficiary_id,
         "gestor_id": current_user.user_id,
         "full_name": request.full_name.strip(),
-        "phone": request.phone.strip(),
-        "bank_name": request.bank_name.strip(),
-        "account_number": request.account_number.strip(),
-        "cedula": request.cedula.strip(),
-        "notes": request.notes,
+        "id_document": request.id_document.strip(),
+        "bank": request.bank.strip(),
+        "bank_code": request.bank_code,
+        "phone_number": request.phone_number,
+        "account_number": request.account_number,
+        "payment_type": request.payment_type,
         "created_at": datetime.now(timezone.utc)
     }
     
@@ -5771,11 +5779,12 @@ async def get_gestor_beneficiaries(current_user: User = Depends(get_current_user
         result.append({
             "beneficiary_id": b.get("beneficiary_id"),
             "full_name": b.get("full_name"),
-            "phone": b.get("phone"),
-            "bank_name": b.get("bank_name"),
+            "id_document": b.get("id_document") or b.get("cedula"),
+            "bank": b.get("bank") or b.get("bank_name"),
+            "bank_code": b.get("bank_code"),
+            "phone_number": b.get("phone_number") or b.get("phone"),
             "account_number": b.get("account_number"),
-            "cedula": b.get("cedula"),
-            "notes": b.get("notes"),
+            "payment_type": b.get("payment_type", "transferencia"),
             "created_at": b.get("created_at")
         })
     
@@ -5783,19 +5792,15 @@ async def get_gestor_beneficiaries(current_user: User = Depends(get_current_user
 
 @api_router.post("/gestor/process-transaction")
 async def process_gestor_transaction(request: GestorTransactionRequest, current_user: User = Depends(get_current_user)):
-    """Gestor: Process a third-party transaction"""
+    """Gestor: Process a third-party transaction using balance_ris_terceros"""
     user = await db.users.find_one({"user_id": current_user.user_id})
     if not user or user.get("role") != "socio_gestor":
         raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
     
-    # Check gestor has enough balance
-    if user.get("balance_ris", 0) < request.amount_ris:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente para procesar esta transacción")
-    
-    # Verify third party user exists
-    third_party = await db.users.find_one({"user_id": request.third_party_user_id})
-    if not third_party:
-        raise HTTPException(status_code=404, detail="Usuario tercero no encontrado")
+    # Check gestor has enough balance in terceros
+    balance_terceros = user.get("balance_ris_terceros", 0)
+    if balance_terceros < request.amount_ris:
+        raise HTTPException(status_code=400, detail=f"Saldo de terceros insuficiente. Disponible: {balance_terceros:.2f} RIS")
     
     # Verify beneficiary exists
     beneficiary = await db.gestor_beneficiaries.find_one({
@@ -5805,81 +5810,111 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     if not beneficiary:
         raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
     
+    # Get current exchange rate
+    rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
+    ris_to_ves = rate_doc.get("ris_to_ves", 92.0) if rate_doc else 92.0
+    amount_ves = request.amount_ris * ris_to_ves
+    
     # Get commission rate
     settings = await db.app_settings.find_one({"setting_id": "gestor_commission"})
     commission_rate = settings.get("value", 5.0) / 100 if settings else 0.05
     commission_amount = request.amount_ris * commission_rate
     
-    # Create transaction
+    # Create gestor transaction
     tx_id = f"gtx_{uuid.uuid4().hex[:12]}"
+    display_id = await get_next_withdrawal_id()
     
     gestor_transaction = {
         "transaction_id": tx_id,
+        "display_id": display_id,
         "gestor_id": current_user.user_id,
         "gestor_name": user.get("name", ""),
-        "third_party_user_id": request.third_party_user_id,
-        "third_party_name": third_party.get("name", ""),
-        "third_party_phone": request.third_party_phone or third_party.get("phone", ""),
+        "gestor_code": user.get("gestor_code", ""),
+        "client_name": request.client_name,
+        "client_phone": request.client_phone or "",
         "beneficiary_id": request.beneficiary_id,
         "beneficiary_name": beneficiary.get("full_name", ""),
-        "beneficiary_phone": beneficiary.get("phone", ""),
-        "beneficiary_bank": beneficiary.get("bank_name", ""),
-        "beneficiary_account": beneficiary.get("account_number", ""),
+        "beneficiary_data": {
+            "full_name": beneficiary.get("full_name"),
+            "id_document": beneficiary.get("id_document"),
+            "bank": beneficiary.get("bank"),
+            "bank_code": beneficiary.get("bank_code"),
+            "phone_number": beneficiary.get("phone_number"),
+            "account_number": beneficiary.get("account_number"),
+            "payment_type": request.payment_type
+        },
+        "payment_type": request.payment_type,
         "amount_ris": request.amount_ris,
-        "amount_ves": request.amount_ves,
+        "amount_ves": amount_ves,
+        "rate_used": ris_to_ves,
         "commission_rate": commission_rate * 100,
         "commission_amount": commission_amount,
-        "status": "pending",  # pending -> processing -> completed
+        "status": "pending",
         "created_at": datetime.now(timezone.utc)
     }
     
     await db.gestor_transactions.insert_one(gestor_transaction)
     
-    # Deduct from gestor balance
+    # Deduct from gestor's terceros balance
     await db.users.update_one(
         {"user_id": current_user.user_id},
-        {"$inc": {"balance_ris": -request.amount_ris}}
+        {"$inc": {"balance_ris_terceros": -request.amount_ris}}
     )
     
-    # Create corresponding withdrawal transaction for admin to process
-    withdrawal_tx_id = f"tx_{uuid.uuid4().hex[:12]}"
+    # Create corresponding withdrawal transaction for admin processing (appears in queue)
+    beneficiary_data = {
+        "full_name": beneficiary.get("full_name"),
+        "id_document": beneficiary.get("id_document"),
+        "bank": beneficiary.get("bank"),
+        "bank_code": beneficiary.get("bank_code"),
+        "phone_number": beneficiary.get("phone_number"),
+        "account_number": beneficiary.get("account_number"),
+        "payment_type": request.payment_type
+    }
+    
     withdrawal = {
-        "transaction_id": withdrawal_tx_id,
-        "user_id": current_user.user_id,  # Gestor is the user for admin panel
-        "type": "withdrawal_ves",
+        "transaction_id": f"tx_{uuid.uuid4().hex[:12]}",
+        "display_id": display_id,
+        "user_id": current_user.user_id,
+        "type": "withdrawal",
         "status": "pending",
         "amount_input": request.amount_ris,
-        "amount_output": request.amount_ves,
+        "amount_output": amount_ves,
+        "beneficiary_data": beneficiary_data,
         "beneficiary_id": request.beneficiary_id,
-        "gestor_transaction_id": tx_id,  # Link to gestor transaction
+        "gestor_transaction_id": tx_id,
         "is_gestor_transaction": True,
-        "third_party_user_id": request.third_party_user_id,
-        "third_party_name": third_party.get("name", ""),
-        "third_party_phone": request.third_party_phone or third_party.get("phone", ""),
+        "client_name": request.client_name,
+        "client_phone": request.client_phone,
+        "payment_type": request.payment_type,
         "created_at": datetime.now(timezone.utc)
     }
     
     await db.transactions.insert_one(withdrawal)
     
+    # Send to WhatsApp queue (FIFO system)
+    await send_next_pending_withdrawal_whatsapp()
+    
     # Notify gestor
     await create_notification(
         user_id=current_user.user_id,
         title="📤 Transacción Registrada",
-        message=f"Envío de {request.amount_ves:.2f} VES a {beneficiary.get('full_name')} registrado. Pendiente de procesamiento.",
+        message=f"Envío de {amount_ves:.2f} VES a {beneficiary.get('full_name')} para cliente {request.client_name}. Pendiente de procesamiento.",
         notification_type="gestor_transaction",
-        data={"transaction_id": tx_id, "amount_ves": request.amount_ves}
+        data={"transaction_id": tx_id, "amount_ves": amount_ves}
     )
     
-    logger.info(f"Gestor transaction {tx_id} created by {current_user.user_id}")
+    logger.info(f"Gestor transaction {tx_id} created by {current_user.user_id} for client {request.client_name}")
     
     return {
         "message": "Transacción registrada exitosamente",
         "transaction_id": tx_id,
-        "withdrawal_id": withdrawal_tx_id,
+        "display_id": display_id,
         "amount_ris": request.amount_ris,
-        "amount_ves": request.amount_ves,
+        "amount_ves": amount_ves,
         "commission": commission_amount,
-        "beneficiary": beneficiary.get("full_name")
+        "beneficiary": beneficiary.get("full_name"),
+        "client": request.client_name
     }
 
 @api_router.get("/gestor/transactions")
@@ -5895,10 +5930,13 @@ async def get_gestor_transactions(current_user: User = Depends(get_current_user)
     for t in transactions:
         result.append({
             "transaction_id": t.get("transaction_id"),
-            "third_party_name": t.get("third_party_name"),
+            "display_id": t.get("display_id"),
+            "client_name": t.get("client_name"),
             "beneficiary_name": t.get("beneficiary_name"),
+            "payment_type": t.get("payment_type"),
             "amount_ris": t.get("amount_ris"),
             "amount_ves": t.get("amount_ves"),
+            "amount_output": t.get("amount_ves"),  # Alias for frontend compatibility
             "commission_amount": t.get("commission_amount"),
             "status": t.get("status"),
             "voucher_url": t.get("voucher_url"),
@@ -5907,6 +5945,43 @@ async def get_gestor_transactions(current_user: User = Depends(get_current_user)
         })
     
     return result
+
+@api_router.post("/gestor/recharge-terceros")
+async def gestor_recharge_terceros(request: GestorRechargeTercerosRequest, current_user: User = Depends(get_current_user)):
+    """Gestor: Transfer balance from personal to terceros account"""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user or user.get("role") != "socio_gestor":
+        raise HTTPException(status_code=403, detail="Acceso solo para socios gestores")
+    
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    
+    balance_personal = user.get("balance_ris", 0)
+    if balance_personal < request.amount:
+        raise HTTPException(status_code=400, detail=f"Saldo personal insuficiente. Disponible: {balance_personal:.2f} RIS")
+    
+    # Transfer from personal to terceros
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {
+            "$inc": {
+                "balance_ris": -request.amount,
+                "balance_ris_terceros": request.amount
+            }
+        }
+    )
+    
+    # Log the transfer
+    logger.info(f"Gestor {current_user.user_id} transferred {request.amount} RIS from personal to terceros")
+    
+    # Get updated balances
+    updated_user = await db.users.find_one({"user_id": current_user.user_id})
+    
+    return {
+        "message": f"Transferido {request.amount:.2f} RIS a saldo de terceros",
+        "balance_ris": updated_user.get("balance_ris", 0),
+        "balance_ris_terceros": updated_user.get("balance_ris_terceros", 0)
+    }
 
 # Include the routers in the main app (must be after all endpoints are defined)
 app.include_router(api_router)

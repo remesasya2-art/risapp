@@ -1,157 +1,177 @@
 <analysis>**original_problem_statement:**
-The user's initial goal was to fix issues with their React Native application. This pivoted to a complete rebuild into a professional, responsive web application using React, Vite, and Tailwind CSS, with a NexPay design language. The scope has since expanded significantly to include a full Spanish translation, web push notifications, an admin panel with role-specific features, enhanced payment flows (PIX and VES), a two-way support chat via WhatsApp, email verification via Resend, and deployment to the user's custom domain.
+The user's initial goal was to fix issues with their React Native application. This pivoted to a complete rebuild into a professional, responsive web application using React, Vite, and Tailwind CSS, with a NexPay design language. The scope has since expanded significantly to include a full Spanish translation, web push notifications, an admin panel with role-specific features, enhanced payment flows, a two-way support chat via WhatsApp, and email verification.
 
-Most recently, the scope expanded further to include a multi-tiered partner system and a robust withdrawal processing flow via WhatsApp.
+Most recently, the scope expanded further to include:
+1.  A multi-tiered partner system (Socio for referrals and Socio Gestor for agents).
+2.  A robust withdrawal processing flow via WhatsApp with a FIFO queue.
+3.  A complete redesign of the Send Money flow to differentiate between Pago Móvil and Transferencia.
+4.  Functionality for users and admins to view and manage multiple proof-of-payment images per transaction.
+5.  Administrative tools for cleaning up stuck transactions.
 
 PRODUCT REQUIREMENTS:
-1.  **Functional Registration & Login:** A secure, two-step user registration process using email verification.
-2.  **Password Recovery:** A flow for users to reset their password, with a verification code sent via email.
-3.  **VES Recharge Flow:** A manual approval flow for Venezuelan Bolívar (VES) recharges, including voucher uploads and an admin management panel.
-4.  **Admin Transaction History:** A modal in the admin panel for SuperAdministrador to view a user's complete profile and transaction history, including vouchers.
-5.  **Two-Way Support Chat (WhatsApp):** A functional chat where user withdrawal requests trigger WhatsApp alerts to the admin. The admin can then send one or multiple voucher images for a single transaction, and the system correctly assigns them. The flow must be sequential (FIFO) to avoid confusion.
-6.  **Web Push Notifications:** End-to-end functional push notifications triggered by server events.
-7.  **Custom Domain Deployment:** The application must be successfully deployed and accessible.
-8.  **Partner/Referral System (Socio):** Implement a system where partners can refer users and earn commissions.
-9.  **Agent System (Socio Gestor):** Implement a system where agents can process remittances for third parties.
-10. **Admin Role Management:** The SuperAdmin must be able to assign  and  roles to any user.
-11. **Admin-Initiated Password Reset:** The SuperAdmin must be able to generate a temporary, one-time-use password for users who lose access to their accounts.
-12. **Sequential Transaction IDs:** Transaction IDs displayed to the admin should be simple and incremental (e.g., 000001, 000002).
+1.  **Functional Registration & Login:** Secure user registration with email verification.
+2.  **Password Recovery:** A flow for users to reset their password.
+3.  **Admin Transaction Management:** An admin panel for SuperAdministrador to view user profiles, transaction histories, and manage withdrawals. This includes processing transactions with multiple proof images.
+4.  **Two-Way Support Chat (WhatsApp):** A functional chat where user withdrawal requests trigger WhatsApp alerts to the admin. The flow must be sequential (FIFO) and handle multiple images for a single transaction.
+5.  **Partner/Referral System (Socio):** A fully tested system where partners earn commissions from referred users.
+6.  **Agent System (Socio Gestor):** An agent-specific dashboard allowing them to process remittances for third parties. This includes a separate balance for third-party funds and a dedicated transaction flow (Pago Móvil/Transferencia).
+7.  **Admin Role Management:** The SuperAdmin must be able to assign  and  roles.
+8.  **Sequential Transaction IDs:** Transaction IDs displayed to the user and admin should be simple and incremental (e.g., R000001, R000002).
+9.  **User Transaction History:** Users must be able to view their complete transaction history, including all associated proof images, and have an option to download them.
+10. **Redesigned Send Flow:** A multi-step process that clearly separates Pago Móvil and Transferencia payment types, each with its own specific input form and validation.
 
 **User's preferred language**: Spanish
 
 **what currently exists?**
 - A full-stack application with a FastAPI backend and a React/Vite/Tailwind CSS frontend.
-- A comprehensive admin panel with role management, user password reset, and a dashboard for monitoring withdrawals.
+- A comprehensive admin panel with role management, user password reset, and an advanced dashboard for monitoring and processing withdrawals, including a tool to clean up stuck transactions.
 - A complete user registration/login/password recovery flow using Resend for emails.
-- A **Socio (Referral)** and **Socio Gestor (Agent)** system has been implemented on the backend but requires full E2E testing and a dedicated admin management UI.
-- An advanced **FIFO (First-In, First-Out) queuing system** for processing withdrawal requests via WhatsApp. This ensures only one transaction is active at a time to prevent admins from assigning vouchers to the wrong user.
-- A **multi-image upload system for WhatsApp**. The intended flow is for the admin to send multiple images for the active transaction, then type a command like listo to process them all at once.
-- The Admin Panel UI has been updated to show the status of the FIFO queue and the total amount in VES required to process all pending withdrawals.
-- Transaction display IDs are now sequential and numeric (e.g., 000001, 000002).
+- A Socio (Referral) system that has been implemented and E2E tested on the backend.
+- A robust FIFO (First-In, First-Out) queuing system for processing withdrawal requests via WhatsApp, now fixed to correctly handle multiple images.
+- A redesigned Send Money flow that separates Pago Móvil and Transferencia into a 4-step process with specific forms and a searchable bank list.
+- Users can view and download multiple proof-of-payment images from their transaction history page.
+- The Socio Gestor (Agent) system is partially implemented but is undergoing a major refactor.
 
 **Last working item**:
-    - Last item agent was working: Fixing a critical bug in the multi-image upload feature for WhatsApp withdrawals. The user reported that when they send multiple images for a single active transaction, only the first image is correctly assigned. Subsequent images are being lost or misassigned. The agent correctly understood the problem and was about to implement a fix.
+    - Last item agent was working: Refactoring the Socio Gestor (Agent) system. The user requested that the agent's flow for sending money to third parties should mirror the newly implemented user Send Money flow (Pago Móvil vs. Transferencia). Additionally, agents need a separate balance () to manage third-party funds, which should be distinct from their personal balance. The agent had started updating the backend models in  and was about to rewrite the frontend component  to implement these changes.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? backend testing agent
-    - User Testing Done: Y (User discovered and reported the bug)
+    - Which testing method agent to use? both
+    - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1:  (P0) Multi-image assignment for WhatsApp withdrawals is broken.
-  - Issue 2:  (P1) Railway deployment fails intermittently due to GitHub-side errors.
+  - Issue 1:  (P0) The Socio Gestor implementation is incomplete and currently non-functional due to the ongoing refactor.
+  - Issue 2:  (P1) Railway deployment fails intermittently due to external GitHub-side errors.
   
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: The agent previously implemented a complex  buffer system which failed in the production environment (Railway). They then switched to a simpler system where images are accumulated in the database until the admin sends a listo command. However, the user reports that only the first image is being correctly associated with the active transaction.
+     - Attempted fixes: The agent started updating backend models in  to add a  field and was planning to rewrite . The work is mid-flight.
      - Next debug checklist: 
-        1. Review the Twilio webhook logic in .
-        2. Specifically, check how the system identifies the active transaction ().
-        3. Verify that when a second or third image is received (without the listo command), it correctly finds the *same* active transaction and appends the new image to its  array in the database.
-        4. The current logic is likely failing to find the active transaction on subsequent image messages.
-     - Why fix this issue and what will be achieved with the fix?: This is a CRITICAL bug that breaks the core withdrawal processing workflow. The admin cannot process transactions that require multiple payment vouchers.
+        1. Finalize backend changes in : ensure the  model has  and that endpoints for agent transactions correctly debit this new balance.
+        2. Rewrite  to include two separate balance displays (personal and third-party).
+        3. Implement the new 4-step Send Money flow (Pago Móvil/Transferencia) within the Gestor Dashboard for processing third-party transactions.
+        4. Ensure the UI for a  is automatically enabled/displayed when the role is assigned by a SuperAdmin.
+     - Why fix this issue and what will be achieved with the fix?: This will complete a core business feature, allowing agents to process remittances for third parties with a clear and separate accounting of funds.
      - Status:  IN PROGRESS
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix?: backend
-     - Blocked on other issue: None
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on other issue: None.
   - Issue 2: 
-     - Attempted fixes: The agent changed the Python version in  from  to  to work around a  error when Railway tried to download the Python build from GitHub. This is a temporary fix for a recurring external platform issue.
-     - Next debug checklist: Advise the user to retry deployment. If it fails, check GitHub's status and consider pinning to another stable Python version.
-     - Why fix this issue and what will be achieved with the fix?: This is a **critical blocker for deployment**. No fixes or features can be released until the application can be successfully built and deployed on Railway.
+     - Attempted fixes: The previous workaround was to change the Python version in . This is a recurring external platform issue.
+     - Next debug checklist: Advise the user to retry deployment. If it fails, check Railway and GitHub status pages. Consider pinning to another stable Python version as a last resort.
+     - Why fix this issue and what will be achieved with the fix?: This is a potential blocker for any deployment. No new features or fixes can be released if the platform cannot build the application.
      - Status:  BLOCKED
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix?: NA
-     - Blocked on other issue: None. This blocks everything else.
+     - Blocked on other issue: None, but it blocks everything from being deployed.
 
 **In progress Task List**:
-  - Task 1: (P0) Fix the multi-image assignment bug
-     - Where to resume: Dive into the  endpoint in . The logic for handling incoming messages with media needs to be fixed to ensure all images sent before a listo command are appended to the single active transaction.
-     - What will be achieved with this?: The admin will be able to correctly process withdrawals that require multiple payment vouchers, a key business requirement.
+  - Task 1: (P0) Complete the Socio Gestor (Agent) System Refactor
+     - Where to resume: Continue the implementation based on the Next debug checklist for Issue #1 above. Start by completing the backend changes in  and then move on to rewriting the  frontend component.
+     - What will be achieved with this?: A fully functional agent system that aligns with the user's latest, detailed requirements for separate balances and a modern transaction flow.
      - Status:  IN PROGRESS
-     - Should Test frontend/backend/both after fix?: backend
-     - Blocked on something: Issue 2 (Deployment failure)
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on something: None
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - **(P1) Update Admin Panel to Show All Voucher Images:** The database now stores an array . The Admin Panel UI needs to be updated to display all images for a transaction, not just the first one.
-    - **(P1) End-to-End Test Socio (Referral) System:** The full flow (referral -> sign-up -> recharge -> bonus -> commission) has not been tested.
-    - **(P1) End-to-End Test Socio Gestor (Agent) Feature:** The core logic needs to be fully implemented and tested.
-    - **(P1) Create Admin Management Section for Partners/Agents:** The  needs a new UI to list all  and  users and view their stats.
+    - **(P1) Create Admin Management Section for Partners/Agents:** The  needs a new UI to list all  and  users, view their stats (referrals, volume, commissions), and manage their roles.
     Future Tasks:
     - **(P2) Blink (Bitcoin Lightning) Integration:** A major future feature to allow users to recharge their accounts with Bitcoin.
     - **(P2) Stripe Integration:** A low-priority item from the initial project scope.
 
 **Completed work in this session**
-- **Admin Password Reset Feature (DONE):** Completed and fully tested the feature allowing a SuperAdmin to reset a user's password. This included backend endpoints and a  page with automatic redirection.
-- **FIFO Withdrawal Queue System (DONE):** Implemented a robust FIFO (First-In, First-Out) queuing system for WhatsApp withdrawals, ensuring only one transaction is processed at a time.
-- **Admin Panel UI for FIFO Queue (DONE):** The admin dashboard now displays queue statistics (pending, active, in queue) and the total VES amount needed for pending withdrawals.
-- **Refined WhatsApp Notifications (DONE):** The content and format of WhatsApp messages for new and queued withdrawals were updated to the user's exact specifications.
-- **Incremental Transaction IDs (DONE):** Implemented a  field for transactions, providing simple, sequential IDs (000001, 000002, etc.).
-- **Backend Refactoring (Routing):** Fixed a critical routing issue in  by moving  calls to the end of the file, resolving 404 errors.
+- **Fixed Multi-image WhatsApp Bug:** Resolved a critical race condition in  by using an atomic MongoDB  operation, ensuring all images sent via WhatsApp are correctly assigned to the active transaction. Verified with a new test file in .
+- **Enhanced Admin Panel Withdrawals:** The admin can now upload and process multiple proof images directly from . The UI also shows a visual count of images per transaction.
+- **Enhanced User History View:** Users can now view all proof images for their transactions in  and download them individually or as a batch.
+- **E2E Tested Socio (Referral) System:** The backend logic for the referral system (sign-up, milestone bonus, commissions) was fully tested and verified via a new test script.
+- **Redesigned Send Money Flow:** The  page was completely overhauled into a 4-step process that distinguishes Pago Móvil from Transferencia, complete with custom forms and a searchable bank list.
+- **Fixed WhatsApp Notification Content:** Corrected the WhatsApp message format in  to display the right details for each payment type and added the requested R prefix to transaction IDs.
+- **Created Admin Clean-up Tool:** Implemented a backend endpoint and a corresponding button in  to allow the SuperAdmin to safely clear stuck pending transactions that were causing erroneous notifications.
 
 **Earlier issues found/mentioned but not fixed**
-   - None. The agent has been diligent in addressing issues as they arise.
+   - None.
 
 **Known issue recurrence from previous fork**
-  - **Issue recurrence:** Intermittent deployment failures due to external dependencies (GitHub).
-  - **Recurrence count:** 2 (once in the previous session, once in this session).
-  - **Status:** BLOCKED (currently blocking deployment of the latest fixes).
+  - **Issue recurrence:** Intermittent deployment failures on Railway, often related to fetching dependencies from GitHub.
+  - **Recurrence count:** 2+
+  - **Status:** BLOCKED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend:** React, Vite, Tailwind CSS
-- **Backend:** FastAPI, MongoDB
-- **Key Features:** Role-Based Access Control (RBAC), FIFO Queuing, Webhook State Management, Multi-image handling.
-- **Integrations:** Twilio (WhatsApp), Resend (Email), Mercado Pago, PyWebPush.
+- **Frontend:** React, Vite, Tailwind CSS, React Context API
+- **Backend:** FastAPI, MongoDB (Pymongo)
+- **Key Features:** Role-Based Access Control (RBAC), FIFO Queuing, Webhook State Management, Atomic DB Operations ( with ), Multi-step forms.
+- **Integrations:** Twilio (WhatsApp), Resend (Email).
 - **Deployment:** Railway (backend), Cloudflare Pages (frontend).
 
 **key DB schema**
-  -  collection updated with fields:  (String, incremental),  (Boolean),  (Array of Strings for image buffer),  (Array of Strings).
-  -  collection updated with  (Boolean).
+  - :  (String),  (Boolean),  (String),  (Float, **new** for agents).
+  - :  (String),  (Boolean),  (Array),  (Array),  (String: 'pago_movil' or 'transferencia', **new**).
+  - :  (String, **new**),  (String, now optional),  (String, now optional).
 
 **changes in tech stack**
   - None.
 
 **All files of reference**
-- : The monolithic file containing all backend logic. The  endpoint and related functions for the FIFO queue and image processing are the most relevant.
-- : Contains the UI for the withdrawal queue dashboard.
+- : The monolithic backend file containing all logic. The most recent changes involve the Send Money redesign, WhatsApp notifications, the cleanup endpoint, and initial updates for the Socio Gestor refactor.
+- : The template for the new send flow that must be replicated in the Gestor Dashboard.
+- : The file that needs a complete rewrite.
+- : Contains the UI for withdrawal management and the new cleanup tool.
+- : Contains the UI for users to view transaction images.
 
 **Areas that need refactoring**:
-- ** is critically monolithic and over 4000 lines long.** It urgently needs to be broken down into a proper project structure (e.g., , , ) to improve maintainability and prevent further routing or logic conflicts.
+- **:** This file is critically oversized (over 4000 lines) and complex. It urgently needs to be broken down into a proper project structure (e.g., , , ) to improve maintainability.
+- **:** This component is now very large due to the 4-step flow logic. It would benefit from being broken down into smaller, step-specific components.
 
 **key api endpoints**
-- : The main endpoint for handling all incoming WhatsApp messages (images and text).
-- : Provides statistics for the FIFO withdrawal queue.
-- : Resets a user's password (Completed).
-- : Sets a new password after a reset (Completed).
+- : Updated to handle the new  and beneficiary data structure.
+- : **New** endpoint to clear stuck pending transactions.
+- : Updated to accept an array of .
+- : Fixed to handle multi-image uploads atomically.
+- : Needs to be updated to support the new send flow and debit the .
+- : Needs to be updated to return the new .
 
 **Critical Info for New Agent**
-- **The immediate priority is fixing the multi-image bug (Issue #1).** The current implementation fails to associate more than one image with the active transaction. The fix lies within the  logic in .
-- **The second priority is resolving the deployment blocker (Issue #2).** The app cannot be updated until the Railway build succeeds. This is likely an external issue with GitHub, so retrying the deployment is the first step.
-- **The  buffer approach failed.** Do not re-implement a time-based buffer. The user has agreed to a command-based flow (listo), which needs to be perfected.
-- **The user's workflow is paramount.** They are actively using the application, so bugs in the withdrawal processing flow have a direct impact. Prioritize fixing this over any new features.
+- **The top priority is to complete the Socio Gestor (Agent) refactor.** This is a significant task involving both backend () and frontend (). Use the new  as a direct model for the agent's transaction flow.
+- The user is highly engaged and provides very specific feedback, including screenshots and desired message formats. Pay close attention to these details.
+- The backend file  is extremely fragile due to its size. Be cautious with edits and consider proposing a refactor into a proper project structure as a future task.
+- The agent successfully created isolated ============================= test session starts ==============================
+platform linux -- Python 3.11.14, pytest-9.0.2, pluggy-1.6.0
+rootdir: /app/frontend
+plugins: anyio-4.12.0
+collected 0 items
+
+============================ no tests ran in 0.01s ============================= files to test complex backend logic. This is a highly effective strategy that should be continued for future backend development.
+- Remember to update both the new withdrawal and queued withdrawal notification messages in  if any changes to transaction data are made.
 
 **documents and test reports created in this job**
   - 
-  -  was updated.
+  - 
+  - 
+  - 
+  -  (updated multiple times)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-10. User confirms the agent's understanding of the multi-image bug is correct and asks for a fix. (Pending fix)
-9. User explains the multi-image bug: the first image is assigned correctly, but subsequent images are not. (Context for bug)
-8. User asks if the system will correctly attach multiple images to the specific transaction in progress. (Answered)
-7. User asks if a command is needed to send more images. (Answered: No, just send the image).
-6. User agrees to implement the listo command flow for multi-image uploads. (Context)
-5. Agent asks for clarification on how the user wants to signal the end of a multi-image upload. (Clarification)
-4. User confirms the desired flow for multi-image uploads is correct and it is working now, and now asks to implement multiple images for a single withdrawal. (New Requirement)
-3. User confirms the improved FIFO logic is correct. (Context)
-2. User reports a bug where the system doesn't process the next item in the queue. (Bug report)
-1. User reports that after a Save to GitHub, the app still has bugs (multiple images not working, incorrect queue count). This led to the discovery that  was unreliable. (Bug report)
+10. **Request:** Redesign the Send Money flow. (Completed)
+9.  **Clarification:** Specified the new flow should have steps for amount, payment type (Pago Móvil/Transferencia), and confirmation. (Completed)
+8.  **Details:** Provided a new bank list with codes, specified validation rules, and asked for a searchable bank input. (Completed)
+7.  **Refinement:** Requested that for Pago Móvil, only the bank *code* should be stored and displayed, not the full name. (Completed)
+6.  **Bug Report:** Reported that WhatsApp notifications for Pago Móvil were showing None instead of the bank code. (Fixed)
+5.  **Format Correction:** Provided the exact, corrected format for all WhatsApp notifications and requested that transaction IDs be prefixed with an R. (Fixed)
+4.  **Bug Report:** Reported that a stuck pending transaction was causing continuous, incorrect WhatsApp notifications and suggested a clean-up button as a solution. (Fixed)
+3.  **Continuation & New Requirements:** Asked the agent to proceed with the Socio Gestor task and provided new, detailed requirements for it:
+    - Replicate the new Send Money flow (Pago Móvil/Transferencia) for the agent's dashboard.
+    - Implement a separate balance for third-party funds ().
+    - Ensure the agent UI is automatically enabled when the role is assigned by an admin. (IN PROGRESS)
+2.  **Request:** continua con la tarea (continue with the task). (In Progress)
+1.  **Request:** (Implicitly approving plan) vamos a rediseñar el flujo de enviar dinero, enviame cual es el flujo actual (Let's redesign the send money flow, send me the current flow). (Completed)
 
 **Project Health Check:**
 - **Broken:**
-    - The multi-image withdrawal feature is non-functional.
-    - The deployment pipeline is currently blocked by an external error (Railway failing to download Python from GitHub).
+    - The Socio Gestor (Agent) feature is non-functional and in a half-implemented state during a major refactor.
 - **Mocked:** None
 
 **3rd Party Integrations**
@@ -162,10 +182,13 @@ PRODUCT REQUIREMENTS:
 - **Cloudflare:** (Frontend Hosting & DNS) - User managed
 
 **Testing status**
-  - Testing agent used after significant changes: YES (once, before the multi-image bug was discovered)
+  - Testing agent used after significant changes: YES (to fix the complex WhatsApp image bug).
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: []
-  - Known regressions: The multi-image upload functionality is a regression. A simpler, single-image flow was working before the agent attempted to implement more complex multi-image solutions.
+  - Test files created:
+      - 
+      - 
+      - 
+  - Known regressions: None in this session.
 
 **Credentials to test flow:**
 - **Super Admin:**
@@ -173,4 +196,4 @@ PRODUCT REQUIREMENTS:
   - Password: 
 
 **What agent forgot to execute**
-- The agent discussed updating the admin panel to display all  for a transaction but did not implement it. This is now a pending Upcoming Task.</analysis>
+- The agent has not yet implemented the admin-facing UI for managing Socio and Socio Gestor users, which was an upcoming task from a previous session. The priority shifted to fixing bugs and implementing the user's more recent, urgent requests.</analysis>
