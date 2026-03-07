@@ -227,6 +227,17 @@
 - **Modal:** Muestra grid de imágenes con numeración, click para ver tamaño completo
 - **Backend:** Endpoint `/transactions` ya incluye `proof_images` array
 
+### 2026-03-07 - Sistema Socio Gestor E2E Completo
+- **Completado:** Sistema de balance separado (personal y terceros)
+- **Completado:** Flujo de transacción de 4 pasos (Monto → Tipo → Cliente → Confirmación)
+- **Completado:** Integración con cola FIFO de WhatsApp para transacciones de gestor
+- **Completado:** Formato de mensaje WhatsApp distingue gestor (👤 Cliente / 🏢 Gestor)
+- **Completado:** Tab "Socios" en Admin Panel con sub-tabs para Referidos y Gestores
+- **Completado:** Menú dinámico según rol del usuario
+- **Backend:** Nuevo endpoint `/gestor/recharge-terceros` para transferir saldo
+- **Backend:** Endpoints admin incluyen `is_gestor_transaction`, `client_name`, `payment_type`
+- **Tests:** 9/9 tests E2E pasados en `/app/backend/tests/test_gestor_whatsapp_integration.py`
+
 ### 2026-03-07 - Multi-Imagen Admin Panel
 - **Mejora:** Admin Panel ahora muestra columna "Imágenes" con indicador visual (📷 X)
 - **Mejora:** Modal de procesamiento permite subir múltiples imágenes
@@ -245,4 +256,4 @@
 - Panel de admin con estadísticas de cola en tiempo real
 
 ## Last Updated
-2026-03-07 - Vista multi-imagen para usuarios en historial
+2026-03-07 - Sistema Socio Gestor E2E completo con integración WhatsApp
