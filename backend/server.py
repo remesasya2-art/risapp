@@ -158,8 +158,12 @@ async def send_next_pending_withdrawal_whatsapp():
         amount_ves = next_withdrawal.get('amount_output', 0)
         display_id = next_withdrawal.get('display_id', next_withdrawal.get('transaction_id', 'N/A')[:8])
         payment_type = beneficiary.get('payment_type', 'transferencia')
+        is_gestor = next_withdrawal.get('is_gestor_transaction', False)
+        client_name = next_withdrawal.get('client_name', '')
         
         # Build WhatsApp message based on payment type
+        user_info = f"👤 Cliente: {client_name}\n🏢 Gestor: {user.get('name', 'N/A')}" if is_gestor and client_name else f"👤 Usuario: {user.get('name', 'N/A')}"
+        
         if payment_type == 'pago_movil':
             bank_code = beneficiary.get('bank_code', '') or beneficiary.get('bank', '')
             phone_number = beneficiary.get('phone_number', 'N/A')
@@ -170,7 +174,7 @@ async def send_next_pending_withdrawal_whatsapp():
 {amount_ves:.2f} Bs
 
 📱 PAGO MÓVIL
-👤 Usuario: {user.get('name', 'N/A')}
+{user_info}
 🔢 ID: R{display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
         else:
@@ -182,7 +186,7 @@ async def send_next_pending_withdrawal_whatsapp():
 {amount_ves:.2f} Bs
 
 🏦 TRANSFERENCIA ({bank_name})
-👤 Usuario: {user.get('name', 'N/A')}
+{user_info}
 🔢 ID: R{display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
         
@@ -4789,6 +4793,9 @@ async def get_all_withdrawals(admin_user: User = Depends(get_admin_user)):
             "commission": tx.get("commission", 0),
             "status": tx.get("status", "pending"),
             "beneficiary_data": tx.get("beneficiary_data", {}),
+            "payment_type": tx.get("payment_type") or tx.get("beneficiary_data", {}).get("payment_type"),
+            "is_gestor_transaction": tx.get("is_gestor_transaction", False),
+            "client_name": tx.get("client_name"),
             "created_at": tx.get("created_at"),
             "updated_at": tx.get("updated_at"),
             "completed_at": tx.get("completed_at"),
@@ -4825,6 +4832,9 @@ async def admin_get_pending_withdrawals(admin_user: User = Depends(get_admin_use
             "rate": tx.get("rate", 0),
             "status": tx.get("status"),
             "beneficiary_data": tx.get("beneficiary_data", {}),
+            "payment_type": tx.get("payment_type") or tx.get("beneficiary_data", {}).get("payment_type"),
+            "is_gestor_transaction": tx.get("is_gestor_transaction", False),
+            "client_name": tx.get("client_name"),
             "created_at": tx.get("created_at"),
             "pending_images": tx.get("pending_images", []),
             "whatsapp_active": tx.get("whatsapp_active", False),
@@ -5694,7 +5704,15 @@ async def get_gestor_dashboard(current_user: User = Depends(get_current_user)):
     total_volume = sum(t.get("amount_ris", 0) for t in all_tx)
     
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    month_tx = [t for t in all_tx if t.get("created_at", datetime.min.replace(tzinfo=timezone.utc)) >= month_start]
+    month_tx = []
+    for t in all_tx:
+        created = t.get("created_at")
+        if created:
+            # Ensure timezone awareness
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if created >= month_start:
+                month_tx.append(t)
     month_volume = sum(t.get("amount_ris", 0) for t in month_tx)
     
     # Format beneficiaries
