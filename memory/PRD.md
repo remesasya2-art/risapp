@@ -182,6 +182,18 @@
 - VAPID_PRIVATE_KEY
 - VAPID_SUBJECT
 
+## Test Results
+
+### Sistema de Referidos "Socio" - E2E Test (2026-03-07) ✅ PASSED
+- **Flujo probado:**
+  1. Admin asigna rol "socio" → genera código de referido
+  2. Usuario se registra con código de referido
+  3. Usuario referido hace recargas
+  4. Sistema paga bono milestone (5 RI$) al alcanzar 100 RI$
+  5. Sistema paga comisión 1% en recargas posteriores
+  6. Ganancias se registran en `referral_earnings`
+- **Resultado:** 12 RI$ ganados correctamente (5 milestone + 2 + 5 comisiones)
+
 ## Changelog
 
 ### 2026-03-07 - Descarga de Comprobantes
