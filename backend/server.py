@@ -171,7 +171,7 @@ async def send_next_pending_withdrawal_whatsapp():
 
 📱 PAGO MÓVIL
 👤 Usuario: {user.get('name', 'N/A')}
-🔢 ID: {display_id}
+🔢 ID: R{display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
         else:
             account_number = beneficiary.get('account_number', 'N/A')
@@ -183,7 +183,7 @@ async def send_next_pending_withdrawal_whatsapp():
 
 🏦 TRANSFERENCIA ({bank_name})
 👤 Usuario: {user.get('name', 'N/A')}
-🔢 ID: {display_id}
+🔢 ID: R{display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
         
         # Send WhatsApp
@@ -2375,7 +2375,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 
 📱 PAGO MÓVIL
 👤 Usuario: {current_user.name}
-🔢 ID: {display_id}
+🔢 ID: R{display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
             else:
                 account_number = request.beneficiary_data.get('account_number', 'N/A')
@@ -2388,7 +2388,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 
 🏦 TRANSFERENCIA ({bank_name})
 👤 Usuario: {current_user.name}
-🔢 ID: {display_id}
+🔢 ID: R{display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
 
             from twilio.rest import Client
