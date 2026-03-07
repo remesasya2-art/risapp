@@ -227,6 +227,15 @@
 - **Modal:** Muestra grid de imágenes con numeración, click para ver tamaño completo
 - **Backend:** Endpoint `/transactions` ya incluye `proof_images` array
 
+### 2026-03-07 - Refactorización Modular del Backend
+- **Nueva estructura:** Creada arquitectura modular para mejor mantenibilidad
+- **config.py:** Configuración centralizada de variables de entorno
+- **database.py:** Conexión MongoDB e índices en módulo separado
+- **models/:** Modelos Pydantic (user.py, transaction.py, requests.py)
+- **services/:** Lógica de negocio (whatsapp.py, email.py, push_notifications.py, notifications.py, referrals.py)
+- **utils/:** Utilidades (security.py, helpers.py)
+- **Estado:** server.py original sigue funcionando, módulos listos para migración gradual
+
 ### 2026-03-07 - Sistema Socio Gestor E2E Completo
 - **Completado:** Sistema de balance separado (personal y terceros)
 - **Completado:** Flujo de transacción de 4 pasos (Monto → Tipo → Cliente → Confirmación)
