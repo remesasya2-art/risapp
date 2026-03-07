@@ -113,8 +113,10 @@ export default function Send() {
 
   const handleSelectBank = (bank, type) => {
     if (type === 'pago_movil') {
-      setNewBeneficiaryPM({ ...newBeneficiaryPM, bank_code: bank.code, bank: bank.name });
+      // Para Pago Móvil solo guardamos el código del banco
+      setNewBeneficiaryPM({ ...newBeneficiaryPM, bank_code: bank.code, bank: bank.code });
     } else {
+      // Para Transferencia guardamos código y nombre
       setNewBeneficiaryTR({ ...newBeneficiaryTR, bank_code: bank.code, bank: bank.name });
     }
     setBankSearch('');
@@ -251,16 +253,27 @@ export default function Send() {
   });
 
   // Render Bank Search Input inline
-  const renderBankSearch = (type) => (
+  const renderBankSearch = (type) => {
+    // Para Pago Móvil solo mostrar código, para Transferencia mostrar código + nombre
+    const getDisplayValue = () => {
+      if (showBankDropdown) return bankSearch;
+      if (type === 'pago_movil') {
+        return newBeneficiaryPM.bank_code || '';  // Solo código (ej: 0134)
+      } else {
+        return newBeneficiaryTR.bank ? `${newBeneficiaryTR.bank_code} - ${newBeneficiaryTR.bank}` : '';
+      }
+    };
+    
+    return (
     <div style={{ position: 'relative' }}>
       <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-        Banco *
+        {type === 'pago_movil' ? 'Código de Banco *' : 'Banco *'}
       </label>
       <div style={{ position: 'relative' }}>
         <Search style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
         <input
           type="text"
-          value={showBankDropdown ? bankSearch : (type === 'pago_movil' ? (newBeneficiaryPM.bank ? `${newBeneficiaryPM.bank_code} - ${newBeneficiaryPM.bank}` : '') : (newBeneficiaryTR.bank ? `${newBeneficiaryTR.bank_code} - ${newBeneficiaryTR.bank}` : ''))}
+          value={getDisplayValue()}
           onChange={(e) => setBankSearch(e.target.value)}
           onFocus={() => setShowBankDropdown(true)}
           placeholder="Buscar por código o nombre..."
@@ -306,6 +319,7 @@ export default function Send() {
       )}
     </div>
   );
+  };
 
   return (
     <div style={pageStyle} data-testid="send-page" onClick={() => setShowBankDropdown(false)}>
@@ -545,7 +559,9 @@ export default function Send() {
                   </div>
                   <div>
                     <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{selectedBeneficiary?.full_name}</p>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>{selectedBeneficiary?.bank}</p>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                      {paymentType === 'pago_movil' ? `Banco: ${selectedBeneficiary?.bank}` : selectedBeneficiary?.bank}
+                    </p>
                     {paymentType === 'pago_movil' ? (
                       <>
                         <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>CI: {selectedBeneficiary?.id_document}</p>
