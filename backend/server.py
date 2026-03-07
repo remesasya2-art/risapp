@@ -3762,16 +3762,20 @@ async def twilio_whatsapp_webhook(request: Request):
             if images_base64:
                 logger.info(f"Total imágenes descargadas: {len(images_base64)}")
                 
-                # Find the ACTIVE withdrawal
+                # Find the ACTIVE withdrawal (first check for whatsapp_active, then oldest pending)
                 active_withdrawal = await db.transactions.find_one(
                     {"type": "withdrawal", "status": "pending", "whatsapp_active": True}
                 )
                 
+                logger.info(f"Búsqueda whatsapp_active=True: {'Encontrado' if active_withdrawal else 'No encontrado'}")
+                
                 if not active_withdrawal:
+                    # Fall back to oldest pending withdrawal
                     active_withdrawal = await db.transactions.find_one(
                         {"type": "withdrawal", "status": "pending"},
                         sort=[("created_at", 1)]
                     )
+                    logger.info(f"Búsqueda fallback (oldest): {'Encontrado' if active_withdrawal else 'No encontrado'}")
                 
                 if not active_withdrawal:
                     from twilio.rest import Client
@@ -3785,30 +3789,37 @@ async def twilio_whatsapp_webhook(request: Request):
                 
                 tx_id = active_withdrawal.get('transaction_id')
                 display_id = active_withdrawal.get('display_id', tx_id[:8] if tx_id else 'N/A')
+                mongo_id = active_withdrawal['_id']
                 
-                # Add images to pending_images array (accumulate)
-                existing_images = active_withdrawal.get('pending_images', [])
-                all_images = existing_images + images_base64
+                logger.info(f"Transacción activa encontrada: {display_id} (MongoDB ID: {mongo_id})")
                 
-                await db.transactions.update_one(
-                    {"_id": active_withdrawal['_id']},
-                    {"$set": {
-                        "pending_images": all_images,
-                        "whatsapp_active": True
-                    }}
+                # ATOMIC operation: Use $push with $each to add images (prevents race conditions)
+                # Also set whatsapp_active and initialize pending_images if needed
+                result = await db.transactions.update_one(
+                    {"_id": mongo_id, "status": "pending"},
+                    {
+                        "$push": {"pending_images": {"$each": images_base64}},
+                        "$set": {"whatsapp_active": True}
+                    }
                 )
+                
+                logger.info(f"Update result - matched: {result.matched_count}, modified: {result.modified_count}")
+                
+                # Get updated document to get accurate count
+                updated_tx = await db.transactions.find_one({"_id": mongo_id})
+                total_images = len(updated_tx.get('pending_images', [])) if updated_tx else len(images_base64)
                 
                 # Send confirmation of images received
                 from twilio.rest import Client
                 twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
                 twilio_client.messages.create(
                     from_=os.getenv('TWILIO_WHATSAPP_FROM'),
-                    body=f"📷 {len(all_images)} imagen(es) recibida(s) para ID: {display_id}\n\n✅ Escribe *listo* para procesar\n📷 O envía más imágenes",
+                    body=f"📷 {total_images} imagen(es) recibida(s) para ID: {display_id}\n\n✅ Escribe *listo* para procesar\n📷 O envía más imágenes",
                     to=from_number
                 )
                 
-                logger.info(f"Imágenes agregadas al buffer: {len(all_images)} total para TX {display_id}")
-                return {"status": "images_buffered", "count": len(all_images)}
+                logger.info(f"Imágenes agregadas al buffer: {total_images} total para TX {display_id}")
+                return {"status": "images_buffered", "count": total_images}
         
         # Handle "listo" command to process buffered images
         elif is_process_command:
