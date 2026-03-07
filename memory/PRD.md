@@ -184,6 +184,11 @@
 
 ## Changelog
 
+### 2026-03-07 - Descarga de Comprobantes
+- **Mejora:** Botón "Descargar todas" para bajar todas las imágenes de una transacción
+- **Mejora:** Botón de descarga individual en cada imagen (esquina superior derecha)
+- **Formato:** Archivos se descargan como `comprobante_{ID}_{num}.png`
+
 ### 2026-03-07 - Vista Multi-Imagen para Usuarios
 - **Mejora:** Usuarios pueden ver todas las imágenes de comprobantes en su historial
 - **UI:** Botón "Ver X comprobantes" con ícono de ojo en transacciones completadas

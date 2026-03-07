@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, 
-  XCircle, Filter, ChevronDown, Plus, Eye, X
+  XCircle, Filter, ChevronDown, Plus, Eye, X, Download
 } from 'lucide-react';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
@@ -17,6 +17,25 @@ export default function History() {
   const [showFilters, setShowFilters] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
+
+  // Función para descargar una imagen
+  const downloadImage = (base64Data, fileName) => {
+    const link = document.createElement('a');
+    link.href = base64Data;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Función para descargar todas las imágenes
+  const downloadAllImages = (images, txId) => {
+    images.forEach((img, index) => {
+      setTimeout(() => {
+        downloadImage(img, `comprobante_${txId}_${index + 1}.png`);
+      }, index * 300); // Pequeño delay entre descargas
+    });
+  };
 
   useEffect(() => {
     loadTransactions();
@@ -330,9 +349,33 @@ export default function History() {
 
             {/* Imágenes del comprobante */}
             <div>
-              <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
-                📷 {(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>
+                  📷 {(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante
+                </p>
+                {/* Botón descargar todas */}
+                {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) && (
+                  <button
+                    onClick={() => {
+                      const images = selectedVoucher.proof_images?.length > 0 
+                        ? selectedVoucher.proof_images 
+                        : [selectedVoucher.proof_image];
+                      const txId = selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8);
+                      downloadAllImages(images, txId);
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 14px', borderRadius: '10px', border: 'none',
+                      backgroundColor: '#6366f1', color: 'white', cursor: 'pointer',
+                      fontSize: '13px', fontWeight: '500', transition: 'all 0.2s'
+                    }}
+                    data-testid="download-all-images"
+                  >
+                    <Download style={{ width: '16px', height: '16px' }} />
+                    Descargar {(selectedVoucher.proof_images?.length || 1) > 1 ? 'todas' : ''}
+                  </button>
+                )}
+              </div>
               
               {/* Grid de imágenes */}
               {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
@@ -358,6 +401,25 @@ export default function History() {
                         onClick={() => window.open(img, '_blank')}
                         title="Click para ver en tamaño completo"
                       />
+                      {/* Botón de descarga individual */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const txId = selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8);
+                          downloadImage(img, `comprobante_${txId}_${idx + 1}.png`);
+                        }}
+                        style={{
+                          position: 'absolute', top: '8px', right: '8px',
+                          width: '32px', height: '32px', borderRadius: '8px',
+                          backgroundColor: 'rgba(255,255,255,0.9)', border: 'none',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)', transition: 'all 0.2s'
+                        }}
+                        title={`Descargar imagen ${idx + 1}`}
+                        data-testid={`download-image-${idx}`}
+                      >
+                        <Download style={{ width: '16px', height: '16px', color: '#6366f1' }} />
+                      </button>
                       {(selectedVoucher.proof_images?.length || 0) > 1 && (
                         <div style={{ 
                           position: 'absolute', bottom: '8px', left: '8px', 
