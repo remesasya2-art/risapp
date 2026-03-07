@@ -43,7 +43,7 @@ export default function AdminPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [showProcessModal, setShowProcessModal] = useState(false);
-  const [proofImage, setProofImage] = useState(null);
+  const [proofImages, setProofImages] = useState([]);  // Array for multiple images
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
@@ -104,15 +104,16 @@ export default function AdminPanel() {
   };
 
   const handleProcessWithdrawal = async () => {
-    if (!selectedItem || !proofImage) { toast.error('Sube el comprobante de pago'); return; }
+    if (!selectedItem || proofImages.length === 0) { toast.error('Sube al menos un comprobante de pago'); return; }
     try {
       await api.post('/admin/withdrawals/process', { 
         transaction_id: selectedItem.transaction_id, 
         action: 'approve',
-        proof_image: proofImage 
+        proof_images: proofImages,  // Send array of images
+        proof_image: proofImages[0] // Keep backwards compatibility
       });
       toast.success('Retiro procesado exitosamente');
-      setShowProcessModal(false); setSelectedItem(null); setProofImage(null); loadData();
+      setShowProcessModal(false); setSelectedItem(null); setProofImages([]); loadData();
     } catch (error) { toast.error(error.response?.data?.detail || 'Error al procesar'); }
   };
 
@@ -288,8 +289,26 @@ export default function AdminPanel() {
   );
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) { const reader = new FileReader(); reader.onload = () => setProofImage(reader.result); reader.readAsDataURL(file); }
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      const newImages = [];
+      let processed = 0;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          newImages.push(reader.result);
+          processed++;
+          if (processed === files.length) {
+            setProofImages(prev => [...prev, ...newImages]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const removeProofImage = (index) => {
+    setProofImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const filteredWithdrawals = withdrawals.filter(w => {
@@ -462,14 +481,24 @@ export default function AdminPanel() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead style={{ backgroundColor: '#f8f9fa' }}>
                       <tr>
-                        {['Fecha', 'Beneficiario', 'Monto', 'Estado', 'Acciones'].map(h => (
+                        {['ID', 'Fecha', 'Beneficiario', 'Monto', 'Imágenes', 'Estado', 'Acciones'].map(h => (
                           <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredWithdrawals.map((w) => (
+                      {filteredWithdrawals.map((w) => {
+                        const pendingImgCount = w.pending_images?.length || 0;
+                        const proofImgCount = w.proof_images?.length || (w.proof_image ? 1 : 0);
+                        const totalImages = w.status === 'pending' ? pendingImgCount : proofImgCount;
+                        
+                        return (
                         <tr key={w.transaction_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`withdrawal-${w.transaction_id}`}>
+                          <td style={{ padding: '16px' }}>
+                            <span style={{ fontSize: '13px', fontFamily: 'monospace', fontWeight: '600', color: '#6366f1', backgroundColor: '#eef2ff', padding: '4px 8px', borderRadius: '6px' }}>
+                              {w.display_id || w.transaction_id?.slice(0, 8)}
+                            </span>
+                          </td>
                           <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>{new Date(w.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                           <td style={{ padding: '16px' }}>
                             <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{w.beneficiary_data?.full_name}</p>
@@ -479,17 +508,49 @@ export default function AdminPanel() {
                             <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{w.amount_input?.toFixed(2)} RIS</p>
                             <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{w.amount_output?.toFixed(2)} VES</p>
                           </td>
+                          <td style={{ padding: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ 
+                                fontSize: '13px', 
+                                fontWeight: '600', 
+                                color: totalImages > 0 ? '#16a34a' : '#9ca3af',
+                                backgroundColor: totalImages > 0 ? '#dcfce7' : '#f3f4f6',
+                                padding: '4px 10px', 
+                                borderRadius: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                📷 {totalImages}
+                              </span>
+                              {w.status === 'pending' && pendingImgCount > 0 && (
+                                <span style={{ fontSize: '11px', color: '#d97706', fontWeight: '500' }}>pendiente</span>
+                              )}
+                            </div>
+                          </td>
                           <td style={{ padding: '16px' }}>{getStatusBadge(w.status)}</td>
                           <td style={{ padding: '16px' }}>
                             {w.status === 'pending' && (
                               <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => { setSelectedItem(w); setShowProcessModal(true); }} style={btnSuccess}>Procesar</button>
+                                <button onClick={() => { setSelectedItem(w); setProofImages(w.pending_images || []); setShowProcessModal(true); }} style={btnSuccess}>Procesar</button>
                                 <button onClick={() => handleRejectWithdrawal(w.transaction_id)} style={btnDanger}>Rechazar</button>
                               </div>
                             )}
+                            {w.status === 'completed' && proofImgCount > 0 && (
+                              <button onClick={() => { 
+                                setSelectedItem(w); 
+                                // Load images from proof_images array or fallback to single proof_image
+                                const images = w.proof_images?.length > 0 ? w.proof_images : (w.proof_image ? [w.proof_image] : []);
+                                setProofImages(images);
+                                setShowProcessModal(true); 
+                              }} style={{ ...btnSecondary, fontSize: '12px', padding: '6px 12px' }}>
+                                Ver {proofImgCount} img
+                              </button>
+                            )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -812,23 +873,99 @@ export default function AdminPanel() {
       {/* Process Withdrawal Modal */}
       {showProcessModal && selectedItem && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '450px' }}>
-            <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 20px 0' }}>Procesar Retiro</h3>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' }}>
+            <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 20px 0' }}>
+              {selectedItem.status === 'completed' ? 'Ver Comprobantes' : 'Procesar Retiro'}
+            </h3>
             <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
-              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
-              <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.full_name}</p>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.bank}</p>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>{selectedItem.beneficiary_data?.account_number}</p>
-              <p style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedItem.amount_output?.toFixed(2)} VES</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
+                  <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.full_name}</p>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.bank}</p>
+                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>{selectedItem.beneficiary_data?.account_number}</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>ID</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', fontFamily: 'monospace', color: '#6366f1', margin: 0 }}>
+                    {selectedItem.display_id || selectedItem.transaction_id?.slice(0, 8)}
+                  </p>
+                </div>
+              </div>
+              <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#dbeafe', borderRadius: '10px' }}>
+                <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0, textAlign: 'center' }}>
+                  {selectedItem.amount_output?.toFixed(2)} VES
+                </p>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0', textAlign: 'center' }}>
+                  ({selectedItem.amount_input?.toFixed(2)} RIS)
+                </p>
+              </div>
             </div>
+            
+            {/* Images Section */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Comprobante de pago</label>
-              <input type="file" accept="image/*" onChange={handleFileChange} style={{ width: '100%' }} />
-              {proofImage && <img src={proofImage} alt="Comprobante" style={{ marginTop: '12px', borderRadius: '12px', maxHeight: '160px', objectFit: 'contain' }} />}
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '12px' }}>
+                <span>📷 Comprobantes de pago ({proofImages.length})</span>
+                {selectedItem.status === 'pending' && (
+                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}>Puedes subir múltiples imágenes</span>
+                )}
+              </label>
+              
+              {/* Image Grid */}
+              {proofImages.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                  {proofImages.map((img, idx) => (
+                    <div key={idx} style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                      <img src={img} alt={`Comprobante ${idx + 1}`} style={{ width: '100%', height: '100px', objectFit: 'cover' }} />
+                      {selectedItem.status === 'pending' && (
+                        <button 
+                          onClick={() => removeProofImage(idx)} 
+                          style={{ 
+                            position: 'absolute', top: '4px', right: '4px', 
+                            width: '22px', height: '22px', borderRadius: '50%', 
+                            backgroundColor: '#dc2626', color: 'white', border: 'none', 
+                            cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                      <div style={{ position: 'absolute', bottom: '4px', left: '4px', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
+                        #{idx + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Upload Button (only for pending) */}
+              {selectedItem.status === 'pending' && (
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  multiple 
+                  onChange={handleFileChange} 
+                  style={{ width: '100%' }} 
+                  data-testid="upload-proof-images"
+                />
+              )}
+              
+              {/* Empty state */}
+              {proofImages.length === 0 && selectedItem.status === 'completed' && (
+                <p style={{ color: '#9ca3af', fontSize: '14px', textAlign: 'center', padding: '20px' }}>No hay imágenes de comprobantes</p>
+              )}
             </div>
+            
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => { setShowProcessModal(false); setSelectedItem(null); setProofImage(null); }} style={{ ...btnSecondary, flex: 1 }}>Cancelar</button>
-              <button onClick={handleProcessWithdrawal} disabled={!proofImage} style={{ ...btnSuccess, flex: 1, opacity: proofImage ? 1 : 0.5 }}>Confirmar</button>
+              <button onClick={() => { setShowProcessModal(false); setSelectedItem(null); setProofImages([]); }} style={{ ...btnSecondary, flex: 1 }}>
+                {selectedItem.status === 'completed' ? 'Cerrar' : 'Cancelar'}
+              </button>
+              {selectedItem.status === 'pending' && (
+                <button onClick={handleProcessWithdrawal} disabled={proofImages.length === 0} style={{ ...btnSuccess, flex: 1, opacity: proofImages.length > 0 ? 1 : 0.5 }}>
+                  Confirmar ({proofImages.length} img)
+                </button>
+              )}
             </div>
           </div>
         </div>

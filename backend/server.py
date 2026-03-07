@@ -4648,6 +4648,7 @@ async def get_all_withdrawals(admin_user: User = Depends(get_admin_user)):
         user = await db.users.find_one({"user_id": tx.get("user_id")})
         withdrawals.append({
             "transaction_id": tx.get("transaction_id"),
+            "display_id": tx.get("display_id"),
             "user_id": tx.get("user_id"),
             "user_name": user.get("full_name") if user else "Unknown",
             "user_email": user.get("email") if user else "",
@@ -4661,6 +4662,9 @@ async def get_all_withdrawals(admin_user: User = Depends(get_admin_user)):
             "updated_at": tx.get("updated_at"),
             "completed_at": tx.get("completed_at"),
             "proof_image": tx.get("proof_image"),
+            "proof_images": tx.get("proof_images", []),
+            "pending_images": tx.get("pending_images", []),
+            "whatsapp_active": tx.get("whatsapp_active", False),
             "processed_by": tx.get("processed_by"),
         })
     
@@ -4682,6 +4686,7 @@ async def admin_get_pending_withdrawals(admin_user: User = Depends(get_admin_use
         user = await db.users.find_one({"user_id": tx.get("user_id")})
         withdrawals.append({
             "transaction_id": tx.get("transaction_id"),
+            "display_id": tx.get("display_id"),
             "user_id": tx.get("user_id"),
             "user_name": user.get("full_name") if user else "Unknown",
             "amount_input": tx.get("amount_input", 0),
@@ -4690,6 +4695,8 @@ async def admin_get_pending_withdrawals(admin_user: User = Depends(get_admin_use
             "status": tx.get("status"),
             "beneficiary_data": tx.get("beneficiary_data", {}),
             "created_at": tx.get("created_at"),
+            "pending_images": tx.get("pending_images", []),
+            "whatsapp_active": tx.get("whatsapp_active", False),
         })
     
     return withdrawals
@@ -4698,12 +4705,13 @@ async def admin_get_pending_withdrawals(admin_user: User = Depends(get_admin_use
 class ProcessWithdrawalAdminRequest(BaseModel):
     transaction_id: str
     action: str  # "approve" or "reject"
-    proof_image: Optional[str] = None
+    proof_image: Optional[str] = None  # Single image (backwards compatibility)
+    proof_images: Optional[List[str]] = None  # Multiple images
     rejection_reason: Optional[str] = None
 
 @api_router.post("/admin/withdrawals/process")
 async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin_user: User = Depends(get_admin_user)):
-    """Process withdrawal from admin panel"""
+    """Process withdrawal from admin panel with support for multiple images"""
     if not has_permission(admin_user, "withdrawals.process"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
@@ -4712,18 +4720,25 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
         raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
     
     if request.action == "approve":
-        if not request.proof_image:
-            raise HTTPException(status_code=400, detail="Se requiere imagen de comprobante")
+        # Get images (support both single and multiple)
+        images = request.proof_images if request.proof_images else ([request.proof_image] if request.proof_image else [])
+        
+        if not images:
+            raise HTTPException(status_code=400, detail="Se requiere al menos una imagen de comprobante")
         
         await db.transactions.update_one(
             {"transaction_id": request.transaction_id},
-            {"$set": {
-                "status": "completed",
-                "proof_image": request.proof_image,
-                "completed_at": datetime.now(timezone.utc),
-                "processed_by": admin_user.user_id,
-                "processed_via": "admin_panel"
-            }}
+            {
+                "$set": {
+                    "status": "completed",
+                    "proof_image": images[0],  # First image for backwards compatibility
+                    "proof_images": images,  # All images
+                    "completed_at": datetime.now(timezone.utc),
+                    "processed_by": admin_user.user_id,
+                    "processed_via": "admin_panel"
+                },
+                "$unset": {"pending_images": "", "whatsapp_active": ""}
+            }
         )
         
         # Notify user

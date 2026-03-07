@@ -184,6 +184,13 @@
 
 ## Changelog
 
+### 2026-03-07 - Multi-Imagen Admin Panel
+- **Mejora:** Admin Panel ahora muestra columna "Imágenes" con indicador visual (📷 X)
+- **Mejora:** Modal de procesamiento permite subir múltiples imágenes
+- **Mejora:** Modal de "Ver Comprobantes" muestra todas las imágenes en grid
+- **Backend:** Endpoint `/admin/withdrawals/process` soporta array `proof_images`
+- **Backend:** Endpoints `/admin/withdrawals/all` y `/pending` incluyen `display_id`, `pending_images`, `proof_images`
+
 ### 2026-03-07 - Fix Multi-Imagen WhatsApp
 - **Bug corregido:** Solo la primera imagen se asignaba a la transacción activa
 - **Causa raíz:** Patrón read-modify-write causaba race conditions entre webhooks
@@ -195,4 +202,4 @@
 - Panel de admin con estadísticas de cola en tiempo real
 
 ## Last Updated
-2026-03-07 - Fix bug multi-imagen WhatsApp con operaciones atómicas MongoDB
+2026-03-07 - Mejoras Admin Panel multi-imagen
