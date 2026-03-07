@@ -153,18 +153,35 @@ async def send_next_pending_withdrawal_whatsapp():
             return None
         
         beneficiary = next_withdrawal.get('beneficiary_data', {})
-        account_number = beneficiary.get('account_number', 'N/A')
         full_name = beneficiary.get('full_name', 'N/A')
         id_document = beneficiary.get('id_document', 'N/A')
         amount_ves = next_withdrawal.get('amount_output', 0)
         display_id = next_withdrawal.get('display_id', next_withdrawal.get('transaction_id', 'N/A')[:8])
+        payment_type = beneficiary.get('payment_type', 'transferencia')
         
-        # Build WhatsApp message - clean format
-        message = f"""{full_name}
+        # Build WhatsApp message based on payment type
+        if payment_type == 'pago_movil':
+            bank_code = beneficiary.get('bank_code', '') or beneficiary.get('bank', '')
+            phone_number = beneficiary.get('phone_number', 'N/A')
+            message = f"""{full_name}
+{bank_code}
+{id_document}
+{phone_number}
+{amount_ves:.2f} Bs
+
+📱 PAGO MÓVIL
+👤 Usuario: {user.get('name', 'N/A')}
+🔢 ID: {display_id}
+🔔 NUEVO RETIRO PENDIENTE"""
+        else:
+            account_number = beneficiary.get('account_number', 'N/A')
+            bank_name = beneficiary.get('bank', '')
+            message = f"""{full_name}
 {account_number}
 {id_document}
 {amount_ves:.2f} Bs
 
+🏦 TRANSFERENCIA ({bank_name})
 👤 Usuario: {user.get('name', 'N/A')}
 🔢 ID: {display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
@@ -2340,19 +2357,36 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 💵 TOTAL Bs PENDIENTES: {total_ves:,.2f} Bs ({pending_count} retiros)""")
         else:
             # No active withdrawal, this becomes the active one
-            # Get bank code if available
-            bank_code = request.beneficiary_data.get('bank_code', '')
-            bank_name = request.beneficiary_data.get('bank', '')
-            account_number = request.beneficiary_data.get('account_number', 'N/A')
+            # Get beneficiary data
             full_name = request.beneficiary_data.get('full_name', 'N/A')
             id_document = request.beneficiary_data.get('id_document', 'N/A')
+            payment_type = request.beneficiary_data.get('payment_type', 'transferencia')
+            bank_code = request.beneficiary_data.get('bank_code', '') or request.beneficiary_data.get('bank', '')
             
-            # New clean format message
-            message = f"""{full_name}
+            # Build message based on payment type
+            if payment_type == 'pago_movil':
+                phone_number = request.beneficiary_data.get('phone_number', 'N/A')
+                # Pago Móvil format: Name, Bank Code, Cedula, Phone, Amount
+                message = f"""{full_name}
+{bank_code}
+{id_document}
+{phone_number}
+{amount_ves:.2f} Bs
+
+📱 PAGO MÓVIL
+👤 Usuario: {current_user.name}
+🔢 ID: {display_id}
+🔔 NUEVO RETIRO PENDIENTE"""
+            else:
+                account_number = request.beneficiary_data.get('account_number', 'N/A')
+                bank_name = request.beneficiary_data.get('bank', '')
+                # Transferencia format: Name, Account, Cedula, Amount
+                message = f"""{full_name}
 {account_number}
 {id_document}
 {amount_ves:.2f} Bs
 
+🏦 TRANSFERENCIA ({bank_name})
 👤 Usuario: {current_user.name}
 🔢 ID: {display_id}
 🔔 NUEVO RETIRO PENDIENTE"""
