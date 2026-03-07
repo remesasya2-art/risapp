@@ -567,11 +567,12 @@ class Beneficiary(BaseModel):
     beneficiary_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     full_name: str
-    account_number: str
-    id_document: str
-    phone_number: str
+    payment_type: str = "transferencia"  # "pago_movil" or "transferencia"
+    account_number: Optional[str] = None  # For transferencia (20 digits)
+    id_document: str  # Cedula (only numbers)
+    phone_number: Optional[str] = None  # For pago_movil (11 digits)
     bank: str
-    bank_code: Optional[str] = None  # Venezuelan bank code (e.g., 0102)
+    bank_code: Optional[str] = None  # Venezuelan bank code (e.g., 0134)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Transaction(BaseModel):
@@ -614,11 +615,12 @@ class UpdateRateRequest(BaseModel):
 
 class BeneficiaryCreate(BaseModel):
     full_name: str
-    account_number: str
-    id_document: str
-    phone_number: str
+    payment_type: str = "transferencia"  # "pago_movil" or "transferencia"
+    account_number: Optional[str] = None  # For transferencia
+    id_document: str  # Cedula
+    phone_number: Optional[str] = None  # For pago_movil
     bank: str
-    bank_code: Optional[str] = None  # Venezuelan bank code (e.g., 0102)
+    bank_code: Optional[str] = None
 
 class VerificationRequest(BaseModel):
     full_name: str

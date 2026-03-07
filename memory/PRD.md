@@ -196,6 +196,18 @@
 
 ## Changelog
 
+### 2026-03-07 - Rediseño Flujo "Enviar Dinero"
+- **Nuevo flujo de 4 pasos:**
+  1. Monto a enviar
+  2. Tipo de pago (Pago Móvil o Transferencia)
+  3. Seleccionar/Agregar beneficiario
+  4. Confirmar envío
+- **Pago Móvil:** Cédula, Banco, Teléfono (11 dígitos, solo números)
+- **Transferencia:** Cédula, Banco, Cuenta (20 dígitos, solo números)
+- **Buscador de bancos:** Con lupa, filtrar por código (ej: 0134) o nombre
+- **33 bancos venezolanos** con sus códigos actualizados
+- **Backend:** Modelo Beneficiary actualizado con `payment_type`, campos opcionales según tipo
+
 ### 2026-03-07 - Descarga de Comprobantes
 - **Mejora:** Botón "Descargar todas" para bajar todas las imágenes de una transacción
 - **Mejora:** Botón de descarga individual en cada imagen (esquina superior derecha)
