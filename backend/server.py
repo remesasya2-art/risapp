@@ -2481,7 +2481,102 @@ async def get_withdrawal_queue_stats(admin_user: User = Depends(get_admin_user))
         "total_ris_pending": total_ris
     }
 
-@api_router.post("/withdrawal/process")
+@api_router.get("/admin/withdrawals/cleanup-check")
+async def check_withdrawals_cleanup(admin_user: User = Depends(get_admin_user)):
+    """Admin: Check for orphaned or stuck pending withdrawals"""
+    if admin_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo SuperAdmin puede usar esta función")
+    
+    # Find all pending withdrawals
+    pending = await db.transactions.find({
+        "type": "withdrawal",
+        "status": "pending"
+    }).to_list(100)
+    
+    orphaned = []
+    for tx in pending:
+        orphaned.append({
+            "transaction_id": tx.get("transaction_id"),
+            "display_id": tx.get("display_id", tx.get("transaction_id", "")[:8]),
+            "beneficiary": tx.get("beneficiary_data", {}).get("full_name", "N/A"),
+            "amount_ves": tx.get("amount_output", 0),
+            "created_at": tx.get("created_at"),
+            "whatsapp_active": tx.get("whatsapp_active", False),
+        })
+    
+    return {
+        "pending_count": len(orphaned),
+        "pending_transactions": orphaned
+    }
+
+@api_router.post("/admin/withdrawals/cleanup")
+async def cleanup_withdrawals(admin_user: User = Depends(get_admin_user)):
+    """Admin: Mark all stuck pending withdrawals as cancelled"""
+    if admin_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo SuperAdmin puede usar esta función")
+    
+    # Find and cancel all pending withdrawals
+    result = await db.transactions.update_many(
+        {"type": "withdrawal", "status": "pending"},
+        {
+            "$set": {
+                "status": "cancelled",
+                "cancelled_at": datetime.now(timezone.utc),
+                "cancelled_by": admin_user.user_id,
+                "cancellation_reason": "Limpieza manual por admin"
+            },
+            "$unset": {"whatsapp_active": "", "pending_images": ""}
+        }
+    )
+    
+    # Also refund the balance to users
+    pending = await db.transactions.find({
+        "type": "withdrawal",
+        "status": "cancelled",
+        "cancellation_reason": "Limpieza manual por admin"
+    }).to_list(100)
+    
+    refunded_count = 0
+    for tx in pending:
+        user_id = tx.get("user_id")
+        amount = tx.get("amount_input", 0)
+        if user_id and amount > 0:
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$inc": {"balance_ris": amount}}
+            )
+            refunded_count += 1
+    
+    return {
+        "cleaned_count": result.modified_count,
+        "refunded_count": refunded_count,
+        "message": f"Se cancelaron {result.modified_count} transacciones y se reembolsaron {refunded_count} usuarios"
+    }
+
+@api_router.delete("/admin/withdrawals/delete/{transaction_id}")
+async def delete_single_withdrawal(transaction_id: str, admin_user: User = Depends(get_admin_user)):
+    """Admin: Delete a single stuck/test withdrawal"""
+    if admin_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo SuperAdmin puede usar esta función")
+    
+    tx = await db.transactions.find_one({"transaction_id": transaction_id})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    # Refund user if pending
+    if tx.get("status") == "pending":
+        user_id = tx.get("user_id")
+        amount = tx.get("amount_input", 0)
+        if user_id and amount > 0:
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$inc": {"balance_ris": amount}}
+            )
+    
+    # Delete the transaction
+    await db.transactions.delete_one({"transaction_id": transaction_id})
+    
+    return {"message": f"Transacción {transaction_id} eliminada", "refunded": tx.get("status") == "pending"}
 async def process_withdrawal(request: ProcessWithdrawalRequest, admin_user: User = Depends(get_admin_user)):
     """Admin: Mark withdrawal as completed and upload proof"""
     # Get transaction first to get user_id
