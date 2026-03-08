@@ -227,6 +227,17 @@
 - **Modal:** Muestra grid de imágenes con numeración, click para ver tamaño completo
 - **Backend:** Endpoint `/transactions` ya incluye `proof_images` array
 
+### 2026-03-08 - Migración Completa de Endpoints
+- **routes/auth.py (409 líneas):** Login, registro, verificación email, password reset
+- **routes/admin.py (439 líneas):** Usuarios, retiros, socios, gestores, tasas, KYC
+- **routes/transactions.py (230 líneas):** Beneficiarios, retiros, historial
+- **routes/gestor.py (323 líneas):** Dashboard, beneficiarios, transacciones terceros
+- **routes/partner.py (102 líneas):** Dashboard socios, referral links
+- **routes/basic.py (83 líneas):** Health, rate, queue stats
+- **routes/dependencies.py (89 líneas):** Auth functions (get_current_user, etc.)
+- **Total:** 1700 líneas organizadas en 7 archivos modulares
+- **Testing:** Todos los endpoints verificados (health, auth, admin, gestor, transactions)
+
 ### 2026-03-08 - Migración Completa de Endpoints a Módulos
 - **routes/basic.py:** Endpoints health, rate, queue-stats (3 endpoints)
 - **routes/gestor.py:** Dashboard, beneficiarios, transacciones, recarga (6 endpoints)
