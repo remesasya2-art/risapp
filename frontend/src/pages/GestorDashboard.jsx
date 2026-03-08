@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Calculator, QrCode, Copy, Clock, CheckCircle, XCircle, 
   Phone, Building2, ChevronRight, Loader2, Plus, RefreshCw,
-  Wallet, CreditCard, Search, TrendingUp, X, AlertCircle, User
+  Wallet, CreditCard, Search, TrendingUp, X, AlertCircle, User, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -73,6 +73,9 @@ export default function GestorDashboard() {
   const [pixTimer, setPixTimer] = useState(420); // 7 minutes in seconds
   const [pixStatus, setPixStatus] = useState('pending');
   
+  // Direct send mode (without PIX recharge)
+  const [isDirectSend, setIsDirectSend] = useState(false);
+  
   // Transaction form state
   const [paymentType, setPaymentType] = useState('');
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
@@ -129,28 +132,40 @@ export default function GestorDashboard() {
     return () => clearInterval(interval);
   }, [currentStep, pixStatus, pixTimer]);
 
-  // PIX Status polling
+  // PIX Status polling - FIXED: Use ref to track if payment was already processed
+  const paymentProcessedRef = React.useRef(false);
+  
   useEffect(() => {
     let pollInterval;
-    if (currentStep === FLOW_STEPS.PIX_QR && pixStatus === 'pending' && pixPayment) {
+    if (currentStep === FLOW_STEPS.PIX_QR && pixStatus === 'pending' && pixPayment && !paymentProcessedRef.current) {
       pollInterval = setInterval(async () => {
         try {
           const res = await api.get(`/gestor/pix/status/${pixPayment.payment_id}`);
-          if (res.data.status === 'paid') {
+          if (res.data.status === 'paid' && !paymentProcessedRef.current) {
+            // Mark as processed immediately to prevent double processing
+            paymentProcessedRef.current = true;
+            clearInterval(pollInterval);
+            
             setPixStatus('paid');
             toast.success('¡Pago PIX recibido!');
+            
+            // Refresh data
             await refreshUser();
             await loadDashboard();
-            setTimeout(() => setCurrentStep(FLOW_STEPS.PAYMENT_SUCCESS), 500);
+            
+            // Navigate to next step immediately
+            setCurrentStep(FLOW_STEPS.PAYMENT_SUCCESS);
           } else if (res.data.status === 'expired') {
             setPixStatus('expired');
           }
         } catch (error) {
           console.error('Error polling PIX status:', error);
         }
-      }, 3000);
+      }, 2000); // Poll every 2 seconds for faster response
     }
-    return () => clearInterval(pollInterval);
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [currentStep, pixStatus, pixPayment, refreshUser, loadDashboard]);
 
   // Calculate amounts
@@ -178,7 +193,7 @@ export default function GestorDashboard() {
     }
   };
 
-  // Start new transaction flow
+  // Start new transaction flow (with PIX recharge)
   const startNewTransaction = () => {
     setInputAmount('');
     setInputMode('ris');
@@ -187,6 +202,20 @@ export default function GestorDashboard() {
     setPixPayment(null);
     setPixTimer(420);
     setPixStatus('pending');
+    setIsDirectSend(false);
+    paymentProcessedRef.current = false; // Reset ref for new transaction
+    setCurrentStep(FLOW_STEPS.CALCULATOR);
+  };
+
+  // Start direct send flow (from existing balance_ris_terceros)
+  const startDirectSend = () => {
+    setInputAmount('');
+    setInputMode('ris');
+    setPaymentType('');
+    setSelectedBeneficiary(null);
+    setPixPayment(null);
+    setIsDirectSend(true);
+    paymentProcessedRef.current = false;
     setCurrentStep(FLOW_STEPS.CALCULATOR);
   };
 
@@ -376,27 +405,18 @@ export default function GestorDashboard() {
             </div>
           ) : (
             <>
-              {/* Balance Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                    <Wallet style={{ width: '24px', height: '24px', color: 'rgba(255,255,255,0.8)' }} />
-                    <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>Mi Saldo</span>
-                  </div>
-                  <p style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff', margin: 0 }}>
-                    R$ {(dashboardData?.balance_ris || 0).toFixed(2)}
-                  </p>
+              {/* Saldo Terceros Card - ONLY showing terceros balance */}
+              <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', marginBottom: '24px' }} data-testid="saldo-terceros">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <CreditCard style={{ width: '28px', height: '28px', color: 'rgba(255,255,255,0.9)' }} />
+                  <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px', fontWeight: '600' }}>Saldo Terceros Disponible</span>
                 </div>
-                
-                <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)' }} data-testid="saldo-terceros">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                    <CreditCard style={{ width: '24px', height: '24px', color: 'rgba(255,255,255,0.8)' }} />
-                    <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>Saldo Terceros</span>
-                  </div>
-                  <p style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff', margin: 0 }}>
-                    R$ {balanceTerceros.toFixed(2)}
-                  </p>
-                </div>
+                <p style={{ fontSize: '36px', fontWeight: '700', color: '#ffffff', margin: 0 }}>
+                  R$ {balanceTerceros.toFixed(2)}
+                </p>
+                <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', marginTop: '8px' }}>
+                  ≈ {(balanceTerceros * risToVes).toFixed(2)} VES
+                </p>
               </div>
 
               {/* Stats */}
@@ -417,10 +437,24 @@ export default function GestorDashboard() {
                 </div>
               </div>
 
-              {/* Main Action Button */}
-              <button onClick={startNewTransaction} style={{ ...btnPrimary, marginBottom: '24px' }} data-testid="new-transaction-btn">
-                <Plus style={{ width: '20px', height: '20px' }} /> Nuevo Envío de Tercero
-              </button>
+              {/* Action Buttons - Two options */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                {/* Button 1: New transaction with PIX recharge */}
+                <button onClick={startNewTransaction} style={btnPrimary} data-testid="new-transaction-btn">
+                  <Plus style={{ width: '20px', height: '20px' }} /> Nuevo Envío (Recarga PIX)
+                </button>
+                
+                {/* Button 2: Direct send from existing balance */}
+                {balanceTerceros > 0 && (
+                  <button 
+                    onClick={startDirectSend} 
+                    style={{ ...btnSuccess, background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)' }} 
+                    data-testid="direct-send-btn"
+                  >
+                    <Send style={{ width: '20px', height: '20px' }} /> Enviar desde Saldo Terceros
+                  </button>
+                )}
+              </div>
 
               {/* Recent Transactions */}
               <div style={cardStyle}>
@@ -465,6 +499,19 @@ export default function GestorDashboard() {
 
   // CALCULATOR VIEW
   if (currentStep === FLOW_STEPS.CALCULATOR) {
+    // Handler for direct send - goes straight to payment type
+    const handleDirectSendContinue = () => {
+      if (amountRis <= 0) {
+        toast.error('Ingresa un monto válido');
+        return;
+      }
+      if (amountRis > balanceTerceros) {
+        toast.error(`Saldo insuficiente. Disponible: R$ ${balanceTerceros.toFixed(2)}`);
+        return;
+      }
+      setCurrentStep(FLOW_STEPS.PAYMENT_TYPE);
+    };
+
     return (
       <div style={{ minHeight: '100vh', backgroundColor: 'white' }} data-testid="calculator-step">
         <div style={headerStyle}>
@@ -472,12 +519,24 @@ export default function GestorDashboard() {
             <button onClick={() => setCurrentStep(FLOW_STEPS.DASHBOARD)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <ArrowLeft style={{ width: '24px', height: '24px', color: 'white' }} />
             </button>
-            <span style={{ fontSize: '18px', fontWeight: '600' }}>Nuevo Envío</span>
+            <span style={{ fontSize: '18px', fontWeight: '600' }}>
+              {isDirectSend ? 'Enviar desde Saldo' : 'Nuevo Envío'}
+            </span>
           </div>
-          <p style={{ fontSize: '14px', opacity: 0.9, margin: 0 }}>Ingresa el monto que el tercero pagará</p>
+          <p style={{ fontSize: '14px', opacity: 0.9, margin: 0 }}>
+            {isDirectSend ? 'Ingresa el monto a enviar (desde saldo terceros)' : 'Ingresa el monto que el tercero pagará'}
+          </p>
         </div>
 
         <div style={{ padding: '24px' }}>
+          {/* Show available balance for direct send */}
+          {isDirectSend && (
+            <div style={{ backgroundColor: '#dcfce7', borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
+              <p style={{ color: '#166534', fontSize: '14px', margin: '0 0 4px 0', fontWeight: '500' }}>Saldo Terceros Disponible</p>
+              <p style={{ color: '#166534', fontSize: '24px', fontWeight: '700', margin: 0 }}>R$ {balanceTerceros.toFixed(2)}</p>
+            </div>
+          )}
+
           {/* Toggle RIS/VES */}
           <div style={{ display: 'flex', backgroundColor: '#f3f4f6', borderRadius: '12px', padding: '4px', marginBottom: '24px' }}>
             <button 
@@ -524,15 +583,26 @@ export default function GestorDashboard() {
             ))}
           </div>
 
-          {/* Continue Button */}
-          <button 
-            onClick={createPixPayment} 
-            disabled={loading || amountRis <= 0}
-            style={{ ...btnPrimary, opacity: (loading || amountRis <= 0) ? 0.5 : 1 }}
-            data-testid="continue-to-pix-btn"
-          >
-            {loading ? <Loader2 style={{ width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} /> : <>Generar QR PIX <ChevronRight style={{ width: '20px', height: '20px' }} /></>}
-          </button>
+          {/* Continue Button - Different action based on mode */}
+          {isDirectSend ? (
+            <button 
+              onClick={handleDirectSendContinue}
+              disabled={loading || amountRis <= 0 || amountRis > balanceTerceros}
+              style={{ ...btnSuccess, opacity: (loading || amountRis <= 0 || amountRis > balanceTerceros) ? 0.5 : 1 }}
+              data-testid="continue-direct-send-btn"
+            >
+              {loading ? <Loader2 style={{ width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} /> : <>Continuar <ChevronRight style={{ width: '20px', height: '20px' }} /></>}
+            </button>
+          ) : (
+            <button 
+              onClick={createPixPayment} 
+              disabled={loading || amountRis <= 0}
+              style={{ ...btnPrimary, opacity: (loading || amountRis <= 0) ? 0.5 : 1 }}
+              data-testid="continue-to-pix-btn"
+            >
+              {loading ? <Loader2 style={{ width: '20px', height: '20px', animation: 'spin 1s linear infinite' }} /> : <>Generar QR PIX <ChevronRight style={{ width: '20px', height: '20px' }} /></>}
+            </button>
+          )}
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>

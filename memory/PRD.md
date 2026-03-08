@@ -313,5 +313,18 @@
 - **Tests:** 17/18 backend tests pasados, 100% frontend tests pasados
 - **Balance Terceros:** Se actualiza automáticamente al confirmar pago PIX
 
+### 2026-03-08 - Correcciones y Mejoras Gestor
+- **Bug Fix:** Corregido el avance automático de pantalla tras confirmación de pago PIX
+  - Implementado `useRef` para prevenir procesamiento doble
+  - Polling aumentado a cada 2 segundos para respuesta más rápida
+- **Nueva Funcionalidad:** Botón "Enviar desde Saldo Terceros"
+  - Permite envío directo sin pasar por recarga PIX
+  - Útil cuando el gestor ya tiene saldo disponible
+  - Valida que el monto no exceda el saldo disponible
+- **UI Simplificada:** Panel Gestor muestra solo Saldo Terceros (no saldo personal)
+- **Dos flujos disponibles:**
+  1. "Nuevo Envío (Recarga PIX)" - Con generación de QR
+  2. "Enviar desde Saldo Terceros" - Envío directo
+
 ## Last Updated
-2026-03-08 - Nuevo Flujo PIX Socio Gestor implementado con Mercado Pago
+2026-03-08 - Bug fix polling PIX + Nuevo botón envío directo desde saldo terceros
