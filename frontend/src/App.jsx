@@ -19,6 +19,7 @@ import Support from './pages/Support';
 import PartnerDashboard from './pages/PartnerDashboard';
 import GestorDashboard from './pages/GestorDashboard';
 import ForceChangePassword from './pages/ForceChangePassword';
+import GestorFlowMockup from './pages/GestorFlowMockup';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -95,6 +96,9 @@ function AppRoutes() {
       
       {/* Force Change Password Route */}
       <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
+      
+      {/* Mockup Route - Temporal */}
+      <Route path="/mockup-gestor" element={<GestorFlowMockup />} />
       
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
