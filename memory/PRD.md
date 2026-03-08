@@ -97,6 +97,14 @@
 - [x] Procesar transacciones de terceros (debita de balance_ris_terceros)
 - [x] Flujo de transacción de 4 pasos: Monto → Tipo de Pago → Datos del Cliente → Confirmación
 - [x] Comisión configurable por SuperAdmin
+- [x] **NUEVO: Flujo PIX para Terceros (Implementado 2026-03-08)**
+  - Calculadora RIS/VES con toggle y teclado numérico
+  - Integración con Mercado Pago para generar QR PIX reales
+  - Timer de 7 minutos para expiración del código
+  - Polling automático para detectar pago
+  - Botón de simular pago (para testing)
+  - Actualización automática de balance_ris_terceros al confirmar pago
+  - Historial de pagos PIX
 
 ### Panel de Administración
 - [x] Gestión de usuarios (búsqueda, historial)
@@ -284,5 +292,26 @@
 - Sistema FIFO para retiros WhatsApp con Total Bs pendientes implementado
 - Panel de admin con estadísticas de cola en tiempo real
 
+### 2026-03-08 - Nuevo Flujo PIX Socio Gestor
+- **IMPLEMENTADO:** Flujo completo para pagos de terceros via PIX
+- **Mercado Pago:** Integración real que genera QR PIX con código copia-pega
+- **Frontend:** Dashboard de gestor totalmente rediseñado con:
+  - Calculadora RIS/VES con toggle y teclado numérico
+  - Pantalla de QR PIX con timer de 7 minutos
+  - Polling automático para detectar confirmación de pago
+  - Botón de simulación de pago para testing
+  - Selección de tipo de pago (Pago Móvil vs Transferencia)
+  - Selector de beneficiarios
+  - Pantalla de confirmación de transacción
+- **Backend:** Nuevos endpoints en `/api/gestor/pix/`:
+  - `POST /create` - Genera QR PIX real
+  - `GET /status/{id}` - Verifica estado del pago
+  - `POST /simulate-payment/{id}` - Simula pago para testing
+  - `GET /history` - Historial de pagos PIX
+  - `POST /cancel/{id}` - Cancela pago pendiente
+- **Webhook:** Endpoint `/api/webhook/mercadopago` para recibir confirmaciones
+- **Tests:** 17/18 backend tests pasados, 100% frontend tests pasados
+- **Balance Terceros:** Se actualiza automáticamente al confirmar pago PIX
+
 ## Last Updated
-2026-03-07 - Sistema Socio Gestor E2E completo con integración WhatsApp
+2026-03-08 - Nuevo Flujo PIX Socio Gestor implementado con Mercado Pago
