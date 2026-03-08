@@ -227,6 +227,15 @@
 - **Modal:** Muestra grid de imágenes con numeración, click para ver tamaño completo
 - **Backend:** Endpoint `/transactions` ya incluye `proof_images` array
 
+### 2026-03-08 - Migración Completa de Endpoints a Módulos
+- **routes/basic.py:** Endpoints health, rate, queue-stats (3 endpoints)
+- **routes/gestor.py:** Dashboard, beneficiarios, transacciones, recarga (6 endpoints)
+- **routes/partner.py:** Dashboard, referral-link (2 endpoints)
+- **routes/dependencies.py:** Funciones de autenticación (get_current_user, get_admin_user, etc.)
+- **Documentación:** Cada módulo es independiente y auto-contenido
+- **Estado:** server.py original sigue activo, módulos funcionando en paralelo
+- **Total migrado:** ~11 endpoints a módulos separados
+
 ### 2026-03-07 - Refactorización Modular del Backend
 - **Nueva estructura:** Creada arquitectura modular para mejor mantenibilidad
 - **config.py:** Configuración centralizada de variables de entorno
