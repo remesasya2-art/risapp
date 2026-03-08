@@ -321,10 +321,11 @@
   - Permite envío directo sin pasar por recarga PIX
   - Útil cuando el gestor ya tiene saldo disponible
   - Valida que el monto no exceda el saldo disponible
+- **Historial de Operaciones con Tabs:**
+  - Tab "Todos": Muestra PIX recibidos y envíos mezclados, ordenados por fecha
+  - Tab "PIX Recibidos": Solo pagos PIX con estado (Confirmado/Pendiente/Expirado)
+  - Tab "Envíos": Solo transacciones de envío con tipo de pago e icono
 - **UI Simplificada:** Panel Gestor muestra solo Saldo Terceros (no saldo personal)
-- **Dos flujos disponibles:**
-  1. "Nuevo Envío (Recarga PIX)" - Con generación de QR
-  2. "Enviar desde Saldo Terceros" - Envío directo
 
 ## Last Updated
-2026-03-08 - Bug fix polling PIX + Nuevo botón envío directo desde saldo terceros
+2026-03-08 - Historial de operaciones con tabs + Bug fix polling PIX + Envío directo

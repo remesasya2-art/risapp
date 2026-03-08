@@ -63,6 +63,8 @@ export default function GestorDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [pixHistory, setPixHistory] = useState([]);
+  const [activeHistoryTab, setActiveHistoryTab] = useState('all'); // 'all', 'pix', 'sends'
   
   // Calculator state
   const [inputMode, setInputMode] = useState('ris'); // 'ris' or 'ves'
@@ -93,14 +95,16 @@ export default function GestorDashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashboardRes, beneficiariesRes, transactionsRes] = await Promise.all([
+      const [dashboardRes, beneficiariesRes, transactionsRes, pixHistoryRes] = await Promise.all([
         api.get('/gestor/dashboard'),
         api.get('/gestor/beneficiaries'),
-        api.get('/gestor/transactions')
+        api.get('/gestor/transactions'),
+        api.get('/gestor/pix/history').catch(() => ({ data: [] }))
       ]);
       setDashboardData(dashboardRes.data);
       setBeneficiaries(beneficiariesRes.data || []);
       setTransactions(transactionsRes.data || []);
+      setPixHistory(pixHistoryRes.data || []);
     } catch (error) {
       console.error('Error loading gestor data:', error);
       toast.error('Error al cargar datos');
@@ -456,36 +460,169 @@ export default function GestorDashboard() {
                 )}
               </div>
 
-              {/* Recent Transactions */}
+              {/* History Section with Tabs */}
               <div style={cardStyle}>
                 <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
-                  Transacciones Recientes
+                  Historial de Operaciones
                 </h3>
-                {transactions.length === 0 ? (
-                  <p style={{ color: '#6b7280', textAlign: 'center', padding: '24px' }}>No hay transacciones</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {transactions.slice(0, 5).map((tx) => (
-                      <div key={tx.transaction_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
-                        <div>
-                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{tx.client_name || 'Cliente'}</p>
-                          <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{tx.beneficiary_name}</p>
+                
+                {/* Tabs */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', backgroundColor: '#f3f4f6', padding: '4px', borderRadius: '12px' }}>
+                  <button 
+                    onClick={() => setActiveHistoryTab('all')}
+                    style={{ flex: 1, padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '13px',
+                      backgroundColor: activeHistoryTab === 'all' ? '#ffffff' : 'transparent',
+                      color: activeHistoryTab === 'all' ? '#111827' : '#6b7280',
+                      boxShadow: activeHistoryTab === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    Todos
+                  </button>
+                  <button 
+                    onClick={() => setActiveHistoryTab('pix')}
+                    style={{ flex: 1, padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '13px',
+                      backgroundColor: activeHistoryTab === 'pix' ? '#ffffff' : 'transparent',
+                      color: activeHistoryTab === 'pix' ? '#16a34a' : '#6b7280',
+                      boxShadow: activeHistoryTab === 'pix' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    PIX Recibidos
+                  </button>
+                  <button 
+                    onClick={() => setActiveHistoryTab('sends')}
+                    style={{ flex: 1, padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '13px',
+                      backgroundColor: activeHistoryTab === 'sends' ? '#ffffff' : 'transparent',
+                      color: activeHistoryTab === 'sends' ? '#2563eb' : '#6b7280',
+                      boxShadow: activeHistoryTab === 'sends' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    Envíos
+                  </button>
+                </div>
+
+                {/* Tab Content: All */}
+                {activeHistoryTab === 'all' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
+                    {[...pixHistory.filter(p => p.status === 'paid').map(p => ({ ...p, type: 'pix' })), 
+                      ...transactions.map(t => ({ ...t, type: 'send' }))]
+                      .sort((a, b) => new Date(b.created_at || b.paid_at) - new Date(a.created_at || a.paid_at))
+                      .slice(0, 10)
+                      .map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              backgroundColor: item.type === 'pix' ? '#dcfce7' : '#dbeafe'
+                            }}>
+                              {item.type === 'pix' ? (
+                                <QrCode style={{ width: '20px', height: '20px', color: '#16a34a' }} />
+                              ) : (
+                                <Send style={{ width: '20px', height: '20px', color: '#2563eb' }} />
+                              )}
+                            </div>
+                            <div>
+                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                                {item.type === 'pix' ? 'Recarga PIX' : (item.client_name || 'Envío')}
+                              </p>
+                              <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                                {item.type === 'pix' ? (item.client_name || 'Cliente') : item.beneficiary_name}
+                              </p>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '700', margin: 0, color: item.type === 'pix' ? '#16a34a' : '#111827' }}>
+                              {item.type === 'pix' ? `+R$ ${item.amount_ris?.toFixed(2)}` : `${item.amount_ves?.toFixed(2)} VES`}
+                            </p>
+                            <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>
+                              {new Date(item.created_at || item.paid_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{tx.amount_ves?.toFixed(2)} VES</p>
-                          <span style={{ 
-                            display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500',
-                            backgroundColor: tx.status === 'completed' ? '#dcfce7' : tx.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                            color: tx.status === 'completed' ? '#16a34a' : tx.status === 'pending' ? '#d97706' : '#dc2626'
-                          }}>
-                            {tx.status === 'completed' ? <CheckCircle style={{ width: '14px', height: '14px' }} /> : 
-                             tx.status === 'pending' ? <Clock style={{ width: '14px', height: '14px' }} /> :
-                             <XCircle style={{ width: '14px', height: '14px' }} />}
-                            {tx.status === 'pending' ? 'Pendiente' : tx.status === 'completed' ? 'Completado' : 'Rechazado'}
-                          </span>
-                        </div>
-                      </div>
                     ))}
+                    {pixHistory.filter(p => p.status === 'paid').length === 0 && transactions.length === 0 && (
+                      <p style={{ color: '#6b7280', textAlign: 'center', padding: '24px' }}>No hay operaciones</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab Content: PIX Received */}
+                {activeHistoryTab === 'pix' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
+                    {pixHistory.length === 0 ? (
+                      <p style={{ color: '#6b7280', textAlign: 'center', padding: '24px' }}>No hay pagos PIX</p>
+                    ) : (
+                      pixHistory.slice(0, 10).map((pix, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px', backgroundColor: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <QrCode style={{ width: '20px', height: '20px', color: '#16a34a' }} />
+                            </div>
+                            <div>
+                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                                {pix.client_name || 'Pago PIX'}
+                              </p>
+                              <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                                ID: {pix.payment_id?.slice(-8)}
+                              </p>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontSize: '16px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
+                              +R$ {pix.amount_ris?.toFixed(2)}
+                            </p>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '500',
+                              backgroundColor: pix.status === 'paid' ? '#dcfce7' : pix.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                              color: pix.status === 'paid' ? '#16a34a' : pix.status === 'pending' ? '#d97706' : '#dc2626'
+                            }}>
+                              {pix.status === 'paid' ? <CheckCircle style={{ width: '12px', height: '12px' }} /> : <Clock style={{ width: '12px', height: '12px' }} />}
+                              {pix.status === 'paid' ? 'Confirmado' : pix.status === 'pending' ? 'Pendiente' : 'Expirado'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Tab Content: Sends */}
+                {activeHistoryTab === 'sends' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
+                    {transactions.length === 0 ? (
+                      <p style={{ color: '#6b7280', textAlign: 'center', padding: '24px' }}>No hay envíos</p>
+                    ) : (
+                      transactions.slice(0, 10).map((tx) => (
+                        <div key={tx.transaction_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px', backgroundColor: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              backgroundColor: tx.payment_type === 'pago_movil' ? '#dbeafe' : '#fef3c7'
+                            }}>
+                              {tx.payment_type === 'pago_movil' ? (
+                                <Phone style={{ width: '20px', height: '20px', color: '#2563eb' }} />
+                              ) : (
+                                <Building2 style={{ width: '20px', height: '20px', color: '#d97706' }} />
+                              )}
+                            </div>
+                            <div>
+                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{tx.client_name || 'Cliente'}</p>
+                              <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{tx.beneficiary_name}</p>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '700', color: '#111827', margin: 0 }}>{tx.amount_ves?.toFixed(2)} VES</p>
+                            <span style={{ 
+                              display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '500',
+                              backgroundColor: tx.status === 'completed' ? '#dcfce7' : tx.status === 'pending' ? '#fef3c7' : '#fee2e2',
+                              color: tx.status === 'completed' ? '#16a34a' : tx.status === 'pending' ? '#d97706' : '#dc2626'
+                            }}>
+                              {tx.status === 'completed' ? <CheckCircle style={{ width: '12px', height: '12px' }} /> : 
+                               tx.status === 'pending' ? <Clock style={{ width: '12px', height: '12px' }} /> :
+                               <XCircle style={{ width: '12px', height: '12px' }} />}
+                              {tx.status === 'pending' ? 'Pendiente' : tx.status === 'completed' ? 'Completado' : 'Rechazado'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
