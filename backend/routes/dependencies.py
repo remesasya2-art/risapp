@@ -12,49 +12,55 @@ from config import SECRET_KEY
 logger = logging.getLogger(__name__)
 
 async def get_current_user(request: Request, authorization: Optional[str] = Header(None)) -> Optional[User]:
-    """Get current user from session token"""
-    token = None
+    """Get current user from session token (cookie or header)"""
+    session_token = None
     
-    # Try Authorization header first
-    if authorization:
-        if authorization.startswith("Bearer "):
-            token = authorization[7:]
-        else:
-            token = authorization
+    # Check cookie first
+    session_token = request.cookies.get('session_token')
+    
+    # Fallback to Authorization header
+    if not session_token and authorization:
+        if authorization.startswith('Bearer '):
+            session_token = authorization[7:]
     
     # Fall back to X-Session-ID header
-    if not token:
-        token = request.headers.get("X-Session-ID")
+    if not session_token:
+        session_token = request.headers.get("X-Session-ID")
     
-    if not token:
-        raise HTTPException(status_code=401, detail="No authentication token provided")
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Find session
-    session = await db.sessions.find_one({
-        "session_token": token,
-        "is_active": True
-    })
+    # Find session (use user_sessions collection like server.py)
+    session = await db.user_sessions.find_one(
+        {"session_token": session_token},
+        {"_id": 0}
+    )
     
     if not session:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     
     # Check expiration
-    if session.get("expires_at") and session["expires_at"] < datetime.now(timezone.utc):
-        await db.sessions.update_one(
-            {"session_token": token},
-            {"$set": {"is_active": False}}
-        )
-        raise HTTPException(status_code=401, detail="Session expired")
+    expires_at = session.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Session expired")
     
     # Get user
-    user = await db.users.find_one({"user_id": session["user_id"]})
+    user = await db.users.find_one(
+        {"user_id": session["user_id"]},
+        {"_id": 0}
+    )
+    
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     
     if user.get("is_deleted"):
         raise HTTPException(status_code=401, detail="Account has been deleted")
     
-    return User(**{k: v for k, v in user.items() if k != "_id"})
+    return User(**user)
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """Require admin or super_admin role"""

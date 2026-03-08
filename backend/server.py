@@ -27,6 +27,7 @@ from whatsapp_service import whatsapp_service
 from mercadopago_service import mercadopago_service
 from admin_routes import admin_router
 from web_push_service import web_push_service
+from routes.gestor_pix import router as gestor_pix_router, webhook_router
 import asyncio
 import resend
 
@@ -6004,6 +6005,8 @@ async def gestor_recharge_terceros(request: GestorRechargeTercerosRequest, curre
 # Include the routers in the main app (must be after all endpoints are defined)
 app.include_router(api_router)
 app.include_router(admin_router)
+app.include_router(gestor_pix_router, prefix="/api")
+app.include_router(webhook_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_db_client():

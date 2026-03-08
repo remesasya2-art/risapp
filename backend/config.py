@@ -37,4 +37,4 @@ VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_CLAIMS_EMAIL", "admin@example.com")
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 
 # App URLs
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://pago-movil-app.preview.emergentagent.com")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://agent-payment-hub-1.preview.emergentagent.com")

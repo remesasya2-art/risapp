@@ -10,7 +10,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pago-movil-app.preview.emergentagent.com/api')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://agent-payment-hub-1.preview.emergentagent.com/api')
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "marshalljulio46@gmail.com"
