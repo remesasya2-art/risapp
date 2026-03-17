@@ -38,7 +38,7 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        await db.sessions.update_one(
+        await db.user_sessions.update_one(
             {"session_token": token},
             {"$set": {"is_active": False}}
         )
@@ -167,7 +167,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
         "is_active": True
     }
-    await db.sessions.insert_one(session)
+    await db.user_sessions.insert_one(session)
     
     logger.info(f"User {email_lower} registered successfully")
     
@@ -240,7 +240,7 @@ async def login_with_password(request: LoginWithPasswordRequest):
         "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
         "is_active": True
     }
-    await db.sessions.insert_one(session)
+    await db.user_sessions.insert_one(session)
     
     # Update last login
     await db.users.update_one(

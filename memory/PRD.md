@@ -327,5 +327,19 @@
   - Tab "Envíos": Solo transacciones de envío con tipo de pago e icono
 - **UI Simplificada:** Panel Gestor muestra solo Saldo Terceros (no saldo personal)
 
+### 2026-03-17 - Limpieza de server.py
+- **Refactorización completada:** server.py reducido de 6027 a 578 líneas (90% reducción)
+- **Estructura modular:** Los endpoints principales están ahora en `/routes/`:
+  - `auth.py` - Autenticación (login, registro, etc.)
+  - `admin.py` - Panel de administración
+  - `gestor.py` - Panel del gestor
+  - `gestor_pix.py` - Pagos PIX de Mercado Pago
+  - `partner.py` - Panel de socios
+  - `transactions.py` - Transacciones y beneficiarios
+  - `basic.py` - Endpoints básicos (health, rate, etc.)
+- **Legacy router:** Endpoints no migrados (notificaciones, soporte, web push) siguen en server.py
+- **Corrección de colecciones:** Unificado uso de `db.user_sessions` en todos los módulos
+- **Backup:** server_old.py conservado como referencia
+
 ## Last Updated
-2026-03-08 - Historial de operaciones con tabs + Bug fix polling PIX + Envío directo
+2026-03-17 - Limpieza completa de server.py (6027 → 578 líneas)
