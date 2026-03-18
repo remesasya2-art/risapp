@@ -19,3 +19,4 @@ py-vapid==1.9.4
 pywebpush==2.3.0
 http-ece==1.2.1
 resend>=2.0.0
+stripe==11.4.1
