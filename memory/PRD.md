@@ -341,5 +341,25 @@
 - **Corrección de colecciones:** Unificado uso de `db.user_sessions` en todos los módulos
 - **Backup:** server_old.py conservado como referencia
 
+### 2026-03-18 - Integración Stripe Completada
+- **Backend:** Nuevo módulo `/routes/stripe_payments.py`:
+  - `GET /payments/stripe/packages` - Lista paquetes de recarga con bonus
+  - `POST /payments/stripe/checkout` - Crea sesión de Stripe Checkout
+  - `GET /payments/stripe/status/{session_id}` - Verifica estado del pago
+  - `GET /payments/stripe/history` - Historial de pagos con tarjeta
+  - `POST /webhook/stripe` - Webhook para confirmaciones automáticas
+- **Frontend:** Nueva página `/recharge/stripe` (`RechargePage.jsx`):
+  - Paquetes de recarga con bonus progresivo (0%, 5%, 10%, 15%)
+  - Toggle para elegir destino (Mi Saldo / Saldo Terceros para gestores)
+  - Redirección a Stripe Checkout real
+  - Polling de estado del pago tras retorno
+  - Pantallas de éxito/error/cargando
+- **Paquetes disponibles:**
+  - R$ 50 → R$ 50 (sin bonus)
+  - R$ 100 → R$ 105 (+5% bonus)
+  - R$ 200 → R$ 220 (+10% bonus)
+  - R$ 500 → R$ 575 (+15% bonus)
+- **Usa:** emergentintegrations library con clave de prueba de Emergent
+
 ## Last Updated
-2026-03-17 - Limpieza completa de server.py (6027 → 578 líneas)
+2026-03-18 - Integración Stripe para recargas con tarjeta completada
