@@ -1,6 +1,6 @@
 """
 Stripe Payment Routes - Handle card payments for RIS balance recharge
-Uses emergentintegrations for Stripe Checkout
+Uses official Stripe SDK for production payments
 """
 import os
 import logging
@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
 import uuid
+import stripe
 
 from database import db
 from routes.dependencies import get_current_user
@@ -17,18 +18,11 @@ from models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/stripe", tags=["stripe-payments"])
 
-# Import Stripe Checkout from emergentintegrations
-try:
-    from emergentintegrations.payments.stripe.checkout import (
-        StripeCheckout, 
-        CheckoutSessionRequest, 
-        CheckoutSessionResponse,
-        CheckoutStatusResponse
-    )
-    STRIPE_AVAILABLE = True
-except ImportError:
-    STRIPE_AVAILABLE = False
-    logger.warning("emergentintegrations not available - Stripe disabled")
+# Initialize Stripe
+STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
+if STRIPE_API_KEY:
+    stripe.api_key = STRIPE_API_KEY
+    logger.info("Stripe initialized with API key")
 
 # Fixed recharge packages (amounts in BRL - same as RIS)
 RECHARGE_PACKAGES = {
@@ -41,25 +35,11 @@ RECHARGE_PACKAGES = {
 class CreateCheckoutRequest(BaseModel):
     package_id: str
     origin_url: str
-    for_terceros: bool = False  # If true, add to balance_ris_terceros
+    for_terceros: bool = False
 
 class CheckoutResponse(BaseModel):
     checkout_url: str
     session_id: str
-
-def get_stripe_checkout(request: Request) -> StripeCheckout:
-    """Get Stripe Checkout instance"""
-    if not STRIPE_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Stripe not available")
-    
-    api_key = os.getenv("STRIPE_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Stripe not configured")
-    
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    
-    return StripeCheckout(api_key=api_key, webhook_url=webhook_url)
 
 @router.get("/packages")
 async def get_recharge_packages():
@@ -84,6 +64,9 @@ async def create_checkout_session(
     current_user: User = Depends(get_current_user)
 ):
     """Create Stripe checkout session for recharge"""
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe no configurado")
+    
     # Validate package
     if data.package_id not in RECHARGE_PACKAGES:
         raise HTTPException(status_code=400, detail="Paquete inválido")
@@ -93,44 +76,47 @@ async def create_checkout_session(
     bonus_percent = package["bonus"]
     total_ris = amount * (1 + bonus_percent / 100)
     
-    # Get Stripe checkout
-    stripe_checkout = get_stripe_checkout(request)
-    
-    # Build URLs from origin
-    success_url = f"{data.origin_url}/recharge/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{data.origin_url}/recharge"
-    
     # Create unique transaction ID
     transaction_id = f"stripe_{uuid.uuid4().hex[:12]}"
     
-    # Metadata for tracking
-    metadata = {
-        "user_id": current_user.user_id,
-        "transaction_id": transaction_id,
-        "package_id": data.package_id,
-        "amount_brl": str(amount),
-        "bonus_percent": str(bonus_percent),
-        "total_ris": str(total_ris),
-        "for_terceros": str(data.for_terceros).lower()
-    }
+    # Build URLs
+    success_url = f"{data.origin_url}/recharge/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/recharge/stripe"
     
     try:
-        # Create checkout session request
-        checkout_request = CheckoutSessionRequest(
-            amount=float(amount),
-            currency="brl",
+        # Create Stripe Checkout Session
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "brl",
+                    "product_data": {
+                        "name": f"Recarga RIS - {package['name']}",
+                        "description": f"Recarga de saldo RIS App. Recibes R$ {total_ris:.2f}"
+                    },
+                    "unit_amount": int(amount * 100),  # Stripe uses cents
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata=metadata
+            customer_email=current_user.email,
+            metadata={
+                "user_id": current_user.user_id,
+                "transaction_id": transaction_id,
+                "package_id": data.package_id,
+                "amount_brl": str(amount),
+                "bonus_percent": str(bonus_percent),
+                "total_ris": str(total_ris),
+                "for_terceros": str(data.for_terceros).lower()
+            }
         )
         
-        # Create session
-        session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
-        
-        # Save payment transaction to DB (PENDING status)
+        # Save payment transaction to DB
         payment_record = {
             "transaction_id": transaction_id,
-            "stripe_session_id": session.session_id,
+            "stripe_session_id": session.id,
             "user_id": current_user.user_id,
             "user_email": current_user.email,
             "package_id": data.package_id,
@@ -148,12 +134,15 @@ async def create_checkout_session(
         
         return CheckoutResponse(
             checkout_url=session.url,
-            session_id=session.session_id
+            session_id=session.id
         )
         
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error de Stripe: {str(e)}")
     except Exception as e:
-        logger.error(f"Error creating Stripe checkout: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al crear sesión de pago: {str(e)}")
+        logger.error(f"Error creating checkout: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al crear sesión de pago")
 
 @router.get("/status/{session_id}")
 async def get_payment_status(
@@ -162,6 +151,9 @@ async def get_payment_status(
     current_user: User = Depends(get_current_user)
 ):
     """Check payment status and process if completed"""
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe no configurado")
+    
     # Find the transaction
     transaction = await db.payment_transactions.find_one({
         "stripe_session_id": session_id,
@@ -180,24 +172,21 @@ async def get_payment_status(
             "message": "Pago ya procesado"
         }
     
-    # Check with Stripe
-    stripe_checkout = get_stripe_checkout(request)
-    
     try:
-        status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
+        # Check with Stripe
+        session = stripe.checkout.Session.retrieve(session_id)
         
-        if status.payment_status == "paid":
-            # Process the payment - add balance
-            total_ris = transaction.get("total_ris", 0)
-            for_terceros = transaction.get("for_terceros", False)
-            
-            # Update user balance (only if not already processed)
+        if session.payment_status == "paid":
+            # Check if not already processed
             existing = await db.payment_transactions.find_one({
                 "stripe_session_id": session_id,
                 "payment_status": "paid"
             })
             
             if not existing:
+                total_ris = transaction.get("total_ris", 0)
+                for_terceros = transaction.get("for_terceros", False)
+                
                 # Update balance
                 balance_field = "balance_ris_terceros" if for_terceros else "balance_ris"
                 await db.users.update_one(
@@ -212,6 +201,7 @@ async def get_payment_status(
                         "$set": {
                             "payment_status": "paid",
                             "status": "completed",
+                            "stripe_payment_intent": session.payment_intent,
                             "completed_at": datetime.now(timezone.utc)
                         }
                     }
@@ -221,7 +211,7 @@ async def get_payment_status(
                 await db.notifications.insert_one({
                     "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
                     "user_id": current_user.user_id,
-                    "title": "💳 Recarga Exitosa",
+                    "title": "Recarga Exitosa",
                     "message": f"Se han añadido R$ {total_ris:.2f} a tu {'saldo de terceros' if for_terceros else 'saldo'}.",
                     "type": "payment_success",
                     "read": False,
@@ -233,11 +223,11 @@ async def get_payment_status(
             return {
                 "status": "completed",
                 "payment_status": "paid",
-                "amount_ris": total_ris,
+                "amount_ris": transaction.get("total_ris"),
                 "message": "¡Pago exitoso! Tu saldo ha sido actualizado."
             }
         
-        elif status.status == "expired":
+        elif session.status == "expired":
             await db.payment_transactions.update_one(
                 {"stripe_session_id": session_id},
                 {"$set": {"status": "expired", "payment_status": "expired"}}
@@ -251,12 +241,12 @@ async def get_payment_status(
         else:
             return {
                 "status": "pending",
-                "payment_status": status.payment_status,
+                "payment_status": session.payment_status,
                 "message": "Pago en proceso..."
             }
             
-    except Exception as e:
-        logger.error(f"Error checking Stripe status: {e}")
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error checking status: {e}")
         return {
             "status": "error",
             "payment_status": "unknown",
@@ -281,53 +271,64 @@ webhook_router = APIRouter(prefix="/webhook", tags=["webhooks"])
 async def stripe_webhook(request: Request):
     """Handle Stripe webhooks"""
     try:
-        body = await request.body()
-        signature = request.headers.get("Stripe-Signature")
+        payload = await request.body()
+        sig_header = request.headers.get("Stripe-Signature")
+        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
         
-        api_key = os.getenv("STRIPE_API_KEY")
-        if not api_key:
-            return {"received": True}
+        # If webhook secret configured, verify signature
+        if webhook_secret and sig_header:
+            try:
+                event = stripe.Webhook.construct_event(
+                    payload, sig_header, webhook_secret
+                )
+            except stripe.error.SignatureVerificationError:
+                logger.warning("Invalid Stripe webhook signature")
+                raise HTTPException(status_code=400, detail="Invalid signature")
+        else:
+            # Parse without verification
+            import json
+            event = json.loads(payload)
         
-        host_url = str(request.base_url).rstrip('/')
-        webhook_url = f"{host_url}/api/webhook/stripe"
-        stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
+        event_type = event.get("type") if isinstance(event, dict) else event.type
+        logger.info(f"Stripe webhook received: {event_type}")
         
-        event = await stripe_checkout.handle_webhook(body, signature)
-        
-        logger.info(f"Stripe webhook received: {event.event_type}")
-        
-        # Process payment success
-        if event.payment_status == "paid" and event.session_id:
-            transaction = await db.payment_transactions.find_one({
-                "stripe_session_id": event.session_id,
-                "payment_status": {"$ne": "paid"}
-            })
+        # Handle checkout.session.completed
+        if event_type == "checkout.session.completed":
+            session = event.get("data", {}).get("object", {}) if isinstance(event, dict) else event.data.object
+            session_id = session.get("id") if isinstance(session, dict) else session.id
+            payment_status = session.get("payment_status") if isinstance(session, dict) else session.payment_status
             
-            if transaction:
-                total_ris = transaction.get("total_ris", 0)
-                user_id = transaction.get("user_id")
-                for_terceros = transaction.get("for_terceros", False)
+            if payment_status == "paid" and session_id:
+                transaction = await db.payment_transactions.find_one({
+                    "stripe_session_id": session_id,
+                    "payment_status": {"$ne": "paid"}
+                })
                 
-                # Update balance
-                balance_field = "balance_ris_terceros" if for_terceros else "balance_ris"
-                await db.users.update_one(
-                    {"user_id": user_id},
-                    {"$inc": {balance_field: total_ris}}
-                )
-                
-                # Update transaction
-                await db.payment_transactions.update_one(
-                    {"stripe_session_id": event.session_id},
-                    {
-                        "$set": {
-                            "payment_status": "paid",
-                            "status": "completed",
-                            "completed_at": datetime.now(timezone.utc)
+                if transaction:
+                    total_ris = transaction.get("total_ris", 0)
+                    user_id = transaction.get("user_id")
+                    for_terceros = transaction.get("for_terceros", False)
+                    
+                    # Update balance
+                    balance_field = "balance_ris_terceros" if for_terceros else "balance_ris"
+                    await db.users.update_one(
+                        {"user_id": user_id},
+                        {"$inc": {balance_field: total_ris}}
+                    )
+                    
+                    # Update transaction
+                    await db.payment_transactions.update_one(
+                        {"stripe_session_id": session_id},
+                        {
+                            "$set": {
+                                "payment_status": "paid",
+                                "status": "completed",
+                                "completed_at": datetime.now(timezone.utc)
+                            }
                         }
-                    }
-                )
-                
-                logger.info(f"Webhook processed payment: {event.session_id}")
+                    )
+                    
+                    logger.info(f"Webhook: Payment {session_id} completed for user {user_id}")
         
         return {"received": True}
         
