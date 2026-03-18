@@ -16,6 +16,7 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
+from services.email_notifications import notify_pix_received, notify_recharge_success
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/gestor/pix", tags=["gestor-pix"])
@@ -220,7 +221,7 @@ async def process_pix_confirmation(payment_id: str, gestor_id: str):
         {"$inc": {"balance_ris_terceros": amount_ris}}
     )
     
-    # Notify gestor
+    # Notify gestor (in-app)
     await create_notification(
         user_id=gestor_id,
         title="💰 Pago PIX Confirmado",
@@ -228,6 +229,19 @@ async def process_pix_confirmation(payment_id: str, gestor_id: str):
         notification_type="pix_received",
         data={"payment_id": payment_id, "amount": amount_ris}
     )
+    
+    # Send email notification
+    try:
+        gestor = await db.users.find_one({"user_id": gestor_id}, {"_id": 0})
+        if gestor and gestor.get("email"):
+            await notify_pix_received(
+                email=gestor["email"],
+                user_name=gestor.get("name", "Gestor"),
+                amount=amount_ris,
+                client_name=payment.get("client_name", "Cliente")
+            )
+    except Exception as e:
+        logger.warning(f"Failed to send PIX email notification: {e}")
     
     logger.info(f"PIX payment {payment_id} confirmed, +{amount_ris} RIS to gestor {gestor_id}")
     return True

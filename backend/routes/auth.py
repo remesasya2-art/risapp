@@ -19,6 +19,7 @@ from models.requests import (
 )
 from routes.dependencies import get_current_user
 from services.email import send_verification_email, send_password_reset_email
+from services.email_notifications import notify_login, notify_password_change
 from utils.security import hash_password, verify_password, validate_password, generate_temp_password
 
 logger = logging.getLogger(__name__)
@@ -250,6 +251,16 @@ async def login_with_password(request: LoginWithPasswordRequest):
     
     logger.info(f"User {user['user_id']} logged in with password")
     
+    # Send login notification email
+    try:
+        await notify_login(
+            email=user["email"],
+            user_name=user.get("name", "Usuario"),
+            device="Web Browser"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send login notification: {e}")
+    
     # Build user response
     user_response = {k: v for k, v in user.items() if k not in ["_id", "password_hash"]}
     
@@ -362,6 +373,15 @@ async def change_password(request: ChangePasswordRequest, current_user: User = D
             }
         }
     )
+    
+    # Send password change notification
+    try:
+        await notify_password_change(
+            email=user["email"],
+            user_name=user.get("name", "Usuario")
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send password change notification: {e}")
     
     return {"message": "Contraseña cambiada exitosamente"}
 

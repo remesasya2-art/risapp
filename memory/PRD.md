@@ -361,5 +361,19 @@
   - R$ 500 → R$ 575 (+15% bonus)
 - **Usa:** emergentintegrations library con clave de prueba de Emergent
 
+### 2026-03-18 - Notificaciones por Email Obligatorias
+- **Servicio creado:** `/services/email_notifications.py`
+- **Eventos notificados por email:**
+  - Nuevo inicio de sesión (con fecha, dispositivo)
+  - Cambio de contraseña
+  - Recarga exitosa (Stripe, PIX)
+  - Pago PIX recibido (para gestores)
+  - Retiro iniciado / completado
+  - Transferencia enviada
+  - Actividad sospechosa
+- **Template HTML profesional** con branding RIS App
+- **Integración con Resend** usando las credenciales existentes
+- **Notificaciones obligatorias** - no se pueden desactivar (seguridad)
+
 ## Last Updated
-2026-03-18 - Integración Stripe para recargas con tarjeta completada
+2026-03-18 - Notificaciones por email obligatorias para eventos de seguridad

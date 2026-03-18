@@ -14,6 +14,7 @@ import stripe
 from database import db
 from routes.dependencies import get_current_user
 from models.user import User
+from services.email_notifications import notify_recharge_success
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/stripe", tags=["stripe-payments"])
@@ -217,6 +218,18 @@ async def get_payment_status(
                     "read": False,
                     "created_at": datetime.now(timezone.utc)
                 })
+                
+                # Send email notification
+                try:
+                    await notify_recharge_success(
+                        email=current_user.email,
+                        user_name=current_user.name or "Usuario",
+                        amount=total_ris,
+                        method="Tarjeta (Stripe)",
+                        balance_type="terceros" if for_terceros else "principal"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send recharge email: {e}")
                 
                 logger.info(f"Stripe payment completed: {session_id} - +{total_ris} RIS to {current_user.user_id}")
             
