@@ -29,11 +29,18 @@ async def get_current_rate():
     """Get current exchange rate"""
     rate = await db.rates.find_one(sort=[("updated_at", -1)])
     if not rate:
-        return {"ris_to_ves": 92.0, "ves_to_ris": 0.0109}
+        return {
+            "ris_to_ves": 92.0, 
+            "ves_to_ris": 0.0109,
+            "usd_to_ris": 5.5,
+            "ris_to_usd": 0.182
+        }
     
     return {
         "ris_to_ves": rate.get("ris_to_ves", 92.0),
         "ves_to_ris": rate.get("ves_to_ris", 0.0109),
+        "usd_to_ris": rate.get("usd_to_ris", 5.5),
+        "ris_to_usd": rate.get("ris_to_usd", 0.182),
         "updated_at": rate.get("updated_at")
     }
 

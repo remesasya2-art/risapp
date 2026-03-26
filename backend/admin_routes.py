@@ -178,6 +178,7 @@ class VerificationDecision(BaseModel):
 
 class UpdateRateRequest(BaseModel):
     ris_to_ves: float
+    usd_to_ris: Optional[float] = None
 
 class AdjustBalanceRequest(BaseModel):
     amount: float
@@ -1054,14 +1055,31 @@ async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = De
     if not has_permission(admin_user, "settings.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    await db.exchange_rates.delete_many({})
+    # Build the rate update
     new_rate = {
         "ris_to_ves": request.ris_to_ves,
+        "ves_to_ris": 1 / request.ris_to_ves if request.ris_to_ves > 0 else 0,
         "updated_at": datetime.now(timezone.utc),
         "updated_by": admin_user.get('user_id')
     }
+    
+    # Add USD rate if provided
+    if request.usd_to_ris is not None:
+        new_rate["usd_to_ris"] = request.usd_to_ris
+        new_rate["ris_to_usd"] = 1 / request.usd_to_ris if request.usd_to_ris > 0 else 0
+    
+    # Update rates collection
+    await db.rates.delete_many({})
+    await db.rates.insert_one(new_rate)
+    
+    # Also update exchange_rates for backward compatibility
+    await db.exchange_rates.delete_many({})
     await db.exchange_rates.insert_one(new_rate)
     
-    logger.info(f"Exchange rate updated to {request.ris_to_ves} by {admin_user.get('email')}")
+    logger.info(f"Exchange rate updated: RIS/VES={request.ris_to_ves}, USD/RIS={request.usd_to_ris} by {admin_user.get('email')}")
     
-    return {"message": f"Tasa actualizada a {request.ris_to_ves} VES por RIS"}
+    return {
+        "message": "Tasas actualizadas exitosamente",
+        "ris_to_ves": request.ris_to_ves,
+        "usd_to_ris": request.usd_to_ris
+    }
