@@ -47,7 +47,6 @@ export default function AdminPanel() {
   const [proofImages, setProofImages] = useState([]);  // Array for multiple images
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
-  const [newRateUsdToVes, setNewRateUsdToVes] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [userHistory, setUserHistory] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -247,20 +246,6 @@ export default function AdminPanel() {
       toast.success('Tasa VES → RIS actualizada'); 
       refreshRates(); 
       setNewRateVesToRis('');
-    } 
-    catch { toast.error('Error al actualizar tasa'); }
-  };
-
-  const handleUpdateRateUsdToVes = async () => {
-    if (!newRateUsdToVes || parseFloat(newRateUsdToVes) <= 0) { toast.error('Ingresa una tasa válida'); return; }
-    try { 
-      await api.post('/settings/rate', { 
-        ris_to_ves: rates?.ris_to_ves || 0,
-        usd_to_ves: parseFloat(newRateUsdToVes)
-      }); 
-      toast.success('Tasa USD → VES actualizada'); 
-      refreshRates(); 
-      setNewRateUsdToVes('');
     } 
     catch { toast.error('Error al actualizar tasa'); }
   };
@@ -1042,12 +1027,12 @@ export default function AdminPanel() {
 
         {/* Rates Tab */}
         {activeTab === 'rates' && (
-          <div style={{ maxWidth: '900px' }}>
+          <div style={{ maxWidth: '700px' }}>
             <div style={{ ...cardStyle, padding: '24px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>Configurar Tasas de Cambio</h3>
               
               {/* Current Rates Display */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                 <div style={{ padding: '20px', backgroundColor: '#dbeafe', borderRadius: '14px' }}>
                   <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>ENVÍOS (RIS → VES)</p>
                   <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {rates?.ris_to_ves?.toFixed(2) || '0.00'} VES</p>
@@ -1058,18 +1043,13 @@ export default function AdminPanel() {
                   <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>{rates?.ves_to_ris?.toFixed(2) || '0.00'} VES = 1 RIS</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para recargas con Bolívares</p>
                 </div>
-                <div style={{ padding: '20px', backgroundColor: '#fef3c7', borderRadius: '14px' }}>
-                  <p style={{ fontSize: '12px', color: '#d97706', margin: '0 0 4px 0', fontWeight: '600' }}>💵 ENVÍOS USA (USD → VES)</p>
-                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>$1 USD = {rates?.usd_to_ves?.toFixed(2) || '0.00'} VES</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para envíos desde USA</p>
-                </div>
               </div>
 
               {/* Update Rates Form - Independent */}
               <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '24px' }}>
                 <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#374151', margin: '0 0 16px 0' }}>Actualizar Tasas</h4>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                   {/* RIS → VES Rate */}
                   <div style={{ padding: '20px', backgroundColor: '#f0f9ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#2563eb', marginBottom: '12px' }}>
@@ -1113,29 +1093,6 @@ export default function AdminPanel() {
                       data-testid="update-rate-ves-button"
                     >
                       Actualizar VES → RIS
-                    </button>
-                  </div>
-
-                  {/* USD → VES Rate */}
-                  <div style={{ padding: '20px', backgroundColor: '#fffbeb', borderRadius: '14px', border: '1px solid #fde68a' }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#d97706', marginBottom: '12px' }}>
-                      💵 USD → VES (Envíos USA)
-                    </label>
-                    <input 
-                      type="number" 
-                      value={newRateUsdToVes} 
-                      onChange={(e) => setNewRateUsdToVes(e.target.value)}
-                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
-                      placeholder={rates?.usd_to_ves?.toString() || '0'} 
-                      data-testid="new-rate-usd-input" 
-                    />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>VES por cada $1 USD enviado</p>
-                    <button 
-                      onClick={handleUpdateRateUsdToVes} 
-                      style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#d97706' }} 
-                      data-testid="update-rate-usd-button"
-                    >
-                      Actualizar USD → VES
                     </button>
                   </div>
                 </div>

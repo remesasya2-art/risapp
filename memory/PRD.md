@@ -375,25 +375,16 @@
 - **Integración con Resend** usando las credenciales existentes
 - **Notificaciones obligatorias** - no se pueden desactivar (seguridad)
 
-### 2026-03-27 - Integración Stripe USD para Clientes USA
-- **Backend:** Refactorizado `/routes/stripe_payments.py`:
-  - **CAMBIO IMPORTANTE:** El flujo ahora es 1:1 - Usuario paga $X USD, recibe $X USD en su cartera
-  - Sin paquetes predefinidos - el usuario ingresa el monto que desea recargar ($5-$1000)
-  - La tasa de cambio aplica solo cuando el usuario ENVÍA dinero a Venezuela
-- **Admin Panel:** Tercera columna ahora es **USD → VES** (para envíos desde USA):
-  - Visualización: "$1 USD = X.XX VES - Tasa para envíos desde USA"
-  - Input independiente para actualizar tasa USD→VES
-- **Frontend:** Actualizado `RechargePage.jsx`:
-  - Título "💳 Recargar con Tarjeta"
-  - Saldo mostrado en USD
-  - Input libre para el monto + botones rápidos ($10, $25, $50, $100)
-  - Mensaje: "Pagas $X USD, recibes $X USD en tu cartera"
-  - Mínimo $5 USD, Máximo $1000 USD
-- **Flujo de tasas:**
-  - **RIS → VES:** Para envíos de usuarios con saldo RIS a Venezuela
-  - **VES → RIS:** Para recargas con Bolívares
-  - **USD → VES:** Para cuando usuarios USA envían dinero a Venezuela (la tasa importante)
+### 2026-03-27 - Eliminación de Integración Stripe
+- **Eliminado:** Todo el código relacionado con Stripe
+  - `/app/backend/routes/stripe_payments.py` - Backend eliminado
+  - `/app/frontend/src/pages/RechargePage.jsx` - Frontend eliminado
+  - Rutas `/recharge/stripe` y `/recharge/success` - Eliminadas de App.jsx
+  - Columna "USD → VES" - Eliminada del Admin Panel (pestaña Tasas)
+  - `stripe==11.4.1` - Eliminado de requirements.txt
+  - Referencias en `routes/__init__.py` - Eliminadas
+- **Admin Panel:** Ahora solo muestra 2 tasas (RIS→VES y VES→RIS)
 
 ## Last Updated
-2026-03-27 - Flujo Stripe simplificado a 1:1 (USD entrada = USD cartera)
+2026-03-27 - Eliminación completa de integración Stripe
 
