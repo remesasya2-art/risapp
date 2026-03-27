@@ -178,7 +178,7 @@ class VerificationDecision(BaseModel):
 
 class UpdateRateRequest(BaseModel):
     ris_to_ves: float
-    usd_to_ris: Optional[float] = None
+    usd_to_ves: Optional[float] = None
 
 class AdjustBalanceRequest(BaseModel):
     amount: float
@@ -1063,10 +1063,10 @@ async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = De
         "updated_by": admin_user.get('user_id')
     }
     
-    # Add USD rate if provided
-    if request.usd_to_ris is not None:
-        new_rate["usd_to_ris"] = request.usd_to_ris
-        new_rate["ris_to_usd"] = 1 / request.usd_to_ris if request.usd_to_ris > 0 else 0
+    # Add USD to VES rate if provided (for sending from USA)
+    if request.usd_to_ves is not None:
+        new_rate["usd_to_ves"] = request.usd_to_ves
+        new_rate["ves_to_usd"] = 1 / request.usd_to_ves if request.usd_to_ves > 0 else 0
     
     # Update rates collection
     await db.rates.delete_many({})
@@ -1076,10 +1076,10 @@ async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = De
     await db.exchange_rates.delete_many({})
     await db.exchange_rates.insert_one(new_rate)
     
-    logger.info(f"Exchange rate updated: RIS/VES={request.ris_to_ves}, USD/RIS={request.usd_to_ris} by {admin_user.get('email')}")
+    logger.info(f"Exchange rate updated: RIS/VES={request.ris_to_ves}, USD/VES={request.usd_to_ves} by {admin_user.get('email')}")
     
     return {
         "message": "Tasas actualizadas exitosamente",
         "ris_to_ves": request.ris_to_ves,
-        "usd_to_ris": request.usd_to_ris
+        "usd_to_ves": request.usd_to_ves
     }

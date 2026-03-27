@@ -47,7 +47,7 @@ export default function AdminPanel() {
   const [proofImages, setProofImages] = useState([]);  // Array for multiple images
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
-  const [newRateUsdToRis, setNewRateUsdToRis] = useState('');
+  const [newRateUsdToVes, setNewRateUsdToVes] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [userHistory, setUserHistory] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -251,16 +251,16 @@ export default function AdminPanel() {
     catch { toast.error('Error al actualizar tasa'); }
   };
 
-  const handleUpdateRateUsdToRis = async () => {
-    if (!newRateUsdToRis || parseFloat(newRateUsdToRis) <= 0) { toast.error('Ingresa una tasa válida'); return; }
+  const handleUpdateRateUsdToVes = async () => {
+    if (!newRateUsdToVes || parseFloat(newRateUsdToVes) <= 0) { toast.error('Ingresa una tasa válida'); return; }
     try { 
       await api.post('/settings/rate', { 
         ris_to_ves: rates?.ris_to_ves || 0,
-        usd_to_ris: parseFloat(newRateUsdToRis)
+        usd_to_ves: parseFloat(newRateUsdToVes)
       }); 
-      toast.success('Tasa USD → RIS actualizada'); 
+      toast.success('Tasa USD → VES actualizada'); 
       refreshRates(); 
-      setNewRateUsdToRis('');
+      setNewRateUsdToVes('');
     } 
     catch { toast.error('Error al actualizar tasa'); }
   };
@@ -1059,9 +1059,9 @@ export default function AdminPanel() {
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para recargas con Bolívares</p>
                 </div>
                 <div style={{ padding: '20px', backgroundColor: '#fef3c7', borderRadius: '14px' }}>
-                  <p style={{ fontSize: '12px', color: '#d97706', margin: '0 0 4px 0', fontWeight: '600' }}>💵 RECARGAS USA (USD → RIS)</p>
-                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>$1 USD = {rates?.usd_to_ris?.toFixed(2) || '5.50'} RIS</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para recargas con tarjeta (Stripe)</p>
+                  <p style={{ fontSize: '12px', color: '#d97706', margin: '0 0 4px 0', fontWeight: '600' }}>💵 ENVÍOS USA (USD → VES)</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>$1 USD = {rates?.usd_to_ves?.toFixed(2) || '0.00'} VES</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para envíos desde USA</p>
                 </div>
               </div>
 
@@ -1116,26 +1116,26 @@ export default function AdminPanel() {
                     </button>
                   </div>
 
-                  {/* USD → RIS Rate */}
+                  {/* USD → VES Rate */}
                   <div style={{ padding: '20px', backgroundColor: '#fffbeb', borderRadius: '14px', border: '1px solid #fde68a' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#d97706', marginBottom: '12px' }}>
-                      💵 USD → RIS (Stripe USA)
+                      💵 USD → VES (Envíos USA)
                     </label>
                     <input 
                       type="number" 
-                      value={newRateUsdToRis} 
-                      onChange={(e) => setNewRateUsdToRis(e.target.value)}
+                      value={newRateUsdToVes} 
+                      onChange={(e) => setNewRateUsdToVes(e.target.value)}
                       style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
-                      placeholder={rates?.usd_to_ris?.toString() || '5.5'} 
+                      placeholder={rates?.usd_to_ves?.toString() || '0'} 
                       data-testid="new-rate-usd-input" 
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>RIS por cada $1 USD</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>VES por cada $1 USD enviado</p>
                     <button 
-                      onClick={handleUpdateRateUsdToRis} 
+                      onClick={handleUpdateRateUsdToVes} 
                       style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#d97706' }} 
                       data-testid="update-rate-usd-button"
                     >
-                      Actualizar USD → RIS
+                      Actualizar USD → VES
                     </button>
                   </div>
                 </div>

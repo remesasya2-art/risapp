@@ -32,15 +32,13 @@ async def get_current_rate():
         return {
             "ris_to_ves": 92.0, 
             "ves_to_ris": 0.0109,
-            "usd_to_ris": 5.5,
-            "ris_to_usd": 0.182
+            "usd_to_ves": 50.0
         }
     
     return {
         "ris_to_ves": rate.get("ris_to_ves", 92.0),
         "ves_to_ris": rate.get("ves_to_ris", 0.0109),
-        "usd_to_ris": rate.get("usd_to_ris", 5.5),
-        "ris_to_usd": rate.get("ris_to_usd", 0.182),
+        "usd_to_ves": rate.get("usd_to_ves", 50.0),
         "updated_at": rate.get("updated_at")
     }
 

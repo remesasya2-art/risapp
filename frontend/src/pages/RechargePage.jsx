@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  ArrowLeft, CreditCard, Check, Loader2, Gift, Wallet, 
-  ChevronRight, AlertCircle, CheckCircle, RefreshCw, DollarSign
+  ArrowLeft, CreditCard, Check, Loader2, Wallet, 
+  ChevronRight, AlertCircle, CheckCircle, DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -13,12 +13,11 @@ export default function RechargePage() {
   const { user, refreshUser } = useAuth();
   const [searchParams] = useSearchParams();
   
-  const [packages, setPackages] = useState([]);
-  const [currentRate, setCurrentRate] = useState(5.5);
-  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [amountUsd, setAmountUsd] = useState('');
+  const [minAmount, setMinAmount] = useState(5);
+  const [maxAmount, setMaxAmount] = useState(1000);
   const [forTerceros, setForTerceros] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadingPackages, setLoadingPackages] = useState(true);
   
   // Payment status check
   const [checkingStatus, setCheckingStatus] = useState(false);
@@ -27,21 +26,18 @@ export default function RechargePage() {
   // Check for return from Stripe
   const sessionId = searchParams.get('session_id');
 
-  // Load packages
+  // Load rate info
   useEffect(() => {
-    const loadPackages = async () => {
+    const loadInfo = async () => {
       try {
-        const res = await api.get('/payments/stripe/packages');
-        setPackages(res.data.packages || []);
-        setCurrentRate(res.data.current_rate || 5.5);
+        const res = await api.get('/payments/stripe/rate');
+        setMinAmount(res.data.min_amount || 5);
+        setMaxAmount(res.data.max_amount || 1000);
       } catch (error) {
-        console.error('Error loading packages:', error);
-        toast.error('Error al cargar paquetes');
-      } finally {
-        setLoadingPackages(false);
+        console.error('Error loading info:', error);
       }
     };
-    loadPackages();
+    loadInfo();
   }, []);
 
   // Poll payment status if returning from Stripe
@@ -70,7 +66,7 @@ export default function RechargePage() {
         setPaymentResult({
           status: 'success',
           amount_usd: res.data.amount_usd,
-          amount_ris: res.data.amount_ris,
+          total_received: res.data.total_received,
           message: res.data.message
         });
         setCheckingStatus(false);
@@ -92,8 +88,13 @@ export default function RechargePage() {
   };
 
   const handleCheckout = async () => {
-    if (!selectedPackage) {
-      toast.error('Selecciona un paquete');
+    const amount = parseFloat(amountUsd);
+    if (!amount || amount < minAmount) {
+      toast.error(`El monto mínimo es $${minAmount} USD`);
+      return;
+    }
+    if (amount > maxAmount) {
+      toast.error(`El monto máximo es $${maxAmount} USD`);
       return;
     }
 
@@ -101,7 +102,7 @@ export default function RechargePage() {
     try {
       const originUrl = window.location.origin;
       const res = await api.post('/payments/stripe/checkout', {
-        package_id: selectedPackage.id,
+        amount_usd: amount,
         origin_url: originUrl,
         for_terceros: forTerceros
       });
@@ -115,6 +116,9 @@ export default function RechargePage() {
       setLoading(false);
     }
   };
+
+  // Quick amount buttons
+  const quickAmounts = [10, 25, 50, 100];
 
   // Styles
   const pageStyle = { 
@@ -160,27 +164,21 @@ export default function RechargePage() {
             </div>
             
             <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#16a34a', margin: '0 0 8px 0' }}>
-              ¡Pago Exitoso!
+              ¡Recarga Exitosa!
             </h2>
             <p style={{ color: '#6b7280', margin: '0 0 24px 0' }}>
-              Tu recarga desde USA ha sido procesada correctamente
+              Tu recarga ha sido procesada correctamente
             </p>
             
             <div style={{ 
               backgroundColor: '#f0fdf4', borderRadius: '16px', padding: '20px', 
               marginBottom: '16px', border: '2px solid #bbf7d0' 
             }}>
-              <p style={{ color: '#6b7280', fontSize: '14px', margin: '0 0 4px 0' }}>
-                Pagaste
+              <p style={{ color: '#16a34a', fontSize: '14px', margin: '0 0 8px 0', fontWeight: '600' }}>
+                Añadido a tu cartera
               </p>
-              <p style={{ fontSize: '24px', fontWeight: '700', color: '#374151', margin: '0 0 12px 0' }}>
-                ${paymentResult.amount_usd?.toFixed(2)} USD
-              </p>
-              <p style={{ color: '#16a34a', fontSize: '14px', margin: '0 0 4px 0', fontWeight: '600' }}>
-                Añadido a tu saldo
-              </p>
-              <p style={{ fontSize: '36px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
-                +{paymentResult.amount_ris?.toFixed(2)} RIS
+              <p style={{ fontSize: '42px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
+                +${paymentResult.total_received?.toFixed(2)} USD
               </p>
             </div>
             
@@ -271,29 +269,11 @@ export default function RechargePage() {
           </button>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#ffffff', margin: 0 }}>
-              💳 Recargar con USD
+              💳 Recargar con Tarjeta
             </h1>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-              Pago seguro con tarjeta desde USA
+              Pago seguro con tarjeta de crédito/débito
             </p>
-          </div>
-        </div>
-
-        {/* Exchange Rate Info */}
-        <div style={{ 
-          ...cardStyle, 
-          marginBottom: '20px', 
-          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-          padding: '16px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <DollarSign style={{ width: '24px', height: '24px', color: '#d97706' }} />
-              <span style={{ color: '#92400e', fontSize: '14px', fontWeight: '600' }}>Tasa actual</span>
-            </div>
-            <span style={{ fontSize: '18px', fontWeight: '700', color: '#92400e' }}>
-              $1 USD = {currentRate.toFixed(2)} RIS
-            </span>
           </div>
         </div>
 
@@ -304,7 +284,7 @@ export default function RechargePage() {
             <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>Tu Saldo Actual</span>
           </div>
           <p style={{ fontSize: '32px', fontWeight: '700', color: '#ffffff', margin: 0 }}>
-            {(user?.balance_ris || 0).toFixed(2)} RIS
+            ${(user?.balance_ris || 0).toFixed(2)} USD
           </p>
         </div>
 
@@ -341,80 +321,84 @@ export default function RechargePage() {
           </div>
         )}
 
-        {/* Packages */}
+        {/* Amount Input */}
         <div style={cardStyle}>
           <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
-            Selecciona un Paquete
+            ¿Cuánto deseas recargar?
           </h3>
 
-          {loadingPackages ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <RefreshCw style={{ width: '32px', height: '32px', color: '#7c3aed', animation: 'spin 1s linear infinite' }} />
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {packages.map((pkg) => (
-                <button
-                  key={pkg.id}
-                  onClick={() => setSelectedPackage(pkg)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '16px', borderRadius: '14px', cursor: 'pointer',
-                    border: selectedPackage?.id === pkg.id ? '3px solid #7c3aed' : '2px solid #e5e7eb',
-                    backgroundColor: selectedPackage?.id === pkg.id ? '#faf5ff' : 'white',
-                    transition: 'all 0.2s'
-                  }}
-                  data-testid={`package-${pkg.id}`}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ 
-                      width: '48px', height: '48px', borderRadius: '12px',
-                      backgroundColor: selectedPackage?.id === pkg.id ? '#7c3aed' : '#fef3c7',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <DollarSign style={{ 
-                        width: '24px', height: '24px', 
-                        color: selectedPackage?.id === pkg.id ? 'white' : '#d97706' 
-                      }} />
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
-                        ${pkg.amount_usd.toFixed(0)} USD
-                      </p>
-                      {pkg.bonus_percent > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                          <Gift style={{ width: '14px', height: '14px', color: '#16a34a' }} />
-                          <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>
-                            +{pkg.bonus_percent}% bonus
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px 0' }}>Recibes</p>
-                    <p style={{ fontSize: '20px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
-                      {pkg.total_ris.toFixed(0)} RIS
-                    </p>
-                    {pkg.bonus_ris > 0 && (
-                      <p style={{ fontSize: '11px', color: '#059669', margin: '2px 0 0 0' }}>
-                        ({pkg.base_ris.toFixed(0)} + {pkg.bonus_ris.toFixed(0)} bonus)
-                      </p>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Main Input */}
+          <div style={{ 
+            display: 'flex', alignItems: 'center', gap: '12px',
+            backgroundColor: '#f9fafb', borderRadius: '16px', padding: '16px',
+            border: '2px solid #e5e7eb', marginBottom: '16px'
+          }}>
+            <DollarSign style={{ width: '28px', height: '28px', color: '#6b7280' }} />
+            <input
+              type="number"
+              value={amountUsd}
+              onChange={(e) => setAmountUsd(e.target.value)}
+              placeholder="0.00"
+              style={{
+                flex: 1,
+                fontSize: '32px',
+                fontWeight: '700',
+                color: '#111827',
+                border: 'none',
+                backgroundColor: 'transparent',
+                outline: 'none'
+              }}
+              data-testid="amount-input"
+            />
+            <span style={{ fontSize: '20px', fontWeight: '600', color: '#6b7280' }}>USD</span>
+          </div>
+
+          {/* Quick Amount Buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
+            {quickAmounts.map((amount) => (
+              <button
+                key={amount}
+                onClick={() => setAmountUsd(amount.toString())}
+                style={{
+                  padding: '14px 8px',
+                  borderRadius: '12px',
+                  border: amountUsd === amount.toString() ? '2px solid #7c3aed' : '2px solid #e5e7eb',
+                  backgroundColor: amountUsd === amount.toString() ? '#faf5ff' : 'white',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '16px',
+                  color: amountUsd === amount.toString() ? '#7c3aed' : '#374151'
+                }}
+                data-testid={`quick-amount-${amount}`}
+              >
+                ${amount}
+              </button>
+            ))}
+          </div>
+
+          {/* Info Box */}
+          <div style={{ 
+            backgroundColor: '#f0fdf4', borderRadius: '12px', padding: '14px',
+            display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px'
+          }}>
+            <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a', flexShrink: 0 }} />
+            <p style={{ fontSize: '14px', color: '#166534', margin: 0 }}>
+              Pagas <strong>${amountUsd || '0'} USD</strong>, recibes <strong>${amountUsd || '0'} USD</strong> en tu cartera
+            </p>
+          </div>
+
+          {/* Limits Info */}
+          <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginBottom: '20px' }}>
+            Mínimo: ${minAmount} USD • Máximo: ${maxAmount} USD
+          </p>
 
           {/* Checkout Button */}
           <button
             onClick={handleCheckout}
-            disabled={loading || !selectedPackage}
+            disabled={loading || !amountUsd || parseFloat(amountUsd) < minAmount}
             style={{ 
               ...btnPrimary, 
-              marginTop: '24px',
-              opacity: (loading || !selectedPackage) ? 0.5 : 1
+              opacity: (loading || !amountUsd || parseFloat(amountUsd) < minAmount) ? 0.5 : 1
             }}
             data-testid="checkout-btn"
           >
@@ -423,7 +407,7 @@ export default function RechargePage() {
             ) : (
               <>
                 <CreditCard style={{ width: '20px', height: '20px' }} />
-                Pagar con Tarjeta (USD)
+                Pagar ${amountUsd || '0'} USD
                 <ChevronRight style={{ width: '20px', height: '20px' }} />
               </>
             )}

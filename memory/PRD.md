@@ -377,26 +377,23 @@
 
 ### 2026-03-27 - Integración Stripe USD para Clientes USA
 - **Backend:** Refactorizado `/routes/stripe_payments.py`:
-  - Paquetes en USD: $10, $25, $50, $100 con bonificaciones progresivas (0%, 5%, 10%, 15%)
-  - Cálculo dinámico de RIS usando tasa `usd_to_ris` de la base de datos
-  - Checkout en USD con descripción que incluye la tasa de cambio actual
-  - Nuevo campo `amount_usd` en transacciones de pago
-- **Admin Panel:** Nueva columna en pestaña "Tasas":
-  - Visualización: "$1 USD = X.XX RIS - Tasa para recargas con tarjeta (Stripe)"
-  - Input independiente para actualizar tasa USD→RIS
-  - Botón "Actualizar USD → RIS" en color naranja (#d97706)
+  - **CAMBIO IMPORTANTE:** El flujo ahora es 1:1 - Usuario paga $X USD, recibe $X USD en su cartera
+  - Sin paquetes predefinidos - el usuario ingresa el monto que desea recargar ($5-$1000)
+  - La tasa de cambio aplica solo cuando el usuario ENVÍA dinero a Venezuela
+- **Admin Panel:** Tercera columna ahora es **USD → VES** (para envíos desde USA):
+  - Visualización: "$1 USD = X.XX VES - Tasa para envíos desde USA"
+  - Input independiente para actualizar tasa USD→VES
 - **Frontend:** Actualizado `RechargePage.jsx`:
-  - Título "💳 Recargar con USD"
-  - Banner con tasa actual de cambio USD→RIS
-  - Paquetes muestran: precio en USD, bonus %, RIS totales con desglose
-  - Pantalla de éxito muestra monto USD pagado y RIS recibidos
-- **Paquetes disponibles (con tasa 5.5):**
-  - $10 USD → 55 RIS (sin bonus)
-  - $25 USD → 144 RIS (+5% bonus: 137.5 + 6.88)
-  - $50 USD → 303 RIS (+10% bonus: 275 + 27.5)
-  - $100 USD → 633 RIS (+15% bonus: 550 + 82.5)
-- **Tests:** 17/17 tests backend + UI tests pasados
+  - Título "💳 Recargar con Tarjeta"
+  - Saldo mostrado en USD
+  - Input libre para el monto + botones rápidos ($10, $25, $50, $100)
+  - Mensaje: "Pagas $X USD, recibes $X USD en tu cartera"
+  - Mínimo $5 USD, Máximo $1000 USD
+- **Flujo de tasas:**
+  - **RIS → VES:** Para envíos de usuarios con saldo RIS a Venezuela
+  - **VES → RIS:** Para recargas con Bolívares
+  - **USD → VES:** Para cuando usuarios USA envían dinero a Venezuela (la tasa importante)
 
 ## Last Updated
-2026-03-27 - Integración Stripe USD para recargas desde Estados Unidos
+2026-03-27 - Flujo Stripe simplificado a 1:1 (USD entrada = USD cartera)
 

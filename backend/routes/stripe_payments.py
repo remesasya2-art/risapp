@@ -1,7 +1,7 @@
 """
 Stripe Payment Routes - Handle USD card payments for RIS balance recharge
 Uses official Stripe SDK for production payments
-Targeted at US customers paying in USD
+User pays X USD and receives X USD in their wallet (1:1 ratio)
 """
 import os
 import logging
@@ -26,17 +26,12 @@ if STRIPE_API_KEY:
     stripe.api_key = STRIPE_API_KEY
     logger.info("Stripe initialized with API key")
 
-# USD Recharge packages - amounts in USD
-# RIS amount calculated dynamically based on usd_to_ris rate from database
-USD_RECHARGE_PACKAGES = {
-    "usd_10": {"amount_usd": 10.0, "bonus": 0, "name": "$10 USD"},
-    "usd_25": {"amount_usd": 25.0, "bonus": 5, "name": "$25 USD (+5% bonus)"},
-    "usd_50": {"amount_usd": 50.0, "bonus": 10, "name": "$50 USD (+10% bonus)"},
-    "usd_100": {"amount_usd": 100.0, "bonus": 15, "name": "$100 USD (+15% bonus)"}
-}
+# Minimum and maximum amounts in USD
+MIN_AMOUNT_USD = 5.0
+MAX_AMOUNT_USD = 1000.0
 
 class CreateCheckoutRequest(BaseModel):
-    package_id: str
+    amount_usd: float  # User chooses the amount
     origin_url: str
     for_terceros: bool = False
 
@@ -44,39 +39,15 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
     session_id: str
 
-async def get_usd_to_ris_rate() -> float:
-    """Get current USD to RIS exchange rate from database"""
-    rate = await db.rates.find_one(sort=[("updated_at", -1)])
-    if rate and rate.get("usd_to_ris"):
-        return rate.get("usd_to_ris")
-    return 5.5  # Default rate
-
-@router.get("/packages")
-async def get_recharge_packages():
-    """Get available USD recharge packages with dynamic RIS calculation"""
-    usd_to_ris = await get_usd_to_ris_rate()
-    
-    packages = []
-    for key, pkg in USD_RECHARGE_PACKAGES.items():
-        base_ris = pkg["amount_usd"] * usd_to_ris
-        bonus_ris = base_ris * (pkg["bonus"] / 100)
-        total_ris = base_ris + bonus_ris
-        
-        packages.append({
-            "id": key,
-            "name": pkg["name"],
-            "amount_usd": pkg["amount_usd"],
-            "bonus_percent": pkg["bonus"],
-            "base_ris": round(base_ris, 2),
-            "bonus_ris": round(bonus_ris, 2),
-            "total_ris": round(total_ris, 2),
-            "exchange_rate": usd_to_ris
-        })
-    
+@router.get("/rate")
+async def get_stripe_info():
+    """Get Stripe recharge info (min/max amounts)"""
     return {
-        "packages": packages,
-        "current_rate": usd_to_ris,
-        "currency": "USD"
+        "min_amount": MIN_AMOUNT_USD,
+        "max_amount": MAX_AMOUNT_USD,
+        "currency": "USD",
+        "conversion_rate": 1.0,  # 1 USD = 1 USD (no conversion on recharge)
+        "note": "Pagas X USD, recibes X USD en tu cartera"
     }
 
 @router.post("/checkout", response_model=CheckoutResponse)
@@ -85,25 +56,19 @@ async def create_checkout_session(
     request: Request,
     current_user: User = Depends(get_current_user)
 ):
-    """Create Stripe checkout session for USD recharge"""
+    """Create Stripe checkout session - User pays X USD, receives X USD (1:1)"""
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=503, detail="Stripe no configurado")
     
-    # Validate package
-    if data.package_id not in USD_RECHARGE_PACKAGES:
-        raise HTTPException(status_code=400, detail="Paquete inválido")
+    # Validate amount
+    amount_usd = round(data.amount_usd, 2)
+    if amount_usd < MIN_AMOUNT_USD:
+        raise HTTPException(status_code=400, detail=f"El monto mínimo es ${MIN_AMOUNT_USD} USD")
+    if amount_usd > MAX_AMOUNT_USD:
+        raise HTTPException(status_code=400, detail=f"El monto máximo es ${MAX_AMOUNT_USD} USD")
     
-    package = USD_RECHARGE_PACKAGES[data.package_id]
-    amount_usd = package["amount_usd"]
-    bonus_percent = package["bonus"]
-    
-    # Get current exchange rate
-    usd_to_ris = await get_usd_to_ris_rate()
-    
-    # Calculate RIS amount
-    base_ris = amount_usd * usd_to_ris
-    bonus_ris = base_ris * (bonus_percent / 100)
-    total_ris = base_ris + bonus_ris
+    # 1:1 conversion - user pays X USD, receives X USD
+    total_received = amount_usd
     
     # Create unique transaction ID
     transaction_id = f"stripe_usd_{uuid.uuid4().hex[:12]}"
@@ -118,10 +83,10 @@ async def create_checkout_session(
             payment_method_types=["card"],
             line_items=[{
                 "price_data": {
-                    "currency": "usd",  # Changed from BRL to USD
+                    "currency": "usd",
                     "product_data": {
-                        "name": f"Recarga RIS - {package['name']}",
-                        "description": f"Recarga desde USA. Recibirás {total_ris:.2f} RIS (tasa: 1 USD = {usd_to_ris} RIS)"
+                        "name": f"Recarga RIS App - ${amount_usd:.2f} USD",
+                        "description": f"Recibirás ${total_received:.2f} USD en tu cartera RIS App"
                     },
                     "unit_amount": int(amount_usd * 100),  # Stripe uses cents
                 },
@@ -134,11 +99,8 @@ async def create_checkout_session(
             metadata={
                 "user_id": current_user.user_id,
                 "transaction_id": transaction_id,
-                "package_id": data.package_id,
                 "amount_usd": str(amount_usd),
-                "bonus_percent": str(bonus_percent),
-                "total_ris": str(total_ris),
-                "usd_to_ris_rate": str(usd_to_ris),
+                "total_received": str(total_received),
                 "for_terceros": str(data.for_terceros).lower()
             }
         )
@@ -149,13 +111,8 @@ async def create_checkout_session(
             "stripe_session_id": session.id,
             "user_id": current_user.user_id,
             "user_email": current_user.email,
-            "package_id": data.package_id,
             "amount_usd": amount_usd,
-            "bonus_percent": bonus_percent,
-            "base_ris": base_ris,
-            "bonus_ris": bonus_ris,
-            "total_ris": total_ris,
-            "usd_to_ris_rate": usd_to_ris,
+            "total_received": total_received,  # Same as amount_usd (1:1)
             "currency": "USD",
             "for_terceros": data.for_terceros,
             "payment_status": "pending",
@@ -164,7 +121,7 @@ async def create_checkout_session(
         }
         await db.payment_transactions.insert_one(payment_record)
         
-        logger.info(f"Stripe USD checkout created: {transaction_id} for user {current_user.user_id} - ${amount_usd} USD -> {total_ris} RIS")
+        logger.info(f"Stripe USD checkout created: {transaction_id} for user {current_user.user_id} - ${amount_usd} USD")
         
         return CheckoutResponse(
             checkout_url=session.url,
@@ -203,7 +160,7 @@ async def get_payment_status(
             "status": "completed",
             "payment_status": "paid",
             "amount_usd": transaction.get("amount_usd"),
-            "amount_ris": transaction.get("total_ris"),
+            "total_received": transaction.get("total_received"),
             "message": "Pago ya procesado"
         }
     
@@ -219,14 +176,14 @@ async def get_payment_status(
             })
             
             if not existing:
-                total_ris = transaction.get("total_ris", 0)
+                total_received = transaction.get("total_received", transaction.get("amount_usd", 0))
                 for_terceros = transaction.get("for_terceros", False)
                 
-                # Update balance
+                # Update balance (balance_ris stores USD value)
                 balance_field = "balance_ris_terceros" if for_terceros else "balance_ris"
                 await db.users.update_one(
                     {"user_id": current_user.user_id},
-                    {"$inc": {balance_field: total_ris}}
+                    {"$inc": {balance_field: total_received}}
                 )
                 
                 # Update transaction record
@@ -247,7 +204,7 @@ async def get_payment_status(
                     "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
                     "user_id": current_user.user_id,
                     "title": "💳 Recarga USD Exitosa",
-                    "message": f"Se han añadido {total_ris:.2f} RIS a tu {'saldo de terceros' if for_terceros else 'saldo'}. Pago de ${transaction.get('amount_usd')} USD.",
+                    "message": f"Se han añadido ${total_received:.2f} USD a tu {'saldo de terceros' if for_terceros else 'cartera'}.",
                     "type": "payment_success",
                     "read": False,
                     "created_at": datetime.now(timezone.utc)
@@ -258,20 +215,20 @@ async def get_payment_status(
                     await notify_recharge_success(
                         email=current_user.email,
                         user_name=current_user.name or "Usuario",
-                        amount=total_ris,
-                        method=f"Tarjeta USD (${transaction.get('amount_usd')} USD)",
+                        amount=total_received,
+                        method=f"Tarjeta (${transaction.get('amount_usd')} USD)",
                         balance_type="terceros" if for_terceros else "principal"
                     )
                 except Exception as e:
                     logger.warning(f"Failed to send recharge email: {e}")
                 
-                logger.info(f"Stripe USD payment completed: {session_id} - +{total_ris} RIS to {current_user.user_id}")
+                logger.info(f"Stripe USD payment completed: {session_id} - +${total_received} USD to {current_user.user_id}")
             
             return {
                 "status": "completed",
                 "payment_status": "paid",
                 "amount_usd": transaction.get("amount_usd"),
-                "amount_ris": transaction.get("total_ris"),
+                "total_received": transaction.get("total_received"),
                 "message": "¡Pago exitoso! Tu saldo ha sido actualizado."
             }
         
@@ -353,7 +310,7 @@ async def stripe_webhook(request: Request):
                 })
                 
                 if transaction:
-                    total_ris = transaction.get("total_ris", 0)
+                    total_received = transaction.get("total_received", transaction.get("amount_usd", 0))
                     user_id = transaction.get("user_id")
                     for_terceros = transaction.get("for_terceros", False)
                     
@@ -361,7 +318,7 @@ async def stripe_webhook(request: Request):
                     balance_field = "balance_ris_terceros" if for_terceros else "balance_ris"
                     await db.users.update_one(
                         {"user_id": user_id},
-                        {"$inc": {balance_field: total_ris}}
+                        {"$inc": {balance_field: total_received}}
                     )
                     
                     # Update transaction
@@ -376,7 +333,7 @@ async def stripe_webhook(request: Request):
                         }
                     )
                     
-                    logger.info(f"Webhook: USD Payment {session_id} completed for user {user_id} - +{total_ris} RIS")
+                    logger.info(f"Webhook: USD Payment {session_id} completed for user {user_id} - +${total_received} USD")
         
         return {"received": True}
         
