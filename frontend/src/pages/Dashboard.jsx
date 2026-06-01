@@ -155,8 +155,6 @@ export default function Dashboard() {
   }
   if (user?.role === 'admin' || user?.role === 'super_admin') {
     menuItems.splice(4, 0, { icon: Settings, label: 'Admin', path: '/admin' });
-    menuItems.splice(5, 0, { icon: TrendingUp, label: 'Contabilidad', path: '/admin/accounting' });
-    menuItems.splice(6, 0, { icon: TrendingUp, label: 'Contabilidad v2 (Enterprise)', path: '/admin/accounting-v2' });
   }
 
   const isActive = (path) => location.pathname === path;

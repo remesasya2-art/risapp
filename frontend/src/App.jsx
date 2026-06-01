@@ -21,8 +21,6 @@ import GestorDashboard from './pages/GestorDashboard';
 import ForceChangePassword from './pages/ForceChangePassword';
 import GestorFlowMockup from './pages/GestorFlowMockup';
 import DriveCallback from './pages/DriveCallback';
-import Accounting from './pages/Accounting';
-import AccountingV2 from './pages/AccountingV2';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -97,8 +95,6 @@ function AppRoutes() {
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
       <Route path="/admin/drive-callback" element={<ProtectedRoute adminOnly><DriveCallback /></ProtectedRoute>} />
-      <Route path="/admin/accounting" element={<ProtectedRoute adminOnly><Accounting /></ProtectedRoute>} />
-      <Route path="/admin/accounting-v2" element={<ProtectedRoute adminOnly><AccountingV2 /></ProtectedRoute>} />
       
       {/* Force Change Password Route */}
       <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
