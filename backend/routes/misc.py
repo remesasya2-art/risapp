@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openpyxl import Workbook
@@ -86,16 +86,37 @@ class VerificationSubmit(BaseModel):
     id_document_image: str
     cpf_image: str
     selfie_image: str
+    # NEW: document type + back side (back required for rg/cnh/rnm)
+    document_type: Optional[str] = "rg"   # rg | cnh | rnm | passport
+    id_document_image_back: Optional[str] = None
     # Keep old fields as optional for backward compatibility
-    document_type: Optional[str] = "rg"
     document_front: Optional[str] = None
     document_back: Optional[str] = None
     selfie: Optional[str] = None
 
 
+# Document types that physically have a back side and therefore require a second photo.
+DOC_TYPES_REQUIRING_BACK = {"rg", "cnh", "rnm"}
+ALLOWED_DOC_TYPES = {"rg", "cnh", "rnm", "passport"}
+
+
 @router.post("/verification/submit")
 async def submit_verification(data: VerificationSubmit, current_user: User = Depends(get_current_user)):
-    """Submit identity verification"""
+    """Submit identity verification.
+
+    For RG, CNH and RNM documents, the back side photo is mandatory.
+    For passports, only the front (main page) is needed.
+    """
+    doc_type = (data.document_type or "rg").lower().strip()
+    if doc_type not in ALLOWED_DOC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Tipo de documento inválido: {doc_type}")
+
+    if doc_type in DOC_TYPES_REQUIRING_BACK and not (data.id_document_image_back or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Para {doc_type.upper()} es obligatorio adjuntar también el reverso del documento."
+        )
+
     verification = {
         "verification_id": f"ver_{uuid.uuid4().hex[:12]}",
         "user_id": current_user.user_id,
@@ -103,7 +124,9 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
         "document_number": data.document_number,
         "cpf_number": data.cpf_number,
         "phone_number": data.phone_number,
+        "document_type": doc_type,
         "id_document_image": data.id_document_image,
+        "id_document_image_back": data.id_document_image_back if doc_type in DOC_TYPES_REQUIRING_BACK else None,
         "cpf_image": data.cpf_image,
         "selfie_image": data.selfie_image,
         "status": "pending",

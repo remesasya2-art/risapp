@@ -42,6 +42,16 @@ REJECTION_REASONS = {
     "other":            "Otro motivo",
 }
 
+# Catalog of accepted document types.
+# `requires_back=True` means the user MUST also upload the back side of the document.
+DOCUMENT_TYPES = [
+    {"code": "rg",       "label": "RG (Registro Geral)",            "requires_back": True},
+    {"code": "cnh",      "label": "CNH (Carteira Nacional de Habilitação)", "requires_back": True},
+    {"code": "rnm",      "label": "RNM (Registro Nacional Migratório)", "requires_back": True},
+    {"code": "passport", "label": "Pasaporte",                       "requires_back": False},
+]
+DOCUMENT_TYPE_MAP = {d["code"]: d for d in DOCUMENT_TYPES}
+
 
 # ============================================================================
 # MODELS
@@ -83,24 +93,27 @@ def _serialize_verification(v: dict, user: dict = None) -> dict:
 
     # Ensure consistent field naming and image normalization
     return {
-        "verification_id":   v.get("verification_id"),
-        "user_id":           v.get("user_id"),
-        "full_name":         v.get("full_name") or (user.get("full_name") if user else None),
-        "email":             (user.get("email") if user else None),
-        "document_number":   v.get("document_number"),
-        "cpf_number":        v.get("cpf_number"),
-        "phone_number":      v.get("phone_number") or (user.get("phone_number") if user else None),
-        "id_document_image": _normalize_image(v.get("id_document_image")),
-        "cpf_image":         _normalize_image(v.get("cpf_image")),
-        "selfie_image":      _normalize_image(v.get("selfie_image")),
-        "status":            v.get("status", "pending"),
-        "submitted_at":      v.get("submitted_at"),
-        "processed_at":      v.get("processed_at"),
-        "processed_by":      v.get("processed_by"),
-        "processed_by_name": v.get("processed_by_name"),
-        "rejection_reason":  v.get("rejection_reason"),
-        "rejection_code":    v.get("rejection_code"),
-        "admin_note":        v.get("admin_note", ""),
+        "verification_id":      v.get("verification_id"),
+        "user_id":              v.get("user_id"),
+        "full_name":            v.get("full_name") or (user.get("full_name") if user else None),
+        "email":                (user.get("email") if user else None),
+        "document_type":        v.get("document_type") or "rg",
+        "document_type_label":  DOCUMENT_TYPE_MAP.get(v.get("document_type") or "rg", {}).get("label", "Documento"),
+        "document_number":      v.get("document_number"),
+        "cpf_number":           v.get("cpf_number"),
+        "phone_number":         v.get("phone_number") or (user.get("phone_number") if user else None),
+        "id_document_image":      _normalize_image(v.get("id_document_image")),
+        "id_document_image_back": _normalize_image(v.get("id_document_image_back")),
+        "cpf_image":              _normalize_image(v.get("cpf_image")),
+        "selfie_image":           _normalize_image(v.get("selfie_image")),
+        "status":               v.get("status", "pending"),
+        "submitted_at":         v.get("submitted_at"),
+        "processed_at":         v.get("processed_at"),
+        "processed_by":         v.get("processed_by"),
+        "processed_by_name":    v.get("processed_by_name"),
+        "rejection_reason":     v.get("rejection_reason"),
+        "rejection_code":       v.get("rejection_code"),
+        "admin_note":           v.get("admin_note", ""),
     }
 
 
@@ -216,6 +229,85 @@ async def list_kyc(
     items = [_serialize_verification(v, users_by_id.get(v.get("user_id"))) for v in verifications]
 
     return {"counts": counts, "items": items}
+
+
+@router.get("/document-types")
+async def get_document_types(admin: User = Depends(get_super_admin)):
+    """Catalog of accepted ID document types."""
+    return DOCUMENT_TYPES
+
+
+@router.get("/export.csv")
+async def export_kyc_csv(
+    status: str = Query("all", regex="^(pending|approved|rejected|all)$"),
+    search: Optional[str] = None,
+    admin: User = Depends(get_super_admin),
+):
+    """Export KYC submissions to CSV with current filters applied."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    query = {}
+    if status != "all":
+        if status == "approved":
+            query["status"] = {"$in": ["approved", "verified"]}
+        else:
+            query["status"] = status
+
+    if search and search.strip():
+        s = search.strip()
+        regex = {"$regex": s, "$options": "i"}
+        query["$or"] = [
+            {"full_name": regex}, {"document_number": regex},
+            {"cpf_number": regex}, {"phone_number": regex},
+        ]
+
+    verifications = await db.verifications.find(query, {"_id": 0}).sort("submitted_at", -1).to_list(5000)
+    uids = [v["user_id"] for v in verifications if v.get("user_id")]
+    users_by_id = {}
+    if uids:
+        async for u in db.users.find({"user_id": {"$in": uids}},
+                                     {"_id": 0, "user_id": 1, "email": 1}):
+            users_by_id[u["user_id"]] = u
+
+    buf = io.StringIO()
+    buf.write("\ufeff")  # BOM for Excel UTF-8 support
+    writer = csv.writer(buf, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([
+        "verification_id", "user_id", "email", "full_name",
+        "document_type", "document_number", "cpf_number", "phone_number",
+        "status", "submitted_at", "processed_at",
+        "processed_by_name", "rejection_code", "rejection_reason",
+        "admin_note", "has_id_front", "has_id_back", "has_cpf", "has_selfie",
+    ])
+    for v in verifications:
+        u = users_by_id.get(v.get("user_id"), {})
+        writer.writerow([
+            v.get("verification_id", ""), v.get("user_id", ""),
+            u.get("email", ""), v.get("full_name", ""),
+            v.get("document_type", ""), v.get("document_number", ""),
+            v.get("cpf_number", ""), v.get("phone_number", ""),
+            v.get("status", ""),
+            (v.get("submitted_at").isoformat() if v.get("submitted_at") else ""),
+            (v.get("processed_at").isoformat() if v.get("processed_at") else ""),
+            v.get("processed_by_name", ""),
+            v.get("rejection_code", "") or "",
+            (v.get("rejection_reason", "") or "").replace("\n", " ").replace("\r", " "),
+            (v.get("admin_note", "") or "").replace("\n", " ").replace("\r", " "),
+            "1" if v.get("id_document_image") else "0",
+            "1" if v.get("id_document_image_back") else "0",
+            "1" if v.get("cpf_image") else "0",
+            "1" if v.get("selfie_image") else "0",
+        ])
+
+    buf.seek(0)
+    filename = f"kyc_{status}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/rejection-reasons")
@@ -408,6 +500,8 @@ async def update_kyc_note(verification_id: str, payload: NoteRequest,
 
     if previous != new_note:
         await _audit(real_id, v["user_id"], "note_updated", admin, {
+            "previous_value": previous,
+            "new_value": new_note,
             "previous_length": len(previous),
             "new_length": len(new_note),
         })

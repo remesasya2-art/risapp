@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Search, RefreshCw, Eye, CheckCircle2, XCircle, Clock, ShieldCheck,
-  ShieldAlert, ShieldX, ImageOff, User as UserIcon
+  ShieldAlert, ShieldX, ImageOff, User as UserIcon, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -84,6 +84,28 @@ export default function KycPanel({ onChange }) {
     }
   };
 
+  const handleExportCsv = async () => {
+    try {
+      const res = await api.get('/admin/kyc/export.csv', {
+        params: { status, search: debouncedSearch || undefined },
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.download = `kyc_${status}_${ts}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('CSV descargado');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al exportar');
+    }
+  };
+
   const cardStyle = {
     backgroundColor: '#ffffff',
     borderRadius: '20px',
@@ -158,6 +180,22 @@ export default function KycPanel({ onChange }) {
           >
             <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             Actualizar
+          </button>
+          <button
+            onClick={handleExportCsv}
+            title="Exportar CSV con filtros aplicados"
+            data-testid="kyc-export-csv"
+            disabled={items.length === 0}
+            style={{
+              padding: '10px 14px', borderRadius: '12px',
+              backgroundColor: items.length === 0 ? '#f3f4f6' : '#1f2937',
+              border: 'none', cursor: items.length === 0 ? 'not-allowed' : 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              color: items.length === 0 ? '#9ca3af' : '#fff',
+              fontSize: '13px', fontWeight: 600,
+            }}
+          >
+            <Download size={16} /> Exportar CSV
           </button>
         </div>
       </div>
