@@ -1,0 +1,34 @@
+[
+  {
+    "content": "Backend: crear endpoint `/api/admin/kyc/list` con tabs/contadores/búsqueda + asegurar campos (selfie_image, fechas, status, processed_by, etc.)",
+    "status": "completed"
+  },
+  {
+    "content": "Backend: endpoint POST `/api/admin/kyc/{id}/approve` con audit log",
+    "status": "completed"
+  },
+  {
+    "content": "Backend: endpoint POST `/api/admin/kyc/{id}/reject` con reason_code + reason_text obligatorios + audit log",
+    "status": "completed"
+  },
+  {
+    "content": "Backend: endpoint PATCH `/api/admin/kyc/{id}/note` para nota interna",
+    "status": "completed"
+  },
+  {
+    "content": "Backend: endpoint GET `/api/admin/kyc/{id}/history` para auditoría",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: componentes Lightbox, RejectModal, DetailModal, KycPanel",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: integrar KycPanel en AdminPanel.jsx reemplazando sección KYC vieja",
+    "status": "completed"
+  },
+  {
+    "content": "Validación end-to-end con testing agent",
+    "status": "in_progress"
+  }
+]
