@@ -29,6 +29,10 @@
   },
   {
     "content": "Validación end-to-end con testing agent",
-    "status": "in_progress"
+    "status": "completed"
+  },
+  {
+    "content": "Fix UX menor: z-index del botón X de cierre",
+    "status": "completed"
   }
 ]
