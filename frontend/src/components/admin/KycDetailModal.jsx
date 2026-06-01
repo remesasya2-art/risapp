@@ -180,7 +180,7 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
                 </p>
               )}
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8, marginLeft: 'auto', position: 'relative', zIndex: 10 }} aria-label="Cerrar">
               <X size={22} color="#6b7280" />
             </button>
           </div>

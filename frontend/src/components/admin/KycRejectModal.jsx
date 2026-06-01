@@ -79,7 +79,7 @@ export default function KycRejectModal({ verification, onClose, onSuccess }) {
               </p>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8, position: 'relative', zIndex: 10 }} aria-label="Cerrar">
             <X size={20} color="#6b7280" />
           </button>
         </div>
