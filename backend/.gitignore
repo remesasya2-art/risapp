@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+secrets/
+*.log
+downloads/
+frontend_build.zip
+static_dist/

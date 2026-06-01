@@ -1,0 +1,168 @@
+{
+  "design_system": {
+    "brand": {
+      "name": "RIS App",
+      "tone": "Modern, Trustworthy, Fintech, Friendly",
+      "inspiration": "Nubank",
+      "primary_color": "#820AD1",
+      "secondary_color": "#F5A623"
+    },
+    "colors": {
+      "primary": {
+        "main": "#820AD1",
+        "light": "#A744F2",
+        "dark": "#5F00A3",
+        "contrast": "#FFFFFF"
+      },
+      "secondary": {
+        "main": "#F5A623",
+        "light": "#FFC966",
+        "dark": "#D98C00",
+        "contrast": "#0F172A"
+      },
+      "background": {
+        "default": "#F8FAFC",
+        "paper": "#FFFFFF",
+        "subtle": "#F1F5F9"
+      },
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#64748B",
+        "disabled": "#94A3B8",
+        "inverse": "#FFFFFF"
+      },
+      "status": {
+        "success": "#10B981",
+        "error": "#EF4444",
+        "warning": "#F59E0B",
+        "info": "#3B82F6"
+      }
+    },
+    "typography": {
+      "font_family": "System",
+      "headings": {
+        "h1": { "fontSize": 32, "fontWeight": "800", "letterSpacing": -0.5 },
+        "h2": { "fontSize": 24, "fontWeight": "700", "letterSpacing": -0.3 },
+        "h3": { "fontSize": 20, "fontWeight": "600" }
+      },
+      "body": {
+        "regular": { "fontSize": 16, "lineHeight": 24 },
+        "small": { "fontSize": 14, "lineHeight": 20 },
+        "tiny": { "fontSize": 12, "lineHeight": 16 }
+      }
+    },
+    "spacing": {
+      "xs": 4,
+      "s": 8,
+      "m": 16,
+      "l": 24,
+      "xl": 32,
+      "xxl": 48
+    },
+    "border_radius": {
+      "small": 8,
+      "medium": 12,
+      "large": 16,
+      "pill": 9999
+    },
+    "shadows": {
+      "soft": {
+        "shadowColor": "#000",
+        "shadowOffset": { "width": 0, "height": 2 },
+        "shadowOpacity": 0.05,
+        "shadowRadius": 8,
+        "elevation": 2
+      },
+      "medium": {
+        "shadowColor": "#820AD1",
+        "shadowOffset": { "width": 0, "height": 4 },
+        "shadowOpacity": 0.1,
+        "shadowRadius": 12,
+        "elevation": 5
+      }
+    }
+  },
+  "components": {
+    "Button": {
+      "variants": {
+        "primary": {
+          "backgroundColor": "#820AD1",
+          "borderRadius": 25,
+          "paddingVertical": 16,
+          "alignItems": "center",
+          "justifyContent": "center"
+        },
+        "secondary": {
+          "backgroundColor": "#FFFFFF",
+          "borderWidth": 1,
+          "borderColor": "#E2E8F0",
+          "borderRadius": 25,
+          "paddingVertical": 16
+        },
+        "ghost": {
+          "backgroundColor": "transparent",
+          "paddingVertical": 12
+        }
+      }
+    },
+    "Card": {
+      "backgroundColor": "#FFFFFF",
+      "borderRadius": 16,
+      "padding": 20,
+      "marginBottom": 16,
+      "shadowColor": "#000",
+      "shadowOffset": { "width": 0, "height": 2 },
+      "shadowOpacity": 0.05,
+      "shadowRadius": 8,
+      "elevation": 2
+    },
+    "Input": {
+      "backgroundColor": "#F1F5F9",
+      "borderRadius": 12,
+      "padding": 16,
+      "fontSize": 16,
+      "color": "#0F172A",
+      "borderWidth": 1,
+      "borderColor": "transparent",
+      "focus": {
+        "borderColor": "#820AD1",
+        "backgroundColor": "#FFFFFF"
+      }
+    }
+  },
+  "layout_strategies": {
+    "dashboard": {
+      "header_style": "Nubank",
+      "header_bg": "#820AD1",
+      "balance_card_style": "Minimal",
+      "actions_layout": "HorizontalScroll"
+    },
+    "sidebar": {
+      "bg_color": "#FFFFFF",
+      "text_color": "#64748B",
+      "active_bg": "#F3E8FF",
+      "active_text": "#820AD1"
+    }
+  },
+  "feature_requirements": {
+    "guest_support": {
+      "enabled": true,
+      "flow": "Form -> WhatsApp",
+      "fields": ["name", "email", "phone"]
+    }
+  },
+  "image_urls": {
+    "logo_placeholder": "https://placehold.co/200x200/820AD1/FFFFFF?text=RIS",
+    "background_pattern": "https://www.transparenttextures.com/patterns/cubes.png"
+  },
+  "instructions_to_main_agent": [
+    "1. CREATE 'app/frontend/constants/theme.ts' with the colors and styles defined above.",
+    "2. REFACTOR 'app/frontend/app/login.tsx' to use the new White/Purple design. Remove the dark blue background.",
+    "3. REFACTOR 'app/frontend/app/index.tsx' (Dashboard) to use the 'Nubank' header style (Purple top section) and white cards.",
+    "4. UPDATE 'app/frontend/components/WebWrapper.tsx' to use a light sidebar with purple accents. ADD the 'Support' button for unauthenticated users in the sidebar.",
+    "5. UPDATE 'app/frontend/app/support.tsx' to handle the 'Guest Mode'. If !user, show a form for Name/Email/Phone. On submit, redirect to WhatsApp with the details pre-filled.",
+    "6. ENSURE all TouchableOpacity buttons use the new rounded styles.",
+    "7. DO NOT modify admin files.",
+    "8. USE 'StyleSheet' for all styles, do not try to use Tailwind classes."
+  ]
+}

@@ -1,89 +1,145 @@
-from fastapi import FastAPI, APIRouter
+"""
+RIS App Backend - Clean Server
+Main FastAPI application entry point.
+All endpoints are now in modular routers under /routes/
+"""
+from fastapi import FastAPI, Request, Header
+from fastapi.security import HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
+from typing import Optional
+from twilio.rest import Client as TwilioClient
+from admin_routes import admin_router
+import resend
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
+# Import modular routers
+from routes import api_router as modular_api_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+# Twilio Configuration
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
+TWILIO_WHATSAPP_FROM = os.getenv('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886')
+TWILIO_WHATSAPP_TO = os.getenv('TWILIO_WHATSAPP_TO')
 
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
+# Resend Email Configuration
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
+SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'noreply@risappbr.com')
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# Create FastAPI app
+app = FastAPI(title="RIS App API", version="2.1.0")
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# Rate limiter wiring (from routes.security_2fa)
+from routes.security_2fa import limiter as security_limiter
+app.state.limiter = security_limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+# Security HTTP headers middleware
+@app.middleware("http")
+async def security_headers_middleware(request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
-app.include_router(api_router)
-
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+security = HTTPBearer()
+
+# ============================================================================
+# STATIC FILES - For serving proof images
+# ============================================================================
+STATIC_DIR = ROOT_DIR / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+(STATIC_DIR / "comprobantes").mkdir(exist_ok=True)
+app.mount("/api/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# ============================================================================
+# INCLUDE ROUTERS
+# ============================================================================
+
+# Include modular routers (from routes/)
+app.include_router(modular_api_router)
+
+# Include admin router (separate file for backward compatibility)
+app.include_router(admin_router)
+
+# ============================================================================
+# STARTUP/SHUTDOWN EVENTS
+# ============================================================================
+
+@app.on_event("startup")
+async def startup_db_client():
+    """Create database indexes on startup"""
+    try:
+        await db.users.create_index("email", unique=True, sparse=True)
+        await db.users.create_index("cpf_number", sparse=True)
+        await db.user_sessions.create_index("session_token", unique=True)
+        await db.user_sessions.create_index("expires_at")
+        await db.transactions.create_index("user_id")
+        await db.transactions.create_index("status")
+        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Index creation warning: {e}")
+
+    # 2FA security indexes
+    try:
+        from routes.security_2fa import ensure_security_indexes
+        await ensure_security_indexes()
+    except Exception as e:
+        logger.warning(f"Security indexes warning: {e}")
+
+    # Start BCV scraper background scheduler
+    try:
+        from services.bcv_scraper import start_scheduler
+        start_scheduler(db, interval_hours=1)
+    except Exception as e:
+        logger.warning(f"BCV scheduler failed to start: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    try:
+        from services.bcv_scraper import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
     client.close()
+
+# Last update: 2026-03-28 - Complete refactor to modular routers

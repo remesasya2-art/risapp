@@ -1,0 +1,540 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useRate } from '../contexts/RateContext';
+import { 
+  ArrowLeft, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, 
+  XCircle, Filter, ChevronDown, Plus, Eye, X, Download
+} from 'lucide-react';
+import api from '../utils/api';
+import NotificationBell from '../components/NotificationBell';
+import { fmt } from '../utils/format';
+
+// Convertir URL de imagen a ruta accesible
+const convertTwilioUrl = (url) => {
+  if (!url) return url;
+  // URLs locales ya funcionan via proxy Kubernetes
+  if (url.startsWith('/api/static/') || url.startsWith('/api/media/')) return url;
+  // Base64 inline
+  if (url.startsWith('data:')) return url;
+  // URLs directas de Twilio -> pasar por proxy backend
+  if (url.includes('api.twilio.com')) {
+    const match = url.match(/\/Accounts\/(AC[^/]+\/.*)/);
+    if (match) return `/api/media/twilio/${match[1]}`;
+  }
+  return url;
+};
+
+export default function History() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { rates } = useRate();
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Función para descargar una imagen
+  const downloadImage = (base64Data, fileName) => {
+    const link = document.createElement('a');
+    link.href = base64Data;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Función para descargar todas las imágenes
+  const downloadAllImages = (images, txId) => {
+    images.forEach((img, index) => {
+      setTimeout(() => {
+        downloadImage(img, `comprobante_${txId}_${index + 1}.png`);
+      }, index * 300); // Pequeño delay entre descargas
+    });
+  };
+
+  useEffect(() => {
+    loadTransactions();
+  }, [page, filter]);
+
+  const loadTransactions = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 10 });
+      if (filter !== 'all') params.append('filter_type', filter);
+      const response = await api.get(`/transactions?${params}`);
+      const data = response.data;
+      setTransactions(data.transactions || []);
+      setTotalPages(data.pages || 1);
+      setTotalCount(data.total || 0);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setPage(1);
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed': return <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />;
+      case 'pending':
+      case 'pending_manual_approval': return <Clock style={{ width: '20px', height: '20px', color: '#d97706' }} />;
+      case 'rejected': return <XCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />;
+      default: return <Clock style={{ width: '20px', height: '20px', color: '#9ca3af' }} />;
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'completed': return 'Completado';
+      case 'pending': return 'Pendiente';
+      case 'pending_manual_approval': return 'En revisión';
+      case 'rejected': return 'Rechazado';
+      default: return status;
+    }
+  };
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'completed': return { backgroundColor: '#dcfce7', color: '#16a34a' };
+      case 'pending':
+      case 'pending_manual_approval': return { backgroundColor: '#fef3c7', color: '#d97706' };
+      case 'rejected': return { backgroundColor: '#fee2e2', color: '#dc2626' };
+      default: return { backgroundColor: '#f3f4f6', color: '#6b7280' };
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-VE', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Caracas'
+    });
+  };
+
+  const pageStyle = {
+    minHeight: '100vh',
+    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
+  };
+
+  const cardStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    border: '1px solid #e5e7eb'
+  };
+
+  const openVoucher = (tx) => {
+    setSelectedVoucher(tx);
+    setShowVoucherModal(true);
+  };
+
+  return (
+    <div style={pageStyle} data-testid="history-page">
+      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate(-1)} 
+              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              data-testid="back-button"
+            >
+              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+            </button>
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Historial</h1>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{totalCount} transacciones</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
+                backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '12px', border: 'none',
+              cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#374151'
+            }}
+            data-testid="filter-button"
+          >
+            <Filter style={{ width: '16px', height: '16px' }} />
+            Filtrar
+            <ChevronDown style={{ width: '16px', height: '16px', transform: showFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+          </button>
+            <NotificationBell />
+          </div>
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+            {[
+              { key: 'all', label: 'Todos' },
+              { key: 'withdrawals', label: 'Envíos' },
+              { key: 'recharges', label: 'Recargas' },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => handleFilterChange(f.key)}
+                style={{
+                  padding: '10px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '500', transition: 'all 0.2s',
+                  backgroundColor: filter === f.key ? '#6366f1' : 'rgba(255,255,255,0.8)',
+                  color: filter === f.key ? '#ffffff' : '#374151'
+                }}
+                data-testid={`filter-${f.key}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Content */}
+        {loading ? (
+          <div style={{ ...cardStyle, padding: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '40px', height: '40px', border: '4px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <p style={{ color: '#6b7280', marginTop: '16px' }}>Cargando transacciones...</p>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div style={{ ...cardStyle, padding: '64px', textAlign: 'center' }}>
+            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Clock style={{ width: '40px', height: '40px', color: '#d1d5db' }} />
+            </div>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#374151', margin: '0 0 8px 0' }}>Sin transacciones</h3>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0' }}>
+              {filter !== 'all' ? 'Prueba cambiando el filtro' : 'Realiza tu primera operación para verla aquí'}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <Link to="/recharge" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#16a34a', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: '500', fontSize: '14px' }}>
+                <Plus style={{ width: '20px', height: '20px' }} /> Recargar saldo
+              </Link>
+              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#6366f1', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: '500', fontSize: '14px' }}>
+                <ArrowUpRight style={{ width: '20px', height: '20px' }} /> Enviar remesa
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {transactions.map((tx) => (
+              <div key={tx.transaction_id} style={{ ...cardStyle, padding: '20px' }} data-testid={`transaction-${tx.transaction_id}`}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                  <div style={{
+                    width: '56px', height: '56px', borderRadius: '16px', flexShrink: 0,
+                    backgroundColor: tx.type === 'withdrawal' ? '#dbeafe' : '#dcfce7',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    {tx.type === 'withdrawal' ? (
+                      <ArrowUpRight style={{ width: '28px', height: '28px', color: '#2563eb' }} />
+                    ) : (
+                      <ArrowDownLeft style={{ width: '28px', height: '28px', color: '#16a34a' }} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                      <div>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                          {tx.type === 'withdrawal' ? 'Envío a Venezuela' : 'Recarga'}
+                        </p>
+                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{formatDate(tx.created_at)}</p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: tx.type === 'withdrawal' ? '#dc2626' : '#16a34a' }}>
+                          {tx.type === 'withdrawal' ? '-' : '+'}{fmt(tx.amount_input)} RIS
+                        </p>
+                        {tx.type === 'withdrawal' && tx.amount_output && (
+                          <p style={{ fontSize: '14px', color: '#374151', margin: '2px 0 0 0', fontWeight: '600' }}>
+                            {fmt(tx.amount_output)} VES
+                            {rates?.bcv_usd_ves && (
+                              <span style={{ color: '#16a34a' }}> = $ {fmt(tx.amount_output / rates.bcv_usd_ves, 2)} BCV</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {tx.type === 'withdrawal' && tx.beneficiary_data && (
+                      <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
+                        <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', margin: 0 }}>{tx.beneficiary_data.full_name}</p>
+                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{tx.beneficiary_data.bank}</p>
+                      </div>
+                    )}
+                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                        borderRadius: '9999px', fontSize: '14px', fontWeight: '500', ...getStatusStyle(tx.status)
+                      }}>
+                        {getStatusIcon(tx.status)}
+                        {getStatusText(tx.status)}
+                      </div>
+                      {/* Botón para ver comprobante(s) - mostrar si hay proof_images o proof_image */}
+                      {tx.type === 'withdrawal' && tx.status === 'completed' && (tx.proof_images?.length > 0 || tx.proof_image) && (
+                        <button
+                          onClick={() => openVoucher(tx)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                            borderRadius: '9999px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                            backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none',
+                            transition: 'all 0.2s'
+                          }}
+                          data-testid={`view-voucher-${tx.transaction_id}`}
+                          title="Ver comprobante(s) de pago"
+                        >
+                          <Eye style={{ width: '16px', height: '16px' }} />
+                          Ver {(tx.proof_images?.length || 1)} comprobante{(tx.proof_images?.length || 1) > 1 ? 's' : ''}
+                        </button>
+                      )}
+                      {/* También para recargas VES que tengan voucher */}
+                      {tx.type === 'recharge_ves' && tx.voucher_url && (
+                        <button
+                          onClick={() => openVoucher(tx)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                            borderRadius: '9999px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                            backgroundColor: '#dcfce7', color: '#16a34a', border: 'none',
+                            transition: 'all 0.2s'
+                          }}
+                          data-testid={`view-voucher-${tx.transaction_id}`}
+                          title="Ver comprobante"
+                        >
+                          <Eye style={{ width: '16px', height: '16px' }} />
+                          Ver comprobante
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Paginación */}
+        {!loading && totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px', paddingBottom: '24px' }} data-testid="pagination">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: page === 1 ? 'default' : 'pointer',
+                backgroundColor: page === 1 ? '#e5e7eb' : '#6366f1', color: page === 1 ? '#9ca3af' : '#fff',
+                fontSize: '14px', fontWeight: '600', transition: 'all 0.2s'
+              }}
+              data-testid="prev-page"
+            >
+              Anterior
+            </button>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151', padding: '0 12px' }}>
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              style={{
+                padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: page === totalPages ? 'default' : 'pointer',
+                backgroundColor: page === totalPages ? '#e5e7eb' : '#6366f1', color: page === totalPages ? '#9ca3af' : '#fff',
+                fontSize: '14px', fontWeight: '600', transition: 'all 0.2s'
+              }}
+              data-testid="next-page"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Modal para ver comprobante(s) */}
+      {showVoucherModal && selectedVoucher && (
+        <div 
+          style={{ 
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', 
+            padding: '16px', zIndex: 50 
+          }}
+          onClick={() => setShowVoucherModal(false)}
+        >
+          <div 
+            style={{ 
+              backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', 
+              width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                Comprobante{(selectedVoucher.proof_images?.length || 1) > 1 ? 's' : ''} de Pago
+              </h3>
+              <button 
+                onClick={() => setShowVoucherModal(false)}
+                style={{ 
+                  width: '36px', height: '36px', borderRadius: '10px', 
+                  border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+              </button>
+            </div>
+
+            {/* Información de la transacción */}
+            <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto enviado</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{fmt(selectedVoucher.amount_input)} RIS</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
+                    {fmt(selectedVoucher.amount_output)} VES
+                    {rates?.bcv_usd_ves && (
+                      <span style={{ fontSize: '14px', color: '#16a34a', marginLeft: 6 }}>= $ {fmt(selectedVoucher.amount_output / rates.bcv_usd_ves, 2)} BCV</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              {selectedVoucher.beneficiary_data && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>{selectedVoucher.beneficiary_data.full_name}</p>
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>{selectedVoucher.beneficiary_data.bank}</p>
+                </div>
+              )}
+              <div style={{ marginTop: '12px' }}>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Fecha de proceso</p>
+                <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>{formatDate(selectedVoucher.completed_at || selectedVoucher.created_at)}</p>
+              </div>
+            </div>
+
+            {/* Imágenes del comprobante */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>
+                  📷 {(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante
+                </p>
+                {/* Botón descargar todas */}
+                {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) && (
+                  <button
+                    onClick={() => {
+                      const images = selectedVoucher.proof_images?.length > 0 
+                        ? selectedVoucher.proof_images.map(convertTwilioUrl)
+                        : [convertTwilioUrl(selectedVoucher.proof_image)];
+                      const txId = selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8);
+                      downloadAllImages(images, txId);
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 14px', borderRadius: '10px', border: 'none',
+                      backgroundColor: '#6366f1', color: 'white', cursor: 'pointer',
+                      fontSize: '13px', fontWeight: '500', transition: 'all 0.2s'
+                    }}
+                    data-testid="download-all-images"
+                  >
+                    <Download style={{ width: '16px', height: '16px' }} />
+                    Descargar {(selectedVoucher.proof_images?.length || 1) > 1 ? 'todas' : ''}
+                  </button>
+                )}
+              </div>
+              
+              {/* Grid de imágenes */}
+              {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: (selectedVoucher.proof_images?.length || 1) > 1 ? 'repeat(2, 1fr)' : '1fr', 
+                  gap: '12px' 
+                }}>
+                  {(selectedVoucher.proof_images?.length > 0 ? selectedVoucher.proof_images : [selectedVoucher.proof_image]).map((img, idx) => (
+                    <div key={idx} style={{ position: 'relative' }}>
+                      <img 
+                        src={convertTwilioUrl(img)} 
+                        alt={`Comprobante ${idx + 1}`}
+                        style={{ 
+                          width: '100%', 
+                          borderRadius: '12px', 
+                          border: '1px solid #e5e7eb',
+                          maxHeight: (selectedVoucher.proof_images?.length || 1) > 1 ? '200px' : '400px', 
+                          objectFit: 'contain', 
+                          backgroundColor: '#f9fafb',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => window.open(convertTwilioUrl(img), '_blank')}
+                        title="Click para ver en tamaño completo"
+                      />
+                      {/* Botón de descarga individual */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const txId = selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8);
+                          downloadImage(convertTwilioUrl(img), `comprobante_${txId}_${idx + 1}.png`);
+                        }}
+                        style={{
+                          position: 'absolute', top: '8px', right: '8px',
+                          width: '32px', height: '32px', borderRadius: '8px',
+                          backgroundColor: 'rgba(255,255,255,0.9)', border: 'none',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)', transition: 'all 0.2s'
+                        }}
+                        title={`Descargar imagen ${idx + 1}`}
+                        data-testid={`download-image-${idx}`}
+                      >
+                        <Download style={{ width: '16px', height: '16px', color: '#6366f1' }} />
+                      </button>
+                      {(selectedVoucher.proof_images?.length || 0) > 1 && (
+                        <div style={{ 
+                          position: 'absolute', bottom: '8px', left: '8px', 
+                          backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', 
+                          fontSize: '12px', padding: '4px 8px', borderRadius: '6px',
+                          fontWeight: '600'
+                        }}>
+                          #{idx + 1}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : selectedVoucher.voucher_url ? (
+                <img 
+                  src={selectedVoucher.voucher_url} 
+                  alt="Comprobante"
+                  style={{ 
+                    width: '100%', borderRadius: '12px', border: '1px solid #e5e7eb',
+                    maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f9fafb',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => window.open(selectedVoucher.voucher_url, '_blank')}
+                  title="Click para ver en tamaño completo"
+                />
+              ) : (
+                <div style={{ 
+                  padding: '40px', backgroundColor: '#f9fafb', borderRadius: '12px',
+                  textAlign: 'center', border: '1px dashed #d1d5db'
+                }}>
+                  <p style={{ color: '#6b7280', margin: 0 }}>No hay comprobante disponible</p>
+                </div>
+              )}
+              
+              <p style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '8px' }}>
+                Toca una imagen para verla en tamaño completo
+              </p>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginTop: '16px' }}>
+              ID: {selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}

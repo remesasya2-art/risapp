@@ -1,0 +1,197 @@
+"""
+Miscellaneous routes - Policies, VES info, Balance, Verification, Export, Dashboard
+"""
+import uuid
+import logging
+from datetime import datetime, timezone
+from io import BytesIO
+from typing import Optional
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from openpyxl import Workbook
+
+from database import db
+from routes.dependencies import get_current_user, get_super_admin
+from models.user import User
+
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["misc"])
+
+
+# ============== POLICIES ==============
+
+class AcceptPolicy(BaseModel):
+    policy_type: str
+
+
+@router.get("/policies")
+async def get_policies():
+    """Get all policies"""
+    policies = await db.policies.find({}, {"_id": 0}).to_list(10)
+    return policies
+
+
+@router.post("/policies/accept")
+async def accept_policy(data: AcceptPolicy, current_user: User = Depends(get_current_user)):
+    """Accept a policy"""
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$addToSet": {"accepted_policies": data.policy_type}}
+    )
+    return {"success": True}
+
+
+@router.get("/policies/status")
+async def get_policies_status(current_user: User = Depends(get_current_user)):
+    """Get user's policy acceptance status"""
+    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    return {"accepted_policies": user.get("accepted_policies", [])}
+
+
+# ============== VES PAYMENT INFO ==============
+
+@router.get("/ves-payment-info")
+async def get_ves_payment_info():
+    """Get VES payment info for manual transfers"""
+    info = await db.settings.find_one({"type": "ves_payment_info"}, {"_id": 0})
+    return info or {
+        "bank": "Banesco",
+        "account_type": "Corriente",
+        "account_number": "0134-0000-00-0000000000",
+        "holder_name": "RIS APP C.A.",
+        "holder_id": "J-00000000-0"
+    }
+
+
+# ============== USER BALANCE ==============
+
+@router.get("/user/balance")
+async def get_user_balance(current_user: User = Depends(get_current_user)):
+    """Get user balance"""
+    return {
+        "balance_ris": current_user.balance_ris or 0,
+        "balance_ris_terceros": current_user.balance_ris_terceros or 0,
+        "balance_ves": getattr(current_user, 'balance_ves', 0) or 0
+    }
+
+
+# ============== VERIFICATION ==============
+
+class VerificationSubmit(BaseModel):
+    full_name: str
+    document_number: str
+    cpf_number: str
+    phone_number: str
+    id_document_image: str
+    cpf_image: str
+    selfie_image: str
+    # Keep old fields as optional for backward compatibility
+    document_type: Optional[str] = "rg"
+    document_front: Optional[str] = None
+    document_back: Optional[str] = None
+    selfie: Optional[str] = None
+
+
+@router.post("/verification/submit")
+async def submit_verification(data: VerificationSubmit, current_user: User = Depends(get_current_user)):
+    """Submit identity verification"""
+    verification = {
+        "verification_id": f"ver_{uuid.uuid4().hex[:12]}",
+        "user_id": current_user.user_id,
+        "full_name": data.full_name,
+        "document_number": data.document_number,
+        "cpf_number": data.cpf_number,
+        "phone_number": data.phone_number,
+        "id_document_image": data.id_document_image,
+        "cpf_image": data.cpf_image,
+        "selfie_image": data.selfie_image,
+        "status": "pending",
+        "submitted_at": datetime.now(timezone.utc)
+    }
+    await db.verifications.insert_one(verification)
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"verification_status": "pending", "phone_number": data.phone_number}}
+    )
+    return {"success": True, "verification_id": verification["verification_id"]}
+
+
+@router.get("/verification/status")
+async def get_verification_status(current_user: User = Depends(get_current_user)):
+    """Get verification status"""
+    verification = await db.verifications.find_one(
+        {"user_id": current_user.user_id},
+        {"_id": 0}
+    )
+    return verification or {"status": "none"}
+
+
+# ============== TRANSACTIONS EXPORT ==============
+
+@router.get("/transactions/export")
+async def export_transactions(current_user: User = Depends(get_super_admin)):
+    """Export all transactions to Excel"""
+    transactions = await db.transactions.find({"hidden_from_admin": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Transacciones"
+    
+    headers = ["ID", "Usuario", "Tipo", "Monto RIS", "Monto VES", "Estado", "Fecha"]
+    ws.append(headers)
+    
+    for tx in transactions:
+        ws.append([
+            tx.get("display_id", tx.get("transaction_id", ""))[:15],
+            tx.get("user_email", ""),
+            tx.get("type", ""),
+            tx.get("amount_ris", 0),
+            tx.get("amount_ves", 0),
+            tx.get("status", ""),
+            str(tx.get("created_at", ""))[:19]
+        ])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=transacciones.xlsx"}
+    )
+
+
+# ============== ADMIN DASHBOARD ==============
+
+@router.get("/admin/dashboard")
+async def get_admin_dashboard(current_user: User = Depends(get_super_admin)):
+    """Get admin dashboard stats"""
+    # Count users
+    total_users = await db.users.count_documents({"is_deleted": {"$ne": True}})
+    verified_users = await db.users.count_documents({"verification_status": "verified"})
+    
+    # Count transactions
+    pending_withdrawals = await db.transactions.count_documents({"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True}})
+    completed_today = await db.transactions.count_documents({
+        "status": "completed",
+        "hidden_from_admin": {"$ne": True},
+        "completed_at": {"$gte": datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)}
+    })
+    
+    # Calculate volumes
+    pipeline = [
+        {"$match": {"status": "completed", "hidden_from_admin": {"$ne": True}}},
+        {"$group": {"_id": None, "total_ris": {"$sum": "$amount_ris"}, "total_ves": {"$sum": "$amount_ves"}}}
+    ]
+    volume = await db.transactions.aggregate(pipeline).to_list(1)
+    
+    return {
+        "total_users": total_users,
+        "verified_users": verified_users,
+        "pending_withdrawals": pending_withdrawals,
+        "completed_today": completed_today,
+        "total_volume_ris": volume[0]["total_ris"] if volume else 0,
+        "total_volume_ves": volume[0]["total_ves"] if volume else 0
+    }
