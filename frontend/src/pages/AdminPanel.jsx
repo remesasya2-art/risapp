@@ -13,6 +13,7 @@ import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
 import { AutoRateCard } from '../components/common/AutoRateCard';
 import { BcvRatesCard } from '../components/common/BcvRatesCard';
+import KycPanel from '../components/admin/KycPanel';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -61,7 +62,6 @@ export default function AdminPanel() {
   const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   const [recharges, setRecharges] = useState([]);
   const [users, setUsers] = useState([]);
-  const [kycPending, setKycPending] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -118,13 +118,13 @@ export default function AdminPanel() {
             api.get('/admin/withdrawals/pending').catch(() => ({ data: [] })),
             api.get('/admin/recharges/ves/pending').catch(() => ({ data: { recharges: [] } })),
             api.get('/admin/users').catch(() => ({ data: { users: [] } })),
-            api.get('/admin/verifications/pending').catch(() => ({ data: [] }))
+            api.get('/admin/kyc/list', { params: { status: 'pending', limit: 1 } }).catch(() => ({ data: { counts: { pending: 0 } } }))
           ]);
           setStats({
             pending_withdrawals: (wRes.data || []).length,
             pending_recharges: (rRes.data?.recharges || []).length,
             users: (uRes.data?.users || []).length,
-            pending_kyc: (kRes.data || []).length
+            pending_kyc: (kRes.data?.counts?.pending ?? 0)
           });
           break;
         case 'withdrawals':
@@ -154,8 +154,7 @@ export default function AdminPanel() {
           setUsers(usersRes.data?.users || []);
           break;
         case 'kyc':
-          const kycRes = await api.get('/admin/verifications/pending');
-          setKycPending(kycRes.data || []);
+          // Handled fully by <KycPanel/> (it fetches its own data via /admin/kyc/list)
           break;
         case 'support':
           const supportRes = await api.get('/admin/support-requests');
@@ -234,9 +233,12 @@ export default function AdminPanel() {
     catch { toast.error('Error al aprobar'); }
   };
 
-  const handleKycDecision = async (verificationId, approved, reason = '') => {
-    try { await api.post('/admin/verifications/decide', { verification_id: verificationId, approved, rejection_reason: reason }); toast.success(approved ? 'KYC aprobado' : 'KYC rechazado'); loadData(); } 
-    catch { toast.error('Error al procesar KYC'); }
+  // Refresh overview stats after KYC actions (the KycPanel manages its own state)
+  const refreshKycStats = async () => {
+    try {
+      const res = await api.get('/admin/kyc/list', { params: { status: 'pending', limit: 1 } });
+      setStats((prev) => ({ ...prev, pending_kyc: res.data?.counts?.pending ?? 0 }));
+    } catch { /* silent */ }
   };
 
   const handleChangeRole = async (newRole) => {
@@ -1154,113 +1156,9 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* KYC Tab */}
+        {/* KYC Tab (new modular panel: tabs, search, lightbox, audit log, reject reasons) */}
         {activeTab === 'kyc' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {loading ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
-            ) : kycPending.length === 0 ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No hay verificaciones pendientes</p></div>
-            ) : kycPending.map((k) => {
-              const v = k.verification || {};
-              return (
-                <div key={v.verification_id || k.user_id} style={{ ...cardStyle, padding: '24px' }} data-testid={`kyc-${v.verification_id || k.user_id}`}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                    {/* Selfie Preview */}
-                    {v.selfie_image && (
-                      <img src={v.selfie_image} alt="Selfie" style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', border: '2px solid #e5e7eb' }} />
-                    )}
-                    <div style={{ flex: 1, minWidth: '200px' }}>
-                      <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{v.full_name || k.name}</h3>
-                      <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>{k.email}</p>
-                      <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>CPF: {maskCPF(v.cpf_number)} • Doc: {v.document_number}</p>
-                      {v.phone_number && <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>Tel: {v.phone_number}</p>}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => setSelectedItem({ ...k, verification: v })} style={{ ...btnPrimary, backgroundColor: '#6366f1' }}>
-                        <Eye style={{ width: '16px', height: '16px' }} /> Ver Docs
-                      </button>
-                      <button onClick={() => handleKycDecision(v.verification_id || k.user_id, true)} style={btnSuccess}>Aprobar</button>
-                      <button onClick={() => handleKycDecision(v.verification_id || k.user_id, false, 'Documentos no válidos')} style={btnDanger}>Rechazar</button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* KYC Document Viewer Modal */}
-        {selectedItem?.verification && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '20px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflow: 'auto', position: 'relative' }}>
-              <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10 }}>
-                <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Documentos de {selectedItem.verification.full_name}</h2>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{selectedItem.email}</p>
-                </div>
-                <button onClick={() => setSelectedItem(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}>
-                  <X style={{ width: '24px', height: '24px', color: '#6b7280' }} />
-                </button>
-              </div>
-              <div style={{ padding: '20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                  {/* ID Document */}
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>Documento de Identidad</p>
-                    </div>
-                    {selectedItem.verification.id_document_image ? (
-                      <img src={selectedItem.verification.id_document_image} alt="ID Document" style={{ width: '100%', height: '200px', objectFit: 'contain', backgroundColor: '#f9fafb' }} />
-                    ) : (
-                      <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No disponible</div>
-                    )}
-                  </div>
-                  {/* CPF Document */}
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>CPF</p>
-                    </div>
-                    {selectedItem.verification.cpf_image ? (
-                      <img src={selectedItem.verification.cpf_image} alt="CPF" style={{ width: '100%', height: '200px', objectFit: 'contain', backgroundColor: '#f9fafb' }} />
-                    ) : (
-                      <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No disponible</div>
-                    )}
-                  </div>
-                  {/* Selfie */}
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>Selfie</p>
-                    </div>
-                    {selectedItem.verification.selfie_image ? (
-                      <img src={selectedItem.verification.selfie_image} alt="Selfie" style={{ width: '100%', height: '200px', objectFit: 'contain', backgroundColor: '#f9fafb' }} />
-                    ) : (
-                      <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No disponible</div>
-                    )}
-                  </div>
-                </div>
-                {/* User Data */}
-                <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: '0 0 12px 0' }}>Datos del Usuario</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', fontSize: '14px' }}>
-                    <div><span style={{ color: '#6b7280' }}>Nombre:</span> <span style={{ color: '#111827', fontWeight: '500' }}>{selectedItem.verification.full_name}</span></div>
-                    <div><span style={{ color: '#6b7280' }}>Documento:</span> <span style={{ color: '#111827', fontWeight: '500' }}>{selectedItem.verification.document_number}</span></div>
-                    <div><span style={{ color: '#6b7280' }}>CPF:</span> <span style={{ color: '#111827', fontWeight: '500' }}>{selectedItem.verification.cpf_number}</span></div>
-                    <div><span style={{ color: '#6b7280' }}>Teléfono:</span> <span style={{ color: '#111827', fontWeight: '500' }}>{selectedItem.verification.phone_number}</span></div>
-                  </div>
-                </div>
-                {/* Action Buttons */}
-                <div style={{ marginTop: '20px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                  <button onClick={() => { handleKycDecision(selectedItem.verification.verification_id || selectedItem.user_id, false, 'Documentos no válidos'); setSelectedItem(null); }} style={{ ...btnDanger, padding: '12px 24px' }}>
-                    Rechazar
-                  </button>
-                  <button onClick={() => { handleKycDecision(selectedItem.verification.verification_id || selectedItem.user_id, true); setSelectedItem(null); }} style={{ ...btnSuccess, padding: '12px 24px' }}>
-                    Aprobar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <KycPanel onChange={refreshKycStats} />
         )}
 
         {/* Rates Tab */}
