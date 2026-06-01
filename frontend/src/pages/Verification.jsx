@@ -20,13 +20,25 @@ export default function Verification() {
   
   const [formData, setFormData] = useState({
     full_name: user?.full_name || user?.name || '',
+    document_type: 'rg', // rg | cnh | rnm | passport
     document_number: '',
     cpf_number: '',
     phone_number: '',
     id_document_image: null,
+    id_document_image_back: null, // required for rg/cnh/rnm
     cpf_image: null,
     selfie_image: null,
   });
+
+  // Catalog of accepted document types and whether they need the back side
+  const DOCUMENT_TYPES = [
+    { code: 'rg',       label: 'RG (Registro Geral)',                       requires_back: true  },
+    { code: 'cnh',      label: 'CNH (Carteira Nacional de Habilitação)',     requires_back: true  },
+    { code: 'rnm',      label: 'RNM (Registro Nacional Migratório)',        requires_back: true  },
+    { code: 'passport', label: 'Pasaporte',                                  requires_back: false },
+  ];
+  const currentDocType = DOCUMENT_TYPES.find(d => d.code === formData.document_type) || DOCUMENT_TYPES[0];
+  const requiresBack = currentDocType.requires_back;
 
   // Styles
   const pageStyle = {
@@ -173,13 +185,20 @@ export default function Verification() {
       toast.error('Sube todos los documentos requeridos');
       return;
     }
+    if (requiresBack && !formData.id_document_image_back) {
+      toast.error(`Para ${currentDocType.label.split(' ')[0]} es obligatorio adjuntar también el reverso del documento`);
+      setStep(2);
+      return;
+    }
 
     setLoading(true);
     try {
       // Include full phone number with country code
       const submitData = {
         ...formData,
-        phone_number: `${phoneCountry}${formData.phone_number}`
+        phone_number: `${phoneCountry}${formData.phone_number}`,
+        // Strip the back side if the document type doesn't need it
+        id_document_image_back: requiresBack ? formData.id_document_image_back : null,
       };
       
       await api.post('/verification/submit', submitData);
@@ -312,13 +331,46 @@ export default function Verification() {
               </div>
 
               <div>
+                <label style={labelStyle}>Tipo de documento</label>
+                <select
+                  value={formData.document_type}
+                  onChange={(e) => setFormData({ ...formData, document_type: e.target.value, id_document_image: null, id_document_image_back: null })}
+                  data-testid="document-type-select"
+                  style={{
+                    ...inputStyle,
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 14px center',
+                    paddingRight: '40px',
+                  }}
+                >
+                  {DOCUMENT_TYPES.map((d) => (
+                    <option key={d.code} value={d.code}>{d.label}</option>
+                  ))}
+                </select>
+                {requiresBack && (
+                  <p style={{ fontSize: '12px', color: '#92400e', margin: '6px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle style={{ width: '14px', height: '14px' }} />
+                    Necesitarás subir <strong style={{ marginLeft: '3px' }}>frente y reverso</strong>
+                  </p>
+                )}
+              </div>
+
+              <div>
                 <label style={labelStyle}>Número de documento</label>
                 <input
                   type="text"
                   value={formData.document_number}
                   onChange={(e) => setFormData({...formData, document_number: e.target.value})}
                   style={inputStyle}
-                  placeholder="RG o Pasaporte"
+                  placeholder={
+                    formData.document_type === 'cnh' ? 'Número de la CNH' :
+                    formData.document_type === 'rnm' ? 'Número del RNM' :
+                    formData.document_type === 'passport' ? 'Número de pasaporte' :
+                    'Número del RG'
+                  }
                 />
               </div>
 
@@ -392,7 +444,7 @@ export default function Verification() {
           </div>
         )}
 
-        {/* Step 2: ID Document */}
+        {/* Step 2: ID Document (front + back when applicable) */}
         {step === 2 && (
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
@@ -405,28 +457,63 @@ export default function Verification() {
               </div>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Documento de identidad</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>RG o Pasaporte (frente)</p>
+                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                  {currentDocType.label}{requiresBack ? ' — frente y reverso' : ' — solo frente'}
+                </p>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <input type="file" accept="image/*" onChange={handleFileChange('id_document_image')} style={{ display: 'none' }} id="id-upload" />
-              <label htmlFor="id-upload" style={uploadAreaStyle(formData.id_document_image)}>
-                {formData.id_document_image ? (
-                  <>
-                    <img src={formData.id_document_image} alt="ID" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: '#22c55e', borderRadius: '50%', padding: '6px' }}>
-                      <CheckCircle style={{ width: '16px', height: '16px', color: 'white' }} />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#374151', margin: '0 0 4px 0' }}>Subir documento</p>
-                    <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>JPG, PNG o PDF (máx. 5MB)</p>
-                  </>
-                )}
-              </label>
+              {/* FRONT */}
+              <div>
+                <label style={{ ...labelStyle, marginBottom: '6px' }}>
+                  Frente del documento <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input type="file" accept="image/*" onChange={handleFileChange('id_document_image')} style={{ display: 'none' }} id="id-upload-front" />
+                <label htmlFor="id-upload-front" style={uploadAreaStyle(formData.id_document_image)} data-testid="upload-id-front">
+                  {formData.id_document_image ? (
+                    <>
+                      <img src={formData.id_document_image} alt="ID frente" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: '#22c55e', borderRadius: '50%', padding: '6px' }}>
+                        <CheckCircle style={{ width: '16px', height: '16px', color: 'white' }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
+                      <p style={{ fontSize: '15px', fontWeight: '600', color: '#374151', margin: '0 0 4px 0' }}>Subir frente</p>
+                      <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>JPG o PNG (máx. 5MB)</p>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {/* BACK (only for rg, cnh, rnm) */}
+              {requiresBack && (
+                <div>
+                  <label style={{ ...labelStyle, marginBottom: '6px' }}>
+                    Reverso del documento <span style={{ color: '#dc2626' }}>*</span>
+                    <span style={{ fontSize: '12px', fontWeight: 400, color: '#6b7280', marginLeft: '6px' }}>(obligatorio)</span>
+                  </label>
+                  <input type="file" accept="image/*" onChange={handleFileChange('id_document_image_back')} style={{ display: 'none' }} id="id-upload-back" />
+                  <label htmlFor="id-upload-back" style={uploadAreaStyle(formData.id_document_image_back)} data-testid="upload-id-back">
+                    {formData.id_document_image_back ? (
+                      <>
+                        <img src={formData.id_document_image_back} alt="ID reverso" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: '#22c55e', borderRadius: '50%', padding: '6px' }}>
+                          <CheckCircle style={{ width: '16px', height: '16px', color: 'white' }} />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
+                        <p style={{ fontSize: '15px', fontWeight: '600', color: '#374151', margin: '0 0 4px 0' }}>Subir reverso</p>
+                        <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>JPG o PNG (máx. 5MB)</p>
+                      </>
+                    )}
+                  </label>
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button onClick={() => setStep(1)} style={{ ...buttonSecondaryStyle, flex: 1 }}>
@@ -434,8 +521,8 @@ export default function Verification() {
                 </button>
                 <button
                   onClick={() => setStep(3)}
-                  disabled={!formData.id_document_image}
-                  style={{ ...buttonPrimaryStyle, flex: 2, opacity: !formData.id_document_image ? 0.5 : 1 }}
+                  disabled={!formData.id_document_image || (requiresBack && !formData.id_document_image_back)}
+                  style={{ ...buttonPrimaryStyle, flex: 2, opacity: (!formData.id_document_image || (requiresBack && !formData.id_document_image_back)) ? 0.5 : 1 }}
                 >
                   Continuar
                 </button>

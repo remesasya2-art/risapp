@@ -134,12 +134,14 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     }
   };
 
+  const DOCS_NEEDING_BACK = new Set(['rg', 'cnh', 'rnm']);
+  const requiresBack = DOCS_NEEDING_BACK.has(v.document_type);
+
   const docs = [
-    { url: v.id_document_image, label: 'Documento de Identidad', autoRotate: 0 },
-    // CPF is commonly captured vertically; we don't auto-rotate by default,
-    // but the user can rotate in the lightbox via R or the toolbar.
-    { url: v.cpf_image,         label: 'CPF',                    autoRotate: 0 },
-    { url: v.selfie_image,      label: 'Selfie',                 autoRotate: 0 },
+    { url: v.id_document_image,      label: `${v.document_type_label || 'Documento'} (frente)`, autoRotate: 0 },
+    ...(requiresBack ? [{ url: v.id_document_image_back, label: `${v.document_type_label || 'Documento'} (reverso)`, autoRotate: 0 }] : []),
+    { url: v.cpf_image,              label: 'CPF',                                                 autoRotate: 0 },
+    { url: v.selfie_image,           label: 'Selfie',                                              autoRotate: 0 },
   ];
   const availableDocs = docs.filter((d) => !!d.url);
 
@@ -170,6 +172,17 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
                 }}>
                   {badge.label}
                 </span>
+                {v.document_type_label && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '4px 10px', borderRadius: '999px',
+                    fontSize: '12px', fontWeight: 600,
+                    backgroundColor: '#eef2ff', color: '#4338ca',
+                    border: '1px solid #c7d2fe'
+                  }}>
+                    {v.document_type_label}
+                  </span>
+                )}
               </div>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>
                 {v.email || '—'} {v.phone_number ? ` • ${v.phone_number}` : ''}
@@ -273,11 +286,33 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
                 {history.length === 0 ? (
                   <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>Sin eventos.</p>
                 ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {history.map((h) => (
-                      <li key={h.audit_id} style={{ display: 'flex', gap: '10px', fontSize: '13px', color: '#374151' }}>
-                        <span style={{ minWidth: '80px', color: '#6b7280' }}>{formatRelativeTime(h.created_at)}</span>
-                        <span><strong>{ACTION_LABEL[h.action] || h.action}</strong>{h.admin_name ? ` — ${h.admin_name}` : ''}{h.details?.final_reason ? ` (${h.details.final_reason})` : ''}</span>
+                      <li key={h.audit_id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#374151', paddingBottom: '10px', borderBottom: '1px dashed #e5e7eb' }}>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+                          <span style={{ minWidth: '90px', color: '#6b7280' }}>{formatRelativeTime(h.created_at)}</span>
+                          <span>
+                            <strong>{ACTION_LABEL[h.action] || h.action}</strong>
+                            {h.admin_name ? ` — ${h.admin_name}` : ''}
+                            {h.details?.final_reason ? ` (${h.details.final_reason})` : ''}
+                          </span>
+                        </div>
+                        {h.action === 'note_updated' && (h.details?.previous_value !== undefined || h.details?.new_value !== undefined) && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginLeft: '100px', marginTop: '4px' }}>
+                            <div style={{ padding: '8px 10px', backgroundColor: '#fef2f2', borderLeft: '3px solid #ef4444', borderRadius: '6px', fontSize: '12px' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Antes</div>
+                              <div style={{ color: '#7f1d1d', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {h.details.previous_value || <em style={{ color: '#9ca3af' }}>(vacío)</em>}
+                              </div>
+                            </div>
+                            <div style={{ padding: '8px 10px', backgroundColor: '#f0fdf4', borderLeft: '3px solid #22c55e', borderRadius: '6px', fontSize: '12px' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Después</div>
+                              <div style={{ color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {h.details.new_value || <em style={{ color: '#9ca3af' }}>(vacío)</em>}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
