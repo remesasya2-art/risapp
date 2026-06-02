@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
+import BalanceCard from '../components/dashboard/BalanceCard';
+import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
 
@@ -205,7 +207,7 @@ export default function Dashboard() {
     <div 
       style={{ 
         minHeight: '100vh', 
-        backgroundColor: '#f8f9fc', 
+        backgroundColor: '#F4F5F9', 
         display: 'flex',
         fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
       }}
@@ -420,178 +422,56 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Balance Card */}
-        <div style={{ ...cardStyle, padding: isMobile ? '20px' : '32px', marginBottom: '24px' }} data-testid="balance-card">
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: isMobile ? 'column' : 'row',
-            alignItems: isMobile ? 'stretch' : 'flex-start', 
-            justifyContent: 'space-between', 
-            marginBottom: '24px',
-            gap: isMobile ? '20px' : '0'
-          }}>
-            <div>
-              <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 8px 0' }}>Saldo Total</p>
-              <p style={{ fontSize: isMobile ? '36px' : '48px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>
-                RI$ {fmt((user?.balance_ris || 0))}
-              </p>
-              <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>
-                Tasa actual: 1 RIS = {fmt(rates?.ris_to_ves) || '0.00'} Bs
-              </p>
-              {rates?.bcv_usd_ves && (
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '8px',
-                  marginTop: '10px', padding: '6px 12px',
-                  backgroundColor: '#fef3c7', borderRadius: '999px',
-                  border: '1px solid #fcd34d'
-                }}
-                data-testid="dashboard-bcv-usd"
-                >
-                  <span style={{ fontSize: '13px' }}>🇺🇸</span>
-                  <span style={{ fontSize: '12px', color: '#92400e', fontWeight: '600' }}>BCV</span>
-                  <span style={{ fontSize: '13px', color: '#78350f', fontWeight: '700' }}>
-                    1 USD = Bs. {fmt(rates.bcv_usd_ves, 2)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <Link to="/recharge" style={buttonPrimaryStyle} data-testid="recharge-button">
-              <Plus style={{ width: '20px', height: '20px' }} strokeWidth={2} />
-              {isMobile ? 'Recargar' : 'Recargar Saldo'}
-            </Link>
-            <Link to="/send" style={buttonSecondaryStyle} data-testid="send-button">
-              <ArrowUpRight style={{ width: '20px', height: '20px' }} strokeWidth={2} />
-              {isMobile ? 'Enviar' : 'Enviar Dinero'}
-            </Link>
-          </div>
+        {/* Balance Card (gradient + count-up + dual pills) */}
+        <div style={{ marginBottom: '24px' }}>
+          <BalanceCard
+            balance={user?.balance_ris || 0}
+            risToVes={rates?.ris_to_ves || 0}
+            bcvUsdVes={rates?.bcv_usd_ves || 0}
+            updatedAt={rates?.updated_at || rates?.last_updated || new Date()}
+            isMobile={isMobile}
+          />
         </div>
 
         {/* Recent Transactions */}
-        <div style={{ ...cardStyle, padding: isMobile ? '20px' : '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: isMobile ? '20px' : '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '16px', paddingBottom: '14px',
+            borderBottom: '1px solid #EFEFF5',
+          }}>
+            <h2 style={{ fontSize: isMobile ? '17px' : '18px', fontWeight: 700, color: '#1A1A2E', margin: 0, letterSpacing: '-0.01em' }}>
               Transacciones Recientes
             </h2>
-            <Link to="/history" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6366f1', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
+            <Link to="/history" style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600,
+            }}>
               Ver todo
               <ChevronRight style={{ width: '16px', height: '16px' }} />
             </Link>
           </div>
-          
+
           {loadingTransactions ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
-              <div style={{ width: '32px', height: '32px', border: '3px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <div style={{ width: '32px', height: '32px', border: '3px solid #e5e7eb', borderTopColor: '#5B4FE9', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
             </div>
           ) : recentTransactions.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
-              <p style={{ color: '#9ca3af', fontSize: '14px', margin: '0 0 12px 0', textAlign: 'center' }}>No hay transacciones aún.</p>
-              <Link to="/recharge" style={{ color: '#6366f1', textDecoration: 'none', fontSize: '14px', fontWeight: '500' }}>
+              <p style={{ color: '#8E8E9A', fontSize: '14px', margin: '0 0 12px 0', textAlign: 'center' }}>No hay transacciones aún.</p>
+              <Link to="/recharge" style={{ color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
                 Recarga saldo para comenzar
               </Link>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {recentTransactions.map((tx) => (
-                <div 
-                  key={tx.transaction_id} 
-                  style={{ 
-                    padding: isMobile ? '14px' : '16px', 
-                    backgroundColor: '#f9fafb', 
-                    borderRadius: '14px',
-                    border: '1px solid #f3f4f6'
-                  }}
-                  data-testid={`recent-tx-${tx.transaction_id}`}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    {/* Icon */}
-                    <div style={{
-                      width: isMobile ? '44px' : '48px', 
-                      height: isMobile ? '44px' : '48px', 
-                      borderRadius: '12px', 
-                      flexShrink: 0,
-                      backgroundColor: tx.type === 'withdrawal' ? '#dbeafe' : '#dcfce7',
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center'
-                    }}>
-                      {tx.type === 'withdrawal' ? (
-                        <ArrowUpRight style={{ width: '22px', height: '22px', color: '#2563eb' }} />
-                      ) : (
-                        <ArrowDownLeft style={{ width: '22px', height: '22px', color: '#16a34a' }} />
-                      )}
-                    </div>
-                    
-                    {/* Content */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                        <div>
-                          <p style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: '600', color: '#111827', margin: 0 }}>
-                            {tx.type === 'withdrawal' ? 'Envío a Venezuela' : 'Recarga'}
-                          </p>
-                          <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{formatDate(tx.created_at)}</p>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: isMobile ? '15px' : '16px', fontWeight: '700', margin: 0, color: tx.type === 'withdrawal' ? '#dc2626' : '#16a34a' }}>
-                            {tx.type === 'withdrawal' ? '-' : '+'}{fmt(tx.amount_input)} RIS
-                          </p>
-                          {tx.type === 'withdrawal' && tx.amount_output && (
-                            <p style={{ fontSize: '12px', color: '#374151', margin: '2px 0 0 0', fontWeight: '600' }}>
-                              {fmt(tx.amount_output)} VES
-                              {rates?.bcv_usd_ves && (
-                                <span style={{ color: '#16a34a' }}> = $ {fmt(tx.amount_output / rates.bcv_usd_ves, 2)} BCV</span>
-                              )}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Beneficiary info for withdrawals */}
-                      {tx.type === 'withdrawal' && tx.beneficiary_data && (
-                        <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                          <p style={{ fontSize: '13px', fontWeight: '500', color: '#374151', margin: 0 }}>{tx.beneficiary_data.full_name}</p>
-                          <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
-                            {tx.beneficiary_data.bank} • {tx.beneficiary_data.phone || tx.beneficiary_data.account_number}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {/* Status badge */}
-                      <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <div style={{
-                          display: 'inline-flex', 
-                          alignItems: 'center', 
-                          gap: '5px', 
-                          padding: '4px 10px',
-                          borderRadius: '9999px', 
-                          fontSize: '12px', 
-                          fontWeight: '500', 
-                          ...getStatusStyle(tx.status)
-                        }}>
-                          {getStatusIcon(tx.status)}
-                          {getStatusText(tx.status)}
-                        </div>
-                        
-                        {/* Botón para ver comprobante(s) */}
-                        {tx.type === 'withdrawal' && tx.status === 'completed' && (tx.proof_images?.length > 0 || tx.proof_image) && (
-                          <button
-                            onClick={() => openVoucher(tx)}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px',
-                              borderRadius: '9999px', fontSize: '12px', fontWeight: '500', cursor: 'pointer',
-                              backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none'
-                            }}
-                            data-testid={`view-voucher-${tx.transaction_id}`}
-                          >
-                            <Eye style={{ width: '14px', height: '14px' }} />
-                            Ver comprobante
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <TransactionItem
+                  key={tx.transaction_id}
+                  tx={tx}
+                  rates={rates}
+                  onViewVoucher={openVoucher}
+                />
               ))}
             </div>
           )}

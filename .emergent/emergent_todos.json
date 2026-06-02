@@ -1,38 +1,26 @@
 [
   {
-    "content": "Backend: modelo VerificationSubmit + validación document_type/id_document_image_back",
+    "content": "Crear hook useCountUp para animación del saldo",
     "status": "completed"
   },
   {
-    "content": "Backend: agregar `document_type` e `id_document_image_back` en _serialize_verification y guardado",
+    "content": "Extender utils/format con formatAccountNumber y formatRelativeUpdate",
     "status": "completed"
   },
   {
-    "content": "Backend: audit log de notas con diff old/new value",
+    "content": "Crear componente BalanceCard.jsx con gradient, wallet icon, eye toggle, 2 pills, botones simétricos",
     "status": "completed"
   },
   {
-    "content": "Backend: endpoint GET /api/admin/kyc/document-types",
+    "content": "Crear componente TransactionItem.jsx con badges traducidos, iconos categorizados, cuenta agrupada",
     "status": "completed"
   },
   {
-    "content": "Backend: endpoint GET /api/admin/kyc/export.csv con filtros aplicados",
+    "content": "Integrar componentes en Dashboard.jsx + cambiar bg a #F4F5F9",
     "status": "completed"
   },
   {
-    "content": "Frontend Verification.jsx: selector de tipo de doc + captura frontal/trasera condicional",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend KycPanel: botón Exportar CSV",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend KycDetailModal: mostrar 4to tile (trasera), badge document_type, render diff de notas en historial",
-    "status": "completed"
-  },
-  {
-    "content": "Probar end-to-end y dejar listo para Save to GitHub",
+    "content": "Validar visualmente y dejar listo",
     "status": "completed"
   }
 ]
