@@ -209,7 +209,7 @@ export default function AdminPanel() {
       await api.post(`/admin/recharges/ves/process/${txId}`, { action: 'approve' });
       toast.success('Recarga aprobada - Saldo acreditado');
       loadData();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Error al aprobar'); }
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error al aprobar');  loadData();}
   };
 
   // Rechazar recarga VES
@@ -226,7 +226,7 @@ export default function AdminPanel() {
       });
       toast.success('Recarga rechazada');
       loadData();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar'); }
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar');  loadData();}
   };
 
   const handleApproveRecharge = async (txId) => {
