@@ -8,12 +8,13 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
-import { fmt } from '../utils/format';
+import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
 import { AutoRateCard } from '../components/common/AutoRateCard';
 import { BcvRatesCard } from '../components/common/BcvRatesCard';
 import KycPanel from '../components/admin/KycPanel';
+import { StatusBadge } from '../components/dashboard/TransactionItem';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -465,13 +466,6 @@ export default function AdminPanel() {
   const btnDanger = { backgroundColor: '#dc2626', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
   const btnSecondary = { backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
 
-  const getStatusBadge = (status) => {
-    const styles = { completed: { bg: '#dcfce7', color: '#16a34a' }, pending: { bg: '#fef3c7', color: '#d97706' }, rejected: { bg: '#fee2e2', color: '#dc2626' } };
-    const labels = { completed: 'Completado', pending: 'Pendiente', rejected: 'Rechazado' };
-    const s = styles[status] || { bg: '#f3f4f6', color: '#6b7280' };
-    return <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', backgroundColor: s.bg, color: s.color }}>{labels[status] || status}</span>;
-  };
-
   return (
     <div style={pageStyle} data-testid="admin-panel">
       {/* Header */}
@@ -676,9 +670,12 @@ export default function AdminPanel() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {['all', 'pending', 'completed', 'rejected'].map((status) => (
                     <button key={status} onClick={() => setStatusFilter(status)}
-                      style={{ padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500',
-                        backgroundColor: statusFilter === status ? '#6366f1' : '#f3f4f6', color: statusFilter === status ? '#ffffff' : '#374151' }}>
-                      {status === 'all' ? 'Todos' : status === 'pending' ? 'Pendientes' : status === 'completed' ? 'Completados' : 'Rechazados'}
+                      style={{ padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600,
+                        backgroundColor: statusFilter === status ? '#5B4FE9' : '#f3f4f6',
+                        color: statusFilter === status ? '#ffffff' : '#374151',
+                        boxShadow: statusFilter === status ? '0 4px 10px rgba(91,79,233,0.30)' : 'none',
+                        transition: 'all 0.2s' }}>
+                      {status === 'all' ? 'Todos' : status === 'pending' ? 'Pendientes' : status === 'completed' ? 'Aprobados' : 'Rechazados'}
                     </button>
                   ))}
                   {/* Cleanup Button - Only for SuperAdmin */}
@@ -723,8 +720,15 @@ export default function AdminPanel() {
                           </td>
                           <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>{new Date(w.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Caracas' })}</td>
                           <td style={{ padding: '16px' }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{w.beneficiary_data?.full_name}</p>
-                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{w.beneficiary_data?.bank}</p>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1A1A2E', margin: 0 }}>{w.beneficiary_data?.full_name}</p>
+                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              {w.beneficiary_data?.bank}
+                            </p>
+                            {(w.beneficiary_data?.account_number || w.beneficiary_data?.phone) && (
+                              <p style={{ fontSize: '11px', color: '#8E8E9A', margin: '2px 0 0 0', fontFamily: 'monospace', letterSpacing: '0.02em' }}>
+                                {formatAccountNumber(w.beneficiary_data?.account_number || w.beneficiary_data?.phone) || (w.beneficiary_data?.account_number || w.beneficiary_data?.phone)}
+                              </p>
+                            )}
                           </td>
                           <td style={{ padding: '16px' }}>
                             <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{fmt(w.amount_input)} RIS</p>
@@ -750,7 +754,7 @@ export default function AdminPanel() {
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '16px' }}>{getStatusBadge(w.status)}</td>
+                          <td style={{ padding: '16px' }}><StatusBadge status={w.status} /></td>
                           <td style={{ padding: '16px' }}>
                             {w.status === 'pending' && (
                               <div style={{ display: 'flex', gap: '8px' }}>
@@ -829,9 +833,7 @@ export default function AdminPanel() {
                           <span style={{ color: '#6366f1', fontWeight: '600' }}>Caracas</span>
                         </div>
                       </div>
-                      <span style={{ padding: '5px 12px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', backgroundColor: '#fef3c7', color: '#d97706' }}>
-                        Pendiente
-                      </span>
+                      <StatusBadge status="pending" />
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
