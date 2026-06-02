@@ -881,7 +881,7 @@ async def process_ves_recharge(
         raise HTTPException(status_code=404, detail="Recarga no encontrada")
     
     if recharge.get("status") != "pending":
-        raise HTTPException(status_code=400, detail="Esta recarga ya fue procesada")
+        return {"message": "Esta recarga ya fue procesada", "already_processed": True}
     
     user_id = recharge.get("user_id")
     amount_ris = recharge.get("amount_ris", 0)
