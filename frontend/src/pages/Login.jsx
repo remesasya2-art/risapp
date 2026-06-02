@@ -8,7 +8,7 @@ import TwoFactorFlow from '../components/auth/TwoFactorFlow';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();h
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
