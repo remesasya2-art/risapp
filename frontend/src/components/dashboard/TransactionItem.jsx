@@ -14,7 +14,7 @@ const STATUS_CONFIG = {
   failed:                   { label: 'Fallida',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
 };
 
-function StatusBadge({ status }) {
+export function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   const { Icon } = cfg;
   return (
