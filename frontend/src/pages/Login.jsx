@@ -8,7 +8,7 @@ import TwoFactorFlow from '../components/auth/TwoFactorFlow';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login } = useAuth();h
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -118,7 +118,7 @@ export default function Login() {
             src="/logo-ris.png" 
             alt="RIS" 
             className="h-24 w-auto"
-            style={{ borderRadius: '0px' }}
+            style={{ borderRadius: '16px' }}
           />
         </div>
 
