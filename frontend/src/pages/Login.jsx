@@ -7,7 +7,7 @@ import PasswordRecovery from './PasswordRecovery';
 import TwoFactorFlow from '../components/auth/TwoFactorFlow';
 
 export default function Login() {
-  const navigate = useNavigate();h
+  const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
