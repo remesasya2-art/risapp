@@ -3,11 +3,11 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
-  ArrowLeft, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, 
-  XCircle, Filter, ChevronDown, Plus, Eye, X, Download
+  ArrowLeft, ArrowUpRight, Clock, Filter, ChevronDown, Plus, X, Download
 } from 'lucide-react';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
+import TransactionItem from '../components/dashboard/TransactionItem';
 import { fmt } from '../utils/format';
 
 // Convertir URL de imagen a ruta accesible
@@ -84,36 +84,6 @@ export default function History() {
     setPage(1);
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'completed': return <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />;
-      case 'pending':
-      case 'pending_manual_approval': return <Clock style={{ width: '20px', height: '20px', color: '#d97706' }} />;
-      case 'rejected': return <XCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />;
-      default: return <Clock style={{ width: '20px', height: '20px', color: '#9ca3af' }} />;
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'completed': return 'Completado';
-      case 'pending': return 'Pendiente';
-      case 'pending_manual_approval': return 'En revisión';
-      case 'rejected': return 'Rechazado';
-      default: return status;
-    }
-  };
-
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'completed': return { backgroundColor: '#dcfce7', color: '#16a34a' };
-      case 'pending':
-      case 'pending_manual_approval': return { backgroundColor: '#fef3c7', color: '#d97706' };
-      case 'rejected': return { backgroundColor: '#fee2e2', color: '#dc2626' };
-      default: return { backgroundColor: '#f3f4f6', color: '#6b7280' };
-    }
-  };
-
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('es-VE', {
@@ -123,15 +93,14 @@ export default function History() {
 
   const pageStyle = {
     minHeight: '100vh',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    backgroundColor: '#F4F5F9',
     fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
   };
 
   const cardStyle = {
     backgroundColor: '#ffffff',
     borderRadius: '20px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #e5e7eb'
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   };
 
   const openVoucher = (tx) => {
@@ -144,40 +113,43 @@ export default function History() {
       <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <button 
               onClick={() => navigate(-1)} 
-              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
               data-testid="back-button"
             >
               <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
             </button>
             <div>
-              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Historial</h1>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{totalCount} transacciones</p>
+              <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#1A1A2E', margin: 0, letterSpacing: '-0.01em' }}>Historial</h1>
+              <p style={{ fontSize: '13px', color: '#8E8E9A', margin: '2px 0 0 0' }}>
+                {totalCount} {totalCount === 1 ? 'transacción' : 'transacciones'}
+              </p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               onClick={() => setShowFilters(!showFilters)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
-                backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '12px', border: 'none',
-              cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#374151'
-            }}
-            data-testid="filter-button"
-          >
-            <Filter style={{ width: '16px', height: '16px' }} />
-            Filtrar
-            <ChevronDown style={{ width: '16px', height: '16px', transform: showFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-          </button>
+                backgroundColor: '#ffffff', borderRadius: '12px', border: 'none',
+                cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#374151',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              }}
+              data-testid="filter-button"
+            >
+              <Filter style={{ width: '16px', height: '16px' }} />
+              Filtrar
+              <ChevronDown style={{ width: '16px', height: '16px', transform: showFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
             <NotificationBell />
           </div>
         </div>
 
         {/* Filters */}
         {showFilters && (
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
             {[
               { key: 'all', label: 'Todos' },
               { key: 'withdrawals', label: 'Envíos' },
@@ -188,9 +160,10 @@ export default function History() {
                 onClick={() => handleFilterChange(f.key)}
                 style={{
                   padding: '10px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                  fontSize: '14px', fontWeight: '500', transition: 'all 0.2s',
-                  backgroundColor: filter === f.key ? '#6366f1' : 'rgba(255,255,255,0.8)',
-                  color: filter === f.key ? '#ffffff' : '#374151'
+                  fontSize: '14px', fontWeight: 600, transition: 'all 0.2s',
+                  backgroundColor: filter === f.key ? '#5B4FE9' : '#ffffff',
+                  color: filter === f.key ? '#ffffff' : '#374151',
+                  boxShadow: filter === f.key ? '0 4px 10px rgba(91,79,233,0.30)' : '0 1px 3px rgba(0,0,0,0.06)',
                 }}
                 data-testid={`filter-${f.key}`}
               >
@@ -203,117 +176,36 @@ export default function History() {
         {/* Content */}
         {loading ? (
           <div style={{ ...cardStyle, padding: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: '40px', height: '40px', border: '4px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            <p style={{ color: '#6b7280', marginTop: '16px' }}>Cargando transacciones...</p>
+            <div style={{ width: '40px', height: '40px', border: '4px solid #e5e7eb', borderTopColor: '#5B4FE9', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <p style={{ color: '#8E8E9A', marginTop: '16px' }}>Cargando transacciones...</p>
           </div>
         ) : transactions.length === 0 ? (
           <div style={{ ...cardStyle, padding: '64px', textAlign: 'center' }}>
-            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-              <Clock style={{ width: '40px', height: '40px', color: '#d1d5db' }} />
+            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: '#F4F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Clock style={{ width: '40px', height: '40px', color: '#C2C2D6' }} />
             </div>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#374151', margin: '0 0 8px 0' }}>Sin transacciones</h3>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1A1A2E', margin: '0 0 8px 0' }}>Sin transacciones</h3>
+            <p style={{ fontSize: '14px', color: '#8E8E9A', margin: '0 0 24px 0' }}>
               {filter !== 'all' ? 'Prueba cambiando el filtro' : 'Realiza tu primera operación para verla aquí'}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-              <Link to="/recharge" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#16a34a', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: '500', fontSize: '14px' }}>
-                <Plus style={{ width: '20px', height: '20px' }} /> Recargar saldo
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <Link to="/recharge" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#38A169', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
+                <Plus style={{ width: '18px', height: '18px' }} /> Recargar saldo
               </Link>
-              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#6366f1', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: '500', fontSize: '14px' }}>
-                <ArrowUpRight style={{ width: '20px', height: '20px' }} /> Enviar remesa
+              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#5B4FE9', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
+                <ArrowUpRight style={{ width: '18px', height: '18px' }} /> Enviar remesa
               </Link>
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {transactions.map((tx) => (
-              <div key={tx.transaction_id} style={{ ...cardStyle, padding: '20px' }} data-testid={`transaction-${tx.transaction_id}`}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                  <div style={{
-                    width: '56px', height: '56px', borderRadius: '16px', flexShrink: 0,
-                    backgroundColor: tx.type === 'withdrawal' ? '#dbeafe' : '#dcfce7',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    {tx.type === 'withdrawal' ? (
-                      <ArrowUpRight style={{ width: '28px', height: '28px', color: '#2563eb' }} />
-                    ) : (
-                      <ArrowDownLeft style={{ width: '28px', height: '28px', color: '#16a34a' }} />
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                      <div>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
-                          {tx.type === 'withdrawal' ? 'Envío a Venezuela' : 'Recarga'}
-                        </p>
-                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{formatDate(tx.created_at)}</p>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '18px', fontWeight: '700', margin: 0, color: tx.type === 'withdrawal' ? '#dc2626' : '#16a34a' }}>
-                          {tx.type === 'withdrawal' ? '-' : '+'}{fmt(tx.amount_input)} RIS
-                        </p>
-                        {tx.type === 'withdrawal' && tx.amount_output && (
-                          <p style={{ fontSize: '14px', color: '#374151', margin: '2px 0 0 0', fontWeight: '600' }}>
-                            {fmt(tx.amount_output)} VES
-                            {rates?.bcv_usd_ves && (
-                              <span style={{ color: '#16a34a' }}> = $ {fmt(tx.amount_output / rates.bcv_usd_ves, 2)} BCV</span>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {tx.type === 'withdrawal' && tx.beneficiary_data && (
-                      <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
-                        <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', margin: 0 }}>{tx.beneficiary_data.full_name}</p>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{tx.beneficiary_data.bank}</p>
-                      </div>
-                    )}
-                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <div style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                        borderRadius: '9999px', fontSize: '14px', fontWeight: '500', ...getStatusStyle(tx.status)
-                      }}>
-                        {getStatusIcon(tx.status)}
-                        {getStatusText(tx.status)}
-                      </div>
-                      {/* Botón para ver comprobante(s) - mostrar si hay proof_images o proof_image */}
-                      {tx.type === 'withdrawal' && tx.status === 'completed' && (tx.proof_images?.length > 0 || tx.proof_image) && (
-                        <button
-                          onClick={() => openVoucher(tx)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                            borderRadius: '9999px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
-                            backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none',
-                            transition: 'all 0.2s'
-                          }}
-                          data-testid={`view-voucher-${tx.transaction_id}`}
-                          title="Ver comprobante(s) de pago"
-                        >
-                          <Eye style={{ width: '16px', height: '16px' }} />
-                          Ver {(tx.proof_images?.length || 1)} comprobante{(tx.proof_images?.length || 1) > 1 ? 's' : ''}
-                        </button>
-                      )}
-                      {/* También para recargas VES que tengan voucher */}
-                      {tx.type === 'recharge_ves' && tx.voucher_url && (
-                        <button
-                          onClick={() => openVoucher(tx)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                            borderRadius: '9999px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
-                            backgroundColor: '#dcfce7', color: '#16a34a', border: 'none',
-                            transition: 'all 0.2s'
-                          }}
-                          data-testid={`view-voucher-${tx.transaction_id}`}
-                          title="Ver comprobante"
-                        >
-                          <Eye style={{ width: '16px', height: '16px' }} />
-                          Ver comprobante
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <TransactionItem
+                key={tx.transaction_id}
+                tx={tx}
+                rates={rates}
+                onViewVoucher={openVoucher}
+              />
             ))}
           </div>
         )}
@@ -325,24 +217,26 @@ export default function History() {
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               style={{
-                padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: page === 1 ? 'default' : 'pointer',
-                backgroundColor: page === 1 ? '#e5e7eb' : '#6366f1', color: page === 1 ? '#9ca3af' : '#fff',
-                fontSize: '14px', fontWeight: '600', transition: 'all 0.2s'
+                padding: '10px 18px', borderRadius: '12px', border: 'none', cursor: page === 1 ? 'default' : 'pointer',
+                backgroundColor: page === 1 ? '#E5E7EB' : '#5B4FE9', color: page === 1 ? '#9CA3AF' : '#fff',
+                fontSize: '14px', fontWeight: 600, transition: 'all 0.2s',
+                boxShadow: page === 1 ? 'none' : '0 4px 10px rgba(91,79,233,0.30)',
               }}
               data-testid="prev-page"
             >
               Anterior
             </button>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151', padding: '0 12px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#374151', padding: '0 12px' }}>
               {page} / {totalPages}
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               style={{
-                padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: page === totalPages ? 'default' : 'pointer',
-                backgroundColor: page === totalPages ? '#e5e7eb' : '#6366f1', color: page === totalPages ? '#9ca3af' : '#fff',
-                fontSize: '14px', fontWeight: '600', transition: 'all 0.2s'
+                padding: '10px 18px', borderRadius: '12px', border: 'none', cursor: page === totalPages ? 'default' : 'pointer',
+                backgroundColor: page === totalPages ? '#E5E7EB' : '#5B4FE9', color: page === totalPages ? '#9CA3AF' : '#fff',
+                fontSize: '14px', fontWeight: 600, transition: 'all 0.2s',
+                boxShadow: page === totalPages ? 'none' : '0 4px 10px rgba(91,79,233,0.30)',
               }}
               data-testid="next-page"
             >
