@@ -99,6 +99,10 @@ export default function AdminPanel() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatReply, setChatReply] = useState('');
   const [accountingBanks, setAccountingBanks] = useState([]);
+  // Modal para rechazar recarga VES
+  const [showRejectRechargeModal, setShowRejectRechargeModal] = useState(false);
+  const [rejectRechargeId, setRejectRechargeId] = useState(null);
+  const [rejectRechargeReason, setRejectRechargeReason] = useState('');
 
   useEffect(() => { loadData(); }, [activeTab]);
 
@@ -213,18 +217,26 @@ export default function AdminPanel() {
   };
 
   // Rechazar recarga VES
-  const handleRejectRechargeVES = async (txId) => {
-    const reason = prompt('Motivo del rechazo:');
-    if (!reason) {
+  const handleRejectRechargeVES = (txId) => {
+    setRejectRechargeId(txId);
+    setRejectRechargeReason('');
+    setShowRejectRechargeModal(true);
+  };
+
+  const handleConfirmRejectRechargeVES = async () => {
+    if (!rejectRechargeReason.trim()) {
       toast.error('Debes proporcionar un motivo de rechazo');
       return;
     }
     try {
-      await api.post(`/admin/recharges/ves/process/${txId}`, { 
+      await api.post(`/admin/recharges/ves/process/${rejectRechargeId}`, { 
         action: 'reject', 
-        rejection_reason: reason
+        rejection_reason: rejectRechargeReason.trim()
       });
       toast.success('Recarga rechazada');
+      setShowRejectRechargeModal(false);
+      setRejectRechargeId(null);
+      setRejectRechargeReason('');
       loadData();
     } catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar');  loadData();}
   };
@@ -2341,6 +2353,59 @@ export default function AdminPanel() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal para rechazar recarga VES */}
+      {showRejectRechargeModal && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '16px', padding: '24px',
+            width: '100%', maxWidth: '440px', margin: '0 16px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: '#111827' }}>
+              Rechazar recarga
+            </h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#6b7280' }}>
+              Indica el motivo del rechazo. El usuario recibirá esta información.
+            </p>
+            <textarea
+              value={rejectRechargeReason}
+              onChange={(e) => setRejectRechargeReason(e.target.value)}
+              placeholder="Ej: Comprobante ilegible, monto incorrecto..."
+              rows={4}
+              style={{
+                width: '100%', padding: '12px', borderRadius: '10px',
+                border: '1.5px solid #d1d5db', fontSize: '14px',
+                fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+              <button
+                onClick={() => { setShowRejectRechargeModal(false); setRejectRechargeReason(''); setRejectRechargeId(null); }}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '10px', border: '1.5px solid #d1d5db',
+                  backgroundColor: '#fff', color: '#374151', fontSize: '14px',
+                  fontWeight: '600', cursor: 'pointer'
+                }}
+              >Cancelar</button>
+              <button
+                onClick={handleConfirmRejectRechargeVES}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '10px', border: 'none',
+                  backgroundColor: '#dc2626', color: '#fff', fontSize: '14px',
+                  fontWeight: '700', cursor: 'pointer'
+                }}
+              >Confirmar rechazo</button>
+            </div>
           </div>
         </div>
       )}
