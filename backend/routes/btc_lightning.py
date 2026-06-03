@@ -122,6 +122,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
             result = resp.json()
             logger.error(f"Blink lnInvoiceCreate response: {resp.status_code} body={resp.text}")
     except Exception as e:
+        logger.error(f"Blink except: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail="Error al conectar con el proveedor de pagos.")
     ln_data = result.get("data", {}).get("lnInvoiceCreate", {})
     errors = ln_data.get("errors", [])
