@@ -118,8 +118,9 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
                 raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, headers={"X-API-KEY": BLINK_API_KEY, "Content-Type": "application/json"}, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "walletId": "ffc6c2b9-e661-48ab-8aa4-3a6e668a0ecc"}}})
+            resp = await client.post(BLINK_GRAPHQL_URL, headers={"X-API-KEY": BLINK_API_KEY, "Content-Type": "application/json"}, json={"query": mutation, "variables": {"input": {"amount": str(sats), "memo": memo, "walletId": "ffc6c2b9-e661-48ab-8aa4-3a6e668a0ecc"}}})
             result = resp.json()
+            logger.info(f"Blink lnInvoiceCreate response: {result}")
     except Exception as e:
         raise HTTPException(status_code=502, detail="Error al conectar con el proveedor de pagos.")
     ln_data = result.get("data", {}).get("lnInvoiceCreate", {})
