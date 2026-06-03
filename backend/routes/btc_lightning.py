@@ -58,7 +58,7 @@ async def _get_total_enviado_hoy(user_id):
 
 def _verify_blink_signature(body, signature):
     if not BLINK_WEBHOOK_SECRET:
-        return True
+        return False
     expected = hmac.new(BLINK_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature or "")
 
@@ -101,6 +101,8 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
     ves_recibe = body.usd_cliente * tasa_ves
     memo = f"RIS-{current_user.user_id[:8]}-{uuid.uuid4().hex[:8]}"
     mutation = "mutation($input: LnInvoiceCreateInput!) { lnInvoiceCreate(input: $input) { invoice { paymentRequest paymentHash } errors { message } } }"
+    if not BLINK_API_KEY:
+                raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(BLINK_GRAPHQL_URL, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "expiresIn": 1800}}}, headers={"Authorization": f"Bearer {BLINK_API_KEY}", "Content-Type": "application/json"})
