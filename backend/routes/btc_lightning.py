@@ -118,7 +118,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
                 raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, headers={"X-API-KEY": BLINK_API_KEY, "Content-Type": "application/json"}, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "expiresIn": 1800}}}, headers={"Authorization": f"Bearer {BLINK_API_KEY}", "Content-Type": "application/json"})
+            resp = await client.post(BLINK_GRAPHQL_URL, headers={"X-API-KEY": BLINK_API_KEY, "Content-Type": "application/json"}, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "expiresIn": 1800}}})
             result = resp.json()
     except Exception as e:
         raise HTTPException(status_code=502, detail="Error al conectar con el proveedor de pagos.")
@@ -313,7 +313,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
                 raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "expiresIn": 1800}}}, headers={"Authorization": f"Bearer {BLINK_API_KEY}", "Content-Type": "application/json"})
+            resp = await client.post(BLINK_GRAPHQL_URL, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "expiresIn": 1800}}})
             result = resp.json()
     except Exception as e:
         raise HTTPException(status_code=502, detail="Error al conectar con el proveedor de pagos.")
