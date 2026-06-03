@@ -101,7 +101,7 @@ function AppRoutes() {
       <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
 
       {/* BTC Lightning Route */}
-              <Route path="/btc-lightning" element={<ProtectedRoute><BTCLightning /></ProtectedRoute>ProtectedRoute>} /></ProtectedRoute>
+              <Route path="/btc-lightning" element={<ProtectedRoute><BTCLightning /></ProtectedRoute>} />
       {/* Mockup Route - Temporal */}
       <Route path="/mockup-gestor" element={<GestorFlowMockup />} />
       
