@@ -314,6 +314,7 @@ async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_curre
         {"remesa_id": remesa_id},
         {"$set": {"estado": "cancelado", "cancelado_en": datetime.now(timezone.utc)}}
     )
+    return {"ok": True, "msg": "Remesa cancelada."}
 
     @router.get("/historial")
     async def get_historial_usuario(current_user: User = Depends(get_current_user)):
@@ -329,5 +330,5 @@ async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_curre
                                         r["creado_en"] = r["creado_en"].isoformat()
                                     if r.get("pagado_en"):
                                                     r["pagado_en"] = r["pagado_en"].isoformat()
-                                            return {"remesas": remesas, "total": len(remesas)}
-    return {"ok": True, "msg": "Remesa cancelada."}
+                                                            return {"remesas": remesas, "total": len(remesas)}
+    
