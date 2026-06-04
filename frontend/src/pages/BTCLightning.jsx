@@ -458,7 +458,7 @@ export default function BTCLightning() {
               ¡Pago Recibido!
             </h2>
             <p style={{ color: '#374151', fontSize: '15px', marginBottom: '8px' }}>
-              Tu remesa está siendo procesada.
+              Tu envío está siendo procesado.
             </p>
             <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
               Recibirás una notificación cuando tu envío esté completado (máx. 15 minutos).
