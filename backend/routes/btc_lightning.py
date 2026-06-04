@@ -241,14 +241,14 @@ async def webhook_blink(request: Request):
         return {"ok": True, "msg": "Evento ignorado"}
     remesa = await db.btc_remesas.find_one({"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}], "estado": "pendiente"})
     if not remesa:
-        return {"ok": True, "msg": "Remesa no encontrada o ya procesada"}
+        return {"ok": True, "msg": "Orden no encontrada o ya procesada"}
     ves_recibe = remesa["ves_recibe"]
     user_id = remesa["user_id"]
     await db.btc_ves_wallets.update_one({"user_id": user_id}, {"$inc": {"saldo": ves_recibe}, "$set": {"moneda": "BTC-VES", "user_id": user_id}, "$setOnInsert": {"creado_en": datetime.now(timezone.utc)}}, upsert=True)
     await db.btc_remesas.update_one({"remesa_id": remesa["remesa_id"]}, {"$set": {"estado": "pagado", "pagado_en": datetime.now(timezone.utc)}})
     try:
         from services.notifications import create_notification
-        await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. {ves_recibe:,.2f} BTC-VES seran enviados en maximo 15 minutos.", notification_type="btc_payment")
+        await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. Tu envío de {ves_recibe:,.2f} BTC-VES sera procesado en maximo 15 minutos.", notification_type="btc_payment")
     except Exception as e:
         logger.warning(f"Error notificacion usuario: {e}")
     try:
@@ -262,7 +262,7 @@ async def webhook_blink(request: Request):
         remesa_id_corto = remesa.get("remesa_id", "N/A")[:8].upper()
         usd_cliente = remesa.get("usd_cliente", 0)
         admin_msg = (
-            f"🔔 NUEVA REMESA BTC PAGADA\n"
+            f"🔔 NUEVA ORDEN BTC PAGADA\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: {remesa_id_corto}\n"
             f"💵 USD: ${usd_cliente:,.2f}\n"
@@ -289,7 +289,7 @@ async def webhook_blink(request: Request):
         tipo_pago = beneficiario_data.get("payment_type", "transferencia").upper()
         remesa_id_corto = remesa.get("remesa_id", "N/A")[:8].upper()
         usd_cliente = remesa.get("usd_cliente", 0)
-        admin_title = f"💸 Nueva remesa BTC pagada - ID {remesa_id_corto}"
+        admin_title = f"💸 Nueva orden BTC pagada - ID {remesa_id_corto}"
         admin_message = (f"${usd_cliente:,.2f} USD | {ves_recibe:,.2f} Bs | {tipo_pago}\n"
                         f"Beneficiario: {nombre_benef} | CI: {cedula_benef}\n"
                         f"Banco: {banco_benef} | Tel: {telefono_benef}")
@@ -307,10 +307,10 @@ async def webhook_blink(request: Request):
 @router.post("/operador/marcar-enviado")
 async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "super_admin"]:
-        raise HTTPException(status_code=403, detail="Solo operadores pueden marcar remesas como enviadas.")
+        raise HTTPException(status_code=403, detail="Solo operadores pueden marcar envíos como completados.")
     remesa = await db.btc_remesas.find_one({"remesa_id": body.remesa_id})
     if not remesa:
-        raise HTTPException(status_code=404, detail="Remesa no encontrada.")
+        raise HTTPException(status_code=404, detail="Orden no encontrada.")
     if remesa["estado"] != "pagado":
         raise HTTPException(status_code=400, detail=f"Estado actual: {remesa['estado']}")
     wallet = await db.btc_ves_wallets.find_one({"user_id": remesa["user_id"]})
@@ -322,10 +322,10 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
     try:
         from services.notifications import create_notification
         nombre = remesa.get("beneficiario_data", {}).get("full_name", "tu beneficiario")
-        await create_notification(user_id=remesa["user_id"], title="Pago enviado", message=f"Tu pago de {remesa['ves_recibe']:,.2f} Bs fue enviado a {nombre}.", notification_type="btc_enviado")
+        await create_notification(user_id=remesa["user_id"], title="Envío completado", message=f"Tu envío de {remesa['ves_recibe']:,.2f} Bs fue completado a {nombre}.", notification_type="btc_enviado")
     except Exception as e:
         logger.warning(f"Error notificacion: {e}")
-    return {"ok": True, "msg": "Remesa marcada como enviada.", "remesa_id": body.remesa_id}
+    return {"ok": True, "msg": "Orden marcada como enviada.", "remesa_id": body.remesa_id}
 
 
 @router.get("/operador/pendientes")
@@ -337,13 +337,13 @@ async def get_remesas_pendientes(current_user: User = Depends(get_current_user))
 
 @router.get("/status/{remesa_id}")
 async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_current_user)):
-    """Permite al frontend verificar el estado de pago de una remesa."""
+    """Permite al frontend verificar el estado de pago de una orden."""
     remesa = await db.btc_remesas.find_one(
         {"remesa_id": remesa_id, "user_id": current_user.user_id},
         {"_id": 0, "remesa_id": 1, "estado": 1, "sats": 1, "usd_cliente": 1, "ves_recibe": 1, "creado_en": 1, "expira_en": 1}
     )
     if not remesa:
-        raise HTTPException(status_code=404, detail="Remesa no encontrada.")
+        raise HTTPException(status_code=404, detail="Orden no encontrada.")
     # Convert datetime to string for JSON
     if remesa.get("creado_en"):
         remesa["creado_en"] = remesa["creado_en"].isoformat()
@@ -354,21 +354,21 @@ async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_cur
 
 @router.post("/cancelar/{remesa_id}")
 async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_current_user)):
-    """Permite al usuario cancelar una remesa pendiente."""
+    """Permite al usuario cancelar un envío pendiente."""
     remesa = await db.btc_remesas.find_one(
         {"remesa_id": remesa_id, "user_id": current_user.user_id, "estado": "pendiente"}
     )
     if not remesa:
-        raise HTTPException(status_code=404, detail="Remesa no encontrada o no cancelable.")
+        raise HTTPException(status_code=404, detail="Orden no encontrada o no cancelable.")
     await db.btc_remesas.update_one(
         {"remesa_id": remesa_id},
         {"$set": {"estado": "cancelado", "cancelado_en": datetime.now(timezone.utc)}}
     )
-    return {"ok": True, "msg": "Remesa cancelada."}
+    return {"ok": True, "msg": "Envío cancelado."}
 
 @router.get("/historial")
 async def get_historial_usuario(current_user: User = Depends(get_current_user)):
-    """Retorna el historial de remesas BTC del usuario autenticado."""
+    """Retorna el historial de envíos BTC del usuario autenticado."""
     remesas = await db.btc_remesas.find(
         {"user_id": current_user.user_id},
         {"_id": 0, "remesa_id": 1, "estado": 1, "sats": 1, "usd_cliente": 1,
