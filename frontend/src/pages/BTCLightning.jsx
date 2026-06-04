@@ -55,6 +55,8 @@ export default function BTCLightning() {
   const [bankSearch, setBankSearch] = useState('');
   const [showBankDropdown, setShowBankDropdown] = useState(false);
   const bankRef = useRef(null);
+    const [activeTab, setActiveTab] = useState('enviar');
+    const [btcWallet, setBtcWallet] = useState(null);
   const [newBenef, setNewBenef] = useState({ full_name: '', cedula: '', bank_code: '', bank: '', phone: '', account_number: '' });
   const [usd, setUsd] = useState('');
   const [invoiceData, setInvoiceData] = useState(null);
@@ -63,6 +65,27 @@ export default function BTCLightning() {
   const [paymentStatus, setPaymentStatus] = useState(null);
   const paymentPollingRef = useRef(null);
   const kycVerificado = user?.verification_status === 'verified';
+
+  const fetchBtcWallet = async () => {
+    try {
+      setLoadingWallet(true);
+      const res = await api.get('/btc/wallet');
+      setBtcWallet(res.data);
+    } catch (e) { setBtcWallet(null); } finally { setLoadingWallet(false); }
+  };
+
+  const fetchBtcHistorial = async () => {
+    try {
+      setLoadingHistorial(true);
+      const res = await api.get('/btc/historial');
+      setBtcHistorial(res.data.remesas || []);
+    } catch (e) { setBtcHistorial([]); } finally { setLoadingHistorial(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'billetera') fetchBtcWallet();
+    if (activeTab === 'historial') fetchBtcHistorial();
+  }, [activeTab]);
 
   useEffect(() => {
     fetchPrecioBTC();
@@ -209,6 +232,15 @@ export default function BTCLightning() {
           <span style={{ fontWeight: '700', color: '#111827' }}>Envio BTC Lightning</span>
           <NotificationBell />
         </div>
+        {/* === NAVEGACION POR TABS === */}
+        <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid #e5e7eb', background: '#fff', margin: '0 0 0 0' }}>
+          {[{ id: 'enviar', label: 'Enviar BTC', icon: '⚡' }, { id: 'billetera', label: 'Billetera', icon: '👛' }, { id: 'historial', label: 'Historial', icon: '📋' }].map(tab => (
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id !== 'enviar') { setStep(1); setInvoiceData(null); setSelectedBeneficiary(null); setUsd(''); } }}
+              style={{ flex: 1, padding: '12px 8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: activeTab === tab.id ? '700' : '500', color: activeTab === tab.id ? '#f59e0b' : '#6b7280', borderBottom: activeTab === tab.id ? '2px solid #f59e0b' : '2px solid transparent', marginBottom: '-2px', transition: 'all 0.2s' }}>
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
         <div style={S.container}>
           <div style={{ ...S.card, border: '1px solid #fde68a', background: '#fffbeb' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -236,7 +268,7 @@ export default function BTCLightning() {
         <NotificationBell />
       </div>
       <div style={S.container}>
-        {step < 3 && (
+        {activeTab === 'enviar' && step < 3 && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
               {[1,2,3].map((n,i) => (
@@ -253,7 +285,7 @@ export default function BTCLightning() {
             </div>
           </>
         )}
-        {step === 1 && (
+        {activeTab === 'enviar' && step === 1 && (
           <>
             <div style={S.card}>
               <p style={{ fontWeight: '700', color: '#111827', marginBottom: '12px', fontSize: '15px' }}>Como recibira el dinero el beneficiario?</p>
@@ -345,7 +377,7 @@ export default function BTCLightning() {
             </button>
           </>
         )}
-        {step === 2 && (
+        {activeTab === 'enviar' && step === 2 && (
           <>
             <div style={{ ...S.card, background: '#fffbeb', border: '1px solid #fde68a' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -387,7 +419,7 @@ export default function BTCLightning() {
             </button>
           </>
         )}
-        {step === 3 && invoiceData && (
+        {activeTab === 'enviar' && step === 3 && invoiceData && (
           <>
             <div style={{ ...S.card, background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '1px solid #86efac', textAlign: 'center' }}>
               <div style={{ fontSize: '52px', marginBottom: '8px' }}>&#9889;</div>
@@ -451,7 +483,7 @@ export default function BTCLightning() {
             </button>
           </>
         )}
-        {step === 4 && (
+        {activeTab === 'enviar' && step === 4 && (
           <div style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: '64px', marginBottom: '16px' }}>⏳</div>
             <h2 style={{ color: '#f59e0b', fontWeight: '800', fontSize: '22px', marginBottom: '12px' }}>
@@ -468,6 +500,75 @@ export default function BTCLightning() {
             </button>
           </div>
         )}
+      {/* === VISTA BILLETERA BTC-VES === */}
+      {activeTab === 'billetera' && (
+        <div style={{ padding: '16px 0' }}>
+          <div style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', borderRadius: '16px', padding: '24px', marginBottom: '16px', color: '#fff', textAlign: 'center' }}>
+            <p style={{ fontSize: '13px', opacity: 0.9, marginBottom: '8px', fontWeight: '600', letterSpacing: '0.05em' }}>SALDO BTC-VES</p>
+            {loadingWallet ? (
+              <p style={{ fontSize: '24px', fontWeight: '800' }}>Cargando...</p>
+            ) : (
+              <p style={{ fontSize: '36px', fontWeight: '800', marginBottom: '4px' }}>{btcWallet ? Number(btcWallet.saldo || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '0,00'}</p>
+            )}
+            <p style={{ fontSize: '12px', opacity: 0.8 }}>BTC-VES disponible</p>
+          </div>
+          <button onClick={fetchBtcWallet} style={{ width: '100%', padding: '10px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', color: '#92400e', fontWeight: '600', cursor: 'pointer', marginBottom: '16px', fontSize: '14px' }}>
+            🔄 Actualizar saldo
+          </button>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb' }}>
+            <p style={{ fontWeight: '700', color: '#111827', marginBottom: '12px', fontSize: '14px' }}>ℹ️ ¿Qué es BTC-VES?</p>
+            <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: '1.6' }}>
+              Cuando pagas con Bitcoin Lightning, tu saldo en BTC-VES se acredita automáticamente. 
+              Este saldo representa el equivalente en bolívares que será enviado a tu beneficiario 
+              cuando el operador complete la transferencia.
+            </p>
+          </div>
+        </div>
+      )}
+      {/* === VISTA HISTORIAL BTC === */}
+      {activeTab === 'historial' && (
+        <div style={{ padding: '16px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontWeight: '700', color: '#111827', fontSize: '16px', margin: 0 }}>Mis Órdenes BTC</h3>
+            <button onClick={fetchBtcHistorial} style={{ padding: '6px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', color: '#92400e', fontWeight: '600', cursor: 'pointer', fontSize: '12px' }}>🔄 Actualizar</button>
+          </div>
+          {loadingHistorial ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>Cargando historial...</div>
+          ) : btcHistorial.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', background: '#f9fafb', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+              <p style={{ fontSize: '40px', marginBottom: '12px' }}>📋</p>
+              <p style={{ color: '#6b7280', fontWeight: '600' }}>No tienes órdenes BTC aún</p>
+              <p style={{ color: '#9ca3af', fontSize: '13px', marginTop: '4px' }}>Tus envíos con BTC Lightning aparecerán aquí</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {btcHistorial.map((r, i) => {
+                const estadoConfig = { pendiente: { color: '#f59e0b', bg: '#fffbeb', label: '⏳ Pendiente' }, pagado: { color: '#3b82f6', bg: '#eff6ff', label: '💰 Pagado' }, enviado: { color: '#10b981', bg: '#ecfdf5', label: '✅ Completado' }, cancelado: { color: '#ef4444', bg: '#fef2f2', label: '❌ Cancelado' } };
+                const cfg = estadoConfig[r.estado] || { color: '#6b7280', bg: '#f9fafb', label: r.estado };
+                return (
+                  <div key={r.remesa_id || i} style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                      <div>
+                        <p style={{ fontWeight: '700', color: '#111827', fontSize: '15px', margin: '0 0 2px' }}>{Number(r.ves_recibe || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
+                        <p style={{ color: '#6b7280', fontSize: '12px', margin: 0 }}>{r.usd_cliente ? Number(r.usd_cliente).toFixed(2) + ' USD' : ''} · {r.sats ? Number(r.sats).toLocaleString() + ' sats' : ''}</p>
+                      </div>
+                      <span style={{ background: cfg.bg, color: cfg.color, padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>{cfg.label}</span>
+                    </div>
+                    {r.beneficiario_data && (
+                      <p style={{ color: '#374151', fontSize: '12px', margin: '0 0 6px', padding: '8px', background: '#f9fafb', borderRadius: '8px' }}>
+                        👤 {r.beneficiario_data.full_name} · {r.beneficiario_data.payment_type === 'pago_movil' ? '📱 Pago Móvil' : '🏦 Transferencia'}
+                      </p>
+                    )}
+                    <p style={{ color: '#9ca3af', fontSize: '11px', margin: 0 }}>
+                      {r.creado_en ? new Date(r.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       </div>
     </div>
   );
