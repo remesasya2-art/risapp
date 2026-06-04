@@ -139,12 +139,12 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         
     try:
         # Headers corregidos usando la cabecera estándar de Blink (Bearer)
-           headers = {
-                "X-API-KEY": BLINK_API_KEY,
-                "Content-Type": "application/json"
-            }
+        headers = {
+            "X-API-KEY": BLINK_API_KEY,
+            "Content-Type": "application/json"
+        }
             
-            payload = {
+        payload = {
             "query": mutation,
             "variables": {
                 "input": {
