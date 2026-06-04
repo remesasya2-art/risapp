@@ -333,7 +333,7 @@ async def get_remesas_pendientes(current_user: User = Depends(get_current_user))
     if current_user.role not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Solo operadores pueden ver esta lista.")
     remesas = await db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1).to_list(100)
-    return {"remesas": remesas, "total": len(remesas)}
+    return {"ordenes": remesas, "remesas": remesas, "total": len(remesas)}
 
 @router.get("/status/{remesa_id}")
 async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_current_user)):
@@ -365,6 +365,23 @@ async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_curre
         {"$set": {"estado": "cancelado", "cancelado_en": datetime.now(timezone.utc)}}
     )
     return {"ok": True, "msg": "Envío cancelado."}
+
+@router.get("/wallet")
+async def get_btc_wallet(current_user: User = Depends(get_current_user)):
+    """Retorna el saldo de la billetera BTC-VES del usuario autenticado."""
+    wallet = await db.btc_ves_wallets.find_one(
+        {"user_id": current_user.user_id},
+        {"_id": 0}
+    )
+    if not wallet:
+        return {"saldo": 0.0, "moneda": "BTC-VES", "user_id": current_user.user_id}
+    return {
+        "saldo": float(wallet.get("saldo", 0)),
+        "moneda": wallet.get("moneda", "BTC-VES"),
+        "user_id": current_user.user_id,
+        "actualizado_en": wallet.get("actualizado_en", None)
+    }
+
 
 @router.get("/historial")
 async def get_historial_usuario(current_user: User = Depends(get_current_user)):
