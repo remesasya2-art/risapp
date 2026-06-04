@@ -50,6 +50,7 @@ const TABS = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'support', label: 'Soporte', icon: MessageSquare },
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
+  { key: 'btc', label: 'BTC Lightning', icon: Zap },
 ];
 
 export default function AdminPanel() {
@@ -103,6 +104,11 @@ export default function AdminPanel() {
   const [showRejectRechargeModal, setShowRejectRechargeModal] = useState(false);
   const [rejectRechargeId, setRejectRechargeId] = useState(null);
   const [rejectRechargeReason, setRejectRechargeReason] = useState('');
+
+  // === BTC Orders State ===
+  const [btcOrdenesP, setBtcOrdenesP] = useState([]);
+  const [loadingBtcOrdenes, setLoadingBtcOrdenes] = useState(false);
+  const [marcandoBtc, setMarcandoBtc] = useState(null);
 
   useEffect(() => { loadData(); }, [activeTab]);
 
@@ -477,6 +483,43 @@ export default function AdminPanel() {
   const btnSuccess = { backgroundColor: '#16a34a', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
   const btnDanger = { backgroundColor: '#dc2626', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
   const btnSecondary = { backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
+
+
+  // === BTC Orders Functions ===
+  const fetchBtcOrdenesPendientes = async () => {
+    try {
+      setLoadingBtcOrdenes(true);
+      const res = await api.get('/btc/operador/pendientes');
+      setBtcOrdenesP(res.data.ordenes || []);
+    } catch (e) {
+      toast.error('Error cargando órdenes BTC');
+      setBtcOrdenesP([]);
+    } finally {
+      setLoadingBtcOrdenes(false);
+    }
+  };
+
+  const handleMarcarBtcEnviado = async (remesa_id) => {
+    if (!window.confirm('¿Confirmar que ya realizaste la transferencia al beneficiario?')) return;
+    try {
+      setMarcandoBtc(remesa_id);
+      await api.post('/btc/operador/marcar-enviado', { remesa_id });
+      toast.success('Orden marcada como enviada exitosamente');
+      fetchBtcOrdenesPendientes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error al marcar como enviado');
+    } finally {
+      setMarcandoBtc(null);
+    }
+
+  // Load BTC orders when BTC tab is active
+  useEffect(() => {
+    if (activeTab === 'btc') {
+      fetchBtcOrdenesPendientes();
+    }
+  }, [activeTab]);
+
+  };
 
   return (
     <div style={pageStyle} data-testid="admin-panel">
@@ -1584,7 +1627,83 @@ export default function AdminPanel() {
             )}
           </div>
         )}
-      </main>
+      
+      {/* BTC Orders Tab */}
+      {activeTab === 'btc' && (
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>⚡ Órdenes BTC Pendientes</h2>
+              <p style={{ color: '#6b7280', fontSize: '14px', margin: '4px 0 0' }}>Órdenes que requieren transferencia manual al beneficiario</p>
+            </div>
+            <button onClick={fetchBtcOrdenesPendientes} disabled={loadingBtcOrdenes}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '14px', opacity: loadingBtcOrdenes ? 0.7 : 1 }}>
+              {loadingBtcOrdenes ? '⏳ Cargando...' : '🔄 Actualizar'}
+            </button>
+          </div>
+
+          {btcOrdenesP.length === 0 && !loadingBtcOrdenes ? (
+            <div style={{ background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: '16px', padding: '48px', textAlign: 'center' }}>
+              <p style={{ fontSize: '48px', margin: '0 0 12px' }}>✅</p>
+              <h3 style={{ color: '#374151', fontWeight: '700', margin: '0 0 8px' }}>No hay órdenes pendientes</h3>
+              <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>Todas las órdenes BTC han sido procesadas</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {btcOrdenesP.map((orden) => (
+                <div key={orden.remesa_id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                    <div>
+                      <span style={{ background: '#fef3c7', color: '#d97706', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>💰 PAGADO - PENDIENTE ENVÍO</span>
+                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#9ca3af', fontFamily: 'monospace' }}>ID: {orden.remesa_id}</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontWeight: '800', fontSize: '18px', color: '#111827', margin: 0 }}>{Number(orden.ves_recibe || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
+                      <p style={{ color: '#6b7280', fontSize: '13px', margin: '2px 0 0' }}>{Number(orden.usd_cliente || 0).toFixed(2)} USD · {Number(orden.sats || 0).toLocaleString()} sats</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: '700', color: '#166534', margin: '0 0 6px', letterSpacing: '0.05em' }}>BENEFICIARIO</p>
+                      <p style={{ fontWeight: '700', color: '#111827', margin: '0 0 2px', fontSize: '15px' }}>{orden.beneficiario_data?.full_name || 'N/A'}</p>
+                      <p style={{ color: '#374151', fontSize: '13px', margin: '0 0 2px' }}>CI: {orden.beneficiario_data?.cedula || 'N/A'}</p>
+                      <p style={{ color: '#374151', fontSize: '13px', margin: 0 }}>
+                        {orden.beneficiario_data?.payment_type === 'pago_movil' ? '📱 Pago Móvil' : '🏦 Transferencia'}
+                      </p>
+                    </div>
+                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '14px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', margin: '0 0 6px', letterSpacing: '0.05em' }}>DATOS PAGO</p>
+                      {orden.beneficiario_data?.payment_type === 'pago_movil' ? (
+                        <>
+                          <p style={{ fontWeight: '600', color: '#111827', margin: '0 0 2px', fontSize: '14px' }}>📱 {orden.beneficiario_data?.phone || 'N/A'}</p>
+                          <p style={{ color: '#374151', fontSize: '13px', margin: 0 }}>{orden.beneficiario_data?.bank || 'N/A'}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p style={{ fontWeight: '600', color: '#111827', margin: '0 0 2px', fontSize: '14px' }}>🏦 {orden.beneficiario_data?.bank || 'N/A'}</p>
+                          <p style={{ color: '#374151', fontSize: '13px', margin: 0, fontFamily: 'monospace' }}>{orden.beneficiario_data?.account_number || 'N/A'}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ color: '#9ca3af', fontSize: '12px', margin: 0 }}>
+                      📅 {orden.creado_en ? new Date(orden.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                    </p>
+                    <button onClick={() => handleMarcarBtcEnviado(orden.remesa_id)} disabled={marcandoBtc === orden.remesa_id}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: marcandoBtc === orden.remesa_id ? '#9ca3af' : '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: marcandoBtc === orden.remesa_id ? 'not-allowed' : 'pointer', fontSize: '14px' }}>
+                      {marcandoBtc === orden.remesa_id ? '⏳ Procesando...' : '✅ Marcar como Enviado'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+</main>
 
       {/* Process Withdrawal Modal */}
       {showProcessModal && selectedItem && (
