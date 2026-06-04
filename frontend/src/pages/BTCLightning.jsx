@@ -60,10 +60,23 @@ export default function BTCLightning() {
   const [invoiceData, setInvoiceData] = useState(null);
   const [countdown, setCountdown] = useState(1800);
   const countdownRef = useRef(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const paymentPollingRef = useRef(null);
   const kycVerificado = user?.verification_status === 'verified';
 
   useEffect(() => {
     fetchPrecioBTC();
+    // Restaurar invoice de sessionStorage si existe
+    const savedInvoice = sessionStorage.getItem('btc_invoice');
+    if (savedInvoice) {
+      try {
+        const inv = JSON.parse(savedInvoice);
+        setInvoiceData(inv);
+        setStep(3);
+      } catch (e) {
+        sessionStorage.removeItem('btc_invoice');
+      }
+    }
     loadBeneficiaries();
     const interval = setInterval(fetchPrecioBTC, 10000);
     return () => clearInterval(interval);
@@ -84,6 +97,25 @@ export default function BTCLightning() {
           return prev - 1;
         });
       }, 1000);
+      // Polling para detectar pago automaticamente
+      paymentPollingRef.current = setInterval(async () => {
+        try {
+          const res = await api.get('/btc/status/' + invoiceData.remesa_id);
+          if (res.data.estado === 'pagado') {
+            clearInterval(paymentPollingRef.current);
+            clearInterval(countdownRef.current);
+            setPaymentStatus('pagado');
+            setStep(4);
+            sessionStorage.removeItem('btc_invoice');
+          }
+        } catch (e) {
+          // ignorar errores de polling silenciosamente
+        }
+      }, 5000);
+      return () => {
+        clearInterval(countdownRef.current);
+        clearInterval(paymentPollingRef.current);
+      };
     }
   }, [step, invoiceData]);
 
@@ -146,9 +178,26 @@ export default function BTCLightning() {
     try {
       const res = await api.post('/btc/generar-invoice', { usd_cliente: usdNum, beneficiario_id: selectedBeneficiary.beneficiary_id });
       setInvoiceData(res.data);
+      sessionStorage.setItem('btc_invoice', JSON.stringify(res.data));
       setStep(3);
     } catch (err) { toast.error(err.response?.data?.detail || 'Error al generar invoice'); }
     finally { setLoading(false); }
+  };
+
+  const handleCancelRemesa = async () => {
+    if (!invoiceData?.remesa_id) return;
+    try {
+      await api.post('/btc/cancelar/' + invoiceData.remesa_id);
+    } catch (e) {
+      // ignorar errores en cancelacion
+    } finally {
+      clearInterval(paymentPollingRef.current);
+      clearInterval(countdownRef.current);
+      setInvoiceData(null);
+      setPaymentStatus(null);
+      sessionStorage.removeItem('btc_invoice');
+      setStep(2);
+    }
   };
 
 
@@ -393,11 +442,31 @@ export default function BTCLightning() {
             <button onClick={() => navigate('/')} style={{ ...S.btnSecondary, width: '100%', justifyContent: 'center', marginBottom: '8px' }}>
               Volver al inicio
             </button>
+            <button onClick={handleCancelRemesa} style={{ marginTop: '12px', padding: '12px 24px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '10px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', width: '100%' }}>
+              Cancelar Pago
+            </button>
             <button onClick={() => { setStep(1); setInvoiceData(null); setSelectedBeneficiary(null); setUsd(''); clearInterval(countdownRef.current); }}
               style={{ ...S.btnSecondary, width: '100%', justifyContent: 'center', color: '#6b7280' }}>
               Hacer otro envio
             </button>
           </>
+        )}
+        {step === 4 && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: '64px', marginBottom: '16px' }}>⏳</div>
+            <h2 style={{ color: '#f59e0b', fontWeight: '800', fontSize: '22px', marginBottom: '12px' }}>
+              ¡Pago Recibido!
+            </h2>
+            <p style={{ color: '#374151', fontSize: '15px', marginBottom: '8px' }}>
+              Tu remesa está siendo procesada.
+            </p>
+            <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
+              Recibirás una notificación cuando tu envío esté completado (máx. 15 minutos).
+            </p>
+            <button onClick={() => { setStep(1); setInvoiceData(null); setPaymentStatus(null); setSelectedBeneficiary(null); setUsd(''); }} style={{ padding: '12px 28px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>
+              Volver al inicio
+            </button>
+          </div>
         )}
       </div>
     </div>
