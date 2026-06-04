@@ -99,43 +99,117 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         raise HTTPException(status_code=403, detail="Debes completar la verificacion KYC para realizar envios con BTC Lightning.")
     if body.usd_cliente <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0.")
+        
     enviado_hoy = await _get_total_enviado_hoy(current_user.user_id)
     if enviado_hoy + body.usd_cliente > LIMITE_DIARIO_USD:
         disponible = max(0.0, LIMITE_DIARIO_USD - enviado_hoy)
         raise HTTPException(status_code=429, detail=f"Limite diario alcanzado. Disponible: ${disponible:.2f} USD.")
+        
     beneficiario = await db.beneficiaries.find_one({"beneficiary_id": body.beneficiario_id, "user_id": current_user.user_id})
     if not beneficiario:
         raise HTTPException(status_code=404, detail="Beneficiario no encontrado.")
+        
     precio_btc = await _get_btc_price()
     tasa_ves = await _get_tasa_ves()
     precio_con_margen = precio_btc * MARGEN
     btc_pagar = (body.usd_cliente * COMISION) / precio_con_margen
-    sats = round(btc_pagar * 100_000_000)
+    
+    # Aseguramos que sats sea un entero (int)
+    sats = int(round(btc_pagar * 100_000_000))
     ves_recibe = body.usd_cliente * tasa_ves
     memo = f"RIS-{current_user.user_id[:8]}-{uuid.uuid4().hex[:8]}"
-    mutation = "mutation($input: LnInvoiceCreateInput!) { lnInvoiceCreate(input: $input) { invoice { paymentRequest paymentHash } errors { message } } }"
+    
+    mutation = """
+    mutation LnInvoiceCreate($input: LnInvoiceCreateInput!) {
+      lnInvoiceCreate(input: $input) {
+        invoice {
+          paymentRequest
+          paymentHash
+        }
+        errors {
+          message
+        }
+      }
+    }
+    """
+    
     if not BLINK_API_KEY:
-                raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
+        raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
+        
     try:
+        # Headers corregidos usando la cabecera estándar de Blink (Bearer)
+        headers = {
+            "Authorization": f"Bearer {BLINK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "query": mutation,
+            "variables": {
+                "input": {
+                    "amount": sats,
+                    "memo": memo,
+                    "walletId": "ffc6c2b9-e661-48ab-8aa4-3a6e668a0ecc"
+                }
+            }
+        }
+        
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, headers={"X-API-KEY": BLINK_API_KEY, "Content-Type": "application/json"}, json={"query": mutation, "variables": {"input": {"amount": str(sats), "memo": memo, "walletId": "ffc6c2b9-e661-48ab-8aa4-3a6e668a0ecc"}}})
+            resp = await client.post(BLINK_GRAPHQL_URL, headers=headers, json=payload)
             result = resp.json()
             logger.error(f"Blink lnInvoiceCreate response: {resp.status_code} body={resp.text}")
+            
     except Exception as e:
         logger.error(f"Blink except: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail="Error al conectar con el proveedor de pagos.")
+        
     ln_data = result.get("data", {}).get("lnInvoiceCreate", {})
     errors = ln_data.get("errors", [])
     if errors:
         raise HTTPException(status_code=502, detail=f"Error Blink: {errors[0].get('message')}")
+        
     invoice = ln_data.get("invoice", {})
     payment_request = invoice.get("paymentRequest")
     payment_hash = invoice.get("paymentHash")
+    
     if not payment_request:
         raise HTTPException(status_code=502, detail=f"No se pudo generar el invoice. BLINK={result}.")
+        
     remesa_id = str(uuid.uuid4())
-    await db.btc_remesas.insert_one({"remesa_id": remesa_id, "user_id": current_user.user_id, "beneficiario_id": body.beneficiario_id, "beneficiario_data": {k: v for k, v in beneficiario.items() if k != "_id"}, "usd_cliente": body.usd_cliente, "ves_recibe": ves_recibe, "btc_pagar": btc_pagar, "sats": sats, "precio_btc_usado": precio_btc, "precio_con_margen": precio_con_margen, "tasa_ves": tasa_ves, "payment_request": payment_request, "payment_hash": payment_hash, "memo": memo, "tipo": "btc_remesa", "estado": "pendiente", "no_reembolsable": True, "creado_en": datetime.now(timezone.utc), "expira_en": datetime.now(timezone.utc) + timedelta(minutes=30)})
-    return {"remesa_id": remesa_id, "qr": payment_request, "btc": f"{btc_pagar:.8f}", "sats": sats, "usd": body.usd_cliente, "ves_recibe": ves_recibe, "precio_btc_usado": precio_btc, "tasa_ves": tasa_ves, "expira_en": 1800, "aviso": "Los pagos en BTC no son reembolsables bajo ningun motivo."}
+    await db.btc_remesas.insert_one({
+        "remesa_id": remesa_id, 
+        "user_id": current_user.user_id, 
+        "beneficiario_id": body.beneficiario_id, 
+        "beneficiario_data": {k: v for k, v in beneficiario.items() if k != "_id"}, 
+        "usd_cliente": body.usd_cliente, 
+        "ves_recibe": ves_recibe, 
+        "btc_pagar": btc_pagar, 
+        "sats": sats, 
+        "precio_btc_usado": precio_btc, 
+        "precio_con_margen": precio_con_margen, 
+        "tasa_ves": tasa_ves, 
+        "payment_request": payment_request, 
+        "payment_hash": payment_hash, 
+        "memo": memo, 
+        "tipo": "btc_remesa", 
+        "estado": "pendiente", 
+        "no_reembolsable": True, 
+        "creado_en": datetime.now(timezone.utc), 
+        "expira_en": datetime.now(timezone.utc) + timedelta(minutes=30)
+    })
+    
+    return {
+        "remesa_id": remesa_id, 
+        "qr": payment_request, 
+        "btc": f"{btc_pagar:.8f}", 
+        "sats": sats, 
+        "usd": body.usd_cliente, 
+        "ves_recibe": ves_recibe, 
+        "precio_btc_usado": precio_btc, 
+        "tasa_ves": tasa_ves, 
+        "expira_en": 1800, 
+        "aviso": "Los pagos en BTC no son reembolsables bajo ningun motivo."
+    }
 
 
 @router.get("/limite-diario")
@@ -162,193 +236,6 @@ async def webhook_blink(request: Request):
     payment_hash = transaction.get("initiationVia", {}).get("paymentHash") or payload.get("payment_hash") or payload.get("invoice_id")
     status = str(transaction.get("status", payload.get("status", ""))).upper()
     if status not in ("PAID", "SUCCESS"):
-        return {"ok": True, "msg": "Evento ignorado"}
-    remesa = await db.btc_remesas.find_one({"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}], "estado": "pendiente"})
-    if not remesa:
-        return {"ok": True, "msg": "Remesa no encontrada o ya procesada"}
-    ves_recibe = remesa["ves_recibe"]
-    user_id = remesa["user_id"]
-    await db.btc_ves_wallets.update_one({"user_id": user_id}, {"$inc": {"saldo": ves_recibe}, "$set": {"moneda": "BTC-VES", "user_id": user_id}, "$setOnInsert": {"creado_en": datetime.now(timezone.utc)}}, upsert=True)
-    await db.btc_remesas.update_one({"remesa_id": remesa["remesa_id"]}, {"$set": {"estado": "pagado", "pagado_en": datetime.now(timezone.utc)}})
-    try:
-        from services.notifications import create_notification
-        await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. {ves_recibe:,.2f} BTC-VES seran enviados en maximo 15 minutos.", notification_type="btc_payment")
-    except Exception as e:
-        logger.warning(f"Error notificacion: {e}")
-    return {"ok": True}
-
-
-@router.post("/operador/marcar-enviado")
-async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "super_admin"]:
-        raise HTTPException(status_code=403, detail="Solo operadores pueden marcar remesas como enviadas.")
-    remesa = await db.btc_remesas.find_one({"remesa_id": body.remesa_id})
-    if not remesa:
-        raise HTTPException(status_code=404, detail="Remesa no encontrada.")
-    if remesa["estado"] != "pagado":
-        raise HTTPException(status_code=400, detail=f"Estado actual: {remesa['estado']}")
-    wallet = await db.btc_ves_wallets.find_one({"user_id": remesa["user_id"]})
-    saldo_actual = wallet["saldo"] if wallet else 0.0
-    if saldo_actual < remesa["ves_recibe"]:
-        raise HTTPException(status_code=400, detail="Saldo BTC-VES insuficiente.")
-    await db.btc_ves_wallets.update_one({"user_id": remesa["user_id"]}, {"$inc": {"saldo": -remesa["ves_recibe"]}})
-    await db.btc_remesas.update_one({"remesa_id": body.remesa_id}, {"$set": {"estado": "enviado", "enviado_en": datetime.now(timezone.utc), "operador_id": body.operador_id}})
-    try:
-        from services.notifications import create_notification
-        nombre = remesa.get("beneficiario_data", {}).get("full_name", "tu beneficiario")
-        await create_notification(user_id=remesa["user_id"], title="Pago enviado", message=f"Tu pago de {remesa['ves_recibe']:,.2f} Bs fue enviado a {nombre}.", notification_type="btc_enviado")
-    except Exception as e:
-        logger.warning(f"Error notificacion: {e}")
-    return {"ok": True, "msg": "Remesa marcada como enviada.", "remesa_id": body.remesa_id}
-
-
-@router.get("/operador/pendientes")
-async def get_remesas_pendientes(current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "super_admin"]:
-        raise HTTPException(status_code=403, detail="Solo operadores pueden ver esta lista.")
-    remesas = await db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1).to_list(100)
-    return {"remesas": remesas, "total": len(remesas)}
-import hashlib
-import hmac
-import logging
-import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Optional
-import os
-
-import httpx
-from database import db
-from fastapi import APIRouter, Depends, HTTPException, Request
-from models.user import User
-from pydantic import BaseModel
-from routes.dependencies import get_current_user
-
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/btc", tags=["btc-lightning"])
-
-BLINK_API_KEY = os.getenv("BLINK_API_KEY", "")
-BLINK_WEBHOOK_SECRET = os.getenv("BLINK_WEBHOOK_SECRET", "")
-BLINK_GRAPHQL_URL = "https://api.blink.sv/graphql"
-
-_btc_price_cache = {"price": 58500.0, "updated_at": None}
-
-MARGEN = 0.99
-COMISION = 1.02
-LIMITE_DIARIO_USD = 500.0
-
-
-async def _get_tasa_ves():
-    config = await db.config.find_one({"clave": "tasa_btc_ves"})
-    return float(config["valor"]) if config and config.get("valor") else 680.0
-
-
-async def _get_btc_price():
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": "BTCUSDT"})
-            data = resp.json()
-            price = float(data["price"])
-            _btc_price_cache["price"] = price
-            _btc_price_cache["updated_at"] = datetime.now(timezone.utc)
-            return price
-    except Exception as e:
-        logger.warning(f"Error precio BTC: {e}")
-        return _btc_price_cache["price"]
-
-
-async def _get_total_enviado_hoy(user_id):
-    hace_24h = datetime.now(timezone.utc) - timedelta(hours=24)
-    pipeline = [
-        {"$match": {"user_id": user_id, "tipo": "btc_remesa", "estado": {"$in": ["pendiente", "pagado", "enviado"]}, "creado_en": {"$gte": hace_24h}}},
-        {"$group": {"_id": None, "total_usd": {"$sum": "$usd_cliente"}}}
-    ]
-    result = await db.btc_remesas.aggregate(pipeline).to_list(1)
-    return result[0]["total_usd"] if result else 0.0
-
-
-def _verify_blink_signature(body, signature):
-    if not BLINK_WEBHOOK_SECRET:
-        return False
-    expected = hmac.new(BLINK_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature or "")
-
-
-class GenerarInvoiceRequest(BaseModel):
-    usd_cliente: float
-    beneficiario_id: str
-
-
-class MarcarEnviadoRequest(BaseModel):
-    remesa_id: str
-    operador_id: str
-
-
-@router.get("/precio")
-async def get_precio_btc():
-    precio = await _get_btc_price()
-    tasa_ves = await _get_tasa_ves()
-    return {"precio_btc": precio, "tasa_btc_ves": tasa_ves, "updated_at": _btc_price_cache.get("updated_at")}
-
-
-@router.post("/generar-invoice")
-async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depends(get_current_user)):
-    if current_user.verification_status != "verified":
-        raise HTTPException(status_code=403, detail="Debes completar la verificacion KYC para realizar envios con BTC Lightning.")
-    if body.usd_cliente <= 0:
-        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0.")
-    enviado_hoy = await _get_total_enviado_hoy(current_user.user_id)
-    if enviado_hoy + body.usd_cliente > LIMITE_DIARIO_USD:
-        disponible = max(0.0, LIMITE_DIARIO_USD - enviado_hoy)
-        raise HTTPException(status_code=429, detail=f"Limite diario alcanzado. Disponible: ${disponible:.2f} USD.")
-    beneficiario = await db.beneficiaries.find_one({"beneficiary_id": body.beneficiario_id, "user_id": current_user.user_id})
-    if not beneficiario:
-        raise HTTPException(status_code=404, detail="Beneficiario no encontrado.")
-    precio_btc = await _get_btc_price()
-    tasa_ves = await _get_tasa_ves()
-    precio_con_margen = precio_btc * MARGEN
-    btc_pagar = (body.usd_cliente * COMISION) / precio_con_margen
-    sats = round(btc_pagar * 100_000_000)
-    ves_recibe = body.usd_cliente * tasa_ves
-    memo = f"RIS-{current_user.user_id[:8]}-{uuid.uuid4().hex[:8]}"
-    mutation = "mutation($input: LnInvoiceCreateInput!) { lnInvoiceCreate(input: $input) { invoice { paymentRequest paymentHash } errors { message } } }"
-    if not BLINK_API_KEY:
-                raise HTTPException(status_code=503, detail="El proveedor de pagos BTC no esta configurado.")
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, json={"query": mutation, "variables": {"input": {"amount": sats, "memo": memo, "expiresIn": 1800}}})
-            result = resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail="Error al conectar con el proveedor de pagos.")
-    ln_data = result.get("data", {}).get("lnInvoiceCreate", {})
-    errors = ln_data.get("errors", [])
-    if errors:
-        raise HTTPException(status_code=502, detail=f"Error Blink: {errors[0].get('message')}")
-    invoice = ln_data.get("invoice", {})
-    payment_request = invoice.get("paymentRequest")
-    payment_hash = invoice.get("paymentHash")
-    if not payment_request:
-        raise HTTPException(status_code=502, detail="No se pudo generar el invoice.")
-    remesa_id = str(uuid.uuid4())
-    await db.btc_remesas.insert_one({"remesa_id": remesa_id, "user_id": current_user.user_id, "beneficiario_id": body.beneficiario_id, "beneficiario_data": {k: v for k, v in beneficiario.items() if k != "_id"}, "usd_cliente": body.usd_cliente, "ves_recibe": ves_recibe, "btc_pagar": btc_pagar, "sats": sats, "precio_btc_usado": precio_btc, "precio_con_margen": precio_con_margen, "tasa_ves": tasa_ves, "payment_request": payment_request, "payment_hash": payment_hash, "memo": memo, "tipo": "btc_remesa", "estado": "pendiente", "no_reembolsable": True, "creado_en": datetime.now(timezone.utc), "expira_en": datetime.now(timezone.utc) + timedelta(minutes=30)})
-    return {"remesa_id": remesa_id, "qr": payment_request, "btc": f"{btc_pagar:.8f}", "sats": sats, "usd": body.usd_cliente, "ves_recibe": ves_recibe, "precio_btc_usado": precio_btc, "tasa_ves": tasa_ves, "expira_en": 1800, "aviso": "Los pagos en BTC no son reembolsables bajo ningun motivo."}
-
-
-@router.get("/limite-diario")
-async def get_limite_diario(current_user: User = Depends(get_current_user)):
-    enviado_hoy = await _get_total_enviado_hoy(current_user.user_id)
-    return {"limite_diario_usd": LIMITE_DIARIO_USD, "enviado_hoy_usd": enviado_hoy, "disponible_usd": max(0.0, LIMITE_DIARIO_USD - enviado_hoy)}
-
-
-@router.post("/webhook/blink")
-async def webhook_blink(request: Request):
-    body = await request.body()
-    signature = request.headers.get("x-blink-signature", "")
-    if not _verify_blink_signature(body, signature):
-        raise HTTPException(status_code=401, detail="Firma invalida")
-    payload = await request.json()
-    payment_hash = payload.get("payment_hash") or payload.get("invoice_id")
-    status = payload.get("status", "").upper()
-    if status != "PAID":
         return {"ok": True, "msg": "Evento ignorado"}
     remesa = await db.btc_remesas.find_one({"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}], "estado": "pendiente"})
     if not remesa:
