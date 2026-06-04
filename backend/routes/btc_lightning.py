@@ -284,3 +284,34 @@ async def get_remesas_pendientes(current_user: User = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Solo operadores pueden ver esta lista.")
     remesas = await db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1).to_list(100)
     return {"remesas": remesas, "total": len(remesas)}
+
+@router.get("/status/{remesa_id}")
+async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_current_user)):
+    """Permite al frontend verificar el estado de pago de una remesa."""
+    remesa = await db.btc_remesas.find_one(
+        {"remesa_id": remesa_id, "user_id": current_user.user_id},
+        {"_id": 0, "remesa_id": 1, "estado": 1, "sats": 1, "usd_cliente": 1, "ves_recibe": 1, "creado_en": 1, "expira_en": 1}
+    )
+    if not remesa:
+        raise HTTPException(status_code=404, detail="Remesa no encontrada.")
+    # Convert datetime to string for JSON
+    if remesa.get("creado_en"):
+        remesa["creado_en"] = remesa["creado_en"].isoformat()
+    if remesa.get("expira_en"):
+        remesa["expira_en"] = remesa["expira_en"].isoformat()
+    return remesa
+
+
+@router.post("/cancelar/{remesa_id}")
+async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_current_user)):
+    """Permite al usuario cancelar una remesa pendiente."""
+    remesa = await db.btc_remesas.find_one(
+        {"remesa_id": remesa_id, "user_id": current_user.user_id, "estado": "pendiente"}
+    )
+    if not remesa:
+        raise HTTPException(status_code=404, detail="Remesa no encontrada o no cancelable.")
+    await db.btc_remesas.update_one(
+        {"remesa_id": remesa_id},
+        {"$set": {"estado": "cancelado", "cancelado_en": datetime.now(timezone.utc)}}
+    )
+    return {"ok": True, "msg": "Remesa cancelada."}
