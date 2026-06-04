@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-import osh
+import os
 
 import httpx
 from database import db
