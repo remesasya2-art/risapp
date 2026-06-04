@@ -144,16 +144,16 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
             "Content-Type": "application/json"
         }
         
-        payload = {
-            "query": mutation,
-            "variables": {
-                "input": {
-                    "amount": sats,
-                    "memo": memo,
-                    "walletId": BLINK_WALLET_ID
-                }
+    payload = {
+        "query": mutation,
+        "variables": {
+            "input": {
+                "amount": sats,
+                "memo": memo,
+                "walletId": BLINK_WALLET_ID
             }
         }
+    }
         
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(BLINK_GRAPHQL_URL, headers=headers, json=payload)
