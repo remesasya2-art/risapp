@@ -132,7 +132,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
     payment_request = invoice.get("paymentRequest")
     payment_hash = invoice.get("paymentHash")
     if not payment_request:
-        raise HTTPException(status_code=502, detail="No se pudo generar el invoice.")
+        raise HTTPException(status_code=502, detail=f"No se pudo generar el invoice. BLINK={result}.")
     remesa_id = str(uuid.uuid4())
     await db.btc_remesas.insert_one({"remesa_id": remesa_id, "user_id": current_user.user_id, "beneficiario_id": body.beneficiario_id, "beneficiario_data": {k: v for k, v in beneficiario.items() if k != "_id"}, "usd_cliente": body.usd_cliente, "ves_recibe": ves_recibe, "btc_pagar": btc_pagar, "sats": sats, "precio_btc_usado": precio_btc, "precio_con_margen": precio_con_margen, "tasa_ves": tasa_ves, "payment_request": payment_request, "payment_hash": payment_hash, "memo": memo, "tipo": "btc_remesa", "estado": "pendiente", "no_reembolsable": True, "creado_en": datetime.now(timezone.utc), "expira_en": datetime.now(timezone.utc) + timedelta(minutes=30)})
     return {"remesa_id": remesa_id, "qr": payment_request, "btc": f"{btc_pagar:.8f}", "sats": sats, "usd": body.usd_cliente, "ves_recibe": ves_recibe, "precio_btc_usado": precio_btc, "tasa_ves": tasa_ves, "expira_en": 1800, "aviso": "Los pagos en BTC no son reembolsables bajo ningun motivo."}
