@@ -279,6 +279,28 @@ async def webhook_blink(request: Request):
         await send_whatsapp_notification(admin_msg)
     except Exception as e:
         logger.warning(f"Error notificacion admin WhatsApp: {e}")
+    try:
+        from services.notifications import create_notification
+        beneficiario_data = remesa.get("beneficiario_data", {})
+        nombre_benef = beneficiario_data.get("full_name", "N/A")
+        cedula_benef = beneficiario_data.get("id_document", "N/A")
+        banco_benef = beneficiario_data.get("bank_code", "") or beneficiario_data.get("bank", "N/A")
+        telefono_benef = beneficiario_data.get("phone_number", "N/A")
+        tipo_pago = beneficiario_data.get("payment_type", "transferencia").upper()
+        remesa_id_corto = remesa.get("remesa_id", "N/A")[:8].upper()
+        usd_cliente = remesa.get("usd_cliente", 0)
+        admin_title = f"💸 Nueva remesa BTC pagada - ID {remesa_id_corto}"
+        admin_message = (f"${usd_cliente:,.2f} USD | {ves_recibe:,.2f} Bs | {tipo_pago}\n"
+                        f"Beneficiario: {nombre_benef} | CI: {cedula_benef}\n"
+                        f"Banco: {banco_benef} | Tel: {telefono_benef}")
+        admins = await db.users.find({"role": {"$in": ["admin", "super_admin"]}}, {"user_id": 1}).to_list(50)
+        for admin in admins:
+            try:
+                await create_notification(user_id=admin["user_id"], title=admin_title, message=admin_message, notification_type="btc_remesa_pagada")
+            except Exception as ea:
+                logger.warning(f"Error notif admin {admin.get('user_id')}: {ea}")
+    except Exception as e:
+        logger.warning(f"Error notificacion in-app admins: {e}")
     return {"ok": True}
 
 
