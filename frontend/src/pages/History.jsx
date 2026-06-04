@@ -193,7 +193,7 @@ export default function History() {
                 <Plus style={{ width: '18px', height: '18px' }} /> Recargar saldo
               </Link>
               <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#5B4FE9', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
-                <ArrowUpRight style={{ width: '18px', height: '18px' }} /> Enviar remesa
+                <ArrowUpRight style={{ width: '18px', height: '18px' }} /> Nuevo envío
               </Link>
             </div>
           </div>
