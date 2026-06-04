@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
 
 BLINK_API_KEY = os.getenv("BLINK_API_KEY", "")
-BLINK_WEBHOOK_SECRET = os.getenv("BLINK_WEBHOOK_SECRET", "")
+BLINK_WEBHOOK_SECRET = os.getenv("BLINK_WEBHOOK_SECRET" , "" )
+BLINK_WALLET_ID = os.getenv("BLINK_WALLET_ID", "81812448-e78e-47fb-b6cd-d827fc952536")
 BLINK_GRAPHQL_URL = "https://api.blink.sv/graphql"
 
 _btc_price_cache = {"price": 58500.0, "updated_at": None}
@@ -149,7 +150,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
                 "input": {
                     "amount": sats,
                     "memo": memo,
-                    "walletId": "ffc6c2b9-e661-48ab-8aa4-3a6e668a0ecc"
+                    "walletId": BLINK_WALLET_ID
                 }
             }
         }
