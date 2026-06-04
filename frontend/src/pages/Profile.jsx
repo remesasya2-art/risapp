@@ -347,7 +347,7 @@ export default function Profile() {
                   </div>
                   <div>
                     <p style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Panel Gestor</p>
-                    <p style={{ fontSize: '13px', opacity: 0.9, margin: '4px 0 0 0' }}>Procesar remesas de terceros</p>
+                    <p style={{ fontSize: '13px', opacity: 0.9, margin: '4px 0 0 0' }}>Procesar envíos de terceros</p>
                   </div>
                 </div>
                 <ChevronRight style={{ width: '24px', height: '24px', opacity: 0.9 }} />
