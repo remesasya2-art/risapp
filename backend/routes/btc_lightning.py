@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-import os
+import osh
 
 import httpx
 from database import db
@@ -139,22 +139,22 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         
     try:
         # Headers corregidos usando la cabecera estándar de Blink (Bearer)
-       headers = {
-            "X-API-KEY": BLINK_API_KEY,
-            "Content-Type": "application/json"
-        }
-        
-    payload = {
-        "query": mutation,
-        "variables": {
-            "input": {
-                "amount": sats,
-                "memo": memo,
-                "walletId": BLINK_WALLET_ID
+           headers = {
+                "X-API-KEY": BLINK_API_KEY,
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+            "query": mutation,
+            "variables": {
+                "input": {
+                    "amount": sats,
+                    "memo": memo,
+                    "walletId": BLINK_WALLET_ID
+                }
             }
         }
-    }
-        
+            
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(BLINK_GRAPHQL_URL, headers=headers, json=payload)
             result = resp.json()
