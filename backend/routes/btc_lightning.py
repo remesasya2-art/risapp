@@ -250,7 +250,35 @@ async def webhook_blink(request: Request):
         from services.notifications import create_notification
         await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. {ves_recibe:,.2f} BTC-VES seran enviados en maximo 15 minutos.", notification_type="btc_payment")
     except Exception as e:
-        logger.warning(f"Error notificacion: {e}")
+        logger.warning(f"Error notificacion usuario: {e}")
+    try:
+        from services.whatsapp import send_whatsapp_notification
+        beneficiario_data = remesa.get("beneficiario_data", {})
+        nombre_benef = beneficiario_data.get("full_name", "N/A")
+        cedula_benef = beneficiario_data.get("id_document", "N/A")
+        banco_benef = beneficiario_data.get("bank_code", "") or beneficiario_data.get("bank", "N/A")
+        telefono_benef = beneficiario_data.get("phone_number", "N/A")
+        tipo_pago = beneficiario_data.get("payment_type", "transferencia")
+        remesa_id_corto = remesa.get("remesa_id", "N/A")[:8].upper()
+        usd_cliente = remesa.get("usd_cliente", 0)
+        admin_msg = (
+            f"🔔 NUEVA REMESA BTC PAGADA\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 ID: {remesa_id_corto}\n"
+            f"💵 USD: ${usd_cliente:,.2f}\n"
+            f"💵 VES a enviar: {ves_recibe:,.2f} Bs\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Beneficiario: {nombre_benef}\n"
+            f"🪪 Cédula: {cedula_benef}\n"
+            f"🏦 Banco: {banco_benef}\n"
+            f"📱 Teléfono: {telefono_benef}\n"
+            f"💳 Tipo: {tipo_pago.upper()}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"⏰ Por favor procesar en max 15 min."
+        )
+        await send_whatsapp_notification(admin_msg)
+    except Exception as e:
+        logger.warning(f"Error notificacion admin WhatsApp: {e}")
     return {"ok": True}
 
 
