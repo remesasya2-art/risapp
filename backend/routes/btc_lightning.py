@@ -201,7 +201,8 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
     
     return {
         "remesa_id": remesa_id, 
-        "qr": payment_request, 
+        "qr": f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={payment_request}",
+        "payment_request": payment_request, 
         "btc": f"{btc_pagar:.8f}", 
         "sats": sats, 
         "usd": body.usd_cliente, 
