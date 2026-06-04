@@ -38,9 +38,9 @@ async def _get_tasa_ves():
 async def _get_btc_price():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": "BTCUSDT"})
+            resp = await client.get("https://blockchain.info/ticker")
             data = resp.json()
-            price = float(data["price"])
+            price = float(data["USD"]["last"])
             _btc_price_cache["price"] = price
             _btc_price_cache["updated_at"] = datetime.now(timezone.utc)
             return price
