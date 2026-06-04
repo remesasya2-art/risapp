@@ -2240,7 +2240,7 @@ export default function AdminPanel() {
                   </div>
                   <div>
                     <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>Socio Gestor</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Procesa remesas de terceros</p>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Procesa envíos de terceros</p>
                   </div>
                 </button>
 
