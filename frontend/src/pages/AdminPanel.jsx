@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap
-} from 'lucide-react';h
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { fmt, formatAccountNumber } from '../utils/format';
