@@ -316,6 +316,7 @@ async def create_ves_recharge(
         "type": "recharge_ves",
         "amount_ves": amount_ves,
         "amount_ris": round(amount_ris, 2),
+        "amount_input": round(amount_ris, 2),
         "rate_used": ris_to_ves,
         "proof_image": proof_image,
         "destination_bank": destination_bank,
