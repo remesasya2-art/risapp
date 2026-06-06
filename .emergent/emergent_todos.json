@@ -1,26 +1,42 @@
 [
   {
-    "content": "Crear hook useCountUp para animación del saldo",
+    "content": "Backend: nuevo archivo routes/btc_admin.py con endpoints admin",
     "status": "completed"
   },
   {
-    "content": "Extender utils/format con formatAccountNumber y formatRelativeUpdate",
+    "content": "Backend: endpoint GET /api/admin/btc/transacciones con filtros + paginación + counts",
     "status": "completed"
   },
   {
-    "content": "Crear componente BalanceCard.jsx con gradient, wallet icon, eye toggle, 2 pills, botones simétricos",
+    "content": "Backend: endpoint GET /api/admin/btc/transacciones.csv",
     "status": "completed"
   },
   {
-    "content": "Crear componente TransactionItem.jsx con badges traducidos, iconos categorizados, cuenta agrupada",
+    "content": "Backend: endpoints GET/PATCH /api/admin/btc/config",
     "status": "completed"
   },
   {
-    "content": "Integrar componentes en Dashboard.jsx + cambiar bg a #F4F5F9",
+    "content": "Backend: modificar btc_lightning.py para leer margen/comisión/tasa desde DB",
     "status": "completed"
   },
   {
-    "content": "Validar visualmente y dejar listo",
+    "content": "Backend: registrar btc_admin router en routes/__init__.py",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: crear componente BtcAdminHistorial con tabla + filtros + paginación + Export CSV",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: crear componente BtcAdminConfig con margen/comisión/tasa USD-VES y botón guardar",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: integrar sub-tabs (Pendientes | Historial | Configuración) en AdminPanel.jsx tab BTC",
+    "status": "completed"
+  },
+  {
+    "content": "Pruebas end-to-end visual",
     "status": "completed"
   }
 ]
