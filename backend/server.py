@@ -100,6 +100,21 @@ app.include_router(modular_api_router)
 # Include admin router (separate file for backward compatibility)
 app.include_router(admin_router)
 
+# ==============================================================================
+# FRONTEND - Serve React build (fixes {"detail":"Not Found"} on root path)
+# ==============================================================================
+FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "dist"
+
+if FRONTEND_BUILD_DIR.exists():
+    _assets_dir = FRONTEND_BUILD_DIR / "assets"
+    if _assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="frontend_assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        from fastapi.responses import FileResponse
+        return FileResponse(str(FRONTEND_BUILD_DIR / "index.html"))
+
 # ============================================================================
 # STARTUP/SHUTDOWN EVENTS
 # ============================================================================

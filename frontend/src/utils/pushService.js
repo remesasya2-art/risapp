@@ -94,7 +94,7 @@ class PushNotificationService {
 
       // Get VAPID public key from server
       const response = await api.get('/push/web/vapid-public-key');
-      this.publicKey = response.data.publicKey;
+      this.publicKey = response.data.public_key;
 
       // Check existing subscription
       this.subscription = await this.registration.pushManager.getSubscription();
