@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';h
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
