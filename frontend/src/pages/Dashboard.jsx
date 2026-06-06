@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   LayoutDashboard, Wallet, ArrowLeftRight, History, 
   LogOut, Plus, ArrowUpRight, ArrowDownLeft, TrendingUp, TrendingDown,
-  ChevronRight, Settings, User, HelpCircle, Menu, X, Clock, CheckCircle, XCircle, Eye, Download
+  ChevronRight, Settings, User, HelpCircle, Menu, X, Clock, CheckCircle, XCircle, Eye, Download, Zap
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
@@ -143,6 +143,7 @@ export default function Dashboard() {
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },
+    { icon: Zap, label: 'Enviar BTC', path: '/btc-lightning' },
   ];
 
   // Build menu based on user role

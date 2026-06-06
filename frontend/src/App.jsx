@@ -21,6 +21,7 @@ import GestorDashboard from './pages/GestorDashboard';
 import ForceChangePassword from './pages/ForceChangePassword';
 import GestorFlowMockup from './pages/GestorFlowMockup';
 import DriveCallback from './pages/DriveCallback';
+import BTCLightning from './pages/BTCLightning';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -98,7 +99,9 @@ function AppRoutes() {
       
       {/* Force Change Password Route */}
       <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
-      
+
+      {/* BTC Lightning Route */}
+              <Route path="/btc-lightning" element={<ProtectedRoute><BTCLightning /></ProtectedRoute>} />
       {/* Mockup Route - Temporal */}
       <Route path="/mockup-gestor" element={<GestorFlowMockup />} />
       

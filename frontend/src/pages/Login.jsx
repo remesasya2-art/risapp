@@ -115,10 +115,10 @@ export default function Login() {
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
           <img 
-            src="/logo-ris.jpeg" 
+            src="/logo-ris.png" 
             alt="RIS" 
-            className="h-12 w-auto"
-            style={{ borderRadius: '12px' }}
+            className="h-24 w-auto"
+            style={{ borderRadius: '16px' }}
           />
         </div>
 

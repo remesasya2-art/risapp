@@ -27,6 +27,7 @@ from routes.accounting_v2 import router as accounting_v2_router
 from routes.security_2fa import router as security_2fa_router
 from routes.payments_card import router as payments_card_router
 from routes.kyc_admin import router as kyc_admin_router
+from routes.btc_lightning import router as btc_lightning_router
 
 # Include sub-routers
 api_router.include_router(basic_router)
@@ -50,5 +51,6 @@ api_router.include_router(accounting_v2_router)
 api_router.include_router(security_2fa_router)
 api_router.include_router(payments_card_router)
 api_router.include_router(kyc_admin_router)
+api_router.include_router(btc_lightning_router)
 
 __all__ = ["api_router"]
