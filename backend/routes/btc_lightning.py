@@ -32,6 +32,24 @@ LIMITE_MAXIMO_USD = 200.0
 _rate_limit_invoices = {}  # {user_id: [timestamps]}
 
 
+async def _get_margen_dinamico():
+    """Lee margen desde DB con fallback al default."""
+    config = await db.config.find_one({"clave": "btc_margen"})
+    try:
+        return float(config["valor"]) if config and config.get("valor") is not None else MARGEN
+    except (ValueError, TypeError):
+        return MARGEN
+
+
+async def _get_comision_dinamica():
+    """Lee comisión desde DB con fallback al default."""
+    config = await db.config.find_one({"clave": "btc_comision"})
+    try:
+        return float(config["valor"]) if config and config.get("valor") is not None else COMISION
+    except (ValueError, TypeError):
+        return COMISION
+
+
 async def _get_tasa_ves():
     config = await db.config.find_one({"clave": "tasa_usd_ves_btc"})
     return float(config["valor"]) if config and config.get("valor") else 680.0
@@ -124,8 +142,10 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         
     precio_btc = await _get_btc_price()
     tasa_ves = await _get_tasa_ves()
-    precio_con_margen = precio_btc * MARGEN
-    btc_pagar = (body.usd_cliente * COMISION) / precio_con_margen
+    margen_dinamico = await _get_margen_dinamico()
+    comision_dinamica = await _get_comision_dinamica()
+    precio_con_margen = precio_btc * margen_dinamico
+    btc_pagar = (body.usd_cliente * comision_dinamica) / precio_con_margen
     
     # Aseguramos que sats sea un entero (int)
     sats = int(round(btc_pagar * 100_000_000))

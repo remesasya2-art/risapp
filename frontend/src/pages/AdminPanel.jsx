@@ -15,6 +15,8 @@ import { AutoRateCard } from '../components/common/AutoRateCard';
 import { BcvRatesCard } from '../components/common/BcvRatesCard';
 import KycPanel from '../components/admin/KycPanel';
 import { StatusBadge } from '../components/dashboard/TransactionItem';
+import BtcAdminHistorial from '../components/admin/BtcAdminHistorial';
+import BtcAdminConfig from '../components/admin/BtcAdminConfig';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -107,6 +109,7 @@ export default function AdminPanel() {
 
   // === BTC Orders State ===
   const [btcOrdenesP, setBtcOrdenesP] = useState([]);
+  const [btcSubTab, setBtcSubTab] = useState('pendientes'); // pendientes | historial | configuracion
   const [loadingBtcOrdenes, setLoadingBtcOrdenes] = useState(false);
   const [marcandoBtc, setMarcandoBtc] = useState(null);
 
@@ -1631,6 +1634,43 @@ export default function AdminPanel() {
       {/* BTC Orders Tab */}
       {activeTab === 'btc' && (
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
+          {/* Sub-tabs nav */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            {[
+              { key: 'pendientes',    label: '⚡ Pendientes',     color: '#f59e0b' },
+              { key: 'historial',     label: '📊 Historial',       color: '#6366f1' },
+              { key: 'configuracion', label: '⚙️  Configuración', color: '#16a34a' },
+            ].map((t) => {
+              const active = btcSubTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setBtcSubTab(t.key)}
+                  data-testid={`btc-subtab-${t.key}`}
+                  style={{
+                    padding: '10px 18px', borderRadius: '12px',
+                    border: active ? `2px solid ${t.color}` : '1.5px solid #e5e7eb',
+                    backgroundColor: active ? '#fff' : '#fff',
+                    color: active ? t.color : '#374151',
+                    fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+                    boxShadow: active ? `0 4px 10px ${t.color}40` : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sub-tab: Historial */}
+          {btcSubTab === 'historial' && <BtcAdminHistorial />}
+
+          {/* Sub-tab: Configuración */}
+          {btcSubTab === 'configuracion' && <BtcAdminConfig />}
+
+          {/* Sub-tab: Pendientes (original content) */}
+          {btcSubTab === 'pendientes' && (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div>
               <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>⚡ Órdenes BTC Pendientes</h2>
@@ -1701,6 +1741,7 @@ export default function AdminPanel() {
               ))}
             </div>
           )}
+          </>)}
         </div>
       )}
 </main>
