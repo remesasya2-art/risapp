@@ -1,8 +1,11 @@
+[variables]
+NODE_VERSION = "20"
+
 [phases.build]
 cmds = [
-  "cd frontend && yarn install --frozen-lockfile && yarn build",
-  "cd backend && pip install -r requirements.txt"
-]
+  "cd frontend && npm install && npm run build",
+    "cd backend && pip install -r requirements.txt"
+    ]
 
-[start]
-cmd = "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
+    [start]
+    cmd = "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
