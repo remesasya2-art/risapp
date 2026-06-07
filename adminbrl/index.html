@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AdminBRL - Panel de Operaciones</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --accent: #4f8ef7;
+      --accent2: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #2d3348;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+    .topbar h1 { font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+    .topbar .subtitle { color: var(--muted); font-size: 0.85rem; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); display: inline-block; margin-right: 6px; }
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 2px; padding: 0 16px; }
+    nav button { background: none; border: none; color: var(--muted); padding: 12px 18px; cursor: pointer; font-size: 0.9rem; border-bottom: 2px solid transparent; transition: all .2s; }
+    nav button:hover { color: var(--text); }
+    nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .card-title { font-size: 1rem; font-weight: 600; }
+    .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge-pending { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .badge-ok { background: rgba(34,197,94,0.15); color: var(--accent2); }
+    .badge-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .btn { border: none; border-radius: 7px; padding: 8px 16px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: opacity .2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-success { background: var(--accent2); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-outline { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th { text-align: left; padding: 10px 12px; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .empty { text-align: center; padding: 48px; color: var(--muted); font-size: 0.9rem; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 9px 12px; font-size: 0.9rem; outline: none; }
+    input:focus, select:focus { border-color: var(--accent); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+    .stat-label { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; min-width: 420px; max-width: 560px; width: 90%; }
+    .modal h3 { margin-bottom: 18px; font-size: 1.05rem; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .alert { padding: 10px 14px; border-radius: 7px; font-size: 0.88rem; margin-bottom: 14px; }
+    .alert-success { background: rgba(34,197,94,0.12); color: var(--accent2); border: 1px solid rgba(34,197,94,0.25); }
+    .alert-error { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.25); }
+    .config-section { background: var(--surface2); border-radius: 7px; padding: 14px; margin-bottom: 12px; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; font-size: 0.9rem; z-index: 200; display: none; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+    #toast.success { border-color: var(--accent2); color: var(--accent2); }
+    #toast.error { border-color: var(--danger); color: var(--danger); }
+    @media (max-width: 640px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } .modal { min-width: unset; } }
+  </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- MODAL: Procesar Retiro VES -->
+<div class="modal-overlay" id="modalVES">
+  <div class="modal">
+    <h3 id="modalVESTitle">Procesar Retiro VES</h3>
+    <div id="modalVESContent">
+      <div class="form-group">
+        <label>Banco a debitar</label>
+        <select id="vesBank">
+          <option value="">Cargando bancos...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Comprobante (URL de imagen, opcional)</label>
+        <input type="text" id="vesProof" placeholder="https://..." />
+      </div>
+      <div id="vesRejectGroup" style="display:none">
+        <div class="form-group">
+          <label>Motivo de rechazo</label>
+          <input type="text" id="vesRejectReason" placeholder="Ej: Datos incorrectos" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalVES')">Cancelar</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmVES('reject')">Rechazar</button>
+      <button class="btn btn-success" onclick="confirmVES('approve')">Aprobar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Procesar Retiro BTC -->
+<div class="modal-overlay" id="modalBTC">
+  <div class="modal">
+    <h3>Marcar Remesa BTC como Enviada</h3>
+    <div class="form-group">
+      <label>Comprobante (URL de imagen, opcional)</label>
+      <input type="text" id="btcProof" placeholder="https://..." />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalBTC')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmBTC()">Marcar Enviada</button>
+    </div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div>
+    <h1>AdminBRL</h1>
+    <div class="subtitle">Panel de Operaciones RisApp</div>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:16px;">
+    <div id="apiStatus" style="font-size:0.82rem;color:var(--muted)">
+      <span class="status-dot" id="statusDot" style="background:var(--warning)"></span>
+      <span id="statusText">Sin conectar</span>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="showSettings()">Configuracion</button>
+  </div>
+</div>
+
+<nav>
+  <button class="active" onclick="showSection('dashboard', this)">Dashboard</button>
+  <button onclick="showSection('retiros-ves', this)">Retiros VES</button>
+  <button onclick="showSection('retiros-btc', this)">Remesas BTC</button>
+  <button onclick="showSection('tasa', this)">Tasa del Dia</button>
+  <button onclick="showSection('configuracion', this)">Configuracion</button>
+</nav>
+
+<div class="container">
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" class="section active">
+    <div class="grid-3" style="margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="stat-value" id="statVESPendientes">-</div>
+        <div class="stat-label">Retiros VES pendientes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statBTCPendientes">-</div>
+        <div class="stat-label">Remesas BTC por enviar</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statTasaActual">-</div>
+        <div class="stat-label">Tasa actual USD/VES</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Estado del sistema</div>
+        <button class="btn btn-outline btn-sm" onclick="refreshDashboard()">Actualizar</button>
+      </div>
+      <div id="dashboardMsg" style="color:var(--muted);font-size:0.9rem">Configura tu API key para ver el estado.</div>
+    </div>
+  </div>
+
+  <!-- RETIROS VES -->
+  <div id="retiros-ves" class="section">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Retiros VES Pendientes <span id="vesBadge" class="badge badge-pending" style="margin-left:8px;display:none"></span></div>
+        <button class="btn btn-outline btn-sm" onclick="loadVES()">
+          <span id="vesSpinner" class="spinner" style="display:none"></span> Actualizar
+        </button>
+      </div>
+      <div id="vesAlert"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Usuario</th>
+              <th>Beneficiario</th>
+              <th>Banco</th>
+              <th>Cuenta</th>
+              <th>Monto VES</th>
+              <th>Fecha</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody id="vesTable">
+            <tr><td colspan="8" class="empty">Carga los retiros pendientes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETIROS BTC -->
+  <div id="retiros-btc" class="section">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Remesas BTC por Enviar <span id="btcBadge" class="badge badge-pending" style="margin-left:8px;display:none"></span></div>
+        <button class="btn btn-outline btn-sm" onclick="loadBTC()">
+          <span id="btcSpinner" class="spinner" style="display:none"></span> Actualizar
+        </button>
+      </div>
+      <div id="btcAlert"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID Remesa</th>
+              <th>Usuario</th>
+              <th>Beneficiario</th>
+              <th>USD</th>
+              <th>VES a recibir</th>
+              <th>Sats</th>
+              <th>Pagado en</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody id="btcTable">
+            <tr><td colspan="8" class="empty">Carga las remesas pendientes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TASA -->
+  <div id="tasa" class="section">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Sincronizar Tasa USD/VES</div></div>
+      <div id="tasaAlert"></div>
+      <div style="max-width:400px;">
+        <div class="form-group">
+          <label>Tasa USD a VES (ej: 42.50)</label>
+          <input type="number" id="tasaInput" placeholder="42.50" step="0.01" min="1" />
+        </div>
+        <div class="form-group">
+          <label>Fuente (opcional)</label>
+          <input type="text" id="tasaSource" value="adminbrl" placeholder="adminbrl" />
+        </div>
+        <button class="btn btn-primary" onclick="syncTasa()">Enviar Tasa a RisApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIGURACION -->
+  <div id="configuracion" class="section">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Configuracion del Bridge</div></div>
+      <div style="max-width:500px;">
+        <div class="form-group">
+          <label>URL base de RisApp API</label>
+          <input type="text" id="cfgBaseUrl" placeholder="https://tu-risapp.railway.app" />
+        </div>
+        <div class="form-group">
+          <label>API Key (X-AdminBRL-Key)</label>
+          <input type="password" id="cfgApiKey" placeholder="tu-api-key-secreta" />
+        </div>
+        <div class="form-group">
+          <label>Auto-refresh cada (segundos, 0 = desactivado)</label>
+          <input type="number" id="cfgRefresh" value="30" min="0" max="300" />
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">Guardar Configuracion</button>
+        <button class="btn btn-outline" style="margin-left:8px;" onclick="testConnection()">Probar conexion</button>
+        <div id="cfgResult" style="margin-top:14px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// CONFIG & STATE
+// ============================================================
+let CFG = { baseUrl: '', apiKey: '', refresh: 30 };
+let _currentVESTx = null;
+let _currentBTCRemesa = null;
+let _refreshTimer = null;
+let _vesBanks = [];
+
+function loadCfg() {
+  try { CFG = JSON.parse(localStorage.getItem('adminbrl_cfg') || '{}'); } catch(e) {}
+  CFG.baseUrl = CFG.baseUrl || '';
+  CFG.apiKey  = CFG.apiKey  || '';
+  CFG.refresh = CFG.refresh  != null ? CFG.refresh : 30;
+  document.getElementById('cfgBaseUrl').value  = CFG.baseUrl;
+  document.getElementById('cfgApiKey').value   = CFG.apiKey;
+  document.getElementById('cfgRefresh').value  = CFG.refresh;
+}
+
+function saveConfig() {
+  CFG.baseUrl = document.getElementById('cfgBaseUrl').value.trim().replace(/\/$/, '');
+  CFG.apiKey  = document.getElementById('cfgApiKey').value.trim();
+  CFG.refresh = parseInt(document.getElementById('cfgRefresh').value) || 0;
+  localStorage.setItem('adminbrl_cfg', JSON.stringify(CFG));
+  showToast('Configuracion guardada', 'success');
+  startAutoRefresh();
+}
+
+// ============================================================
+// API HELPER
+// ============================================================
+async function api(method, path, body) {
+  const url = CFG.baseUrl + '/api/adminbrl' + path;
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-AdminBRL-Key': CFG.apiKey
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(url, opts);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.detail || 'Error ' + resp.status);
+  return data;
+}
+
+// ============================================================
+// TOAST & MODAL
+// ============================================================
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = type;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+function showAlert(elId, msg, type='error') {
+  document.getElementById(elId).innerHTML =
+    '<div class="alert alert-' + (type==='success'?'success':'error') + '">' + msg + '</div>';
+  setTimeout(() => { document.getElementById(elId).innerHTML = ''; }, 5000);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'retiros-ves') loadVES();
+  if (id === 'retiros-btc') loadBTC();
+  if (id === 'dashboard') refreshDashboard();
+}
+
+function showSettings() {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('configuracion').classList.add('active');
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+async function refreshDashboard() {
+  if (!CFG.baseUrl || !CFG.apiKey) {
+    document.getElementById('dashboardMsg').textContent = 'Configura URL y API key en la pestana Configuracion.';
+    return;
+  }
+  try {
+    const [ves, btc] = await Promise.all([
+      api('GET', '/withdrawals/pending'),
+      api('GET', '/btc/pending')
+    ]);
+    document.getElementById('statVESPendientes').textContent = ves.total || 0;
+    document.getElementById('statBTCPendientes').textContent = btc.total || 0;
+
+    // Get tasa
+    try {
+      const cfg = await fetch(CFG.baseUrl + '/api/admin/config/tasa', {
+        headers: { 'X-AdminBRL-Key': CFG.apiKey }
+      });
+      if (cfg.ok) {
+        const d = await cfg.json();
+        document.getElementById('statTasaActual').textContent = (d.tasa_ves || d.valor || '-') + ' VES';
+      }
+    } catch(e) {}
+
+    document.getElementById('statusDot').style.background = 'var(--accent2)';
+    document.getElementById('statusText').textContent = 'Conectado';
+    document.getElementById('dashboardMsg').innerHTML =
+      '<span style="color:var(--accent2)">Sistema conectado correctamente.</span> ' +
+      ves.total + ' retiro(s) VES y ' + btc.total + ' remesa(s) BTC pendientes.';
+  } catch(e) {
+    document.getElementById('statusDot').style.background = 'var(--danger)';
+    document.getElementById('statusText').textContent = 'Error de conexion';
+    document.getElementById('dashboardMsg').innerHTML = '<span style="color:var(--danger)">Error: ' + e.message + '</span>';
+  }
+}
+
+// ============================================================
+// RETIROS VES
+// ============================================================
+async function loadVES() {
+  document.getElementById('vesSpinner').style.display = 'inline-block';
+  if (!CFG.baseUrl || !CFG.apiKey) {
+    document.getElementById('vesTable').innerHTML = '<tr><td colspan="8" class="empty">Configura la conexion primero</td></tr>';
+    document.getElementById('vesSpinner').style.display = 'none';
+    return;
+  }
+  try {
+    const data = await api('GET', '/withdrawals/pending');
+    renderVES(data.withdrawals || []);
+    const badge = document.getElementById('vesBadge');
+    if (data.total > 0) { badge.style.display = 'inline-flex'; badge.textContent = data.total; }
+    else badge.style.display = 'none';
+  } catch(e) {
+    document.getElementById('vesTable').innerHTML = '<tr><td colspan="8" class="empty" style="color:var(--danger)">' + e.message + '</td></tr>';
+  }
+  document.getElementById('vesSpinner').style.display = 'none';
+}
+
+function renderVES(list) {
+  if (!list.length) {
+    document.getElementById('vesTable').innerHTML = '<tr><td colspan="8" class="empty">No hay retiros pendientes</td></tr>';
+    return;
+  }
+  const rows = list.map(tx => {
+    const b = tx.beneficiary || {};
+    const fecha = tx.created_at ? tx.created_at.slice(0,16).replace('T',' ') : '-';
+    return '<tr>' +
+      '<td><span style="font-family:monospace;font-size:0.78rem">' + (tx.display_id || tx.transaction_id?.slice(0,8) || '-') + '</span></td>' +
+      '<td>' + (tx.user_name || '-') + '<br><span style="color:var(--muted);font-size:0.75rem">' + (tx.user_email || '') + '</span></td>' +
+      '<td>' + (b.full_name || '-') + '<br><span style="color:var(--muted);font-size:0.75rem">' + (b.id_document || '') + '</span></td>' +
+      '<td>' + (b.bank_name || '-') + '</td>' +
+      '<td style="font-family:monospace">' + (b.account_number || '-') + '</td>' +
+      '<td style="font-weight:700;color:var(--warning)">' + Number(tx.amount_output || 0).toLocaleString('es-VE', {minimumFractionDigits:2}) + ' VES</td>' +
+      '<td style="color:var(--muted);font-size:0.82rem">' + fecha + '</td>' +
+      '<td><button class="btn btn-primary btn-sm" onclick="openVESModal(' + JSON.stringify(JSON.stringify(tx)) + ')">Procesar</button></td>' +
+    '</tr>';
+  });
+  document.getElementById('vesTable').innerHTML = rows.join('');
+}
+
+async function loadBanks() {
+  if (!CFG.baseUrl || !CFG.apiKey) return;
+  try {
+    const data = await api('GET', '/withdrawals/pending'); // dummy call to wake up
+    // Fetch banks directly
+    const resp = await fetch(CFG.baseUrl + '/api/admin/banks', {
+      headers: { 'Authorization': 'Bearer ' + CFG.apiKey }
+    });
+    if (resp.ok) {
+      const d = await resp.json();
+      _vesBanks = d.banks || d || [];
+    }
+  } catch(e) {}
+}
+
+function openVESModal(txJson) {
+  _currentVESTx = JSON.parse(txJson);
+  document.getElementById('modalVESTitle').textContent = 'Procesar: ' + (_currentVESTx.display_id || _currentVESTx.transaction_id?.slice(0,8));
+  document.getElementById('vesRejectGroup').style.display = 'none';
+  document.getElementById('vesProof').value = '';
+  document.getElementById('vesRejectReason').value = '';
+  // Load banks for select
+  loadBanksSelect();
+  document.getElementById('modalVES').classList.add('open');
+}
+
+async function loadBanksSelect() {
+  const sel = document.getElementById('vesBank');
+  sel.innerHTML = '<option value="">Cargando...</option>';
+  try {
+    const resp = await fetch(CFG.baseUrl + '/api/admin/bank-accounts', {
+      headers: {
+        'X-AdminBRL-Key': CFG.apiKey,
+        'Authorization': 'Bearer dummy'
+      }
+    });
+    if (resp.ok) {
+      const d = await resp.json();
+      const banks = d.banks || d.accounts || d || [];
+      if (Array.isArray(banks) && banks.length) {
+        sel.innerHTML = '<option value="">Seleccionar banco...</option>' +
+          banks.map(b => '<option value="' + b.bank_id + '">' + b.name + ' (Saldo: ' + Number(b.balance||0).toLocaleString() + ' VES)</option>').join('');
+      } else {
+        sel.innerHTML = '<option value="">Escribe el bank_id manualmente</option>';
+        // Fallback: manual input
+        sel.outerHTML = '<input type="text" id="vesBank" placeholder="bank_id (ej: bank_abc123)" />';
+      }
+    } else {
+      sel.outerHTML = '<input type="text" id="vesBank" placeholder="bank_id" />';
+    }
+  } catch(e) {
+    sel.outerHTML = '<input type="text" id="vesBank" placeholder="bank_id" />';
+  }
+}
+
+async function confirmVES(action) {
+  if (!_currentVESTx) return;
+  const bankId = document.getElementById('vesBank').value;
+  const proof = document.getElementById('vesProof').value.trim();
+  const reason = document.getElementById('vesRejectReason').value.trim();
+
+  if (action === 'reject') {
+    const ok = confirm('Rechazar retiro ' + (_currentVESTx.display_id || '') + '?');
+    if (!ok) return;
+  }
+  if (action === 'approve' && !bankId) {
+    showAlert('vesAlert', 'Debes seleccionar un banco para aprobar.'); return;
+  }
+
+  const body = {
+    transaction_id: _currentVESTx.transaction_id,
+    action,
+    bank_id: bankId || undefined,
+    proof_images: proof ? [proof] : undefined,
+    rejection_reason: reason || undefined
+  };
+
+  try {
+    const data = await api('POST', '/withdrawals/process', body);
+    closeModal('modalVES');
+    showToast(data.message || 'Procesado correctamente', 'success');
+    loadVES();
+    refreshDashboard();
+  } catch(e) {
+    showAlert('vesAlert', e.message);
+  }
+}
+
+// ============================================================
+// RETIROS BTC
+// ============================================================
+async function loadBTC() {
+  document.getElementById('btcSpinner').style.display = 'inline-block';
+  if (!CFG.baseUrl || !CFG.apiKey) {
+    document.getElementById('btcTable').innerHTML = '<tr><td colspan="8" class="empty">Configura la conexion primero</td></tr>';
+    document.getElementById('btcSpinner').style.display = 'none';
+    return;
+  }
+  try {
+    const data = await api('GET', '/btc/pending');
+    renderBTC(data.ordenes || []);
+    const badge = document.getElementById('btcBadge');
+    if (data.total > 0) { badge.style.display = 'inline-flex'; badge.textContent = data.total; }
+    else badge.style.display = 'none';
+  } catch(e) {
+    document.getElementById('btcTable').innerHTML = '<tr><td colspan="8" class="empty" style="color:var(--danger)">' + e.message + '</td></tr>';
+  }
+  document.getElementById('btcSpinner').style.display = 'none';
+}
+
+function renderBTC(list) {
+  if (!list.length) {
+    document.getElementById('btcTable').innerHTML = '<tr><td colspan="8" class="empty">No hay remesas pendientes por enviar</td></tr>';
+    return;
+  }
+  const rows = list.map(r => {
+    const b = r.beneficiario || {};
+    const fecha = r.pagado_en ? r.pagado_en.slice(0,16).replace('T',' ') : '-';
+    return '<tr>' +
+      '<td style="font-family:monospace;font-size:0.78rem">' + (r.remesa_id?.slice(0,12) || '-') + '</td>' +
+      '<td>' + (r.user_name || r.user_id?.slice(0,8) || '-') + '</td>' +
+      '<td>' + (b.full_name || '-') + '<br><span style="color:var(--muted);font-size:0.75rem">' + (b.phone || '') + '</span></td>' +
+      '<td style="font-weight:700;color:var(--accent)">$' + Number(r.usd_cliente||0).toFixed(2) + '</td>' +
+      '<td style="font-weight:700;color:var(--warning)">' + Number(r.ves_recibe||0).toLocaleString() + ' VES</td>' +
+      '<td style="font-family:monospace">' + Number(r.sats||0).toLocaleString() + '</td>' +
+      '<td style="color:var(--muted);font-size:0.82rem">' + fecha + '</td>' +
+      '<td><button class="btn btn-success btn-sm" onclick="openBTCModal(' + JSON.stringify(JSON.stringify(r)) + ')">Marcar Enviada</button></td>' +
+    '</tr>';
+  });
+  document.getElementById('btcTable').innerHTML = rows.join('');
+}
+
+function openBTCModal(rJson) {
+  _currentBTCRemesa = JSON.parse(rJson);
+  document.getElementById('btcProof').value = '';
+  document.getElementById('modalBTC').classList.add('open');
+}
+
+async function confirmBTC() {
+  if (!_currentBTCRemesa) return;
+  const proof = document.getElementById('btcProof').value.trim();
+  const body = {
+    remesa_id: _currentBTCRemesa.remesa_id,
+    proof_images: proof ? [proof] : undefined
+  };
+  try {
+    const data = await api('POST', '/btc/process', body);
+    closeModal('modalBTC');
+    showToast(data.msg || 'Remesa marcada como enviada', 'success');
+    loadBTC();
+    refreshDashboard();
+  } catch(e) {
+    showAlert('btcAlert', e.message);
+  }
+}
+
+// ============================================================
+// TASA
+// ============================================================
+async function syncTasa() {
+  const tasa = parseFloat(document.getElementById('tasaInput').value);
+  const source = document.getElementById('tasaSource').value.trim() || 'adminbrl';
+  if (!tasa || tasa <= 0) { showAlert('tasaAlert', 'Ingresa una tasa valida.'); return; }
+  try {
+    const data = await api('POST', '/rates/sync', { tasa_ves: tasa, source });
+    showAlert('tasaAlert', 'Tasa sincronizada: ' + data.tasa_ves + ' VES/USD', 'success');
+    document.getElementById('statTasaActual').textContent = tasa + ' VES';
+  } catch(e) {
+    showAlert('tasaAlert', e.message);
+  }
+}
+
+// ============================================================
+// TEST CONNECTION
+// ============================================================
+async function testConnection() {
+  const el = document.getElementById('cfgResult');
+  el.innerHTML = '<span class="spinner"></span> Probando...';
+  try {
+    const data = await api('GET', '/withdrawals/pending');
+    el.innerHTML = '<div class="alert alert-success">Conexion exitosa. ' + data.total + ' retiro(s) VES pendiente(s).</div>';
+    document.getElementById('statusDot').style.background = 'var(--accent2)';
+    document.getElementById('statusText').textContent = 'Conectado';
+  } catch(e) {
+    el.innerHTML = '<div class="alert alert-error">Error: ' + e.message + '</div>';
+    document.getElementById('statusDot').style.background = 'var(--danger)';
+    document.getElementById('statusText').textContent = 'Error de conexion';
+  }
+}
+
+// ============================================================
+// AUTO-REFRESH
+// ============================================================
+function startAutoRefresh() {
+  if (_refreshTimer) clearInterval(_refreshTimer);
+  if (CFG.refresh > 0) {
+    _refreshTimer = setInterval(() => {
+      const active = document.querySelector('.section.active');
+      if (active?.id === 'retiros-ves') loadVES();
+      else if (active?.id === 'retiros-btc') loadBTC();
+      else if (active?.id === 'dashboard') refreshDashboard();
+    }, CFG.refresh * 1000);
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadCfg();
+startAutoRefresh();
+refreshDashboard();
+</script>
+</body>
+</html>
