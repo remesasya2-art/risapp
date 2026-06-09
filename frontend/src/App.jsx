@@ -12,7 +12,7 @@ import Recharge from './pages/Recharge';
 import RechargeVES from './pages/RechargeVES';
 import Profile from './pages/Profile';
 import History from './pages/History';
-import Verification from './pages/Verification';
+import Verification from './pages/Verification';h
 import AdminPanel from './pages/AdminPanel';
 import Notifications from './pages/Notifications';
 import Support from './pages/Support';
@@ -103,7 +103,7 @@ function AppRoutes() {
       {/* BTC Lightning Route */}
               <Route path="/btc-lightning" element={<ProtectedRoute><BTCLightning /></ProtectedRoute>} />
       {/* Mockup Route - Temporal */}
-      <Route path="/mockup-gestor" element={<GestorFlowMockup />} />
+      <Route path="/mockup-gestor" element={<ProtectedRoute><GestorFlowMockup /></ProtectedRoute>} />
       
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
