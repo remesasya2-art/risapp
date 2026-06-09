@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+  <html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CentroGestionCont-Byte — Registro de Transacciones RisApp</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --accent: #4f8ef7;
+      --success: #22c55e;
+      --danger: #ef4444;
+              --warning: #f59e0b;
+              --text: #e2e8f0;
+              --muted: #94a3b8;
+      --border: #2d3348;
+      --radius: 8px;
+}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+    .topbar h1 { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+    .topbar .subtitle { font-size: 0.75rem; color: var(--muted); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; margin-right: 6px; }
+    .status-dot.off { background: var(--danger); }
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 2px; padding: 0 16px; }
+    nav button { background: none; border: none; color: var(--muted); padding: 10px 16px; cursor: pointer; font-size: 0.85rem; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    nav button.active, nav button:hover { color: var(--text); border-bottom-color: var(--accent); }
+    .main { padding: 24px; }
+    .config-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; display: none; }
+    .config-panel.open { display: block; }
+    .config-panel label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 4px; margin-top: 12px; }
+    .config-panel input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; color: var(--text); font-size: 0.85rem; }
+    .btn { padding: 8px 18px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: opacity 0.15s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+        .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+    .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .filters select, .filters input { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 6px 10px; color: var(--text); font-size: 0.82rem; }
+          .filters label { font-size: 0.8rem; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    thead th { background: var(--surface2); color: var(--muted); padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 10px 12px; vertical-align: middle; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.72rem; font-weight: 600; }
+    .badge-pending   { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .badge-completed { background: rgba(34,197,94,0.15); color: var(--success); }
+    .badge-approved  { background: rgba(34,197,94,0.15); color: var(--success); }
+    .badge-rejected  { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .badge-type { background: rgba(79,142,247,0.12); color: var(--accent); }
+          .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
+          .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .card .value { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+    .card .label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .pager { display: flex; gap: 8px; align-items: center; margin-top: 14px; font-size: 0.82rem; }
+    .pager button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 5px 12px; cursor: pointer; }
+    .pager button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .empty { text-align: center; padding: 48px; color: var(--muted); }
+    .detail-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 99; align-items: center; justify-content: center; }
+    .detail-modal.open { display: flex; }
+    .detail-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 95%; max-height: 80vh; overflow-y: auto; }
+    .detail-box h3 { margin-bottom: 16px; color: var(--accent); }
+    .detail-row { display: flex; gap: 8px; margin-bottom: 8px; font-size: 0.82rem; }
+    .detail-row .dk { color: var(--muted); min-width: 140px; }
+    pre { background: var(--surface2); border-radius: 4px; padding: 10px; font-size: 0.75rem; overflow-x: auto; color: var(--text); }
+    .loading { opacity: 0.5; pointer-events: none; }
+    #msgBox { display: none; padding: 10px 16px; border-radius: 4px; margin-bottom: 14px; font-size: 0.82rem; }
+    #msgBox.error { display: block; background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid var(--danger); }
+    #msgBox.info { display: block; background: rgba(79,142,247,0.1); color: var(--accent); border: 1px solid var(--accent); }
+  </style>
+    </head>
+    <body>
+
+    <div class="topbar">
+      <div>
+        <h1>&#9632; CentroGestionCont-Byte</h1>
+        <div class="subtitle">Centro de Informacion Administrativo — RisApp Brasil</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <span id="connStatus"><span class="status-dot off" id="connDot"></span><span id="connTxt" style="font-size:0.78rem;color:var(--muted)">Desconectado</span></span>
+        <button class="btn btn-secondary btn-sm" onclick="toggleConfig()">&#9881; Configuracion</button>
+    <button class="btn btn-primary btn-sm" onclick="loadAll()">&#8635; Actualizar</button>
+  </div>
+</div>
+
+<nav>
+  <button class="active" onclick="showTab('dashboard',this)">Dashboard</button>
+  <button onclick="showTab('log',this)">Registro de Transacciones</button>
+  <button onclick="showTab('stats',this)">Estadisticas</button>
+</nav>
+
+<div class="main">
+  <div class="config-panel" id="configPanel">
+    <strong>Configuracion de Conexion</strong>
+    <label>URL base de RisApp</label>
+    <input type="text" id="cfgBaseUrl" placeholder="https://www.risappbr.com" />
+        <label>API Key CentroGestion (X-CentroGestion-Key)</label>
+        <input type="password" id="cfgApiKey" placeholder="clave-secreta" />
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="saveConfig()">Guardar y Conectar</button>
+      <button class="btn btn-secondary" onclick="toggleConfig()">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="msgBox"></div>
+
+      <!-- DASHBOARD -->
+      <div id="tab-dashboard">
+        <div class="card-grid" id="statsCards"></div>
+        <div id="recentTable"></div>
+      </div>
+
+      <!-- LOG -->
+      <div id="tab-log" style="display:none">
+        <div class="filters">
+          <label>Tipo:
+        <select id="fTipo" onchange="loadLog(1)">
+              <option value="">Todos</option>
+              <option value="retiro_ves">Retiro VES</option>
+              <option value="recarga_pix">Recarga PIX</option>
+              <option value="recarga_ves">Recarga VES</option>
+              <option value="pago_tarjeta">Pago Tarjeta</option>
+              <option value="remesa_btc">Remesa BTC</option>
+              <option value="retiro_aprobado">Retiro Aprobado</option>
+              <option value="retiro_rechazado">Retiro Rechazado</option>
+            </select>
+          </label>
+          <label>Status:
+        <select id="fStatus" onchange="loadLog(1)">
+              <option value="">Todos</option>
+              <option value="pending">Pendiente</option>
+              <option value="completed">Completado</option>
+              <option value="approved">Aprobado</option>
+              <option value="rejected">Rechazado</option>
+              <option value="paid">Pagado</option>
+            </select>
+          </label>
+          <label>Desde: <input type="date" id="fDesde" onchange="loadLog(1)" /></label>
+          <label>Hasta: <input type="date" id="fHasta" onchange="loadLog(1)" /></label>
+          <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Limpiar</button>
+        </div>
+        <div id="logTable"></div>
+    <div class="pager" id="pager"></div>
+      </div>
+
+      <!-- STATS -->
+      <div id="tab-stats" style="display:none">
+        <div class="filters">
+          <label>Desde: <input type="date" id="sFDesde" /></label>
+          <label>Hasta: <input type="date" id="sFHasta" /></label>
+          <button class="btn btn-primary btn-sm" onclick="loadStats()">Calcular</button>
+        </div>
+        <div id="statsTable" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- DETAIL MODAL -->
+    <div class="detail-modal" id="detailModal">
+      <div class="detail-box">
+        <h3>Detalle del Evento</h3>
+    <div id="detailContent"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeDetail()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const CFG_KEY = 'cgcb_config';
+  let CFG = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
+  CFG.baseUrl = CFG.baseUrl || '';
+  CFG.apiKey  = CFG.apiKey  || '';
+  let currentPage = 1;
+  let currentTab = 'dashboard';
+
+  document.getElementById('cfgBaseUrl').value = CFG.baseUrl;
+  document.getElementById('cfgApiKey').value  = CFG.apiKey;
+
+  function saveConfig() {
+        CFG.baseUrl = document.getElementById('cfgBaseUrl').value.trim().replace(/\/$/, '');
+              CFG.apiKey  = document.getElementById('cfgApiKey').value.trim();
+    localStorage.setItem(CFG_KEY, JSON.stringify(CFG));
+    document.getElementById('configPanel').classList.remove('open');
+    loadAll();
+  }
+
+  function toggleConfig() {
+        document.getElementById('configPanel').classList.toggle('open');
+  }
+
+  function showTab(tab, el) {
+        currentTab = tab;
+    ['dashboard','log','stats'].forEach(t => {
+            document.getElementById('tab-' + t).style.display = (t === tab) ? '' : 'none';
+      });
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    if (tab === 'dashboard') loadDashboard();
+    if (tab === 'log') loadLog(1);
+    if (tab === 'stats') loadStats();
+  }
+
+  function msg(text, type='info') {
+        const el = document.getElementById('msgBox');
+    el.className = type;
+    el.textContent = text;
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
+
+  async function apiFetch(path) {
+    if (!CFG.baseUrl || !CFG.apiKey) {
+      msg('Configura la URL y API Key para conectar.', 'error');
+      return null;
+    }
+    const url = CFG.baseUrl + '/api/centro-gestion' + path;
+    const res = await fetch(url, { headers: { 'X-CentroGestion-Key': CFG.apiKey } });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.detail || res.statusText);
+    }
+    return res.json();
+  }
+
+  async function loadAll() {
+    try {
+      const h = await apiFetch('/health');
+      if (h) {
+        document.getElementById('connDot').classList.remove('off');
+        document.getElementById('connTxt').textContent = 'Conectado — ' + h.total_eventos + ' eventos';
+      }
+    } catch(e) {
+      document.getElementById('connDot').classList.add('off');
+      document.getElementById('connTxt').textContent = 'Error: ' + e.message;
+    }
+    if (currentTab === 'dashboard') loadDashboard();
+    if (currentTab === 'log') loadLog(currentPage);
+    if (currentTab === 'stats') loadStats();
+  }
+
+  async function loadDashboard() {
+    // Stats cards
+    try {
+      const s = await apiFetch('/stats');
+      if (!s) return;
+      const cards = document.getElementById('statsCards');
+      cards.innerHTML = `
+                <div class="card"><div class="value">${s.total_eventos}</div><div class="label">Total Eventos</div></div>
+                ${s.por_tipo.map(t => `<div class="card"><div class="value">${t.total_eventos}</div><div class="label">${t._id}</div></div>`).join('')}
+              `;
+    } catch(e) { msg(e.message, 'error'); }
+
+    // Recent 10
+    try {
+      const d = await apiFetch('/log?limit=10&page=1');
+      if (!d) return;
+      document.getElementById('recentTable').innerHTML = '<strong style="font-size:0.85rem;color:var(--muted)">Ultimos 10 eventos</strong>' + renderTable(d.eventos);
+    } catch(e) {}
+  }
+
+  async function loadLog(page) {
+    currentPage = page;
+    const tipo   = document.getElementById('fTipo').value;
+    const status = document.getElementById('fStatus').value;
+    const desde  = document.getElementById('fDesde').value;
+    const hasta  = document.getElementById('fHasta').value;
+    let qs = `?page=${page}&limit=50`;
+    if (tipo)   qs += `&tipo=${tipo}`;
+    if (status) qs += `&status=${status}`;
+    if (desde)  qs += `&desde=${desde}`;
+    if (hasta)  qs += `&hasta=${hasta}`;
+    try {
+      const d = await apiFetch('/log' + qs);
+      if (!d) return;
+      document.getElementById('logTable').innerHTML = renderTable(d.eventos);
+      renderPager(d.page, d.pages);
+    } catch(e) { msg(e.message, 'error'); }
+  }
+
+  async function loadStats() {
+    const desde = document.getElementById('sFDesde').value;
+    const hasta = document.getElementById('sFHasta').value;
+    let qs = '?';
+    if (desde) qs += `desde=${desde}&`;
+    if (hasta) qs += `hasta=${hasta}`;
+    try {
+      const s = await apiFetch('/stats' + qs);
+      if (!s) return;
+      const rows = s.por_tipo.map(t => `
+        <tr>
+          <td><span class="badge badge-type">${t._id}</span></td>
+          <td>${t.total_eventos}</td>
+          <td>${t.monto_input_total.toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
+          <td>${t.monto_output_total.toLocaleString('es-VE', {minimumFractionDigits:2})}</td>
+        </tr>`).join('');
+      document.getElementById('statsTable').innerHTML = `
+                <p style="font-size:0.82rem;color:var(--muted);margin-bottom:10px">Total: <strong style="color:var(--text)">${s.total_eventos}</strong> eventos | Generado: ${new Date(s.generado_en).toLocaleString('es-VE')}</p>
+                <table><thead><tr><th>Tipo</th><th>Eventos</th><th>Monto Input Total</th><th>Monto Output Total</th></tr></thead>
+                <tbody>${rows}</tbody></table>`;
+                                                                                                                                                                             } catch(e) { msg(e.message, 'error'); }
+      }
+
+  function renderTable(eventos) {
+        if (!eventos || eventos.length === 0) return '<div class="empty">No hay eventos registrados</div>';
+    const rows = eventos.map(e => `
+      <tr onclick="showDetail('${e.transaction_id}')" style="cursor:pointer">
+        <td style="font-family:monospace;font-size:0.75rem">${e.transaction_id}</td>
+              <td><span class="badge badge-type">${e.tipo}</span></td>
+              <td>${e.user_email || e.user_id || '—'}</td>
+            <td>${e.amount_input != null ? e.amount_input.toLocaleString('es-VE',{minimumFractionDigits:2}) : '—'} ${e.currency_input || ''}</td>
+            <td>${e.amount_output != null ? e.amount_output.toLocaleString('es-VE',{minimumFractionDigits:2}) : '—'} ${e.currency_output || ''}</td>
+            <td><span class="badge badge-${e.status}">${e.status}</span></td>
+            <td style="color:var(--muted)">${new Date(e.registrado_en).toLocaleString('es-VE')}</td>
+          </tr>`).join('');
+        return `<table><thead><tr>
+                <th>ID Transaccion</th><th>Tipo</th><th>Usuario</th>
+                <th>Monto Input</th><th>Monto Output</th><th>Status</th><th>Fecha</th>
+              </tr></thead><tbody>${rows}</tbody></table>`;
+                                                                                                                      }
+
+  function renderPager(page, pages) {
+        const el = document.getElementById('pager');
+    el.innerHTML = `
+            <button onclick="loadLog(${page-1})" ${page<=1?'disabled':''}>&#8592; Anterior</button>
+            <span style="color:var(--muted)">Pagina ${page} de ${pages}</span>
+            <button onclick="loadLog(${page+1})" ${page>=pages?'disabled':''}>Siguiente &#8594;</button>`;
+      }
+
+  async function showDetail(txId) {
+    try {
+      const d = await apiFetch('/log/' + txId);
+      if (!d) return;
+      const fields = Object.entries(d).filter(([k]) => k !== 'metadata');
+      const meta = d.metadata || {};
+      document.getElementById('detailContent').innerHTML = `
+                ${fields.map(([k,v]) => `<div class="detail-row"><span class="dk">${k}</span><span>${v instanceof Object ? JSON.stringify(v) : (v ?? '—')}</span></div>`).join('')}
+                <div style="margin-top:12px"><strong style="font-size:0.8rem;color:var(--muted)">Metadata</strong><pre>${JSON.stringify(meta, null, 2)}</pre></div>`;
+      document.getElementById('detailModal').classList.add('open');
+    } catch(e) { msg(e.message, 'error'); }
+  }
+
+  function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
+
+  function clearFilters() {
+        ['fTipo','fStatus','fDesde','fHasta'].forEach(id => document.getElementById(id).value = '');
+    loadLog(1);
+  }
+
+  // Auto-load
+  if (CFG.baseUrl && CFG.apiKey) loadAll();
+</script>
+    </body>
+    </html>
