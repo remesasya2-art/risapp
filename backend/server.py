@@ -4,6 +4,7 @@ Main FastAPI application entry point.
 All endpoints are now in modular routers under /routes/
 """
 from fastapi import FastAPI, Request, Header
+from contextlib import asynccontextmanager
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -52,8 +53,43 @@ SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'noreply@risappbr.com')
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
 
+# Lifespan context manager (replaces @app.on_event startup/shutdown)
+@asynccontextmanager
+async def lifespan(app):
+        # Startup
+        try:
+                    await db.users.create_index("email", unique=True, sparse=True)
+                    await db.users.create_index("cpf_number", sparse=True)
+                    await db.user_sessions.create_index("session_token", unique=True)
+                    await db.user_sessions.create_index("expires_at")
+                    await db.transactions.create_index("user_id")
+                    await db.transactions.create_index("status")
+                    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+                    logger.info("Database indexes created successfully")
+        except Exception as e:
+                    logger.warning(f"Index creation warning: {e}")
+                try:
+                            from routes.security_2fa import ensure_security_indexes
+                            await ensure_security_indexes()
+                except Exception as e:
+        logger.warning(f"Security indexes warning: {e}")
+    try:
+                from services.bcv_scraper import start_scheduler
+                start_scheduler(db, interval_hours=1)
+    except Exception as e:
+        logger.warning(f"BCV scheduler failed to start: {e}")
+    yield
+    # Shutdown
+    try:
+                from services.bcv_scraper import stop_scheduler
+                stop_scheduler()
+    except Exception:
+        pass
+    client.close()
+
+
 # Create FastAPI app
-app = FastAPI(title="RIS App API", version="2.1.0")
+app = FastAPI(title="RIS App API", version="2.1.0", lifespan=lifespan)
 
 # Rate limiter wiring (from routes.security_2fa)
 from routes.security_2fa import limiter as security_limiter
@@ -72,14 +108,9 @@ async def security_headers_middleware(request, call_next):
     return response
 
 # CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+raworigins = os.getenv("ALLOWED_ORIGINS", "https://risappbr.com,https://www.risappbr.com")
+ALLOWED_ORIGINS = [o.strip() for o in raworigins.split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 security = HTTPBearer()
 
 # ============================================================================
@@ -115,46 +146,5 @@ if FRONTEND_BUILD_DIR.exists():
         from fastapi.responses import FileResponse
         return FileResponse(str(FRONTEND_BUILD_DIR / "index.html"))
 
-# ============================================================================
-# STARTUP/SHUTDOWN EVENTS
-# ============================================================================
-
-@app.on_event("startup")
-async def startup_db_client():
-    """Create database indexes on startup"""
-    try:
-        await db.users.create_index("email", unique=True, sparse=True)
-        await db.users.create_index("cpf_number", sparse=True)
-        await db.user_sessions.create_index("session_token", unique=True)
-        await db.user_sessions.create_index("expires_at")
-        await db.transactions.create_index("user_id")
-        await db.transactions.create_index("status")
-        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
-        logger.info("Database indexes created successfully")
-    except Exception as e:
-        logger.warning(f"Index creation warning: {e}")
-
-    # 2FA security indexes
-    try:
-        from routes.security_2fa import ensure_security_indexes
-        await ensure_security_indexes()
-    except Exception as e:
-        logger.warning(f"Security indexes warning: {e}")
-
-    # Start BCV scraper background scheduler
-    try:
-        from services.bcv_scraper import start_scheduler
-        start_scheduler(db, interval_hours=1)
-    except Exception as e:
-        logger.warning(f"BCV scheduler failed to start: {e}")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    try:
-        from services.bcv_scraper import stop_scheduler
-        stop_scheduler()
-    except Exception:
-        pass
-    client.close()
-
+    
 # Last update: 2026-03-28 - Complete refactor to modular routers
