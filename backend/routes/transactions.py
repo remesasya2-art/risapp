@@ -83,10 +83,16 @@ async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(g
 @router.post("/withdrawal/create")
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
         """Create a withdrawal request"""
-        user = await db.users.find_one({"user_id": current_user.user_id})
+if request.amount <= 0:
+                raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
-    if user.get("balance_ris", 0) < request.amount:
-                raise HTTPException(status_code=400, detail="Saldo insuficiente")
+        user = await db.users.find_one_and_update(
+                            {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
+                            {"$inc": {"balance_ris": -request.amount}},
+                            return_document=True
+        )
+        if user is None:
+                            raise HTTPException(status_code=400, detail="Saldo insuficiente")
 
     # Get beneficiary
     beneficiary = await db.beneficiaries.find_one({
@@ -133,13 +139,6 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
                 "created_at": datetime.now(timezone.utc),
                 "whatsapp_active": False
     }
-
-    # Deduct balance
-    await db.users.update_one(
-                {"user_id": current_user.user_id},
-                {"$inc": {"balance_ris": -request.amount}}
-    )
-
     await db.transactions.insert_one(transaction)
 
     # Notify user
@@ -252,8 +251,8 @@ async def get_transactions(
         if filter_type and filter_type != "all":
                     if filter_type == "withdrawals":
                                     query["type"] = {"$in": ["withdrawal", "send"]}
-        elif filter_type == "recharges":
-                        query["type"] = {"$in": ["recharge", "recharge_ves"]}
+                    elif filter_type == "recharges":
+                                    query["type"] = {"$in": ["recharge", "recharge_ves"]}
 
         skip = (page - 1) * limit
         total = await db.transactions.count_documents(query)
