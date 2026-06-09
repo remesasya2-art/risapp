@@ -23,8 +23,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('last_activity', Date.now().toString());
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      doLogout();
-      window.location.href = '/login';
+      doLogout().then(() => { window.location.href = '/login'; });
     }, INACTIVITY_TIMEOUT);
   }, [doLogout]);
 
