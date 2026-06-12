@@ -12,7 +12,7 @@ import Recharge from './pages/Recharge';
 import RechargeVES from './pages/RechargeVES';
 import Profile from './pages/Profile';
 import History from './pages/History';
-import Verification from './pages/Verification';h
+import Verification from './pages/Verification';
 import AdminPanel from './pages/AdminPanel';
 import Notifications from './pages/Notifications';
 import Support from './pages/Support';
