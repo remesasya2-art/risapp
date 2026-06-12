@@ -56,33 +56,33 @@ if RESEND_API_KEY:
 # Lifespan context manager (replaces @app.on_event startup/shutdown)
 @asynccontextmanager
 async def lifespan(app):
-        # Startup
-        try:
-                    await db.users.create_index("email", unique=True, sparse=True)
-                    await db.users.create_index("cpf_number", sparse=True)
-                    await db.user_sessions.create_index("session_token", unique=True)
-                    await db.user_sessions.create_index("expires_at")
-                    await db.transactions.create_index("user_id")
-                    await db.transactions.create_index("status")
-                    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
-                    logger.info("Database indexes created successfully")
-        except Exception as e:
-                    logger.warning(f"Index creation warning: {e}")
-                try:
-                            from routes.security_2fa import ensure_security_indexes
-                            await ensure_security_indexes()
-                except Exception as e:
+    # Startup
+    try:
+        await db.users.create_index("email", unique=True, sparse=True)
+        await db.users.create_index("cpf_number", sparse=True)
+        await db.user_sessions.create_index("session_token", unique=True)
+        await db.user_sessions.create_index("expires_at")
+        await db.transactions.create_index("user_id")
+        await db.transactions.create_index("status")
+        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.warning(f"Index creation warning: {e}")
+    try:
+        from routes.security_2fa import ensure_security_indexes
+        await ensure_security_indexes()
+    except Exception as e:
         logger.warning(f"Security indexes warning: {e}")
     try:
-                from services.bcv_scraper import start_scheduler
-                start_scheduler(db, interval_hours=1)
+        from services.bcv_scraper import start_scheduler
+        start_scheduler(db, interval_hours=1)
     except Exception as e:
         logger.warning(f"BCV scheduler failed to start: {e}")
     yield
     # Shutdown
     try:
-                from services.bcv_scraper import stop_scheduler
-                stop_scheduler()
+        from services.bcv_scraper import stop_scheduler
+        stop_scheduler()
     except Exception:
         pass
     client.close()
