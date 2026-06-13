@@ -25,7 +25,7 @@ async def create_beneficiary(request: BeneficiaryCreate, current_user: User = De
         """Create a new beneficiary"""
         beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"
 
-    beneficiary = {
+        beneficiary = {
                 "beneficiary_id": beneficiary_id,
                 "user_id": current_user.user_id,
                 "full_name": request.full_name.strip(),
