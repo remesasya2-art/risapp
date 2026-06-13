@@ -22,20 +22,20 @@ router = APIRouter(tags=["transactions"])
 
 @router.post("/beneficiaries")
 async def create_beneficiary(request: BeneficiaryCreate, current_user: User = Depends(get_current_user)):
-        """Create a new beneficiary"""
-        beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"
+    """Create a new beneficiary"""
+    beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"
 
-        beneficiary = {
-                "beneficiary_id": beneficiary_id,
-                "user_id": current_user.user_id,
-                "full_name": request.full_name.strip(),
-                "id_document": request.id_document.strip(),
-                "bank": request.bank.strip(),
-                "bank_code": request.bank_code,
-                "phone_number": request.phone_number,
-                "account_number": request.account_number,
-                "payment_type": request.payment_type,
-                "created_at": datetime.now(timezone.utc)
+    beneficiary = {
+        "beneficiary_id": beneficiary_id,
+        "user_id": current_user.user_id,
+        "full_name": request.full_name.strip(),
+        "id_document": request.id_document.strip(),
+        "bank": request.bank.strip(),
+        "bank_code": request.bank_code,
+        "phone_number": request.phone_number,
+        "account_number": request.account_number,
+        "payment_type": request.payment_type,
+        "created_at": datetime.now(timezone.utc)
     }
 
     await db.beneficiaries.insert_one(beneficiary)
@@ -44,36 +44,36 @@ async def create_beneficiary(request: BeneficiaryCreate, current_user: User = De
 
 @router.get("/beneficiaries")
 async def get_beneficiaries(current_user: User = Depends(get_current_user)):
-        """Get user's beneficiaries"""
-        beneficiaries = await db.beneficiaries.find(
-            {"user_id": current_user.user_id}
-        ).to_list(100)
+    """Get user's beneficiaries"""
+    beneficiaries = await db.beneficiaries.find(
+        {"user_id": current_user.user_id}
+    ).to_list(100)
 
     return [
-                {
-                                "beneficiary_id": b.get("beneficiary_id"),
-                                "full_name": b.get("full_name"),
-                                "id_document": b.get("id_document"),
-                                "bank": b.get("bank"),
-                                "bank_code": b.get("bank_code"),
-                                "phone_number": b.get("phone_number"),
-                                "account_number": b.get("account_number"),
-                                "payment_type": b.get("payment_type", "transferencia"),
-                                "created_at": b.get("created_at")
-                }
-                for b in beneficiaries
+        {
+            "beneficiary_id": b.get("beneficiary_id"),
+            "full_name": b.get("full_name"),
+            "id_document": b.get("id_document"),
+            "bank": b.get("bank"),
+            "bank_code": b.get("bank_code"),
+            "phone_number": b.get("phone_number"),
+            "account_number": b.get("account_number"),
+            "payment_type": b.get("payment_type", "transferencia"),
+            "created_at": b.get("created_at")
+        }
+        for b in beneficiaries
     ]
 
 @router.delete("/beneficiaries/{beneficiary_id}")
 async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(get_current_user)):
-        """Delete a beneficiary"""
-        result = await db.beneficiaries.delete_one({
-            "beneficiary_id": beneficiary_id,
-            "user_id": current_user.user_id
-        })
+    """Delete a beneficiary"""
+    result = await db.beneficiaries.delete_one({
+        "beneficiary_id": beneficiary_id,
+        "user_id": current_user.user_id
+    })
 
     if result.deleted_count == 0:
-                raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
 
     return {"message": "Beneficiario eliminado"}
 
@@ -82,26 +82,26 @@ async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(g
 @router.post("/withdraw")
 @router.post("/withdrawal/create")
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
-        """Create a withdrawal request"""
-if request.amount <= 0:
-                raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    """Create a withdrawal request"""
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
-        user = await db.users.find_one_and_update(
-                            {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
-                            {"$inc": {"balance_ris": -request.amount}},
-                            return_document=True
-        )
-        if user is None:
-                            raise HTTPException(status_code=400, detail="Saldo insuficiente")
+    user = await db.users.find_one_and_update(
+        {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
+        {"$inc": {"balance_ris": -request.amount}},
+        return_document=True
+    )
+    if user is None:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente")
 
     # Get beneficiary
     beneficiary = await db.beneficiaries.find_one({
-                "beneficiary_id": request.beneficiary_id,
-                "user_id": current_user.user_id
+        "beneficiary_id": request.beneficiary_id,
+        "user_id": current_user.user_id
     })
 
     if not beneficiary:
-                raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
 
     # Get exchange rate
     rate = await db.rates.find_one(sort=[("updated_at", -1)])
@@ -114,170 +114,173 @@ if request.amount <= 0:
     display_id = await get_next_withdrawal_id()
 
     beneficiary_data = {
-                "full_name": beneficiary.get("full_name"),
-                "id_document": beneficiary.get("id_document"),
-                "bank": beneficiary.get("bank"),
-                "bank_code": beneficiary.get("bank_code"),
-                "phone_number": beneficiary.get("phone_number"),
-                "account_number": beneficiary.get("account_number"),
-                "payment_type": beneficiary.get("payment_type", "transferencia")
+        "full_name": beneficiary.get("full_name"),
+        "id_document": beneficiary.get("id_document"),
+        "bank": beneficiary.get("bank"),
+        "bank_code": beneficiary.get("bank_code"),
+        "phone_number": beneficiary.get("phone_number"),
+        "account_number": beneficiary.get("account_number"),
+        "payment_type": beneficiary.get("payment_type", "transferencia")
     }
 
     transaction = {
-                "transaction_id": tx_id,
-                "display_id": display_id,
-                "user_id": current_user.user_id,
-                "type": "withdrawal",
-                "amount_input": request.amount,
-                "amount_output": amount_ves,
-                "currency_input": "RIS",
-                "currency_output": "VES",
-                "rate": ris_to_ves,
-                "status": "pending",
-                "beneficiary_id": request.beneficiary_id,
-                "beneficiary_data": beneficiary_data,
-                "created_at": datetime.now(timezone.utc),
-                "whatsapp_active": False
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "user_id": current_user.user_id,
+        "type": "withdrawal",
+        "amount_input": request.amount,
+        "amount_output": amount_ves,
+        "currency_input": "RIS",
+        "currency_output": "VES",
+        "rate": ris_to_ves,
+        "status": "pending",
+        "beneficiary_id": request.beneficiary_id,
+        "beneficiary_data": beneficiary_data,
+        "created_at": datetime.now(timezone.utc),
+        "whatsapp_active": False
     }
     await db.transactions.insert_one(transaction)
 
     # Notify user
     await create_notification(
-                user_id=current_user.user_id,
-                title="Retiro Solicitado",
-                message=f"Tu retiro de {request.amount} RIS ({amount_ves:.2f} VES) ha sido recibido y esta en cola.",
-                notification_type="withdrawal_pending"
+        user_id=current_user.user_id,
+        title="Retiro Solicitado",
+        message=f"Tu retiro de {request.amount} RIS ({amount_ves:.2f} VES) ha sido recibido y esta en cola.",
+        notification_type="withdrawal_pending"
     )
 
     # Send to WhatsApp queue
     try:
-                await send_next_pending_withdrawal_whatsapp()
-except Exception as e:
-            logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
+        await send_next_pending_withdrawal_whatsapp()
+    except Exception as e:
+        logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
 
     # Registrar en CentroGestion
+    try:
         await registrar_evento(
-                    tipo="retiro_ves",
-                    transaction_id=tx_id,
-                    user_id=current_user.user_id,
-                    user_email=user.get("email"),
-                    user_name=user.get("name") or user.get("full_name"),
-                    amount_input=request.amount,
-                    amount_output=amount_ves,
-                    currency_input="RIS",
-                    currency_output="VES",
-                    status="pending",
-                    metadata={
-                                    "display_id": display_id,
-                                    "rate": ris_to_ves,
-                                    "beneficiary": beneficiary_data
-                    }
+            tipo="retiro_ves",
+            transaction_id=tx_id,
+            user_id=current_user.user_id,
+            user_email=user.get("email"),
+            user_name=user.get("name") or user.get("full_name"),
+            amount_input=request.amount,
+            amount_output=amount_ves,
+            currency_input="RIS",
+            currency_output="VES",
+            status="pending",
+            metadata={
+                "display_id": display_id,
+                "rate": ris_to_ves,
+                "beneficiary": beneficiary_data
+            }
         )
+    except Exception as e:
+        logger.warning(f"registrar_evento fallo: {e}")
 
     return {
-                "message": "Retiro solicitado exitosamente",
-                "transaction_id": tx_id,
-                "display_id": display_id,
-                "amount_ris": request.amount,
-                "amount_ves": amount_ves,
-                "rate": ris_to_ves
+        "message": "Retiro solicitado exitosamente",
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "amount_ris": request.amount,
+        "amount_ves": amount_ves,
+        "rate": ris_to_ves
     }
 
 # ============== RECHARGE VES ==============
 
 @router.post("/recharge/ves")
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
-        """Create a VES recharge request"""
-        amount_ves = float(request.get("amount_ves", 0))
-        amount_ris = float(request.get("amount_ris", 0))
-        payment_method = request.get("payment_method", "transferencia")
-        amount_input = float(request.get("amount_input", amount_ves))
+    """Create a VES recharge request"""
+    amount_ves = float(request.get("amount_ves", 0))
+    amount_ris = float(request.get("amount_ris", 0))
+    payment_method = request.get("payment_method", "transferencia")
+    amount_input = float(request.get("amount_input", amount_ves))
 
     if amount_ves <= 0 or amount_ris <= 0:
-                raise HTTPException(status_code=400, detail="Montos invalidos")
+        raise HTTPException(status_code=400, detail="Montos invalidos")
 
     user = await db.users.find_one({"user_id": current_user.user_id})
 
     tx_id = f"rech_{uuid.uuid4().hex[:12]}"
 
     transaction = {
-                "transaction_id": tx_id,
-                "user_id": current_user.user_id,
-                "type": "recharge_ves",
-                "amount_input": amount_input,
-                "amount_output": amount_ris,
-                "currency_input": "VES",
-                "currency_output": "RIS",
-                "payment_method": payment_method,
-                "status": "pending",
-                "created_at": datetime.now(timezone.utc)
+        "transaction_id": tx_id,
+        "user_id": current_user.user_id,
+        "type": "recharge_ves",
+        "amount_input": amount_input,
+        "amount_output": amount_ris,
+        "currency_input": "VES",
+        "currency_output": "RIS",
+        "payment_method": payment_method,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc)
     }
 
     await db.transactions.insert_one(transaction)
 
     # Registrar en CentroGestion
     await registrar_evento(
-                tipo="recarga_ves",
-                transaction_id=tx_id,
-                user_id=current_user.user_id,
-                user_email=user.get("email") if user else None,
-                user_name=user.get("name") if user else None,
-                amount_input=amount_ves,
-                amount_output=amount_ris,
-                currency_input="VES",
-                currency_output="RIS",
-                status="pending",
-                metadata={"payment_method": payment_method}
+        tipo="recarga_ves",
+        transaction_id=tx_id,
+        user_id=current_user.user_id,
+        user_email=user.get("email") if user else None,
+        user_name=user.get("name") or user.get("full_name") if user else None,
+        amount_input=amount_input,
+        amount_output=amount_ris,
+        currency_input="VES",
+        currency_output="RIS",
+        status="pending",
+        metadata={"payment_method": payment_method}
     )
 
     return {
-                "message": "Recarga VES registrada, pendiente de verificacion",
-                "transaction_id": tx_id,
-                "amount_ves": amount_ves,
-                "amount_ris": amount_ris
+        "message": "Recarga VES registrada, pendiente de verificacion",
+        "transaction_id": tx_id,
+        "amount_ves": amount_ves,
+        "amount_ris": amount_ris
     }
 
 # ============== TRANSACTION HISTORY ==============
 
 @router.get("/transactions")
 async def get_transactions(
-        page: int = 1,
-        limit: int = 10,
-        filter_type: str = None,
-        current_user: User = Depends(get_current_user)
+    page: int = 1,
+    limit: int = 10,
+    filter_type: str = None,
+    current_user: User = Depends(get_current_user)
 ):
-        """Get user's transaction history with pagination"""
-        query = {"user_id": current_user.user_id}
-        if filter_type and filter_type != "all":
-                    if filter_type == "withdrawals":
-                                    query["type"] = {"$in": ["withdrawal", "send"]}
-                    elif filter_type == "recharges":
-                                    query["type"] = {"$in": ["recharge", "recharge_ves"]}
+    """Get user's transaction history with pagination"""
+    query = {"user_id": current_user.user_id}
+    if filter_type and filter_type != "all":
+        if filter_type == "withdrawals":
+            query["type"] = {"$in": ["withdrawal", "send"]}
+        elif filter_type == "recharges":
+            query["type"] = {"$in": ["recharge", "recharge_ves"]}
 
-        skip = (page - 1) * limit
-        total = await db.transactions.count_documents(query)
-        transactions = await db.transactions.find(
-            query,
-            {"_id": 0}
-        ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    skip = (page - 1) * limit
+    total = await db.transactions.count_documents(query)
+    transactions = await db.transactions.find(
+        query,
+        {"_id": 0}
+    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
 
     return {
-                "total": total,
-                "page": page,
-                "limit": limit,
-                "transactions": transactions
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "transactions": transactions
     }
 
 @router.get("/transactions/{transaction_id}")
 async def get_transaction(transaction_id: str, current_user: User = Depends(get_current_user)):
-        """Get a specific transaction"""
-        transaction = await db.transactions.find_one(
-            {"transaction_id": transaction_id, "user_id": current_user.user_id},
-            {"_id": 0}
-        )
+    """Get a specific transaction"""
+    transaction = await db.transactions.find_one(
+        {"transaction_id": transaction_id, "user_id": current_user.user_id},
+        {"_id": 0}
+    )
 
     if not transaction:
-                raise HTTPException(status_code=404, detail="Transaccion no encontrada")
+        raise HTTPException(status_code=404, detail="Transaccion no encontrada")
 
     return transaction
 
@@ -285,26 +288,26 @@ async def get_transaction(transaction_id: str, current_user: User = Depends(get_
 
 @router.get("/withdrawal/pending")
 async def check_pending_withdrawal(current_user: User = Depends(get_current_user)):
-        """Check if user has a pending withdrawal"""
-        withdrawal = await db.transactions.find_one(
-            {
-                "user_id": current_user.user_id,
-                "type": {"$in": ["withdrawal", "send"]},
-                "status": "pending"
-            },
-            {"_id": 0},
-            sort=[("created_at", -1)]
-        )
+    """Check if user has a pending withdrawal"""
+    withdrawal = await db.transactions.find_one(
+        {
+            "user_id": current_user.user_id,
+            "type": {"$in": ["withdrawal", "send"]},
+            "status": "pending"
+        },
+        {"_id": 0},
+        sort=[("created_at", -1)]
+    )
 
     if not withdrawal:
-                return {"has_pending": False}
+        return {"has_pending": False}
 
     return {
-                "has_pending": True,
-                "transaction_id": withdrawal.get("transaction_id"),
-                "display_id": withdrawal.get("display_id"),
-                "amount_input": withdrawal.get("amount_input"),
-                "amount_output": withdrawal.get("amount_output"),
-                "beneficiary_data": withdrawal.get("beneficiary_data"),
-                "created_at": withdrawal.get("created_at")
+        "has_pending": True,
+        "transaction_id": withdrawal.get("transaction_id"),
+        "display_id": withdrawal.get("display_id"),
+        "amount_input": withdrawal.get("amount_input"),
+        "amount_output": withdrawal.get("amount_output"),
+        "beneficiary_data": withdrawal.get("beneficiary_data"),
+        "created_at": withdrawal.get("created_at")
     }
