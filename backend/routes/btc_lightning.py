@@ -12,7 +12,7 @@ import httpx
 from database import db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
-from pydantic import BaseModel
+from pydantic import BaseModelh
 from routes.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -287,7 +287,7 @@ async def webhook_blink(request: Request):
             "user_id": user_id,
             "tipo": "envio",
             "subtipo": "btc_lightning",
-            "estado": "pendiente",
+            "estado": "procesando",
             "amount": -remesa.get("usd_cliente", 0),
             "amount_ves": remesa.get("ves_recibe", 0),
             "monto_btc": remesa.get("btc_pagar", 0),
@@ -300,6 +300,7 @@ async def webhook_blink(request: Request):
             "created_at": datetime.now(timezone.utc),
             "display_id": remesa.get("remesa_id", "")[:8].upper(),
             "moneda": "BTC-VES",
+            "description": f"Procesando envio de ${remesa.get('usd_cliente', 0):,.2f} USD ({remesa.get('ves_recibe', 0):,.2f} Bs)",
         })
         logger.info(f"Transaccion historial creada para remesa {remesa.get('remesa_id')}")
     except Exception as e_hist:
