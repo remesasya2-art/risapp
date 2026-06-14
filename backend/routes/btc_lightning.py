@@ -12,7 +12,7 @@ import httpx
 from database import db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
-from pydantic import BaseModel
+from pydantic import BaseModelh
 from routes.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -278,6 +278,32 @@ async def webhook_blink(request: Request):
     user_id = remesa["user_id"]
     await db.btc_ves_wallets.update_one({"user_id": user_id}, {"$inc": {"saldo": ves_recibe}, "$set": {"moneda": "BTC-VES", "user_id": user_id}, "$setOnInsert": {"creado_en": datetime.now(timezone.utc)}}, upsert=True)
     await db.btc_remesas.update_one({"remesa_id": remesa["remesa_id"]}, {"$set": {"estado": "pagado", "pagado_en": datetime.now(timezone.utc)}})
+        # Registrar transaccion en historial del usuario con estado pendiente
+        try:
+            beneficiario_data_hist = remesa.get("beneficiario_data", {})
+            tx_hist_id = f"tx_{str(uuid.uuid4())[:12]}"
+            await db.transactions.insert_one({
+                "tx_id": tx_hist_id,
+                "user_id": user_id,
+                "tipo": "envio",
+                "subtipo": "btc_lightning",
+                "estado": "pendiente",
+                "amount": -remesa.get("usd_cliente", 0),
+                "amount_ves": remesa.get("ves_recibe", 0),
+                "monto_btc": remesa.get("btc_pagar", 0),
+                "usd_cliente": remesa.get("usd_cliente", 0),
+                "beneficiario": beneficiario_data_hist.get("full_name", "N/A"),
+                "beneficiario_data": beneficiario_data_hist,
+                "banco": beneficiario_data_hist.get("bank_code", ""),
+                "metodo": beneficiario_data_hist.get("payment_type", "pago_movil"),
+                "remesa_id": remesa.get("remesa_id"),
+                "created_at": datetime.now(timezone.utc),
+                "display_id": remesa.get("remesa_id", "")[:8].upper(),
+                "moneda": "BTC-VES",
+            })
+            logger.info(f"Transaccion historial creada para remesa {remesa.get('remesa_id')}")
+        except Exception as e_hist:
+            logger.warning(f"Error al registrar transaccion en historial: {e_hist}")
     try:
         from services.notifications import create_notification
         await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. Tu envío de {ves_recibe:,.2f} BTC-VES sera procesado en maximo 15 minutos.", notification_type="btc_payment")
