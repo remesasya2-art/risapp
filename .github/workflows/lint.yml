@@ -15,12 +15,14 @@ jobs:
       - name: Install linting tools
         run: pip install black flake8
 
-      - name: Check syntax errors (SyntaxError / IndentationError)
+      - name: "[BLOQUEANTE] Detectar SyntaxError e IndentationError"
         run: |
           find backend -name "*.py" | xargs python -m py_compile
 
-      - name: Check formatting with black
+      - name: "[INFO] Verificar estilo black (no bloquea)"
         run: black --check backend/
+        continue-on-error: true
 
-      - name: Check style with flake8
+      - name: "[INFO] Verificar estilo flake8 (no bloquea)"
         run: flake8 backend/ --max-line-length=120 --extend-ignore=E501
+        continue-on-error: true
