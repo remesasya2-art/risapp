@@ -1,4 +1,4 @@
-"""
+c"""
 BTC Lightning Admin Routes - Historial completo, configuración dinámica, export CSV.
 
 Endpoints:
@@ -407,3 +407,4 @@ async def export_btc_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
