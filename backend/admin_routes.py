@@ -1082,3 +1082,17 @@ async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = De
     
     # Build the rate update
     new_rate = {
+        "ris_to_ves": request.ris_to_ves,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": admin_user.get("username", "admin")
+    }
+    if request.usd_to_ves is not None:
+        new_rate["usd_to_ves"] = request.usd_to_ves
+
+    await db.exchange_rates.update_one(
+        {},
+        {"$set": new_rate},
+        upsert=True
+    )
+
+    return {"message": "Tasa actualizada correctamente", "rate": new_rate}
