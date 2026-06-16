@@ -190,7 +190,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(BLINK_GRAPHQL_URL, headers=headers, json=payload)
             result = resp.json()
-            logger.error(f"Blink lnInvoiceCreate response: {resp.status_code} body={resp.text}")
+            logger.debug(f"Blink lnInvoiceCreate status: {resp.status_code}")
             
     except Exception as e:
         logger.error(f"Blink except: {type(e).__name__}: {e}")
