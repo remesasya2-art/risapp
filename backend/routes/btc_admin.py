@@ -1,4 +1,4 @@
-c"""
+"""
 BTC Lightning Admin Routes - Historial completo, configuración dinámica, export CSV.
 
 Endpoints:
