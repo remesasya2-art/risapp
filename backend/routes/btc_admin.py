@@ -1,17 +1,17 @@
 """
-BTC Lightning Admin Routes - Historial completo, configuración dinámica, export CSV.
+BTC Lightning Admin Routes - Historial completo, configuraciÃ³n dinÃ¡mica, export CSV.
 
 Endpoints:
   - GET    /api/admin/btc/transacciones        Lista paginada con filtros + counts
   - GET    /api/admin/btc/transacciones.csv    Export CSV con filtros aplicados
-  - GET    /api/admin/btc/config               Lee configuración BTC (margen, comisión, tasa)
-  - PATCH  /api/admin/btc/config               Actualiza configuración
-  - GET    /api/admin/btc/stats                Métricas agregadas (totales por estado, USD recibido, etc.)
+  - GET    /api/admin/btc/config               Lee configuraciÃ³n BTC (margen, comisiÃ³n, tasa)
+  - PATCH  /api/admin/btc/config               Actualiza configuraciÃ³n
+  - GET    /api/admin/btc/stats                MÃ©tricas agregadas (totales por estado, USD recibido, etc.)
 
-Las configuraciones se persisten en la colección `config` con claves:
+Las configuraciones se persisten en la colecciÃ³n `config` con claves:
   - btc_margen        (default 0.99)
   - btc_comision      (default 1.02)
-  - tasa_usd_ves_btc  (default 680.0)   ← reutiliza la clave ya existente
+  - tasa_usd_ves_btc  (default 680.0)   â reutiliza la clave ya existente
 """
 import csv
 import io
@@ -57,8 +57,8 @@ STATUS_LABELS = {
 
 class BtcConfigUpdate(BaseModel):
     margen: Optional[float] = Field(None, gt=0, le=1.0, description="0 < margen <= 1.0 (1 = sin margen)")
-    comision: Optional[float] = Field(None, ge=1.0, le=2.0, description="1.0 <= comision <= 2.0 (1 = sin comisión)")
-    tasa_usd_ves: Optional[float] = Field(None, gt=0, description="Tasa USD a VES para conversión final")
+    comision: Optional[float] = Field(None, ge=1.0, le=2.0, description="1.0 <= comision <= 2.0 (1 = sin comisiÃ³n)")
+    tasa_usd_ves: Optional[float] = Field(None, gt=0, description="Tasa USD a VES para conversiÃ³n final")
 
 
 class MarcarEnviadoBtcRequest(BaseModel):
@@ -209,7 +209,7 @@ async def get_btc_config(admin: User = Depends(get_super_admin)):
     tasa_usd_ves = await _read_config_value("tasa_usd_ves_btc", DEFAULT_TASA_USD_VES)
     btc_price = await _fetch_current_btc_price()
 
-    # Compute representative example: 1 USD client → ? BTC, ? VES
+    # Compute representative example: 1 USD client â ? BTC, ? VES
     example = {}
     if btc_price:
         precio_con_margen = btc_price * margen
@@ -254,7 +254,7 @@ async def update_btc_config(payload: BtcConfigUpdate, admin: User = Depends(get_
         changes["tasa_usd_ves"] = float(payload.tasa_usd_ves)
 
     if not changes:
-        raise HTTPException(status_code=400, detail="No se proporcionó ningún cambio.")
+        raise HTTPException(status_code=400, detail="No se proporcionÃ³ ningÃºn cambio.")
 
     # Audit log (best effort)
     try:
@@ -409,4 +409,5 @@ async def export_btc_csv(
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv; charset=utf-8",
-        headers={"Cont
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
