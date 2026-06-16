@@ -411,6 +411,52 @@ async def approve_kyc(verification_id: str, admin: User = Depends(get_super_admi
     return {"success": True, "message": "Verificación aprobada"}
 
 
+@router.post("/{verification_id}/re-review")
+async def re_review_kyc(verification_id: str, admin: User = Depends(get_super_admin)):
+    """Marca una verificación ya aprobada para re-revisión: vuelve a 'pending'.
+    Los documentos existentes se conservan, así que el admin puede re-revisarlos
+    y aprobar de nuevo sin que el usuario tenga que reenviar nada.
+    """
+    v = await db.verifications.find_one(
+        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]}
+    )
+    if not v:
+        raise HTTPException(status_code=404, detail="Verificación no encontrada")
+    if v.get("status") not in ("approved", "verified"):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede re-verificar una solicitud que ya fue aprobada"
+        )
+
+    user_id = v["user_id"]
+    real_id = v["verification_id"]
+    now = datetime.now(timezone.utc)
+
+    await db.verifications.update_one(
+        {"verification_id": real_id},
+        {"$set": {
+            "status": "pending",
+            "re_review": True,
+            "re_review_requested_at": now,
+            "re_review_by": admin.user_id,
+            "re_review_by_name": getattr(admin, "full_name", None) or admin.email,
+        }}
+    )
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"verification_status": "pending"}}
+    )
+    await create_notification(
+        user_id=user_id,
+        title="🔁 Re-verificación de cuenta",
+        message="Por seguridad estamos revisando nuevamente tu identidad. Si necesitamos algo más, te avisaremos.",
+        notification_type="kyc"
+    )
+    await _audit(real_id, user_id, "re_review_requested", admin, {})
+    logger.info(f"KYC re-review requested: {real_id} by {admin.user_id}")
+    return {"success": True, "message": "Usuario enviado a re-verificación"}
+
+
 @router.post("/{verification_id}/reject")
 async def reject_kyc(verification_id: str, payload: RejectRequest,
                      admin: User = Depends(get_super_admin)):
