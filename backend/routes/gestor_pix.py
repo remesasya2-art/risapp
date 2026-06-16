@@ -391,6 +391,11 @@ async def _credit_mercadopago_bank(payment: dict, amount_brl: float):
 @router.post("/simulate-payment/{payment_id}")
 async def simulate_pix_payment(payment_id: str, current_user: User = Depends(require_authenticated_user)):
     """Simulate PIX payment confirmation (for testing when MP not available)"""
+    # --- SECURITY: this endpoint credits real balance with no real payment.
+    # It must NEVER be reachable in production. ---
+    if os.environ.get("ENVIRONMENT", "").lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
     payment = await db.gestor_pix_payments.find_one({
         "payment_id": payment_id,
         "gestor_id": current_user.user_id,
