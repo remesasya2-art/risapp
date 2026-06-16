@@ -1,4 +1,4 @@
-"""
+undefined"""
 Miscellaneous routes - Policies, VES info, Balance, Verification, Export, Dashboard
 """
 import uuid
@@ -137,6 +137,26 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
         {"user_id": current_user.user_id},
         {"$set": {"verification_status": "pending", "phone_number": data.phone_number}}
     )
+
+    # Notificar a los super administradores que hay un nuevo KYC por revisar.
+    # Va en try/except para que un fallo de notificación nunca rompa el envío.
+    try:
+        from services.notifications import create_notification
+        admins = await db.users.find({"role": "super_admin"}, {"user_id": 1}).to_list(50)
+        for adm in admins:
+            await create_notification(
+                user_id=adm["user_id"],
+                title="🆔 Nueva verificación KYC",
+                message=f"{data.full_name} envió sus documentos para verificación.",
+                notification_type="kyc",
+                data={
+                    "verification_id": verification["verification_id"],
+                    "user_id": current_user.user_id,
+                }
+            )
+    except Exception as e:
+        logger.warning(f"No se pudo notificar a los admins del nuevo KYC: {e}")
+
     return {"success": True, "verification_id": verification["verification_id"]}
 
 
