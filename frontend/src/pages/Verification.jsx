@@ -145,15 +145,16 @@ export default function Verification() {
 
   const startCamera = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: 640, height: 480 } 
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
       });
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        try { await videoRef.current.play(); } catch (e) { /* autoplay fallback */ }
       }
     } catch (error) {
-      toast.error('No se pudo acceder a la cámara');
+      toast.error('No se pudo acceder a la cámara. Revisa que el navegador tenga permiso de cámara y que estés en una conexión segura (HTTPS).');
     }
   };
 
@@ -165,15 +166,29 @@ export default function Verification() {
   };
 
   const capturePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-      const selfieData = canvas.toDataURL('image/jpeg', 0.8);
-      setFormData({ ...formData, selfie_image: selfieData });
-      stopCamera();
+    const video = videoRef.current;
+    if (!video) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) {
+      toast.error('La cámara aún se está iniciando. Espera un segundo e intenta de nuevo.');
+      return;
     }
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    // Espejar para que la foto coincida con lo que el usuario ve en la vista previa
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, w, h);
+    const selfieData = canvas.toDataURL('image/jpeg', 0.85);
+    if (!selfieData || selfieData.length < 1000) {
+      toast.error('No se pudo capturar la selfie. Intenta de nuevo con buena luz.');
+      return;
+    }
+    setFormData((prev) => ({ ...prev, selfie_image: selfieData }));
+    stopCamera();
   };
 
   const handleSubmit = async () => {
@@ -183,6 +198,11 @@ export default function Verification() {
     }
     if (!formData.id_document_image || !formData.cpf_image || !formData.selfie_image) {
       toast.error('Sube todos los documentos requeridos');
+      return;
+    }
+    if (formData.selfie_image.length < 1000) {
+      toast.error('La selfie no se capturó correctamente. Vuelve a tomarla.');
+      setStep(3);
       return;
     }
     if (requiresBack && !formData.id_document_image_back) {
