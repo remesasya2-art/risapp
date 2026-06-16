@@ -9,6 +9,7 @@ import httpx
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Response
 from twilio.rest import Client
+from twilio.request_validator import RequestValidator
 
 from database import db
 from services.notifications import create_notification
@@ -88,7 +89,33 @@ async def twilio_whatsapp_webhook(request: Request):
     """
     try:
         form_data = await request.form()
+
+        # --- SECURITY: verify the request really comes from Twilio ---
+        if not TWILIO_AUTH_TOKEN:
+            logger.error("TWILIO_AUTH_TOKEN not set - rejecting webhook")
+            return Response(status_code=503, content="Webhook not configured")
+
+        # Reconstruct the public URL Twilio actually called (Railway sits behind a proxy,
+        # so request.url.scheme/host may be the internal http one).
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        public_url = f"{proto}://{host}{request.url.path}"
+        if request.url.query:
+            public_url += f"?{request.url.query}"
+
+        validator = RequestValidator(TWILIO_AUTH_TOKEN)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        if not validator.validate(public_url, dict(form_data), signature):
+            logger.warning(f"Invalid Twilio signature for webhook (url={public_url})")
+            return Response(status_code=403, content="Invalid signature")
+
         from_number = form_data.get("From", "")
+
+        # --- SECURITY: only the authorized admin number can act on withdrawals ---
+        if not ADMIN_WHATSAPP_NUMBER or from_number != ADMIN_WHATSAPP_NUMBER:
+            logger.warning(f"Webhook from unauthorized number: {from_number}")
+            return Response(content="", media_type="text/xml")
+
         body = form_data.get("Body", "").strip().lower()
         num_media = int(form_data.get("NumMedia", 0))
         
