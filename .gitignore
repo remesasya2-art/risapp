@@ -31,9 +31,17 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
-
+.env
+.env.*
+*.env
 *token.json*
 *credentials.json*
+credentials.json
+.credentials
+
+# Secrets / keys
+*.pem
+*.key
 
 # Logs and debug files
 npm-debug.log*
@@ -44,7 +52,6 @@ dump.rdb
 
 # System files
 .DS_Store
-*.pem
 
 # Python
 __pycache__/
@@ -76,13 +83,9 @@ agenthub/agents/youtube/db
 # Build caches
 .cache/
 
-memory/test_credentials.md
-
 # Mobile development
 android-sdk/
-.env
-.env.*
-*.env
-credentials.json
-*.key
-.credentials
+
+# ---- Emergent / test artifacts that leak secrets (DO NOT COMMIT) ----
+memory/test_credentials.md
+test_result.md
