@@ -121,6 +121,22 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     }
   };
 
+  const reReview = async () => {
+    if (!v.verification_id) return;
+    if (!window.confirm('¿Enviar a este usuario a re-verificación? Volverá a la cola de pendientes.')) return;
+    setWorking(true);
+    try {
+      await api.post(`/admin/kyc/${v.verification_id}/re-review`);
+      toast.success('Usuario enviado a re-verificación');
+      onChanged?.();
+      onClose?.();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al re-verificar');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const saveNote = async () => {
     if (!v.verification_id) return;
     setNoteSaving(true);
@@ -338,6 +354,20 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
               >
                 {working ? <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={18} />}
                 Aprobar KYC
+              </button>
+            </div>
+          )}
+
+          {/* Footer action for already-approved users: send to re-review */}
+          {(status === 'approved' || status === 'verified') && (
+            <div style={{ position: 'sticky', bottom: 0, backgroundColor: '#fff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={reReview}
+                disabled={working}
+                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: '#fff', color: '#7c3aed', border: '1.5px solid #7c3aed', fontWeight: 600, cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: working ? 0.7 : 1 }}
+              >
+                {working ? <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> : '🔁'}
+                Re-verificar
               </button>
             </div>
           )}
