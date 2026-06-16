@@ -575,16 +575,27 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             notification_type="withdrawal_completed",
             data={"transaction_id": request.transaction_id}
         )
-        
+
+        # Marcar whatsapp_active=False y disparar siguiente en cola FIFO
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {"whatsapp_active": False}}
+        )
+        try:
+            from services.whatsapp import send_next_pending_withdrawal_whatsapp
+            await send_next_pending_withdrawal_whatsapp()
+        except Exception as e_fifo:
+            logger.warning(f"WhatsApp FIFO error tras aprobar retiro: {e_fifo}")
+
         return {"message": "Retiro aprobado y usuario notificado"}
-    
+
     elif request.action == "reject":
         # Return balance to user
         await db.users.update_one(
             {"user_id": tx['user_id']},
             {"$inc": {"balance_ris": tx['amount_input']}}
         )
-        
+
         await db.transactions.update_one(
             {"transaction_id": request.transaction_id},
             {"$set": {
@@ -594,7 +605,7 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
                 "rejected_by": admin_user.get('user_id')
             }}
         )
-        
+
         await create_notification(
             user_id=tx['user_id'],
             title="❌ Retiro Rechazado",
@@ -602,7 +613,18 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             notification_type="withdrawal_rejected",
             data={"transaction_id": request.transaction_id}
         )
-        
+
+        # Disparar siguiente en cola FIFO
+        await db.transactions.update_one(
+            {"transaction_id": request.transaction_id},
+            {"$set": {"whatsapp_active": False}}
+        )
+        try:
+            from services.whatsapp import send_next_pending_withdrawal_whatsapp
+            await send_next_pending_withdrawal_whatsapp()
+        except Exception as e_fifo:
+            logger.warning(f"WhatsApp FIFO error tras rechazar retiro: {e_fifo}")
+
         return {"message": "Retiro rechazado y balance devuelto"}
     
     raise HTTPException(status_code=400, detail="Acción inválida")
@@ -618,7 +640,10 @@ async def get_pending_recharges(admin_user: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     recharges = await db.transactions.find(
-        {"type": "recharge", "status": "pending_review"},
+        {
+            "type": {"$in": ["recharge", "recharge_ves"]},
+            "status": {"$in": ["pending", "pending_review"]}
+        },
         {"proof_image": 0}
     ).sort("created_at", -1).to_list(1000)
     
@@ -658,7 +683,7 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user: dict = D
     
     transaction = await db.transactions.find_one({
         "transaction_id": request.transaction_id,
-        "status": "pending_review"
+        "status": {"$in": ["pending", "pending_review"]}
     })
     
     if not transaction:
@@ -1057,29 +1082,3 @@ async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = De
     
     # Build the rate update
     new_rate = {
-        "ris_to_ves": request.ris_to_ves,
-        "ves_to_ris": 1 / request.ris_to_ves if request.ris_to_ves > 0 else 0,
-        "updated_at": datetime.now(timezone.utc),
-        "updated_by": admin_user.get('user_id')
-    }
-    
-    # Add USD to VES rate if provided (for sending from USA)
-    if request.usd_to_ves is not None:
-        new_rate["usd_to_ves"] = request.usd_to_ves
-        new_rate["ves_to_usd"] = 1 / request.usd_to_ves if request.usd_to_ves > 0 else 0
-    
-    # Update rates collection
-    await db.rates.delete_many({})
-    await db.rates.insert_one(new_rate)
-    
-    # Also update exchange_rates for backward compatibility
-    await db.exchange_rates.delete_many({})
-    await db.exchange_rates.insert_one(new_rate)
-    
-    logger.info(f"Exchange rate updated: RIS/VES={request.ris_to_ves}, USD/VES={request.usd_to_ves} by {admin_user.get('email')}")
-    
-    return {
-        "message": "Tasas actualizadas exitosamente",
-        "ris_to_ves": request.ris_to_ves,
-        "usd_to_ves": request.usd_to_ves
-    }

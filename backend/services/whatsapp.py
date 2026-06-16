@@ -114,3 +114,49 @@ async def send_next_pending_withdrawal_whatsapp():
         logger.info(f"FIFO: Notificación enviada para retiro {display_id}")
     else:
         logger.warning(f"FIFO: No se pudo enviar notificación para retiro {display_id}")
+
+
+async def send_next_pending_btc_whatsapp():
+    """Envía WhatsApp al admin con la siguiente orden BTC pagada pendiente de procesar (FIFO)."""
+    from database import db
+
+    next_btc = await db.btc_remesas.find_one(
+        {"estado": "pagado"},
+        sort=[("pagado_en", 1)]  # FIFO: la más antigua primero
+    )
+
+    if not next_btc:
+        logger.info("BTC FIFO: No hay órdenes BTC pendientes de procesar")
+        return
+
+    beneficiario_data = next_btc.get("beneficiario_data", {})
+    nombre_benef = beneficiario_data.get("full_name", "N/A")
+    cedula_benef = beneficiario_data.get("id_document", "N/A")
+    banco_benef = beneficiario_data.get("bank_code", "") or beneficiario_data.get("bank", "N/A")
+    telefono_benef = beneficiario_data.get("phone_number", "N/A")
+    tipo_pago = beneficiario_data.get("payment_type", "transferencia")
+    remesa_id_corto = next_btc.get("remesa_id", "N/A")[:8].upper()
+    usd_cliente = next_btc.get("usd_cliente", 0)
+    ves_recibe = next_btc.get("ves_recibe", 0)
+
+    message = (
+        f"⏭️ SIGUIENTE ORDEN BTC EN COLA\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 ID: {remesa_id_corto}\n"
+        f"💵 USD: ${usd_cliente:,.2f}\n"
+        f"💵 VES a enviar: {ves_recibe:,.2f} Bs\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Beneficiario: {nombre_benef}\n"
+        f"🪪 Cédula: {cedula_benef}\n"
+        f"🏦 Banco: {banco_benef}\n"
+        f"📱 Teléfono: {telefono_benef}\n"
+        f"💳 Tipo: {tipo_pago.upper()}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏰ Por favor procesar en max 15 min."
+    )
+
+    success = await send_whatsapp_notification(message)
+    if success:
+        logger.info(f"BTC FIFO: Notificación enviada para orden {remesa_id_corto}")
+    else:
+        logger.warning(f"BTC FIFO: No se pudo enviar notificación para orden {remesa_id_corto}")

@@ -61,6 +61,10 @@ class BtcConfigUpdate(BaseModel):
     tasa_usd_ves: Optional[float] = Field(None, gt=0, description="Tasa USD a VES para conversión final")
 
 
+class MarcarEnviadoBtcRequest(BaseModel):
+    remesa_id: str
+
+
 # ============================================================================
 # HELPERS
 # ============================================================================
@@ -405,6 +409,4 @@ async def export_btc_csv(
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
+        headers={"Cont

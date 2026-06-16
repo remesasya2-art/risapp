@@ -384,6 +384,12 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
         await create_notification(user_id=remesa["user_id"], title="Envío completado", message=f"Tu envío de {remesa['ves_recibe']:,.2f} Bs fue completado a {nombre}.", notification_type="btc_enviado")
     except Exception as e:
         logger.warning(f"Error notificacion: {e}")
+    # Disparar siguiente orden BTC en cola FIFO por WhatsApp
+    try:
+        from services.whatsapp import send_next_pending_btc_whatsapp
+        await send_next_pending_btc_whatsapp()
+    except Exception as e:
+        logger.warning(f"BTC FIFO WhatsApp error: {e}")
     return {"ok": True, "msg": "Orden marcada como enviada.", "remesa_id": body.remesa_id}
 
 
@@ -450,10 +456,4 @@ async def get_historial_usuario(current_user: User = Depends(get_current_user)):
         {"_id": 0, "remesa_id": 1, "estado": 1, "sats": 1, "usd_cliente": 1,
          "ves_recibe": 1, "tasa_ves": 1, "creado_en": 1, "pagado_en": 1,
          "beneficiario_data": 1}
-    ).sort("creado_en", -1).to_list(50)
-    for r in remesas:
-        if r.get("creado_en"):
-            r["creado_en"] = r["creado_en"].isoformat()
-        if r.get("pagado_en"):
-            r["pagado_en"] = r["pagado_en"].isoformat()
-    return {"remesas": remesas, "total": len(remesas)}
+    ).sort("creado_en"

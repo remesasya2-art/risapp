@@ -66,7 +66,7 @@ export default function AdminPanel() {
   const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   const [recharges, setRecharges] = useState([]);
   const [users, setUsers] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [showProcessModal, setShowProcessModal] = useState(false);
@@ -506,7 +506,7 @@ export default function AdminPanel() {
     if (!window.confirm('¿Confirmar que ya realizaste la transferencia al beneficiario?')) return;
     try {
       setMarcandoBtc(remesa_id);
-      await api.post('/btc/operador/marcar-enviado', { remesa_id });
+      await api.post('/admin/btc/marcar-enviado', { remesa_id });
       toast.success('Orden marcada como enviada exitosamente');
       fetchBtcOrdenesPendientes();
     } catch (e) {
@@ -865,7 +865,7 @@ export default function AdminPanel() {
                 <p style={{ color: '#6b7280', margin: 0 }}>No hay recargas VES pendientes</p>
               </div>
             ) : (
-              recharges.map((r) => {
+              recharges.filter(r => r.status === 'pending').map((r) => {
                 const legacyMap = {
                   banco_venezuela: 'Banco de Venezuela',
                   banesco: 'Banesco',
@@ -2570,7 +2570,4 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
+      <style>{`@keyframes spin { to { transform: rotate(360d
