@@ -377,7 +377,7 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
     if saldo_actual < remesa["ves_recibe"]:
         raise HTTPException(status_code=400, detail="Saldo BTC-VES insuficiente.")
     await db.btc_ves_wallets.update_one({"user_id": remesa["user_id"]}, {"$inc": {"saldo": -remesa["ves_recibe"]}})
-    await db.btc_remesas.update_one({"remesa_id": body.remesa_id}, {"$set": {"estado": "enviado", "enviado_en": datetime.now(timezone.utc), "operador_id": body.operador_id}})
+    await db.btc_remesas.update_one({"remesa_id": body.remesa_id}, {"$set": {"estado": "enviado", "enviado_en": datetime.now(timezone.utc), "operador_id": current_user.user_id}})
     try:
         from services.notifications import create_notification
         nombre = remesa.get("beneficiario_data", {}).get("full_name", "tu beneficiario")
