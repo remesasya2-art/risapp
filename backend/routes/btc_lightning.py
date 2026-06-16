@@ -456,4 +456,11 @@ async def get_historial_usuario(current_user: User = Depends(get_current_user)):
         {"_id": 0, "remesa_id": 1, "estado": 1, "sats": 1, "usd_cliente": 1,
          "ves_recibe": 1, "tasa_ves": 1, "creado_en": 1, "pagado_en": 1,
          "beneficiario_data": 1}
-    ).sort("creado_en"
+    ).sort("creado_en", -1).to_list(100)
+    # Convertir fechas a texto ISO para que el JSON no falle
+    for r in remesas:
+        if r.get("creado_en"):
+            r["creado_en"] = r["creado_en"].isoformat()
+        if r.get("pagado_en"):
+            r["pagado_en"] = r["pagado_en"].isoformat()
+    return {"remesas": remesas, "total": len(remesas)}
