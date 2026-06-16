@@ -86,6 +86,15 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
+    # Validar beneficiario ANTES de tocar el saldo
+    beneficiary = await db.beneficiaries.find_one({
+        "beneficiary_id": request.beneficiary_id,
+        "user_id": current_user.user_id
+    })
+    if not beneficiary:
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+
+    # Descuento atómico de saldo (solo después de validar todo lo demás)
     user = await db.users.find_one_and_update(
         {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
         {"$inc": {"balance_ris": -request.amount}},
@@ -93,15 +102,6 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     )
     if user is None:
         raise HTTPException(status_code=400, detail="Saldo insuficiente")
-
-    # Get beneficiary
-    beneficiary = await db.beneficiaries.find_one({
-        "beneficiary_id": request.beneficiary_id,
-        "user_id": current_user.user_id
-    })
-
-    if not beneficiary:
-        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
 
     # Get exchange rate
     rate = await db.rates.find_one(sort=[("updated_at", -1)])
