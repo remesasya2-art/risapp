@@ -174,15 +174,3 @@ agent_communication:
       - New ImageLightbox with zoom/rotate/EXIF/keyboard shortcuts.
       - Internal admin note + audit log surfaced in detail modal.
 
-      Test credentials (in /app/memory/test_credentials.md):
-      - Admin: REDACTED / REDACTED (super_admin, 2FA bypassed)
-      - Users with pending KYC: joao@/maria@/REDACTED / REDACTED
-
-      Auth note: login uses /api/auth/login-password and triggers 2FA enrollment.
-      For the test admin, 2FA was bypassed via DB flags (two_factor_skipped:true,
-      two_factor_setup_completed:true). A long-lived session token was also
-      pre-inserted; testing agent can either login fresh (skipping/handling 2FA)
-      or set localStorage.session_token directly using the value documented below.
-
-      Active session token for REDACTED (valid 7d):
-        REDACTED
