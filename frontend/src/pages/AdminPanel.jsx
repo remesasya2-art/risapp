@@ -2570,4 +2570,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360d
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
