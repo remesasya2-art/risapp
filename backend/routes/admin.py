@@ -1383,23 +1383,41 @@ async def suspend_user(user_id: str, data: dict, admin: User = Depends(get_super
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, admin: User = Depends(get_super_admin)):
-    """Permanently delete a user and all their data"""
+    """Borrado lógico: conserva el historial para auditoría y libera el correo.
+
+    No elimina transacciones, beneficiarios ni notificaciones (se conservan para auditoría).
+    Marca la cuenta como borrada, cierra sus sesiones y libera el correo (lo mueve a
+    original_email) para que pueda reutilizarse en un registro nuevo, salvo que el correo
+    esté en la lista negra.
+    """
     user = await db.users.find_one({"user_id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if user.get("role") == "super_admin":
         raise HTTPException(status_code=403, detail="No se puede eliminar a un super admin")
-    
-    # Delete user and related data
-    await db.users.delete_one({"user_id": user_id})
-    await db.transactions.delete_many({"user_id": user_id})
-    await db.beneficiaries.delete_many({"user_id": user_id})
-    await db.notifications.delete_many({"user_id": user_id})
+
+    now = datetime.now(timezone.utc)
+    original_email = user.get("email", "")
+    # "Lápida" única para liberar el correo original conservando la cuenta/historial
+    tombstone_email = f"deleted+{now.strftime('%Y%m%d%H%M%S')}+{uuid.uuid4().hex[:6]}@deleted.local"
+
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "is_deleted": True,
+            "deleted_at": now,
+            "deleted_by": admin.user_id,
+            "original_email": original_email,
+            "email": tombstone_email,
+            "email_verified": False,
+        }}
+    )
+
+    # Cerrar sus sesiones activas (el resto del historial se conserva)
     await db.user_sessions.delete_many({"user_id": user_id})
-    await db.support_chats.delete_many({"user_id": user_id})
-    
-    logger.info(f"User {user_id} ({user.get('email')}) deleted permanently by admin {admin.user_id}")
-    return {"message": "Usuario eliminado permanentemente"}
+
+    logger.info(f"User {user_id} ({original_email}) soft-deleted by admin {admin.user_id}; email released")
+    return {"message": "Usuario eliminado (historial conservado, correo liberado)"}
 
 # ============================================================================
 # BLACKLIST (correos / identidades baneadas)

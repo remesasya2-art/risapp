@@ -2028,8 +2028,8 @@ export default function AdminPanel() {
                         </button>
                         <button
                           onClick={async () => {
-                            if (!confirm('¿ELIMINAR este usuario permanentemente? Esta acción NO se puede deshacer.')) return;
-                            if (!confirm('¿Estás SEGURO? Se borrarán todos sus datos.')) return;
+                            if (!confirm('¿Eliminar esta cuenta? Se conservará el historial para auditoría y se liberará el correo para que pueda volver a registrarse (salvo que esté baneado).')) return;
+                            if (!confirm('¿Confirmas? La cuenta quedará deshabilitada y el correo quedará disponible para un registro nuevo.')) return;
                             try {
                               await api.delete(`/admin/users/${selectedUser.user_id}`);
                               toast.success('Usuario eliminado');
