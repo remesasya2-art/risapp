@@ -109,6 +109,7 @@ export default function AdminPanel() {
 
   // === BTC Orders State ===
   const [btcOrdenesP, setBtcOrdenesP] = useState([]);
+  const [comprobanteByOrden, setComprobanteByOrden] = useState({});
   const [btcSubTab, setBtcSubTab] = useState('pendientes'); // pendientes | historial | configuracion
   const [loadingBtcOrdenes, setLoadingBtcOrdenes] = useState(false);
   const [marcandoBtc, setMarcandoBtc] = useState(null);
@@ -502,12 +503,20 @@ export default function AdminPanel() {
     }
   };
 
+  const handleComprobanteSelect = (remesa_id, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setComprobanteByOrden((prev) => ({ ...prev, [remesa_id]: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
   const handleMarcarBtcEnviado = async (remesa_id) => {
     if (!window.confirm('¿Confirmar que ya realizaste la transferencia al beneficiario?')) return;
     try {
       setMarcandoBtc(remesa_id);
-      await api.post('/admin/btc/marcar-enviado', { remesa_id });
+      await api.post('/admin/btc/marcar-enviado', { remesa_id, comprobante: comprobanteByOrden[remesa_id] || null });
       toast.success('Orden marcada como enviada exitosamente');
+      setComprobanteByOrden((prev) => { const c = { ...prev }; delete c[remesa_id]; return c; });
       fetchBtcOrdenesPendientes();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error al marcar como enviado');
@@ -1728,6 +1737,16 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
+                      📎 {comprobanteByOrden[orden.remesa_id] ? 'Comprobante adjunto ✓' : 'Adjuntar comprobante (opcional)'}
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={(e) => handleComprobanteSelect(orden.remesa_id, e.target.files?.[0])} />
+                    </label>
+                    {comprobanteByOrden[orden.remesa_id] && (
+                      <img src={comprobanteByOrden[orden.remesa_id]} alt="comprobante" style={{ display: 'block', marginTop: '8px', maxWidth: '160px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                    )}
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <p style={{ color: '#9ca3af', fontSize: '12px', margin: 0 }}>
                       📅 {orden.creado_en ? new Date(orden.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
