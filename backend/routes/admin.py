@@ -650,56 +650,24 @@ async def process_withdrawal(
         raise HTTPException(status_code=400, detail="Transaccion ya procesada")
     
     if action == "approve":
-        amount_output = transaction.get("amount_output", 0)
-
-        # Bank is REQUIRED when approving (to log the payment properly)
-        if not bank_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Debes seleccionar el banco desde donde se pagó al beneficiario"
-            )
-        bank = await db.bank_accounts.find_one({"bank_id": bank_id})
-        if not bank:
-            raise HTTPException(status_code=400, detail="Banco no encontrado")
-
-        new_balance = bank["balance"] - amount_output
-        is_deficit = new_balance < 0
-
-        await db.bank_accounts.update_one({"bank_id": bank_id}, {"$inc": {"balance": -amount_output}})
-
-        beneficiary = transaction.get("beneficiary_data", {})
-        beneficiary_name = beneficiary.get("full_name", beneficiary.get("name", ""))
-
-        await db.bank_ledger.insert_one({
-            "bank_id": bank_id,
-            "bank_name": bank["name"],
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "type": "salida",
-            "concept": f"Pago beneficiario: {beneficiary_name} (TX {transaction.get('display_id', transaction_id[:8])})",
-            "amount": amount_output,
-            "balance_after": round(new_balance, 2),
-            "reference": transaction_id,
-            "notes": "Retiro aprobado por admin" + (" [DEFICIT]" if is_deficit else ""),
-            "deficit": is_deficit,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
-        
+        # La contabilidad de bancos se lleva en la app externa. Aquí ya NO se
+        # descuenta de bancos internos ni se exige seleccionar banco: el admin
+        # solo registra el pago y su comprobante. El banco es opcional.
         update_data = {
             "status": "completed",
             "completed_at": datetime.now(timezone.utc),
             "processed_by": admin.user_id,
             "whatsapp_active": False,
-            "paid_from_bank": bank_id
         }
-        
+        if bank_id:
+            update_data["paid_from_bank"] = bank_id
         if proof_images:
             update_data["proof_images"] = proof_images
-        
         await db.transactions.update_one(
             {"transaction_id": transaction_id},
             {"$set": update_data}
         )
-        
+
         # Notify user
         await create_notification(
             user_id=transaction["user_id"],
