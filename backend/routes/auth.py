@@ -54,7 +54,11 @@ async def register_user(request: RegisterUserRequest):
         raise HTTPException(status_code=400, detail="Email inválido")
     
     email_lower = request.email.lower().strip()
-    
+
+    # Rechazar correos en la lista negra
+    if await db.blacklist.find_one({"type": "email", "value": email_lower}):
+        raise HTTPException(status_code=400, detail="Este correo no puede registrarse. Contacta a soporte.")
+
     # Check existing user
     existing = await db.users.find_one({"email": email_lower})
     if existing:

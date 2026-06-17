@@ -1400,3 +1400,65 @@ async def delete_user(user_id: str, admin: User = Depends(get_super_admin)):
     
     logger.info(f"User {user_id} ({user.get('email')}) deleted permanently by admin {admin.user_id}")
     return {"message": "Usuario eliminado permanentemente"}
+
+# ============================================================================
+# BLACKLIST (correos / identidades baneadas)
+# ============================================================================
+
+ALLOWED_BLACKLIST_TYPES = {"email", "cpf", "document"}
+
+def _normalize_blacklist_value(bl_type: str, value: str) -> str:
+    """Normaliza el valor según el tipo para comparaciones consistentes."""
+    value = (value or "").strip()
+    if bl_type == "email":
+        return value.lower()
+    if bl_type == "cpf":
+        return "".join(c for c in value if c.isdigit())
+    if bl_type == "document":
+        return "".join(c for c in value if c.isalnum()).upper()
+    return value
+
+class BlacklistAddRequest(BaseModel):
+    type: str          # "email" | "cpf" | "document"
+    value: str
+    reason: str = ""
+
+@router.post("/blacklist")
+async def add_to_blacklist(data: BlacklistAddRequest, admin: User = Depends(get_super_admin)):
+    """Agrega un correo/CPF/documento a la lista negra."""
+    bl_type = (data.type or "").lower().strip()
+    if bl_type not in ALLOWED_BLACKLIST_TYPES:
+        raise HTTPException(status_code=400, detail="Tipo de lista negra inválido")
+    norm = _normalize_blacklist_value(bl_type, data.value)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Valor vacío")
+    existing = await db.blacklist.find_one({"type": bl_type, "value": norm})
+    if existing:
+        return {"success": True, "message": "Ya estaba en la lista negra", "blacklist_id": existing["blacklist_id"]}
+    entry = {
+        "blacklist_id": f"bl_{uuid.uuid4().hex[:12]}",
+        "type": bl_type,
+        "value": norm,
+        "reason": (data.reason or "").strip(),
+        "banned_by": admin.user_id,
+        "banned_by_name": getattr(admin, "full_name", None) or admin.email,
+        "banned_at": datetime.now(timezone.utc),
+    }
+    await db.blacklist.insert_one(entry)
+    logger.info(f"Blacklist add: {bl_type}={norm} by {admin.user_id}")
+    return {"success": True, "message": "Agregado a la lista negra", "blacklist_id": entry["blacklist_id"]}
+
+@router.get("/blacklist")
+async def list_blacklist(admin: User = Depends(get_super_admin)):
+    """Lista todos los elementos de la lista negra."""
+    items = await db.blacklist.find({}, {"_id": 0}).sort("banned_at", -1).to_list(1000)
+    return {"items": items, "total": len(items)}
+
+@router.delete("/blacklist/{blacklist_id}")
+async def remove_from_blacklist(blacklist_id: str, admin: User = Depends(get_super_admin)):
+    """Quita un elemento de la lista negra (des-banear)."""
+    result = await db.blacklist.delete_one({"blacklist_id": blacklist_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Elemento no encontrado")
+    logger.info(f"Blacklist remove: {blacklist_id} by {admin.user_id}")
+    return {"success": True, "message": "Quitado de la lista negra"}
