@@ -189,7 +189,6 @@ export default function AdminPanel() {
 
   const handleProcessWithdrawal = async () => {
     if (!selectedItem || proofImages.length === 0) { toast.error('Sube al menos un comprobante de pago'); return; }
-    if (!processBankId) { toast.error('Selecciona el banco desde donde se pagó'); return; }
     try {
       await api.post('/admin/withdrawals/process', {
         transaction_id: selectedItem.transaction_id,
@@ -1857,7 +1856,7 @@ export default function AdminPanel() {
                 {selectedItem.status === 'completed' ? 'Cerrar' : 'Cancelar'}
               </button>
               {selectedItem.status === 'pending' && (
-                <button onClick={handleProcessWithdrawal} disabled={proofImages.length === 0 || !processBankId} style={{ ...btnSuccess, flex: 1, opacity: (proofImages.length > 0 && processBankId) ? 1 : 0.5 }}>
+                <button onClick={handleProcessWithdrawal} disabled={proofImages.length === 0} style={{ ...btnSuccess, flex: 1, opacity: (proofImages.length > 0) ? 1 : 0.5 }}>
                   Confirmar ({proofImages.length} img)
                 </button>
               )}
@@ -1865,7 +1864,7 @@ export default function AdminPanel() {
             {selectedItem.status === 'pending' && (
               <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '10px', border: '1px solid #fcd34d' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#92400e', marginBottom: '6px' }}>
-                  Banco desde donde se pagó al beneficiario * (obligatorio)
+                  Banco desde donde se pagó al beneficiario (opcional)
                 </label>
                 <select value={processBankId} onChange={e => setProcessBankId(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', backgroundColor: '#fff' }}
