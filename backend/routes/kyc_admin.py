@@ -182,7 +182,6 @@ async def list_kyc(
         }
     """
     await _ensure_indexes()
-
     # Counts (always all statuses)
     counts = {
         "pending":  await db.verifications.count_documents({"status": "pending"}),
@@ -190,7 +189,6 @@ async def list_kyc(
         "rejected": await db.verifications.count_documents({"status": "rejected"}),
     }
     counts["total"] = counts["pending"] + counts["approved"] + counts["rejected"]
-
     # Build query
     query = {}
     if status != "all":
@@ -198,7 +196,6 @@ async def list_kyc(
             query["status"] = {"$in": ["approved", "verified"]}
         else:
             query["status"] = status
-
     if search:
         s = search.strip()
         # search across multiple fields case-insensitive
@@ -209,10 +206,8 @@ async def list_kyc(
             {"cpf_number": regex},
             {"phone_number": regex},
         ]
-
     cursor = db.verifications.find(query, {"_id": 0}).sort("submitted_at", -1).limit(limit)
     verifications = await cursor.to_list(limit)
-
     # Optionally also include users matched by email if search is provided
     # (the verifications collection doesn't store email)
     if search:
@@ -232,7 +227,6 @@ async def list_kyc(
                     extra_query["status"] = status
             extras = await db.verifications.find(extra_query, {"_id": 0}).to_list(100)
             verifications.extend(extras)
-
     # Hydrate with user emails (one batch query)
     uids = [v["user_id"] for v in verifications if v.get("user_id")]
     users_by_id = {}
@@ -243,13 +237,11 @@ async def list_kyc(
         )
         async for u in users_cursor:
             users_by_id[u["user_id"]] = u
-
-        items = [_serialize_verification(v, users_by_id.get(v.get("user_id")), include_images=False) for v in verifications]
+    items = [_serialize_verification(v, users_by_id.get(v.get("user_id")), include_images=False) for v in verifications]
     # Marcar coincidencias con la lista negra de identidades (CPF / documento).
     # Se carga la lista negra una sola vez para no consultar por cada item.
     bl_entries = await db.blacklist.find(
-        {"type": {"$in": ["cpf", "document"]}},
-        {"_id": 0, "type": 1, "value": 1}
+        {"type": {"$in": ["cpf", "document"]}}, {"_id": 0, "type": 1, "value": 1}
     ).to_list(5000)
     banned_cpf = {e["value"] for e in bl_entries if e.get("type") == "cpf"}
     banned_doc = {e["value"] for e in bl_entries if e.get("type") == "document"}
@@ -263,7 +255,6 @@ async def list_kyc(
     else:
         for item in items:
             item["blacklist_match"] = False
-
     return {"counts": counts, "items": items}
 
 
