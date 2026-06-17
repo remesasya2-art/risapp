@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -16,6 +16,7 @@ export default function Verification() {
   const [loading, setLoading] = useState(false);
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [phoneCountry, setPhoneCountry] = useState('+55'); // Brasil por defecto
   
   const [formData, setFormData] = useState({
@@ -143,18 +144,27 @@ export default function Verification() {
     }
   };
 
+  // Conecta el stream al <video> en cuanto ambos existen. Esto corrige la
+  // carrera por la que en el primer intento el <video> aún no estaba montado
+  // cuando se pedía la cámara (y por eso no se veía nada hasta el 2º intento).
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stream]);
+
   const startCamera = async () => {
+    setCameraLoading(true);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
       });
       setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        try { await videoRef.current.play(); } catch (e) { /* autoplay fallback */ }
-      }
     } catch (error) {
       toast.error('No se pudo acceder a la cámara. Revisa que el navegador tenga permiso de cámara y que estés en una conexión segura (HTTPS).');
+    } finally {
+      setCameraLoading(false);
     }
   };
 
@@ -661,15 +671,15 @@ export default function Verification() {
                     alignItems: 'center', justifyContent: 'center', color: '#9ca3af'
                   }}>
                     <Camera style={{ width: '48px', height: '48px', marginBottom: '12px' }} />
-                    <p style={{ fontSize: '15px', fontWeight: '500', margin: 0 }}>Cámara no activa</p>
+                    <p style={{ fontSize: '15px', fontWeight: '500', margin: 0 }}>{cameraLoading ? 'Iniciando cámara…' : 'Cámara no activa'}</p>
                   </div>
                 )}
               </div>
 
               {!formData.selfie_image && !stream && (
-                <button onClick={startCamera} style={buttonSecondaryStyle}>
+                <button onClick={startCamera} disabled={cameraLoading} style={{ ...buttonSecondaryStyle, opacity: cameraLoading ? 0.7 : 1 }}>
                   <Camera style={{ width: '20px', height: '20px' }} />
-                  Activar cámara
+                  {cameraLoading ? 'Iniciando cámara…' : 'Activar cámara'}
                 </button>
               )}
 
