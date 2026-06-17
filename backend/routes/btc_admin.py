@@ -411,3 +411,77 @@ async def export_btc_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+class MarcarBtcEnviadoRequest(BaseModel):
+    remesa_id: str
+    comprobante: Optional[str] = None   # imagen base64 del comprobante (opcional)
+
+
+async def completar_remesa_btc(remesa_id: str, comprobante: Optional[str] = None,
+                               via: str = "panel", operador_id: Optional[str] = None,
+                               operador_nombre: Optional[str] = None) -> dict:
+    """Lógica compartida para completar una remesa BTC (marcarla como enviada).
+
+    La usan tanto el panel del super_admin como (en el futuro) el webhook de
+    Twilio/WhatsApp. Así el flujo queda abierto para cualquiera de las dos vías,
+    y ambas actualizan el estado y notifican al usuario igual.
+    """
+    remesa = await db.btc_remesas.find_one({"remesa_id": remesa_id})
+    if not remesa:
+        raise HTTPException(status_code=404, detail="Remesa no encontrada")
+    if remesa.get("estado") != "pagado":
+        raise HTTPException(
+            status_code=400,
+            detail=f"La remesa no está lista para marcar (estado actual: {remesa.get('estado')})"
+        )
+
+    update = {
+        "estado": "enviado",
+        "enviado_en": datetime.now(timezone.utc),
+        "completado_via": via,
+    }
+    if operador_id:
+        update["operador_id"] = operador_id
+    if operador_nombre:
+        update["operador_nombre"] = operador_nombre
+    if comprobante:
+        update["comprobante_pago"] = comprobante
+
+    await db.btc_remesas.update_one({"remesa_id": remesa_id}, {"$set": update})
+
+    # Marcar como completada la transacción del historial del usuario
+    tx_update = {"estado": "completado"}
+    if comprobante:
+        tx_update["comprobante_pago"] = comprobante
+    await db.transactions.update_one({"remesa_id": remesa_id}, {"$set": tx_update})
+
+    # Notificar al usuario (in-app + push) en tiempo real
+    try:
+        from services.notifications import create_notification
+        nombre = (remesa.get("beneficiario_data") or {}).get("full_name", "el beneficiario")
+        await create_notification(
+            user_id=remesa["user_id"],
+            title="Envío completado",
+            message=f"Tu envío de {remesa.get('ves_recibe', 0):,.2f} Bs fue completado a {nombre}.",
+            notification_type="btc_enviado",
+        )
+    except Exception as e:
+        logger.warning(f"Error notificando envío BTC completado: {e}")
+
+    logger.info(f"BTC remesa {remesa_id} completada vía {via} (operador={operador_id})")
+    return {"success": True, "message": "Remesa marcada como enviada", "via": via}
+
+
+@router.post("/marcar-enviado")
+async def marcar_btc_enviado(data: MarcarBtcEnviadoRequest, admin: User = Depends(get_super_admin)):
+    """El super_admin marca una remesa BTC (ya pagada en BTC) como enviada,
+    tras pagar manualmente en bolívares. Puede adjuntar el comprobante de pago.
+    """
+    return await completar_remesa_btc(
+        remesa_id=data.remesa_id,
+        comprobante=data.comprobante,
+        via="panel",
+        operador_id=admin.user_id,
+        operador_nombre=getattr(admin, "full_name", None) or admin.email,
+    )
