@@ -59,7 +59,9 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     
     if user.get("is_deleted"):
         raise HTTPException(status_code=401, detail="Account has been deleted")
-    
+    if user.get("is_banned"):
+        raise HTTPException(status_code=403, detail="Esta cuenta ha sido suspendida")
+
     return User(**user)
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:

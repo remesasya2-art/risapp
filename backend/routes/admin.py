@@ -1462,3 +1462,70 @@ async def remove_from_blacklist(blacklist_id: str, admin: User = Depends(get_sup
         raise HTTPException(status_code=404, detail="Elemento no encontrado")
     logger.info(f"Blacklist remove: {blacklist_id} by {admin.user_id}")
     return {"success": True, "message": "Quitado de la lista negra"}
+
+async def _add_bl(bl_type: str, value: str, reason: str, admin: User):
+    """Inserta un valor en la lista negra si no existe ya (idempotente)."""
+    norm = _normalize_blacklist_value(bl_type, value)
+    if not norm:
+        return
+    if await db.blacklist.find_one({"type": bl_type, "value": norm}):
+        return
+    await db.blacklist.insert_one({
+        "blacklist_id": f"bl_{uuid.uuid4().hex[:12]}",
+        "type": bl_type,
+        "value": norm,
+        "reason": reason,
+        "banned_by": admin.user_id,
+        "banned_by_name": getattr(admin, "full_name", None) or admin.email,
+        "banned_at": datetime.now(timezone.utc),
+    })
+
+class BanUserRequest(BaseModel):
+    verification_id: str
+    scope: str = "full"   # "email" | "full"
+    reason: str = ""
+
+@router.post("/ban")
+async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_super_admin)):
+    """Banea a un usuario a partir de su verificación.
+
+    scope="email": solo banea el correo (puede abrir cuenta con otro correo).
+    scope="full":  banea correo + CPF + documento (su identidad queda en lista negra).
+    En ambos casos se bloquea la cuenta actual y se cierran sus sesiones.
+    """
+    v = await db.verifications.find_one(
+        {"$or": [{"verification_id": data.verification_id}, {"user_id": data.verification_id}]}
+    )
+    if not v:
+        raise HTTPException(status_code=404, detail="Verificación no encontrada")
+    user_id = v["user_id"]
+    user = await db.users.find_one({"user_id": user_id})
+    email = (user or {}).get("email", "")
+    reason = (data.reason or "").strip()
+    scope = (data.scope or "full").lower()
+
+    # Siempre se banea el correo
+    if email:
+        await _add_bl("email", email, reason, admin)
+
+    # El baneo completo también lista la identidad (CPF + documento)
+    if scope == "full":
+        if v.get("cpf_number"):
+            await _add_bl("cpf", v["cpf_number"], reason, admin)
+        if v.get("document_number"):
+            await _add_bl("document", v["document_number"], reason, admin)
+
+    # Bloquear la cuenta (impide iniciar sesión) y cerrar sus sesiones
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "is_banned": True,
+            "banned_at": datetime.now(timezone.utc),
+            "ban_reason": reason,
+            "verification_status": "rejected",
+        }}
+    )
+    await db.user_sessions.delete_many({"user_id": user_id})
+
+    logger.info(f"User {user_id} banned (scope={scope}) by {admin.user_id}")
+    return {"success": True, "message": "Usuario baneado", "scope": scope}

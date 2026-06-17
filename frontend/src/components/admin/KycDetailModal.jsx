@@ -137,6 +137,24 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     }
   };
 
+  const banUser = async (scope) => {
+    if (!v.verification_id) return;
+    const label = scope === 'email' ? 'el CORREO de este usuario' : 'al usuario COMPLETO (correo + CPF + documento)';
+    if (!window.confirm(`¿Banear ${label}? Esta acción bloquea la cuenta.`)) return;
+    const reason = window.prompt('Motivo del baneo (opcional):', '') || '';
+    setWorking(true);
+    try {
+      await api.post('/admin/ban', { verification_id: v.verification_id, scope, reason });
+      toast.success(scope === 'email' ? 'Correo baneado' : 'Usuario baneado');
+      onChanged?.();
+      onClose?.();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al banear');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const saveNote = async () => {
     if (!v.verification_id) return;
     setNoteSaving(true);
@@ -336,6 +354,27 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
               </div>
             )}
           </div>
+
+          {/* Danger zone: baneo */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #fee2e2', backgroundColor: '#fff7f7' }}>
+          <p style={{ fontSize: '12px', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Zona de baneo</p>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => banUser('email')}
+              disabled={working}
+              style={{ padding: '10px 16px', borderRadius: '10px', backgroundColor: '#fff', color: '#b91c1c', border: '1.5px solid #fca5a5', fontWeight: 600, cursor: 'pointer', fontSize: '13px', opacity: working ? 0.6 : 1 }}
+            >
+              Banear solo correo
+            </button>
+            <button
+              onClick={() => banUser('full')}
+              disabled={working}
+              style={{ padding: '10px 16px', borderRadius: '10px', backgroundColor: '#b91c1c', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '13px', opacity: working ? 0.6 : 1 }}
+            >
+              Banear usuario completo
+            </button>
+          </div>
+        </div>
 
           {/* Footer actions */}
           {status === 'pending' && (
