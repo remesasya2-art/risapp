@@ -86,13 +86,16 @@ def _normalize_image(value):
     return v
 
 
-def _serialize_verification(v: dict, user: dict = None) -> dict:
-    """Normalize a verification doc for the API response."""
+def _serialize_verification(v: dict, user: dict = None, include_images: bool = True) -> dict:
+    """Normalize a verification doc for the API response.
+
+    include_images=False omite las imágenes base64 (pesadas) y en su lugar
+    devuelve banderas has_* — se usa en el listado para que cargue rápido.
+    Las imágenes completas se obtienen en el endpoint de detalle.
+    """
     if not v:
         return {}
-
-    # Ensure consistent field naming and image normalization
-    return {
+    base = {
         "verification_id":      v.get("verification_id"),
         "user_id":              v.get("user_id"),
         "full_name":            v.get("full_name") or (user.get("full_name") if user else None),
@@ -102,10 +105,6 @@ def _serialize_verification(v: dict, user: dict = None) -> dict:
         "document_number":      v.get("document_number"),
         "cpf_number":           v.get("cpf_number"),
         "phone_number":         v.get("phone_number") or (user.get("phone_number") if user else None),
-        "id_document_image":      _normalize_image(v.get("id_document_image")),
-        "id_document_image_back": _normalize_image(v.get("id_document_image_back")),
-        "cpf_image":              _normalize_image(v.get("cpf_image")),
-        "selfie_image":           _normalize_image(v.get("selfie_image")),
         "status":               v.get("status", "pending"),
         "submitted_at":         v.get("submitted_at"),
         "processed_at":         v.get("processed_at"),
@@ -115,6 +114,25 @@ def _serialize_verification(v: dict, user: dict = None) -> dict:
         "rejection_code":       v.get("rejection_code"),
         "admin_note":           v.get("admin_note", ""),
     }
+    id_front = _normalize_image(v.get("id_document_image"))
+    id_back  = _normalize_image(v.get("id_document_image_back"))
+    cpf_img  = _normalize_image(v.get("cpf_image"))
+    selfie   = _normalize_image(v.get("selfie_image"))
+    if include_images:
+        base.update({
+            "id_document_image":      id_front,
+            "id_document_image_back": id_back,
+            "cpf_image":              cpf_img,
+            "selfie_image":           selfie,
+        })
+    else:
+        base.update({
+            "has_id_document":      bool(id_front),
+            "has_id_document_back": bool(id_back),
+            "has_cpf":              bool(cpf_img),
+            "has_selfie":           bool(selfie),
+        })
+    return base
 
 
 async def _ensure_indexes():
@@ -226,7 +244,7 @@ async def list_kyc(
         async for u in users_cursor:
             users_by_id[u["user_id"]] = u
 
-    items = [_serialize_verification(v, users_by_id.get(v.get("user_id"))) for v in verifications]
+        items = [_serialize_verification(v, users_by_id.get(v.get("user_id")), include_images=False) for v in verifications]
     # Marcar coincidencias con la lista negra de identidades (CPF / documento).
     # Se carga la lista negra una sola vez para no consultar por cada item.
     bl_entries = await db.blacklist.find(

@@ -228,18 +228,15 @@ export default function KycPanel({ onChange }) {
                   overflow: 'hidden', flexShrink: 0,
                   border: '2px solid #e5e7eb', backgroundColor: '#f3f4f6',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: v.selfie_image ? 'pointer' : 'default',
+                  cursor: 'pointer',
                 }}
-                onClick={() => v.selfie_image && setSelected(v)}
-                title={v.selfie_image ? 'Ver documentos' : 'Sin selfie'}
+                onClick={() => setSelected(v)}
+                title="Ver documentos"
                 >
-                  {v.selfie_image ? (
-                    <img
-                      src={v.selfie_image}
-                      alt="Selfie"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
+                  {v.has_selfie ? (
+                    <span style={{ fontSize: '24px', fontWeight: 700, color: '#6b7280' }}>
+                      {(v.full_name || '?').trim().charAt(0).toUpperCase()}
+                    </span>
                   ) : (
                     <ImageOff size={22} color="#9ca3af" />
                   )}

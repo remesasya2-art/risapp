@@ -82,7 +82,7 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const v = verification || {};
+    const [v, setV] = useState(verification || {});
   const status = v.status || 'pending';
   const badge = STATUS_BADGE[status] || STATUS_BADGE.pending;
 
@@ -90,7 +90,26 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     setNote(v.admin_note || '');
   }, [v.verification_id, v.admin_note]);
 
+    // El listado ya no trae imágenes (para cargar rápido). Al abrir el modal,
+  // se piden las imágenes completas de esta verificación.
   useEffect(() => {
+    setV(verification || {});
+    let active = true;
+    (async () => {
+      if (!verification?.verification_id) return;
+      try {
+        const res = await api.get(`/admin/kyc/${verification.verification_id}`);
+        if (active && res.data?.verification) {
+          setV((prev) => ({ ...prev, ...res.data.verification }));
+        }
+      } catch (e) {
+        // Si falla, se mantienen los datos del listado
+      }
+    })();
+    return () => { active = false; };
+  }, [verification?.verification_id]);
+
+useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !rejectOpen && lightboxIndex === null) onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
