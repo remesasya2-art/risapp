@@ -257,6 +257,11 @@ export default function KycPanel({ onChange }) {
                     }}>
                       {badge.label}
                     </span>
+                    {v.blacklist_match && (
+                      <span style={{ display: 'inline-flex', padding: '3px 9px', borderRadius: '999px', fontSize: '11px', fontWeight: 700, backgroundColor: '#fee2e2', color: '#b91c1c' }}>
+                        ⚠ Lista negra
+                      </span>
+                    )}
                   </div>
                   <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 6px 0' }}>{v.email || '—'}</p>
                   <p style={{ fontSize: '13px', color: '#374151', margin: 0 }}>

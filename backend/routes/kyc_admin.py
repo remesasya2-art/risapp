@@ -227,6 +227,24 @@ async def list_kyc(
             users_by_id[u["user_id"]] = u
 
     items = [_serialize_verification(v, users_by_id.get(v.get("user_id"))) for v in verifications]
+    # Marcar coincidencias con la lista negra de identidades (CPF / documento).
+    # Se carga la lista negra una sola vez para no consultar por cada item.
+    bl_entries = await db.blacklist.find(
+        {"type": {"$in": ["cpf", "document"]}},
+        {"_id": 0, "type": 1, "value": 1}
+    ).to_list(5000)
+    banned_cpf = {e["value"] for e in bl_entries if e.get("type") == "cpf"}
+    banned_doc = {e["value"] for e in bl_entries if e.get("type") == "document"}
+    if banned_cpf or banned_doc:
+        for item, v in zip(items, verifications):
+            cpf_norm = "".join(c for c in (v.get("cpf_number") or "") if c.isdigit())
+            doc_norm = "".join(c for c in (v.get("document_number") or "") if c.isalnum()).upper()
+            item["blacklist_match"] = bool(
+                (cpf_norm and cpf_norm in banned_cpf) or (doc_norm and doc_norm in banned_doc)
+            )
+    else:
+        for item in items:
+            item["blacklist_match"] = False
 
     return {"counts": counts, "items": items}
 

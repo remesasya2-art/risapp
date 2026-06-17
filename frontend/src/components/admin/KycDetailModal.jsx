@@ -261,7 +261,19 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
               <Field icon={Calendar} label="Fecha de envío" value={v.submitted_at ? formatAbsoluteTime(v.submitted_at) : '—'} />
             </div>
 
-            {/* Rejection reason (if any) */}
+        {/* Coincidencia con lista negra */}
+        {v.blacklist_match && (
+          <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: '#fef2f2', border: '1.5px solid #fca5a5' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: '#b91c1c', margin: 0 }}>
+              ⚠ Coincidencia con la lista negra
+            </p>
+            <p style={{ fontSize: '13px', color: '#7f1d1d', margin: '4px 0 0 0' }}>
+              El CPF o documento de este usuario coincide con una identidad baneada. Revisa con atención y rechaza o banea si corresponde.
+            </p>
+          </div>
+        )}
+
+        {/* Rejection reason (if any) */}
             {status === 'rejected' && v.rejection_reason && (
               <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
                 <p style={{ fontSize: '12px', fontWeight: 700, color: '#991b1b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
