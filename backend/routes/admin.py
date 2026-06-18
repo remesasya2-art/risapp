@@ -5,7 +5,7 @@ import os
 import uuid
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from database import db
 from models.user import User
@@ -905,6 +905,164 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     # Más antiguas primero (orden cronológico robusto ante created_at None)
     ordenes.sort(key=lambda o: str(o.get("created_at") or ""))
     return {"ordenes": ordenes, "total": len(ordenes)}
+
+@router.get("/reportes/procesados")
+async def reporte_procesados(
+    period: str = Query("day", regex="^(day|month|year)$"),
+    date: str = Query(...),
+    formato: str = Query("json", regex="^(json|csv)$"),
+    admin: User = Depends(get_super_admin),
+):
+    """Reporte de TODO lo procesado (4 flujos) por día / mes / año.
+    Devuelve JSON (vista previa + totales) o CSV (descarga para Excel o para la
+    app de contabilidad externa). La información completa se genera aquí.
+    """
+    from datetime import timedelta as _td
+    try:
+        base = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fecha inválida (use YYYY-MM-DD)")
+    if period == "day":
+        start = base.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + _td(days=1)
+    elif period == "month":
+        start = base.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
+    else:  # year
+        start = base.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = start.replace(year=start.year + 1)
+
+    user_cache = {}
+    async def _user(uid):
+        if not uid:
+            return {}
+        if uid not in user_cache:
+            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
+        return user_cache[uid]
+
+    rows = []
+    # Retiros completados (RIS→VES y RIS→Reais)
+    async for tx in db.transactions.find(
+        {"type": "withdrawal", "status": "completed", "completed_at": {"$gte": start, "$lt": end}}
+    ):
+        u = await _user(tx.get("user_id"))
+        b = tx.get("beneficiary_data", {}) or {}
+        es_brl = str(tx.get("currency_output") or "VES").upper() in ("BRL", "REAIS", "REAL")
+        rows.append({
+            "fecha_procesado": tx.get("completed_at"),
+            "flujo": "RIS → Reais" if es_brl else "RIS → VES",
+            "referencia": tx.get("display_id") or tx.get("transaction_id"),
+            "usuario": u.get("full_name") or u.get("name") or "",
+            "usuario_email": u.get("email", ""),
+            "beneficiario": b.get("full_name") or b.get("name", ""),
+            "documento": b.get("cpf") or b.get("cedula") or b.get("id_document", ""),
+            "pix": b.get("pix_key", ""),
+            "banco": "" if es_brl else (b.get("bank") or b.get("bank_code", "")),
+            "monto_origen": tx.get("amount_input", 0),
+            "unidad_origen": "RIS",
+            "monto_destino": tx.get("amount_output", 0),
+            "unidad_destino": "BRL" if es_brl else "VES",
+            "tasa": tx.get("rate", ""),
+            "procesado_por": tx.get("processed_by", ""),
+            "comprobante": "sí" if (tx.get("proof_images") or tx.get("proof_image")) else "no",
+        })
+
+    # Recargas VES aprobadas (VES→RIS)
+    async for tx in db.transactions.find(
+        {"type": "recharge_ves", "status": "approved", "processed_at": {"$gte": start, "$lt": end}}
+    ):
+        u = await _user(tx.get("user_id"))
+        rows.append({
+            "fecha_procesado": tx.get("processed_at"),
+            "flujo": "VES → RIS",
+            "referencia": tx.get("display_id") or tx.get("transaction_id"),
+            "usuario": u.get("full_name") or u.get("name") or "",
+            "usuario_email": u.get("email", ""),
+            "beneficiario": "",
+            "documento": "",
+            "pix": "",
+            "banco": "",
+            "monto_origen": tx.get("amount_ves", 0),
+            "unidad_origen": "VES",
+            "monto_destino": tx.get("amount_ris", 0),
+            "unidad_destino": "RIS",
+            "tasa": tx.get("rate_used", ""),
+            "procesado_por": tx.get("processed_by", ""),
+            "comprobante": "sí" if tx.get("proof_image") else "no",
+        })
+
+    # Remesas BTC enviadas (BTC→VES)
+    async for r in db.btc_remesas.find(
+        {"estado": "enviado", "enviado_en": {"$gte": start, "$lt": end}}, {"_id": 0}
+    ):
+        u = await _user(r.get("user_id"))
+        b = r.get("beneficiario_data", {}) or {}
+        rows.append({
+            "fecha_procesado": r.get("enviado_en"),
+            "flujo": "BTC → VES",
+            "referencia": r.get("display_id") or r.get("remesa_id"),
+            "usuario": u.get("full_name") or u.get("name") or "",
+            "usuario_email": u.get("email", ""),
+            "beneficiario": b.get("full_name") or b.get("name", ""),
+            "documento": b.get("cedula", ""),
+            "pix": "",
+            "banco": b.get("bank", ""),
+            "monto_origen": r.get("usd_cliente", 0),
+            "unidad_origen": "USD",
+            "monto_destino": r.get("ves_recibe", 0),
+            "unidad_destino": "VES",
+            "tasa": r.get("tasa_ves", ""),
+            "procesado_por": r.get("operador_id", ""),
+            "comprobante": "sí" if r.get("comprobante_pago") else "no",
+        })
+
+    rows.sort(key=lambda x: str(x.get("fecha_procesado") or ""))
+
+    def fmtfecha(d):
+        if not d:
+            return ""
+        try:
+            return d.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return str(d)
+
+    if formato == "csv":
+        import csv as _csv
+        import io as _io
+        from fastapi.responses import StreamingResponse as _SR
+        buf = _io.StringIO()
+        buf.write("\ufeff")  # BOM para que Excel respete los acentos
+        w = _csv.writer(buf)
+        w.writerow(["Fecha", "Flujo", "Referencia", "Usuario", "Email",
+                    "Beneficiario", "Documento", "Llave PIX", "Banco",
+                    "Monto origen", "Unidad", "Monto destino", "Unidad",
+                    "Tasa", "Procesado por", "Comprobante"])
+        for r in rows:
+            w.writerow([
+                fmtfecha(r["fecha_procesado"]), r["flujo"], r["referencia"], r["usuario"], r["usuario_email"],
+                r["beneficiario"], r["documento"], r["pix"], r["banco"],
+                r["monto_origen"], r["unidad_origen"], r["monto_destino"], r["unidad_destino"],
+                r["tasa"], r["procesado_por"], r["comprobante"],
+            ])
+        buf.seek(0)
+        filename = f"reporte_{period}_{date}.csv"
+        return _SR(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
+                   headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+    # JSON: vista previa + totales por flujo
+    totales = {}
+    for r in rows:
+        totales[r["flujo"]] = totales.get(r["flujo"], 0) + 1
+        r["fecha_procesado"] = fmtfecha(r["fecha_procesado"])
+    return {
+        "period": period,
+        "date": date,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "total": len(rows),
+        "totales_por_flujo": totales,
+        "rows": rows,
+    }
 
 
 @router.get("/recharges/ves")
