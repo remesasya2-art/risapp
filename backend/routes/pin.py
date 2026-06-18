@@ -168,6 +168,37 @@ async def pin_verify(data: PinVerifyRequest, current_user: User = Depends(get_ve
     raise HTTPException(status_code=401, detail="PIN incorrecto")
 
 
+@router.post("/hint-check")
+async def pin_hint_check(current_user: User = Depends(get_verified_user)):
+    """Tras un envío: decide si mostrar el aviso suave para configurar el PIN.
+
+    Solo para usuarios verificados SIN PIN (no super_admin) que ya tengan al
+    menos 2 envíos completados con éxito. Crea también una notificación en la
+    campana. Es recurrente pero discreto: se repite hasta que configure el PIN.
+    """
+    doc = await _get_user_doc(current_user.user_id)
+    if doc.get("role") == "super_admin" or doc.get("pin_hash"):
+        return {"hint": False}
+    uid = current_user.user_id
+    completados = await db.transactions.count_documents(
+        {"user_id": uid, "type": "withdrawal", "status": "completed"}
+    )
+    completados += await db.btc_remesas.count_documents({"user_id": uid, "estado": "enviado"})
+    if completados < 2:
+        return {"hint": False}
+    msg = "Configura tu PIN para mayor seguridad en tu perfil de usuario."
+    try:
+        await create_notification(
+            user_id=uid,
+            title="Protege tus envíos",
+            message=msg,
+            notification_type="pin_hint",
+        )
+    except Exception as e:
+        logger.warning(f"No se pudo crear notificación de aviso de PIN: {e}")
+    return {"hint": True, "message": msg}
+
+
 @router.post("/disable")
 async def pin_disable(data: PinDisableRequest, current_user: User = Depends(get_verified_user)):
     """Desactiva el PIN. Requiere la contraseña de la cuenta."""
