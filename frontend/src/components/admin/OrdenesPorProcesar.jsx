@@ -9,6 +9,7 @@ const FLUJO_STYLE = {
   ris_ves: { bg: '#EEF2FF', fg: '#4F46E5' },
   btc_ves: { bg: '#FFF7ED', fg: '#EA580C' },
   ves_ris: { bg: '#ECFDF5', fg: '#059669' },
+  ris_reais: { bg: '#FEF9C3', fg: '#CA8A04' },
 };
 
 function formatDate(d) {
@@ -183,10 +184,11 @@ export default function OrdenesPorProcesar() {
                   }}>
                     <div><strong>{b.nombre || '—'}</strong>{b.documento ? ` · ${b.documento}` : ''}</div>
                     <div style={{ color: '#6b7280', marginTop: '2px' }}>
-                      {b.tipo_pago === 'pago_movil' ? '📱 Pago Móvil' : '🏦 Transferencia'}
+                      {b.tipo_pago === 'pix_br' ? '🇧🇷 PIX (Brasil)' : b.tipo_pago === 'pago_movil' ? '📱 Pago Móvil' : '🏦 Transferencia'}
                       {b.banco ? ` · ${b.banco}` : ''}
                       {b.telefono ? ` · ${b.telefono}` : ''}
                       {b.cuenta ? ` · ${b.cuenta}` : ''}
+                      {b.pix_key ? ` · PIX: ${b.pix_key}` : ''}
                     </div>
                   </div>
                 )}
