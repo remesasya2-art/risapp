@@ -5,6 +5,7 @@ import { Zap, AlertCircle, CheckCircle, Loader, ArrowLeft, ArrowRight, Plus, X, 
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
+import PinConfirm from '../components/PinConfirm';
 
 
 const VENEZUELAN_BANKS = [
@@ -46,6 +47,7 @@ export default function BTCLightning() {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const [precioBTC, setPrecioBTC] = useState(null);
   const [tasaVES, setTasaVES] = useState(680);
   const [beneficiaries, setBeneficiaries] = useState([]);
@@ -193,6 +195,12 @@ export default function BTCLightning() {
 
 
 
+  const pedirConfirmacion = () => {
+    if (!selectedBeneficiary) return toast.error('Selecciona un beneficiario');
+    if (!usdNum || usdNum <= 0) return toast.error('Ingresa un monto valido');
+    if (!precioBTC) return toast.error('Esperando precio BTC...');
+    setShowPin(true);
+  };
   const handleGenerarInvoice = async () => {
     if (!selectedBeneficiary) return toast.error('Selecciona un beneficiario');
     if (!usdNum || usdNum <= 0) return toast.error('Ingresa un monto valido');
@@ -203,6 +211,10 @@ export default function BTCLightning() {
       setInvoiceData(res.data);
       sessionStorage.setItem('btc_invoice', JSON.stringify(res.data));
       setStep(3);
+      try {
+        const h = await api.post('/pin/hint-check');
+        if (h.data?.hint) toast(h.data.message || 'Configura tu PIN para mayor seguridad en tu perfil.', { icon: '🔒' });
+      } catch (_) { /* aviso opcional */ }
     } catch (err) { toast.error(err.response?.data?.detail || 'Error al generar invoice'); }
     finally { setLoading(false); }
   };
@@ -413,10 +425,11 @@ export default function BTCLightning() {
                 La tasa incluye 1% de margen por volatilidad. El beneficiario recibe <strong style={{ color: '#fbbf24' }}>{vesRecibe} VES</strong> garantizados.
               </div>
             </div>
-            <button onClick={handleGenerarInvoice} disabled={loading||!usdNum||usdNum<=0||!precioBTC}
+            <button onClick={pedirConfirmacion} disabled={loading||!usdNum||usdNum<=0||!precioBTC}
               style={{ ...S.btnPrimary, opacity: (!usdNum||usdNum<=0||!precioBTC||loading)?0.5:1, cursor: (!usdNum||usdNum<=0||!precioBTC||loading)?'not-allowed':'pointer' }}>
               {loading?<><Loader size={18}/> Generando invoice...</>:<><Zap size={18}/> Generar Invoice Lightning</>}
             </button>
+            <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={handleGenerarInvoice} />
           </>
         )}
         {activeTab === 'enviar' && step === 3 && invoiceData && (
