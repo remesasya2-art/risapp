@@ -6,6 +6,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
 
 from database import db
 from models.user import User
@@ -908,29 +909,44 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 
 @router.get("/reportes/procesados")
 async def reporte_procesados(
-    period: str = Query("day", regex="^(day|month|year)$"),
-    date: str = Query(...),
+    period: str = Query("day", regex="^(day|month|year|range)$"),
+    date: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     formato: str = Query("json", regex="^(json|csv)$"),
     admin: User = Depends(get_super_admin),
 ):
-    """Reporte de TODO lo procesado (4 flujos) por día / mes / año.
+    """Reporte de TODO lo procesado (4 flujos) por día / mes / año o rango.
+    Para period="range" usa date_from y date_to (ambos YYYY-MM-DD, inclusivos).
     Devuelve JSON (vista previa + totales) o CSV (descarga para Excel o para la
     app de contabilidad externa). La información completa se genera aquí.
     """
     from datetime import timedelta as _td
+    def _parse(d):
+        return datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     try:
-        base = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if period == "range":
+            if not date_from or not date_to:
+                raise HTTPException(status_code=400, detail="Indica la fecha desde y hasta (YYYY-MM-DD)")
+            start = _parse(date_from).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = _parse(date_to).replace(hour=0, minute=0, second=0, microsecond=0) + _td(days=1)
+            if end <= start:
+                raise HTTPException(status_code=400, detail="El rango de fechas es inválido (desde debe ser ≤ hasta)")
+        else:
+            if not date:
+                raise HTTPException(status_code=400, detail="Indica la fecha (YYYY-MM-DD)")
+            base = _parse(date)
+            if period == "day":
+                start = base.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = start + _td(days=1)
+            elif period == "month":
+                start = base.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
+            else:  # year
+                start = base.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end = start.replace(year=start.year + 1)
     except ValueError:
         raise HTTPException(status_code=400, detail="Fecha inválida (use YYYY-MM-DD)")
-    if period == "day":
-        start = base.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + _td(days=1)
-    elif period == "month":
-        start = base.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
-    else:  # year
-        start = base.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = start.replace(year=start.year + 1)
 
     user_cache = {}
     async def _user(uid):
@@ -1045,7 +1061,8 @@ async def reporte_procesados(
                 r["tasa"], r["procesado_por"], r["comprobante"],
             ])
         buf.seek(0)
-        filename = f"reporte_{period}_{date}.csv"
+        etiqueta = f"{date_from}_a_{date_to}" if period == "range" else (date or "")
+        filename = f"reporte_{period}_{etiqueta}.csv"
         return _SR(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
                    headers={"Content-Disposition": f"attachment; filename={filename}"})
 
@@ -1057,6 +1074,8 @@ async def reporte_procesados(
     return {
         "period": period,
         "date": date,
+        "date_from": date_from,
+        "date_to": date_to,
         "start": start.isoformat(),
         "end": end.isoformat(),
         "total": len(rows),
