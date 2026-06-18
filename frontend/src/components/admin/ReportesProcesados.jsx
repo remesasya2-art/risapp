@@ -7,21 +7,30 @@ const PERIODOS = [
   { key: 'day', label: 'Día' },
   { key: 'month', label: 'Mes' },
   { key: 'year', label: 'Año' },
+  { key: 'range', label: 'Rango' },
 ];
 
 export default function ReportesProcesados() {
   const hoy = new Date().toISOString().slice(0, 10);
   const [period, setPeriod] = useState('day');
   const [date, setDate] = useState(hoy);
+  const [dateFrom, setDateFrom] = useState(hoy);
+  const [dateTo, setDateTo] = useState(hoy);
   const [loading, setLoading] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [data, setData] = useState(null);
+
+  const buildParams = (formato) => (
+    period === 'range'
+      ? { period, date_from: dateFrom, date_to: dateTo, formato }
+      : { period, date, formato }
+  );
 
   const generar = async () => {
     setLoading(true);
     setData(null);
     try {
-      const res = await api.get('/admin/reportes/procesados', { params: { period, date, formato: 'json' } });
+      const res = await api.get('/admin/reportes/procesados', { params: buildParams('json') });
       setData(res.data);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo generar el reporte');
@@ -34,13 +43,15 @@ export default function ReportesProcesados() {
     setDescargando(true);
     try {
       const res = await api.get('/admin/reportes/procesados', {
-        params: { period, date, formato: 'csv' },
+        params: buildParams('csv'),
         responseType: 'blob',
       });
       const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_${period}_${date}.csv`;
+      a.download = period === 'range'
+        ? `reporte_${dateFrom}_a_${dateTo}.csv`
+        : `reporte_${period}_${date}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -84,12 +95,29 @@ export default function ReportesProcesados() {
             ))}
           </div>
         </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
-            <Calendar size={12} style={{ verticalAlign: 'middle' }} /> Fecha dentro del período
-          </label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
-        </div>
+        {period === 'range' ? (
+          <>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
+                <Calendar size={12} style={{ verticalAlign: 'middle' }} /> Desde
+              </label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
+                <Calendar size={12} style={{ verticalAlign: 'middle' }} /> Hasta
+              </label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={inputStyle} />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
+              <Calendar size={12} style={{ verticalAlign: 'middle' }} /> Fecha dentro del período
+            </label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
+          </div>
+        )}
         <button onClick={generar} disabled={loading} style={{
           padding: '10px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer',
           backgroundColor: '#6366f1', color: '#fff', fontWeight: 700, fontSize: '14px',
