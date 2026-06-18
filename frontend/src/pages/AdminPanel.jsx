@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
@@ -44,6 +45,7 @@ const maskCPF = (cpf) => {
 
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
+  { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
   { key: 'partners', label: 'Socios', icon: Briefcase },
@@ -576,6 +578,9 @@ export default function AdminPanel() {
 
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
         {/* Overview Tab */}
+        {activeTab === 'ordenes' && (
+          <OrdenesPorProcesar />
+        )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
