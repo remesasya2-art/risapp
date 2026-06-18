@@ -5,6 +5,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from database import db
 from models.user import User
@@ -78,6 +79,114 @@ async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(g
     return {"message": "Beneficiario eliminado"}
 
 # ============== WITHDRAWALS ==============
+
+# ---- RIS → Reais (Brasil, pago por PIX) ----
+
+class BrBeneficiaryCreate(BaseModel):
+    full_name: str
+    cpf: str
+    pix_key: str
+
+class ReaisSendRequest(BaseModel):
+    beneficiary_id: str
+    amount: float   # en RIS (1 RIS = 1 R$)
+
+@router.post("/beneficiaries/br")
+async def create_br_beneficiary(request: BrBeneficiaryCreate, current_user: User = Depends(get_current_user)):
+    """Crea un beneficiario en Brasil (pago por PIX en reais)."""
+    beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"
+    beneficiary = {
+        "beneficiary_id": beneficiary_id,
+        "user_id": current_user.user_id,
+        "full_name": request.full_name.strip(),
+        "cpf": request.cpf.strip(),
+        "pix_key": request.pix_key.strip(),
+        "pais": "BR",
+        "payment_type": "pix_br",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.beneficiaries.insert_one(beneficiary)
+    return {"message": "Beneficiario (Brasil) creado", "beneficiary_id": beneficiary_id}
+
+@router.get("/beneficiaries/br")
+async def get_br_beneficiaries(current_user: User = Depends(get_current_user)):
+    """Lista los beneficiarios en Brasil del usuario."""
+    rows = await db.beneficiaries.find(
+        {"user_id": current_user.user_id, "pais": "BR"}
+    ).to_list(100)
+    return [
+        {
+            "beneficiary_id": b.get("beneficiary_id"),
+            "full_name": b.get("full_name"),
+            "cpf": b.get("cpf"),
+            "pix_key": b.get("pix_key"),
+            "payment_type": "pix_br",
+            "created_at": b.get("created_at"),
+        }
+        for b in rows
+    ]
+
+@router.post("/reais/send")
+async def create_reais_send(request: ReaisSendRequest, current_user: User = Depends(get_current_user)):
+    """Crea una orden de envío RIS → Reais (1 RIS = 1 R$, sin comisión: ya viene
+    incluida en la recarga). Queda pendiente para que el super_admin la pague
+    por PIX en Brasil desde el área de Órdenes por procesar."""
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    # Descuento atómico de saldo RIS
+    user = await db.users.find_one_and_update(
+        {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
+        {"$inc": {"balance_ris": -request.amount}},
+        return_document=True
+    )
+    if user is None:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente")
+    beneficiary = await db.beneficiaries.find_one({
+        "beneficiary_id": request.beneficiary_id,
+        "user_id": current_user.user_id,
+        "pais": "BR",
+    })
+    if not beneficiary:
+        # Devolver el saldo si el beneficiario no existe
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$inc": {"balance_ris": request.amount}}
+        )
+        raise HTTPException(status_code=404, detail="Beneficiario de Brasil no encontrado")
+    amount_brl = request.amount  # 1 a 1
+    beneficiary_data = {
+        "full_name": beneficiary.get("full_name"),
+        "cpf": beneficiary.get("cpf"),
+        "pix_key": beneficiary.get("pix_key"),
+        "payment_type": "pix_br",
+        "pais": "BR",
+    }
+    tx_id = f"tx_{uuid.uuid4().hex[:12]}"
+    display_id = await get_next_withdrawal_id()
+    transaction = {
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "user_id": current_user.user_id,
+        "type": "withdrawal",
+        "amount_input": request.amount,
+        "amount_output": amount_brl,
+        "currency_input": "RIS",
+        "currency_output": "BRL",
+        "rate": 1.0,
+        "status": "pending",
+        "beneficiary_id": request.beneficiary_id,
+        "beneficiary_data": beneficiary_data,
+        "created_at": datetime.now(timezone.utc),
+        "whatsapp_active": False,
+    }
+    await db.transactions.insert_one(transaction)
+    await create_notification(
+        user_id=current_user.user_id,
+        title="Envío a Brasil solicitado",
+        message=f"Tu envío de {request.amount:.2f} RIS (R$ {amount_brl:.2f}) a {beneficiary.get('full_name')} fue recibido y está en cola.",
+        notification_type="withdrawal_pending",
+    )
+    return {"success": True, "transaction_id": tx_id, "display_id": display_id, "amount_brl": amount_brl}
 
 @router.post("/withdraw")
 @router.post("/withdrawal/create")
