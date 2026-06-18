@@ -22,6 +22,7 @@ import ForceChangePassword from './pages/ForceChangePassword';
 import GestorFlowMockup from './pages/GestorFlowMockup';
 import DriveCallback from './pages/DriveCallback';
 import BTCLightning from './pages/BTCLightning';
+import SendReais from './pages/SendReais';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -83,6 +84,7 @@ function AppRoutes() {
       {/* Protected Routes */}
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
+      <Route path="/send-reais" element={<ProtectedRoute><SendReais /></ProtectedRoute>} />
       <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
       <Route path="/recharge-ves" element={<ProtectedRoute><RechargeVES /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
