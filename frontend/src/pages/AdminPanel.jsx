@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
+import ReportesProcesados from '../components/admin/ReportesProcesados';
 import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
@@ -46,6 +47,7 @@ const maskCPF = (cpf) => {
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
   { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
+  { key: 'reportes', label: 'Reportes', icon: Download },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
   { key: 'partners', label: 'Socios', icon: Briefcase },
@@ -580,6 +582,10 @@ export default function AdminPanel() {
         {/* Overview Tab */}
         {activeTab === 'ordenes' && (
           <OrdenesPorProcesar />
+        )}
+
+        {activeTab === 'reportes' && (
+          <ReportesProcesados />
         )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
