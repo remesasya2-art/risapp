@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
+import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
 
 // Lista actualizada de bancos venezolanos
@@ -200,6 +201,14 @@ export default function Send() {
     }
   };
 
+  const [showPin, setShowPin] = useState(false);
+  const pedirConfirmacion = () => {
+    if (!isValidAmount || !selectedBeneficiary || !paymentType) {
+      toast.error('Verifica los datos de envío');
+      return;
+    }
+    setShowPin(true);
+  };
   const handleSend = async () => {
     if (!isValidAmount || !selectedBeneficiary || !paymentType) {
       toast.error('Verifica los datos de envío');
@@ -213,6 +222,10 @@ export default function Send() {
       });
       toast.success('¡Envío registrado! Será procesado pronto.');
       await refreshUser();
+      try {
+        const h = await api.post('/pin/hint-check');
+        if (h.data?.hint) toast(h.data.message || 'Configura tu PIN para mayor seguridad en tu perfil.', { icon: '🔒' });
+      } catch (_) { /* aviso opcional */ }
       navigate('/history');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al procesar envío');
@@ -598,10 +611,11 @@ export default function Send() {
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button onClick={() => setStep(3)} style={buttonSecondaryStyle}>Atrás</button>
-              <button onClick={handleSend} disabled={loading} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', opacity: loading ? 0.5 : 1 }} data-testid="confirm-send">
+              <button onClick={pedirConfirmacion} disabled={loading} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', opacity: loading ? 0.5 : 1 }} data-testid="confirm-send">
                 {loading ? 'Procesando...' : 'Confirmar envío'}
               </button>
             </div>
+            <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={handleSend} />
           </div>
         )}
 
