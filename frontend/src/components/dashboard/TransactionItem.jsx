@@ -49,7 +49,13 @@ function formatShort(dateString) {
  *   onViewVoucher: (tx) => void
  */
 export default function TransactionItem({ tx, rates, onViewVoucher }) {
-  const isWithdrawal = tx.type === 'withdrawal';
+  // Normalizar nombres de campo: unas transacciones usan inglés
+  // (type/status/amount_input) y otras español (tipo/estado/amount), p.ej. las de BTC.
+  const txType = String(tx.type || tx.tipo || '').toLowerCase();
+  const txStatus = tx.status || tx.estado || 'pending';
+  const isBtc = txType.includes('btc') || tx.subtipo === 'btc_lightning';
+  const isWithdrawal = ['withdrawal', 'send', 'envio', 'envío'].includes(txType) || isBtc;
+  const isRecharge = txType.startsWith('recharge') || txType.startsWith('recarga');
   const sign = isWithdrawal ? '-' : '+';
   const amountColor = isWithdrawal ? '#E53E3E' : '#38A169';
   const iconBg = isWithdrawal ? '#FFF0F0' : '#F0FFF4';
@@ -58,8 +64,27 @@ export default function TransactionItem({ tx, rates, onViewVoucher }) {
 
   const beneficiary = tx.beneficiary_data || {};
   const account = beneficiary.account_number || beneficiary.phone || '';
-  const showVoucher = isWithdrawal && tx.status === 'completed'
+  const showVoucher = isWithdrawal && txStatus === 'completed'
     && ((tx.proof_images && tx.proof_images.length > 0) || tx.proof_image);
+
+  // Monto principal y unidad según el flujo (busca el primer campo con valor)
+  let mainAmount, mainUnit;
+  if (isBtc) {
+    mainAmount = Math.abs(Number(tx.amount_ves ?? tx.amount_output ?? 0));
+    mainUnit = 'VES';
+  } else {
+    mainAmount = Math.abs(Number(tx.amount_input ?? tx.amount_ris ?? tx.amount ?? tx.amount_output ?? 0));
+    mainUnit = 'RIS';
+  }
+
+  // Etiqueta: "Recarga" SOLO para entradas (PIX / bolívares); el resto es envío
+  const title = isBtc
+    ? (beneficiary.full_name ? `Envío BTC · ${beneficiary.full_name}` : 'Envío BTC')
+    : isWithdrawal
+      ? (beneficiary.full_name || tx.beneficiario || 'Envío')
+      : isRecharge
+        ? 'Recarga'
+        : (sign === '+' ? 'Recarga' : 'Envío');
 
   return (
     <div
@@ -95,7 +120,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher }) {
                 fontSize: '15px', fontWeight: 700, color: '#1A1A2E',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {isWithdrawal ? (beneficiary.full_name || 'Envío a Venezuela') : 'Recarga'}
+                {title}
               </div>
               <div style={{ fontSize: '12px', color: '#8E8E9A', marginTop: '2px' }}>
                 {formatShort(tx.created_at)}
@@ -106,9 +131,9 @@ export default function TransactionItem({ tx, rates, onViewVoucher }) {
                 fontSize: '16px', fontWeight: 700, color: amountColor,
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}>
-                {sign}{fmt(tx.amount_input)} RIS
+                {sign}{fmt(mainAmount)} {mainUnit}
               </div>
-              {isWithdrawal && tx.amount_output && (
+              {isWithdrawal && !isBtc && tx.amount_output && (
                 <div style={{ fontSize: '11px', color: '#8E8E9A', marginTop: '2px', whiteSpace: 'nowrap' }}>
                   {fmt(tx.amount_output)} VES
                   {rates?.bcv_usd_ves > 0 && (
@@ -146,7 +171,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher }) {
 
           {/* Bottom row: badge + voucher button */}
           <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <StatusBadge status={tx.status} />
+            <StatusBadge status={txStatus} />
             {showVoucher && (
               <button
                 onClick={() => onViewVoucher?.(tx)}
