@@ -811,31 +811,48 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
             user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
         return user_cache[uid]
 
-    # 1) RIS → VES (retiros): el admin paga VES y sube comprobante
+    # 1) RIS → VES y RIS → Reais (retiros): el admin paga y sube comprobante.
+    #    Se distinguen por currency_output (VES vs BRL).
     async for tx in db.transactions.find(
         {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True}}
     ).sort("created_at", 1):
         u = await _user(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
-        ordenes.append({
-            "orden_id": tx.get("transaction_id"),
-            "flujo": "ris_ves",
-            "flujo_label": "RIS → VES",
-            "accion": "pagar",
-            "display_id": tx.get("display_id"),
-            "created_at": tx.get("created_at"),
-            "user_name": u.get("full_name") or u.get("name") or "—",
-            "user_email": u.get("email", ""),
-            "origen": {"valor": tx.get("amount_input", 0), "unidad": "RIS"},
-            "destino": {"valor": tx.get("amount_output", 0), "unidad": "VES"},
-            "beneficiario": {
+        cur_out = str(tx.get("currency_output") or "VES").upper()
+        if cur_out in ("BRL", "REAIS", "REAL"):
+            flujo, flujo_label, unidad_dest = "ris_reais", "RIS → Reais", "BRL"
+            beneficiario = {
+                "nombre": b.get("full_name") or b.get("name", ""),
+                "documento": b.get("cpf") or b.get("documento", ""),
+                "banco": "",
+                "telefono": "",
+                "cuenta": "",
+                "tipo_pago": "pix_br",
+                "pix_key": b.get("pix_key", ""),
+            }
+        else:
+            flujo, flujo_label, unidad_dest = "ris_ves", "RIS → VES", "VES"
+            beneficiario = {
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula") or b.get("id_document", ""),
                 "banco": b.get("bank") or b.get("bank_code", ""),
                 "telefono": b.get("phone") or b.get("phone_number", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
-            },
+                "pix_key": "",
+            }
+        ordenes.append({
+            "orden_id": tx.get("transaction_id"),
+            "flujo": flujo,
+            "flujo_label": flujo_label,
+            "accion": "pagar",
+            "display_id": tx.get("display_id"),
+            "created_at": tx.get("created_at"),
+            "user_name": u.get("full_name") or u.get("name") or "—",
+            "user_email": u.get("email", ""),
+            "origen": {"valor": tx.get("amount_input", 0), "unidad": "RIS"},
+            "destino": {"valor": tx.get("amount_output", 0), "unidad": unidad_dest},
+            "beneficiario": beneficiario,
             "comprobante_usuario": None,
         })
 
