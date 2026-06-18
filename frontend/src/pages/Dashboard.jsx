@@ -144,6 +144,7 @@ export default function Dashboard() {
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },
     { icon: Zap, label: 'Enviar BTC', path: '/btc-lightning' },
+    { icon: ArrowUpRight, label: 'Enviar a Brasil', path: '/send-reais' },
   ];
 
   // Build menu based on user role
