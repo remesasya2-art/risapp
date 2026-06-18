@@ -792,6 +792,104 @@ async def get_pending_ves_recharges(admin: User = Depends(get_super_admin)):
     return {"recharges": recharges}
 
 
+@router.get("/ordenes/pendientes")
+async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
+    """Área unificada de 'Órdenes por procesar'.
+
+    Junta en una sola lista normalizada todas las órdenes pendientes de los
+    distintos flujos (RIS→VES, BTC→VES, VES→RIS) para que el super_admin las
+    procese desde un solo lugar. NO descuenta bancos internos: la contabilidad
+    se lleva en la app externa. La info completa queda disponible aquí.
+    """
+    ordenes = []
+    user_cache = {}
+
+    async def _user(uid):
+        if not uid:
+            return {}
+        if uid not in user_cache:
+            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
+        return user_cache[uid]
+
+    # 1) RIS → VES (retiros): el admin paga VES y sube comprobante
+    async for tx in db.transactions.find(
+        {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True}}
+    ).sort("created_at", 1):
+        u = await _user(tx.get("user_id"))
+        b = tx.get("beneficiary_data", {}) or {}
+        ordenes.append({
+            "orden_id": tx.get("transaction_id"),
+            "flujo": "ris_ves",
+            "flujo_label": "RIS → VES",
+            "accion": "pagar",
+            "display_id": tx.get("display_id"),
+            "created_at": tx.get("created_at"),
+            "user_name": u.get("full_name") or u.get("name") or "—",
+            "user_email": u.get("email", ""),
+            "origen": {"valor": tx.get("amount_input", 0), "unidad": "RIS"},
+            "destino": {"valor": tx.get("amount_output", 0), "unidad": "VES"},
+            "beneficiario": {
+                "nombre": b.get("full_name") or b.get("name", ""),
+                "documento": b.get("cedula") or b.get("id_document", ""),
+                "banco": b.get("bank") or b.get("bank_code", ""),
+                "telefono": b.get("phone") or b.get("phone_number", ""),
+                "cuenta": b.get("account_number", ""),
+                "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
+            },
+            "comprobante_usuario": None,
+        })
+
+    # 2) BTC → VES (remesas pagadas): el admin paga VES y sube comprobante
+    async for r in db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1):
+        u = await _user(r.get("user_id"))
+        b = r.get("beneficiario_data", {}) or {}
+        ordenes.append({
+            "orden_id": r.get("remesa_id"),
+            "flujo": "btc_ves",
+            "flujo_label": "BTC → VES",
+            "accion": "pagar",
+            "display_id": r.get("display_id") or (r.get("remesa_id") or "")[:8],
+            "created_at": r.get("pagado_en") or r.get("creado_en"),
+            "user_name": u.get("full_name") or u.get("name") or "—",
+            "user_email": u.get("email", ""),
+            "origen": {"valor": r.get("usd_cliente", 0), "unidad": "USD"},
+            "destino": {"valor": r.get("ves_recibe", 0), "unidad": "VES"},
+            "beneficiario": {
+                "nombre": b.get("full_name") or b.get("name", ""),
+                "documento": b.get("cedula", ""),
+                "banco": b.get("bank", ""),
+                "telefono": b.get("phone", ""),
+                "cuenta": b.get("account_number", ""),
+                "tipo_pago": b.get("payment_type", ""),
+            },
+            "comprobante_usuario": None,
+        })
+
+    # 3) VES → RIS (recargas): el admin REVISA el comprobante del usuario y aprueba
+    async for tx in db.transactions.find(
+        {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True}}
+    ).sort("created_at", 1):
+        u = await _user(tx.get("user_id"))
+        ordenes.append({
+            "orden_id": tx.get("transaction_id"),
+            "flujo": "ves_ris",
+            "flujo_label": "VES → RIS",
+            "accion": "aprobar",
+            "display_id": tx.get("display_id"),
+            "created_at": tx.get("created_at"),
+            "user_name": u.get("full_name") or u.get("name") or "—",
+            "user_email": u.get("email", ""),
+            "origen": {"valor": tx.get("amount_ves", 0), "unidad": "VES"},
+            "destino": {"valor": tx.get("amount_ris", 0), "unidad": "RIS"},
+            "beneficiario": None,
+            "comprobante_usuario": tx.get("proof_image"),
+        })
+
+    # Más antiguas primero (orden cronológico robusto ante created_at None)
+    ordenes.sort(key=lambda o: str(o.get("created_at") or ""))
+    return {"ordenes": ordenes, "total": len(ordenes)}
+
+
 @router.get("/recharges/ves")
 async def get_all_ves_recharges(admin: User = Depends(get_super_admin)):
     """Get all VES recharge requests"""
