@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, X, User, CheckCircle, AlertCircle } from 'lucide-react
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
+import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
 
 export default function SendReais() {
@@ -14,6 +15,7 @@ export default function SendReais() {
   const [selectedId, setSelectedId] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [newBenef, setNewBenef] = useState({ full_name: '', cpf: '', pix_key: '' });
 
@@ -56,6 +58,11 @@ export default function SendReais() {
     }
   };
 
+  const pedirConfirmacion = () => {
+    if (!selectedId) { toast.error('Selecciona un beneficiario'); return; }
+    if (!isValidAmount) { toast.error('Monto inválido o saldo insuficiente'); return; }
+    setShowPin(true);
+  };
   const enviar = async () => {
     if (!selectedId) { toast.error('Selecciona un beneficiario'); return; }
     if (!isValidAmount) { toast.error('Monto inválido o saldo insuficiente'); return; }
@@ -64,6 +71,10 @@ export default function SendReais() {
       await api.post('/reais/send', { beneficiary_id: selectedId, amount: amountNum });
       toast.success('¡Envío a Brasil registrado! Será procesado pronto.');
       if (refreshUser) await refreshUser();
+      try {
+        const h = await api.post('/pin/hint-check');
+        if (h.data?.hint) toast(h.data.message || 'Configura tu PIN para mayor seguridad en tu perfil.', { icon: '🔒' });
+      } catch (_) { /* aviso opcional */ }
       navigate('/history');
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Error al procesar el envío');
@@ -192,7 +203,7 @@ export default function SendReais() {
 
         {/* Enviar */}
         {!showNew && (
-          <button onClick={enviar} disabled={loading || !selectedId || !isValidAmount} style={{
+          <button onClick={pedirConfirmacion} disabled={loading || !selectedId || !isValidAmount} style={{
             width: '100%', padding: '14px', borderRadius: '12px', border: 'none',
             backgroundColor: '#5B4FE9', color: '#fff', fontWeight: 700, fontSize: '16px',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
@@ -202,6 +213,7 @@ export default function SendReais() {
             <CheckCircle size={18} /> {loading ? 'Procesando…' : 'Enviar a Brasil'}
           </button>
         )}
+        <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={enviar} />
 
         <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', marginTop: '14px' }}>
           Sin comisión adicional · El pago lo procesa el equipo por PIX
