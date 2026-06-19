@@ -19,6 +19,7 @@ import KycPanel from '../components/admin/KycPanel';
 import { StatusBadge } from '../components/dashboard/TransactionItem';
 import BtcAdminHistorial from '../components/admin/BtcAdminHistorial';
 import BtcAdminConfig from '../components/admin/BtcAdminConfig';
+import TasasBtcSection from '../components/admin/TasasBtcSection';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -1343,6 +1344,8 @@ export default function AdminPanel() {
                   </button>
                 </div>
               </div>
+              {/* Sección unificada: ruta BTC USDI→VES + referencias (BCV, precio BTC) */}
+              <TasasBtcSection />
             </div>
           </div>
         )}
