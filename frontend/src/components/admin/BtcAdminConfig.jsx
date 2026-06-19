@@ -38,7 +38,7 @@ export default function BtcAdminConfig() {
     const t = parseFloat(tasaUsdVes);
     if (isNaN(m) || m <= 0 || m > 1)        return toast.error('Margen debe ser un número entre 0 (exclusivo) y 1 (sin margen)');
     if (isNaN(c) || c < 1 || c > 2)         return toast.error('Comisión debe ser un número entre 1 (sin comisión) y 2');
-    if (isNaN(t) || t <= 0)                  return toast.error('Tasa USD-VES debe ser un número positivo');
+    if (isNaN(t) || t <= 0)                  return toast.error('Tasa USDI-VES debe ser un número positivo');
     setSaving(true);
     try {
       await api.patch('/admin/btc/config', { margen: m, comision: c, tasa_usd_ves: t });
@@ -94,7 +94,7 @@ export default function BtcAdminConfig() {
             <div>
               <p style={{ fontSize: '12px', color: '#92400E', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Precio Bitcoin actual</p>
               <p style={{ fontSize: '28px', color: '#7C2D12', margin: '2px 0 0 0', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-                ${btcPrice > 0 ? fmt(btcPrice, 2) : '—'} USD
+                ${btcPrice > 0 ? fmt(btcPrice, 2) : '—'} USDI
               </p>
               <p style={{ fontSize: '11px', color: '#92400E', margin: '2px 0 0 0' }}>
                 Fuente: {data?.btc_price_source || 'blockchain.info'}{lastFetch ? ` · Actualizado ${formatRelativeTime(lastFetch)}` : ''}
@@ -131,7 +131,7 @@ export default function BtcAdminConfig() {
           />
           <Field
             label="Comisión (cliente)"
-            help={`Multiplica el USD que el cliente paga. ${c === 1 ? 'Sin comisión.' : `${((c - 1) * 100).toFixed(2)}% de comisión al cliente.`}`}
+            help={`Multiplica el USDI que el cliente paga. ${c === 1 ? 'Sin comisión.' : `${((c - 1) * 100).toFixed(2)}% de comisión al cliente.`}`}
             value={comision}
             onChange={(v) => setComision(v)}
             min={1.0} max={2.0} step={0.001}
@@ -140,8 +140,8 @@ export default function BtcAdminConfig() {
             dataTestId="btc-config-comision"
           />
           <Field
-            label="Tasa USD → VES"
-            help="Tasa de cambio usada para convertir USD a Bolívares al beneficiario."
+            label="Tasa USDI → VES"
+            help="Tasa de cambio usada para convertir USDI a Bolívares al beneficiario."
             value={tasaUsdVes}
             onChange={(v) => setTasaUsdVes(v)}
             min={0} step={0.01}
@@ -177,14 +177,14 @@ export default function BtcAdminConfig() {
           <Info size={16} /> Vista previa con los valores actuales
         </h3>
         <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 14px 0' }}>
-          Ejemplo: un cliente paga <strong>1 USD</strong> → recibe lo siguiente con tus parámetros:
+          Ejemplo: un cliente paga <strong>1 USDI</strong> → recibe lo siguiente con tus parámetros:
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
           <Stat
             color="#F7931A"
             label="Cliente paga"
             value="$ 1.00"
-            sub="USD nominal"
+            sub="USDI nominal"
           />
           <Stat
             color="#F7931A"
@@ -196,7 +196,7 @@ export default function BtcAdminConfig() {
             color="#16a34a"
             label="Beneficiario recibe"
             value={`${fmt(previewVes)} Bs`}
-            sub={`Tasa ${fmt(t || 0)} Bs/USD`}
+            sub={`Tasa ${fmt(t || 0)} Bs/USDI`}
           />
           <Stat
             color="#3b82f6"
