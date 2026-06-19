@@ -404,7 +404,7 @@ export default function BTCLightning() {
             </div>
             <div style={S.card}>
               <p style={{ fontWeight: '700', color: '#111827', marginBottom: '16px', fontSize: '15px' }}>Cuanto quieres enviar?</p>
-              <label style={S.label}>Monto (USD)</label>
+              <label style={S.label}>Monto (USDI)</label>
               <input type='number' style={{ ...S.input, fontSize: '28px', fontWeight: '700', textAlign: 'center', marginBottom: '16px', padding: '14px' }}
                 placeholder='0' min='1' value={usd} onChange={e => setUsd(e.target.value)} />
               <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '14px', border: '1px solid #e5e7eb' }}>
@@ -470,7 +470,7 @@ export default function BTCLightning() {
                 { label: 'Beneficiario', value: selectedBeneficiary?.full_name },
                 { label: 'Banco', value: selectedBeneficiary?.bank },
                 { label: selectedBeneficiary?.payment_type==='pago_movil'?'Telefono':'Cuenta', value: selectedBeneficiary?.payment_type==='pago_movil'?selectedBeneficiary?.phone:selectedBeneficiary?.account_number },
-                { label: 'Monto enviado', value: '$'+usdNum+' USD' },
+                { label: 'Monto enviado', value: '$'+usdNum+' USDI' },
                 { label: 'VES a recibir', value: vesRecibe+' VES', hl: true },
                 { label: 'Metodo', value: selectedBeneficiary?.payment_type==='pago_movil'?'Pago Movil':'Transferencia Bancaria' },
               ].map(row => (
@@ -563,7 +563,7 @@ export default function BTCLightning() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                       <div>
                         <p style={{ fontWeight: '700', color: '#111827', fontSize: '15px', margin: '0 0 2px' }}>{Number(r.ves_recibe || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
-                        <p style={{ color: '#6b7280', fontSize: '12px', margin: 0 }}>{r.usd_cliente ? Number(r.usd_cliente).toFixed(2) + ' USD' : ''} · {r.sats ? Number(r.sats).toLocaleString() + ' sats' : ''}</p>
+                        <p style={{ color: '#6b7280', fontSize: '12px', margin: 0 }}>{r.usd_cliente ? Number(r.usd_cliente).toFixed(2) + ' USDI' : ''} · {r.sats ? Number(r.sats).toLocaleString() + ' sats' : ''}</p>
                       </div>
                       <span style={{ background: cfg.bg, color: cfg.color, padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>{cfg.label}</span>
                     </div>
