@@ -316,7 +316,7 @@ function InternationalTips() {
   const tips = [
     {
       title: 'Wise',
-      desc: 'Enviá BRL desde tu cuenta en USD/EUR. Llegan como PIX en minutos.',
+      desc: 'Enviá BRL desde tu cuenta en USDI/EUR. Llegan como PIX en minutos.',
       url: 'https://wise.com/send-money/send-money-to-brazil',
     },
     {
