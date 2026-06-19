@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Fingerprint } from 'lucide-react';
@@ -16,12 +16,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [huellaLoading, setHuellaLoading] = useState(false);
   const [soportaHuella] = useState(webauthnSupported());
+  const emailRef = useRef(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const [twoFactorState, setTwoFactorState] = useState(null); // { mode, pendingToken, email }
 
   const handleHuella = async () => {
     if (!email) {
-      toast.error('Escribe tu correo y luego usa la huella');
+      toast.error('Escribe tu correo para entrar con huella');
+      emailRef.current?.focus();
+      emailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     setHuellaLoading(true);
@@ -172,6 +175,18 @@ export default function Login() {
           Continuar con Google
         </button>
 
+        {soportaHuella && (
+          <button
+            type="button"
+            onClick={handleHuella}
+            disabled={huellaLoading}
+            className="w-full flex items-center justify-center gap-2 text-base font-bold text-[#0891B2] bg-white hover:bg-cyan-50 transition-all mb-6 disabled:opacity-50"
+            style={{ ...buttonStyle, border: '1px solid #0891B2' }}
+          >
+            <Fingerprint size={18} /> {huellaLoading ? 'Verificando huella…' : 'Entrar con huella'}
+          </button>
+        )}
+
         {/* Divider */}
         <div className="flex items-center gap-4 mb-6">
           <div className="flex-1 h-px bg-gray-200"></div>
@@ -185,6 +200,7 @@ export default function Login() {
             <label className="block text-gray-700 text-sm font-medium mb-2">Correo electrónico</label>
             <input
               type="email"
+              ref={emailRef}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               data-testid="email-input"
@@ -239,17 +255,6 @@ export default function Login() {
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </button>
         </form>
-        {soportaHuella && (
-          <button
-            type="button"
-            onClick={handleHuella}
-            disabled={huellaLoading}
-            className="w-full mt-4 border border-[#0891B2] text-[#0891B2] font-bold text-base transition-all disabled:opacity-50"
-            style={{ ...buttonStyle, backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-          >
-            <Fingerprint size={18} /> {huellaLoading ? 'Verificando huella…' : 'Entrar con huella'}
-          </button>
-        )}
         {/* Register Link */}
         <p className="text-center text-gray-500 text-base mt-6">
           ¿No tienes cuenta?{' '}
