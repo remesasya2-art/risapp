@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import pushService from '../utils/pushService';
 import PinSettings from '../components/PinSettings';
+import WebAuthnSettings from '../components/WebAuthnSettings';
 
 // Función para enmascarar el CPF (solo muestra últimos 3 dígitos)
 const maskCPF = (cpf) => {
@@ -305,6 +306,9 @@ export default function Profile() {
 
         {/* PIN de seguridad */}
         <PinSettings user={user} />
+
+        {/* Ingreso con huella */}
+        <WebAuthnSettings />
 
         {/* Partner Dashboard Button (only for socios) */}
         {user?.role === 'socio' && (
