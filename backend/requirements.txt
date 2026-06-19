@@ -159,3 +159,4 @@ websockets==15.0.1
 wrapt==2.2.0
 yarl==1.22.0
 zipp==3.23.0
+webauthn==2.5.2
