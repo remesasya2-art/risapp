@@ -205,7 +205,7 @@ export default function BtcAdminHistorial() {
                 <Th>Fecha</Th>
                 <Th>Usuario</Th>
                 <Th align="right">BTC pagado</Th>
-                <Th align="right">Tasa BTC-USD</Th>
+                <Th align="right">Tasa BTC-USDI</Th>
                 <Th align="right">Monto VES</Th>
                 <Th>Beneficiario</Th>
                 <Th>Pago BTC</Th>
@@ -248,7 +248,7 @@ export default function BtcAdminHistorial() {
                       {fmt(tx.ves_recibe)} Bs
                     </div>
                     <div style={{ color: '#9ca3af', fontSize: '11px' }}>
-                      USD ${fmt(tx.usd_cliente)}
+                      USDI ${fmt(tx.usd_cliente)}
                     </div>
                   </Td>
                   <Td>
