@@ -1721,7 +1721,7 @@ export default function AdminPanel() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <p style={{ fontWeight: '800', fontSize: '18px', color: '#111827', margin: 0 }}>{Number(orden.ves_recibe || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
-                      <p style={{ color: '#6b7280', fontSize: '13px', margin: '2px 0 0' }}>{Number(orden.usd_cliente || 0).toFixed(2)} USD · {Number(orden.sats || 0).toLocaleString()} sats</p>
+                      <p style={{ color: '#6b7280', fontSize: '13px', margin: '2px 0 0' }}>{Number(orden.usd_cliente || 0).toFixed(2)} USDI · {Number(orden.sats || 0).toLocaleString()} sats</p>
                     </div>
                   </div>
 
