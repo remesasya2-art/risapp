@@ -1,20 +1,47 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Fingerprint } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PasswordRecovery from './PasswordRecovery';
 import TwoFactorFlow from '../components/auth/TwoFactorFlow';
+import { loginConHuella, webauthnSupported } from '../utils/webauthn';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, completeTwoFactorLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [huellaLoading, setHuellaLoading] = useState(false);
+  const [soportaHuella] = useState(webauthnSupported());
   const [showRecovery, setShowRecovery] = useState(false);
   const [twoFactorState, setTwoFactorState] = useState(null); // { mode, pendingToken, email }
+
+  const handleHuella = async () => {
+    if (!email) {
+      toast.error('Escribe tu correo y luego usa la huella');
+      return;
+    }
+    setHuellaLoading(true);
+    try {
+      const data = await loginConHuella(email);
+      completeTwoFactorLogin(data.session_token, data.user);
+      if (data.must_change_password) {
+        toast.success('Por favor establece una nueva contraseña');
+        navigate('/force-change-password');
+      } else {
+        toast.success('¡Bienvenido!');
+        navigate('/');
+      }
+    } catch (error) {
+      const detail = error?.response?.data?.detail;
+      toast.error(detail || 'No se pudo entrar con huella. Usa tu contraseña.');
+    } finally {
+      setHuellaLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -212,7 +239,17 @@ export default function Login() {
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </button>
         </form>
-
+        {soportaHuella && (
+          <button
+            type="button"
+            onClick={handleHuella}
+            disabled={huellaLoading}
+            className="w-full mt-4 border border-[#0891B2] text-[#0891B2] font-bold text-base transition-all disabled:opacity-50"
+            style={{ ...buttonStyle, backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            <Fingerprint size={18} /> {huellaLoading ? 'Verificando huella…' : 'Entrar con huella'}
+          </button>
+        )}
         {/* Register Link */}
         <p className="text-center text-gray-500 text-base mt-6">
           ¿No tienes cuenta?{' '}
