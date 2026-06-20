@@ -195,7 +195,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
-    # Validar beneficiario ANTES de tocar el saldo
+    # 1) Validar beneficiario ANTES de tocar el saldo (evita débito sin destino)
     beneficiary = await db.beneficiaries.find_one({
         "beneficiary_id": request.beneficiary_id,
         "user_id": current_user.user_id
@@ -203,22 +203,15 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     if not beneficiary:
         raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
 
-    # Descuento atómico de saldo (solo después de validar todo lo demás)
-    user = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
-        {"$inc": {"balance_ris": -request.amount}},
-        return_document=True
-    )
-    if user is None:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente")
-
-    # Get exchange rate
+    # 2) Leer y validar la tasa ANTES de debitar (fail-closed: sin tasa válida no se procesa)
     rate = await db.rates.find_one(sort=[("updated_at", -1)])
-    ris_to_ves = rate.get("ris_to_ves", 92.0) if rate else 92.0
+    ris_to_ves = (rate or {}).get("ris_to_ves")
+    if not ris_to_ves or ris_to_ves <= 0:
+        raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
 
     amount_ves = request.amount * ris_to_ves
 
-    # Create transaction
+    # Preparar datos de la transacción (antes del débito; no dependen del saldo)
     tx_id = f"tx_{uuid.uuid4().hex[:12]}"
     display_id = await get_next_withdrawal_id()
 
@@ -248,7 +241,26 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         "created_at": datetime.now(timezone.utc),
         "whatsapp_active": False
     }
-    await db.transactions.insert_one(transaction)
+
+    # 3) Débito atómico (impide sobregiro y condiciones de carrera)
+    user = await db.users.find_one_and_update(
+        {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
+        {"$inc": {"balance_ris": -request.amount}},
+        return_document=True
+    )
+    if user is None:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente")
+
+    # 4) Crear el registro; si falla, devolver el saldo (compensación) para no perder RIS
+    try:
+        await db.transactions.insert_one(transaction)
+    except Exception as e:
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$inc": {"balance_ris": request.amount}}
+        )
+        logger.error(f"Fallo al registrar retiro {tx_id}, saldo devuelto: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo registrar el retiro. Tu saldo no fue afectado.")
 
     # Notify user
     await create_notification(
