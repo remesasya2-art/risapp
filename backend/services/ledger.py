@@ -155,3 +155,67 @@ async def sum_ris_balance(user_id: str, account: str = "balance_ris") -> float:
     except Exception as e:
         logger.warning(f"sum_ris_balance fallo: {e}")
         return 0.0
+
+async def create_opening_entries():
+    """Crea, UNA sola vez por usuario y cuenta, una línea 'saldo_apertura' que
+    iguala la suma del ledger al saldo actual del usuario.
+
+    Esto resuelve la migración: como el ledger empezó a registrar después de que
+    los usuarios ya tenían saldo, la apertura representa ese saldo inicial. Tras
+    ejecutarla, sum(ledger) == balance del usuario y la reconciliación cuadra.
+
+    Es idempotente: si un usuario ya tiene apertura en esa cuenta, no la repite.
+    El valor de apertura = saldo_actual - suma_ledger_existente, de modo que
+    también respeta los movimientos ya registrados desde que el libro arrancó.
+    """
+    creados = 0
+    revisados = 0
+    try:
+        await _ensure_indexes()
+        async for u in db.users.find(
+            {},
+            {"user_id": 1, "balance_ris": 1, "balance_ris_terceros": 1,
+             "email": 1, "name": 1, "full_name": 1, "role": 1},
+        ):
+            uid = u.get("user_id")
+            if not uid:
+                continue
+            revisados += 1
+            snapshot = {
+                "email": u.get("email"),
+                "name": u.get("full_name") or u.get("name"),
+                "role": u.get("role", "user"),
+            }
+            for account, field in (("balance_ris", "balance_ris"),
+                                   ("balance_ris_terceros", "balance_ris_terceros")):
+                # ¿ya tiene apertura en esta cuenta? (idempotencia)
+                existing = await db[LEDGER_COLLECTION].find_one(
+                    {"user_id": uid, "movement_type": "saldo_apertura", "account": account}
+                )
+                if existing:
+                    continue
+                current = float(u.get(field) or 0)
+                led = await sum_ris_balance(uid, account)
+                opening = round(current - led, 8)
+                if abs(opening) < 1e-9:
+                    continue  # nada que abrir
+                await record_ris_entry(
+                    user_id=uid,
+                    movement_type="saldo_apertura",
+                    amount=abs(opening),
+                    direction="credit" if opening > 0 else "debit",
+                    account=account,
+                    balance_before=led,
+                    balance_after=current,
+                    reference_kind="manual",
+                    reference_id="opening_migration",
+                    actor_type="system",
+                    actor_id="ledger_opening",
+                    user_snapshot=snapshot,
+                    notes="Saldo de apertura (migración al libro mayor)",
+                )
+                creados += 1
+        return {"revisados": revisados, "aperturas_creadas": creados}
+    except Exception as e:
+        logger.error(f"create_opening_entries fallo: {e}")
+        return {"revisados": revisados, "aperturas_creadas": creados, "error": str(e)}
