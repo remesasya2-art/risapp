@@ -270,25 +270,16 @@ async def get_pix_status(payment_id: str, current_user: User = Depends(require_a
 
 async def process_pix_confirmation(payment_id: str, user_id: str):
     """Process PIX payment confirmation - credit user's balance"""
-    payment = await db.gestor_pix_payments.find_one({
-        "payment_id": payment_id,
-        "status": "pending"
-    })
-    
+    # Reclamo atómico: solo UNA ejecución concurrente obtiene el pago pendiente.
+    # Si el webhook de Mercado Pago llega duplicado, las demás reciben None y no
+    # vuelven a acreditar (evita doble crédito).
+    payment = await db.gestor_pix_payments.find_one_and_update(
+        {"payment_id": payment_id, "status": "pending"},
+        {"$set": {"status": "paid", "paid_at": datetime.now(timezone.utc)}}
+    )
     if not payment:
         logger.warning(f"Payment {payment_id} not found or already processed")
         return False
-    
-    # Mark as paid
-    await db.gestor_pix_payments.update_one(
-        {"payment_id": payment_id},
-        {
-            "$set": {
-                "status": "paid",
-                "paid_at": datetime.now(timezone.utc)
-            }
-        }
-    )
     
     # Get user to check role
     user = await db.users.find_one({"user_id": user_id})
