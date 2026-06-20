@@ -296,10 +296,31 @@ async def process_card_payment(
             })
 
             # 1. Credit RIS to user
-            await db.users.update_one(
+            _card_user = await db.users.find_one_and_update(
                 {"user_id": current_user.user_id},
                 {"$inc": {"balance_ris": body.amount_ris}},
+                return_document=True
             )
+            # Libro mayor RIS (no interrumpe la acreditación)
+            try:
+                from services.ledger import record_ris_entry
+                _card_after = (_card_user or {}).get("balance_ris")
+                await record_ris_entry(
+                    user_id=current_user.user_id,
+                    movement_type="pago_tarjeta",
+                    amount=body.amount_ris,
+                    direction="credit",
+                    account="balance_ris",
+                    balance_before=(_card_after - body.amount_ris) if _card_after is not None else None,
+                    balance_after=_card_after,
+                    reference_kind="card_payment",
+                    reference_id=payment_id,
+                    actor_type="user",
+                    actor_id=current_user.user_id,
+                    notes="Recarga con tarjeta",
+                )
+            except Exception as e:
+                logger.warning(f"Ledger pago_tarjeta no registrado: {e}")
 
             # 2. Notification
             await create_notification(
