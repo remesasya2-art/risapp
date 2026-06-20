@@ -688,10 +688,36 @@ async def process_withdrawal(
         
     elif action == "reject":
         # Refund balance
-        await db.users.update_one(
+        _refund_amount = transaction.get("amount_input", 0)
+        _refunded_user = await db.users.find_one_and_update(
             {"user_id": transaction["user_id"]},
-            {"$inc": {"balance_ris": transaction.get("amount_input", 0)}}
+            {"$inc": {"balance_ris": _refund_amount}},
+            return_document=True
         )
+        # Libro mayor RIS: crédito de devolución (no interrumpe el rechazo)
+        try:
+            from services.ledger import record_ris_entry
+            _bal_after = (_refunded_user or {}).get("balance_ris")
+            await record_ris_entry(
+                user_id=transaction["user_id"],
+                movement_type="refund_envio",
+                amount=_refund_amount,
+                direction="credit",
+                account="balance_ris",
+                balance_before=(_bal_after - _refund_amount) if _bal_after is not None else None,
+                balance_after=_bal_after,
+                reference_kind="transaction",
+                reference_id=transaction_id,
+                transaction_id=transaction_id,
+                display_id=transaction.get("display_id"),
+                actor_type="admin",
+                actor_id=admin.user_id,
+                counterparty=transaction.get("beneficiary_data"),
+                metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
+                notes="Devolución por retiro rechazado",
+            )
+        except Exception as e:
+            logger.warning(f"Ledger refund_envio no registrado: {e}")
         
         await db.transactions.update_one(
             {"transaction_id": transaction_id},
