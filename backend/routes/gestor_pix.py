@@ -293,19 +293,55 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
     
     if user_role == "socio_gestor" and is_gestor_recharge:
         # Gestor receiving third-party payment
-        await db.users.update_one(
+        updated = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris_terceros": amount_ris}}
+            {"$inc": {"balance_ris_terceros": amount_ris}},
+            return_document=True
         )
         balance_type = "saldo de terceros"
+        ledger_account = "balance_ris_terceros"
+        balance_after = (updated or {}).get("balance_ris_terceros")
     else:
         # Regular user or gestor recharging their own account -> main balance
-        await db.users.update_one(
+        updated = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris}}
+            {"$inc": {"balance_ris": amount_ris}},
+            return_document=True
         )
         balance_type = "saldo principal"
-    
+        ledger_account = "balance_ris"
+        balance_after = (updated or {}).get("balance_ris")
+
+    balance_before = (balance_after - amount_ris) if balance_after is not None else None
+
+    # Libro mayor RIS (append-only). Nunca interrumpe la acreditación.
+    try:
+        from services.ledger import record_ris_entry
+        await record_ris_entry(
+            user_id=user_id,
+            movement_type="recarga_pix",
+            amount=amount_ris,
+            direction="credit",
+            account=ledger_account,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            reference_kind="pix_payment",
+            reference_id=payment_id,
+            actor_type="webhook",
+            actor_id="mercadopago",
+            user_snapshot=({"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user_role} if user else None),
+            counterparty={"client_name": payment.get("client_name")},
+            metadata={
+                "amount_brl": payment.get("amount_brl"),
+                "amount_ves": payment.get("amount_ves"),
+                "mp_payment_id": payment.get("mp_payment_id"),
+                "is_gestor_terceros": is_gestor_recharge,
+            },
+            notes="Recarga por PIX (Mercado Pago)",
+        )
+    except Exception as e:
+        logger.warning(f"Ledger recarga_pix no registrado: {e}")
+
     # Notify user (in-app)
     await create_notification(
         user_id=user_id,
