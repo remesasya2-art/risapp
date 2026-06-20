@@ -179,7 +179,16 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
         "created_at": datetime.now(timezone.utc),
         "whatsapp_active": False,
     }
-    await db.transactions.insert_one(transaction)
+    try:
+        await db.transactions.insert_one(transaction)
+    except Exception as e:
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$inc": {"balance_ris": request.amount}}
+        )
+        logger.error(f"Fallo al registrar envío a Brasil {tx_id}, saldo devuelto: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
+
     await create_notification(
         user_id=current_user.user_id,
         title="Envío a Brasil solicitado",
