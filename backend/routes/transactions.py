@@ -189,6 +189,36 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
         logger.error(f"Fallo al registrar envío a Brasil {tx_id}, saldo devuelto: {e}")
         raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
 
+    # Libro mayor RIS (append-only). Nunca interrumpe el envío.
+    try:
+        from services.ledger import record_ris_entry
+        balance_after_ris = user.get("balance_ris")
+        await record_ris_entry(
+            user_id=current_user.user_id,
+            movement_type="envio_reais",
+            amount=request.amount,
+            direction="debit",
+            account="balance_ris",
+            balance_before=(balance_after_ris + request.amount) if balance_after_ris is not None else None,
+            balance_after=balance_after_ris,
+            reference_kind="transaction",
+            reference_id=tx_id,
+            transaction_id=tx_id,
+            display_id=display_id,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            actor_email=user.get("email"),
+            rate=1.0,
+            rate_kind="ris_to_brl",
+            amount_output=amount_brl,
+            currency_output="BRL",
+            counterparty=beneficiary_data,
+            user_snapshot={"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user.get("role", "user")},
+            notes="Envío RIS → Reais (PIX Brasil)",
+        )
+    except Exception as e:
+        logger.warning(f"Ledger envio_reais no registrado: {e}")
+
     await create_notification(
         user_id=current_user.user_id,
         title="Envío a Brasil solicitado",
@@ -270,6 +300,36 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         )
         logger.error(f"Fallo al registrar retiro {tx_id}, saldo devuelto: {e}")
         raise HTTPException(status_code=500, detail="No se pudo registrar el retiro. Tu saldo no fue afectado.")
+
+    # Libro mayor RIS (append-only). Nunca interrumpe el envío.
+    try:
+        from services.ledger import record_ris_entry
+        balance_after_ris = user.get("balance_ris")
+        await record_ris_entry(
+            user_id=current_user.user_id,
+            movement_type="envio_ves",
+            amount=request.amount,
+            direction="debit",
+            account="balance_ris",
+            balance_before=(balance_after_ris + request.amount) if balance_after_ris is not None else None,
+            balance_after=balance_after_ris,
+            reference_kind="transaction",
+            reference_id=tx_id,
+            transaction_id=tx_id,
+            display_id=display_id,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            actor_email=user.get("email"),
+            rate=ris_to_ves,
+            rate_kind="ris_to_ves",
+            amount_output=amount_ves,
+            currency_output="VES",
+            counterparty=beneficiary_data,
+            user_snapshot={"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user.get("role", "user")},
+            notes="Envío RIS → VES",
+        )
+    except Exception as e:
+        logger.warning(f"Ledger envio_ves no registrado: {e}")
 
     # Notify user
     await create_notification(
