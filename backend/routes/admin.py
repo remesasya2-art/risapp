@@ -1224,10 +1224,37 @@ async def process_ves_recharge(
         )
         
         # Add balance to user
-        await db.users.update_one(
+        _rch_user = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris}}
+            {"$inc": {"balance_ris": amount_ris}},
+            return_document=True
         )
+        # Libro mayor RIS (no interrumpe la aprobación)
+        try:
+            from services.ledger import record_ris_entry
+            _rch_after = (_rch_user or {}).get("balance_ris")
+            await record_ris_entry(
+                user_id=user_id,
+                movement_type="recarga_ves",
+                amount=amount_ris,
+                direction="credit",
+                account="balance_ris",
+                balance_before=(_rch_after - amount_ris) if _rch_after is not None else None,
+                balance_after=_rch_after,
+                reference_kind="transaction",
+                reference_id=transaction_id,
+                transaction_id=transaction_id,
+                actor_type="admin",
+                actor_id=admin.user_id,
+                rate=(amount_ves / amount_ris) if amount_ris else None,
+                rate_kind="ves_to_ris",
+                amount_output=amount_ves,
+                currency_output="VES",
+                metadata={"destination_bank_id": bank_id},
+                notes="Recarga VES → RIS aprobada",
+            )
+        except Exception as e:
+            logger.warning(f"Ledger recarga_ves no registrado: {e}")
         
         # Notify user
         await create_notification(
