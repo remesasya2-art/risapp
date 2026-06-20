@@ -4,12 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import ReportesProcesados from '../components/admin/ReportesProcesados';
+import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
@@ -49,6 +50,7 @@ const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
   { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
   { key: 'reportes', label: 'Reportes', icon: Download },
+  { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
   { key: 'partners', label: 'Socios', icon: Briefcase },
@@ -587,6 +589,9 @@ export default function AdminPanel() {
 
         {activeTab === 'reportes' && (
           <ReportesProcesados />
+        )}
+        {activeTab === 'ledger' && (
+          <ReconciliacionLedger />
         )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
