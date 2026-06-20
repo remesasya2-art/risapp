@@ -46,10 +46,32 @@ async def process_referral_bonus(user_id: str, recharge_amount: float):
     
     if total_bonus > 0:
         # Add bonus to partner balance
-        await db.users.update_one(
+        _partner_after_doc = await db.users.find_one_and_update(
             {"user_id": partner["user_id"]},
-            {"$inc": {"balance_ris": total_bonus}}
+            {"$inc": {"balance_ris": total_bonus}},
+            return_document=True
         )
+        # Libro mayor RIS (no interrumpe el abono del bono)
+        try:
+            from services.ledger import record_ris_entry
+            _pb_after = (_partner_after_doc or {}).get("balance_ris")
+            await record_ris_entry(
+                user_id=partner["user_id"],
+                movement_type="bono_referido",
+                amount=total_bonus,
+                direction="credit",
+                account="balance_ris",
+                balance_before=(_pb_after - total_bonus) if _pb_after is not None else None,
+                balance_after=_pb_after,
+                reference_kind="referral",
+                reference_id=user_id,
+                actor_type="system",
+                actor_id="referrals",
+                metadata={"referred_user_id": user_id, "first_recharge": first_recharge, "recharge_amount": recharge_amount},
+                notes="Bono/comisión de referido",
+            )
+        except Exception as e:
+            logger.warning(f"Ledger bono_referido no registrado: {e}")
         
         # Record earning
         earning = {
