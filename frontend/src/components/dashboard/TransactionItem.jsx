@@ -72,8 +72,9 @@ export default function TransactionItem({ tx, rates, onViewVoucher }) {
 
   const beneficiary = tx.beneficiary_data || {};
   const account = beneficiary.account_number || beneficiary.phone || '';
-  const showVoucher = isWithdrawal && txStatus === 'completed'
-    && ((tx.proof_images && tx.proof_images.length > 0) || tx.proof_image);
+// El ojito aparece en CUALQUIER transacción con un comprobante cargado
+  // (el admin lo sube en los envíos; el usuario en las recargas), sin importar el tipo ni el estado.
+  const showVoucher = (tx.proof_images && tx.proof_images.length > 0) || tx.proof_image || tx.comprobante_pago;
 
   // Monto principal y unidad según el flujo (busca el primer campo con valor)
   let mainAmount, mainUnit;
