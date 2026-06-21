@@ -934,10 +934,20 @@ export default function AdminPanel() {
                       <div style={{ padding: '12px', backgroundColor: '#dcfce7', borderRadius: '10px' }}>
                         <p style={{ fontSize: '10px', color: '#16a34a', margin: 0, fontWeight: '700', letterSpacing: '0.5px' }}>A ACREDITAR</p>
                         <p style={{ fontSize: '18px', fontWeight: '700', color: '#166534', margin: '2px 0 0 0' }}>{fmt(parseFloat(r.amount_ris || r.amount_output || 0))} RI$</p>
-                        <p style={{ fontSize: '11px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa: 1 RIS = {fmt(r.rate_used || 140)} VES</p>
+                        <p style={{ fontSize: '11px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa: 1 RIS = {fmt(r.rate || r.rate_used || 140)} VES</p>
                       </div>
                     </div>
 
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#1e40af' }}>
+                      <CheckCircle style={{ width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+                      <span>Verifica el comprobante: debe mostrar una transferencia de <strong>{fmt(parseFloat(r.amount_ves || r.amount_input || 0))} VES</strong> a <strong>{destBankLabel}</strong>. Si coincide, aprueba para acreditar <strong>{fmt(parseFloat(r.amount_ris || r.amount_output || 0))} RI$</strong>.</span>
+                    </div>
+                    {!r.proof_image && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#b91c1c' }}>
+                        <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                        <span>Esta solicitud no tiene comprobante adjunto. Confírmalo con el usuario antes de aprobar.</span>
+                      </div>
+                    )}
                     {!hasBankResolved && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', backgroundColor: '#fef3c7', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#92400e' }}>
                         <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
