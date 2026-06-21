@@ -12,6 +12,14 @@ const STATUS_CONFIG = {
   pending_manual_approval:  { label: 'En revisión', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
   rejected:                 { label: 'Rechazado', bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
   failed:                   { label: 'Fallida',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  // Estados en español (transacciones BTC y otras que guardan 'estado' en español)
+  procesando:               { label: 'Procesando', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
+  pendiente:                { label: 'Pendiente',  bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
+  completado:               { label: 'Enviado',    bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
+  enviado:                  { label: 'Enviado',    bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
+  cancelado:                { label: 'Cancelado',  bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  expirado:                 { label: 'Expirado',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  fallido:                  { label: 'Fallida',    bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
 };
 
 export function StatusBadge({ status }) {
