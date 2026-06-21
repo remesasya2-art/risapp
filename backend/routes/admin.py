@@ -1170,8 +1170,8 @@ async def process_ves_recharge(
         return {"message": "Esta recarga ya fue procesada", "already_processed": True}
     
     user_id = recharge.get("user_id")
-    amount_ris = recharge.get("amount_ris", 0)
-    amount_ves = recharge.get("amount_ves", 0)
+    amount_ris = recharge.get("amount_ris") or recharge.get("amount_output", 0)
+    amount_ves = recharge.get("amount_ves") or recharge.get("amount_input", 0)
     
     # Resolve destination bank from the transaction itself.
     # Backwards compatibility: older transactions may only have `destination_bank` (legacy code).
