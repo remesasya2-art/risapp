@@ -11,6 +11,7 @@ import api from '../utils/api';
 import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import ReportesProcesados from '../components/admin/ReportesProcesados';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
+import LibroMayor from '../components/admin/LibroMayor';
 import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
@@ -591,7 +592,7 @@ export default function AdminPanel() {
           <ReportesProcesados />
         )}
         {activeTab === 'ledger' && (
-          <ReconciliacionLedger />
+          <LibroMayor />
         )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
