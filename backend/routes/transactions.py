@@ -382,12 +382,29 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
     """Create a VES recharge request"""
     amount_ves = float(request.get("amount_ves", 0))
-    amount_ris = float(request.get("amount_ris", 0))
     payment_method = request.get("payment_method", "transferencia")
-    amount_input = float(request.get("amount_input", amount_ves))
 
-    if amount_ves <= 0 or amount_ris <= 0:
-        raise HTTPException(status_code=400, detail="Montos invalidos")
+    if amount_ves <= 0:
+        raise HTTPException(status_code=400, detail="Monto inválido")
+
+    # Tasa autoritativa del servidor (fail-closed): NO se confía en el monto RIS
+    # que envíe el cliente; el servidor recalcula cuánto RIS corresponde.
+    rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
+    ves_to_ris = (rate_doc or {}).get("ves_to_ris_rate")
+    if not ves_to_ris or ves_to_ris <= 0:
+        raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
+
+    # Fórmula oficial: ves_to_ris_rate = VES por 1 RIS  ->  RIS = VES / tasa
+    amount_ris = round(amount_ves / ves_to_ris, 2)
+    if amount_ris <= 0:
+        raise HTTPException(status_code=400, detail="El monto en VES es demasiado bajo para la tasa actual.")
+
+    amount_input = amount_ves
+
+    # Aviso si el cliente había calculado un RIS distinto (no bloquea: el servidor manda)
+    _client_ris = float(request.get("amount_ris", 0) or 0)
+    if _client_ris and abs(_client_ris - amount_ris) > 0.01:
+        logger.warning(f"recharge_ves: RIS del cliente ({_client_ris}) != servidor ({amount_ris}) user={current_user.user_id}")
 
     user = await db.users.find_one({"user_id": current_user.user_id})
 
@@ -399,6 +416,10 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
         "type": "recharge_ves",
         "amount_input": amount_input,
         "amount_output": amount_ris,
+        "amount_ves": amount_ves,
+        "amount_ris": amount_ris,
+        "rate": ves_to_ris,
+        "rate_kind": "ves_to_ris",
         "currency_input": "VES",
         "currency_output": "RIS",
         "payment_method": payment_method,
