@@ -104,7 +104,14 @@ export default function History() {
   };
 
   const openVoucher = (tx) => {
-    setSelectedVoucher(tx);
+const normalized = { ...tx };
+    // Las remesas BTC guardan el comprobante en 'comprobante_pago'; el modal
+    // muestra proof_image/proof_images, así que lo normalizamos aquí.
+    const sinProof = !normalized.proof_image && (!normalized.proof_images || normalized.proof_images.length === 0);
+    if (sinProof && tx.comprobante_pago) {
+      normalized.proof_image = tx.comprobante_pago;
+    }
+    setSelectedVoucher(normalized);
     setShowVoucherModal(true);
   };
 
