@@ -47,6 +47,16 @@ const maskCPF = (cpf) => {
   return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
 };
 
+const CRM_KEYS = ['partners', 'users', 'kyc', 'chat', 'support'];
+
+const CRM_SUBTABS = [
+  { key: 'users', label: 'Usuarios', icon: Users },
+  { key: 'kyc', label: 'KYC', icon: Shield },
+  { key: 'partners', label: 'Socios', icon: Briefcase },
+  { key: 'chat', label: 'Chat', icon: MessageSquare },
+  { key: 'support', label: 'Soporte', icon: MessageSquare },
+];
+
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
   { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
@@ -54,11 +64,7 @@ const TABS = [
   { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
-  { key: 'partners', label: 'Socios', icon: Briefcase },
-  { key: 'users', label: 'Usuarios', icon: Users },
-  { key: 'kyc', label: 'KYC', icon: Shield },
-  { key: 'chat', label: 'Chat', icon: MessageSquare },
-  { key: 'support', label: 'Soporte', icon: MessageSquare },
+  { key: 'crm', label: 'CRM', icon: UserCog },
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
   { key: 'btc', label: 'BTC Lightning', icon: Zap },
 ];
@@ -596,9 +602,9 @@ export default function AdminPanel() {
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
             {TABS.map((tab) => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? 'users' : tab.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
-                  backgroundColor: activeTab === tab.key ? '#6366f1' : 'transparent', color: activeTab === tab.key ? '#ffffff' : '#6b7280' }}
+                  backgroundColor: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#6366f1' : 'transparent', color: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#ffffff' : '#6b7280' }}
                 data-testid={`tab-${tab.key}`}
               >
                 <tab.icon style={{ width: '18px', height: '18px' }} /> {tab.label}
@@ -609,6 +615,17 @@ export default function AdminPanel() {
       </div>
 
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
+        {CRM_KEYS.includes(activeTab) && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #eef0f4', paddingBottom: '14px' }}>
+            {CRM_SUBTABS.map((st) => (
+              <button key={st.key} onClick={() => setActiveTab(st.key)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', border: activeTab === st.key ? '1px solid #6366f1' : '1px solid #e5e7eb', backgroundColor: activeTab === st.key ? '#eef2ff' : '#fff', color: activeTab === st.key ? '#4F46E5' : '#6b7280', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
+              >
+                <st.icon style={{ width: '16px', height: '16px' }} /> {st.label}
+              </button>
+            ))}
+          </div>
+        )}
         {/* Overview Tab */}
         {activeTab === 'ordenes' && (
           <OrdenesPorProcesar />
