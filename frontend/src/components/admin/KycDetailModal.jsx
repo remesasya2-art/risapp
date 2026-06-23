@@ -89,7 +89,7 @@ function DocTile({ label, url, onOpen, autoRotate = 0 }) {
   );
 }
 
-export default function KycDetailModal({ verification, onClose, onChanged }) {
+export default function KycDetailModal({ verification, onClose, onChanged, onNext }) {
   const [working, setWorking] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -127,6 +127,9 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     }
   };
 
+  // Cola rápida: tras una acción (o al saltar), ir al siguiente pendiente.
+  const goNextOrClose = () => { if (onNext) onNext(); else onClose?.(); };
+
     // El listado ya no trae imágenes (para cargar rápido). Al abrir el modal,
   // se piden las imágenes completas de esta verificación.
   useEffect(() => {
@@ -146,11 +149,6 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     return () => { active = false; };
   }, [verification?.verification_id]);
 
-useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !rejectOpen && lightboxIndex === null) onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, rejectOpen, lightboxIndex]);
 
   const loadHistory = async () => {
     try {
@@ -169,7 +167,7 @@ useEffect(() => {
       await api.post(`/admin/kyc/${v.verification_id}/approve`, { checklist: checks });
       toast.success('KYC aprobado');
       onChanged?.();
-      onClose?.();
+      goNextOrClose();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Error al aprobar');
     } finally {
@@ -210,6 +208,23 @@ useEffect(() => {
       setWorking(false);
     }
   };
+
+  // Atajos de teclado para revisión rápida (no se activan al escribir en campos).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (rejectOpen || lightboxIndex !== null) return;
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 'Escape') { onClose?.(); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goNextOrClose(); return; }
+      if (status === 'pending') {
+        if ((e.key === 'a' || e.key === 'A') && allChecked && !working) { e.preventDefault(); approve(); }
+        else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); setRejectOpen(true); }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, rejectOpen, lightboxIndex, status, allChecked, working, riskLevel, checks, onNext]);
 
   const saveNote = async () => {
     if (!v.verification_id) return;
@@ -496,7 +511,18 @@ useEffect(() => {
 
           {/* Footer actions */}
           {status === 'pending' && (
-            <div style={{ position: 'sticky', bottom: 0, backgroundColor: '#fff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ position: 'sticky', bottom: 0, backgroundColor: '#fff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <button
+                  onClick={goNextOrClose}
+                  title="Saltar al siguiente sin decidir"
+                  style={{ padding: '10px 16px', borderRadius: '12px', backgroundColor: '#fff', color: '#6b7280', border: '1px solid #e5e7eb', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                >
+                  Siguiente ▸
+                </button>
+                <span style={{ fontSize: '10.5px', color: '#9ca3af' }}>Atajos: A aprobar · R rechazar · → siguiente</span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={() => setRejectOpen(true)}
                 disabled={working}
@@ -512,6 +538,7 @@ useEffect(() => {
                 {working ? <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={18} />}
                 Aprobar KYC
               </button>
+              </div>
             </div>
           )}
 
@@ -543,7 +570,7 @@ useEffect(() => {
         <KycRejectModal
           verification={v}
           onClose={() => setRejectOpen(false)}
-          onSuccess={() => { onChanged?.(); onClose?.(); }}
+          onSuccess={() => { onChanged?.(); goNextOrClose(); }}
         />
       )}
     </>
