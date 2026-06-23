@@ -440,7 +440,7 @@ export default function BTCLightning() {
                 Tu envio esta siendo procesado
               </h2>
               <p style={{ color: '#16a34a', fontSize: '14px', margin: '0 0 16px', lineHeight: '1.5' }}>
-                Una vez que pagues el invoice, el sistema acreditara automaticamente <strong>{vesRecibe} VES</strong> a <strong>{selectedBeneficiary?.full_name}</strong> via {selectedBeneficiary?.payment_type==='pago_movil'?'Pago Movil':'Transferencia Bancaria'}.
+                Una vez confirmado tu pago en Bitcoin, nuestro equipo procesara el envio de <strong>{vesRecibe} VES</strong> a <strong>{selectedBeneficiary?.full_name}</strong> via {selectedBeneficiary?.payment_type==='pago_movil'?'Pago Movil':'Transferencia Bancaria'}. Te notificaremos al completarse.
               </p>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: countdown<300?'#fee2e2':'#fef3c7', color: countdown<300?'#dc2626':'#d97706', borderRadius: '20px', padding: '6px 14px', fontSize: '13px', fontWeight: '700' }}>
                 <Clock size={14}/> Invoice expira en {fmtCountdown(countdown)}
@@ -481,7 +481,7 @@ export default function BTCLightning() {
               ))}
               <div style={{ marginTop: '14px', background: '#f0fdf4', borderRadius: '8px', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle size={16} color='#16a34a'/>
-                <span style={{ fontSize: '12px', color: '#15803d', fontWeight: '600' }}>El pago se acreditara automaticamente al confirmar la red Lightning</span>
+                <span style={{ fontSize: '12px', color: '#15803d', fontWeight: '600' }}>Tu pago en Bitcoin se confirma al instante; el envio de los bolivares lo procesa nuestro equipo enseguida</span>
               </div>
             </div>
             <button onClick={() => navigate('/')} style={{ ...S.btnSecondary, width: '100%', justifyContent: 'center', marginBottom: '8px' }}>
@@ -531,9 +531,9 @@ export default function BTCLightning() {
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb' }}>
             <p style={{ fontWeight: '700', color: '#111827', marginBottom: '12px', fontSize: '14px' }}>ℹ️ ¿Qué es BTC-VES?</p>
             <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: '1.6' }}>
-              Cuando pagas con Bitcoin Lightning, tu saldo en BTC-VES se acredita automáticamente. 
-              Este saldo representa el equivalente en bolívares que será enviado a tu beneficiario 
-              cuando el operador complete la transferencia.
+              Cuando pagas con Bitcoin Lightning, registramos tu pago al confirmarse en la red. 
+              Ese monto representa el equivalente en bolívares que nuestro equipo enviará a tu 
+              beneficiario al completar la transferencia.
             </p>
           </div>
         </div>
