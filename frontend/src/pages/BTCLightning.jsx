@@ -103,6 +103,20 @@ export default function BTCLightning() {
       }
     }
     loadBeneficiaries();
+    // Restaurar estado real desde el servidor (sobrevive aunque el navegador
+    // cierre la pestaña mientras el usuario paga en su billetera). Si la remesa
+    // ya fue pagada, mostramos la pantalla de éxito al volver.
+    (async () => {
+      try {
+        const r = await api.get('/btc/mi-remesa-activa');
+        const rem = r.data?.remesa;
+        if (rem && ['pagado', 'enviado', 'completado'].includes(rem.estado)) {
+          sessionStorage.removeItem('btc_invoice');
+          setPaymentStatus('pagado');
+          setStep(4);
+        }
+      } catch (e) { /* consulta opcional, no rompe el flujo */ }
+    })();
     const interval = setInterval(fetchPrecioBTC, 10000);
     return () => clearInterval(interval);
   }, []);
