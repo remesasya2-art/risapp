@@ -73,6 +73,8 @@ export default function AdminPanel() {
   const [withdrawals, setWithdrawals] = useState([]);
   const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   const [recharges, setRecharges] = useState([]);
+  const [refDigits, setRefDigits] = useState({});
+  const [refChecks, setRefChecks] = useState({});
   const [users, setUsers] = useState([]);
   const [statusFilter, setStatusFilter] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
@@ -225,9 +227,33 @@ export default function AdminPanel() {
   };
 
   // Aprobar recarga VES (banco se toma automáticamente de la transacción)
+  const checkRefDigits = async (txId, value) => {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 3);
+    setRefDigits((prev) => ({ ...prev, [txId]: digits }));
+    if (digits.length === 3) {
+      try {
+        const res = await api.get('/admin/recharges/ves/check-reference', {
+          params: { digits, exclude_transaction_id: txId },
+        });
+        setRefChecks((prev) => ({ ...prev, [txId]: res.data }));
+      } catch (e) { /* el chequeo es opcional, no bloquea */ }
+    } else {
+      setRefChecks((prev) => ({ ...prev, [txId]: null }));
+    }
+  };
+
   const handleApproveRechargeVES = async (txId) => {
+    const digits = refDigits[txId] || '';
+    const check = refChecks[txId];
+    if (check && check.has_collision) {
+      const first = check.first_registered;
+      const quien = first ? `${first.user_name || first.user_email || 'otro usuario'}` : 'otro usuario';
+      if (!window.confirm(`⚠️ La referencia ${digits} ya aparece en una recarga de ${quien}. Posible pago duplicado: el saldo corresponde a quien la registró primero. ¿Aprobar de todas formas?`)) {
+        return;
+      }
+    }
     try {
-      await api.post(`/admin/recharges/ves/process/${txId}`, { action: 'approve' });
+      await api.post(`/admin/recharges/ves/process/${txId}`, { action: 'approve', reference_digits: digits });
       toast.success('Recarga aprobada - Saldo acreditado');
       loadData();
     } catch (error) { toast.error(error.response?.data?.detail || 'Error al aprobar');  loadData();}
@@ -955,6 +981,28 @@ export default function AdminPanel() {
                       </div>
                     )}
 
+                    <div style={{ marginBottom: '10px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>Últimos 3 dígitos de la referencia del comprobante</label>
+                      <input
+                        value={refDigits[r.transaction_id] || ''}
+                        onChange={(e) => checkRefDigits(r.transaction_id, e.target.value)}
+                        inputMode="numeric"
+                        maxLength={3}
+                        placeholder="000"
+                        style={{ width: '90px', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', letterSpacing: '3px', textAlign: 'center' }}
+                      />
+                      {refChecks[r.transaction_id] && refChecks[r.transaction_id].has_collision && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', marginTop: '8px', fontSize: '12px', color: '#b91c1c' }}>
+                          <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+                          <span>
+                            Esta referencia ya aparece en una recarga de otro usuario (posible pago duplicado).
+                            {refChecks[r.transaction_id].first_registered && (
+                              <> Registrada primero por <strong>{refChecks[r.transaction_id].first_registered.user_name || refChecks[r.transaction_id].first_registered.user_email}</strong>. El saldo corresponde a quien la registró primero.</>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                         onClick={() => handleApproveRechargeVES(r.transaction_id)}
