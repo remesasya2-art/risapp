@@ -400,6 +400,36 @@ async def get_remesas_pendientes(current_user: User = Depends(get_current_user))
     remesas = await db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1).to_list(100)
     return {"ordenes": remesas, "remesas": remesas, "total": len(remesas)}
 
+@router.get("/mi-remesa-activa")
+async def mi_remesa_activa(current_user: User = Depends(get_current_user)):
+    """Devuelve la remesa BTC más reciente y relevante del usuario (de las últimas
+    48h, no cancelada), para que al volver a la app vea su estado: el invoice si
+    sigue vigente, o la pantalla de éxito si ya pagó. Evita que pierda el hilo
+    tras salir a pagar en su billetera."""
+    from datetime import timedelta
+    limite = datetime.now(timezone.utc) - timedelta(hours=48)
+    remesa = await db.btc_remesas.find_one(
+        {
+            "user_id": current_user.user_id,
+            "estado": {"$in": ["pendiente", "pagado", "enviado", "completado"]},
+            "creado_en": {"$gte": limite},
+        },
+        {
+            "_id": 0, "remesa_id": 1, "estado": 1, "sats": 1, "usd_cliente": 1,
+            "ves_recibe": 1, "btc_pagar": 1, "payment_request": 1,
+            "beneficiario_data": 1, "creado_en": 1, "expira_en": 1,
+        },
+        sort=[("creado_en", -1)],
+    )
+    if not remesa:
+        return {"activa": False}
+    if remesa.get("creado_en"):
+        remesa["creado_en"] = remesa["creado_en"].isoformat()
+    if remesa.get("expira_en"):
+        remesa["expira_en"] = remesa["expira_en"].isoformat()
+    return {"activa": True, "remesa": remesa}
+
+
 @router.get("/status/{remesa_id}")
 async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_current_user)):
     """Permite al frontend verificar el estado de pago de una orden."""
