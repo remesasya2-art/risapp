@@ -23,6 +23,12 @@ const CHECK_ITEMS = [
 
 const EMPTY_CHECKS = { rostro: false, legible: false, vigente: false, nombre: false, edad: false };
 
+const RISK_OPTIONS = [
+  { key: 'low',    label: 'Bajo',  bg: '#dcfce7', fg: '#166534' },
+  { key: 'medium', label: 'Medio', bg: '#fef3c7', fg: '#92400e' },
+  { key: 'high',   label: 'Alto',  bg: '#fee2e2', fg: '#991b1b' },
+];
+
 function maskCPF(cpf) {
   if (!cpf) return '—';
   const c = String(cpf).replace(/\D/g, '');
@@ -92,6 +98,7 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [checks, setChecks] = useState(EMPTY_CHECKS);
+  const [riskLevel, setRiskLevel] = useState(verification?.risk_level || null);
 
     const [v, setV] = useState(verification || {});
   const status = v.status || 'pending';
@@ -102,6 +109,23 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
     setNote(v.admin_note || '');
     setChecks(EMPTY_CHECKS);
   }, [v.verification_id, v.admin_note]);
+
+  useEffect(() => {
+    setRiskLevel(v.risk_level || null);
+  }, [v.verification_id, v.risk_level]);
+
+  const setRisk = async (level) => {
+    const prev = riskLevel;
+    setRiskLevel(level);
+    try {
+      await api.post(`/admin/kyc/${v.verification_id}/risk`, { level });
+      toast.success('Nivel de riesgo actualizado');
+      onChanged && onChanged();
+    } catch (e) {
+      setRiskLevel(prev);
+      toast.error('No se pudo actualizar el riesgo');
+    }
+  };
 
     // El listado ya no trae imágenes (para cargar rápido). Al abrir el modal,
   // se piden las imágenes completas de esta verificación.
@@ -296,6 +320,24 @@ useEffect(() => {
             </div>
 
             {/* User data */}
+            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '24px 0 12px 0' }}>Nivel de riesgo</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {RISK_OPTIONS.map((r) => {
+                const active = riskLevel === r.key;
+                return (
+                  <button key={r.key} onClick={() => setRisk(r.key)}
+                    style={{ padding: '8px 16px', borderRadius: '10px', border: active ? `2px solid ${r.fg}` : '1px solid #e5e7eb', backgroundColor: active ? r.bg : '#fff', color: active ? r.fg : '#6b7280', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+            {!riskLevel && v.risk_suggested && (
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 0 0' }}>
+                Sugerencia automática: <strong style={{ color: v.risk_suggested === 'high' ? '#991b1b' : '#166534' }}>{v.risk_suggested === 'high' ? 'Alto' : 'Bajo'}</strong>{v.blacklist_match ? ' (coincide con lista negra)' : ''}.
+              </p>
+            )}
+
             <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '24px 0 12px 0' }}>Datos del Usuario</h3>
             <div style={{ backgroundColor: '#f9fafb', borderRadius: '14px', padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', fontSize: '14px' }}>
               <Field icon={UserIcon} label="Nombre completo" value={v.full_name} />
