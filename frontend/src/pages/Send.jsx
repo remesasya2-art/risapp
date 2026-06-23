@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -55,6 +55,7 @@ export default function Send() {
   const { user, refreshUser } = useAuth();
   const { rates } = useRate();
   const [step, setStep] = useState(1);
+  const idemRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [showNewBeneficiary, setShowNewBeneficiary] = useState(false);
@@ -214,12 +215,15 @@ export default function Send() {
       toast.error('Verifica los datos de envío');
       return;
     }
+    if (!idemRef.current) idemRef.current = (window.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2)));
     setLoading(true);
     try {
       await api.post('/withdraw', { 
         amount: parseFloat(amount), 
-        beneficiary_id: selectedBeneficiary.beneficiary_id
+        beneficiary_id: selectedBeneficiary.beneficiary_id,
+        idempotency_key: idemRef.current
       });
+      idemRef.current = null;
       toast.success('¡Envío registrado! Será procesado pronto.');
       await refreshUser();
       try {
