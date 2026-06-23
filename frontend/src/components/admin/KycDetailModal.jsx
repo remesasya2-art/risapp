@@ -13,6 +13,16 @@ const STATUS_BADGE = {
   rejected: { bg: '#fee2e2', fg: '#991b1b', label: 'Rechazado' },
 };
 
+const CHECK_ITEMS = [
+  { key: 'rostro',  label: 'El rostro de la selfie coincide con el del documento' },
+  { key: 'legible', label: 'El documento es legible y no está alterado' },
+  { key: 'vigente', label: 'El documento está vigente (no vencido)' },
+  { key: 'nombre',  label: 'El nombre coincide entre el documento y el registro' },
+  { key: 'edad',    label: 'La persona es mayor de edad (18+)' },
+];
+
+const EMPTY_CHECKS = { rostro: false, legible: false, vigente: false, nombre: false, edad: false };
+
 function maskCPF(cpf) {
   if (!cpf) return '—';
   const c = String(cpf).replace(/\D/g, '');
@@ -81,13 +91,16 @@ export default function KycDetailModal({ verification, onClose, onChanged }) {
   const [noteSaving, setNoteSaving] = useState(false);
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [checks, setChecks] = useState(EMPTY_CHECKS);
 
     const [v, setV] = useState(verification || {});
   const status = v.status || 'pending';
   const badge = STATUS_BADGE[status] || STATUS_BADGE.pending;
+  const allChecked = CHECK_ITEMS.every((c) => checks[c.key]);
 
   useEffect(() => {
     setNote(v.admin_note || '');
+    setChecks(EMPTY_CHECKS);
   }, [v.verification_id, v.admin_note]);
 
     // El listado ya no trae imágenes (para cargar rápido). Al abrir el modal,
@@ -129,7 +142,7 @@ useEffect(() => {
     if (!v.verification_id) return;
     setWorking(true);
     try {
-      await api.post(`/admin/kyc/${v.verification_id}/approve`);
+      await api.post(`/admin/kyc/${v.verification_id}/approve`, { checklist: checks });
       toast.success('KYC aprobado');
       onChanged?.();
       onClose?.();
@@ -254,6 +267,19 @@ useEffect(() => {
           <div style={{ padding: '20px 24px' }}>
             {/* Documents */}
             <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '0 0 12px 0' }}>Documentos</h3>
+            {v.selfie_image && v.id_document_image && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px', backgroundColor: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '14px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Selfie</p>
+                  <img src={v.selfie_image} alt="Selfie" onClick={() => openLightbox('Selfie')} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Documento (frente)</p>
+                  <img src={v.id_document_image} alt="Documento" onClick={() => openLightbox(`${v.document_type_label || 'Documento'} (frente)`)} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
+                </div>
+              </div>
+            )}
+            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 12px' }}>Compara el rostro de la selfie con el del documento. Haz click para ampliar.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
               {docs.map((d) => (
                 <DocTile
@@ -407,6 +433,25 @@ useEffect(() => {
           </div>
         </div>
 
+          {status === 'pending' && (
+            <div style={{ padding: '0 24px 8px' }}>
+              <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '8px 0 12px 0' }}>Checklist de verificación</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '14px' }}>
+                {CHECK_ITEMS.map((c) => (
+                  <label key={c.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13.5px', color: '#374151', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!checks[c.key]} onChange={(e) => setChecks((prev) => ({ ...prev, [c.key]: e.target.checked }))} style={{ marginTop: '2px', width: '16px', height: '16px', cursor: 'pointer' }} />
+                    <span>{c.label}</span>
+                  </label>
+                ))}
+              </div>
+              {!allChecked && (
+                <p style={{ fontSize: '12px', color: '#d97706', margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={14} /> Marca todas las casillas para habilitar la aprobación.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Footer actions */}
           {status === 'pending' && (
             <div style={{ position: 'sticky', bottom: 0, backgroundColor: '#fff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -419,8 +464,8 @@ useEffect(() => {
               </button>
               <button
                 onClick={approve}
-                disabled={working}
-                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: '#16a34a', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: working ? 0.7 : 1 }}
+                disabled={working || !allChecked}
+                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: '#16a34a', color: '#fff', border: 'none', fontWeight: 600, cursor: (working || !allChecked) ? 'not-allowed' : 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: (working || !allChecked) ? 0.5 : 1 }}
               >
                 {working ? <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={18} />}
                 Aprobar KYC
