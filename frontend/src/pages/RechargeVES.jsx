@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -53,6 +53,7 @@ export default function RechargeVES() {
   const { rates } = useRate();
   
   const [step, setStep] = useState(1);
+  const idemRef = useRef(null);
   const [amountVES, setAmountVES] = useState('');
   const [selectedBank, setSelectedBank] = useState('');
   const [paymentType, setPaymentType] = useState('');
@@ -167,6 +168,7 @@ ${bankData.transferencia.ci}`;
       return;
     }
 
+    if (!idemRef.current) idemRef.current = (window.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2)));
     setLoading(true);
     try {
       const response = await api.post('/recharge/ves', {
@@ -174,8 +176,10 @@ ${bankData.transferencia.ci}`;
         amount_ris: parseFloat(amountRIS),
         payment_method: paymentType,
         voucher_image: proofImage,
-        bank: selectedBank
+        bank: selectedBank,
+        idempotency_key: idemRef.current
       });
+      idemRef.current = null;
 
       setTransactionId(response.data.transaction_id);
       setSubmitted(true);
