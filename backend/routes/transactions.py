@@ -4,6 +4,7 @@ Transaction routes - Withdrawals, Recharges, Beneficiaries
 import uuid
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -12,6 +13,7 @@ from models.user import User
 from models.requests import WithdrawalRequest, BeneficiaryCreate
 from routes.dependencies import get_current_user, get_verified_user
 from services.whatsapp import send_next_pending_withdrawal_whatsapp
+from services.idempotency import claim_idempotency, store_idempotency_result
 from services.notifications import create_notification
 from services.centro_gestion import registrar_evento
 from utils.helpers import get_next_withdrawal_id
@@ -90,6 +92,7 @@ class BrBeneficiaryCreate(BaseModel):
 class ReaisSendRequest(BaseModel):
     beneficiary_id: str
     amount: float   # en RIS (1 RIS = 1 R$)
+    idempotency_key: Optional[str] = None
 
 @router.post("/beneficiaries/br")
 async def create_br_beneficiary(request: BrBeneficiaryCreate, current_user: User = Depends(get_current_user)):
@@ -133,6 +136,12 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     por PIX en Brasil desde el área de Órdenes por procesar."""
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    # Idempotencia: evita duplicar el envío por doble clic / reintento de red.
+    _idem_new, _idem_existing = await claim_idempotency(current_user.user_id, "reais_send", request.idempotency_key)
+    if not _idem_new:
+        if _idem_existing and _idem_existing.get("result"):
+            return _idem_existing["result"]
+        raise HTTPException(status_code=409, detail="Esta operación ya se está procesando. Espera un momento.")
     # Descuento atómico de saldo RIS
     user = await db.users.find_one_and_update(
         {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
@@ -225,7 +234,9 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
         message=f"Tu envío de {request.amount:.2f} RIS (R$ {amount_brl:.2f}) a {beneficiary.get('full_name')} fue recibido y está en cola.",
         notification_type="withdrawal_pending",
     )
-    return {"success": True, "transaction_id": tx_id, "display_id": display_id, "amount_brl": amount_brl}
+    _resp_reais = {"success": True, "transaction_id": tx_id, "display_id": display_id, "amount_brl": amount_brl}
+    await store_idempotency_result(current_user.user_id, "reais_send", request.idempotency_key, _resp_reais)
+    return _resp_reais
 
 @router.post("/withdraw")
 @router.post("/withdrawal/create")
@@ -233,7 +244,12 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     """Create a withdrawal request"""
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
-
+    # Idempotencia: evita duplicar el envío por doble clic / reintento de red.
+    _idem_new, _idem_existing = await claim_idempotency(current_user.user_id, "withdraw_ves", request.idempotency_key)
+    if not _idem_new:
+        if _idem_existing and _idem_existing.get("result"):
+            return _idem_existing["result"]
+        raise HTTPException(status_code=409, detail="Esta operación ya se está procesando. Espera un momento.")
     # 1) Validar beneficiario ANTES de tocar el saldo (evita débito sin destino)
     beneficiary = await db.beneficiaries.find_one({
         "beneficiary_id": request.beneficiary_id,
@@ -367,7 +383,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     except Exception as e:
         logger.warning(f"registrar_evento fallo: {e}")
 
-    return {
+    _resp_withdraw = {
         "message": "Retiro solicitado exitosamente",
         "transaction_id": tx_id,
         "display_id": display_id,
@@ -375,6 +391,8 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         "amount_ves": amount_ves,
         "rate": ris_to_ves
     }
+    await store_idempotency_result(current_user.user_id, "withdraw_ves", request.idempotency_key, _resp_withdraw)
+    return _resp_withdraw
 
 # ============== RECHARGE VES ==============
 
@@ -386,7 +404,13 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
 
     if amount_ves <= 0:
         raise HTTPException(status_code=400, detail="Monto inválido")
-
+    # Idempotencia: evita duplicar la solicitud por doble clic / reintento de red.
+    _rch_key = request.get("idempotency_key")
+    _rch_new, _rch_existing = await claim_idempotency(current_user.user_id, "recharge_ves", _rch_key)
+    if not _rch_new:
+        if _rch_existing and _rch_existing.get("result"):
+            return _rch_existing["result"]
+        raise HTTPException(status_code=409, detail="Esta solicitud ya se está procesando. Espera un momento.")
     # Tasa autoritativa del servidor (fail-closed): NO se confía en el monto RIS
     # que envíe el cliente; el servidor recalcula cuánto RIS corresponde.
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
@@ -444,12 +468,14 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
         metadata={"payment_method": payment_method}
     )
 
-    return {
+    _resp_rch = {
         "message": "Recarga VES registrada, pendiente de verificacion",
         "transaction_id": tx_id,
         "amount_ves": amount_ves,
         "amount_ris": amount_ris
     }
+    await store_idempotency_result(current_user.user_id, "recharge_ves", _rch_key, _resp_rch)
+    return _resp_rch
 
 # ============== TRANSACTION HISTORY ==============
 
