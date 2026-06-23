@@ -18,6 +18,7 @@ export default function Recharge() {
   const { user, refreshUser } = useAuth();
   const { rates } = useRate();
   const [method, setMethod] = useState(null);
+  const idemRef = useRef(null);
   const [amount, setAmount] = useState('');
   const [cpf, setCpf] = useState('');
   const [cpfError, setCpfError] = useState('');
@@ -292,12 +293,15 @@ export default function Recharge() {
       toast.error('Sube el comprobante de pago');
       return;
     }
+    if (!idemRef.current) idemRef.current = (window.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2)));
     setLoading(true);
     try {
       await api.post('/recharge/ves', {
         amount_ves: parseFloat(amount),
         proof_image: proofImage,
+        idempotency_key: idemRef.current,
       });
+      idemRef.current = null;
       toast.success('Recarga enviada para verificación');
       navigate('/history');
     } catch (error) {
