@@ -43,6 +43,15 @@ export default function KycPanel({ onChange }) {
   const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
   const [selected, setSelected] = useState(null);
+
+  // Cola rápida: ir a la siguiente verificación de la lista actual (o cerrar).
+  const selectNext = (current) => {
+    if (!current) { setSelected(null); return; }
+    const id = current.verification_id || current.user_id;
+    const idx = items.findIndex((it) => (it.verification_id || it.user_id) === id);
+    const next = idx >= 0 ? items[idx + 1] : null;
+    setSelected(next || null);
+  };
   const [quickReject, setQuickReject] = useState(null);
   const abortRef = useRef(null);
 
@@ -316,6 +325,7 @@ export default function KycPanel({ onChange }) {
         <KycDetailModal
           verification={selected}
           onClose={() => setSelected(null)}
+          onNext={() => selectNext(selected)}
           onChanged={async () => { await load(); onChange?.(); }}
         />
       )}
