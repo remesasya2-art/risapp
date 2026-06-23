@@ -53,6 +53,7 @@ class RechargeRequest(BaseModel):
 class WithdrawalRequest(BaseModel):
     amount: float
     beneficiary_id: str
+    idempotency_key: Optional[str] = None
 
 class ProcessWithdrawalRequest(BaseModel):
     transaction_id: str
