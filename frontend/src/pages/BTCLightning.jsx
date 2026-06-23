@@ -143,7 +143,13 @@ export default function BTCLightning() {
 
   useEffect(() => {
     if (step === 3 && invoiceData) {
-      const _secs = invoiceData.expira_en ? Math.max(0, Math.floor((new Date(invoiceData.expira_en).getTime() - Date.now()) / 1000)) : 1800;
+      let _secs = 1800;
+      if (invoiceData.expira_en) {
+        const _exp = new Date(invoiceData.expira_en);
+        if (!isNaN(_exp.getTime()) && _exp.getTime() > Date.now()) {
+          _secs = Math.max(0, Math.floor((_exp.getTime() - Date.now()) / 1000));
+        }
+      }
       setCountdown(_secs);
       countdownRef.current = setInterval(() => {
         setCountdown(prev => {
