@@ -1143,6 +1143,52 @@ async def get_all_ves_recharges(admin: User = Depends(get_super_admin)):
     return recharges
 
 
+@router.get("/recharges/ves/check-reference")
+async def check_ves_reference(
+    digits: str,
+    exclude_transaction_id: str = "",
+    admin: User = Depends(get_super_admin)
+):
+    """Avisa si esos 3 digitos de referencia ya aparecen en OTRA recarga VES
+    (posible pago duplicado/colusion). Solo informa; no aprueba ni rechaza.
+    El criterio: el RIS le corresponde a quien la registro primero."""
+    digits = str(digits or "").strip()[:3]
+    if len(digits) < 3:
+        return {"digits": digits, "has_collision": False, "matches": []}
+    current = None
+    if exclude_transaction_id:
+        current = await db.transactions.find_one(
+            {"transaction_id": exclude_transaction_id}, {"user_id": 1}
+        )
+    current_user_id = (current or {}).get("user_id")
+    q = {"type": "recharge_ves", "reference_digits": digits}
+    if exclude_transaction_id:
+        q["transaction_id"] = {"$ne": exclude_transaction_id}
+    matches = []
+    cursor = db.transactions.find(q).sort("created_at", 1).limit(20)
+    async for t in cursor:
+        u = await db.users.find_one(
+            {"user_id": t.get("user_id")}, {"email": 1, "full_name": 1, "name": 1}
+        ) or {}
+        matches.append({
+            "transaction_id": t.get("transaction_id"),
+            "user_id": t.get("user_id"),
+            "user_name": u.get("full_name") or u.get("name"),
+            "user_email": u.get("email"),
+            "amount_ves": t.get("amount_ves") or t.get("amount_input"),
+            "status": t.get("status"),
+            "created_at": t.get("created_at"),
+            "is_other_user": t.get("user_id") != current_user_id,
+        })
+    other_user = [m for m in matches if m["is_other_user"]]
+    return {
+        "digits": digits,
+        "has_collision": len(other_user) > 0,
+        "matches": matches,
+        "first_registered": matches[0] if matches else None,
+    }
+
+
 @router.post("/recharges/ves/process/{transaction_id}")
 async def process_ves_recharge(
     transaction_id: str, 
@@ -1154,6 +1200,7 @@ async def process_ves_recharge(
     destination_bank_id (set when the user created the recharge)."""
     action = request.get("action")
     rejection_reason = request.get("rejection_reason", "")
+    reference_digits = str(request.get("reference_digits", "") or "").strip()[:3]
     
     if action not in ["approve", "reject"]:
         raise HTTPException(status_code=400, detail="Accion invalida")
@@ -1220,6 +1267,7 @@ async def process_ves_recharge(
                 "received_in_bank": bank_id,
                 "destination_bank_id": bank_id,
                 "destination_bank_name": bank["name"],
+                "reference_digits": reference_digits,
             }}
         )
         
