@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Plus, X, User, CheckCircle, AlertCircle } from 'lucide-react';
@@ -12,6 +12,7 @@ export default function SendReais() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const [beneficiaries, setBeneficiaries] = useState([]);
+  const idemRef = useRef(null);
   const [selectedId, setSelectedId] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,9 +67,11 @@ export default function SendReais() {
   const enviar = async () => {
     if (!selectedId) { toast.error('Selecciona un beneficiario'); return; }
     if (!isValidAmount) { toast.error('Monto inválido o saldo insuficiente'); return; }
+    if (!idemRef.current) idemRef.current = (window.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2)));
     try {
       setLoading(true);
-      await api.post('/reais/send', { beneficiary_id: selectedId, amount: amountNum });
+      await api.post('/reais/send', { beneficiary_id: selectedId, amount: amountNum, idempotency_key: idemRef.current });
+      idemRef.current = null;
       toast.success('¡Envío a Brasil registrado! Será procesado pronto.');
       if (refreshUser) await refreshUser();
       try {
