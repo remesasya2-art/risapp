@@ -114,6 +114,20 @@ export default function BTCLightning() {
           sessionStorage.removeItem('btc_invoice');
           setPaymentStatus('pagado');
           setStep(4);
+        } else if (rem && rem.estado === 'pendiente' && rem.expira_en && new Date(rem.expira_en) > new Date()) {
+          setInvoiceData({
+            remesa_id: rem.remesa_id,
+            payment_request: rem.payment_request,
+            qr: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(rem.payment_request || ''),
+            sats: rem.sats,
+            ves_recibe: rem.ves_recibe,
+            usd_cliente: rem.usd_cliente,
+            btc_pagar: rem.btc_pagar,
+            expira_en: rem.expira_en,
+          });
+          if (rem.usd_cliente != null) setUsd(String(rem.usd_cliente));
+          if (rem.beneficiario_data) setSelectedBeneficiary(rem.beneficiario_data);
+          setStep(3);
         }
       } catch (e) { /* consulta opcional, no rompe el flujo */ }
     })();
@@ -129,7 +143,8 @@ export default function BTCLightning() {
 
   useEffect(() => {
     if (step === 3 && invoiceData) {
-      setCountdown(1800);
+      const _secs = invoiceData.expira_en ? Math.max(0, Math.floor((new Date(invoiceData.expira_en).getTime() - Date.now()) / 1000)) : 1800;
+      setCountdown(_secs);
       countdownRef.current = setInterval(() => {
         setCountdown(prev => {
           if (prev <= 1) { clearInterval(countdownRef.current); toast.error('El invoice expiro. Genera uno nuevo.'); return 0; }
@@ -464,7 +479,7 @@ export default function BTCLightning() {
               <p style={{ fontWeight: '700', color: '#111827', marginBottom: '14px', fontSize: '15px' }}>Paga con tu wallet Lightning</p>
               {invoiceData.qr && (
                 <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                  <img src={invoiceData.qr} alt='QR Lightning' style={{ width: '200px', height: '200px', borderRadius: '12px', border: '2px solid #e5e7eb' }} />
+                  <img src={invoiceData.qr} alt='QR Lightning' style={{ width: '200px', height: '200px', borderRadius: '12px', border: '2px solid #e5e7eb', display: 'block', margin: '0 auto' }} />
                   <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>Escanea con tu wallet Lightning</p>
                 </div>
               )}
