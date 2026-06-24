@@ -12,6 +12,7 @@ import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import ReportesProcesados from '../components/admin/ReportesProcesados';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import LibroMayor from '../components/admin/LibroMayor';
+import ListaNegra from '../components/admin/ListaNegra';
 import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
@@ -47,11 +48,12 @@ const maskCPF = (cpf) => {
   return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
 };
 
-const CRM_KEYS = ['partners', 'users', 'kyc', 'chat', 'support'];
+const CRM_KEYS = ['partners', 'users', 'kyc', 'blacklist', 'chat', 'support'];
 
 const CRM_SUBTABS = [
   { key: 'users', label: 'Usuarios', icon: Users },
   { key: 'kyc', label: 'KYC', icon: Shield },
+  { key: 'blacklist', label: 'Lista negra', icon: Shield },
   { key: 'partners', label: 'Socios', icon: Briefcase },
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'support', label: 'Soporte', icon: MessageSquare },
@@ -1318,6 +1320,10 @@ export default function AdminPanel() {
         )}
 
         {/* KYC Tab (new modular panel: tabs, search, lightbox, audit log, reject reasons) */}
+        {activeTab === 'blacklist' && (
+          <ListaNegra />
+        )}
+
         {activeTab === 'kyc' && (
           <KycPanel onChange={refreshKycStats} />
         )}
