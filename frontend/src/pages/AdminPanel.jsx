@@ -84,6 +84,8 @@ export default function AdminPanel() {
   const [refDigits, setRefDigits] = useState({});
   const [refChecks, setRefChecks] = useState({});
   const [users, setUsers] = useState([]);
+
+  const [bannedEmails, setBannedEmails] = useState(() => new Set());
   const [statusFilter, setStatusFilter] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -185,6 +187,8 @@ export default function AdminPanel() {
         case 'users':
           const usersRes = await api.get('/admin/users');
           setUsers(usersRes.data?.users || []);
+          const blRes = await api.get('/admin/blacklist').catch(() => ({ data: { items: [] } }));
+          setBannedEmails(new Set((blRes.data?.items || []).filter((it) => it.type === 'email').map((it) => String(it.value || '').toLowerCase().trim())));
           break;
         case 'kyc':
           // Handled fully by <KycPanel/> (it fetches its own data via /admin/kyc/list)
@@ -311,6 +315,7 @@ export default function AdminPanel() {
     try {
       await api.post('/admin/blacklist', { type: 'email', value: u.email, reason: 'Agregado desde Usuarios' });
       toast.success('Usuario agregado a la lista negra');
+      setBannedEmails((prev) => new Set(prev).add(String(u.email || '').toLowerCase().trim()));
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo agregar a la lista negra');
     }
@@ -457,9 +462,10 @@ export default function AdminPanel() {
 
   // Filtrar usuarios por búsqueda
   const filteredUsers = users.filter(u => 
-    userSearchQuery === '' || 
+    !bannedEmails.has(String(u.email || '').toLowerCase().trim()) &&
+    (userSearchQuery === '' || 
     u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
+    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase()))
   );
 
   const handleFileChange = (e) => {
