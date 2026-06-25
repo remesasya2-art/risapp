@@ -305,6 +305,17 @@ export default function AdminPanel() {
     } catch { /* silent */ }
   };
 
+  const handleBanUser = async (u) => {
+    if (!u?.email) { toast.error('Este usuario no tiene correo'); return; }
+    if (!window.confirm(`¿Agregar a ${u.name || u.email} a la lista negra? Su correo (${u.email}) quedará bloqueado para registrarse de nuevo.`)) return;
+    try {
+      await api.post('/admin/blacklist', { type: 'email', value: u.email, reason: 'Agregado desde Usuarios' });
+      toast.success('Usuario agregado a la lista negra');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo agregar a la lista negra');
+    }
+  };
+
   const handleChangeRole = async (newRole) => {
     if (!selectedUserForRole) return;
     setAssigningRole(true);
@@ -1306,6 +1317,20 @@ export default function AdminPanel() {
                               >
                                 <KeyRound style={{ width: '14px', height: '14px' }} />
                                 Clave
+                              </button>
+                            )}
+                            {u.user_id !== user.user_id && (
+                              <button 
+                                onClick={() => handleBanUser(u)}
+                                style={{ 
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+                                  backgroundColor: '#1f2937', color: '#fff', border: 'none',
+                                  borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                                }}
+                                data-testid={`ban-user-${u.user_id}`}
+                              >
+                                <Shield style={{ width: '14px', height: '14px' }} />
+                                Lista negra
                               </button>
                             )}
                           </td>
