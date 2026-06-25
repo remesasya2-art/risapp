@@ -525,23 +525,23 @@ const normalized = { ...tx };
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto enviado</p>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{fmt(selectedVoucher.amount_input)} RIS</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} RIS`}</p>
                 </div>
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
                   <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
-                    {fmt(selectedVoucher.amount_output)} VES
+                    {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} VES
                     {rates?.bcv_usd_ves && (
-                      <span style={{ fontSize: '14px', marginLeft: 6 }}>= $ {fmt(selectedVoucher.amount_output / rates.bcv_usd_ves, 2)} BCV</span>
+                      <span style={{ fontSize: '14px', marginLeft: 6 }}>= $ {fmt((selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0) / rates.bcv_usd_ves, 2)} BCV</span>
                     )}
                   </p>
                 </div>
               </div>
-              {selectedVoucher.beneficiary_data && (
+              {(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data) && (
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>{selectedVoucher.beneficiary_data.full_name}</p>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>{selectedVoucher.beneficiary_data.bank}</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).full_name}</p>
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank || (selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank_code || ''}</p>
                 </div>
               )}
               <div style={{ marginTop: '12px' }}>
