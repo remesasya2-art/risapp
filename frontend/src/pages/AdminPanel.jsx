@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -121,6 +121,39 @@ export default function AdminPanel() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatReply, setChatReply] = useState('');
+  const [chatSearch, setChatSearch] = useState('');
+  const chatMessagesRef = useRef(null);
+  const chatPollRef = useRef(null);
+  const prevMsgCount = useRef(0);
+  const loadChatMessages = async (userId) => {
+    if (!userId) return;
+    try {
+      const res = await api.get(`/admin/support/chat/${userId}`);
+      setChatMessages(res.data || []);
+    } catch (e) { /* silencioso */ }
+  };
+  // Auto-refresco en vivo de la conversación abierta (cada 4s).
+  useEffect(() => {
+    if (!selectedChat?.user_id) return;
+    const id = selectedChat.user_id;
+    prevMsgCount.current = 0;
+    loadChatMessages(id);
+    chatPollRef.current = setInterval(() => loadChatMessages(id), 4000);
+    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
+  }, [selectedChat?.user_id]);
+  // Bajar al último mensaje solo cuando llegan mensajes nuevos (no en cada poll).
+  useEffect(() => {
+    const el = chatMessagesRef.current;
+    if (el && chatMessages.length > prevMsgCount.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+    prevMsgCount.current = chatMessages.length;
+  }, [chatMessages]);
+  const filteredChats = supportChats.filter((c) => {
+    const q = chatSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (c.user_name || '').toLowerCase().includes(q) || (c.user_email || '').toLowerCase().includes(q);
+  });
   const [accountingBanks, setAccountingBanks] = useState([]);
   // Modal para rechazar recarga VES
   const [showRejectRechargeModal, setShowRejectRechargeModal] = useState(false);
@@ -1474,27 +1507,20 @@ export default function AdminPanel() {
             {/* Chat List */}
             <div style={{ width: '320px', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>Conversaciones</h3>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>Conversaciones</h3>
+                <input value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} placeholder="Buscar por nombre o correo…" style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                {supportChats.length === 0 ? (
+                {filteredChats.length === 0 ? (
                   <div style={{ padding: '40px 20px', textAlign: 'center', color: '#9ca3af' }}>
                     <MessageSquare style={{ width: '48px', height: '48px', margin: '0 auto 12px', opacity: 0.5 }} />
                     <p style={{ fontSize: '14px' }}>No hay conversaciones</p>
                   </div>
                 ) : (
-                  supportChats.map(chat => (
+                  filteredChats.map(chat => (
                     <div
                       key={chat.user_id}
-                      onClick={async () => {
-                        setSelectedChat(chat);
-                        try {
-                          const res = await api.get(`/admin/support/chat/${chat.user_id}`);
-                          setChatMessages(res.data || []);
-                        } catch (e) {
-                          console.error(e);
-                        }
-                      }}
+                      onClick={() => setSelectedChat(chat)}
                       style={{
                         padding: '16px 20px',
                         borderBottom: '1px solid #f3f4f6',
@@ -1514,7 +1540,7 @@ export default function AdminPanel() {
                       </div>
                       <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>{chat.user_email}</p>
                       <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {chat.last_message?.substring(0, 40)}...
+                        {chat.last_message ? (chat.last_message.length > 40 ? chat.last_message.substring(0, 40) + '…' : chat.last_message) : ''}
                       </p>
                       <p style={{ fontSize: '11px', color: '#9ca3af', margin: '4px 0 0 0' }}>
                         {chat.last_message_at ? new Date(chat.last_message_at).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Caracas' }) : ''}
@@ -1560,7 +1586,7 @@ export default function AdminPanel() {
                   </div>
 
                   {/* Messages */}
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#f9fafb' }}>
+                  <div ref={chatMessagesRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#f9fafb' }}>
                     {chatMessages.map(msg => (
                       <div
                         key={msg.message_id}
