@@ -122,6 +122,9 @@ export default function AdminPanel() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatReply, setChatReply] = useState('');
+  const [quickReplies, setQuickReplies] = useState([]);
+  const [showQrManager, setShowQrManager] = useState(false);
+  const [newQr, setNewQr] = useState('');
   const [chatSearch, setChatSearch] = useState('');
   const chatMessagesRef = useRef(null);
   const chatPollRef = useRef(null);
@@ -150,11 +153,59 @@ export default function AdminPanel() {
     }
     prevMsgCount.current = chatMessages.length;
   }, [chatMessages]);
+  // Cargar respuestas rápidas guardadas (localStorage del operador).
+  useEffect(() => {
+    const defaults = [
+      'Hola {nombre}, ¿en qué puedo ayudarte?',
+      'Gracias por tu paciencia, {nombre}. Estoy revisando tu caso.',
+      'Tu solicitud está siendo procesada. Te avisaremos al completarse.',
+      'Para ayudarte mejor, ¿podrías enviarme una captura de pantalla?',
+      '¿Hay algo más en lo que pueda ayudarte, {nombre}?',
+      'Gracias por contactarnos. ¡Que tengas un buen día!',
+    ];
+    try {
+      const saved = localStorage.getItem('ris_quick_replies');
+      setQuickReplies(saved ? JSON.parse(saved) : defaults);
+    } catch (e) {
+      setQuickReplies(defaults);
+    }
+  }, []);
   const filteredChats = supportChats.filter((c) => {
     const q = chatSearch.trim().toLowerCase();
     if (!q) return true;
     return (c.user_name || '').toLowerCase().includes(q) || (c.user_email || '').toLowerCase().includes(q);
   });
+  const persistQuickReplies = (list) => {
+    setQuickReplies(list);
+    try { localStorage.setItem('ris_quick_replies', JSON.stringify(list)); } catch (e) { /* noop */ }
+  };
+  const addQuickReply = () => {
+    const t = newQr.trim();
+    if (!t) return;
+    persistQuickReplies([...quickReplies, t]);
+    setNewQr('');
+  };
+  const removeQuickReply = (idx) => {
+    persistQuickReplies(quickReplies.filter((_, i) => i !== idx));
+  };
+  const chatFirstName = (selectedChat?.user_name || '').trim().split(' ')[0] || 'cliente';
+  const insertQuickReply = (text) => {
+    const filled = text.replace(/\{nombre\}/g, chatFirstName);
+    setChatReply((prev) => (prev ? prev.replace(/\s*$/, '') + ' ' + filled : filled));
+  };
+  const sendChatReply = async () => {
+    const text = chatReply.trim();
+    if (!text || !selectedChat?.user_id) return;
+    try {
+      await api.post('/admin/support/respond', { user_id: selectedChat.user_id, message: text });
+      setChatReply('');
+      const res = await api.get(`/admin/support/chat/${selectedChat.user_id}`);
+      setChatMessages(res.data || []);
+      toast.success('Respuesta enviada');
+    } catch (e) {
+      toast.error('Error al enviar');
+    }
+  };
   const [accountingBanks, setAccountingBanks] = useState([]);
   // Modal para rechazar recarga VES
   const [showRejectRechargeModal, setShowRejectRechargeModal] = useState(false);
@@ -1625,46 +1676,52 @@ export default function AdminPanel() {
                     ))}
                   </div>
 
-                  {/* Reply Input */}
-                  <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px' }}>
-                    <input
-                      type="text"
-                      value={chatReply}
-                      onChange={(e) => setChatReply(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && chatReply.trim()) {
-                          api.post('/admin/support/respond', { user_id: selectedChat.user_id, message: chatReply.trim() })
-                            .then(async () => {
-                              setChatReply('');
-                              const res = await api.get(`/admin/support/chat/${selectedChat.user_id}`);
-                              setChatMessages(res.data || []);
-                              toast.success('Respuesta enviada');
-                            })
-                            .catch(() => toast.error('Error al enviar'));
-                        }
-                      }}
-                      placeholder="Escribe tu respuesta..."
-                      style={{ flex: 1, padding: '14px 18px', borderRadius: '24px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none' }}
-                      data-testid="admin-chat-reply-input"
-                    />
-                    <button
-                      onClick={async () => {
-                        if (!chatReply.trim()) return;
-                        try {
-                          await api.post('/admin/support/respond', { user_id: selectedChat.user_id, message: chatReply.trim() });
-                          setChatReply('');
-                          const res = await api.get(`/admin/support/chat/${selectedChat.user_id}`);
-                          setChatMessages(res.data || []);
-                          toast.success('Respuesta enviada');
-                        } catch (e) {
-                          toast.error('Error al enviar');
-                        }
-                      }}
-                      style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#6366f1', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      data-testid="admin-chat-send-btn"
-                    >
-                      <Send style={{ width: '20px', height: '20px' }} />
-                    </button>
+                  {/* Reply Input + respuestas rápidas */}
+                  <div style={{ borderTop: '1px solid #e5e7eb' }}>
+                    <div style={{ padding: '10px 16px 0', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                      {quickReplies.map((qr, i) => (
+                        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '999px', padding: '5px 10px', fontSize: '12px', maxWidth: '280px' }}>
+                          <button onClick={() => insertQuickReply(qr)} title="Insertar" style={{ background: 'none', border: 'none', color: '#4f46e5', cursor: 'pointer', fontSize: '12px', padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
+                            {qr}
+                          </button>
+                          {showQrManager && (
+                            <button onClick={() => removeQuickReply(i)} title="Eliminar" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 700, padding: 0, lineHeight: 1 }}>×</button>
+                          )}
+                        </span>
+                      ))}
+                      <button onClick={() => setShowQrManager((v) => !v)} style={{ background: 'none', border: '1px dashed #c7d2fe', color: '#6366f1', borderRadius: '999px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}>
+                        {showQrManager ? 'Listo' : 'Editar respuestas'}
+                      </button>
+                    </div>
+                    {showQrManager && (
+                      <div style={{ padding: '8px 16px 0', display: 'flex', gap: '8px' }}>
+                        <input value={newQr} onChange={(e) => setNewQr(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addQuickReply(); }} placeholder="Nueva respuesta rápida (usa {nombre} para el nombre del cliente)" style={{ flex: 1, padding: '8px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none' }} />
+                        <button onClick={addQuickReply} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Añadir</button>
+                      </div>
+                    )}
+                    <div style={{ padding: '12px 16px 16px', display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+                      <textarea
+                        value={chatReply}
+                        onChange={(e) => setChatReply(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendChatReply();
+                          }
+                        }}
+                        rows={1}
+                        placeholder="Escribe tu respuesta…  (Enter envía · Shift+Enter salto de línea)"
+                        style={{ flex: 1, padding: '14px 18px', borderRadius: '20px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', resize: 'none', maxHeight: '120px', fontFamily: 'inherit' }}
+                        data-testid="admin-chat-reply-input"
+                      />
+                      <button
+                        onClick={sendChatReply}
+                        style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#6366f1', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        data-testid="admin-chat-send-btn"
+                      >
+                        <Send style={{ width: '20px', height: '20px' }} />
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
