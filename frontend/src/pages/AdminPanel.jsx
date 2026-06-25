@@ -116,6 +116,7 @@ export default function AdminPanel() {
   // Support requests state
   const [supportRequests, setSupportRequests] = useState([]);
   const [supportFilter, setSupportFilter] = useState('pending'); // 'pending', 'resolved', 'all'
+  const [supportSearch, setSupportSearch] = useState('');
   // Chat state
   const [supportChats, setSupportChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
@@ -500,6 +501,19 @@ export default function AdminPanel() {
     u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
     u.email?.toLowerCase().includes(userSearchQuery.toLowerCase()))
   );
+
+  const supportCounts = {
+    pending: supportRequests.filter((r) => r.status === 'pending').length,
+    resolved: supportRequests.filter((r) => r.status === 'resolved').length,
+    all: supportRequests.length,
+  };
+
+  const filteredSupport = supportRequests.filter((req) => {
+    if (supportFilter !== 'all' && req.status !== supportFilter) return false;
+    const q = supportSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (req.subject || '').toLowerCase().includes(q) || (req.email || '').toLowerCase().includes(q) || (req.message || '').toLowerCase().includes(q);
+  });
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
@@ -1682,20 +1696,20 @@ export default function AdminPanel() {
                     }}
                     data-testid={`support-filter-${filter}`}
                   >
-                    {filter === 'pending' ? 'Pendientes' : filter === 'resolved' ? 'Resueltas' : 'Todas'}
+                    {(filter === 'pending' ? 'Pendientes' : filter === 'resolved' ? 'Resueltas' : 'Todas') +  ` (${supportCounts[filter]})`}
                   </button>
                 ))}
               </div>
             </div>
 
+            <input value={supportSearch} onChange={(e) => setSupportSearch(e.target.value)} placeholder="Buscar por asunto, correo o mensaje…" style={{ width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }} />
             {loading ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <RefreshCw className="animate-spin" style={{ width: '32px', height: '32px', color: '#6366f1' }} />
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {supportRequests
-                  .filter(req => supportFilter === 'all' || req.status === supportFilter)
+                {filteredSupport
                   .map((request) => (
                     <div 
                       key={request.support_id} 
@@ -1786,7 +1800,7 @@ export default function AdminPanel() {
                     </div>
                   ))}
                 
-                {supportRequests.filter(req => supportFilter === 'all' || req.status === supportFilter).length === 0 && (
+                {filteredSupport.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
                     <MessageSquare style={{ width: '48px', height: '48px', margin: '0 auto 12px', opacity: 0.5 }} />
                     <p style={{ fontSize: '16px', fontWeight: '500' }}>No hay solicitudes {supportFilter === 'pending' ? 'pendientes' : supportFilter === 'resolved' ? 'resueltas' : ''}</p>
