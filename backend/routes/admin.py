@@ -1746,7 +1746,11 @@ async def reply_support_request(request_id: str, data: SupportReplyRequest, admi
             {safe_reply}
         </div>
         <p style="color: #6b7280; font-size: 13px;">Tu mensaje original: "{original_msg}"</p>
-        <p style="color: #6b7280; font-size: 12px;">Si necesitas mas ayuda, responde a este correo o vuelve a escribirnos desde la app.</p>
+        <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px 14px; margin: 18px 0 8px;">
+            <p style="color: #92400e; font-size: 13px; margin: 0; line-height: 1.5;">
+                <strong>No respondas este correo</strong>, no podemos leer las respuestas por esta via. El equipo de RisApp se pondra en contacto contigo directamente a traves de los numeros de contacto y el correo que nos dejaste.
+            </p>
+        </div>
     </div>
     """
     email_sent = await send_email(
