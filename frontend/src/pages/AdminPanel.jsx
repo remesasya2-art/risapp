@@ -117,6 +117,9 @@ export default function AdminPanel() {
   const [supportRequests, setSupportRequests] = useState([]);
   const [supportFilter, setSupportFilter] = useState('pending'); // 'pending', 'resolved', 'all'
   const [supportSearch, setSupportSearch] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [supportReplyText, setSupportReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
   // Chat state
   const [supportChats, setSupportChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
@@ -575,6 +578,27 @@ export default function AdminPanel() {
     if (!q) return true;
     return (req.subject || '').toLowerCase().includes(q) || (req.email || '').toLowerCase().includes(q) || (req.message || '').toLowerCase().includes(q);
   });
+
+  const sendSupportReply = async (req) => {
+    const text = supportReplyText.trim();
+    if (!text) { toast.error('Escribe una respuesta'); return; }
+    setSendingReply(true);
+    try {
+      const res = await api.post(`/admin/support-requests/${req.support_id}/reply`, { message: text });
+      if (res.data?.email_sent) {
+        toast.success('Respuesta enviada por correo');
+      } else {
+        toast.error(res.data?.message || 'Respuesta guardada, pero el correo no se envió');
+      }
+      setReplyingTo(null);
+      setSupportReplyText('');
+      loadData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo enviar la respuesta');
+    } finally {
+      setSendingReply(false);
+    }
+  };
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
@@ -1884,6 +1908,42 @@ export default function AdminPanel() {
                           {request.message}
                         </p>
                       </div>
+                      <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => { setReplyingTo(replyingTo === request.support_id ? null : request.support_id); setSupportReplyText(''); }}
+                          style={{ padding: '8px 16px', borderRadius: '10px', border: '1px solid #6366f1', backgroundColor: replyingTo === request.support_id ? '#eef2ff' : '#fff', color: '#6366f1', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          data-testid={`reply-support-${request.support_id}`}
+                        >
+                          <Mail style={{ width: '16px', height: '16px' }} />
+                          {replyingTo === request.support_id ? 'Cancelar' : 'Responder por correo'}
+                        </button>
+                        {request.responded_at && (
+                          <span style={{ fontSize: '12px', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle style={{ width: '14px', height: '14px' }} /> Respondida
+                          </span>
+                        )}
+                      </div>
+                      {replyingTo === request.support_id && (
+                        <div style={{ marginTop: '10px' }}>
+                          <textarea
+                            value={supportReplyText}
+                            onChange={(e) => setSupportReplyText(e.target.value)}
+                            rows={3}
+                            placeholder={`Escribe tu respuesta para ${request.email}…`}
+                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                          />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                            <button
+                              onClick={() => sendSupportReply(request)}
+                              disabled={sendingReply}
+                              style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', opacity: sendingReply ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <Send style={{ width: '16px', height: '16px' }} />
+                              {sendingReply ? 'Enviando…' : 'Enviar respuesta'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 
