@@ -202,11 +202,15 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     
     await db.gestor_transactions.insert_one(gestor_transaction)
     
-    # Deduct from terceros balance
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
+    # Débito atómico con guardia (evita condición de carrera / saldo negativo)
+    debited = await db.users.find_one_and_update(
+        {"user_id": current_user.user_id, "balance_ris_terceros": {"$gte": request.amount_ris}},
         {"$inc": {"balance_ris_terceros": -request.amount_ris}}
     )
+    if not debited:
+        # El saldo cambió entre la comprobación y el débito (carrera): deshacemos el registro.
+        await db.gestor_transactions.delete_one({"transaction_id": tx_id})
+        raise HTTPException(status_code=400, detail="Saldo de terceros insuficiente.")
     
     # Create withdrawal for admin processing
     beneficiary_data = {
