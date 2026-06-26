@@ -153,40 +153,37 @@ export default function AdminPanel() {
     }
     prevMsgCount.current = chatMessages.length;
   }, [chatMessages]);
-  // Cargar respuestas rápidas guardadas (localStorage del operador).
-  useEffect(() => {
-    const defaults = [
-      'Hola {nombre}, ¿en qué puedo ayudarte?',
-      'Gracias por tu paciencia, {nombre}. Estoy revisando tu caso.',
-      'Tu solicitud está siendo procesada. Te avisaremos al completarse.',
-      'Para ayudarte mejor, ¿podrías enviarme una captura de pantalla?',
-      '¿Hay algo más en lo que pueda ayudarte, {nombre}?',
-      'Gracias por contactarnos. ¡Que tengas un buen día!',
-    ];
-    try {
-      const saved = localStorage.getItem('ris_quick_replies');
-      setQuickReplies(saved ? JSON.parse(saved) : defaults);
-    } catch (e) {
-      setQuickReplies(defaults);
-    }
-  }, []);
+  // Cargar respuestas rápidas compartidas (backend).
+  useEffect(() => { loadQuickReplies(); }, []);
   const filteredChats = supportChats.filter((c) => {
     const q = chatSearch.trim().toLowerCase();
     if (!q) return true;
     return (c.user_name || '').toLowerCase().includes(q) || (c.user_email || '').toLowerCase().includes(q);
   });
-  const persistQuickReplies = (list) => {
-    setQuickReplies(list);
-    try { localStorage.setItem('ris_quick_replies', JSON.stringify(list)); } catch (e) { /* noop */ }
+  const loadQuickReplies = async () => {
+    try {
+      const res = await api.get('/admin/quick-replies');
+      setQuickReplies(res.data || []);
+    } catch (e) { /* silencioso */ }
   };
-  const addQuickReply = () => {
+  const addQuickReply = async () => {
     const t = newQr.trim();
     if (!t) return;
-    persistQuickReplies([...quickReplies, t]);
-    setNewQr('');
+    try {
+      await api.post('/admin/quick-replies', { text: t });
+      setNewQr('');
+      loadQuickReplies();
+    } catch (e) {
+      toast.error('No se pudo guardar la respuesta');
+    }
   };
-  const removeQuickReply = (idx) => {
-    persistQuickReplies(quickReplies.filter((_, i) => i !== idx));
+  const removeQuickReply = async (qrId) => {
+    try {
+      await api.delete(`/admin/quick-replies/${qrId}`);
+      setQuickReplies((prev) => prev.filter((q) => q.qr_id !== qrId));
+    } catch (e) {
+      toast.error('No se pudo eliminar');
+    }
   };
   const chatFirstName = (selectedChat?.user_name || '').trim().split(' ')[0] || 'cliente';
   const insertQuickReply = (text) => {
@@ -1679,13 +1676,13 @@ export default function AdminPanel() {
                   {/* Reply Input + respuestas rápidas */}
                   <div style={{ borderTop: '1px solid #e5e7eb' }}>
                     <div style={{ padding: '10px 16px 0', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                      {quickReplies.map((qr, i) => (
-                        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '999px', padding: '5px 10px', fontSize: '12px', maxWidth: '280px' }}>
-                          <button onClick={() => insertQuickReply(qr)} title="Insertar" style={{ background: 'none', border: 'none', color: '#4f46e5', cursor: 'pointer', fontSize: '12px', padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
-                            {qr}
+                      {quickReplies.map((qr) => (
+                        <span key={qr.qr_id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '999px', padding: '5px 10px', fontSize: '12px', maxWidth: '280px' }}>
+                          <button onClick={() => insertQuickReply(qr.text)} title="Insertar" style={{ background: 'none', border: 'none', color: '#4f46e5', cursor: 'pointer', fontSize: '12px', padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
+                            {qr.text}
                           </button>
                           {showQrManager && (
-                            <button onClick={() => removeQuickReply(i)} title="Eliminar" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 700, padding: 0, lineHeight: 1 }}>×</button>
+                            <button onClick={() => removeQuickReply(qr.qr_id)} title="Eliminar" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 700, padding: 0, lineHeight: 1 }}>×</button>
                           )}
                         </span>
                       ))}
