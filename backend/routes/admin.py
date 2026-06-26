@@ -16,6 +16,7 @@ from routes.dependencies import get_admin_user, get_super_admin
 from services.whatsapp import send_next_pending_withdrawal_whatsapp
 from services.notifications import create_notification
 from services.email import send_admin_password_reset_email
+from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
 
 logger = logging.getLogger(__name__)
@@ -1717,6 +1718,62 @@ async def resolve_support_request(request_id: str, admin: User = Depends(get_adm
     
     logger.info(f"Support request {request_id} resolved by {admin.user_id}")
     return {"message": "Solicitud marcada como resuelta"}
+
+class SupportReplyRequest(BaseModel):
+    message: str
+
+@router.post("/support-requests/{request_id}/reply")
+async def reply_support_request(request_id: str, data: SupportReplyRequest, admin: User = Depends(get_admin_user)):
+    """Responde una solicitud de soporte por correo (vía Resend) y guarda la respuesta."""
+    text = (data.message or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
+    req = await db.support_requests.find_one({"support_id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    to_email = req.get("email")
+    if not to_email:
+        raise HTTPException(status_code=400, detail="La solicitud no tiene correo de contacto")
+    subject_orig = req.get("subject") or "tu solicitud"
+    original_msg = req.get("message") or ""
+    safe_reply = text.replace("\n", "<br>")
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #6366f1;">Respuesta de soporte - RIS App</h2>
+        <p>Hola,</p>
+        <p>Gracias por contactarnos. En respuesta a tu solicitud <strong>"{subject_orig}"</strong>:</p>
+        <div style="background: #f3f4f6; border-left: 4px solid #6366f1; padding: 14px 16px; border-radius: 8px; margin: 16px 0; color: #1f2937;">
+            {safe_reply}
+        </div>
+        <p style="color: #6b7280; font-size: 13px;">Tu mensaje original: "{original_msg}"</p>
+        <p style="color: #6b7280; font-size: 12px;">Si necesitas mas ayuda, responde a este correo o vuelve a escribirnos desde la app.</p>
+    </div>
+    """
+    email_sent = await send_email(
+        to_email=to_email,
+        subject=f"Re: {subject_orig} - Soporte RIS App",
+        html_content=html_content,
+    )
+    reply_doc = {
+        "message": text,
+        "admin_id": admin.user_id,
+        "admin_name": getattr(admin, "name", None) or "Soporte",
+        "sent_at": datetime.now(timezone.utc),
+        "email_sent": bool(email_sent),
+    }
+    await db.support_requests.update_one(
+        {"support_id": request_id},
+        {
+            "$push": {"replies": reply_doc},
+            "$set": {
+                "responded_at": datetime.now(timezone.utc),
+                "responded_by": admin.user_id,
+            },
+        },
+    )
+    if not email_sent:
+        return {"success": False, "email_sent": False, "message": "Respuesta guardada, pero el correo no se pudo enviar (revisa la configuracion de Resend)."}
+    return {"success": True, "email_sent": True, "message": "Respuesta enviada por correo"}
 
 
 
