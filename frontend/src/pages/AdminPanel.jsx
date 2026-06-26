@@ -125,6 +125,7 @@ export default function AdminPanel() {
   const [quickReplies, setQuickReplies] = useState([]);
   const [showQrManager, setShowQrManager] = useState(false);
   const [newQr, setNewQr] = useState('');
+  const [chatImage, setChatImage] = useState(null);
   const [chatSearch, setChatSearch] = useState('');
   const chatMessagesRef = useRef(null);
   const chatPollRef = useRef(null);
@@ -190,12 +191,24 @@ export default function AdminPanel() {
     const filled = text.replace(/\{nombre\}/g, chatFirstName);
     setChatReply((prev) => (prev ? prev.replace(/\s*$/, '') + ' ' + filled : filled));
   };
+  const handleChatImage = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Solo se permiten imágenes'); return; }
+    if (file.size > 1.5 * 1024 * 1024) { toast.error('La imagen no debe superar 1.5 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setChatImage(reader.result);
+    reader.onerror = () => toast.error('No se pudo leer la imagen');
+    reader.readAsDataURL(file);
+  };
   const sendChatReply = async () => {
     const text = chatReply.trim();
-    if (!text || !selectedChat?.user_id) return;
+    if ((!text && !chatImage) || !selectedChat?.user_id) return;
     try {
-      await api.post('/admin/support/respond', { user_id: selectedChat.user_id, message: text });
+      await api.post('/admin/support/respond', { user_id: selectedChat.user_id, message: text, image: chatImage || null });
       setChatReply('');
+      setChatImage(null);
       const res = await api.get(`/admin/support/chat/${selectedChat.user_id}`);
       setChatMessages(res.data || []);
       toast.success('Respuesta enviada');
@@ -1664,7 +1677,10 @@ export default function AdminPanel() {
                           color: msg.sender === 'admin' ? 'white' : '#1f2937',
                           boxShadow: msg.sender === 'user' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                         }}>
-                          <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{msg.message}</p>
+                          {msg.message && <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{msg.message}</p>}
+                          {msg.image && (
+                            <img src={msg.image} alt="adjunto" onClick={() => window.open(msg.image, '_blank')} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '220px', maxHeight: '220px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
+                          )}
                         </div>
                         <p style={{ fontSize: '10px', color: '#9ca3af', margin: '4px 8px 0', textAlign: msg.sender === 'admin' ? 'right' : 'left' }}>
                           {new Date(msg.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
@@ -1696,7 +1712,24 @@ export default function AdminPanel() {
                         <button onClick={addQuickReply} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Añadir</button>
                       </div>
                     )}
+                    {chatImage && (
+                      <div style={{ padding: '8px 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img src={chatImage} alt="adjunto" style={{ width: '46px', height: '46px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>Imagen lista para enviar</span>
+                        <button onClick={() => setChatImage(null)} title="Quitar imagen" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <X style={{ width: '16px', height: '16px' }} />
+                        </button>
+                      </div>
+                    )}
                     <div style={{ padding: '12px 16px 16px', display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+                      <input type="file" accept="image/*" id="admin-chat-image-input" onChange={handleChatImage} style={{ display: 'none' }} />
+                      <button
+                        onClick={() => document.getElementById('admin-chat-image-input').click()}
+                        title="Adjuntar imagen"
+                        style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb', color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      >
+                        <Image style={{ width: '20px', height: '20px' }} />
+                      </button>
                       <textarea
                         value={chatReply}
                         onChange={(e) => setChatReply(e.target.value)}
