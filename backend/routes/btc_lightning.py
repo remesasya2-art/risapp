@@ -376,8 +376,22 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
     saldo_actual = wallet["saldo"] if wallet else 0.0
     if saldo_actual < remesa["ves_recibe"]:
         raise HTTPException(status_code=400, detail="Saldo BTC-VES insuficiente.")
-    await db.btc_ves_wallets.update_one({"user_id": remesa["user_id"]}, {"$inc": {"saldo": -remesa["ves_recibe"]}})
-    await db.btc_remesas.update_one({"remesa_id": body.remesa_id}, {"$set": {"estado": "enviado", "enviado_en": datetime.now(timezone.utc), "operador_id": current_user.user_id}})
+    # Transición de estado atómica: solo una petición puede pasar de "pagado" a "enviado"
+    claimed = await db.btc_remesas.find_one_and_update(
+        {"remesa_id": body.remesa_id, "estado": "pagado"},
+        {"$set": {"estado": "enviado", "enviado_en": datetime.now(timezone.utc), "operador_id": current_user.user_id}}
+    )
+    if not claimed:
+        raise HTTPException(status_code=400, detail="La orden ya fue procesada o no está en estado pagado.")
+    # Débito atómico del monedero BTC-VES con guardia
+    wdec = await db.btc_ves_wallets.find_one_and_update(
+        {"user_id": remesa["user_id"], "saldo": {"$gte": remesa["ves_recibe"]}},
+        {"$inc": {"saldo": -remesa["ves_recibe"]}}
+    )
+    if not wdec:
+        # No había saldo suficiente: revertimos el estado para no dejar la orden "enviada" sin debitar
+        await db.btc_remesas.update_one({"remesa_id": body.remesa_id}, {"$set": {"estado": "pagado"}})
+        raise HTTPException(status_code=400, detail="Saldo BTC-VES insuficiente.")
     try:
         from services.notifications import create_notification
         nombre = remesa.get("beneficiario_data", {}).get("full_name", "tu beneficiario")
