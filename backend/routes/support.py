@@ -5,6 +5,8 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
+from typing import Optional
+
 from pydantic import BaseModel
 
 from database import db
@@ -24,6 +26,7 @@ class SupportMessage(BaseModel):
 class AdminSupportResponse(BaseModel):
     user_id: str
     message: str
+    image: Optional[str] = None
 
 
 class CloseChat(BaseModel):
@@ -142,6 +145,7 @@ async def admin_respond(response: AdminSupportResponse, current_user: User = Dep
         "admin_id": current_user.user_id,
         "admin_name": current_user.name or "Admin",
         "message": response.message,
+        "image": response.image,
         "sender": "admin",
         "created_at": datetime.now(timezone.utc),
         "read": False
@@ -152,7 +156,7 @@ async def admin_respond(response: AdminSupportResponse, current_user: User = Dep
     await db.support_chats.update_one(
         {"user_id": response.user_id},
         {"$set": {
-            "last_message": response.message,
+            "last_message": response.message or "📷 Imagen",
             "last_message_at": datetime.now(timezone.utc),
             "last_responder": current_user.name or "Admin",
             "unread_count": 0
