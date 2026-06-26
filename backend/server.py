@@ -65,6 +65,22 @@ async def lifespan(app):
         await db.transactions.create_index("user_id")
         await db.transactions.create_index("status")
         await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+
+        # --- Índices adicionales (rendimiento al escalar) ---
+        await db.transactions.create_index([("user_id", 1), ("created_at", -1)])
+        await db.transactions.create_index([("created_at", -1)])
+        await db.transactions.create_index("transaction_id", sparse=True)
+        await db.support_requests.create_index([("status", 1), ("created_at", -1)])
+        await db.support_requests.create_index("support_id", sparse=True)
+        await db.support_messages.create_index([("user_id", 1), ("created_at", 1)])
+        await db.support_messages.create_index([("user_id", 1), ("read", 1)])
+        await db.support_chats.create_index("user_id")
+        await db.support_chats.create_index([("last_message_at", -1)])
+        await db.quick_replies.create_index([("created_at", 1)])
+        await db.blacklist.create_index([("type", 1), ("value", 1)])
+        await db.blacklist.create_index("value")
+        await db.verifications.create_index([("status", 1), ("created_at", -1)])
+        await db.verifications.create_index("user_id")
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.warning(f"Index creation warning: {e}")
