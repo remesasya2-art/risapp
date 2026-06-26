@@ -207,9 +207,14 @@ export default function SupportChat() {
                         {msg.admin_name || 'Soporte'}
                       </p>
                     )}
-                    <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>
-                      {msg.message}
-                    </p>
+                    {msg.message && (
+                      <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>
+                        {msg.message}
+                      </p>
+                    )}
+                    {msg.image && (
+                      <img src={msg.image} alt="adjunto" onClick={() => window.open(msg.image, '_blank')} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '200px', maxHeight: '200px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
+                    )}
                   </div>
                   <p style={{
                     fontSize: '10px',
