@@ -82,7 +82,7 @@ export default function AdminPanel() {
 
   const isAgent = user?.role === 'agent';
   useEffect(() => {
-    if (isAgent && !['chat', 'support'].includes(activeTab)) setActiveTab('chat');
+    if (isAgent && !['chat', 'support', 'users', 'kyc', 'blacklist'].includes(activeTab)) setActiveTab('chat');
   }, [isAgent]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
@@ -875,7 +875,7 @@ export default function AdminPanel() {
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
         {CRM_KEYS.includes(activeTab) && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #eef0f4', paddingBottom: '14px' }}>
-            {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support'].includes(st.key)) : CRM_SUBTABS.filter(st => st.key !== 'ratings' || user?.role === 'super_admin')).map((st) => (
+            {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support', 'users', 'kyc', 'blacklist'].includes(st.key)) : CRM_SUBTABS.filter(st => st.key !== 'ratings' || user?.role === 'super_admin')).map((st) => (
               <button key={st.key} onClick={() => setActiveTab(st.key)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', border: activeTab === st.key ? '1px solid #6366f1' : '1px solid #e5e7eb', backgroundColor: activeTab === st.key ? '#eef2ff' : '#fff', color: activeTab === st.key ? '#4F46E5' : '#6b7280', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
               >
@@ -1536,7 +1536,7 @@ export default function AdminPanel() {
                               <Eye style={{ width: '14px', height: '14px' }} />
                               Ver
                             </button>
-                            {u.user_id !== user.user_id && (
+                            {user?.role === 'super_admin' && u.user_id !== user.user_id && (
                               <button 
                                 onClick={() => { setSelectedUserForRole(u); setShowRoleModal(true); }}
                                 style={{ 
@@ -1550,7 +1550,7 @@ export default function AdminPanel() {
                                 Rol
                               </button>
                             )}
-                            {u.user_id !== user.user_id && (
+                            {user?.role === 'super_admin' && u.user_id !== user.user_id && (
                               <button 
                                 onClick={() => handleResetPassword(u.user_id, u.name)}
                                 style={{ 
@@ -2549,7 +2549,7 @@ export default function AdminPanel() {
                   </div>
 
                   {/* Admin Actions: Suspend / Delete */}
-                  {selectedUser.role !== 'super_admin' && (
+                  {user?.role === 'super_admin' && selectedUser.role !== 'super_admin' && (
                     <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: '14px', marginBottom: '24px' }}>
                       <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#991b1b', margin: '0 0 12px 0' }}>ACCIONES DE ADMINISTRADOR</h4>
                       <div style={{ display: 'flex', gap: '12px' }}>
