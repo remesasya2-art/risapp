@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -57,6 +57,7 @@ const CRM_SUBTABS = [
   { key: 'partners', label: 'Socios', icon: Briefcase },
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'support', label: 'Soporte', icon: MessageSquare },
+  { key: 'ratings', label: 'Calificaciones', icon: Star },
 ];
 
 const TABS = [
@@ -130,6 +131,7 @@ export default function AdminPanel() {
   const [sendingReply, setSendingReply] = useState(false);
   // Chat state
   const [supportChats, setSupportChats] = useState([]);
+  const [agentRatings, setAgentRatings] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatReply, setChatReply] = useState('');
@@ -335,6 +337,10 @@ export default function AdminPanel() {
         case 'support':
           const supportRes = await api.get('/admin/support-requests');
           setSupportRequests(supportRes.data?.requests || []);
+          break;
+        case 'ratings':
+          const ratingsRes = await api.get('/admin/agent-ratings');
+          setAgentRatings(ratingsRes.data?.agents || []);
           break;
         case 'chat':
           const chatsRes = await api.get('/admin/support/chats');
@@ -869,7 +875,7 @@ export default function AdminPanel() {
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
         {CRM_KEYS.includes(activeTab) && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #eef0f4', paddingBottom: '14px' }}>
-            {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support'].includes(st.key)) : CRM_SUBTABS).map((st) => (
+            {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support'].includes(st.key)) : CRM_SUBTABS.filter(st => st.key !== 'ratings' || user?.role === 'super_admin')).map((st) => (
               <button key={st.key} onClick={() => setActiveTab(st.key)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', border: activeTab === st.key ? '1px solid #6366f1' : '1px solid #e5e7eb', backgroundColor: activeTab === st.key ? '#eef2ff' : '#fff', color: activeTab === st.key ? '#4F46E5' : '#6b7280', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
               >
@@ -1921,6 +1927,42 @@ export default function AdminPanel() {
         )}
 
         {/* Support Requests Tab */}
+        {activeTab === 'ratings' && (
+          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: '0 0 4px 0' }}>Calificaciones por agente</h2>
+            <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 20px 0' }}>Uso interno · basado en las estrellas que dejan los clientes al cerrarse un caso</p>
+            {(!agentRatings || agentRatings.length === 0) ? (
+              <p style={{ color: '#9ca3af', fontSize: '14px' }}>Aún no hay calificaciones.</p>
+            ) : (
+              agentRatings.map((ag) => (
+                <div key={ag.agent_id} style={{ border: '1px solid #e5e7eb', borderRadius: '14px', padding: '18px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>{ag.agent_name}</span>
+                      <span style={{ fontSize: '13px', color: '#6b7280' }}>{ag.count} {ag.count === 1 ? 'calificación' : 'calificaciones'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#f59e0b', fontSize: '18px', letterSpacing: '2px' }}>{'★'.repeat(Math.round(ag.average))}{'☆'.repeat(5 - Math.round(ag.average))}</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>{ag.average.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {ag.ratings.map((r, i) => (
+                      <div key={i} style={{ background: '#f9fafb', borderRadius: '10px', padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ color: '#f59e0b', fontSize: '14px', letterSpacing: '1px' }}>{'★'.repeat(r.stars || 0)}{'☆'.repeat(5 - (r.stars || 0))}</span>
+                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>{r.channel === 'chat' ? 'Chat' : 'Soporte'}{r.case_code ? ` · ${r.case_code}` : ''}{r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString('es-ES')}` : ''}</span>
+                        </div>
+                        {r.comment && <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#374151', whiteSpace: 'pre-wrap' }}>{r.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         {activeTab === 'support' && (
           <div style={{ padding: '0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
