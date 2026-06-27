@@ -4,7 +4,7 @@ Support routes - Support chat system
 import uuid
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 
 from pydantic import BaseModel
@@ -242,4 +242,41 @@ async def create_quick_reply(data: QuickReplyCreate, current_user: User = Depend
 async def delete_quick_reply(qr_id: str, current_user: User = Depends(get_crm_user)):
     """Elimina una respuesta rápida compartida."""
     await db.quick_replies.delete_one({"qr_id": qr_id})
+    return {"success": True}
+
+# ============== ASIGNACIÓN DE CASOS DE CHAT (tomar / soltar) ==============
+
+class ClaimChat(BaseModel):
+    user_id: str
+
+@router.post("/admin/support/claim")
+async def claim_chat(data: ClaimChat, current_user: User = Depends(get_crm_user)):
+    """Toma (claim) una conversación de chat de forma ATÓMICA: solo uno puede tomarla."""
+    result = await db.support_chats.update_one(
+        {"user_id": data.user_id, "$or": [{"assigned_to": None}, {"assigned_to": {"$exists": False}}, {"assigned_to": ""}]},
+        {"$set": {
+            "assigned_to": current_user.user_id,
+            "assigned_to_name": current_user.name or "Operador",
+            "assigned_at": datetime.now(timezone.utc),
+        }}
+    )
+    if result.modified_count == 1:
+        return {"success": True, "assigned_to": current_user.user_id, "assigned_to_name": current_user.name or "Operador"}
+    existing = await db.support_chats.find_one({"user_id": data.user_id}, {"_id": 0, "assigned_to": 1, "assigned_to_name": 1})
+    if existing and existing.get("assigned_to") == current_user.user_id:
+        return {"success": True, "already_mine": True, "assigned_to": current_user.user_id, "assigned_to_name": current_user.name or "Operador"}
+    return {"success": False, "assigned_to": (existing or {}).get("assigned_to"), "assigned_to_name": (existing or {}).get("assigned_to_name")}
+
+@router.post("/admin/support/release")
+async def release_chat(data: ClaimChat, current_user: User = Depends(get_crm_user)):
+    """Suelta una conversación. Solo el dueño del caso o un super admin."""
+    chat = await db.support_chats.find_one({"user_id": data.user_id}, {"_id": 0, "assigned_to": 1})
+    if not chat:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    if chat.get("assigned_to") and chat.get("assigned_to") != current_user.user_id and current_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo quien atiende el caso o un super admin puede liberarlo")
+    await db.support_chats.update_one(
+        {"user_id": data.user_id},
+        {"$set": {"assigned_to": None, "assigned_to_name": None, "assigned_at": None}}
+    )
     return {"success": True}
