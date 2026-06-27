@@ -11,6 +11,11 @@ export default function SupportChat() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [conv, setConv] = useState(null);
+  const [ratingStars, setRatingStars] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [ratingDone, setRatingDone] = useState(false);
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,10 +33,18 @@ export default function SupportChat() {
     }
   };
 
+  const loadConversation = async () => {
+    try {
+      const res = await api.get('/support/conversation');
+      setConv(res.data || null);
+    } catch (error) { /* silencioso */ }
+  };
+
   useEffect(() => {
     loadMessages();
+    loadConversation();
     // Poll for new messages every 10 seconds
-    const interval = setInterval(loadMessages, 10000);
+    const interval = setInterval(() => { loadMessages(); loadConversation(); }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -62,6 +75,20 @@ export default function SupportChat() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const submitRating = async () => {
+    if (ratingStars < 1 || submittingRating) return;
+    setSubmittingRating(true);
+    try {
+      await api.post('/support/rate', { stars: ratingStars, comment: ratingComment.trim() || null });
+      setRatingDone(true);
+      toast.success('¡Gracias por tu calificación!');
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'No se pudo enviar la calificación');
+    } finally {
+      setSubmittingRating(false);
     }
   };
 
@@ -230,6 +257,27 @@ export default function SupportChat() {
             <div ref={messagesEndRef} />
           </div>
 
+                    {conv?.status === 'closed' && (conv?.rated || ratingDone) && (
+            <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', backgroundColor: '#f0fdf4', textAlign: 'center', fontSize: '13px', color: '#15803d', fontWeight: 600 }}>
+              ✓ ¡Gracias por tu calificación!
+            </div>
+          )}
+          {conv?.status === 'closed' && !conv?.rated && !ratingDone && (
+            <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb', backgroundColor: '#fafafa' }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#1f2937', textAlign: 'center' }}>
+                ¿Cómo fue tu atención{conv?.assigned_to_name ? ` con ${conv.assigned_to_name}` : ''}?
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '10px' }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => setRatingStars(n)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '28px', lineHeight: 1, color: n <= ratingStars ? '#f59e0b' : '#d1d5db' }}>★</button>
+                ))}
+              </div>
+              <textarea value={ratingComment} onChange={(e) => setRatingComment(e.target.value)} placeholder="Comentario (opcional)" rows={2} style={{ width: '100%', padding: '8px 10px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: '8px' }} />
+              <button onClick={submitRating} disabled={ratingStars < 1 || submittingRating} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', backgroundColor: ratingStars >= 1 ? '#6366f1' : '#e5e7eb', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: ratingStars >= 1 ? 'pointer' : 'default' }}>
+                Enviar calificación
+              </button>
+            </div>
+          )}
           {/* Input */}
           <div style={{
             padding: '12px 16px',
