@@ -75,7 +75,12 @@ export default function AdminPanel() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { rates, refreshRates } = useRate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(user?.role === 'agent' ? 'chat' : 'overview');
+
+  const isAgent = user?.role === 'agent';
+  useEffect(() => {
+    if (isAgent && !['chat', 'support'].includes(activeTab)) setActiveTab('chat');
+  }, [isAgent]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
   const [withdrawals, setWithdrawals] = useState([]);
@@ -747,7 +752,7 @@ export default function AdminPanel() {
               </button>
               <div>
                 <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Panel de Control</h1>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</p>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'agent' ? 'Agente' : 'Admin'}</p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -764,8 +769,8 @@ export default function AdminPanel() {
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-            {TABS.map((tab) => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? 'users' : tab.key)}
+            {(isAgent ? TABS.filter(t => t.key === 'crm') : TABS).map((tab) => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? (isAgent ? 'chat' : 'users') : tab.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
                   backgroundColor: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#6366f1' : 'transparent', color: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#ffffff' : '#6b7280' }}
                 data-testid={`tab-${tab.key}`}
@@ -780,7 +785,7 @@ export default function AdminPanel() {
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
         {CRM_KEYS.includes(activeTab) && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #eef0f4', paddingBottom: '14px' }}>
-            {CRM_SUBTABS.map((st) => (
+            {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support'].includes(st.key)) : CRM_SUBTABS).map((st) => (
               <button key={st.key} onClick={() => setActiveTab(st.key)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', border: activeTab === st.key ? '1px solid #6366f1' : '1px solid #e5e7eb', backgroundColor: activeTab === st.key ? '#eef2ff' : '#fff', color: activeTab === st.key ? '#4F46E5' : '#6b7280', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
               >
