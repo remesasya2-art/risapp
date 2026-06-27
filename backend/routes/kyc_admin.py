@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from database import db
 from models.user import User
-from routes.dependencies import get_super_admin
+from routes.dependencies import get_super_admin, get_crm_user
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ async def list_kyc(
     status: str = Query("pending", regex="^(pending|approved|rejected|all)$"),
     search: Optional[str] = Query(None, description="Match name, email or document number"),
     limit: int = Query(100, ge=1, le=500),
-    admin: User = Depends(get_super_admin),
+    admin: User = Depends(get_crm_user),
 ):
     """
     Returns:
@@ -266,7 +266,7 @@ async def list_kyc(
 
 
 @router.get("/document-types")
-async def get_document_types(admin: User = Depends(get_super_admin)):
+async def get_document_types(admin: User = Depends(get_crm_user)):
     """Catalog of accepted ID document types."""
     return DOCUMENT_TYPES
 
@@ -275,7 +275,7 @@ async def get_document_types(admin: User = Depends(get_super_admin)):
 async def export_kyc_csv(
     status: str = Query("all", regex="^(pending|approved|rejected|all)$"),
     search: Optional[str] = None,
-    admin: User = Depends(get_super_admin),
+    admin: User = Depends(get_crm_user),
 ):
     """Export KYC submissions to CSV with current filters applied."""
     import csv
@@ -345,13 +345,13 @@ async def export_kyc_csv(
 
 
 @router.get("/rejection-reasons")
-async def get_rejection_reasons(admin: User = Depends(get_super_admin)):
+async def get_rejection_reasons(admin: User = Depends(get_crm_user)):
     """Predefined rejection reason catalog."""
     return [{"code": code, "label": label} for code, label in REJECTION_REASONS.items()]
 
 
 @router.get("/{verification_id}")
-async def get_kyc_detail(verification_id: str, admin: User = Depends(get_super_admin)):
+async def get_kyc_detail(verification_id: str, admin: User = Depends(get_crm_user)):
     v = await db.verifications.find_one({"verification_id": verification_id}, {"_id": 0})
     if not v:
         # fallback by user_id
@@ -371,7 +371,7 @@ async def get_kyc_detail(verification_id: str, admin: User = Depends(get_super_a
 
 
 @router.get("/{verification_id}/history")
-async def get_kyc_history(verification_id: str, admin: User = Depends(get_super_admin)):
+async def get_kyc_history(verification_id: str, admin: User = Depends(get_crm_user)):
     """Audit history for a verification."""
     # Resolve real id (allow user_id fallback)
     v = await db.verifications.find_one(
@@ -405,7 +405,7 @@ async def get_kyc_history(verification_id: str, admin: User = Depends(get_super_
 
 
 @router.post("/{verification_id}/approve")
-async def approve_kyc(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_super_admin)):
+async def approve_kyc(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_crm_user)):
     checklist = (payload or {}).get("checklist") or {}
     v = await db.verifications.find_one(
         {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]}
@@ -448,7 +448,7 @@ async def approve_kyc(verification_id: str, payload: dict = Body(default={}), ad
 
 
 @router.post("/{verification_id}/risk")
-async def set_kyc_risk(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_super_admin)):
+async def set_kyc_risk(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_crm_user)):
     """Asigna el nivel de riesgo (low/medium/high) a una verificación. No cambia
     el estado; es una clasificación del admin que queda registrada en auditoría."""
     level = (payload or {}).get("level")
@@ -474,7 +474,7 @@ async def set_kyc_risk(verification_id: str, payload: dict = Body(default={}), a
 
 
 @router.post("/{verification_id}/re-review")
-async def re_review_kyc(verification_id: str, admin: User = Depends(get_super_admin)):
+async def re_review_kyc(verification_id: str, admin: User = Depends(get_crm_user)):
     """Marca una verificación ya aprobada para re-revisión: vuelve a 'pending'.
     Los documentos existentes se conservan, así que el admin puede re-revisarlos
     y aprobar de nuevo sin que el usuario tenga que reenviar nada.
@@ -521,7 +521,7 @@ async def re_review_kyc(verification_id: str, admin: User = Depends(get_super_ad
 
 @router.post("/{verification_id}/reject")
 async def reject_kyc(verification_id: str, payload: RejectRequest,
-                     admin: User = Depends(get_super_admin)):
+                     admin: User = Depends(get_crm_user)):
     if payload.reason_code not in REJECTION_REASONS:
         raise HTTPException(status_code=400, detail="Motivo de rechazo inválido")
 
@@ -584,7 +584,7 @@ async def reject_kyc(verification_id: str, payload: RejectRequest,
 
 @router.patch("/{verification_id}/note")
 async def update_kyc_note(verification_id: str, payload: NoteRequest,
-                          admin: User = Depends(get_super_admin)):
+                          admin: User = Depends(get_crm_user)):
     """Update internal admin note (only visible to admins)."""
     v = await db.verifications.find_one(
         {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
