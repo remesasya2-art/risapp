@@ -1830,6 +1830,24 @@ async def release_support_request(request_id: str, admin: User = Depends(get_crm
     return {"success": True}
 
 
+class SetPriorityRequest(BaseModel):
+    priority: str
+
+@router.post("/support-requests/{request_id}/priority")
+async def set_support_priority(request_id: str, data: SetPriorityRequest, admin: User = Depends(get_crm_user)):
+    """Cambia la prioridad de una solicitud de soporte."""
+    valid = ["baja", "normal", "alta", "urgente"]
+    if data.priority not in valid:
+        raise HTTPException(status_code=400, detail="Prioridad inválida")
+    result = await db.support_requests.update_one(
+        {"support_id": request_id},
+        {"$set": {"priority": data.priority}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    return {"success": True, "priority": data.priority}
+
+
 
 @router.post("/users/{user_id}/suspend")
 async def suspend_user(user_id: str, data: dict, admin: User = Depends(get_super_admin)):
