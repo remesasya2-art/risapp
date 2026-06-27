@@ -1797,6 +1797,38 @@ async def reply_support_request(request_id: str, data: SupportReplyRequest, admi
         return {"success": False, "email_sent": False, "message": "Respuesta guardada, pero el correo no se pudo enviar (revisa la configuracion de Resend)."}
     return {"success": True, "email_sent": True, "message": "Respuesta enviada por correo"}
 
+@router.post("/support-requests/{request_id}/claim")
+async def claim_support_request(request_id: str, admin: User = Depends(get_crm_user)):
+    """Toma (claim) una solicitud de soporte de forma ATÓMICA: solo uno puede tomarla."""
+    result = await db.support_requests.update_one(
+        {"support_id": request_id, "$or": [{"assigned_to": None}, {"assigned_to": {"$exists": False}}, {"assigned_to": ""}]},
+        {"$set": {
+            "assigned_to": admin.user_id,
+            "assigned_to_name": admin.name or "Operador",
+            "assigned_at": datetime.now(timezone.utc),
+        }}
+    )
+    if result.modified_count == 1:
+        return {"success": True, "assigned_to": admin.user_id, "assigned_to_name": admin.name or "Operador"}
+    existing = await db.support_requests.find_one({"support_id": request_id}, {"_id": 0, "assigned_to": 1, "assigned_to_name": 1})
+    if existing and existing.get("assigned_to") == admin.user_id:
+        return {"success": True, "already_mine": True, "assigned_to": admin.user_id, "assigned_to_name": admin.name or "Operador"}
+    return {"success": False, "assigned_to": (existing or {}).get("assigned_to"), "assigned_to_name": (existing or {}).get("assigned_to_name")}
+
+@router.post("/support-requests/{request_id}/release")
+async def release_support_request(request_id: str, admin: User = Depends(get_crm_user)):
+    """Suelta una solicitud. Solo el dueño del caso o un super admin."""
+    req = await db.support_requests.find_one({"support_id": request_id}, {"_id": 0, "assigned_to": 1})
+    if not req:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if req.get("assigned_to") and req.get("assigned_to") != admin.user_id and admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Solo quien atiende el caso o un super admin puede liberarlo")
+    await db.support_requests.update_one(
+        {"support_id": request_id},
+        {"$set": {"assigned_to": None, "assigned_to_name": None, "assigned_at": None}}
+    )
+    return {"success": True}
+
 
 
 @router.post("/users/{user_id}/suspend")
