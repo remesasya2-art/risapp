@@ -71,6 +71,8 @@ const TABS = [
   { key: 'btc', label: 'BTC Lightning', icon: Zap },
 ];
 
+const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
+
 export default function AdminPanel() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -122,6 +124,7 @@ export default function AdminPanel() {
   const [supportRequests, setSupportRequests] = useState([]);
   const [supportFilter, setSupportFilter] = useState('pending'); // 'pending', 'resolved', 'all'
   const [supportSearch, setSupportSearch] = useState('');
+  const [supportAssignFilter, setSupportAssignFilter] = useState('all');
   const [replyingTo, setReplyingTo] = useState(null);
   const [supportReplyText, setSupportReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
@@ -624,6 +627,8 @@ export default function AdminPanel() {
 
   const filteredSupport = supportRequests.filter((req) => {
     if (supportFilter !== 'all' && req.status !== supportFilter) return false;
+    if (supportAssignFilter === 'mine' && req.assigned_to !== user?.user_id) return false;
+    if (supportAssignFilter === 'unassigned' && req.assigned_to) return false;
     const q = supportSearch.trim().toLowerCase();
     if (!q) return true;
     return (req.subject || '').toLowerCase().includes(q) || (req.email || '').toLowerCase().includes(q) || (req.message || '').toLowerCase().includes(q);
@@ -657,6 +662,15 @@ export default function AdminPanel() {
       loadSupportRequests();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo liberar');
+    }
+  };
+
+  const setSupportPriority = async (req, priority) => {
+    try {
+      await api.post(`/admin/support-requests/${req.support_id}/priority`, { priority });
+      setSupportRequests((prev) => prev.map((r) => (r.support_id === req.support_id ? { ...r, priority } : r)));
+    } catch (e) {
+      toast.error('No se pudo cambiar la prioridad');
     }
   };
 
@@ -1937,6 +1951,15 @@ export default function AdminPanel() {
             </div>
 
             <input value={supportSearch} onChange={(e) => setSupportSearch(e.target.value)} placeholder="Buscar por asunto, correo o mensaje…" style={{ width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }} />
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              {[['all', 'Todos'], ['mine', 'Mis casos'], ['unassigned', 'Sin asignar']].map(([key, label]) => (
+                <button key={key} onClick={() => setSupportAssignFilter(key)} style={{
+                  padding: '7px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  border: supportAssignFilter === key ? '1px solid #6366f1' : '1px solid #e5e7eb',
+                  backgroundColor: supportAssignFilter === key ? '#eef2ff' : '#fff', color: supportAssignFilter === key ? '#4F46E5' : '#6b7280'
+                }}>{label}</button>
+              ))}
+            </div>
             {loading ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <RefreshCw className="animate-spin" style={{ width: '32px', height: '32px', color: '#6366f1' }} />
@@ -2059,6 +2082,12 @@ export default function AdminPanel() {
                             <CheckCircle style={{ width: '14px', height: '14px' }} /> Respondida
                           </span>
                         )}
+                                              <select value={request.priority || 'normal'} onChange={(e) => setSupportPriority(request, e.target.value)} title="Prioridad" style={{ marginLeft: 'auto', padding: '7px 10px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', cursor: 'pointer', color: PRIORITY_COLORS[request.priority || 'normal'], fontWeight: 700 }}>
+                          <option value="baja">Prioridad: Baja</option>
+                          <option value="normal">Prioridad: Normal</option>
+                          <option value="alta">Prioridad: Alta</option>
+                          <option value="urgente">Prioridad: Urgente</option>
+                        </select>
                       </div>
                       {replyingTo === request.support_id && (
                         <div style={{ marginTop: '10px' }}>
