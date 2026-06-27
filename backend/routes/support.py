@@ -280,3 +280,37 @@ async def release_chat(data: ClaimChat, current_user: User = Depends(get_crm_use
         {"$set": {"assigned_to": None, "assigned_to_name": None, "assigned_at": None}}
     )
     return {"success": True}
+
+# ============== CALIFICACIÓN DEL USUARIO (chat) ==============
+class RateChat(BaseModel):
+    stars: int
+    comment: Optional[str] = None
+
+@router.post("/support/rate")
+async def rate_chat(data: RateChat, current_user: User = Depends(get_current_user)):
+    """El usuario califica la atención de su chat (solo si está cerrado y sin calificar)."""
+    if data.stars < 1 or data.stars > 5:
+        raise HTTPException(status_code=400, detail="La calificación debe ser de 1 a 5 estrellas")
+    chat = await db.support_chats.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if not chat:
+        raise HTTPException(status_code=404, detail="No hay conversación para calificar")
+    if chat.get("status") != "closed":
+        raise HTTPException(status_code=400, detail="Solo puedes calificar un caso cerrado")
+    if chat.get("rated"):
+        raise HTTPException(status_code=400, detail="Este caso ya fue calificado")
+    rating = {
+        "rating_id": f"rat_{uuid.uuid4().hex[:12]}",
+        "channel": "chat",
+        "case_ref": current_user.user_id,
+        "agent_id": chat.get("assigned_to"),
+        "agent_name": chat.get("assigned_to_name"),
+        "stars": data.stars,
+        "comment": (data.comment or "").strip()[:500],
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.ratings.insert_one(rating)
+    await db.support_chats.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"rated": True, "rating_stars": data.stars}}
+    )
+    return {"success": True}
