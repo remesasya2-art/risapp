@@ -47,7 +47,7 @@ function ProtectedRoute({ children, adminOnly = false }) {
     return <Navigate to="/force-change-password" replace />;
   }
 
-  if (adminOnly && !['admin', 'super_admin'].includes(user.role)) {
+  if (adminOnly && !['agent', 'admin', 'super_admin'].includes(user.role)) {
     return <Navigate to="/" replace />;
   }
 
