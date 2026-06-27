@@ -145,13 +145,46 @@ export default function AdminPanel() {
       setChatMessages(res.data || []);
     } catch (e) { /* silencioso */ }
   };
+
+  const loadSupportChats = async () => {
+    try {
+      const res = await api.get('/admin/support/chats');
+      const list = res.data || [];
+      setSupportChats(list);
+      setSelectedChat((prev) => (prev ? (list.find((c) => c.user_id === prev.user_id) || prev) : prev));
+    } catch (e) { /* silencioso */ }
+  };
+
+  const claimChat = async (chat) => {
+    try {
+      const res = await api.post('/admin/support/claim', { user_id: chat.user_id });
+      if (res.data?.success) {
+        toast.success(res.data?.already_mine ? 'Ya atendías este caso' : 'Tomaste este caso');
+      } else {
+        toast.error(`Ya lo atiende ${res.data?.assigned_to_name || 'otro operador'}`);
+      }
+      await loadSupportChats();
+    } catch (e) {
+      toast.error('No se pudo tomar el caso');
+    }
+  };
+
+  const releaseChat = async (chat) => {
+    try {
+      await api.post('/admin/support/release', { user_id: chat.user_id });
+      toast.success('Caso liberado');
+      await loadSupportChats();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo liberar');
+    }
+  };
   // Auto-refresco en vivo de la conversación abierta (cada 4s).
   useEffect(() => {
     if (!selectedChat?.user_id) return;
     const id = selectedChat.user_id;
     prevMsgCount.current = 0;
     loadChatMessages(id);
-    chatPollRef.current = setInterval(() => loadChatMessages(id), 4000);
+    chatPollRef.current = setInterval(() => { loadChatMessages(id); loadSupportChats(); }, 4000);
     return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
   }, [selectedChat?.user_id]);
   // Bajar al último mensaje solo cuando llegan mensajes nuevos (no en cada poll).
@@ -1669,6 +1702,9 @@ export default function AdminPanel() {
                         )}
                       </div>
                       <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>{chat.user_email}</p>
+                      {chat.assigned_to_name && (
+                        <p style={{ fontSize: '11px', color: '#15803d', margin: '0 0 4px 0', fontWeight: 600 }}>● Atendido por {chat.assigned_to_name}</p>
+                      )}
                       <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {chat.last_message ? (chat.last_message.length > 40 ? chat.last_message.substring(0, 40) + '…' : chat.last_message) : ''}
                       </p>
@@ -1698,6 +1734,24 @@ export default function AdminPanel() {
                       <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>{selectedChat.user_name}</h3>
                       <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#6b7280' }}>{selectedChat.user_email}</p>
                     </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {selectedChat.assigned_to ? (
+                        <>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#15803d', backgroundColor: '#dcfce7', padding: '6px 10px', borderRadius: '999px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
+                            Atendido por {selectedChat.assigned_to_name || 'Operador'}
+                          </span>
+                          {(selectedChat.assigned_to === user?.user_id || user?.role === 'super_admin') && (
+                            <button onClick={() => releaseChat(selectedChat)} style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', backgroundColor: '#fff', color: '#6b7280', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                              Soltar
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <button onClick={() => claimChat(selectedChat)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                          Atender este caso
+                        </button>
+                      )}
                     <button
                       onClick={async () => {
                         try {
@@ -1713,6 +1767,7 @@ export default function AdminPanel() {
                     >
                       Cerrar Chat
                     </button>
+                    </div>
                   </div>
 
                   {/* Messages */}
