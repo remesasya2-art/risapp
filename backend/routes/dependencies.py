@@ -70,6 +70,12 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+async def get_crm_user(current_user: User = Depends(get_current_user)) -> User:
+    """Require CRM access: agent, admin or super_admin"""
+    if current_user.role not in ["agent", "admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="CRM access required")
+    return current_user
+
 async def get_super_admin(current_user: User = Depends(get_current_user)) -> User:
     """Require super_admin role"""
     if current_user.role != "super_admin":
