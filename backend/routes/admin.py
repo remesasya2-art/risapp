@@ -537,6 +537,24 @@ async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get
     
     return {"message": "Rol actualizado", "new_role": request.new_role}
 
+class SetAgentRequest(BaseModel):
+    is_agent: bool
+
+@router.post("/users/{user_id}/set-agent")
+async def set_user_agent(user_id: str, data: SetAgentRequest, admin: User = Depends(get_super_admin)):
+    """Promueve a un usuario a agente de soporte, o le quita el rol (solo super admin)."""
+    target = await db.users.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if target.get("role") == "super_admin":
+        raise HTTPException(status_code=400, detail="No se puede cambiar el rol de un super administrador")
+    if target.get("email") == "marshalljulio46@gmail.com":
+        raise HTTPException(status_code=403, detail="No puedes modificar al administrador principal")
+    new_role = "agent" if data.is_agent else "user"
+    await db.users.update_one({"user_id": user_id}, {"$set": {"role": new_role}})
+    logger.info(f"User {user_id} agent role set to {data.is_agent} by {admin.user_id}")
+    return {"success": True, "role": new_role}
+
 @router.post("/reset-password")
 async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User = Depends(get_super_admin)):
     """Admin reset user password"""
