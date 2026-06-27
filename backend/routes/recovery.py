@@ -8,6 +8,8 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
+from pymongo import ReturnDocument
+
 from database import db
 from services.email_notifications import send_email
 
@@ -289,8 +291,19 @@ async def support_contact(data: SupportContactRequest):
     
     # Store support request
     support_id = f"sup_{uuid.uuid4().hex[:12]}"
+    # Número de caso secuencial y atómico (TKT-000123)
+    counter = await db.counters.find_one_and_update(
+        {"_id": "support_case"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+    case_number = counter.get("seq", 1)
+    case_code = f"TKT-{case_number:06d}"
     await db.support_requests.insert_one({
         "support_id": support_id,
+        "case_number": case_number,
+        "case_code": case_code,
         "email": data.email.lower(),
         "subject": data.subject,
         "phone_number": data.phone_number,
