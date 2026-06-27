@@ -407,6 +407,18 @@ export default function AdminPanel() {
     } catch { /* silent */ }
   };
 
+  const handleSetAgent = async (u) => {
+    const makeAgent = u.role !== 'agent';
+    if (!window.confirm(makeAgent ? `¿Convertir a ${u.name || u.email} en agente de soporte?` : `¿Quitar el rol de agente a ${u.name || u.email}?`)) return;
+    try {
+      await api.post(`/admin/users/${u.user_id}/set-agent`, { is_agent: makeAgent });
+      toast.success(makeAgent ? 'Ahora es agente de soporte' : 'Rol de agente quitado');
+      loadData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo cambiar el rol');
+    }
+  };
+
   const handleBanUser = async (u) => {
     if (!u?.email) { toast.error('Este usuario no tiene correo'); return; }
     if (!window.confirm(`¿Agregar a ${u.name || u.email} a la lista negra? Su correo (${u.email}) quedará bloqueado para registrarse de nuevo.`)) return;
@@ -1469,6 +1481,20 @@ export default function AdminPanel() {
                               >
                                 <Shield style={{ width: '14px', height: '14px' }} />
                                 Lista negra
+                              </button>
+                            )}
+                            {user?.role === 'super_admin' && u.user_id !== user.user_id && u.role !== 'super_admin' && (
+                              <button 
+                                onClick={() => handleSetAgent(u)}
+                                style={{ 
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+                                  backgroundColor: u.role === 'agent' ? '#fef3c7' : '#ecfeff', color: u.role === 'agent' ? '#b45309' : '#0e7490', border: 'none',
+                                  borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                                }}
+                                data-testid={`set-agent-${u.user_id}`}
+                              >
+                                <UserCog style={{ width: '14px', height: '14px' }} />
+                                {u.role === 'agent' ? 'Quitar agente' : 'Hacer agente'}
                               </button>
                             )}
                           </td>
