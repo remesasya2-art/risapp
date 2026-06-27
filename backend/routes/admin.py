@@ -12,7 +12,7 @@ from database import db
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
-from routes.dependencies import get_admin_user, get_super_admin
+from routes.dependencies import get_admin_user, get_super_admin, get_crm_user
 from services.whatsapp import send_next_pending_withdrawal_whatsapp
 from services.notifications import create_notification
 from services.email import send_admin_password_reset_email
@@ -1714,13 +1714,13 @@ async def process_verification(user_id: str, action: str, reason: str = None, ad
 # ============== SUPPORT REQUESTS ==============
 
 @router.get("/support-requests")
-async def get_support_requests(admin: User = Depends(get_admin_user)):
+async def get_support_requests(admin: User = Depends(get_crm_user)):
     """Get all support requests"""
     requests = await db.support_requests.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return {"requests": requests}
 
 @router.post("/support-requests/{request_id}/resolve")
-async def resolve_support_request(request_id: str, admin: User = Depends(get_admin_user)):
+async def resolve_support_request(request_id: str, admin: User = Depends(get_crm_user)):
     """Mark a support request as resolved"""
     result = await db.support_requests.update_one(
         {"support_id": request_id},
@@ -1741,7 +1741,7 @@ class SupportReplyRequest(BaseModel):
     message: str
 
 @router.post("/support-requests/{request_id}/reply")
-async def reply_support_request(request_id: str, data: SupportReplyRequest, admin: User = Depends(get_admin_user)):
+async def reply_support_request(request_id: str, data: SupportReplyRequest, admin: User = Depends(get_crm_user)):
     """Responde una solicitud de soporte por correo (vía Resend) y guarda la respuesta."""
     text = (data.message or "").strip()
     if not text:
