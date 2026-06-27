@@ -1969,8 +1969,8 @@ export default function AdminPanel() {
                             }}>
                               {request.status === 'pending' ? 'Pendiente' : 'Resuelta'}
                             </span>
-                            <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                              {request.support_id}
+                            <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: 700 }}>
+                              {request.case_code || request.support_id}
                             </span>
                           </div>
                           <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '8px 0 4px 0' }}>
