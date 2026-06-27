@@ -1847,6 +1847,39 @@ async def set_support_priority(request_id: str, data: SetPriorityRequest, admin:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     return {"success": True, "priority": data.priority}
 
+@router.get("/agent-ratings")
+async def get_agent_ratings(admin: User = Depends(get_super_admin)):
+    """Resumen interno de calificaciones por agente (solo super admin)."""
+    ratings = await db.ratings.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    agents = {}
+    for r in ratings:
+        aid = r.get("agent_id") or "sin_asignar"
+        aname = r.get("agent_name") or "Sin asignar"
+        if aid not in agents:
+            agents[aid] = {"agent_id": aid, "agent_name": aname, "count": 0, "sum_stars": 0, "ratings": []}
+        a = agents[aid]
+        a["count"] += 1
+        a["sum_stars"] += (r.get("stars") or 0)
+        a["ratings"].append({
+            "stars": r.get("stars"),
+            "comment": r.get("comment") or "",
+            "channel": r.get("channel"),
+            "case_code": r.get("case_code"),
+            "created_at": r.get("created_at"),
+        })
+    result = []
+    for a in agents.values():
+        avg = round(a["sum_stars"] / a["count"], 2) if a["count"] else 0
+        result.append({
+            "agent_id": a["agent_id"],
+            "agent_name": a["agent_name"],
+            "count": a["count"],
+            "average": avg,
+            "ratings": a["ratings"],
+        })
+    result.sort(key=lambda x: (-x["average"], -x["count"]))
+    return {"agents": result, "total": len(ratings)}
+
 
 
 @router.post("/users/{user_id}/suspend")
