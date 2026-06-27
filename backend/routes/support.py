@@ -10,7 +10,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from database import db
-from routes.dependencies import get_current_user, get_super_admin
+from routes.dependencies import get_current_user, get_super_admin, get_crm_user
 from models.user import User
 from services.whatsapp import send_whatsapp_notification
 from services.notifications import create_notification
@@ -117,7 +117,7 @@ async def get_support_conversation(current_user: User = Depends(get_current_user
 # ============== ADMIN SUPPORT ENDPOINTS ==============
 
 @router.get("/admin/support/chats")
-async def get_admin_support_chats(current_user: User = Depends(get_super_admin)):
+async def get_admin_support_chats(current_user: User = Depends(get_crm_user)):
     """Get all support chats for admin"""
     chats = await db.support_chats.find(
         {},
@@ -127,7 +127,7 @@ async def get_admin_support_chats(current_user: User = Depends(get_super_admin))
 
 
 @router.get("/admin/support/chat/{user_id}")
-async def get_admin_chat_messages(user_id: str, current_user: User = Depends(get_super_admin)):
+async def get_admin_chat_messages(user_id: str, current_user: User = Depends(get_crm_user)):
     """Get chat messages for a specific user"""
     messages = await db.support_messages.find(
         {"user_id": user_id},
@@ -137,7 +137,7 @@ async def get_admin_chat_messages(user_id: str, current_user: User = Depends(get
 
 
 @router.post("/admin/support/respond")
-async def admin_respond(response: AdminSupportResponse, current_user: User = Depends(get_super_admin)):
+async def admin_respond(response: AdminSupportResponse, current_user: User = Depends(get_crm_user)):
     """Admin responds to support chat"""
     message_doc = {
         "message_id": f"msg_{uuid.uuid4().hex[:12]}",
@@ -175,7 +175,7 @@ async def admin_respond(response: AdminSupportResponse, current_user: User = Dep
 
 
 @router.post("/admin/support/close")
-async def close_chat(data: CloseChat, current_user: User = Depends(get_super_admin)):
+async def close_chat(data: CloseChat, current_user: User = Depends(get_crm_user)):
     """Close a support chat"""
     await db.support_chats.update_one(
         {"user_id": data.user_id},
@@ -200,7 +200,7 @@ DEFAULT_QUICK_REPLIES = [
 
 
 @router.get("/admin/quick-replies")
-async def get_quick_replies(current_user: User = Depends(get_super_admin)):
+async def get_quick_replies(current_user: User = Depends(get_crm_user)):
     """Lista las respuestas rápidas compartidas (siembra valores por defecto la primera vez)."""
     count = await db.quick_replies.count_documents({})
     if count == 0:
@@ -222,7 +222,7 @@ async def get_quick_replies(current_user: User = Depends(get_super_admin)):
 
 
 @router.post("/admin/quick-replies")
-async def create_quick_reply(data: QuickReplyCreate, current_user: User = Depends(get_super_admin)):
+async def create_quick_reply(data: QuickReplyCreate, current_user: User = Depends(get_crm_user)):
     """Crea una respuesta rápida compartida."""
     text = (data.text or "").strip()
     if not text:
@@ -239,7 +239,7 @@ async def create_quick_reply(data: QuickReplyCreate, current_user: User = Depend
 
 
 @router.delete("/admin/quick-replies/{qr_id}")
-async def delete_quick_reply(qr_id: str, current_user: User = Depends(get_super_admin)):
+async def delete_quick_reply(qr_id: str, current_user: User = Depends(get_crm_user)):
     """Elimina una respuesta rápida compartida."""
     await db.quick_replies.delete_one({"qr_id": qr_id})
     return {"success": True}
