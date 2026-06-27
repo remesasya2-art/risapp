@@ -399,13 +399,13 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
 # ============== USERS ==============
 
 @router.get("/users")
-async def get_all_users(admin: User = Depends(get_super_admin)):
+async def get_all_users(admin: User = Depends(get_crm_user)):
     """Get all users"""
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return {"users": users}
 
 @router.get("/users/{user_id}")
-async def get_user_detail(user_id: str, admin: User = Depends(get_super_admin)):
+async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
     """Get user details"""
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
     if not user:
@@ -431,7 +431,7 @@ async def get_user_detail(user_id: str, admin: User = Depends(get_super_admin)):
     }
 
 @router.get("/users/{user_id}/complete")
-async def get_user_complete_history(user_id: str, admin: User = Depends(get_super_admin)):
+async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_user)):
     """Get complete user history including profile, KYC, stats, transactions, and beneficiaries"""
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
     if not user:
@@ -1965,7 +1965,7 @@ class BlacklistAddRequest(BaseModel):
     reason: str = ""
 
 @router.post("/blacklist")
-async def add_to_blacklist(data: BlacklistAddRequest, admin: User = Depends(get_super_admin)):
+async def add_to_blacklist(data: BlacklistAddRequest, admin: User = Depends(get_crm_user)):
     """Agrega un correo/CPF/documento a la lista negra."""
     bl_type = (data.type or "").lower().strip()
     if bl_type not in ALLOWED_BLACKLIST_TYPES:
@@ -1990,13 +1990,13 @@ async def add_to_blacklist(data: BlacklistAddRequest, admin: User = Depends(get_
     return {"success": True, "message": "Agregado a la lista negra", "blacklist_id": entry["blacklist_id"]}
 
 @router.get("/blacklist")
-async def list_blacklist(admin: User = Depends(get_super_admin)):
+async def list_blacklist(admin: User = Depends(get_crm_user)):
     """Lista todos los elementos de la lista negra."""
     items = await db.blacklist.find({}, {"_id": 0}).sort("banned_at", -1).to_list(1000)
     return {"items": items, "total": len(items)}
 
 @router.delete("/blacklist/{blacklist_id}")
-async def remove_from_blacklist(blacklist_id: str, admin: User = Depends(get_super_admin)):
+async def remove_from_blacklist(blacklist_id: str, admin: User = Depends(get_crm_user)):
     """Quita un elemento de la lista negra (des-banear)."""
     result = await db.blacklist.delete_one({"blacklist_id": blacklist_id})
     if result.deleted_count == 0:
@@ -2027,7 +2027,7 @@ class BanUserRequest(BaseModel):
     reason: str = ""
 
 @router.post("/ban")
-async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_super_admin)):
+async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_crm_user)):
     """Banea a un usuario a partir de su verificación.
 
     scope="email": solo banea el correo (puede abrir cuenta con otro correo).
