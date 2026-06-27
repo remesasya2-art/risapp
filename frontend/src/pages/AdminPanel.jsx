@@ -629,6 +629,43 @@ export default function AdminPanel() {
     return (req.subject || '').toLowerCase().includes(q) || (req.email || '').toLowerCase().includes(q) || (req.message || '').toLowerCase().includes(q);
   });
 
+  const loadSupportRequests = async () => {
+    try {
+      const res = await api.get('/admin/support-requests');
+      setSupportRequests(res.data?.requests || []);
+    } catch (e) { /* silencioso */ }
+  };
+
+  const claimRequest = async (req) => {
+    try {
+      const res = await api.post(`/admin/support-requests/${req.support_id}/claim`);
+      if (res.data?.success) {
+        toast.success(res.data?.already_mine ? 'Ya atendías este caso' : 'Tomaste este caso');
+      } else {
+        toast.error(`Ya lo atiende ${res.data?.assigned_to_name || 'otro operador'}`);
+      }
+      loadSupportRequests();
+    } catch (e) {
+      toast.error('No se pudo tomar el caso');
+    }
+  };
+
+  const releaseRequest = async (req) => {
+    try {
+      await api.post(`/admin/support-requests/${req.support_id}/release`);
+      toast.success('Caso liberado');
+      loadSupportRequests();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo liberar');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'support') return;
+    const t = setInterval(() => { loadSupportRequests(); }, 6000);
+    return () => clearInterval(t);
+  }, [activeTab]);
+
   const sendSupportReply = async (req) => {
     const text = supportReplyText.trim();
     if (!text) { toast.error('Escribe una respuesta'); return; }
@@ -1995,6 +2032,20 @@ export default function AdminPanel() {
                         </p>
                       </div>
                       <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        {request.assigned_to ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#15803d', backgroundColor: '#dcfce7', padding: '6px 10px', borderRadius: '999px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
+                            Atendido por {request.assigned_to_name || 'Operador'}
+                            {(request.assigned_to === user?.user_id || user?.role === 'super_admin') && (
+                              <button onClick={() => releaseRequest(request)} style={{ marginLeft: '6px', background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>soltar</button>
+                            )}
+                          </span>
+                        ) : (
+                          <button onClick={() => claimRequest(request)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <UserCog style={{ width: '16px', height: '16px' }} />
+                            Atender este caso
+                          </button>
+                        )}
                         <button
                           onClick={() => { setReplyingTo(replyingTo === request.support_id ? null : request.support_id); setSupportReplyText(''); }}
                           style={{ padding: '8px 16px', borderRadius: '10px', border: '1px solid #6366f1', backgroundColor: replyingTo === request.support_id ? '#eef2ff' : '#fff', color: '#6366f1', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
