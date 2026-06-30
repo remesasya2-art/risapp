@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Header
 from typing import Optional
 
 from database import db
+from services.money import from_db, to_float
 from models.user import User, UserSession
 from models.requests import (
     SetPasswordRequest, LoginWithPasswordRequest, RegisterUserRequest,
@@ -31,6 +32,11 @@ async def get_me(current_user: User = Depends(get_current_user)):
     user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
     if user:
         user['password_set'] = user.get('password_set', False)
+        # Normaliza los montos para que la API devuelva siempre numeros limpios,
+        # tolerando datos viejos (float) y futuros (Decimal128). No cambia el valor hoy.
+        for f in ("balance_ris", "balance_ves", "balance_ris_terceros", "balance_personal", "balance_terceros"):
+            if f in user and user[f] is not None:
+                user[f] = to_float(from_db(user[f]))
     return user
 
 @router.post("/logout")
