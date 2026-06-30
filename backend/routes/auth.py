@@ -156,7 +156,10 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         "verification_status": "unverified",
         "referred_by": pending.get("referred_by"),
         "referral_code": referral_code,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(timezone.utc),
+        "terms_accepted": True,
+        "terms_accepted_at": datetime.now(timezone.utc),
+        "terms_version": "2026-06-29"
     }
     
     await db.users.insert_one(user)
