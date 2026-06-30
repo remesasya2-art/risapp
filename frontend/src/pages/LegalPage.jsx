@@ -114,7 +114,7 @@ export default function LegalPage() {
           <li style={li}>Razón social: J. DEL CARMEN HERNANDEZ BARRETO</li>
           <li style={li}>Nombre fantasía: SAIPHA SERVICIOS DIGITAIS</li>
           <li style={li}>CNPJ: 68.994.057/0001-61</li>
-          <li style={li}>Dirección: Rua Monte Roraima, S/N, Bairro Vila Nova, Pacaraima – RR, CEP 69355-000, Brasil</li>
+          <li style={li}>Dirección: Rua Monte Roraima, S/N, Bairro Vila Nova, Pacaraima – RR, CEP 69345-000, Brasil</li>
           <li style={li}>Correo de contacto: saipha.servicios.digitais@gmail.com</li>
           <li style={li}>Sitio web: risappbr.com</li>
         </ul>
