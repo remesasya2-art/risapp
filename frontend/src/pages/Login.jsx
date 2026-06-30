@@ -5,6 +5,7 @@ import { Eye, EyeOff, Fingerprint } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PasswordRecovery from './PasswordRecovery';
 import TwoFactorFlow from '../components/auth/TwoFactorFlow';
+import Footer from '../components/Footer';
 import { loginConHuella, webauthnSupported } from '../utils/webauthn';
 
 export default function Login() {
@@ -127,6 +128,7 @@ export default function Login() {
   }
 
   return (
+    <>
     <div 
       className="min-h-screen flex items-center justify-center p-4"
       style={{
@@ -249,5 +251,7 @@ export default function Login() {
         </p>
       </div>
     </div>
+      <Footer />
+    </>
   );
 }
