@@ -17,6 +17,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   
   // Verification step
   const [step, setStep] = useState(1); // 1 = form, 2 = verification
@@ -33,6 +34,11 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!acceptedTerms) {
+      toast.error('Debes aceptar los Términos y la Política de Privacidad');
+      return;
+    }
     
     if (!name || !email || !password || !confirmPassword) {
       toast.error('Por favor completa todos los campos');
@@ -461,10 +467,26 @@ export default function Register() {
             )}
           </div>
 
+          {/* Aceptar términos */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', margin: '0 0 16px 0' }}>
+            <input
+              type="checkbox"
+              id="acceptTerms"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              style={{ marginTop: '3px', cursor: 'pointer' }}
+            />
+            <label htmlFor="acceptTerms" style={{ fontSize: '13px', color: '#6b7280', lineHeight: 1.5, cursor: 'pointer' }}>
+              He leído y acepto los{' '}
+              <a href="/legal#terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline' }}>Términos y Condiciones</a>
+              {' '}y la{' '}
+              <a href="/legal#privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline' }}>Política de Privacidad</a>.
+            </label>
+          </div>
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !acceptedTerms}
             data-testid="register-submit-btn"
             style={{
               ...buttonStyle,
