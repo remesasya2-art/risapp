@@ -23,6 +23,7 @@ import GestorFlowMockup from './pages/GestorFlowMockup';
 import DriveCallback from './pages/DriveCallback';
 import BTCLightning from './pages/BTCLightning';
 import SendReais from './pages/SendReais';
+import LegalPage from './pages/LegalPage';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -80,6 +81,7 @@ function AppRoutes() {
       {/* Public Routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/legal" element={<LegalPage />} />
       
       {/* Protected Routes */}
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
