@@ -40,12 +40,12 @@ export default function Register() {
     }
     
     if (password.length < 6) {
-      toast.error('La contraseÃ±a debe tener al menos 6 caracteres');
+      toast.error('La contraseña debe tener al menos 6 caracteres');
       return;
     }
     
     if (password !== confirmPassword) {
-      toast.error('Las contraseÃ±as no coinciden');
+      toast.error('Las contraseñas no coinciden');
       return;
     }
     
@@ -59,7 +59,7 @@ export default function Register() {
         referral_code: referralCode.trim().toUpperCase() || null
       });
       
-      toast.success(response.data.message || 'CÃ³digo de verificaciÃ³n enviado');
+      toast.success(response.data.message || 'Código de verificación enviado');
       setStep(2); // Move to verification step
     } catch (error) {
       console.error('Register error:', error);
@@ -73,7 +73,7 @@ export default function Register() {
     e.preventDefault();
     
     if (!verificationCode || verificationCode.length !== 6) {
-      toast.error('Ingresa el cÃ³digo de 6 dÃ­gitos');
+      toast.error('Ingresa el código de 6 dígitos');
       return;
     }
     
@@ -87,16 +87,16 @@ export default function Register() {
       // Save session token and redirect
       if (response.data.session_token) {
         localStorage.setItem('session_token', response.data.session_token);
-        toast.success('Â¡Cuenta creada exitosamente!');
+        toast.success('¡Cuenta creada exitosamente!');
         // Force page reload to update auth state
         window.location.href = '/';
       } else {
-        toast.success('Registro completado. Por favor inicia sesiÃ³n.');
+        toast.success('Registro completado. Por favor inicia sesión.');
         navigate('/login');
       }
     } catch (error) {
       console.error('Verification error:', error);
-      toast.error(error.response?.data?.detail || 'CÃ³digo invÃ¡lido');
+      toast.error(error.response?.data?.detail || 'Código inválido');
     } finally {
       setLoading(false);
     }
@@ -108,10 +108,10 @@ export default function Register() {
       const response = await api.post('/auth/resend-verification-code', {
         email: email.trim().toLowerCase()
       });
-      toast.success(response.data.message || 'CÃ³digo reenviado');
+      toast.success(response.data.message || 'Código reenviado');
     } catch (error) {
       console.error('Resend error:', error);
-      toast.error(error.response?.data?.detail || 'Error al reenviar cÃ³digo');
+      toast.error(error.response?.data?.detail || 'Error al reenviar código');
     } finally {
       setResending(false);
     }
@@ -210,7 +210,7 @@ export default function Register() {
             Verifica tu cuenta
           </h1>
           <p style={{ fontSize: '16px', color: '#9ca3af', textAlign: 'center', margin: '0 0 32px 0' }}>
-            Ingresa el cÃ³digo de 6 dÃ­gitos enviado a <br/>
+            Ingresa el código de 6 dígitos enviado a <br/>
             <span style={{ color: '#6366f1', fontWeight: '500' }}>{email}</span>
           </p>
 
@@ -218,7 +218,7 @@ export default function Register() {
             {/* Verification Code Input */}
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-                CÃ³digo de verificaciÃ³n
+                Código de verificación
               </label>
               <input
                 type="text"
@@ -250,14 +250,14 @@ export default function Register() {
                 cursor: loading || verificationCode.length !== 6 ? 'not-allowed' : 'pointer'
               }}
             >
-              {loading ? 'Verificando...' : 'Verificar CÃ³digo'}
+              {loading ? 'Verificando...' : 'Verificar Código'}
             </button>
           </form>
 
           {/* Resend Code */}
           <div style={{ textAlign: 'center', marginTop: '24px' }}>
             <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>
-              Â¿No recibiste el cÃ³digo?
+              ¿No recibiste el código?
             </p>
             <button
               type="button"
@@ -273,15 +273,15 @@ export default function Register() {
                 opacity: resending ? 0.6 : 1
               }}
             >
-              {resending ? 'Reenviando...' : 'Reenviar cÃ³digo'}
+              {resending ? 'Reenviando...' : 'Reenviar código'}
             </button>
           </div>
 
           {/* Login Link */}
           <p style={{ textAlign: 'center', fontSize: '15px', color: '#6b7280', marginTop: '24px' }}>
-            Â¿Ya tienes cuenta?{' '}
+            ¿Ya tienes cuenta?{' '}
             <Link to="/login" style={{ color: '#6366f1', fontWeight: '500', textDecoration: 'none' }}>
-              Inicia sesiÃ³n
+              Inicia sesión
             </Link>
           </p>
         </div>
@@ -313,7 +313,7 @@ export default function Register() {
         {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
           <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
-          <span style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>O continÃºa con email</span>
+          <span style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>O continúa con email</span>
           <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
         </div>
 
@@ -337,7 +337,7 @@ export default function Register() {
           {/* Email */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-              Correo electrÃ³nico
+              Correo electrónico
             </label>
             <input
               type="email"
@@ -353,7 +353,7 @@ export default function Register() {
           {/* Password */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-              ContraseÃ±a
+              Contraseña
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -383,13 +383,13 @@ export default function Register() {
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>MÃ­nimo 7 caracteres con letras, nÃºmeros y sÃ­mbolos</p>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>Mínimo 7 caracteres con letras, números y símbolos</p>
           </div>
 
           {/* Confirm Password */}
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-              Confirmar contraseÃ±a
+              Confirmar contraseña
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -427,16 +427,16 @@ export default function Register() {
               </button>
             </div>
             {confirmPassword && password !== confirmPassword && (
-              <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseÃ±as no coinciden</p>
+              <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
             )}
             {confirmPassword && password === confirmPassword && password.length >= 6 && (
-              <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>Las contraseÃ±as coinciden</p>
+              <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>Las contraseñas coinciden</p>
             )}
           </div>
 
           {/* Referral Code Field */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={labelStyle}>CÃ³digo de referido (opcional)</label>
+            <label style={labelStyle}>Código de referido (opcional)</label>
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
                 <Gift size={20} />
@@ -456,7 +456,7 @@ export default function Register() {
             </div>
             {referralCode && (
               <p style={{ fontSize: '13px', color: '#6366f1', margin: '6px 0 0 0' }}>
-                ð Â¡CÃ³digo aplicado! Tu referidor recibirÃ¡ una bonificaciÃ³n.
+                🎁 ¡Código aplicado! Tu referidor recibirá una bonificación.
               </p>
             )}
           </div>
@@ -472,15 +472,15 @@ export default function Register() {
               cursor: loading ? 'not-allowed' : 'pointer'
             }}
           >
-            {loading ? 'Enviando cÃ³digo...' : 'Continuar'}
+            {loading ? 'Enviando código...' : 'Continuar'}
           </button>
         </form>
 
         {/* Login Link */}
         <p style={{ textAlign: 'center', fontSize: '15px', color: '#6b7280', marginTop: '24px' }}>
-          Â¿Ya tienes cuenta?{' '}
+          ¿Ya tienes cuenta?{' '}
           <Link to="/login" style={{ color: '#6366f1', fontWeight: '500', textDecoration: 'none' }}>
-            Inicia sesiÃ³n
+            Inicia sesión
           </Link>
         </p>
       </div>
