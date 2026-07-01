@@ -479,18 +479,19 @@ async def get_accounting_report(
         )
         client_name = user.get("full_name", user.get("name", "")) if user else ""
 
+        # Lectura tolerante (float viejo / Decimal128 nuevo) de los montos del reporte
         if route == "brl_ves":
-            valor_transaccion = tx.get("amount_input", 0)
+            valor_transaccion = to_float(from_db(tx.get("amount_input", 0)))
             moneda = "BRL"
-            tasa_dia = tx.get("rate", 0)
-            cantidad_entregar = tx.get("amount_output", 0)
+            tasa_dia = to_float(from_db(tx.get("rate", 0)))
+            cantidad_entregar = to_float(from_db(tx.get("amount_output", 0)))
             pais_destino = "VENEZUELA"
             ruta_remesa = "BRL -> VZA"
         else:
-            valor_transaccion = tx.get("amount_input", 0)
+            valor_transaccion = to_float(from_db(tx.get("amount_input", 0)))
             moneda = "VES"
-            tasa_dia = tx.get("rate", 0)
-            cantidad_entregar = tx.get("amount_output", 0)
+            tasa_dia = to_float(from_db(tx.get("rate", 0)))
+            cantidad_entregar = to_float(from_db(tx.get("amount_output", 0)))
             pais_destino = "BRASIL"
             ruta_remesa = "VES -> BRL"
 
