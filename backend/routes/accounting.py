@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from services.money import from_db, to_float
+from services.money import from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -151,15 +151,18 @@ async def add_manual_ledger_entry(data: ManualLedgerEntry, admin: User = Depends
     if not bank:
         raise HTTPException(status_code=404, detail="Banco no encontrado")
     
-    if data.type == "salida" and bank["balance"] < data.amount:
-        raise HTTPException(status_code=400, detail=f"Saldo insuficiente. Disponible: {bank['balance']:.2f} {bank['currency']}")
-    
+    # Fase 3a-2: aritmetica de saldo en Decimal (lectura tolerante + escritura Decimal128)
+    current_balance = from_db(bank["balance"])
+    amount = to_decimal(data.amount)
+    if data.type == "salida" and not is_gte(current_balance, amount):
+        raise HTTPException(status_code=400, detail=f"Saldo insuficiente. Disponible: {to_float(current_balance):.2f} {bank['currency']}")
     if data.type == "entrada":
-        new_balance = bank["balance"] + data.amount
-        await db.bank_accounts.update_one({"bank_id": data.bank_id}, {"$inc": {"balance": data.amount}})
+        delta = amount
     else:
-        new_balance = bank["balance"] - data.amount
-        await db.bank_accounts.update_one({"bank_id": data.bank_id}, {"$inc": {"balance": -data.amount}})
+        delta = -amount
+    new_balance = quantize_money(current_balance + delta)
+    # $inc con operando Decimal128: atomico y convierte el campo a Decimal128
+    await db.bank_accounts.update_one({"bank_id": data.bank_id}, {"$inc": {"balance": to_decimal128(delta)}})
     
     entry_id = f"manual_{uuid.uuid4().hex[:8]}"
     await db.bank_ledger.insert_one({
@@ -168,15 +171,15 @@ async def add_manual_ledger_entry(data: ManualLedgerEntry, admin: User = Depends
         "date": data.date or caracas_today_str(),
         "type": data.type,
         "concept": data.concept,
-        "amount": data.amount,
-        "balance_after": round(new_balance, 2),
+        "amount": to_decimal128(amount),
+        "balance_after": to_decimal128(new_balance),
         "reference": entry_id,
         "notes": data.notes,
         "created_by": admin.user_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
-    return {"message": "Movimiento registrado", "new_balance": round(new_balance, 2)}
+    return {"message": "Movimiento registrado", "new_balance": to_float(new_balance)}
 
 
 # === USDT Rates ===
