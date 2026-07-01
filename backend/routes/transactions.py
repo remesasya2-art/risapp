@@ -9,6 +9,27 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from database import db
+
+from services.money import from_db, to_float
+
+# Campos de dinero de una transaccion (para lectura tolerante float/Decimal128)
+_TX_MONEY_2 = (
+    "amount_input", "amount_output", "amount_ris", "amount_ves", "amount_brl",
+    "balance_before", "balance_after", "balance_after_ris",
+    "fee", "commission_amount", "commission",
+    "monto_origen", "monto_destino", "monto_input_total", "monto_output_total",
+)
+
+def _normalize_tx_money(tx):
+    """Normaliza los montos de una transaccion a numeros limpios (tolera float y Decimal128)."""
+    if not tx:
+        return tx
+    for _k in _TX_MONEY_2:
+        if _k in tx and tx[_k] is not None:
+            tx[_k] = to_float(from_db(tx[_k]))
+    if tx.get("rate") is not None:
+        tx["rate"] = to_float(from_db(tx["rate"], places=6), places=6)
+    return tx
 from models.user import User
 from models.requests import WithdrawalRequest, BeneficiaryCreate
 from routes.dependencies import get_current_user, get_verified_user
@@ -501,6 +522,9 @@ async def get_transactions(
         {"_id": 0}
     ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
 
+    for _tx in transactions:
+        _normalize_tx_money(_tx)
+
     return {
         "total": total,
         "page": page,
@@ -518,6 +542,8 @@ async def get_transaction(transaction_id: str, current_user: User = Depends(get_
 
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaccion no encontrada")
+
+    _normalize_tx_money(transaction)
 
     return transaction
 
