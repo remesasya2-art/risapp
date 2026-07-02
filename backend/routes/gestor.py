@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import db
+from services.money import from_db, to_float
 from models.user import User
 from models.requests import GestorBeneficiaryRequest, GestorTransactionRequest, GestorRechargeTercerosRequest
 from routes.dependencies import get_current_user
@@ -82,8 +83,8 @@ async def get_gestor_dashboard(current_user: User = Depends(require_gestor)):
     
     return {
         "gestor_code": user.get("gestor_code", ""),
-        "balance_ris": user.get("balance_ris", 0),
-        "balance_ris_terceros": user.get("balance_ris_terceros", 0),
+        "balance_ris": to_float(from_db(user.get("balance_ris", 0))),
+        "balance_ris_terceros": to_float(from_db(user.get("balance_ris_terceros", 0))),
         "commission_rate": commission,
         "stats": {
             "total_transactions": len(all_tx),
@@ -145,7 +146,7 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     user = await db.users.find_one({"user_id": current_user.user_id})
     
     # Check balance
-    balance_terceros = user.get("balance_ris_terceros", 0)
+    balance_terceros = to_float(from_db(user.get("balance_ris_terceros", 0)))
     if balance_terceros < request.amount_ris:
         raise HTTPException(status_code=400, detail=f"Saldo de terceros insuficiente. Disponible: {balance_terceros:.2f} RIS")
     
@@ -301,7 +302,7 @@ async def gestor_recharge_terceros(request: GestorRechargeTercerosRequest, curre
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
     
-    balance_personal = user.get("balance_ris", 0)
+    balance_personal = to_float(from_db(user.get("balance_ris", 0)))
     if balance_personal < request.amount:
         raise HTTPException(status_code=400, detail=f"Saldo personal insuficiente. Disponible: {balance_personal:.2f} RIS")
     
@@ -322,6 +323,6 @@ async def gestor_recharge_terceros(request: GestorRechargeTercerosRequest, curre
     
     return {
         "message": f"Transferido {request.amount:.2f} RIS a saldo de terceros",
-        "balance_ris": updated_user.get("balance_ris", 0),
-        "balance_ris_terceros": updated_user.get("balance_ris_terceros", 0)
+        "balance_ris": to_float(from_db(updated_user.get("balance_ris", 0))),
+        "balance_ris_terceros": to_float(from_db(updated_user.get("balance_ris_terceros", 0)))
     }
