@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
 from database import db
+from services.money import from_db, to_float
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
@@ -521,7 +522,7 @@ async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get
         update_data["became_partner_at"] = datetime.now(timezone.utc)
     elif request.new_role == "socio_gestor":
         update_data["gestor_code"] = request.gestor_code or f"GES{uuid.uuid4().hex[:6].upper()}"
-        update_data["balance_ris_terceros"] = user.get("balance_ris_terceros", 0)
+        update_data["balance_ris_terceros"] = to_float(from_db(user.get("balance_ris_terceros", 0)))
         update_data["became_gestor_at"] = datetime.now(timezone.utc)
     
     await db.users.update_one({"user_id": request.user_id}, {"$set": update_data})
@@ -717,6 +718,7 @@ async def process_withdrawal(
         try:
             from services.ledger import record_ris_entry
             _bal_after = (_refunded_user or {}).get("balance_ris")
+            _bal_after = to_float(from_db(_bal_after)) if _bal_after is not None else None
             await record_ris_entry(
                 user_id=transaction["user_id"],
                 movement_type="refund_envio",
@@ -1300,6 +1302,7 @@ async def process_ves_recharge(
         try:
             from services.ledger import record_ris_entry
             _rch_after = (_rch_user or {}).get("balance_ris")
+            _rch_after = to_float(from_db(_rch_after)) if _rch_after is not None else None
             await record_ris_entry(
                 user_id=user_id,
                 movement_type="recarga_ves",
@@ -1423,8 +1426,8 @@ async def get_all_gestors(admin: User = Depends(get_super_admin)):
             "gestor_code": g.get("gestor_code", ""),
             "total_transactions": tx_count,
             "total_volume": round(total_volume, 2),
-            "balance_ris": g.get("balance_ris", 0),
-            "balance_ris_terceros": g.get("balance_ris_terceros", 0),
+            "balance_ris": to_float(from_db(g.get("balance_ris", 0))),
+            "balance_ris_terceros": to_float(from_db(g.get("balance_ris_terceros", 0))),
             "became_gestor_at": g.get("became_gestor_at"),
             "created_at": g.get("created_at")
         })
