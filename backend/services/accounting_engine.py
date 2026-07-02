@@ -34,6 +34,7 @@ from typing import Optional, List, Dict, Any
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from database import db, client as mongo_client
+from services.money import from_db, to_float
 
 logger = logging.getLogger(__name__)
 
@@ -608,9 +609,9 @@ class ExecutiveReportService:
         users_agg = await db.users.aggregate(
             [{"$group": {"_id": None, "total_ris": {"$sum": "$balance_ris"}}}]
         ).to_list(1)
-        total_ris_circulation = (
+        total_ris_circulation = to_float(from_db(
             users_agg[0]["total_ris"] if users_agg else 0
-        ) or 0
+        )) or 0
 
         pending_w_agg = await db.transactions.aggregate(
             [
