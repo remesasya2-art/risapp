@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from database import db
 
-from services.money import from_db, to_float
+from services.money import from_db, to_float, to_decimal, to_decimal128
 
 # Campos de dinero de una transaccion (para lectura tolerante float/Decimal128)
 _TX_MONEY_2 = (
@@ -165,8 +165,8 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
         raise HTTPException(status_code=409, detail="Esta operación ya se está procesando. Espera un momento.")
     # Descuento atómico de saldo RIS
     user = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
-        {"$inc": {"balance_ris": -request.amount}},
+        {"user_id": current_user.user_id, "balance_ris": {"$gte": to_decimal128(to_decimal(request.amount))}},
+        {"$inc": {"balance_ris": to_decimal128(-to_decimal(request.amount))}},
         return_document=True
     )
     if user is None:
@@ -180,7 +180,7 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
         # Devolver el saldo si el beneficiario no existe
         await db.users.update_one(
             {"user_id": current_user.user_id},
-            {"$inc": {"balance_ris": request.amount}}
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(request.amount))}}
         )
         raise HTTPException(status_code=404, detail="Beneficiario de Brasil no encontrado")
     amount_brl = request.amount  # 1 a 1
@@ -214,7 +214,7 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     except Exception as e:
         await db.users.update_one(
             {"user_id": current_user.user_id},
-            {"$inc": {"balance_ris": request.amount}}
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(request.amount))}}
         )
         logger.error(f"Fallo al registrar envío a Brasil {tx_id}, saldo devuelto: {e}")
         raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
@@ -320,8 +320,8 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 
     # 3) Débito atómico (impide sobregiro y condiciones de carrera)
     user = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, "balance_ris": {"$gte": request.amount}},
-        {"$inc": {"balance_ris": -request.amount}},
+        {"user_id": current_user.user_id, "balance_ris": {"$gte": to_decimal128(to_decimal(request.amount))}},
+        {"$inc": {"balance_ris": to_decimal128(-to_decimal(request.amount))}},
         return_document=True
     )
     if user is None:
@@ -333,7 +333,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     except Exception as e:
         await db.users.update_one(
             {"user_id": current_user.user_id},
-            {"$inc": {"balance_ris": request.amount}}
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(request.amount))}}
         )
         logger.error(f"Fallo al registrar retiro {tx_id}, saldo devuelto: {e}")
         raise HTTPException(status_code=500, detail="No se pudo registrar el retiro. Tu saldo no fue afectado.")
