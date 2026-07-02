@@ -12,6 +12,7 @@ from twilio.rest import Client
 from twilio.request_validator import RequestValidator
 
 from database import db
+from services.money import to_decimal, to_decimal128
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -230,7 +231,7 @@ Procesando siguiente retiro..."""
             amount_ris = active_withdrawal.get("amount_input", 0)
             await db.users.update_one(
                 {"user_id": user_id},
-                {"$inc": {"balance_ris": amount_ris}}
+                {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris))}}
             )
             
             # Notify user
