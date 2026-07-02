@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
 from database import db
-from services.money import from_db, to_float
+from services.money import from_db, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
@@ -121,7 +121,7 @@ async def wipe_all_data(
     deleted = await _wipe_collections(_ALL_DATA_COLLECTIONS)
     balance_reset = await db.users.update_many(
         {},
-        {"$set": {"balance_ris": 0, "balance_ris_terceros": 0}}
+        {"$set": {"balance_ris": to_decimal128(0), "balance_ris_terceros": to_decimal128(0)}}
     )
 
     # Soft-delete: hide user transactions from admin views (users still see their own)
@@ -711,7 +711,7 @@ async def process_withdrawal(
         _refund_amount = transaction.get("amount_input", 0)
         _refunded_user = await db.users.find_one_and_update(
             {"user_id": transaction["user_id"]},
-            {"$inc": {"balance_ris": _refund_amount}},
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(_refund_amount))}},
             return_document=True
         )
         # Libro mayor RIS: crédito de devolución (no interrumpe el rechazo)
@@ -1295,7 +1295,7 @@ async def process_ves_recharge(
         # Add balance to user
         _rch_user = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris}},
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris))}},
             return_document=True
         )
         # Libro mayor RIS (no interrumpe la aprobación)
