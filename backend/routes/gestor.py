@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import db
-from services.money import from_db, to_float
+from services.money import from_db, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import GestorBeneficiaryRequest, GestorTransactionRequest, GestorRechargeTercerosRequest
 from routes.dependencies import get_current_user
@@ -205,8 +205,8 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     
     # Débito atómico con guardia (evita condición de carrera / saldo negativo)
     debited = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, "balance_ris_terceros": {"$gte": request.amount_ris}},
-        {"$inc": {"balance_ris_terceros": -request.amount_ris}}
+        {"user_id": current_user.user_id, "balance_ris_terceros": {"$gte": to_decimal128(to_decimal(request.amount_ris))}},
+        {"$inc": {"balance_ris_terceros": to_decimal128(-to_decimal(request.amount_ris))}}
     )
     if not debited:
         # El saldo cambió entre la comprobación y el débito (carrera): deshacemos el registro.
@@ -311,8 +311,8 @@ async def gestor_recharge_terceros(request: GestorRechargeTercerosRequest, curre
         {"user_id": current_user.user_id},
         {
             "$inc": {
-                "balance_ris": -request.amount,
-                "balance_ris_terceros": request.amount
+                "balance_ris": to_decimal128(-to_decimal(request.amount)),
+                "balance_ris_terceros": to_decimal128(to_decimal(request.amount))
             }
         }
     )
