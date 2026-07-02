@@ -20,6 +20,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from database import db
+from services.money import to_decimal, to_decimal128
 from services.notifications import create_notification
 from services.whatsapp import send_next_pending_withdrawal_whatsapp
 
@@ -232,7 +233,7 @@ async def process_withdrawal(
 
         await db.users.update_one(
             {"user_id": transaction["user_id"]},
-            {"$inc": {"balance_ris": transaction.get("amount_input", 0)}}
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(transaction.get("amount_input", 0)))}}
         )
 
         rejection_reason = request.rejection_reason or "Rechazado por el operador."
