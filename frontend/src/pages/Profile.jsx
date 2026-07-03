@@ -39,6 +39,10 @@ export default function Profile() {
   const [pushLoading, setPushLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(true);
   const [pushMessage, setPushMessage] = useState('');
+  const [showRegenerate2FA, setShowRegenerate2FA] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [newBackupCodes, setNewBackupCodes] = useState(null);
+  const [loading2FA, setLoading2FA] = useState(false);
 
   useEffect(() => {
     checkPushStatus();
@@ -142,6 +146,25 @@ export default function Profile() {
       toast.error(error.response?.data?.detail || 'Error al cambiar contraseña');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRegenerateBackupCodes = async (e) => {
+    e.preventDefault();
+    if (twoFACode.length !== 6) {
+      toast.error('Ingresa el código de 6 dígitos de tu app de autenticación');
+      return;
+    }
+    setLoading2FA(true);
+    try {
+      const { data } = await api.post('/auth/2fa/regenerate-backup-codes', { code: twoFACode });
+      setNewBackupCodes(data.backup_codes);
+      setTwoFACode('');
+      toast.success('Códigos de respaldo regenerados');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Error al regenerar códigos');
+    } finally {
+      setLoading2FA(false);
     }
   };
 
@@ -309,6 +332,68 @@ export default function Profile() {
 
         {/* Ingreso con huella */}
         <WebAuthnSettings />
+        {/* Gestionar 2FA (solo super_admin) */}
+        {isSuperAdminDiamond(user?.email) && (
+          <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Shield style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>Códigos de respaldo 2FA</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>Genera 10 nuevos códigos de un solo uso</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowRegenerate2FA(true); setNewBackupCodes(null); setTwoFACode(''); }}
+                style={{ padding: '10px 16px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#374151' }}
+              >
+                Regenerar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showRegenerate2FA && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', zIndex: 1000 }}>
+            <div style={{ ...cardStyle, padding: '24px', width: '100%', maxWidth: '400px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: '0 0 16px 0' }}>Regenerar códigos de respaldo</h3>
+              {!newBackupCodes ? (
+                <form onSubmit={handleRegenerateBackupCodes} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Ingresa el código de 6 dígitos de tu app de autenticación para generar 10 nuevos códigos. Los códigos anteriores dejarán de funcionar.</p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={twoFACode}
+                    onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, ''))}
+                    style={{ ...inputStyle, textAlign: 'center', fontSize: '20px', letterSpacing: '4px' }}
+                  />
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button type="button" onClick={() => setShowRegenerate2FA(false)} style={{ flex: 1, padding: '14px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Cancelar</button>
+                    <button type="submit" disabled={loading2FA} style={{ flex: 1, padding: '14px', backgroundColor: '#6366f1', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#ffffff', opacity: loading2FA ? 0.6 : 1 }}>
+                      {loading2FA ? 'Verificando...' : 'Confirmar'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: '600', margin: 0 }}>Guarda estos códigos en un lugar seguro. No se mostrarán de nuevo.</p>
+                  <div style={{ backgroundColor: '#f8f9fa', borderRadius: '12px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontFamily: 'monospace', fontSize: '14px' }}>
+                    {newBackupCodes.map((code, i) => (
+                      <div key={i} style={{ color: '#111827' }}>{code}</div>
+                    ))}
+                  </div>
+                  <button onClick={() => { setShowRegenerate2FA(false); setNewBackupCodes(null); }} style={{ padding: '14px', backgroundColor: '#6366f1', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>
+                    Ya guardé mis códigos
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Partner Dashboard Button (only for socios) */}
         {user?.role === 'socio' && (
