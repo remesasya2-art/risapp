@@ -511,3 +511,33 @@ async def admin_access_log(
         if isinstance(e.get("created_at"), datetime):
             e["created_at"] = e["created_at"].isoformat()
     return {"entries": entries, "count": len(entries)}
+
+
+class TwoFARegenerateBackupRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+@router.post("/regenerate-backup-codes")
+async def twofa_regenerate_backup_codes(
+    data: TwoFARegenerateBackupRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Regenerate the 10 backup codes without touching the TOTP secret/QR. Requires a valid current TOTP code."""
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user.get("two_factor_enabled"):
+        raise HTTPException(status_code=400, detail="2FA no esta activo")
+
+    secret = user.get("two_factor_secret")
+    if not secret or not pyotp.TOTP(secret).verify(data.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Codigo incorrecto")
+
+    plain_codes, hashed_codes = _generate_backup_codes()
+    await db.users.update_one(
+        {"user_id": current_user.user_id},
+        {"$set": {"two_factor_backup_hashes": hashed_codes}},
+    )
+    return {
+        "message": "Codigos de respaldo regenerados",
+        "backup_codes": plain_codes,
+        "important": "Guarda estos codigos en un lugar seguro. NO se mostraran de nuevo.",
+    }
