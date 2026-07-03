@@ -36,6 +36,7 @@ from typing import Optional, List
 
 import pyotp
 import qrcode
+from bson.decimal128 import Decimal128
 from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -109,6 +110,18 @@ def _generate_backup_codes() -> tuple[List[str], List[str]]:
     hashes = [hash_password(c) for c in plain]
     return plain, hashes
 
+
+def _sanitize_for_json(value):
+        """Recursively convert BSON/datetime types into JSON-serializable values (e.g. Decimal128)."""
+    if isinstance(value, Decimal128):
+        return float(value.to_decimal())
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _sanitize_for_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_for_json(v) for v in value]
+    return value
 
 def _make_qr_data_url(otpauth_url: str) -> str:
     """Generate a base64 PNG data URL from the otpauth URI."""
@@ -320,7 +333,7 @@ async def twofa_enroll_confirm(request: Request, data: TwoFASetupConfirmFromPend
     return {
         "message": "2FA activado correctamente",
         "session_token": token,
-        "user": user_response,
+        "user": _sanitize_for_json(user_response),
         "backup_codes": plain_codes,
         "important": "Guarda estos códigos en un lugar seguro. NO se mostrarán de nuevo.",
     }
@@ -476,7 +489,7 @@ async def twofa_verify(request: Request, data: TwoFAVerifyRequest):
     return {
         "message": "Login exitoso (2FA)",
         "session_token": token,
-        "user": user_response,
+        "user": _sanitize_for_json(user_response),
         "used_backup_code": used_backup,
         "backup_codes_remaining": len(user.get("two_factor_backup_hashes", [])) - (1 if used_backup else 0),
     }
