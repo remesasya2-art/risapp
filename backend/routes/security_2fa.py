@@ -63,7 +63,14 @@ SUPER_ADMIN_ROLE = "super_admin"
 # ============================================================
 # Rate Limiter (per IP)
 # ============================================================
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
+def get_real_client_ip(request: Request) -> str:
+      """Usa X-Forwarded-For (IP real del cliente detras del proxy de Railway); si no existe, cae de vuelta a get_remote_address."""
+      xff = request.headers.get("x-forwarded-for")
+      if xff:
+                return xff.split(",")[0].strip()
+            return get_remote_address(request)
+
+limiter = Limiter(key_func=get_real_client_ip, default_limits=[])
 
 # ============================================================
 # Router
