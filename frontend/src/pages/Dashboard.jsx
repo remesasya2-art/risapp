@@ -146,12 +146,12 @@ const normalized = { ...tx };
   const baseMenuItems = [
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
     { icon: Wallet, label: 'Recargar', path: '/recharge' },
-    { icon: ArrowLeftRight, label: 'Enviar', path: '/send' },
+    { icon: ArrowLeftRight, label: 'Enviar a Venezuela', path: '/send' },
+    { icon: ArrowUpRight, label: 'Enviar a Brasil', path: '/send-reais' },
+    { icon: Zap, label: 'Enviar BTC', path: '/btc-lightning' },
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },
-    { icon: Zap, label: 'Enviar BTC', path: '/btc-lightning' },
-    { icon: ArrowUpRight, label: 'Enviar a Brasil', path: '/send-reais' },
   ];
 
   // Build menu based on user role
@@ -159,13 +159,13 @@ const normalized = { ...tx };
   
   // Add role-specific menu items
   if (user?.role === 'socio' || user?.role === 'socio_gestor') {
-    menuItems.splice(4, 0, { icon: TrendingUp, label: 'Socio', path: '/partner' });
+    menuItems.splice(5, 0, { icon: TrendingUp, label: 'Socio', path: '/partner' });
   }
   if (user?.role === 'socio_gestor') {
-    menuItems.splice(5, 0, { icon: Settings, label: 'Gestor', path: '/gestor' });
+    menuItems.splice(6, 0, { icon: Settings, label: 'Gestor', path: '/gestor' });
   }
   if (user?.role === 'admin' || user?.role === 'super_admin') {
-    menuItems.splice(4, 0, { icon: Settings, label: 'Admin', path: '/admin' });
+    menuItems.splice(5, 0, { icon: Settings, label: 'Admin', path: '/admin' });
   }
 
   const isActive = (path) => location.pathname === path;
