@@ -6,6 +6,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import Request, Header, HTTPException, Depends
 from database import db
+from bson.decimal128 import Decimal128
 from models.user import User
 from config import SECRET_KEY
 
@@ -62,6 +63,10 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     if user.get("is_banned"):
         raise HTTPException(status_code=403, detail="Esta cuenta ha sido suspendida")
 
+    # Convert BSON Decimal128 fields to float for Pydantic compatibility
+    for _k, _v in list(user.items()):
+        if isinstance(_v, Decimal128):
+            user[_k] = float(_v.to_decimal())
     return User(**user)
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
