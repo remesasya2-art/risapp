@@ -1,7 +1,8 @@
 """
 User related Pydantic models
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from bson.decimal128 import Decimal128
 from typing import Optional, List
 from datetime import datetime
 
@@ -18,6 +19,13 @@ class User(BaseModel):
     balance_ris: float = 0.0
     balance_ves: float = 0.0
     balance_ris_terceros: float = 0.0  # For gestor third-party funds
+    @field_validator("balance_ris", "balance_ves", "balance_ris_terceros", mode="before")
+    @classmethod
+    def coerce_money(cls, v):
+        """Tolera saldos guardados como Decimal128 (Mongo) y los entrega como float."""
+        if isinstance(v, Decimal128):
+            return float(v.to_decimal())
+        return v
     role: str = "user"  # user, socio, socio_gestor, admin, super_admin
     permissions: List[str] = []
     verification_status: str = "unverified"  # unverified, pending, verified
