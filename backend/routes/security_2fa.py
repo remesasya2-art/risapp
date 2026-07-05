@@ -528,7 +528,8 @@ async def twofa_regenerate_backup_codes(
         raise HTTPException(status_code=400, detail="2FA no esta activo")
 
     secret = user.get("two_factor_secret")
-    if not secret or not pyotp.TOTP(secret).verify(data.code, valid_window=1):
+    _code = (data.code or "").strip().replace(" ", "")
+    if not secret or not pyotp.TOTP(secret).verify(_code, valid_window=1):
         raise HTTPException(status_code=400, detail="Codigo incorrecto")
 
     plain_codes, hashed_codes = _generate_backup_codes()
