@@ -11,7 +11,7 @@ export default function Footer() {
           <p style={{ fontWeight: 800, fontSize: '16px', color: '#1f2937', margin: '0 0 6px 0' }}>RIS App</p>
           <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>SAIPHA SERVICIOS DIGITAIS</p>
           <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>J. DEL CARMEN HERNANDEZ BARRETO</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>CNPJ: 68.994.057/0001-61</p>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>CNPJ: 66.994.057/0001-61</p>
           <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Rua Monte Roraima, S/N, Vila Nova, Pacaraima – RR, CEP 69345-000, Brasil</p>
         </div>
         <div>
@@ -31,7 +31,7 @@ export default function Footer() {
       </div>
       <div style={{ maxWidth: '1100px', margin: '24px auto 0', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
         <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, textAlign: 'center' }}>
-          © {new Date().getFullYear()} SAIPHA SERVICIOS DIGITAIS · CNPJ 68.994.057/0001-61 · Todos los derechos reservados.
+                    © {new Date().getFullYear()} SAIPHA SERVICIOS DIGITAIS · CNPJ 66.994.057/0001-61 · Todos los derechos reservados.
         </p>
       </div>
     </footer>
