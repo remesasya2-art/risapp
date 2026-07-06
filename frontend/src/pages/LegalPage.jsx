@@ -26,7 +26,7 @@ export default function LegalPage() {
 
         {/* 1. PRIVACIDAD */}
         <h1 id="privacidad" style={h1}>1. Política de Privacidad</h1>
-        <p style={p}>En SAIPHA SERVICIOS DIGITAIS (J. DEL CARMEN HERNANDEZ BARRETO, CNPJ 68.994.057/0001-61), operadora de la plataforma RIS App (risappbr.com), valoramos y protegemos la privacidad de nuestros usuarios. Esta Política explica qué datos recopilamos, con qué finalidad y cómo los protegemos, en conformidad con la Lei Geral de Proteção de Dados (LGPD – Lei nº 13.709/2018) de Brasil.</p>
+        <p style={p}>En SAIPHA SERVICIOS DIGITAIS (J. DEL CARMEN HERNANDEZ BARRETO, CNPJ 66.994.057/0001-61), operadora de la plataforma RIS App (risappbr.com), valoramos y protegemos la privacidad de nuestros usuarios. Esta Política explica qué datos recopilamos, con qué finalidad y cómo los protegemos, en conformidad con la Lei Geral de Proteção de Dados (LGPD – Lei nº 13.709/2018) de Brasil.</p>
         <h2 style={h2}>1.1. Datos que recopilamos</h2>
         <ul>
           <li style={li}>Datos de identificación: nombre completo, documento de identidad y fecha de nacimiento.</li>
@@ -52,7 +52,7 @@ export default function LegalPage() {
 
         {/* 2. TÉRMINOS */}
         <h1 id="terminos" style={h1}>2. Términos y Condiciones de Uso</h1>
-        <p style={p}>Estos Términos regulan el uso de la plataforma RIS App (risappbr.com), operada por J. DEL CARMEN HERNANDEZ BARRETO (SAIPHA SERVICIOS DIGITAIS), CNPJ 68.994.057/0001-61. Al registrarse y utilizar la plataforma, el usuario acepta estos Términos.</p>
+        <p style={p}>Estos Términos regulan el uso de la plataforma RIS App (risappbr.com), operada por J. DEL CARMEN HERNANDEZ BARRETO (SAIPHA SERVICIOS DIGITAIS), CNPJ 66.994.057/0001-61. Al registrarse y utilizar la plataforma, el usuario acepta estos Términos.</p>
         <h2 style={h2}>2.1. Descripción del servicio</h2>
         <p style={p}>La plataforma permite registrar una cuenta y realizar recargas de saldo. Dicho saldo se utiliza exclusivamente para el consumo de los servicios digitales disponibles dentro de la propia plataforma. El saldo y los servicios son de uso interno de la aplicación.</p>
         <h2 style={h2}>2.2. Registro y cuenta</h2>
@@ -113,7 +113,7 @@ export default function LegalPage() {
         <ul>
           <li style={li}>Razón social: J. DEL CARMEN HERNANDEZ BARRETO</li>
           <li style={li}>Nombre fantasía: SAIPHA SERVICIOS DIGITAIS</li>
-          <li style={li}>CNPJ: 68.994.057/0001-61</li>
+          <li style={li}>CNPJ: 66.994.057/0001-61</li>
           <li style={li}>Dirección: Rua Monte Roraima, S/N, Bairro Vila Nova, Pacaraima – RR, CEP 69345-000, Brasil</li>
           <li style={li}>Correo de contacto: saipha.servicios.digitais@gmail.com</li>
           <li style={li}>Sitio web: risappbr.com</li>
