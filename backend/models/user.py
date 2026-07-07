@@ -19,7 +19,9 @@ class User(BaseModel):
     balance_ris: float = 0.0
     balance_ves: float = 0.0
     balance_ris_terceros: float = 0.0  # For gestor third-party funds
-    @field_validator("balance_ris", "balance_ves", "balance_ris_terceros", mode="before")
+    balance_usdt: float = 0.0  # Creditos USDT (deposito cripto via NOWPayments, separado de RIS)
+    balance_usdc: float = 0.0  # Creditos USDC (deposito cripto via NOWPayments, separado de RIS)
+    @field_validator("balance_ris", "balance_ves", "balance_ris_terceros", "balance_usdt", "balance_usdc", mode="before")
     @classmethod
     def coerce_money(cls, v):
         """Tolera saldos guardados como Decimal128 (Mongo) y los entrega como float."""
