@@ -1,18 +1,16 @@
 """
 routes/credits.py — Endpoints de creditos cripto (deposito via NOWPayments).
 
-Sub-paso 2: crear el deposito.
-
-  POST /api/credits/deposit  -> crea un invoice en NOWPayments y devuelve invoice_url.
-
-Sub-paso 3: confirmar el deposito.
-
-  POST /api/credits/webhook  -> IPN de NOWPayments. Acredita balance_usdt/balance_usdc
-
-  (NUNCA balance_ris — son billeteras totalmente separadas) cuando el pago se confirma.
+Flujo DENTRO de la app (sin redireccion externa):
+  POST /api/credits/deposit               -> crea un pago directo (create_payment) y
+                                              devuelve pay_address/pay_amount para
+                                              mostrar como QR + copiar, sin salir de la app.
+  GET  /api/credits/deposit/{order_id}/status -> polling del estado (lee crypto_deposits,
+                                              que el webhook va actualizando).
+  POST /api/credits/webhook                -> IPN de NOWPayments. Acredita balance_usdt/
+                                              balance_usdc (NUNCA balance_ris) al confirmarse.
 
 Guarda cada intento en la coleccion crypto_deposits con estado 'pending'.
-
 Cumplimiento: corre assert_payment_allowed (IP + declaracion) ANTES de crear el cobro.
 """
 
@@ -60,18 +58,24 @@ async def create_deposit(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
-    """Crea un deposito de creditos: valida jurisdiccion, crea invoice en NOWPayments,
-    guarda el deposito 'pending' y devuelve el invoice_url para redirigir al usuario."""
+    """Crea un deposito de creditos: valida jurisdiccion, crea un PAGO DIRECTO en
+    NOWPayments (sin pagina hosteada externa), guarda el deposito 'pending' y devuelve
+    la direccion/monto para que el frontend los muestre como QR + copiar, sin que el
+    usuario salga de la app."""
+
     # 1) Cumplimiento de jurisdiccion (IP + declaracion). Lanza 403/400 si no pasa.
     assert_payment_allowed(request, declared_not_restricted=data.declared_not_restricted)
+
     # 2) Validar moneda y monto
     key = normalize_currency(data.currency)
     if key not in PAY_CURRENCY:
         raise HTTPException(status_code=400, detail="Moneda no soportada. Usa USDT o USDC.")
     if not data.amount or data.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0.")
+
     pay_currency = PAY_CURRENCY[key]
     order_id = f"credit_{key}_{current_user.user_id}_{uuid.uuid4().hex[:12]}"
+
     # 3) Registrar el deposito como 'pending' ANTES de llamar a NOWPayments
     deposit_doc = {
         "order_id": order_id,
@@ -84,46 +88,95 @@ async def create_deposit(
         "created_at": datetime.now(timezone.utc),
     }
     await db.crypto_deposits.insert_one(deposit_doc)
-    # 4) Crear el invoice en NOWPayments
+
+    # 4) Crear el pago directo en NOWPayments (sin redireccion externa)
     try:
-        invoice = await nowpayments.create_invoice(
+        payment = await nowpayments.create_payment(
             price_amount=float(data.amount),
             price_currency=key,          # valoramos en la propia cripto (1 a 1)
             pay_currency=pay_currency,
             order_id=order_id,
             order_description=f"Deposito de {CREDIT_LABELS.get(key, key)}",
             ipn_callback_url=f"{PUBLIC_BASE_URL}/api/credits/webhook",
-            success_url=f"{PUBLIC_BASE_URL}/credits?status=success",
-            cancel_url=f"{PUBLIC_BASE_URL}/credits?status=cancel",
         )
     except Exception as e:
-        logger.error(f"NOWPayments create_invoice failed for {order_id}: {e}")
+        logger.error(f"NOWPayments create_payment failed for {order_id}: {e}")
         await db.crypto_deposits.update_one(
             {"order_id": order_id}, {"$set": {"status": "error"}}
         )
         raise HTTPException(status_code=502, detail="No se pudo iniciar el pago. Intenta de nuevo.")
-    invoice_url = invoice.get("invoice_url")
-    if not invoice_url:
-        logger.error(f"NOWPayments sin invoice_url para {order_id}: {invoice}")
+
+    pay_address = payment.get("pay_address")
+    pay_amount = payment.get("pay_amount")
+    if not pay_address or not pay_amount:
+        logger.error(f"NOWPayments sin pay_address/pay_amount para {order_id}: {payment}")
+        await db.crypto_deposits.update_one(
+            {"order_id": order_id}, {"$set": {"status": "error"}}
+        )
         raise HTTPException(status_code=502, detail="No se pudo iniciar el pago. Intenta de nuevo.")
-    # Guardar el id de invoice para trazabilidad
+
+    payin_extra_id = payment.get("payin_extra_id")  # memo/tag, solo si la red lo requiere
+    network = payment.get("network")
+
+    # Guardar los datos del pago para trazabilidad y para que /status los pueda devolver
     await db.crypto_deposits.update_one(
         {"order_id": order_id},
-        {"$set": {"invoice_id": invoice.get("id"), "invoice_url": invoice_url}},
+        {
+            "$set": {
+                "payment_id": payment.get("payment_id"),
+                "pay_address": pay_address,
+                "pay_amount": pay_amount,
+                "payin_extra_id": payin_extra_id,
+                "network": network,
+            }
+        },
     )
-    return {"invoice_url": invoice_url, "order_id": order_id}
+
+    return {
+        "order_id": order_id,
+        "pay_address": pay_address,
+        "pay_amount": pay_amount,
+        "pay_currency": pay_currency,
+        "payin_extra_id": payin_extra_id,
+        "network": network,
+    }
+
+
+@router.get("/deposit/{order_id}/status")
+async def get_deposit_status(
+    order_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Polling del estado de un deposito propio, para el flujo dentro de la app
+    (sin redireccion). Solo lee crypto_deposits (que el webhook va actualizando) —
+    no llama a NOWPayments directamente. Restringido al dueño del deposito."""
+    deposit = await db.crypto_deposits.find_one(
+        {"order_id": order_id, "user_id": current_user.user_id}, {"_id": 0}
+    )
+    if not deposit:
+        raise HTTPException(status_code=404, detail="Deposito no encontrado")
+
+    return {
+        "order_id": order_id,
+        "status": deposit.get("status"),
+        "credited": deposit.get("credited", False),
+        "currency": deposit.get("currency"),
+        "amount": deposit.get("amount"),
+    }
 
 
 # Estados de NOWPayments que cierran el deposito sin acreditar (se registran para soporte).
-TERMINALNO_CREDIT_STATUSES = {"failed", "expired", "refunded"}
+_TERMINAL_NO_CREDIT_STATUSES = {"failed", "expired", "refunded"}
 
 
 @router.post("/webhook")
 async def nowpayments_webhook(request: Request):
     """IPN de NOWPayments — confirma un deposito y acredita creditos (USDT/USDC).
+
     IMPORTANTE: esto es una billetera de creditos cripto totalmente separada de
     balance_ris. Este webhook NUNCA toca balance_ris ni la logica de PIX/MercadoPago
     (routes/gestor_pix.py) — es un flujo aislado, solo mueve balance_usdt/balance_usdc.
+
     Seguridad (mismo patron que el webhook de Mercado Pago):
       1. Verifica firma HMAC-SHA512 (header x-nowpayments-sig) contra NOWPAYMENTS_IPN_KEY.
       2. Busca el deposito propio por order_id en crypto_deposits.
@@ -133,24 +186,31 @@ async def nowpayments_webhook(request: Request):
     """
     raw_body = await request.body()
     signature = request.headers.get("x-nowpayments-sig", "")
+
     if not nowpayments.verify_ipn_signature(raw_body, signature):
         logger.warning("NOWPayments webhook: firma invalida o ausente")
         raise HTTPException(status_code=401, detail="invalid_signature")
+
     try:
         payload = json.loads(raw_body or b"{}")
     except Exception:
         payload = {}
+
     logger.info(f"NOWPayments webhook recibido: {payload}")
+
     order_id = payload.get("order_id")
     payment_status = payload.get("payment_status")
     payment_id = payload.get("payment_id")
+
     if not order_id:
         logger.warning("NOWPayments webhook sin order_id")
         return {"received": True, "error": "no_order_id"}
+
     deposit = await db.crypto_deposits.find_one({"order_id": order_id})
     if not deposit:
         logger.warning(f"NOWPayments webhook: order_id {order_id} no encontrado en crypto_deposits")
         return {"received": True, "error": "deposit_not_found"}
+
     # Trazabilidad: guardamos el ultimo estado visto, independientemente de si acredita.
     await db.crypto_deposits.update_one(
         {"order_id": order_id},
@@ -162,17 +222,20 @@ async def nowpayments_webhook(request: Request):
             }
         },
     )
+
     # Estados terminales sin credito (pago fallo/expiro/fue reembolsado): solo se marca.
-    if payment_status in TERMINALNO_CREDIT_STATUSES:
+    if payment_status in _TERMINAL_NO_CREDIT_STATUSES:
         await db.crypto_deposits.update_one(
             {"order_id": order_id, "credited": False},
             {"$set": {"status": payment_status}},
         )
         return {"received": True, "processed": False, "status": payment_status}
+
     # Estados intermedios (waiting, confirming, sending, partially_paid, etc.):
     # se registra pero todavia no se acredita.
     if payment_status != "finished":
         return {"received": True, "processed": False, "status": payment_status}
+
     # Idempotencia + acreditacion atomica: el filtro credited=False garantiza que
     # solo el primer IPN que llegue con 'finished' pasa este punto.
     claimed = await db.crypto_deposits.find_one_and_update(
@@ -185,13 +248,17 @@ async def nowpayments_webhook(request: Request):
             }
         },
     )
+
     if not claimed:
         logger.info(f"NOWPayments webhook: order_id {order_id} ya estaba acreditado, ignorando duplicado")
         return {"received": True, "already_processed": True}
+
     # Se acredita lo REALMENTE pagado (no lo solicitado), con fallback al monto pedido.
     actually_paid = payload.get("actually_paid")
     credit_amount = actually_paid if actually_paid else claimed.get("amount")
+
     result = await credit_user(db, claimed["user_id"], claimed["currency"], credit_amount)
+
     if not result.get("ok"):
         logger.error(f"NOWPayments webhook: fallo al acreditar order_id {order_id}: {result}")
         # Revertimos el flag para permitir que un reintento (manual o del proximo IPN) acredite.
@@ -200,10 +267,12 @@ async def nowpayments_webhook(request: Request):
             {"$set": {"credited": False, "credit_error": result.get("reason")}},
         )
         return {"received": True, "error": "credit_failed"}
+
     logger.info(
         f"NOWPayments: acreditado {credit_amount} {claimed['currency']} "
         f"a user {claimed['user_id']} (order {order_id})"
     )
+
     # Notificacion in-app + push. Best-effort: si falla, no revierte el credito ya aplicado.
     try:
         await create_notification(
@@ -215,4 +284,5 @@ async def nowpayments_webhook(request: Request):
         )
     except Exception as e:
         logger.warning(f"NOWPayments webhook: no se pudo enviar notificacion: {e}")
+
     return {"received": True, "processed": True, "status": "finished"}
