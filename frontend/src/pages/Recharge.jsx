@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, QrCode, Copy, CheckCircle, Upload, Clock, Banknote, AlertCircle,
-  Wallet, ArrowRight, Shield, Zap, X, XCircle, Timer, CreditCard
+  Wallet, ArrowRight, Shield, Zap, X, XCircle, Timer, CreditCard, Bitcoin
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -502,6 +502,33 @@ export default function Recharge() {
                     <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Tarjeta de Crédito/Débito (Brasil)</span>
                     <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Pago en 1 cuota • Comisión MP incluida</p>
                     <p style={{ fontSize: '14px', fontWeight: '600', color: '#7c3aed', margin: '4px 0 0 0' }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
+                  </div>
+                  <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
+                </div>
+              </button>
+
+              {/* Cripto Option (USDT/USDC) */}
+              <button
+                onClick={() => navigate('/credits/deposit')}
+                style={{
+                  padding: '24px',
+                  borderRadius: '16px',
+                  border: '2px solid #e5e7eb',
+                  backgroundColor: '#ffffff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s'
+                }}
+                data-testid="select-crypto"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Bitcoin style={{ width: '28px', height: '28px', color: '#d97706' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Cripto (USDT/USDC)</span>
+                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Sin salir de la app • Acreditación automática</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#d97706', margin: '4px 0 0 0' }}>Créditos separados de tu saldo RIS</p>
                   </div>
                   <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
                 </div>
