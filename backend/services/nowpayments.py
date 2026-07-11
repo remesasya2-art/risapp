@@ -1,14 +1,17 @@
 """
 services/nowpayments.py — Cliente de la API de NOWPayments (FD Transfers LLC).
 
-Solo cubre lo necesario para el deposito de creditos:
+Cubre lo necesario para el deposito de creditos:
   - status: comprobar que la API responde.
-  - create_invoice: crear una factura hosteada (POST /v1/invoice) y obtener invoice_url.
+  - create_invoice: crear una factura hosteada (POST /v1/invoice), REDIRIGE fuera de la app.
+    (ya no se usa en el flujo de deposito, se deja por si se necesita como respaldo)
+  - create_payment: crear un pago directo (POST /v1/payment) — devuelve direccion + monto
+    para mostrar como QR/copiar DENTRO de la app, sin redirigir a ninguna pagina externa.
   - verify_ipn_signature: verificar la firma HMAC-SHA512 del webhook (IPN).
 
 SEGURIDAD
     Las claves se leen de variables de entorno, NUNCA van en el codigo:
-      NOWPAYMENTS_API_KEY  -> header x-api-key para crear invoices
+      NOWPAYMENTS_API_KEY  -> header x-api-key para crear pagos/invoices
       NOWPAYMENTS_IPN_KEY  -> secreto para verificar la firma del webhook
 """
 
@@ -68,6 +71,41 @@ async def create_invoice(
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{API_BASE}/invoice", headers=_headers(), json=payload)
+        r.raise_for_status()
+        return r.json()
+
+
+async def create_payment(
+    *,
+    price_amount: float,
+    price_currency: str,
+    pay_currency: str,
+    order_id: str,
+    order_description: str,
+    ipn_callback_url: str | None = None,
+) -> dict:
+    """Crea un pago directo (POST /v1/payment) — SIN pagina hosteada externa.
+
+    Para el flujo dentro de la app: el JSON de respuesta trae 'pay_address' (direccion
+    a la que el usuario debe enviar la cripto) y 'pay_amount' (monto exacto), que se
+    muestran como QR + texto para copiar. El usuario nunca sale de la app.
+
+    Puede incluir 'payin_extra_id' (memo/tag) para redes que lo requieran, y 'network'
+    (nombre de la red). El pago se confirma por el mismo webhook IPN que ya tenemos
+    (mismos campos: order_id, payment_status, actually_paid).
+    """
+    payload = {
+        "price_amount": price_amount,
+        "price_currency": price_currency,
+        "pay_currency": pay_currency,
+        "order_id": order_id,
+        "order_description": order_description,
+    }
+    if ipn_callback_url:
+        payload["ipn_callback_url"] = ipn_callback_url
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{API_BASE}/payment", headers=_headers(), json=payload)
         r.raise_for_status()
         return r.json()
 
