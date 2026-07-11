@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -23,6 +23,7 @@ import { StatusBadge } from '../components/dashboard/TransactionItem';
 import BtcAdminHistorial from '../components/admin/BtcAdminHistorial';
 import BtcAdminConfig from '../components/admin/BtcAdminConfig';
 import TasasBtcSection from '../components/admin/TasasBtcSection';
+import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -70,6 +71,7 @@ const TABS = [
   { key: 'crm', label: 'CRM', icon: UserCog },
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
   { key: 'btc', label: 'BTC Lightning', icon: Zap },
+  { key: 'credits', label: 'Créditos Cripto', icon: Wallet, superAdminOnly: true },
 ];
 
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
@@ -859,7 +861,7 @@ export default function AdminPanel() {
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-            {(isAgent ? TABS.filter(t => t.key === 'crm') : TABS).map((tab) => (
+            {(isAgent ? TABS.filter(t => t.key === 'crm') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? (isAgent ? 'chat' : 'users') : tab.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
                   backgroundColor: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#6366f1' : 'transparent', color: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#ffffff' : '#6b7280' }}
@@ -2287,6 +2289,18 @@ export default function AdminPanel() {
             </div>
           )}
           </>)}
+        </div>
+      )}
+      {/* Credits Cripto Tab (USDT/USDC via NOWPayments) — solo super_admin */}
+      {activeTab === 'credits' && user?.role === 'super_admin' && (
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 0' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>💰 Créditos Cripto (USDT/USDC)</h2>
+            <p style={{ color: '#6b7280', fontSize: '14px', margin: '4px 0 0' }}>
+              Billetera de créditos cripto vía NOWPayments — totalmente separada de balance_ris
+            </p>
+          </div>
+          <CreditsAdminPanel />
         </div>
       )}
 </main>
