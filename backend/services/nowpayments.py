@@ -106,7 +106,12 @@ async def create_payment(
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{API_BASE}/payment", headers=_headers(), json=payload)
-        r.raise_for_status()
+        if r.status_code >= 400:
+            # Incluir el cuerpo de la respuesta de NOWPayments para saber el motivo
+            # exacto del error (moneda no habilitada, monto minimo, permisos, etc.)
+            raise RuntimeError(
+                f"NOWPayments /v1/payment HTTP {r.status_code}: {r.text}"
+            )
         return r.json()
 
 
