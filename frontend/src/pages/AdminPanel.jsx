@@ -860,7 +860,7 @@ export default function AdminPanel() {
       {/* Tabs */}
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', rowGap: '8px' }}>
             {(isAgent ? TABS.filter(t => t.key === 'crm') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? (isAgent ? 'chat' : 'users') : tab.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
