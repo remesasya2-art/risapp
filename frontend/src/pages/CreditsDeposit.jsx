@@ -17,7 +17,7 @@ export default function CreditsDeposit() {
   const [amount, setAmount] = useState('');
   const [declared, setDeclared] = useState(false);
   const [loading, setLoading] = useState(false);
-
+  const [minAmount, setMinAmount] = useState(null);
   // Datos del pago en curso (dentro de la app, sin redireccion)
   const [order, setOrder] = useState(null); // { order_id, pay_address, pay_amount, pay_currency, payin_extra_id, network }
   const [depositStatus, setDepositStatus] = useState('pending'); // pending, finished, failed, expired, refunded
@@ -26,7 +26,23 @@ export default function CreditsDeposit() {
 
   const selected = CREDIT_OPTIONS.find((o) => o.key === currency);
   const amountNum = parseFloat(amount);
-  const canContinue = amountNum > 0 && declared && !loading;
+  const belowMin = minAmount != null && amountNum > 0 && amountNum < minAmount;
+  const canContinue = amountNum > 0 && declared && !loading && !belowMin;
+
+  // Consulta el monto minimo real (via NOWPayments) cada vez que cambia la moneda elegida
+  useEffect(() => {
+    let cancelled = false;
+    setMinAmount(null);
+    api.get('/credits/min-amount', { params: { currency } })
+      .then(({ data }) => {
+        if (!cancelled && data?.min_amount) setMinAmount(data.min_amount);
+      })
+      .catch(() => {
+        // Silencioso: si falla, simplemente no se muestra el minimo (el backend
+        // igual valida con un fallback antes de crear el pago)
+      });
+    return () => { cancelled = true; };
+  }, [currency]);
 
   const handleDeposit = async () => {
     if (!canContinue) return;
@@ -55,7 +71,6 @@ export default function CreditsDeposit() {
   // Polling del estado cada 5s mientras haya un pedido activo y no este acreditado
   useEffect(() => {
     if (!order?.order_id || credited) return;
-
     const checkStatus = async () => {
       try {
         const { data } = await api.get(`/credits/deposit/${order.order_id}/status`);
@@ -70,7 +85,6 @@ export default function CreditsDeposit() {
         // Silencioso: si falla una consulta, se reintenta en el proximo ciclo
       }
     };
-
     checkStatus();
     pollRef.current = setInterval(checkStatus, 5000);
     return () => clearInterval(pollRef.current);
@@ -150,8 +164,16 @@ export default function CreditsDeposit() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', fontSize: 18, fontWeight: 500, color: '#111827', border: '1px solid #d1d5db', borderRadius: 12, marginBottom: 20 }}
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '12px 14px', fontSize: 18, fontWeight: 500, color: '#111827',
+                border: belowMin ? '1px solid #dc2626' : '1px solid #d1d5db', borderRadius: 12, marginBottom: 6,
+              }}
             />
+            <p style={{ fontSize: 12, color: belowMin ? '#dc2626' : '#9ca3af', margin: '0 0 20px 0' }}>
+              {minAmount != null
+                ? `Monto mínimo: ${minAmount} ${selected?.key.toUpperCase()}`
+                : 'Consultando monto mínimo...'}
+            </p>
 
             {/* Declaracion de jurisdiccion */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', backgroundColor: '#fef3c7', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
@@ -178,7 +200,6 @@ export default function CreditsDeposit() {
             >
               {loading ? (<><Loader2 size={18} className="animate-spin" /> Generando dirección...</>) : 'Generar dirección de pago'}
             </button>
-
             <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <ShieldCheck size={13} /> Pago procesado de forma segura por NOWPayments
             </p>
@@ -210,13 +231,11 @@ export default function CreditsDeposit() {
               }}>
                 <Clock size={14} className="animate-spin" /> Esperando confirmación del pago...
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
                 <div style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16, border: '2px solid #e5e7eb' }}>
                   <QRCodeSVG value={order.pay_address} size={200} />
                 </div>
               </div>
-
               <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
               <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 4px 0' }}>
                 {order.pay_amount} {order.pay_currency?.toUpperCase()}
@@ -224,7 +243,6 @@ export default function CreditsDeposit() {
               {order.network && (
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network}</p>
               )}
-
               <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
                 <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de depósito</p>
                 <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', margin: '0 0 10px 0' }}>
@@ -237,7 +255,6 @@ export default function CreditsDeposit() {
                   <Copy size={14} /> Copiar dirección
                 </button>
               </div>
-
               {order.payin_extra_id && (
                 <div style={{ padding: 14, backgroundColor: '#fee2e2', borderRadius: 12, textAlign: 'left' }}>
                   <p style={{ fontSize: 11, color: '#991b1b', margin: '0 0 6px 0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -255,12 +272,10 @@ export default function CreditsDeposit() {
                 </div>
               )}
             </div>
-
             <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
               La app detecta el pago automáticamente. Puedes cerrar esta pantalla y volver más tarde;
               el saldo se acreditará igual apenas se confirme.
             </p>
-
             <button
               onClick={resetFlow}
               style={{ width: '100%', padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 12, backgroundColor: '#fff', cursor: 'pointer' }}
