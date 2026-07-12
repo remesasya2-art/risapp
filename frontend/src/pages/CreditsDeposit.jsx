@@ -115,7 +115,7 @@ export default function CreditsDeposit() {
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', paddingBottom: 40 }}>
       {/* Header */}
       <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => (order ? resetFlow() : navigate('/recharge'))} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+        <button onClick={() => (order ? resetFlow() : navigate(-1))} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
           <ArrowLeft size={22} color="#374151" />
         </button>
         <h1 style={{ fontSize: 18, fontWeight: 600, color: '#111827', margin: 0 }}>Recargar con cripto</h1>
