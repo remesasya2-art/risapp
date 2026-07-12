@@ -10,6 +10,7 @@ import {
 import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
 import BalanceCard from '../components/dashboard/BalanceCard';
+import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
@@ -17,7 +18,7 @@ import { fmt } from '../utils/format';
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { rates } = useRate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -55,6 +56,16 @@ export default function Dashboard() {
       }
     };
     loadRecentTransactions();
+  }, []);
+
+  // Refresca el saldo (incluye creditos USDT/USDC) cada 15s, para verlo "en tiempo real"
+  // sin tener que recargar la pagina cuando un deposito cripto se confirma.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshUser();
+    }, 15000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Close sidebar when navigating on mobile
@@ -438,6 +449,15 @@ const normalized = { ...tx };
             risToVes={rates?.ris_to_ves || 0}
             bcvUsdVes={rates?.bcv_usd_ves || 0}
             updatedAt={rates?.updated_at || rates?.last_updated || new Date()}
+            isMobile={isMobile}
+          />
+        </div>
+
+        {/* Créditos cripto (USDT/USDC) — saldo separado del RIS, se refresca solo */}
+        <div style={{ marginBottom: '24px' }}>
+          <CryptoBalanceCard
+            usdt={user?.balance_usdt || 0}
+            usdc={user?.balance_usdc || 0}
             isMobile={isMobile}
           />
         </div>
