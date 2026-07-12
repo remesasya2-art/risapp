@@ -1,6 +1,5 @@
 """
 routes/credits.py — Endpoints de creditos cripto (deposito via NOWPayments).
-
 Flujo DENTRO de la app (sin redireccion externa):
   POST /api/credits/deposit               -> crea un pago directo (create_payment) y
                                               devuelve pay_address/pay_amount para
@@ -9,7 +8,6 @@ Flujo DENTRO de la app (sin redireccion externa):
                                               que el webhook va actualizando).
   POST /api/credits/webhook                -> IPN de NOWPayments. Acredita balance_usdt/
                                               balance_usdc (NUNCA balance_ris) al confirmarse.
-
 Guarda cada intento en la coleccion crypto_deposits con estado 'pending'.
 Cumplimiento: corre assert_payment_allowed (IP + declaracion) ANTES de crear el cobro.
 """
@@ -20,7 +18,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from database import db
@@ -40,17 +38,46 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 
 # Mapa de la moneda elegida por el usuario -> pay_currency que espera NOWPayments.
 # (red por defecto; se puede ampliar si ofreces mas redes)
+# NOTA: "usdcerc20" NO es un codigo valido para NOWPayments ("Currency usdcerc20 was
+# not found") -> Ethereum es la red por defecto de USDC en su sistema, se usa "usdc" a secas.
 PAY_CURRENCY = {
     "usdt": "usdttrc20",   # USDT en TRON (TRC20)
-    "usdc": "usdcerc20",   # USDC en Ethereum (ERC20)
+    "usdc": "usdc",        # USDC en Ethereum (red por defecto en NOWPayments)
 }
 
+# Fallback si NOWPayments no responde al consultar el minimo (no debe bloquear el flujo).
+MINAMOUNT_FALLBACK = {"usdt": 10.0, "usdc": 10.0}
 
 class DepositRequest(BaseModel):
     currency: str            # "usdt" o "usdc" (lo elige el usuario en la app)
     amount: float            # cuanto quiere depositar (en esa cripto, 1 a 1)
     declared_not_restricted: bool = False  # checkbox de declaracion de jurisdiccion
 
+@router.get("/min-amount")
+async def get_min_amount(
+    currency: str = Query(..., description="'usdt' o 'usdc'"),
+    current_user: User = Depends(get_current_user),
+):
+    """Devuelve el monto minimo depositable para la moneda pedida (consulta a NOWPayments,
+    con fallback fijo si la API no responde). Para mostrarlo en el frontend ANTES de que
+    el usuario intente un monto que NOWPayments va a rechazar por AMOUNT_MINIMAL_ERROR."""
+    key = normalize_currency(currency)
+    if key not in PAY_CURRENCY:
+        raise HTTPException(status_code=400, detail="Moneda no soportada. Usa USDT o USDC.")
+    pay_currency = PAY_CURRENCY[key]
+    try:
+        info = await nowpayments.get_min_amount(pay_currency, fiat_equivalent="usd")
+        min_amount = info.get("min_amount")
+        if not min_amount:
+            raise ValueError("sin min_amount en la respuesta")
+        return {"currency": key, "min_amount": min_amount, "source": "nowpayments"}
+    except Exception as e:
+        logger.warning(f"No se pudo obtener min-amount de NOWPayments para {pay_currency}: {e}")
+        return {
+            "currency": key,
+            "min_amount": MINAMOUNT_FALLBACK.get(key, 10.0),
+            "source": "fallback",
+        }
 
 @router.post("/deposit")
 async def create_deposit(
@@ -74,6 +101,23 @@ async def create_deposit(
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0.")
 
     pay_currency = PAY_CURRENCY[key]
+
+    # 2.5) Validar monto minimo ANTES de crear nada (evita el AMOUNT_MINIMAL_ERROR de
+    # NOWPayments con un mensaje generico). Si la consulta a NOWPayments falla, se usa
+    # un minimo fijo de respaldo en vez de bloquear el deposito.
+    try:
+        min_info = await nowpayments.get_min_amount(pay_currency, fiat_equivalent="usd")
+        min_amount = min_info.get("min_amount") or MINAMOUNT_FALLBACK.get(key, 10.0)
+    except Exception as e:
+        logger.warning(f"No se pudo obtener min-amount de NOWPayments para {pay_currency}: {e}")
+        min_amount = MINAMOUNT_FALLBACK.get(key, 10.0)
+
+    if float(data.amount) < float(min_amount):
+        raise HTTPException(
+            status_code=400,
+            detail=f"El monto mínimo para depositar {CREDIT_LABELS.get(key, key)} es {min_amount}.",
+        )
+
     order_id = f"credit_{key}_{current_user.user_id}_{uuid.uuid4().hex[:12]}"
 
     # 3) Registrar el deposito como 'pending' ANTES de llamar a NOWPayments
@@ -144,7 +188,6 @@ async def create_deposit(
         "network": network,
     }
 
-
 @router.get("/deposit/{order_id}/status")
 async def get_deposit_status(
     order_id: str,
@@ -167,19 +210,15 @@ async def get_deposit_status(
         "amount": deposit.get("amount"),
     }
 
-
 # Estados de NOWPayments que cierran el deposito sin acreditar (se registran para soporte).
-_TERMINAL_NO_CREDIT_STATUSES = {"failed", "expired", "refunded"}
-
+TERMINALNO_CREDIT_STATUSES = {"failed", "expired", "refunded"}
 
 @router.post("/webhook")
 async def nowpayments_webhook(request: Request):
     """IPN de NOWPayments — confirma un deposito y acredita creditos (USDT/USDC).
-
     IMPORTANTE: esto es una billetera de creditos cripto totalmente separada de
     balance_ris. Este webhook NUNCA toca balance_ris ni la logica de PIX/MercadoPago
     (routes/gestor_pix.py) — es un flujo aislado, solo mueve balance_usdt/balance_usdc.
-
     Seguridad (mismo patron que el webhook de Mercado Pago):
       1. Verifica firma HMAC-SHA512 (header x-nowpayments-sig) contra NOWPAYMENTS_IPN_KEY.
       2. Busca el deposito propio por order_id en crypto_deposits.
@@ -227,7 +266,7 @@ async def nowpayments_webhook(request: Request):
     )
 
     # Estados terminales sin credito (pago fallo/expiro/fue reembolsado): solo se marca.
-    if payment_status in _TERMINAL_NO_CREDIT_STATUSES:
+    if payment_status in TERMINALNO_CREDIT_STATUSES:
         await db.crypto_deposits.update_one(
             {"order_id": order_id, "credited": False},
             {"$set": {"status": payment_status}},
