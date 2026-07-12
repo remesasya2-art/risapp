@@ -101,12 +101,18 @@ async def create_payment(
     order_id: str,
     order_description: str,
     ipn_callback_url: str | None = None,
+    is_fee_paid_by_user: bool = False,
 ) -> dict:
     """Crea un pago directo (POST /v1/payment) — SIN pagina hosteada externa.
 
     Para el flujo dentro de la app: el JSON de respuesta trae 'pay_address' (direccion
     a la que el usuario debe enviar la cripto) y 'pay_amount' (monto exacto), que se
     muestran como QR + texto para copiar. El usuario nunca sale de la app.
+
+    is_fee_paid_by_user=True: la comision de servicio de NOWPayments se suma al
+    pay_amount (el usuario la paga), en vez de descontarse de lo que se acredita al
+    comercio. NOWPayments exige que el pago sea a tasa fija (fixed_rate) cuando se usa
+    esta opcion, por eso se envia siempre junto con ella.
 
     Puede incluir 'payin_extra_id' (memo/tag) para redes que lo requieran, y 'network'
     (nombre de la red). El pago se confirma por el mismo webhook IPN que ya tenemos
@@ -121,15 +127,13 @@ async def create_payment(
     }
     if ipn_callback_url:
         payload["ipn_callback_url"] = ipn_callback_url
+    if is_fee_paid_by_user:
+        payload["is_fee_paid_by_user"] = True
+        payload["fixed_rate"] = True
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{API_BASE}/payment", headers=_headers(), json=payload)
-        if r.status_code >= 400:
-            # Incluir el cuerpo de la respuesta de NOWPayments para saber el motivo
-            # exacto del error (moneda no habilitada, monto minimo, permisos, etc.)
-            raise RuntimeError(
-                f"NOWPayments /v1/payment HTTP {r.status_code}: {r.text}"
-            )
+        r.raise_for_status()
         return r.json()
 
 
