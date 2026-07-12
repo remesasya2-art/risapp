@@ -29,17 +29,18 @@ export default function CreditsDeposit() {
   const belowMin = minAmount != null && amountNum > 0 && amountNum < minAmount;
   const canContinue = amountNum > 0 && declared && !loading && !belowMin;
 
-  // Consulta el monto minimo real (via NOWPayments) cada vez que cambia la moneda elegida
+  // Consulta el monto minimo real (via NOWPayments) cada vez que cambia la moneda elegida.
+  // Si la consulta falla, se usa un valor de respaldo (10) para que el aviso SIEMPRE
+  // se muestre al usuario, en vez de quedar en "Consultando..." indefinidamente.
   useEffect(() => {
     let cancelled = false;
     setMinAmount(null);
     api.get('/credits/min-amount', { params: { currency } })
       .then(({ data }) => {
-        if (!cancelled && data?.min_amount) setMinAmount(data.min_amount);
+        if (!cancelled) setMinAmount(data?.min_amount || 10);
       })
       .catch(() => {
-        // Silencioso: si falla, simplemente no se muestra el minimo (el backend
-        // igual valida con un fallback antes de crear el pago)
+        if (!cancelled) setMinAmount(10);
       });
     return () => { cancelled = true; };
   }, [currency]);
@@ -169,11 +170,18 @@ export default function CreditsDeposit() {
                 border: belowMin ? '1px solid #dc2626' : '1px solid #d1d5db', borderRadius: 12, marginBottom: 6,
               }}
             />
-            <p style={{ fontSize: 12, color: belowMin ? '#dc2626' : '#9ca3af', margin: '0 0 20px 0' }}>
-              {minAmount != null
-                ? `Monto mínimo: ${minAmount} ${selected?.key.toUpperCase()}`
-                : 'Consultando monto mínimo...'}
-            </p>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
+              marginBottom: 20, backgroundColor: belowMin ? '#fee2e2' : '#eff6ff',
+              border: belowMin ? '1px solid #fecaca' : '1px solid #bfdbfe',
+            }}>
+              <AlertTriangle size={16} color={belowMin ? '#dc2626' : '#2563eb'} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: belowMin ? '#dc2626' : '#1d4ed8' }}>
+                {minAmount != null
+                  ? `Monto mínimo para depositar: ${minAmount} ${selected?.key.toUpperCase()}`
+                  : 'Consultando monto mínimo...'}
+              </span>
+            </div>
 
             {/* Declaracion de jurisdiccion */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', backgroundColor: '#fef3c7', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
@@ -242,6 +250,24 @@ export default function CreditsDeposit() {
               </p>
               {order.network && (
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network}</p>
+              )}
+              {order.fee_amount != null && (
+                <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 16, textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
+                    <span>Se acreditará en tu cuenta</span>
+                    <span style={{ fontWeight: 600, color: '#111827' }}>{order.credit_amount} {currency.toUpperCase()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
+                    <span>Comisión de red (la pagas tú)</span>
+                    <span style={{ fontWeight: 600, color: '#111827' }}>
+                      {order.fee_amount} {currency.toUpperCase()} ({order.fee_percentage}%)
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#374151', paddingTop: 6, borderTop: '1px dashed #e5e7eb' }}>
+                    <span style={{ fontWeight: 600 }}>Total a enviar</span>
+                    <span style={{ fontWeight: 700 }}>{order.pay_amount} {order.pay_currency?.toUpperCase()}</span>
+                  </div>
+                </div>
               )}
               <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
                 <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de depósito</p>
