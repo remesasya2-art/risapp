@@ -12,13 +12,19 @@ SEGURIDAD
     para evitar condiciones de carrera. Cada deposito se acredita UNA sola vez
     (idempotencia por payment_id, controlada en la coleccion crypto_deposits).
 
-ESTADO
-    Modulo aislado. Se conecta al webhook de NOWPayments cuando se construya.
-    No cambia el comportamiento actual de la app.
+AUDITORIA
+    Cada acreditacion (via webhook o manual desde el panel de superadmin) queda
+    registrada como una linea inmutable en el libro mayor de creditos cripto
+    (services/ledger_crypto.py), con saldo antes/despues, quien la hizo y a que
+    operacion pertenece. Si el registro del ledger falla, NUNCA revierte ni
+    bloquea la acreditacion real — es solo el rastro auditable.
 """
 
+import logging
 from decimal import Decimal
 from bson.decimal128 import Decimal128
+
+logger = logging.getLogger(__name__)
 
 # Monedas de credito soportadas y su campo de saldo en el documento de usuario.
 CREDIT_FIELDS = {
@@ -65,7 +71,20 @@ def to_credit_decimal(amount) -> Decimal:
     return d.quantize(Decimal("0.00000001"))
 
 
-async def credit_user(db, user_id: str, currency: str, amount) -> dict:
+async def credit_user(
+    db,
+    user_id: str,
+    currency: str,
+    amount,
+    *,
+    movement_type: str = "deposito_cripto",
+    reference_kind: str | None = None,
+    reference_id: str | None = None,
+    actor_type: str = "webhook",
+    actor_id: str | None = None,
+    actor_email: str | None = None,
+    notes: str | None = None,
+) -> dict:
     """Acredita amount de creditos (USDT/USDC) al usuario, de forma atomica.
 
     Devuelve {"ok": True, "field": ..., "amount": ...} si acredito,
@@ -73,14 +92,59 @@ async def credit_user(db, user_id: str, currency: str, amount) -> dict:
 
     NOTA: la idempotencia (no acreditar dos veces el mismo pago) se controla
     en el webhook via la coleccion crypto_deposits, ANTES de llamar aqui.
+
+    Ademas de acreditar, escribe una linea inmutable en el libro mayor de
+    creditos cripto (services/ledger_crypto.py) para auditoria — igual que el
+    libro de RIS. Esto nunca bloquea ni revierte la acreditacion si falla.
     """
     field = credit_field_for(currency)
     if not field:
         return {"ok": False, "reason": f"moneda no soportada: {currency}"}
 
-    inc_value = Decimal128(to_credit_decimal(amount))
+    key = normalize_currency(currency)
+    amount_dec = to_credit_decimal(amount)
+
+    # Saldo antes (best-effort, solo para el registro del ledger; el $inc de abajo
+    # es la operacion atomica real que determina el saldo).
+    user_before = await db.users.find_one(
+        {"user_id": user_id},
+        {"_id": 0, field: 1, "email": 1, "name": 1, "full_name": 1, "role": 1},
+    )
+    balance_before = float(to_credit_decimal(user_before.get(field, 0))) if user_before else None
+
+    inc_value = Decimal128(amount_dec)
     await db.users.update_one(
         {"user_id": user_id},
         {"$inc": {field: inc_value}},
     )
-    return {"ok": True, "field": field, "amount": str(to_credit_decimal(amount))}
+
+    balance_after = (balance_before + float(amount_dec)) if balance_before is not None else None
+
+    try:
+        from services.ledger_crypto import record_crypto_entry
+        await record_crypto_entry(
+            user_id=user_id,
+            currency=key,
+            movement_type=movement_type,
+            amount=float(amount_dec),
+            direction="credit",
+            balance_before=balance_before,
+            balance_after=balance_after,
+            reference_kind=reference_kind,
+            reference_id=reference_id,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            actor_email=actor_email,
+            user_snapshot=(
+                {
+                    "email": user_before.get("email"),
+                    "name": user_before.get("full_name") or user_before.get("name"),
+                    "role": user_before.get("role", "user"),
+                } if user_before else None
+            ),
+            notes=notes,
+        )
+    except Exception as e:
+        logger.warning(f"No se pudo registrar en ledger_crypto (user={user_id}): {e}")
+
+    return {"ok": True, "field": field, "amount": str(amount_dec)}
