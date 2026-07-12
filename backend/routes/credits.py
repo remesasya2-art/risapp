@@ -90,10 +90,13 @@ async def create_deposit(
     await db.crypto_deposits.insert_one(deposit_doc)
 
     # 4) Crear el pago directo en NOWPayments (sin redireccion externa)
+    #    price_currency va en USD (no en 'usdt'/'usdc' pelado, que NOWPayments no acepta
+    #    como codigo de moneda valido). Como son stablecoins, el monto en USD es
+    #    practicamente 1 a 1 con el monto en USDT/USDC que pidio el usuario.
     try:
         payment = await nowpayments.create_payment(
             price_amount=float(data.amount),
-            price_currency=key,          # valoramos en la propia cripto (1 a 1)
+            price_currency="usd",
             pay_currency=pay_currency,
             order_id=order_id,
             order_description=f"Deposito de {CREDIT_LABELS.get(key, key)}",
