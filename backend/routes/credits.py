@@ -145,7 +145,7 @@ async def create_deposit(
             order_id=order_id,
             order_description=f"Deposito de {CREDIT_LABELS.get(key, key)}",
             ipn_callback_url=f"{PUBLIC_BASE_URL}/api/credits/webhook",
-            is_fee_paid_by_user=True,
+            is_fee_paid_by_user=False,
         )
     except Exception as e:
         logger.error(f"NOWPayments create_payment failed for {order_id}: {e}")
