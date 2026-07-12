@@ -145,6 +145,7 @@ async def create_deposit(
             order_id=order_id,
             order_description=f"Deposito de {CREDIT_LABELS.get(key, key)}",
             ipn_callback_url=f"{PUBLIC_BASE_URL}/api/credits/webhook",
+            is_fee_paid_by_user=True,
         )
     except Exception as e:
         logger.error(f"NOWPayments create_payment failed for {order_id}: {e}")
@@ -165,6 +166,16 @@ async def create_deposit(
     payin_extra_id = payment.get("payin_extra_id")  # memo/tag, solo si la red lo requiere
     network = payment.get("network")
 
+    # Desglose de comision: con is_fee_paid_by_user=True, NOWPayments suma su comision
+    # de servicio al pay_amount (el usuario la paga), asi el monto acreditado en la app
+    # es el monto completo que el usuario declaro (data.amount), sin descuentos.
+    pay_amount_float = float(pay_amount)
+    credit_amount = float(data.amount)
+    fee_amount = round(pay_amount_float - credit_amount, 8)
+    if fee_amount < 0:
+        fee_amount = 0.0
+    fee_percentage = round((fee_amount / credit_amount) * 100, 2) if credit_amount else 0.0
+
     # Guardar los datos del pago para trazabilidad y para que /status los pueda devolver
     await db.crypto_deposits.update_one(
         {"order_id": order_id},
@@ -175,6 +186,8 @@ async def create_deposit(
                 "pay_amount": pay_amount,
                 "payin_extra_id": payin_extra_id,
                 "network": network,
+                "fee_amount": fee_amount,
+                "credit_amount": credit_amount,
             }
         },
     )
@@ -186,6 +199,9 @@ async def create_deposit(
         "pay_currency": pay_currency,
         "payin_extra_id": payin_extra_id,
         "network": network,
+        "credit_amount": credit_amount,
+        "fee_amount": fee_amount,
+        "fee_percentage": fee_percentage,
     }
 
 @router.get("/deposit/{order_id}/status")
