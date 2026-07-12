@@ -38,6 +38,24 @@ async def get_status() -> dict:
         return r.json()
 
 
+async def get_min_amount(currency: str, fiat_equivalent: str = "usd") -> dict:
+    """GET /v1/min-amount — monto minimo pagable en currency (cubre la comision de red).
+    Devuelve el JSON de NOWPayments, que incluye 'min_amount' (en la propia currency)
+    y, si se pide fiat_equivalent, tambien el equivalente en esa moneda fiat.
+    Se usa para avisarle al usuario el minimo ANTES de que NOWPayments rechace el pago
+    con AMOUNT_MINIMAL_ERROR.
+    """
+    params = {
+        "currency_from": currency,
+        "currency_to": currency,
+        "fiat_equivalent": fiat_equivalent,
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{API_BASE}/min-amount", headers=_headers(), params=params)
+        r.raise_for_status()
+        return r.json()
+
+
 async def create_invoice(
     *,
     price_amount: float,
