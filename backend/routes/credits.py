@@ -315,7 +315,14 @@ async def nowpayments_webhook(request: Request):
     actually_paid = payload.get("actually_paid")
     credit_amount = actually_paid if actually_paid else claimed.get("amount")
 
-    result = await credit_user(db, claimed["user_id"], claimed["currency"], credit_amount)
+    result = await credit_user(
+            db, claimed["user_id"], claimed["currency"], credit_amount,
+            movement_type="deposito_cripto",
+            reference_kind="crypto_deposit",
+            reference_id=order_id,
+            actor_type="webhook",
+            notes="Acreditado via webhook NOWPayments",
+        )
 
     if not result.get("ok"):
         logger.error(f"NOWPayments webhook: fallo al acreditar order_id {order_id}: {result}")
