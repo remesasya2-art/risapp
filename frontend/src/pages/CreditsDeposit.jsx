@@ -7,8 +7,8 @@ import { QRCodeSVG } from 'qrcode.react';
 
 // Monedas de credito disponibles (de cara al usuario: "Creditos")
 const CREDIT_OPTIONS = [
-  { key: 'usdt', label: 'Creditos USDT', desc: 'Deposita con USDT', color: '#26A17B' },
-  { key: 'usdc', label: 'Creditos USDC', desc: 'Deposita con USDC', color: '#2775CA' },
+  { key: 'usdt', label: 'Creditos USDTRIS', desc: 'Deposita con USDT', color: '#26A17B' },
+  { key: 'usdc', label: 'Creditos USDCRIS', desc: 'Deposita con USDC', color: '#2775CA' },
 ];
 
 export default function CreditsDeposit() {
