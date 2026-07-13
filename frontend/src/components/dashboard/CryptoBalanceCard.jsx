@@ -15,8 +15,8 @@ export default function CryptoBalanceCard({ usdt = 0, usdc = 0, isMobile = false
       gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(2, minmax(0, 240px))',
       gap: '12px',
     }}>
-      <CryptoMini label="Créditos USDT" color="#26A17B" amount={fmtCrypto(usdt)} />
-      <CryptoMini label="Créditos USDC" color="#2775CA" amount={fmtCrypto(usdc)} />
+      <CryptoMini label="Créditos USDTRIS" color="#26A17B" amount={fmtCrypto(usdt)} />
+      <CryptoMini label="Créditos USDCRIS" color="#2775CA" amount={fmtCrypto(usdc)} />
     </div>
   );
 }
