@@ -11,8 +11,7 @@ export default function Footer() {
           <p style={{ fontWeight: 800, fontSize: '16px', color: '#1f2937', margin: '0 0 6px 0' }}>RIS App</p>
           <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>SAIPHA SERVICIOS DIGITAIS</p>
           <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>J. DEL CARMEN HERNANDEZ BARRETO</p>
-                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>CNPJ: 66.994.057/0001-61</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Rua Monte Roraima, S/N, Vila Nova, Pacaraima – RR, CEP 69345-000, Brasil</p>
+          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>CNPJ: 66.994.057/0001-61</p>
         </div>
         <div>
           <p style={colTitle}>Legal</p>
