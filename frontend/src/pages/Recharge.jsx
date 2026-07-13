@@ -526,7 +526,7 @@ export default function Recharge() {
                     <Bitcoin style={{ width: '28px', height: '28px', color: '#d97706' }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Cripto (USDT/USDC)</span>
+                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Cripto (USDTRIS/USDCRIS)</span>
                     <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Sin salir de la app • Acreditación automática</p>
                     <p style={{ fontSize: '14px', fontWeight: '600', color: '#d97706', margin: '4px 0 0 0' }}>Créditos separados de tu saldo RIS</p>
                   </div>
