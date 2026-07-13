@@ -21,6 +21,7 @@ export default function Dashboard() {
   const { user, logout, refreshUser } = useAuth();
   const { rates } = useRate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -250,7 +251,7 @@ const normalized = { ...tx };
       {/* Sidebar */}
       <aside 
         style={{
-          width: '260px',
+          width: isMobile ? '260px' : (desktopCollapsed ? '76px' : '260px'),
           backgroundColor: '#ffffff',
           borderRight: '1px solid #f3f4f6',
           display: 'flex',
@@ -259,7 +260,8 @@ const normalized = { ...tx };
           height: '100%',
           zIndex: 50,
           transform: isMobile ? (sidebarOpen ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
-          transition: 'transform 0.3s ease-in-out'
+          transition: 'transform 0.3s ease-in-out, width 0.2s ease-in-out',
+          overflow: 'hidden'
         }}
       >
         {/* Logo */}
@@ -292,29 +294,64 @@ const normalized = { ...tx };
         {/* Navigation */}
         <nav style={{ flex: 1, padding: '16px' }}>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {menuItems.map((item) => (
-              <li key={item.path} style={{ marginBottom: '4px' }}>
-                <Link
-                  to={item.path}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    textDecoration: 'none',
-                    transition: 'all 0.2s',
-                    backgroundColor: isActive(item.path) ? '#6366f1' : 'transparent',
-                    color: isActive(item.path) ? '#ffffff' : '#6b7280',
-                    fontWeight: isActive(item.path) ? '600' : '400',
-                    fontSize: '14px'
-                  }}
-                >
-                  <item.icon style={{ width: '20px', height: '20px' }} strokeWidth={1.5} />
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            ))}
+            {menuItems.map((item, idx) => {
+              const collapsedDesktop = desktopCollapsed && !isMobile;
+              if (idx === 0) {
+                // El item "Inicio" (siempre el primero) se reconvierte en el boton
+                // hamburguesa que colapsa/expande el menu lateral en desktop. Ya no
+                // navega a "/" (era redundante: estando en el Dashboard no hacia nada).
+                return (
+                  <li key="sidebar-toggle" style={{ marginBottom: '4px' }}>
+                    <button
+                      onClick={() => (isMobile ? setSidebarOpen(false) : setDesktopCollapsed((c) => !c))}
+                      title={collapsedDesktop ? 'Expandir menú' : 'Colapsar menú'}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        width: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#6b7280',
+                        fontSize: '14px',
+                        justifyContent: collapsedDesktop ? 'center' : 'flex-start'
+                      }}
+                    >
+                      <Menu style={{ width: '20px', height: '20px' }} strokeWidth={1.5} />
+                      {!collapsedDesktop && <span>Menú</span>}
+                    </button>
+                  </li>
+                );
+              }
+              return (
+                <li key={item.path} style={{ marginBottom: '4px' }}>
+                  <Link
+                    to={item.path}
+                    title={collapsedDesktop ? item.label : undefined}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      textDecoration: 'none',
+                      transition: 'all 0.2s',
+                      backgroundColor: isActive(item.path) ? '#6366f1' : 'transparent',
+                      color: isActive(item.path) ? '#ffffff' : '#6b7280',
+                      fontWeight: isActive(item.path) ? '600' : '400',
+                      fontSize: '14px',
+                      justifyContent: collapsedDesktop ? 'center' : 'flex-start'
+                    }}
+                  >
+                    <item.icon style={{ width: '20px', height: '20px' }} strokeWidth={1.5} />
+                    {!collapsedDesktop && <span>{item.label}</span>}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 
@@ -373,9 +410,10 @@ const normalized = { ...tx };
       {/* Main Content */}
       <main style={{ 
         flex: 1, 
-        marginLeft: isMobile ? 0 : '260px', 
+        marginLeft: isMobile ? 0 : (desktopCollapsed ? '76px' : '260px'), 
         padding: isMobile ? '16px' : '32px',
-        paddingTop: isMobile ? '72px' : '32px'
+        paddingTop: isMobile ? '72px' : '32px',
+        transition: 'margin-left 0.2s ease-in-out'
       }}>
         {/* Mobile Header */}
         {isMobile && (
