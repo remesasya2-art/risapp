@@ -7,8 +7,8 @@ import { QRCodeSVG } from 'qrcode.react';
 
 // Monedas de credito disponibles (de cara al usuario: "Creditos")
 const CREDIT_OPTIONS = [
-  { key: 'usdt', label: 'Creditos USDT', desc: 'Deposita con USDT (red TRON / TRC20)', color: '#26A17B' },
-  { key: 'usdc', label: 'Creditos USDC', desc: 'Deposita con USDC (red Ethereum / ERC20)', color: '#2775CA' },
+  { key: 'usdt', label: 'Creditos USDT', desc: 'Deposita con USDT', color: '#26A17B' },
+  { key: 'usdc', label: 'Creditos USDC', desc: 'Deposita con USDC', color: '#2775CA' },
 ];
 
 export default function CreditsDeposit() {
@@ -18,37 +18,67 @@ export default function CreditsDeposit() {
   const [declared, setDeclared] = useState(false);
   const [loading, setLoading] = useState(false);
   const [minAmount, setMinAmount] = useState(null);
+  // Seleccion de red (TRC20, ERC20, BSC, Solana, Polygon, etc.)
+  const [networks, setNetworks] = useState([]);
+  const [network, setNetwork] = useState(null); // ticker exacto, ej. 'usdttrc20'
+  const [networksLoading, setNetworksLoading] = useState(false);
   // Datos del pago en curso (dentro de la app, sin redireccion)
-  const [order, setOrder] = useState(null); // { order_id, pay_address, pay_amount, pay_currency, payin_extra_id, network }
-  const [depositStatus, setDepositStatus] = useState('pending'); // pending, finished, failed, expired, refunded
+  const [order, setOrder] = useState(null);
+  const [depositStatus, setDepositStatus] = useState('pending');
   const [credited, setCredited] = useState(false);
   const pollRef = useRef(null);
 
   const selected = CREDIT_OPTIONS.find((o) => o.key === currency);
   const amountNum = parseFloat(amount);
   const belowMin = minAmount != null && amountNum > 0 && amountNum < minAmount;
-  const canContinue = amountNum > 0 && declared && !loading && !belowMin;
+  const canContinue = amountNum > 0 && declared && !loading && !belowMin && !!network;
 
-  // Consulta el monto minimo real (via NOWPayments) cada vez que cambia la moneda elegida.
+  // Consulta las redes disponibles cada vez que cambia la moneda elegida.
+  // Si la consulta falla, cae a la red por defecto de esa moneda (nunca deja al
+  // usuario bloqueado sin poder depositar).
+  useEffect(() => {
+    let cancelled = false;
+    setNetworks([]);
+    setNetwork(null);
+    setNetworksLoading(true);
+    api.get('/credits/networks', { params: { currency } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = data?.networks || [];
+        setNetworks(list);
+        const def = list.find((n) => n.is_default) || list[0];
+        setNetwork(def?.ticker || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const fallbackTicker = currency === 'usdc' ? 'usdc' : 'usdttrc20';
+          const fallbackLabel = currency === 'usdc' ? 'Ethereum (ERC20)' : 'Tron (TRC20)';
+          setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true }]);
+          setNetwork(fallbackTicker);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setNetworksLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [currency]);
+
+  // Consulta el monto minimo real (via NOWPayments) para la moneda + red elegidas.
   // Si la consulta falla, se usa un valor de respaldo (10) para que el aviso SIEMPRE
   // se muestre al usuario, en vez de quedar en "Consultando..." indefinidamente.
   useEffect(() => {
     let cancelled = false;
     setMinAmount(null);
-    api.get('/credits/min-amount', { params: { currency } })
+    if (!network) return;
+    api.get('/credits/min-amount', { params: { currency, network } })
       .then(({ data }) => {
         if (!cancelled) setMinAmount(data?.min_amount || 10);
       })
-     .catch(() => {
-  if (!cancelled) {
-    const fallbackTicker = currency === 'usdc' ? 'usdc' : 'usdttrc20';
-    const fallbackLabel = currency === 'usdc' ? 'Ethereum (ERC20)' : 'Tron (TRC20)';
-    setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true }]);
-    setNetwork(fallbackTicker);
-  }
-});
+      .catch(() => {
+        if (!cancelled) setMinAmount(10);
+      });
     return () => { cancelled = true; };
-  }, [currency]);
+  }, [currency, network]);
 
   const handleDeposit = async () => {
     if (!canContinue) return;
@@ -58,6 +88,7 @@ export default function CreditsDeposit() {
         currency,
         amount: amountNum,
         declared_not_restricted: declared,
+        network,
       });
       if (data?.pay_address && data?.pay_amount) {
         setOrder(data);
@@ -159,6 +190,29 @@ export default function CreditsDeposit() {
               ))}
             </div>
 
+            {/* Seleccion de red */}
+            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 8 }}>Red</label>
+            {networksLoading ? (
+              <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>Consultando redes disponibles...</p>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                {networks.map((n) => (
+                  <button
+                    key={n.ticker}
+                    onClick={() => setNetwork(n.ticker)}
+                    style={{
+                      padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: network === n.ticker ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                      backgroundColor: network === n.ticker ? '#eff6ff' : '#fff',
+                      color: network === n.ticker ? '#1d4ed8' : '#374151',
+                    }}
+                  >
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Monto */}
             <label style={{ fontSize: 13, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 8 }}>
               Monto a depositar ({selected?.key.toUpperCase()})
@@ -225,7 +279,7 @@ export default function CreditsDeposit() {
             </div>
             <h2 style={{ fontSize: 22, fontWeight: 700, color: '#16a34a', margin: '0 0 8px 0' }}>¡Depósito acreditado!</h2>
             <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0' }}>
-              Se acreditaron {order.pay_amount} {order.pay_currency?.toUpperCase()} a tu cuenta.
+              Se acreditaron {order.credit_amount ?? order.pay_amount} {currency.toUpperCase()} a tu cuenta.
             </p>
             <button
               onClick={() => navigate('/')}
@@ -250,11 +304,25 @@ export default function CreditsDeposit() {
                 </div>
               </div>
               <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
-              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 4px 0' }}>
+              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
                 {order.pay_amount} {order.pay_currency?.toUpperCase()}
               </p>
-              {order.network && (
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network}</p>
+              <button
+                onClick={() => handleCopy(String(order.pay_amount), 'Monto')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 999, backgroundColor: '#eff6ff', cursor: 'pointer', marginBottom: 10 }}
+              >
+                <Copy size={12} /> Copiar monto exacto
+              </button>
+              <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px 0' }}>
+                ⚠️ Envía el monto EXACTO. Si envías menos, el pago puede quedar pendiente sin acreditarse.
+              </p>
+              <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 12px 0' }}>
+                Tu billetera o exchange de origen puede cobrarte una comisión adicional al retirar/enviar —
+                esa comisión es externa a esta app y no está incluida en el cálculo de arriba. Se acreditará
+                exactamente lo que llegue a esta dirección.
+              </p>
+              {order.network_label && (
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network_label}</p>
               )}
               {order.fee_amount != null && (
                 <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 16, textAlign: 'left' }}>
