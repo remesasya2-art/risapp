@@ -56,6 +56,18 @@ async def get_min_amount(currency: str, fiat_equivalent: str = "usd") -> dict:
         return r.json()
 
 
+async def get_merchant_coins() -> list[str]:
+    """GET /v1/merchant/coins — monedas/redes habilitadas en el dashboard de NOWPayments
+    para este comercio (Coin Settings). Se usa para ofrecerle al usuario solo las redes
+    que realmente estan activas en la cuenta, evitando ofrecer una red que despues falle
+    al crear el pago."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{API_BASE}/merchant/coins", headers=_headers())
+        r.raise_for_status()
+        data = r.json()
+        return data.get("selectedCurrencies", []) or []
+
+
 async def create_invoice(
     *,
     price_amount: float,
