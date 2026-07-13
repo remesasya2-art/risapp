@@ -39,9 +39,14 @@ export default function CreditsDeposit() {
       .then(({ data }) => {
         if (!cancelled) setMinAmount(data?.min_amount || 10);
       })
-      .catch(() => {
-        if (!cancelled) setMinAmount(10);
-      });
+     .catch(() => {
+  if (!cancelled) {
+    const fallbackTicker = currency === 'usdc' ? 'usdc' : 'usdttrc20';
+    const fallbackLabel = currency === 'usdc' ? 'Ethereum (ERC20)' : 'Tron (TRC20)';
+    setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true }]);
+    setNetwork(fallbackTicker);
+  }
+});
     return () => { cancelled = true; };
   }, [currency]);
 
