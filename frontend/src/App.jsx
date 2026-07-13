@@ -25,6 +25,7 @@ import DriveCallback from './pages/DriveCallback';
 import BTCLightning from './pages/BTCLightning';
 import SendReais from './pages/SendReais';
 import LegalPage from './pages/LegalPage';
+import Landing from './pages/Landing';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -76,6 +77,33 @@ function PublicRoute({ children }) {
   return children;
 }
 
+// Ruta raiz "/": muestra la Landing publica si NO hay sesion, y el Dashboard si SI
+// la hay. A diferencia de ProtectedRoute/PublicRoute (que redirigen), esta ruta
+// debe RENDERIZAR contenido distinto segun el estado de auth, no redirigir.
+function HomeGate() {
+  const { user, loading, mustChangePassword } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)' }}>
+        <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '4px solid #e5e7eb', borderTopColor: '#6366f1', animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Landing />;
+  }
+
+  if (mustChangePassword && location.pathname !== '/force-change-password') {
+    return <Navigate to="/force-change-password" replace />;
+  }
+
+  return <Dashboard />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -85,7 +113,7 @@ function AppRoutes() {
       <Route path="/legal" element={<LegalPage />} />
       
       {/* Protected Routes */}
-      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/" element={<HomeGate />} />
       <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
       <Route path="/send-reais" element={<ProtectedRoute><SendReais /></ProtectedRoute>} />
       <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
