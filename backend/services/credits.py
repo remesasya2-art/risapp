@@ -32,10 +32,12 @@ CREDIT_FIELDS = {
     "usdc": "balance_usdc",
 }
 
-# Etiqueta de cara al usuario
+# Etiqueta de cara al usuario (nombre de marca de la billetera, NO el ticker real
+# de la cripto: el deposito/red siguen siendo USDT/USDC reales en la blockchain,
+# esto es solo como se llama el saldo dentro de la app).
 CREDIT_LABELS = {
-    "usdt": "Creditos USDT",
-    "usdc": "Creditos USDC",
+    "usdt": "Creditos USDTRIS",
+    "usdc": "Creditos USDCRIS",
 }
 
 
