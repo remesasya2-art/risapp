@@ -158,9 +158,9 @@ const normalized = { ...tx };
   const baseMenuItems = [
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
     { icon: Wallet, label: 'Recargar', path: '/recharge' },
-    { icon: ArrowLeftRight, label: 'Enviar a Venezuela', path: '/send' },
-    { icon: ArrowUpRight, label: 'Enviar a Brasil', path: '/send-reais' },
-    { icon: Zap, label: 'Enviar BTC', path: '/btc-lightning' },
+    { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
+    { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
+    { icon: Zap, label: 'Bitcoin Lightning', path: '/btc-lightning' },
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },
