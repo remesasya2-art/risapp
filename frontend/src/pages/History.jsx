@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
@@ -30,10 +30,14 @@ export default function History() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { rates } = useRate();
+  const [searchParams] = useSearchParams();
+  const initialFilter = ['all', 'withdrawals', 'recharges', 'cripto'].includes(searchParams.get('filter'))
+    ? searchParams.get('filter')
+    : 'all';
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
+  const [filter, setFilter] = useState(initialFilter);
+  const [showFilters, setShowFilters] = useState(initialFilter !== 'all');
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
   const [page, setPage] = useState(1);
