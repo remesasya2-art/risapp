@@ -531,13 +531,14 @@ const normalized = { ...tx };
               </Link>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {recentTransactions.map((tx) => (
                 <TransactionItem
                   key={tx.transaction_id}
                   tx={tx}
                   rates={rates}
                   onViewVoucher={openVoucher}
+                  compact
                 />
               ))}
             </div>
