@@ -419,8 +419,9 @@ async def _credit_mercadopago_bank(payment: dict, amount_brl: float):
 async def simulate_pix_payment(payment_id: str, current_user: User = Depends(require_authenticated_user)):
     """Simulate PIX payment confirmation (for testing when MP not available)"""
     # --- SECURITY: this endpoint credits real balance with no real payment.
-    # It must NEVER be reachable in production. ---
-    if os.environ.get("ENVIRONMENT", "").lower() == "production":
+    # Fail-closed por defecto: solo se habilita si ENABLE_PIX_SIMULATION=true
+    # esta seteado explicitamente (nunca queda abierto por accidente/typo). ---
+    if os.environ.get("ENABLE_PIX_SIMULATION", "").lower() != "true":
         raise HTTPException(status_code=404, detail="Not found")
 
     payment = await db.gestor_pix_payments.find_one({
