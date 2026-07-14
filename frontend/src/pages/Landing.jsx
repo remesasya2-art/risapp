@@ -3,8 +3,6 @@ import {
   Wallet, Bitcoin, ShieldCheck, Clock, Smartphone, LayoutDashboard,
   ArrowRight, CheckCircle2, TrendingUp, QrCode,
 } from 'lucide-react';
-import { useRate } from '../contexts/RateContext';
-import { fmt } from '../utils/format';
 import Footer from '../components/Footer';
 
 /**
@@ -61,38 +59,6 @@ const TRUST_ITEMS = [
   { icon: Smartphone, title: '100% desde el navegador', desc: 'Sin instalar nada: gestiona tu cuenta desde risappbr.com.' },
 ];
 
-function MarketIndicators() {
-  const { rates, loading } = useRate();
-  const items = [
-    { label: 'USD', value: rates?.bcv_usd_ves },
-    { label: 'EUR', value: rates?.bcv_eur_ves },
-  ].filter((i) => i.value);
-
-  if (loading || items.length === 0) return null;
-
-  return (
-    <div style={{
-      display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center',
-      backgroundColor: '#fff', borderRadius: 16, padding: '16px 24px', border: '1px solid #eef0f4',
-      boxShadow: '0 8px 20px rgba(91,79,233,0.08)', maxWidth: 420, width: '100%',
-    }}>
-      {items.map((i) => (
-        <div key={i.label} style={{ textAlign: 'center', minWidth: 110 }}>
-          <p style={{ margin: '0 0 4px 0', fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-            {i.label} / VES
-          </p>
-          <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#3B3A9E' }}>
-            {fmt(i.value)}
-          </p>
-        </div>
-      ))}
-      <p style={{ width: '100%', margin: '10px 0 0 0', fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
-        Indicador de mercado, solo referencial.
-      </p>
-    </div>
-  );
-}
-
 export default function Landing() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' }}>
@@ -121,40 +87,31 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section style={{ padding: '64px 20px 48px', background: 'radial-gradient(ellipse at top left, #f0eeff 0%, #ffffff 55%)' }}>
-        <div style={{
-          maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 48, alignItems: 'center',
-          flexWrap: 'wrap',
-        }}>
-          <div style={{ flex: '1 1 420px', minWidth: 300 }}>
-            <h1 style={{ fontSize: 42, fontWeight: 800, color: '#111827', lineHeight: 1.15, margin: '0 0 16px 0' }}>
-              Tu plataforma de <span style={{ color: '#5B4FE9' }}>operaciones digitales</span>
-            </h1>
-            <p style={{ fontSize: 17, color: '#6b7280', lineHeight: 1.6, margin: '0 0 28px 0' }}>
-              Recarga tu cuenta, opera con Bitcoin y activa créditos digitales USDTRIS y
-              USDCRIS. Todo desde una sola cuenta, sin salir de la app.
-            </p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Link to="/register" style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '15px 26px', borderRadius: 14,
-                fontSize: 15, fontWeight: 700, color: '#fff', textDecoration: 'none',
-                background: 'linear-gradient(135deg, #5B4FE9 0%, #3B3A9E 100%)',
-                boxShadow: '0 10px 24px rgba(91,79,233,0.28)',
-              }}>
-                Crear cuenta gratis <ArrowRight size={17} />
-              </Link>
-              <Link to="/login" style={{
-                display: 'inline-flex', alignItems: 'center', padding: '15px 26px', borderRadius: 14,
-                fontSize: 15, fontWeight: 700, color: '#374151', textDecoration: 'none',
-                border: '1.5px solid #e5e7eb',
-              }}>
-                Ya tengo cuenta
-              </Link>
-            </div>
-          </div>
-
-          <div style={{ flex: '1 1 380px', display: 'flex', justifyContent: 'center' }}>
-            <MarketIndicators />
+      <section style={{ padding: '64px 20px 56px', background: 'radial-gradient(ellipse at top left, #f0eeff 0%, #ffffff 55%)' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
+          <h1 style={{ fontSize: 42, fontWeight: 800, color: '#111827', lineHeight: 1.15, margin: '0 0 16px 0' }}>
+            Tu plataforma de <span style={{ color: '#5B4FE9' }}>operaciones digitales</span>
+          </h1>
+          <p style={{ fontSize: 17, color: '#6b7280', lineHeight: 1.6, margin: '0 0 28px 0' }}>
+            Recarga tu cuenta, opera con Bitcoin y activa créditos digitales USDTRIS y
+            USDCRIS. Todo desde una sola cuenta, sin salir de la app.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link to="/register" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '15px 26px', borderRadius: 14,
+              fontSize: 15, fontWeight: 700, color: '#fff', textDecoration: 'none',
+              background: 'linear-gradient(135deg, #5B4FE9 0%, #3B3A9E 100%)',
+              boxShadow: '0 10px 24px rgba(91,79,233,0.28)',
+            }}>
+              Crear cuenta gratis <ArrowRight size={17} />
+            </Link>
+            <Link to="/login" style={{
+              display: 'inline-flex', alignItems: 'center', padding: '15px 26px', borderRadius: 14,
+              fontSize: 15, fontWeight: 700, color: '#374151', textDecoration: 'none',
+              border: '1.5px solid #e5e7eb',
+            }}>
+              Ya tengo cuenta
+            </Link>
           </div>
         </div>
       </section>
