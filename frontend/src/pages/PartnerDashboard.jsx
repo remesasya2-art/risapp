@@ -46,7 +46,7 @@ export default function PartnerDashboard() {
       try {
         await navigator.share({
           title: 'Únete a RIS App',
-          text: '¡Regístrate en RIS App usando mi código de referido y comienza a enviar dinero fácilmente!',
+          text: '¡Regístrate en RIS App usando mi código de referido y empieza a operar fácilmente!',
           url: data.referral_link
         });
       } catch (error) {
