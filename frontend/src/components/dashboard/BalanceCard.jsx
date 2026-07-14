@@ -176,7 +176,7 @@ export default function BalanceCard({
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)'; }}
           >
             <ArrowUpRight size={18} strokeWidth={2.5} />
-            {isMobile ? 'Enviar' : 'Enviar Dinero'}
+            {isMobile ? 'Gastar' : 'Gastar Saldo'}
           </Link>
         </div>
       </div>
