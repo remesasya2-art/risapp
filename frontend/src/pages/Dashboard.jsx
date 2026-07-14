@@ -11,6 +11,7 @@ import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
+import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
@@ -479,6 +480,11 @@ const normalized = { ...tx };
             </p>
           </div>
         )}
+
+        {/* Indicadores de mercado (BCV) — solo post-login */}
+        <div style={{ marginBottom: '20px' }}>
+          <MarketRatesStrip isMobile={isMobile} />
+        </div>
 
         {/* Balance Card (gradient + count-up + dual pills) */}
         <div style={{ marginBottom: '24px' }}>
