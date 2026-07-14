@@ -56,7 +56,7 @@ function formatShort(dateString) {
  *   rates: { bcv_usd_ves } (optional, for $ conversion)
  *   onViewVoucher: (tx) => void
  */
-export default function TransactionItem({ tx, rates, onViewVoucher }) {
+export default function TransactionItem({ tx, rates, onViewVoucher, compact = false }) {
   // Normalizar nombres de campo: unas transacciones usan inglés
   // (type/status/amount_input) y otras español (tipo/estado/amount), p.ej. las de BTC.
   const txType = String(tx.type || tx.tipo || '').toLowerCase();
@@ -94,6 +94,71 @@ export default function TransactionItem({ tx, rates, onViewVoucher }) {
       : isRecharge
         ? 'Recarga'
         : (sign === '+' ? 'Recarga' : 'Envío');
+
+  if (compact) {
+    const statusCfg = STATUS_CONFIG[txStatus] || STATUS_CONFIG.pending;
+    return (
+      <div
+        data-testid={`recent-tx-${tx.transaction_id}`}
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          padding: '10px 12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          transition: 'background-color 0.15s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8F8FF'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '34px', height: '34px', borderRadius: '50%',
+            backgroundColor: iconBg, color: iconColor,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <IconArrow size={16} strokeWidth={2.5} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{
+                fontSize: '13.5px', fontWeight: 700, color: '#1A1A2E',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {title}
+              </span>
+              <span style={{
+                fontSize: '14px', fontWeight: 700, color: amountColor,
+                fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+                {sign}{fmt(mainAmount)} {mainUnit}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '2px' }}>
+              <span style={{ fontSize: '11px', color: '#8E8E9A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatShort(tx.created_at)} · <span style={{ color: statusCfg.fg, fontWeight: 600 }}>{statusCfg.label}</span>
+              </span>
+              {showVoucher && (
+                <button
+                  onClick={() => onViewVoucher?.(tx)}
+                  data-testid={`view-voucher-${tx.transaction_id}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: '22px', height: '22px', borderRadius: '50%',
+                    backgroundColor: '#EEF2FF', color: '#5B4FE9', border: 'none', cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                  title="Ver comprobante"
+                >
+                  <Eye size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
