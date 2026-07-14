@@ -39,7 +39,7 @@ const FEATURES = [
     icon: TrendingUp,
     color: '#2775CA',
     title: 'Créditos digitales USDTRIS / USDCRIS',
-    desc: 'Activa créditos digitales respaldados en USDT o USDC dentro de tu cuenta.',
+    desc: 'Convierte tus depósitos en créditos digitales USDTRIS/USDCRIS para usar dentro de la plataforma.',
   },
   {
     icon: LayoutDashboard,
@@ -125,8 +125,8 @@ export default function Landing() {
               Tu plataforma de <span style={{ color: '#5B4FE9' }}>operaciones digitales</span>
             </h1>
             <p style={{ fontSize: 17, color: '#6b7280', lineHeight: 1.6, margin: '0 0 28px 0' }}>
-              Recarga tu cuenta, opera con Bitcoin y activa créditos digitales respaldados
-              en USDT o USDC. Todo desde una sola cuenta, sin salir de la app.
+              Recarga tu cuenta, opera con Bitcoin y activa créditos digitales USDTRIS y
+              USDCRIS. Todo desde una sola cuenta, sin salir de la app.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Link to="/register" style={{
@@ -218,17 +218,18 @@ export default function Landing() {
               <ShieldCheck size={26} color="#fff" />
             </div>
             <h3 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: '0 0 12px 0' }}>
-              Tu cuenta y tus datos, protegidos
+              Seguridad en cada operación
             </h3>
             <p style={{ fontSize: 15, color: '#6b7280', lineHeight: 1.6, margin: 0 }}>
-              Cada operación se procesa con verificación de seguridad antes de acreditarse,
-              y mantenemos una separación estricta entre tus distintos saldos.
+              Cada operación pasa por validaciones de seguridad antes de reflejarse en tu
+              cuenta, y los distintos tipos de créditos se gestionan de forma independiente
+              dentro de la plataforma.
             </p>
           </div>
           <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              'Acreditación atómica: nunca se duplica ni se pierde una operación confirmada.',
-              'Separación estricta entre tus distintos saldos y créditos digitales.',
+              'Cada operación se refleja una sola vez: nunca se duplica ni se pierde.',
+              'Los distintos tipos de créditos se gestionan de forma independiente.',
               'Verificación de identidad antes de operar montos mayores.',
             ].map((line) => (
               <div key={line} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
