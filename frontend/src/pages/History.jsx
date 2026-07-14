@@ -8,6 +8,7 @@ import {
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import TransactionItem from '../components/dashboard/TransactionItem';
+import CryptoHistoryItem from '../components/dashboard/CryptoHistoryItem';
 import { fmt } from '../utils/format';
 
 // Convertir URL de imagen a ruta accesible
@@ -65,6 +66,15 @@ export default function History() {
   const loadTransactions = async () => {
     setLoading(true);
     try {
+      if (filter === 'cripto') {
+        const params = new URLSearchParams({ page, limit: 10 });
+        const response = await api.get(`/credits/history?${params}`);
+        const data = response.data;
+        setTransactions(data.items || []);
+        setTotalPages(Math.max(1, Math.ceil((data.total || 0) / 10)));
+        setTotalCount(data.total || 0);
+        return;
+      }
       const params = new URLSearchParams({ page, limit: 10 });
       if (filter !== 'all') params.append('filter_type', filter);
       const response = await api.get(`/transactions?${params}`);
@@ -161,6 +171,7 @@ const normalized = { ...tx };
               { key: 'all', label: 'Todos' },
               { key: 'withdrawals', label: 'Envíos' },
               { key: 'recharges', label: 'Recargas' },
+              { key: 'cripto', label: 'Cripto' },
             ].map((f) => (
               <button
                 key={f.key}
@@ -206,14 +217,18 @@ const normalized = { ...tx };
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {transactions.map((tx) => (
-              <TransactionItem
-                key={tx.transaction_id}
-                tx={tx}
-                rates={rates}
-                onViewVoucher={openVoucher}
-              />
-            ))}
+            {filter === 'cripto'
+              ? transactions.map((item) => (
+                  <CryptoHistoryItem key={item.order_id} item={item} formatDate={formatDate} />
+                ))
+              : transactions.map((tx) => (
+                  <TransactionItem
+                    key={tx.transaction_id}
+                    tx={tx}
+                    rates={rates}
+                    onViewVoucher={openVoucher}
+                  />
+                ))}
           </div>
         )}
 
