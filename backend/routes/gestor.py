@@ -143,6 +143,9 @@ async def get_gestor_beneficiaries(current_user: User = Depends(require_gestor))
 @router.post("/process-transaction")
 async def process_gestor_transaction(request: GestorTransactionRequest, current_user: User = Depends(require_gestor)):
     """Process a third-party transaction using balance_ris_terceros"""
+    if not request.amount_ris or request.amount_ris <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0.")
+
     user = await db.users.find_one({"user_id": current_user.user_id})
     
     # Check balance
