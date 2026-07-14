@@ -456,7 +456,7 @@ export default function GestorDashboard() {
                     style={{ ...btnSuccess, background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)' }} 
                     data-testid="direct-send-btn"
                   >
-                    <Send style={{ width: '20px', height: '20px' }} /> Enviar desde Saldo Terceros
+                    <Send style={{ width: '20px', height: '20px' }} /> Gastar desde Saldo Terceros
                   </button>
                 )}
               </div>
@@ -658,7 +658,7 @@ export default function GestorDashboard() {
               <ArrowLeft style={{ width: '24px', height: '24px', color: 'white' }} />
             </button>
             <span style={{ fontSize: '18px', fontWeight: '600' }}>
-              {isDirectSend ? 'Enviar desde Saldo' : 'Nuevo Envío'}
+              {isDirectSend ? 'Gastar desde Saldo' : 'Nuevo Envío'}
             </span>
           </div>
           <p style={{ fontSize: '14px', opacity: 0.9, margin: 0 }}>
