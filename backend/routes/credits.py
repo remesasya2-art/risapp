@@ -332,3 +332,37 @@ async def nowpayments_webhook(request: Request):
     except Exception as e:
         logger.warning(f"NOWPayments webhook: no se pudo enviar notificacion: {e}")
     return {"received": True, "processed": True, "status": "finished"}
+
+
+
+@router.get("/history")
+async def get_credit_history(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, le=100),
+    currency: str = Query("all", description="usdt | usdc | all"),
+    current_user: User = Depends(get_current_user),
+):
+    """Historial propio de depositos de creditos cripto (USDT/USDC) del usuario
+    autenticado. Incluye tanto los depositos reales via NOWPayments como las
+    acreditaciones manuales de soporte (ambos quedan en crypto_deposits). Nunca
+    mezcla con balance_ris ni con /transactions — es un historial totalmente
+    separado, igual que el resto de la billetera cripto."""
+    query: dict = {"user_id": current_user.user_id}
+    key = normalize_currency(currency) if currency != "all" else None
+    if key:
+        query["currency"] = key
+
+    skip = (page - 1) * limit
+    total = await db.crypto_deposits.count_documents(query)
+    items = (
+        await db.crypto_deposits.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(limit)
+    )
+
+    for it in items:
+        it["currency_label"] = CREDIT_LABELS.get(it.get("currency"), it.get("currency"))
+
+    return {"total": total, "page": page, "limit": limit, "items": items}
