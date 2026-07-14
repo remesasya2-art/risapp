@@ -437,7 +437,7 @@ export default function Send() {
         {step === 2 && (
           <div style={cardStyle}>
             <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>Tipo de pago</h2>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0' }}>Selecciona cómo deseas enviar el dinero</p>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0' }}>Selecciona cómo deseas pagar</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
               {/* Pago Móvil Option */}
