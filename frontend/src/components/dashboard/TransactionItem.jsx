@@ -166,7 +166,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
       style={{
         backgroundColor: '#ffffff',
         borderRadius: '12px',
-        padding: '16px',
+        padding: '12px',
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
         transition: 'background-color 0.2s, transform 0.05s',
         cursor: showVoucher ? 'default' : 'default',
@@ -174,15 +174,15 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8F8FF'; }}
       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
         {/* Category icon */}
         <div style={{
-          width: '44px', height: '44px', borderRadius: '50%',
+          width: '36px', height: '36px', borderRadius: '50%',
           backgroundColor: iconBg, color: iconColor,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
         }}>
-          <IconArrow size={20} strokeWidth={2.5} />
+          <IconArrow size={17} strokeWidth={2.5} />
         </div>
 
         {/* Body */}
@@ -191,24 +191,24 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{
-                fontSize: '15px', fontWeight: 700, color: '#1A1A2E',
+                fontSize: '14px', fontWeight: 700, color: '#1A1A2E',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {title}
               </div>
-              <div style={{ fontSize: '12px', color: '#8E8E9A', marginTop: '2px' }}>
+              <div style={{ fontSize: '11.5px', color: '#8E8E9A', marginTop: '1px' }}>
                 {formatShort(tx.created_at)}
               </div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{
-                fontSize: '16px', fontWeight: 700, color: amountColor,
+                fontSize: '15px', fontWeight: 700, color: amountColor,
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}>
                 {sign}{fmt(mainAmount)} {mainUnit}
               </div>
               {isWithdrawal && !isBtc && tx.amount_output && (
-                <div style={{ fontSize: '11px', color: '#8E8E9A', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: '10.5px', color: '#8E8E9A', marginTop: '1px', whiteSpace: 'nowrap' }}>
                   {fmt(tx.amount_output)} VES
                   {rates?.bcv_usd_ves > 0 && (
                     <> = ${fmt(tx.amount_output / rates.bcv_usd_ves, 2)} BCV</>
@@ -221,20 +221,20 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           {/* Beneficiary block for withdrawals */}
           {isWithdrawal && (beneficiary.bank || account) && (
             <div style={{
-              marginTop: '10px', padding: '10px 12px',
-              backgroundColor: '#FAFAFC', borderRadius: '10px',
+              marginTop: '8px', padding: '8px 10px',
+              backgroundColor: '#FAFAFC', borderRadius: '9px',
               border: '1px solid #EFEFF5',
-              display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+              display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
             }}>
               {beneficiary.bank && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8E8E9A' }}>
-                  <Building2 size={13} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#8E8E9A' }}>
+                  <Building2 size={12} />
                   <span style={{ color: '#374151', fontWeight: 500 }}>{beneficiary.bank}</span>
                 </span>
               )}
               {account && (
                 <span style={{
-                  fontSize: '12px', color: '#374151', fontVariantNumeric: 'tabular-nums',
+                  fontSize: '11.5px', color: '#374151', fontVariantNumeric: 'tabular-nums',
                   letterSpacing: '0.04em', fontWeight: 500,
                 }}>
                   {formatAccountNumber(account) || account}
@@ -244,7 +244,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           )}
 
           {/* Bottom row: badge + voucher button */}
-          <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <StatusBadge status={txStatus} />
             {showVoucher && (
               <button
@@ -252,13 +252,13 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
                 data-testid={`view-voucher-${tx.transaction_id}`}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '5px',
-                  padding: '4px 10px', borderRadius: '20px',
-                  fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  padding: '3px 9px', borderRadius: '20px',
+                  fontSize: '11.5px', fontWeight: 600, cursor: 'pointer',
                   backgroundColor: '#EEF2FF', color: '#5B4FE9', border: 'none',
                   lineHeight: 1,
                 }}
               >
-                <Eye size={12} />
+                <Eye size={11} />
                 Ver comprobante
               </button>
             )}
