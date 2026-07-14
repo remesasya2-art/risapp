@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Clock } from 'lucide-react';
 
 /**
  * Tarjetas de saldo de creditos cripto (USDT/USDC), separadas del saldo RIS.
@@ -35,12 +35,20 @@ function CryptoMini({ label, color, amount }) {
       <span style={{ fontSize: '22px', fontWeight: 700, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>
         {amount}
       </span>
-      <Link
-        to="/credits/deposit"
-        style={{ fontSize: '12px', fontWeight: 600, color, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-      >
-        <Plus size={12} strokeWidth={3} /> Recargar
-      </Link>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Link
+          to="/credits/deposit"
+          style={{ fontSize: '12px', fontWeight: 600, color, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          <Plus size={12} strokeWidth={3} /> Recargar
+        </Link>
+        <Link
+          to="/history?filter=cripto"
+          style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          <Clock size={12} strokeWidth={3} /> Historial
+        </Link>
+      </div>
     </div>
   );
 }
