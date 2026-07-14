@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   Wallet, Bitcoin, ShieldCheck, Clock, Smartphone, LayoutDashboard,
-  ArrowRight, CheckCircle2, TrendingUp,
+  ArrowRight, CheckCircle2, TrendingUp, QrCode,
 } from 'lucide-react';
 import { useRate } from '../contexts/RateContext';
 import { fmt } from '../utils/format';
@@ -28,6 +28,12 @@ const FEATURES = [
     color: '#5B4FE9',
     title: 'Recargas digitales',
     desc: 'Recarga tu cuenta con distintos métodos de pago, de forma rápida y segura.',
+  },
+  {
+    icon: QrCode,
+    color: '#16a34a',
+    title: 'Recarga instantánea con PIX',
+    desc: 'Recarga tu cuenta al instante con PIX, sin comisiones y sin esperas.',
   },
   {
     icon: Bitcoin,
