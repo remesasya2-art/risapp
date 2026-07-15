@@ -197,34 +197,41 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
     }
 
 @router.post("/resend-verification-code")
-async def resend_verification_code(request: ResendVerificationCodeRequest):
+async def resend_verification_code(request: Request, body: ResendVerificationCodeRequest):
     """Resend verification code"""
-    email_lower = request.email.lower().strip()
-    
-    pending = await db.pending_verifications.find_one({"email": email_lower})
-    if not pending:
-        raise HTTPException(status_code=400, detail="No hay verificación pendiente")
-    
-    # Generate new code
-    verification_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-    
-    await db.pending_verifications.update_one(
-        {"email": email_lower},
-        {
-            "$set": {
-                "verification_code": verification_code,
-                "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
-                "attempts": 0
+    from routes.security_2fa import limiter
+
+    # 5/15min: sin esto, resend resetea el contador de intentos de /verify-email
+    # a 0 cada vez, permitiendo fuerza bruta indefinida del codigo de 6 digitos.
+    @limiter.limit("5/15minutes")
+    async def _do_resend(request: Request, body: ResendVerificationCodeRequest):
+        email_lower = body.email.lower().strip()
+
+        pending = await db.pending_verifications.find_one({"email": email_lower})
+        if not pending:
+            raise HTTPException(status_code=400, detail="No hay verificación pendiente")
+
+        verification_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+
+        await db.pending_verifications.update_one(
+            {"email": email_lower},
+            {
+                "$set": {
+                    "verification_code": verification_code,
+                    "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
+                    "attempts": 0
+                }
             }
+        )
+
+        email_sent = await send_verification_email(email_lower, verification_code, pending["name"])
+
+        return {
+            "message": "Nuevo código enviado",
+            "email_sent": email_sent
         }
-    )
-    
-    email_sent = await send_verification_email(email_lower, verification_code, pending["name"])
-    
-    return {
-        "message": "Nuevo código enviado",
-        "email_sent": email_sent
-    }
+
+    return await _do_resend(request, body)
 
 @router.post("/login-password")
 async def login_with_password(request: Request, body: LoginWithPasswordRequest):
@@ -324,32 +331,38 @@ async def login_with_password(request: Request, body: LoginWithPasswordRequest):
     return await _do_login(request, body)
 
 @router.post("/request-password-reset")
-async def request_password_reset(request: RequestPasswordResetRequest):
+async def request_password_reset(request: Request, body: RequestPasswordResetRequest):
     """Request password reset"""
-    email_lower = request.email.lower().strip()
-    
-    user = await db.users.find_one({"email": email_lower})
-    if not user:
-        # Don't reveal if user exists
-        return {"message": "Si el email existe, recibirás instrucciones"}
-    
-    # Generate temp password
-    temp_password = generate_temp_password()
-    
-    await db.users.update_one(
-        {"email": email_lower},
-        {
-            "$set": {
-                "password_reset_token": hash_password(temp_password),
-                "password_reset_expires": datetime.now(timezone.utc) + timedelta(hours=1),
-                "must_change_password": True
+    from routes.security_2fa import limiter
+
+    # 5/15min: evita bombardeo de emails de reseteo a una victima.
+    @limiter.limit("5/15minutes")
+    async def _do_request_reset(request: Request, body: RequestPasswordResetRequest):
+        email_lower = body.email.lower().strip()
+
+        user = await db.users.find_one({"email": email_lower})
+        if not user:
+            # Don't reveal if user exists
+            return {"message": "Si el email existe, recibirás instrucciones"}
+
+        temp_password = generate_temp_password()
+
+        await db.users.update_one(
+            {"email": email_lower},
+            {
+                "$set": {
+                    "password_reset_token": hash_password(temp_password),
+                    "password_reset_expires": datetime.now(timezone.utc) + timedelta(hours=1),
+                    "must_change_password": True
+                }
             }
-        }
-    )
-    
-    await send_password_reset_email(email_lower, temp_password)
-    
-    return {"message": "Si el email existe, recibirás instrucciones"}
+        )
+
+        await send_password_reset_email(email_lower, temp_password)
+
+        return {"message": "Si el email existe, recibirás instrucciones"}
+
+    return await _do_request_reset(request, body)
 
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
