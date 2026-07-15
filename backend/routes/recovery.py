@@ -5,7 +5,7 @@ import uuid
 import random
 import logging
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 from pymongo import ReturnDocument
@@ -44,99 +44,100 @@ class SupportContactRequest(BaseModel):
 
 
 @router.post("/verify-identity")
-async def verify_identity(data: VerifyIdentityRequest):
+async def verify_identity(data: VerifyIdentityRequest, request: Request):
     """Step 1: Verify user identity with personal data"""
-    
-    # Find user by email
-    user = await db.users.find_one({"email": data.email.lower()})
-    if not user:
-        raise HTTPException(status_code=400, detail="No se encontró una cuenta con ese correo")
-    
-    # Verify personal data matches
-    # Clean CPF for comparison (remove dots and dashes)
-    user_cpf = (user.get("cpf_number") or "").replace(".", "").replace("-", "")
-    input_cpf = data.cpf.replace(".", "").replace("-", "")
-    
-    # Get verification data
-    verification = await db.verifications.find_one({"user_id": user["user_id"]})
-    
-    errors = []
-    
-    # Check full name (case insensitive)
-    stored_name = (verification.get("full_name") if verification else user.get("name", "")).lower().strip()
-    input_name = data.full_name.lower().strip()
-    if stored_name != input_name:
-        errors.append("nombre")
-    
-    # Check phone number (remove spaces and special chars)
-    stored_phone = (verification.get("phone_number") if verification else user.get("phone_number", "")).replace(" ", "").replace("-", "")
-    input_phone = data.phone_number.replace(" ", "").replace("-", "")
-    if stored_phone != input_phone and stored_phone[-8:] != input_phone[-8:]:  # Compare last 8 digits
-        errors.append("teléfono")
-    
-    # Check CPF
-    stored_cpf = (verification.get("cpf_number") if verification else user_cpf).replace(".", "").replace("-", "")
-    if stored_cpf != input_cpf:
-        errors.append("CPF")
-    
-    # Check document number (RNM, CI, Passport)
-    stored_doc = (verification.get("document_number") if verification else user.get("document_number", "")).replace(" ", "").upper()
-    input_doc = data.document_number.replace(" ", "").upper()
-    if stored_doc != input_doc:
-        errors.append("documento")
-    
-    if errors:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Los siguientes datos no coinciden: {', '.join(errors)}"
-        )
-    
-    # Generate 6-digit verification code
-    code = str(random.randint(100000, 999999))
-    
-    # Store recovery attempt with expiration (5 minutes)
-    recovery_id = f"rec_{uuid.uuid4().hex[:12]}"
-    await db.password_recovery.delete_many({"email": data.email.lower()})  # Remove old attempts
-    await db.password_recovery.insert_one({
-        "recovery_id": recovery_id,
-        "email": data.email.lower(),
-        "user_id": user["user_id"],
-        "code": code,
-        "attempts": 0,
-        "max_attempts": 3,
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
-        "created_at": datetime.now(timezone.utc),
-        "verified": False
-    })
-    
-    # Send code via email
-    try:
-        await send_email(
-            to_email=data.email,
-            subject="🔐 RIS App - Código de Recuperación",
-            html_content=f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #6366f1;">Recuperación de Contraseña</h2>
-                <p>Hola {data.full_name},</p>
-                <p>Tu código de verificación es:</p>
-                <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
-                    <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">{code}</span>
+    from routes.security_2fa import limiter
+
+    # 5/15min por IP: evita que se use este endpoint como oraculo para
+    # fuerza-brutear CPF/telefono/documento de una victima campo por campo.
+    @limiter.limit("5/15minutes")
+    async def _do_verify(request: Request, data: VerifyIdentityRequest):
+        GENERIC_ERROR = "Los datos no coinciden con nuestros registros"
+
+        # Find user by email
+        user = await db.users.find_one({"email": data.email.lower()})
+        if not user:
+            # No revelamos si el correo existe o no: mismo mensaje que un dato incorrecto.
+            raise HTTPException(status_code=400, detail=GENERIC_ERROR)
+
+        # Verify personal data matches
+        user_cpf = (user.get("cpf_number") or "").replace(".", "").replace("-", "")
+        input_cpf = data.cpf.replace(".", "").replace("-", "")
+
+        verification = await db.verifications.find_one({"user_id": user["user_id"]})
+
+        matches = True
+
+        stored_name = (verification.get("full_name") if verification else user.get("name", "")).lower().strip()
+        input_name = data.full_name.lower().strip()
+        if stored_name != input_name:
+            matches = False
+
+        stored_phone = (verification.get("phone_number") if verification else user.get("phone_number", "")).replace(" ", "").replace("-", "")
+        input_phone = data.phone_number.replace(" ", "").replace("-", "")
+        if stored_phone != input_phone and stored_phone[-8:] != input_phone[-8:]:
+            matches = False
+
+        stored_cpf = (verification.get("cpf_number") if verification else user_cpf).replace(".", "").replace("-", "")
+        if stored_cpf != input_cpf:
+            matches = False
+
+        stored_doc = (verification.get("document_number") if verification else user.get("document_number", "")).replace(" ", "").upper()
+        input_doc = data.document_number.replace(" ", "").upper()
+        if stored_doc != input_doc:
+            matches = False
+
+        if not matches:
+            # No revelamos cual campo especifico fallo (evita el oraculo campo-por-campo).
+            raise HTTPException(status_code=400, detail=GENERIC_ERROR)
+
+        # Generate 6-digit verification code
+        code = str(random.randint(100000, 999999))
+
+        # Store recovery attempt with expiration (5 minutes)
+        recovery_id = f"rec_{uuid.uuid4().hex[:12]}"
+        await db.password_recovery.delete_many({"email": data.email.lower()})  # Remove old attempts
+        await db.password_recovery.insert_one({
+            "recovery_id": recovery_id,
+            "email": data.email.lower(),
+            "user_id": user["user_id"],
+            "code": code,
+            "attempts": 0,
+            "max_attempts": 3,
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "created_at": datetime.now(timezone.utc),
+            "verified": False
+        })
+
+        # Send code via email
+        try:
+            await send_email(
+                to_email=data.email,
+                subject="🔐 RIS App - Código de Recuperación",
+                html_content=f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #6366f1;">Recuperación de Contraseña</h2>
+                    <p>Hola {data.full_name},</p>
+                    <p>Tu código de verificación es:</p>
+                    <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">{code}</span>
+                    </div>
+                    <p style="color: #ef4444; font-weight: 600;">⚠️ Este código expira en 5 minutos.</p>
+                    <p style="color: #6b7280; font-size: 14px;">Si no solicitaste este código, ignora este mensaje.</p>
                 </div>
-                <p style="color: #ef4444; font-weight: 600;">⚠️ Este código expira en 5 minutos.</p>
-                <p style="color: #6b7280; font-size: 14px;">Si no solicitaste este código, ignora este mensaje.</p>
-            </div>
-            """
-        )
-        logger.info(f"Recovery code sent to {data.email}")
-    except Exception as e:
-        logger.error(f"Failed to send recovery email: {e}")
-        raise HTTPException(status_code=500, detail="Error al enviar el código. Intenta nuevamente.")
-    
-    return {
-        "success": True,
-        "message": "Código enviado a tu correo",
-        "email_masked": data.email[:3] + "***" + data.email[data.email.index("@"):]
-    }
+                """
+            )
+            logger.info(f"Recovery code sent to {data.email}")
+        except Exception as e:
+            logger.error(f"Failed to send recovery email: {e}")
+            raise HTTPException(status_code=500, detail="Error al enviar el código. Intenta nuevamente.")
+
+        return {
+            "success": True,
+            "message": "Código enviado a tu correo",
+            "email_masked": data.email[:3] + "***" + data.email[data.email.index("@"):]
+        }
+    return await _do_verify(request, data)
 
 
 @router.post("/verify-code")
