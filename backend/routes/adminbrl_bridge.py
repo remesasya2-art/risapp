@@ -12,6 +12,8 @@ Endpoints:
   POST /api/adminbrl/rates/sync            -- Sincronizar tasa del dia
 """
 import os
+import hmac
+import time
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List
@@ -33,14 +35,31 @@ router = APIRouter(prefix="/adminbrl", tags=["adminbrl-bridge"])
 
 ADMINBRL_API_KEY = os.getenv("ADMINBRL_API_KEY", "")
 
+# Bloqueo simple en memoria tras intentos fallidos repetidos (este bridge es
+# server-to-server, no necesita infraestructura de rate limiting distribuida).
+_failed_attempts: list = []
+_MAX_FAILED_ATTEMPTS = 5
+_LOCKOUT_WINDOW_SECONDS = 300  # 5 minutos
+
 
 def _check_api_key(x_adminbrl_key: Optional[str]) -> None:
+    now = time.time()
+    while _failed_attempts and _failed_attempts[0] < now - _LOCKOUT_WINDOW_SECONDS:
+        _failed_attempts.pop(0)
+
+    if len(_failed_attempts) >= _MAX_FAILED_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Demasiados intentos fallidos. Intenta de nuevo en unos minutos."
+        )
+
     if not ADMINBRL_API_KEY:
         raise HTTPException(
             status_code=503,
             detail="ADMINBRL_API_KEY no configurada en el servidor."
         )
-    if x_adminbrl_key != ADMINBRL_API_KEY:
+    if not x_adminbrl_key or not hmac.compare_digest(x_adminbrl_key, ADMINBRL_API_KEY):
+        _failed_attempts.append(now)
         raise HTTPException(
             status_code=401,
             detail="API key invalida o ausente."
