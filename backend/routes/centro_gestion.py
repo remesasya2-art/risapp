@@ -11,6 +11,8 @@ Endpoints:
   GET  /api/centro-gestion/health           -- Health check (verifica conectividad)
 """
 import os
+import hmac
+import time
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -24,11 +26,23 @@ router = APIRouter(prefix="/centro-gestion", tags=["centro-gestion"])
 
 CENTRO_GESTION_API_KEY = os.getenv("CENTRO_GESTION_API_KEY", "")
 
+_failed_attempts_cg: list = []
+_MAX_FAILED_ATTEMPTS_CG = 5
+_LOCKOUT_WINDOW_SECONDS_CG = 300  # 5 minutos
+
 
 def _check_key(x_centrogestion_key: Optional[str]) -> None:
+    now = time.time()
+    while _failed_attempts_cg and _failed_attempts_cg[0] < now - _LOCKOUT_WINDOW_SECONDS_CG:
+        _failed_attempts_cg.pop(0)
+
+    if len(_failed_attempts_cg) >= _MAX_FAILED_ATTEMPTS_CG:
+        raise HTTPException(status_code=429, detail="Demasiados intentos fallidos. Intenta de nuevo en unos minutos.")
+
     if not CENTRO_GESTION_API_KEY:
         raise HTTPException(status_code=503, detail="CENTRO_GESTION_API_KEY no configurada en el servidor")
-    if x_centrogestion_key != CENTRO_GESTION_API_KEY:
+    if not x_centrogestion_key or not hmac.compare_digest(x_centrogestion_key, CENTRO_GESTION_API_KEY):
+        _failed_attempts_cg.append(now)
         raise HTTPException(status_code=401, detail="API key invalida")
 
 
