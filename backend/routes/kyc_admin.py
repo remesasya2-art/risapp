@@ -169,7 +169,7 @@ async def _audit(verification_id: str, user_id: str, action: str,
 
 @router.get("/list")
 async def list_kyc(
-    status: str = Query("pending", regex="^(pending|approved|rejected|all)$"),
+    status: str = Query("pending", pattern="^(pending|approved|rejected|all)$"),
     search: Optional[str] = Query(None, description="Match name, email or document number"),
     limit: int = Query(100, ge=1, le=500),
     admin: User = Depends(get_crm_user),
@@ -273,7 +273,7 @@ async def get_document_types(admin: User = Depends(get_crm_user)):
 
 @router.get("/export.csv")
 async def export_kyc_csv(
-    status: str = Query("all", regex="^(pending|approved|rejected|all)$"),
+    status: str = Query("all", pattern="^(pending|approved|rejected|all)$"),
     search: Optional[str] = None,
     admin: User = Depends(get_crm_user),
 ):
