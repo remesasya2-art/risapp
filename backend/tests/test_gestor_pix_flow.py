@@ -18,10 +18,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 GESTOR_EMAIL = "testgestor@test.com"
-GESTOR_PASSWORD = "Gestor2025!"
+GESTOR_PASSWORD = os.environ.get("TEST_GESTOR_PASSWORD")
 ADMIN_EMAIL = "marshalljulio46@gmail.com"
-ADMIN_PASSWORD = "Admin2025!"
-
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 
 class TestGestorAuthentication:
     """Test gestor login and authentication"""
