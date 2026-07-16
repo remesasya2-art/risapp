@@ -956,11 +956,11 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 
 @router.get("/reportes/procesados")
 async def reporte_procesados(
-    period: str = Query("day", regex="^(day|month|year|range)$"),
+    period: str = Query("day", pattern="^(day|month|year|range)$"),
     date: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
-    formato: str = Query("json", regex="^(json|csv)$"),
+    formato: str = Query("json", pattern="^(json|csv)$"),
     admin: User = Depends(get_super_admin),
 ):
     """Reporte de TODO lo procesado (4 flujos) por día / mes / año o rango.
