@@ -10,7 +10,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://agent-payment-hub-1.
 
 # Test credentials
 TEST_EMAIL = "marshalljulio46@gmail.com"
-TEST_PASSWORD = "Admin2025!"
+TEST_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 
 
 class TestVAPIDPublicKey:
