@@ -14,10 +14,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', os.environ.get('EXPO_PUBLIC_B
 
 # Test credentials from the review request
 TEST_USER_EMAIL = "test@ris.app"
-TEST_USER_PASSWORD = "Test1234!"
+TEST_USER_PASSWORD = os.environ.get("TEST_USER_PASSWORD")
 SUPER_ADMIN_EMAIL = "marshalljulio46@gmail.com"
-SUPER_ADMIN_PASSWORD = "Admin2025!"
-
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 
 class TestPixPendingEndpoint:
     """Tests for GET /api/pix/pending endpoint"""
