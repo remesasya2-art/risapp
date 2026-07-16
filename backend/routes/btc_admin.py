@@ -310,7 +310,7 @@ async def get_btc_stats(admin: User = Depends(get_super_admin)):
 
 @router.get("/transacciones")
 async def list_btc_transacciones(
-    status: str = Query("all", regex="^(pendiente|pagado|enviado|cancelado|expirado|fallido|all)$"),
+    status: str = Query("all", pattern="^(pendiente|pagado|enviado|cancelado|expirado|fallido|all)$"),
     search: Optional[str] = None,
     date_from: Optional[str] = Query(None, description="ISO date (e.g. 2026-06-01T00:00:00Z)"),
     date_to: Optional[str] = Query(None),
@@ -355,7 +355,7 @@ async def list_btc_transacciones(
 
 @router.get("/transacciones.csv")
 async def export_btc_csv(
-    status: str = Query("all", regex="^(pendiente|pagado|enviado|cancelado|expirado|fallido|all)$"),
+    status: str = Query("all", pattern="^(pendiente|pagado|enviado|cancelado|expirado|fallido|all)$"),
     search: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
