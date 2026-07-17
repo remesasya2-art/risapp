@@ -175,8 +175,8 @@ class TestAdminPasswordResetFlow:
         response = requests.post(
             f"{BASE_URL}/auth/set-new-password",
             json={
-                "new_password": "AnotherPass2025!",
-                "confirm_password": "AnotherPass2025!"
+                "new_password": os.environ.get("TEST_ANOTHER_PASSWORD"),,
+                "confirm_password": os.environ.get("TEST_ANOTHER_PASSWORD")
             },
             headers=headers
         )
