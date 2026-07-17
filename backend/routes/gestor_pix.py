@@ -602,10 +602,10 @@ async def mercadopago_webhook(request: Request):
             
             logger.info(f"MP webhook signature OK (data_id={data_id})")
         else:
-            logger.warning(
-                "MERCADOPAGO_WEBHOOK_SECRET not set — webhook signature NOT verified. "
-                "Set it in production for security."
+            logger.error(
+                "MERCADOPAGO_WEBHOOK_SECRET not set — rejecting webhook (fail-closed)."
             )
+            raise HTTPException(status_code=401, detail="webhook_secret_not_configured")
         
         # ── 2. Parse payload ─────────────────────────────────────────────
         try:
