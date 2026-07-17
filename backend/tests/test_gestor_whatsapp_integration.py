@@ -16,9 +16,9 @@ BASE_URL = os.environ.get('VITE_API_URL', '').rstrip('/')
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "marshalljulio46@gmail.com"
-SUPER_ADMIN_PASSWORD = "Admin2025!"
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 GESTOR_EMAIL = "testgestor@test.com"
-GESTOR_PASSWORD = "Gestor2025!"
+GESTOR_PASSWORD = os.environ.get("TEST_GESTOR_PASSWORD")
 
 
 class TestGestorWhatsAppIntegration:
