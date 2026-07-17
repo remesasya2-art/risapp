@@ -14,9 +14,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://agent-payment-hub-1.
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "marshalljulio46@gmail.com"
-SUPER_ADMIN_PASSWORD = "Admin2025!"
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 TEST_USER_EMAIL = "testuser123@test.com"
-TEST_USER_ORIGINAL_PASSWORD = "TestPassword2025!"
+TEST_USER_ORIGINAL_PASSWORD = os.environ.get("TEST_USER_ORIGINAL_PASSWORD")
 
 class TestAdminPasswordResetFlow:
     """Tests for the complete admin password reset flow"""
@@ -129,7 +129,7 @@ class TestAdminPasswordResetFlow:
     def test_04_user_can_set_new_password(self):
         """Test: User can set new password via /auth/set-new-password"""
         headers = {"Authorization": f"Bearer {TestAdminPasswordResetFlow.user_token}"}
-        new_password = "NewTest2025!#"
+        new_password = os.environ.get("TEST_NEW_PASSWORD")
         
         response = requests.post(
             f"{BASE_URL}/auth/set-new-password",
@@ -147,7 +147,7 @@ class TestAdminPasswordResetFlow:
     
     def test_05_user_login_with_new_password_no_must_change_flag(self):
         """Test: User can login with new password and must_change_password is False"""
-        new_password = "NewTest2025!#"
+        new_password = os.environ.get("TEST_NEW_PASSWORD")
         response = requests.post(
             f"{BASE_URL}/auth/login-password",
             json={"email": TEST_USER_EMAIL, "password": new_password}
