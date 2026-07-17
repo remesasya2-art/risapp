@@ -165,7 +165,7 @@ class TestAdminPasswordResetFlow:
         # Login again to get fresh token
         response = requests.post(
             f"{BASE_URL}/auth/login-password",
-            json={"email": TEST_USER_EMAIL, "password": "NewTest2025!#"}
+            json={"email": TEST_USER_EMAIL, "password": os.environ.get("TEST_NEW_PASSWORD")}
         )
         assert response.status_code == 200
         token = response.json()["session_token"]
