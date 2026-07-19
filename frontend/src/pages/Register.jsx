@@ -92,7 +92,8 @@ export default function Register() {
       
       // Save session token and redirect
       if (response.data.session_token) {
-        localStorage.setItem('session_token', response.data.session_token);
+        localStorage.setItem('has_session', '1');
+        localStorage.setItem('last_activity', Date.now().toString());
         toast.success('¡Cuenta creada exitosamente!');
         // Force page reload to update auth state
         window.location.href = '/';
