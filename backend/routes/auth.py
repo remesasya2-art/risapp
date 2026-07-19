@@ -118,7 +118,7 @@ async def register_user(request: RegisterUserRequest):
     }
 
 @router.post("/verify-email")
-async def verify_email_code(request: VerifyEmailCodeRequest, response: Response):
+async def verify_email_code(request: VerifyEmailCodeRequest):
     """Verify email code and complete registration"""
     email_lower = request.email.lower().strip()
     
@@ -187,7 +187,6 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response)
         "is_active": True
     }
     await db.user_sessions.insert_one(session)
-    set_session_cookie(response, session_token)
     
     logger.info(f"User {email_lower} registered successfully")
     
@@ -616,7 +615,7 @@ async def register_user(request: RegisterUserRequest):
     }
 
 @router.post("/verify-email")
-async def verify_email_code(request: VerifyEmailCodeRequest, response: Response):
+async def verify_email_code(request: VerifyEmailCodeRequest):
     """Verify email code and complete registration"""
     email_lower = request.email.lower().strip()
     
@@ -685,7 +684,6 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response)
         "is_active": True
     }
     await db.user_sessions.insert_one(session)
-    set_session_cookie(response, session_token)
     
     logger.info(f"User {email_lower} registered successfully")
     

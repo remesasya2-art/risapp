@@ -11,18 +11,15 @@ export function AuthProvider({ children }) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const timerRef = useRef(null);
 
-  const doLogout = useCallback(async () => {
-    localStorage.removeItem('has_session');
+  const doLogout = useCallback(() => {
+    localStorage.removeItem('session_token');
     localStorage.removeItem('last_activity');
     setUser(null);
     setMustChangePassword(false);
-    try {
-      await api.post('/auth/logout');
-    } catch (e) {}
   }, []);
 
   const resetTimer = useCallback(() => {
-    if (!localStorage.getItem('has_session')) return;
+    if (!localStorage.getItem('session_token')) return;
     localStorage.setItem('last_activity', Date.now().toString());
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
@@ -52,7 +49,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const checkAuth = async () => {
-    if (!localStorage.getItem('has_session')) {
+    const token = localStorage.getItem('session_token');
+    if (!token) {
       setLoading(false);
       return;
     }
@@ -62,7 +60,7 @@ export function AuthProvider({ children }) {
       setUser(response.data);
       setMustChangePassword(response.data.must_change_password || false);
     } catch (error) {
-      localStorage.removeItem('has_session');
+      localStorage.removeItem('session_token');
     } finally {
       setLoading(false);
     }
@@ -77,7 +75,7 @@ export function AuthProvider({ children }) {
       return data;
     }
 
-    localStorage.setItem('has_session', '1');
+    localStorage.setItem('session_token', data.session_token);
     localStorage.setItem('last_activity', Date.now().toString());
     setUser(data.user);
     setMustChangePassword(data.must_change_password || false);
@@ -85,7 +83,7 @@ export function AuthProvider({ children }) {
   };
 
   const completeTwoFactorLogin = (sessionToken, userData) => {
-    localStorage.setItem('has_session', '1');
+    localStorage.setItem('session_token', sessionToken);
     localStorage.setItem('last_activity', Date.now().toString());
     setUser(userData);
     setMustChangePassword(userData?.must_change_password || false);
