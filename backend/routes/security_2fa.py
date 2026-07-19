@@ -37,14 +37,14 @@ from typing import Optional, List
 import pyotp
 import qrcode
 from bson.decimal128 import Decimal128
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from database import db
 from models.user import User
-from routes.dependencies import get_current_user
+from routes.dependencies import get_current_user, set_session_cookie
 from utils.security import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
@@ -289,7 +289,7 @@ async def twofa_enroll_init(data: TwoFASetupInitFromPendingRequest):
 
 
 @router.post("/enroll-confirm")
-async def twofa_enroll_confirm(request: Request, data: TwoFASetupConfirmFromPendingRequest):
+async def twofa_enroll_confirm(request: Request, response: Response, data: TwoFASetupConfirmFromPendingRequest):
     """Confirm enrollment with first TOTP code + consume pending_token + issue session."""
     pending = await _consume_pending_token(data.pending_token)
     if not pending or pending.get("purpose") != "2fa_enroll":
@@ -323,6 +323,7 @@ async def twofa_enroll_confirm(request: Request, data: TwoFASetupConfirmFromPend
     # Issue real session token now
     user = await db.users.find_one({"user_id": user["user_id"]})
     token = await issue_session_token(user, request=request, two_factor_used=True)
+    set_session_cookie(response, token)
 
     user_response = {
         k: v for k, v in user.items()
@@ -437,7 +438,7 @@ async def twofa_disable(
 # ============================================================
 @router.post("/verify")
 @limiter.limit("10/15minutes")
-async def twofa_verify(request: Request, data: TwoFAVerifyRequest):
+async def twofa_verify(request: Request, response: Response, data: TwoFAVerifyRequest):
     """Exchange pending_token + TOTP/backup code for a real session_token."""
     pending = await _consume_pending_token(data.pending_token)
     if not pending:
@@ -479,6 +480,7 @@ async def twofa_verify(request: Request, data: TwoFAVerifyRequest):
 
     # Issue real session
     token = await issue_session_token(user, request=request, two_factor_used=True)
+    set_session_cookie(response, token)
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {"last_login": datetime.now(timezone.utc)}},
