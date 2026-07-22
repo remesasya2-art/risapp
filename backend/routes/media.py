@@ -5,8 +5,10 @@ import logging
 import os
 import re
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
+from routes.dependencies import get_current_user
+from models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/media", tags=["media"])
@@ -16,7 +18,7 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 
 
 @router.get("/twilio/{path:path}")
-async def proxy_twilio_media(path: str):
+async def proxy_twilio_media(path: str, current_user: User = Depends(get_current_user)):
     """
     Proxy Twilio media files to avoid authentication issues
     Converts: /api/media/twilio/AC.../Messages/MM.../Media/ME...
@@ -51,8 +53,7 @@ async def proxy_twilio_media(path: str):
                 content=response.content,
                 media_type=content_type,
                 headers={
-                    "Cache-Control": "public, max-age=86400",
-                    "Access-Control-Allow-Origin": "*"
+                    "Cache-Control": "private, max-age=86400",
                 }
             )
             
