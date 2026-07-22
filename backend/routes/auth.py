@@ -42,17 +42,18 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 async def logout(request: Request, response: Response, current_user: User = Depends(get_current_user)):
     """Logout current session"""
-    # El token puede venir de la cookie o del header Authorization
+    # Resolver el token igual que get_current_user: cookie -> Authorization: Bearer -> X-Session-ID
     token = request.cookies.get("session_token")
     if not token:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
+    if not token:
+        token = request.headers.get("X-Session-ID")
+    # Invalidar la sesion en el servidor: borrar por token y todas las sesiones del usuario
     if token:
-        await db.user_sessions.update_one(
-            {"session_token": token},
-            {"$set": {"is_active": False}}
-        )
+        await db.user_sessions.delete_one({"session_token": token})
+    await db.user_sessions.delete_many({"user_id": current_user.user_id})
     clear_session_cookie(response)
     return {"message": "Sesión cerrada exitosamente"}
 
@@ -118,7 +119,7 @@ async def register_user(request: RegisterUserRequest):
     }
 
 @router.post("/verify-email")
-async def verify_email_code(request: VerifyEmailCodeRequest):
+async def verify_email_code(request: VerifyEmailCodeRequest, response: Response):
     """Verify email code and complete registration"""
     email_lower = request.email.lower().strip()
     
@@ -187,6 +188,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         "is_active": True
     }
     await db.user_sessions.insert_one(session)
+    set_session_cookie(response, session_token)
     
     logger.info(f"User {email_lower} registered successfully")
     
@@ -542,15 +544,21 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return user
 
 @router.post("/logout")
-async def logout(request: Request, current_user: User = Depends(get_current_user)):
+async def logout(request: Request, response: Response, current_user: User = Depends(get_current_user)):
     """Logout current session"""
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        await db.user_sessions.update_one(
-            {"session_token": token},
-            {"$set": {"is_active": False}}
-        )
+    # Resolver el token igual que get_current_user: cookie -> Authorization: Bearer -> X-Session-ID
+    token = request.cookies.get("session_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    if not token:
+        token = request.headers.get("X-Session-ID")
+    # Invalidar la sesion en el servidor: borrar por token y todas las sesiones del usuario
+    if token:
+        await db.user_sessions.delete_one({"session_token": token})
+    await db.user_sessions.delete_many({"user_id": current_user.user_id})
+    clear_session_cookie(response)
     return {"message": "Sesión cerrada exitosamente"}
 
 @router.post("/register")
@@ -615,7 +623,7 @@ async def register_user(request: RegisterUserRequest):
     }
 
 @router.post("/verify-email")
-async def verify_email_code(request: VerifyEmailCodeRequest):
+async def verify_email_code(request: VerifyEmailCodeRequest, response: Response):
     """Verify email code and complete registration"""
     email_lower = request.email.lower().strip()
     
@@ -684,6 +692,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest):
         "is_active": True
     }
     await db.user_sessions.insert_one(session)
+    set_session_cookie(response, session_token)
     
     logger.info(f"User {email_lower} registered successfully")
     
