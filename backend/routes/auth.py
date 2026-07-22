@@ -49,10 +49,7 @@ async def logout(request: Request, response: Response, current_user: User = Depe
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
     if token:
-        await db.user_sessions.update_one(
-            {"session_token": token},
-            {"$set": {"is_active": False}}
-        )
+        await db.user_sessions.delete_one({"session_token": token})
     clear_session_cookie(response)
     return {"message": "Sesión cerrada exitosamente"}
 
@@ -548,10 +545,7 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        await db.user_sessions.update_one(
-            {"session_token": token},
-            {"$set": {"is_active": False}}
-        )
+        await db.user_sessions.delete_one({"session_token": token})
     return {"message": "Sesión cerrada exitosamente"}
 
 @router.post("/register")
