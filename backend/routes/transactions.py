@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from database import db
 
 from services.money import from_db, to_float, to_decimal, to_decimal128
+from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 
 # Campos de dinero de una transaccion (para lectura tolerante float/Decimal128)
 _TX_MONEY_2 = (
@@ -281,11 +282,15 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
 
     # 2) Leer y validar la tasa ANTES de debitar (fail-closed: sin tasa válida no se procesa)
     rate = await db.rates.find_one(sort=[("updated_at", -1)])
-    ris_to_ves = (rate or {}).get("ris_to_ves")
-    if not ris_to_ves or ris_to_ves <= 0:
+    _base_rtv = (rate or {}).get("ris_to_ves")
+    if not _base_rtv or _base_rtv <= 0:
         raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
+    # Aplicar el mismo ajuste de horario que /api/rate para que el envío coincida con la cotización
+    _cfg = await load_auto_rate_config(db)
+    _eff = apply_rate_adjustment({"ris_to_ves": _base_rtv}, _cfg)
+    ris_to_ves = _eff.get("ris_to_ves") or _base_rtv
 
-    amount_ves = request.amount * ris_to_ves
+    amount_ves = round(request.amount * ris_to_ves, 2)
 
     # Preparar datos de la transacción (antes del débito; no dependen del saldo)
     tx_id = f"tx_{uuid.uuid4().hex[:12]}"
@@ -435,9 +440,13 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     # Tasa autoritativa del servidor (fail-closed): NO se confía en el monto RIS
     # que envíe el cliente; el servidor recalcula cuánto RIS corresponde.
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
-    ves_to_ris = (rate_doc or {}).get("ves_to_ris_rate")
-    if not ves_to_ris or ves_to_ris <= 0:
+    _base_vtr = (rate_doc or {}).get("ves_to_ris_rate")
+    if not _base_vtr or _base_vtr <= 0:
         raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
+    # Aplicar el mismo ajuste de horario que /api/rate para que la orden coincida con la cotización
+    _cfg = await load_auto_rate_config(db)
+    _eff = apply_rate_adjustment({"ves_to_ris_rate": _base_vtr}, _cfg)
+    ves_to_ris = _eff.get("ves_to_ris_rate") or _base_vtr
 
     # Fórmula oficial: ves_to_ris_rate = VES por 1 RIS  ->  RIS = VES / tasa
     amount_ris = round(amount_ves / ves_to_ris, 2)
