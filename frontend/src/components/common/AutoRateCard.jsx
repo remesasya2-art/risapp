@@ -7,6 +7,16 @@ import { RateHistoryButton } from './RateHistoryButton';
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+const NB = '#e0e5ec';
+const RAISED = '5px 5px 10px #a3b1c6, -5px -5px 10px #ffffff';
+const RAISED_SM = '3px 3px 6px #a3b1c6, -3px -3px 6px #ffffff';
+const INSET = 'inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff';
+const INK = '#2b3a5c';
+const SOFT = '#5a6a88';
+const AMBER = '#b3730d';
+const GREEN = '#1f9d6b';
+const BLUE = '#2f6fd6';
+
 export const AutoRateCard = ({ baseRisToVes, baseVesToRis, onChange, userRole }) => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,152 +67,90 @@ export const AutoRateCard = ({ baseRisToVes, baseVesToRis, onChange, userRole })
     ? (baseVesToRis ?? 0) + Number(config.delta_ves_brl || 0)
     : baseVesToRis;
 
+  const on = !!config.enabled;
+  const off = !!config.is_off_hours_now;
+
   return (
-    <div data-testid="auto-rate-card" style={{
-      backgroundColor: '#fff',
-      borderRadius: '16px',
-      padding: '20px',
-      border: '1px solid #e5e7eb',
-      marginTop: '16px'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: config.enabled ? '#dcfce7' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Zap style={{ width: '22px', height: '22px', color: config.enabled ? '#16a34a' : '#6b7280' }} />
-          </div>
-          <div>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: 0 }}>Tasa Automática</h3>
-            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
-              Ajuste automático fuera de horario, domingos y feriados venezolanos
-            </p>
-          </div>
+    <div data-testid="auto-rate-card" style={{ background: NB, borderRadius: '18px', boxShadow: RAISED, padding: '16px 18px', marginTop: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div style={{ width: '34px', height: '34px', borderRadius: '11px', boxShadow: RAISED_SM, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Zap style={{ width: '17px', height: '17px', color: GREEN }} />
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={config.enabled || false}
-            onChange={e => save({ enabled: e.target.checked })}
-            disabled={saving}
-            data-testid="auto-rate-toggle"
-            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-          />
-          <span style={{ fontSize: '13px', fontWeight: '600', color: config.enabled ? '#16a34a' : '#6b7280' }}>
-            {config.enabled ? 'Activo' : 'Inactivo'}
-          </span>
-        </label>
+        <h3 style={{ fontSize: '15px', fontWeight: 700, color: INK, margin: 0, flex: 1 }}>Tasa automática</h3>
+        <div onClick={() => !saving && save({ enabled: !on })} data-testid="auto-rate-toggle"
+          style={{ width: '46px', height: '26px', borderRadius: '16px', boxShadow: INSET, background: on ? '#d1f0e3' : '#dfe4ec', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: '3px', left: on ? '23px' : '3px', width: '20px', height: '20px', borderRadius: '50%', background: on ? GREEN : '#9aa7bf', boxShadow: '1px 1px 3px rgba(0,0,0,.25)', transition: 'left .2s' }} />
+        </div>
+        <span style={{ fontSize: '12px', fontWeight: 700, color: on ? GREEN : SOFT, flexShrink: 0 }}>{on ? 'Activo' : 'Inactivo'}</span>
         <RateHistoryButton userRole={userRole} />
       </div>
 
-      {/* Status current */}
-      <div style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: config.is_off_hours_now ? '#fef3c7' : '#dbeafe', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <Clock style={{ width: '18px', height: '18px', color: config.is_off_hours_now ? '#ca8a04' : '#2563eb' }} />
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '13px', fontWeight: '600', color: '#111827', margin: 0 }}>
-            {config.is_off_hours_now ? 'FUERA de horario laboral' : 'DENTRO de horario laboral'}
-          </p>
-          <p style={{ fontSize: '11px', color: '#6b7280', margin: '2px 0 0 0' }}>
-            Hora Caracas: {new Date(config.current_caracas_time).toLocaleString('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'medium' })}
-          </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '11px', boxShadow: INSET, marginBottom: '14px', fontSize: '12px', fontWeight: 600, color: off ? AMBER : BLUE }}>
+        <Clock style={{ width: '15px', height: '15px' }} />
+        {off ? 'Fuera de horario' : 'Dentro de horario'}
+        <span style={{ color: SOFT, fontWeight: 500, marginLeft: 'auto' }}>
+          Caracas {new Date(config.current_caracas_time).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+        <div style={{ padding: '10px 12px', borderRadius: '12px', boxShadow: RAISED_SM }}>
+          <div style={{ fontSize: '10px', letterSpacing: '.05em', color: SOFT, fontWeight: 700, textTransform: 'uppercase' }}>BRL → VES</div>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: INK, marginTop: '3px' }}>
+            {fmt(baseRisToVes)}<span style={{ color: SOFT, fontWeight: 500, margin: '0 5px' }}>→</span><span style={{ color: on && off ? AMBER : INK }}>{fmt(effectiveRisToVes)}</span>
+          </div>
+        </div>
+        <div style={{ padding: '10px 12px', borderRadius: '12px', boxShadow: RAISED_SM }}>
+          <div style={{ fontSize: '10px', letterSpacing: '.05em', color: SOFT, fontWeight: 700, textTransform: 'uppercase' }}>VES → BRL</div>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: INK, marginTop: '3px' }}>
+            {fmt(baseVesToRis)}<span style={{ color: SOFT, fontWeight: 500, margin: '0 5px' }}>→</span><span style={{ color: on && off ? AMBER : INK }}>{fmt(effectiveVesToRis)}</span>
+          </div>
         </div>
       </div>
 
-      {/* Current rates (base + effective) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-        <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '11px', color: '#6b7280', margin: '0 0 4px 0', textTransform: 'uppercase', fontWeight: '600' }}>BRL → VES</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Base: <strong>{fmt(baseRisToVes)}</strong></p>
-          <p style={{ fontSize: '18px', fontWeight: '700', color: config.is_off_hours_now && config.enabled ? '#ca8a04' : '#111827', margin: '2px 0 0 0' }}>
-            Actual: {fmt(effectiveRisToVes)}
-          </p>
-        </div>
-        <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '11px', color: '#6b7280', margin: '0 0 4px 0', textTransform: 'uppercase', fontWeight: '600' }}>VES → BRL</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Base: <strong>{fmt(baseVesToRis)}</strong></p>
-          <p style={{ fontSize: '18px', fontWeight: '700', color: config.is_off_hours_now && config.enabled ? '#ca8a04' : '#111827', margin: '2px 0 0 0' }}>
-            Actual: {fmt(effectiveVesToRis)}
-          </p>
-        </div>
-      </div>
-
-      {/* Deltas */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '9px', marginBottom: '14px' }}>
         <div>
-          <label style={{ fontSize: '12px', color: '#374151', fontWeight: '500', display: 'block', marginBottom: '4px' }}>
-            BRL→VES: restar fuera de horario
-          </label>
-          <input type="number" step="0.01"
-            defaultValue={config.delta_brl_ves}
-            onBlur={e => {
-              const v = parseFloat(e.target.value);
-              if (!isNaN(v) && v !== config.delta_brl_ves) save({ delta_brl_ves: v });
-            }}
-            disabled={saving}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', boxSizing: 'border-box' }}
+          <label style={{ fontSize: '10px', color: SOFT, fontWeight: 600, display: 'block', marginBottom: '5px', textAlign: 'center' }}>− BRL→VES</label>
+          <input type="number" step="0.01" defaultValue={config.delta_brl_ves} disabled={saving}
+            onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v !== config.delta_brl_ves) save({ delta_brl_ves: v }); }}
             data-testid="delta-brl-ves"
-          />
+            style={{ width: '100%', padding: '9px 6px', borderRadius: '10px', border: 'none', background: NB, boxShadow: INSET, fontSize: '14px', color: INK, textAlign: 'center', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
         </div>
         <div>
-          <label style={{ fontSize: '12px', color: '#374151', fontWeight: '500', display: 'block', marginBottom: '4px' }}>
-            VES→BRL: sumar fuera de horario
-          </label>
-          <input type="number" step="0.01"
-            defaultValue={config.delta_ves_brl}
-            onBlur={e => {
-              const v = parseFloat(e.target.value);
-              if (!isNaN(v) && v !== config.delta_ves_brl) save({ delta_ves_brl: v });
-            }}
-            disabled={saving}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', boxSizing: 'border-box' }}
+          <label style={{ fontSize: '10px', color: SOFT, fontWeight: 600, display: 'block', marginBottom: '5px', textAlign: 'center' }}>+ VES→BRL</label>
+          <input type="number" step="0.01" defaultValue={config.delta_ves_brl} disabled={saving}
+            onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v !== config.delta_ves_brl) save({ delta_ves_brl: v }); }}
             data-testid="delta-ves-brl"
-          />
+            style={{ width: '100%', padding: '9px 6px', borderRadius: '10px', border: 'none', background: NB, boxShadow: INSET, fontSize: '14px', color: INK, textAlign: 'center', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-      </div>
-
-      {/* Work hours */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
         <div>
-          <label style={{ fontSize: '12px', color: '#374151', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Inicio horario</label>
-          <select value={config.work_start_hour} onChange={e => save({ work_start_hour: parseInt(e.target.value) })}
-            disabled={saving}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
-            data-testid="work-start"
-          >
-            {Array.from({length: 24}, (_, i) => <option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>)}
+          <label style={{ fontSize: '10px', color: SOFT, fontWeight: 600, display: 'block', marginBottom: '5px', textAlign: 'center' }}>Inicio</label>
+          <select value={config.work_start_hour} onChange={e => save({ work_start_hour: parseInt(e.target.value) })} disabled={saving} data-testid="work-start"
+            style={{ width: '100%', padding: '9px 4px', borderRadius: '10px', border: 'none', background: NB, boxShadow: INSET, fontSize: '13px', color: INK, textAlign: 'center', fontWeight: 600, outline: 'none' }}>
+            {Array.from({length: 24}, (_, i) => <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
           </select>
         </div>
         <div>
-          <label style={{ fontSize: '12px', color: '#374151', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Fin horario</label>
-          <select value={config.work_end_hour} onChange={e => save({ work_end_hour: parseInt(e.target.value) })}
-            disabled={saving}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
-            data-testid="work-end"
-          >
-            {Array.from({length: 24}, (_, i) => <option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>)}
+          <label style={{ fontSize: '10px', color: SOFT, fontWeight: 600, display: 'block', marginBottom: '5px', textAlign: 'center' }}>Fin</label>
+          <select value={config.work_end_hour} onChange={e => save({ work_end_hour: parseInt(e.target.value) })} disabled={saving} data-testid="work-end"
+            style={{ width: '100%', padding: '9px 4px', borderRadius: '10px', border: 'none', background: NB, boxShadow: INSET, fontSize: '13px', color: INK, textAlign: 'center', fontWeight: 600, outline: 'none' }}>
+            {Array.from({length: 24}, (_, i) => <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Working days */}
       <div>
-        <label style={{ fontSize: '12px', color: '#374151', fontWeight: '500', display: 'block', marginBottom: '8px' }}>Días laborales</label>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        <label style={{ fontSize: '10px', color: SOFT, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '8px', display: 'block' }}>Días laborales</label>
+        <div style={{ display: 'flex', gap: '6px' }}>
           {DAY_NAMES.map((name, idx) => {
             const active = workDaysSet.has(idx);
             return (
-              <button key={idx} onClick={() => toggleDay(idx)} disabled={saving}
-                style={{
-                  padding: '6px 14px', borderRadius: '8px', border: 'none',
-                  backgroundColor: active ? '#2563eb' : '#f3f4f6',
-                  color: active ? '#fff' : '#6b7280',
-                  fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                  minWidth: '48px'
-                }}
-                data-testid={`work-day-${idx}`}
-              >{name}</button>
+              <button key={idx} onClick={() => toggleDay(idx)} disabled={saving} data-testid={`work-day-${idx}`}
+                style={{ flex: 1, height: '36px', borderRadius: '11px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: NB, boxShadow: active ? INSET : RAISED_SM, color: active ? BLUE : SOFT }}
+              >{name.slice(0,2)}</button>
             );
           })}
         </div>
-        <p style={{ fontSize: '11px', color: '#9ca3af', margin: '8px 0 0 0' }}>
-          Feriados venezolanos aplican automáticamente como fuera de horario.
-        </p>
       </div>
     </div>
   );
