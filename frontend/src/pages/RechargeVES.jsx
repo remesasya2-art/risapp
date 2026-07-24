@@ -256,7 +256,7 @@ ${bankData.transferencia.ci}`;
   if (submitted) {
     return (
       <div style={pageStyle} data-testid="recharge-ves-submitted">
-        <div style={{ padding: '24px', maxWidth: '500px', margin: '0 auto' }}>
+        <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -316,7 +316,7 @@ ${bankData.transferencia.ci}`;
 
   return (
     <div style={pageStyle} data-testid="recharge-ves-page">
-      <div style={{ padding: '24px', maxWidth: '500px', margin: '0 auto' }}>
+      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
