@@ -33,7 +33,7 @@ const VENEZUELAN_BANKS = [
 const S = {
   page: { minHeight: '100vh', background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)', fontFamily: 'Inter, sans-serif' },
   header: { background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '0 20px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 },
-  container: { maxWidth: '480px', margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: '600px', margin: '0 auto', padding: '24px' },
   card: { background: '#fff', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 2px 16px rgba(0,0,0,0.06)', padding: '24px', marginBottom: '16px' },
   label: { fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', display: 'block' },
   input: { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '15px', color: '#111827', background: '#f9fafb', outline: 'none', boxSizing: 'border-box' },

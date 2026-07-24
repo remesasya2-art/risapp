@@ -113,7 +113,7 @@ export default function SendReais() {
         <NotificationBell />
       </div>
 
-      <div style={{ maxWidth: '520px', margin: '0 auto', padding: '20px' }}>
+      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '24px' }}>
         {/* Saldo */}
         <div style={{ ...card, background: 'linear-gradient(135deg,#5B4FE9,#7A6FF0)', border: 'none' }}>
           <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', margin: 0 }}>Saldo disponible</p>

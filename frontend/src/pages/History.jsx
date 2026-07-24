@@ -131,7 +131,7 @@ const normalized = { ...tx };
 
   return (
     <div style={pageStyle} data-testid="history-page">
-      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>

@@ -157,7 +157,7 @@ export default function CreditsDeposit() {
         <h1 style={{ fontSize: 18, fontWeight: 600, color: '#111827', margin: 0 }}>Recargar con cripto</h1>
       </div>
 
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '20px' }}>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px' }}>
         {!order ? (
           <>
             <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 20 }}>
