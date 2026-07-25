@@ -89,3 +89,9 @@ android-sdk/
 # ---- Emergent / test artifacts that leak secrets (DO NOT COMMIT) ----
 memory/test_credentials.md
 test_result.md
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example

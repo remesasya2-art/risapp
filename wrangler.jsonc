@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "risapp",
+  "compatibility_date": "2026-07-25",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "adminbrl"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
