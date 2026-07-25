@@ -1,0 +1,15 @@
+{
+  "name": "RIS App",
+  "short_name": "RIS App",
+  "description": "Rápido, seguro y confiable. Tus operaciones en minutos.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#1e40af",
+  "icons": [
+    { "src": "/logo-ris.png", "sizes": "400x400", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-ris.jpeg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" }
+  ]
+}
