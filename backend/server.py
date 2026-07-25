@@ -160,6 +160,16 @@ if FRONTEND_BUILD_DIR.exists():
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
         from fastapi.responses import FileResponse
+        # Servir archivos reales del build (sw.js, íconos, manifest, etc.) si existen;
+        # si no, caer al index.html para las rutas del SPA.
+        if full_path:
+            candidate = (FRONTEND_BUILD_DIR / full_path).resolve()
+            try:
+                candidate.relative_to(FRONTEND_BUILD_DIR.resolve())
+            except ValueError:
+                candidate = None
+            if candidate and candidate.is_file():
+                return FileResponse(str(candidate))
         return FileResponse(str(FRONTEND_BUILD_DIR / "index.html"))
 
     
