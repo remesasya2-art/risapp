@@ -416,6 +416,7 @@ async def export_btc_csv(
 class MarcarBtcEnviadoRequest(BaseModel):
     remesa_id: str
     comprobante: Optional[str] = None   # imagen base64 del comprobante (opcional)
+    force: bool = False   # forzar aunque la orden esté asignada a otro operador
 
 
 async def completar_remesa_btc(remesa_id: str, comprobante: Optional[str] = None,
@@ -478,6 +479,14 @@ async def marcar_btc_enviado(data: MarcarBtcEnviadoRequest, admin: User = Depend
     """El super_admin marca una remesa BTC (ya pagada en BTC) como enviada,
     tras pagar manualmente en bolívares. Puede adjuntar el comprobante de pago.
     """
+    remesa = await db.btc_remesas.find_one({"remesa_id": data.remesa_id})
+    if not remesa:
+        raise HTTPException(status_code=404, detail="Remesa no encontrada")
+    if remesa.get("assigned_to") and remesa.get("assigned_to") != admin.user_id and not data.force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Esta orden está siendo procesada por {remesa.get('assigned_to_name') or 'otro operador'}",
+        )
     return await completar_remesa_btc(
         remesa_id=data.remesa_id,
         comprobante=data.comprobante,
