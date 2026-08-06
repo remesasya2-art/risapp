@@ -23,6 +23,7 @@ import { StatusBadge } from '../components/dashboard/TransactionItem';
 import BtcAdminHistorial from '../components/admin/BtcAdminHistorial';
 import BtcAdminConfig from '../components/admin/BtcAdminConfig';
 import TasasBtcSection from '../components/admin/TasasBtcSection';
+import TasasCriptoSection from '../components/admin/TasasCriptoSection';
 import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
 
 // Convertir URL de imagen a ruta accesible
@@ -1734,6 +1735,8 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
               {/* Sección unificada: ruta BTC USDI→VES + referencias (BCV, precio BTC) */}
               <TasasBtcSection />
+              {/* Tasa de envíos con saldo cripto (USDTRIS/USDCRIS → VES) */}
+              <TasasCriptoSection />
             </div>
           </div>
         )}
