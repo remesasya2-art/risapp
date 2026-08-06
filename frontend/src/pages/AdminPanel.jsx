@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
@@ -80,7 +80,22 @@ export default function AdminPanel() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { rates, refreshRates } = useRate();
-  const [activeTab, setActiveTab] = useState(user?.role === 'agent' ? 'chat' : 'overview');
+const [searchParams, setSearchParams] = useSearchParams();
+  const VALID_TAB_KEYS = [...TABS.map((t) => t.key), ...CRM_SUBTABS.map((s) => s.key)];
+  const defaultTab = user?.role === 'agent' ? 'chat' : 'overview';
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTabState] = useState(VALID_TAB_KEYS.includes(tabFromUrl) ? tabFromUrl : defaultTab);
+
+  // Mantiene la pestaña activa reflejada en la URL (?tab=...) para que recargar
+  // la pagina, o entrar por un enlace directo, no te devuelva siempre al Resumen.
+  const setActiveTab = (key) => {
+    setActiveTabState(key);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', key);
+      return next;
+    }, { replace: true });
+  };
 
   const isAgent = user?.role === 'agent';
   useEffect(() => {
