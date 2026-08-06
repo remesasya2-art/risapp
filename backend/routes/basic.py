@@ -44,6 +44,11 @@ async def get_current_rate():
     effective["base_ris_to_ves"] = base["ris_to_ves"]
     effective["base_ves_to_ris_rate"] = base["ves_to_ris_rate"]
 
+    # Tasas de envío con saldo cripto (USDTRIS/USDCRIS → VES). No llevan ajuste
+    # automático por horario (son un valor fijo que configura el admin aparte).
+    effective["usdtris_to_ves"] = (rate or {}).get("usdtris_to_ves")
+    effective["usdcris_to_ves"] = (rate or {}).get("usdcris_to_ves")
+
     # Expose BCV USD/EUR rates publicly (read-only)
     bcv = await db.bcv_rates.find_one({}, {"_id": 0, "rates": 1, "value_date": 1, "fetched_at": 1}, sort=[("fetched_at", -1)])
     if bcv and bcv.get("rates"):
