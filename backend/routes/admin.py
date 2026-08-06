@@ -663,10 +663,18 @@ async def process_withdrawal(
     proof_images = request.get("proof_images")
     bank_id = request.get("bank_id")
     
+    force = bool(request.get("force"))
+
     transaction = await db.transactions.find_one({"transaction_id": transaction_id})
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaccion no encontrada")
-    
+
+    if transaction.get("assigned_to") and transaction.get("assigned_to") != admin.user_id and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Esta orden está siendo procesada por {transaction.get('assigned_to_name') or 'otro operador'}",
+        )
+
     if transaction.get("status") != "pending":
         raise HTTPException(status_code=400, detail="Transaccion ya procesada")
     
@@ -840,6 +848,78 @@ async def get_pending_ves_recharges(admin: User = Depends(get_super_admin)):
     return {"recharges": recharges}
 
 
+class OrdenClaimRequest(BaseModel):
+    orden_id: str
+    flujo: str  # ris_ves | ris_reais | ves_ris | btc_ves
+
+
+def _resolver_coleccion_orden(flujo: str, orden_id: str):
+    """Ubica la colección y el filtro correcto para una orden del panel unificado,
+    según su flujo. Devuelve (None, None) si el flujo no es válido."""
+    if flujo in ("ris_ves", "ris_reais"):
+        return db.transactions, {"transaction_id": orden_id, "type": "withdrawal"}
+    if flujo == "ves_ris":
+        return db.transactions, {"transaction_id": orden_id, "type": "recharge_ves"}
+    if flujo == "btc_ves":
+        return db.btc_remesas, {"remesa_id": orden_id}
+    return None, None
+
+
+@router.post("/ordenes/tomar")
+async def tomar_orden(data: OrdenClaimRequest, admin: User = Depends(get_super_admin)):
+    """El operador 'reclama' una orden pendiente para dejar claro que él la está
+    procesando y evitar que otro administrador la trabaje en simultáneo."""
+    coleccion, query = _resolver_coleccion_orden(data.flujo, data.orden_id)
+    if coleccion is None:
+        raise HTTPException(status_code=400, detail="Flujo inválido")
+
+    doc = await coleccion.find_one(query)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    admin_name = getattr(admin, "full_name", None) or getattr(admin, "name", None) or admin.email
+    assigned_to = doc.get("assigned_to")
+
+    if assigned_to and assigned_to != admin.user_id:
+        return {
+            "success": False,
+            "assigned_to": assigned_to,
+            "assigned_to_name": doc.get("assigned_to_name") or "otro operador",
+        }
+
+    await coleccion.update_one(query, {"$set": {
+        "assigned_to": admin.user_id,
+        "assigned_to_name": admin_name,
+        "assigned_at": datetime.now(timezone.utc),
+        "estado_admin": "en_proceso",
+    }})
+    return {"success": True, "assigned_to": admin.user_id, "assigned_to_name": admin_name}
+
+
+@router.post("/ordenes/liberar")
+async def liberar_orden(data: OrdenClaimRequest, admin: User = Depends(get_super_admin)):
+    """Libera una orden previamente reclamada, para que cualquier operador
+    pueda tomarla de nuevo."""
+    coleccion, query = _resolver_coleccion_orden(data.flujo, data.orden_id)
+    if coleccion is None:
+        raise HTTPException(status_code=400, detail="Flujo inválido")
+
+    doc = await coleccion.find_one(query)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    if doc.get("assigned_to") and doc.get("assigned_to") != admin.user_id:
+        raise HTTPException(status_code=403, detail="Esta orden está asignada a otro operador")
+
+    await coleccion.update_one(query, {"$set": {
+        "assigned_to": None,
+        "assigned_to_name": None,
+        "assigned_at": None,
+        "estado_admin": "pendiente",
+    }})
+    return {"success": True}
+
+
 @router.get("/ordenes/pendientes")
 async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     """Área unificada de 'Órdenes por procesar'.
@@ -902,6 +982,9 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
             "destino": {"valor": tx.get("amount_output", 0), "unidad": unidad_dest},
             "beneficiario": beneficiario,
             "comprobante_usuario": None,
+            "assigned_to": tx.get("assigned_to"),
+            "assigned_to_name": tx.get("assigned_to_name"),
+            "estado_admin": tx.get("estado_admin", "pendiente"),
         })
 
     # 2) BTC → VES (remesas pagadas): el admin paga VES y sube comprobante
@@ -928,6 +1011,9 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "tipo_pago": b.get("payment_type", ""),
             },
             "comprobante_usuario": None,
+            "assigned_to": r.get("assigned_to"),
+            "assigned_to_name": r.get("assigned_to_name"),
+            "estado_admin": r.get("estado_admin", "pendiente"),
         })
 
     # 3) VES → RIS (recargas): el admin REVISA el comprobante del usuario y aprueba
@@ -948,6 +1034,9 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
             "destino": {"valor": tx.get("amount_ris", 0), "unidad": "RIS"},
             "beneficiario": None,
             "comprobante_usuario": tx.get("proof_image"),
+            "assigned_to": tx.get("assigned_to"),
+            "assigned_to_name": tx.get("assigned_to_name"),
+            "estado_admin": tx.get("estado_admin", "pendiente"),
         })
 
     # Más antiguas primero (orden cronológico robusto ante created_at None)
@@ -1233,7 +1322,14 @@ async def process_ves_recharge(
     
     if not recharge:
         raise HTTPException(status_code=404, detail="Recarga no encontrada")
-    
+
+    force = bool(request.get("force"))
+    if recharge.get("assigned_to") and recharge.get("assigned_to") != admin.user_id and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Esta orden está siendo procesada por {recharge.get('assigned_to_name') or 'otro operador'}",
+        )
+
     if recharge.get("status") != "pending":
         return {"message": "Esta recarga ya fue procesada", "already_processed": True}
     
