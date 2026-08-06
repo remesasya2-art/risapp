@@ -124,8 +124,8 @@ export default function BalanceCard({
           {bcvUsdVes > 0 && (
             <RatePill
               icon={<TrendingUp size={13} />}
-              value={`1 USD = Bs. ${fmt(bcvUsdVes)}`}
-              label="Tasa BCV"
+              value={hidden ? 'Bs ••••••' : `Bs ${fmt(animated * bcvUsdVes)}`}
+              label="Equivalente BCV de tu saldo"
             />
           )}
         </div>
