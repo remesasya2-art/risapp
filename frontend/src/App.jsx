@@ -24,6 +24,7 @@ import GestorFlowMockup from './pages/GestorFlowMockup';
 import DriveCallback from './pages/DriveCallback';
 import BTCLightning from './pages/BTCLightning';
 import SendReais from './pages/SendReais';
+import SendCrypto from './pages/SendCrypto';
 import LegalPage from './pages/LegalPage';
 import Landing from './pages/Landing';
 
@@ -116,6 +117,7 @@ function AppRoutes() {
       <Route path="/" element={<HomeGate />} />
       <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
       <Route path="/send-reais" element={<ProtectedRoute><SendReais /></ProtectedRoute>} />
+      <Route path="/send-crypto" element={<ProtectedRoute><SendCrypto /></ProtectedRoute>} />
       <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
       <Route path="/recharge-ves" element={<ProtectedRoute><RechargeVES /></ProtectedRoute>} />
       <Route path="/credits/deposit" element={<ProtectedRoute><CreditsDeposit /></ProtectedRoute>} />
