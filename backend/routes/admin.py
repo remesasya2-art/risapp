@@ -603,6 +603,7 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
             "user_id": tx.get("user_id"),
             "user_name": user.get("name") if user else "Unknown",
             "amount_input": tx.get("amount_input", 0),
+            "currency_input": tx.get("currency_input") or "RIS",
             "amount_output": tx.get("amount_output", 0),
             "status": tx.get("status"),
             "beneficiary_data": tx.get("beneficiary_data", {}),
@@ -634,6 +635,7 @@ async def get_all_withdrawals(admin: User = Depends(get_super_admin)):
             "user_name": user.get("name") if user else "Unknown",
             "user_email": user.get("email") if user else "",
             "amount_input": tx.get("amount_input", 0),
+            "currency_input": tx.get("currency_input") or "RIS",
             "amount_output": tx.get("amount_output", 0),
             "rate": tx.get("rate", 0),
             "status": tx.get("status", "pending"),
@@ -1584,7 +1586,7 @@ async def get_all_gestors(admin: User = Depends(get_super_admin)):
 @router.get("/rates")
 async def get_rates(admin: User = Depends(get_super_admin)):
     """Get exchange rates"""
-    rate = await db.rates.find_one(sort=[("updated_at", -1)])
+    rate = await db.rates.find_one({}, {"_id": 0}, sort=[("updated_at", -1)])
     return rate or {"ris_to_ves": 92.0, "ves_to_ris": 0.0109}
 
 @router.post("/rates")
