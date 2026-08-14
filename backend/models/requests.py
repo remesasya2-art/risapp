@@ -65,6 +65,8 @@ class UpdateRateRequest(BaseModel):
     ris_to_ves: Optional[float] = None       # Tasa para envíos: 1 RIS = X VES
     ves_to_ris_rate: Optional[float] = None  # Tasa para recargas VES: X VES = 1 RIS  
     brl_to_ris: Optional[float] = None       # Tasa para recargas PIX: 1 BRL = X RIS
+    usdtris_to_ves: Optional[float] = None   # Tasa para envíos con saldo USDTRIS: 1 USDT = X VES
+    usdcris_to_ves: Optional[float] = None   # Tasa para envíos con saldo USDCRIS: 1 USDC = X VES
 
 class BeneficiaryCreate(BaseModel):
     full_name: str

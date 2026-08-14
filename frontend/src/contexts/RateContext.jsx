@@ -27,6 +27,8 @@ export function RateProvider({ children }) {
         bcv_eur_ves: response.data.bcv_eur_ves,
         bcv_value_date: response.data.bcv_value_date,
         updated_at: response.data.updated_at,
+        usdtris_to_ves: response.data.usdtris_to_ves,
+        usdcris_to_ves: response.data.usdcris_to_ves,
       };
       setRates(newRates);
       setLastUpdated(new Date());

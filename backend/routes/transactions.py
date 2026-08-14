@@ -420,6 +420,157 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     await store_idempotency_result(current_user.user_id, "withdraw_ves", request.idempotency_key, _resp_withdraw)
     return _resp_withdraw
 
+# ---- Saldo cripto (USDTRIS / USDCRIS) → VES ----
+# Replica exactamente el mismo patrón de seguridad de create_withdrawal
+# (idempotencia, validar beneficiario antes de tocar saldo, tasa fail-closed,
+# débito atómico con compensación si falla el registro), pero debitando
+# balance_usdt/balance_usdc en vez de balance_ris.
+
+class CryptoSendRequest(BaseModel):
+    currency: str            # "usdt" o "usdc"
+    amount: float            # monto en USDT/USDC
+    beneficiary_id: str
+    idempotency_key: Optional[str] = None
+
+@router.post("/withdraw-crypto")
+async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: User = Depends(get_current_user)):
+    """Crea un envío de saldo cripto (USDTRIS/USDCRIS) a un beneficiario en VES."""
+    from services.credits import normalize_currency, credit_field_for, to_credit_decimal
+    from bson.decimal128 import Decimal128
+
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+
+    key = normalize_currency(request.currency)
+    field = credit_field_for(request.currency)
+    if not field:
+        raise HTTPException(status_code=400, detail="Moneda no soportada")
+
+    # Idempotencia: scope distinto por moneda para que no colisionen las llaves
+    # con "withdraw_ves" ni entre sí (usdt vs usdc).
+    idem_scope = f"withdraw_{key}"
+    _idem_new, _idem_existing = await claim_idempotency(current_user.user_id, idem_scope, request.idempotency_key)
+    if not _idem_new:
+        if _idem_existing and _idem_existing.get("result"):
+            return _idem_existing["result"]
+        raise HTTPException(status_code=409, detail="Esta operación ya se está procesando. Espera un momento.")
+
+    # 1) Validar beneficiario ANTES de tocar el saldo
+    beneficiary = await db.beneficiaries.find_one({
+        "beneficiary_id": request.beneficiary_id,
+        "user_id": current_user.user_id
+    })
+    if not beneficiary:
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+
+    # 2) Leer y validar la tasa ANTES de debitar (fail-closed)
+    rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
+    rate_field = "usdtris_to_ves" if key == "usdt" else "usdcris_to_ves"
+    crypto_to_ves = (rate_doc or {}).get(rate_field)
+    if not crypto_to_ves or crypto_to_ves <= 0:
+        raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
+
+    amount_ves = round(request.amount * crypto_to_ves, 2)
+
+    tx_id = f"tx_{uuid.uuid4().hex[:12]}"
+    display_id = await get_next_withdrawal_id()
+
+    beneficiary_data = {
+        "full_name": beneficiary.get("full_name"),
+        "id_document": beneficiary.get("id_document"),
+        "bank": beneficiary.get("bank"),
+        "bank_code": beneficiary.get("bank_code"),
+        "phone_number": beneficiary.get("phone_number"),
+        "account_number": beneficiary.get("account_number"),
+        "payment_type": beneficiary.get("payment_type", "transferencia")
+    }
+
+    transaction = {
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "user_id": current_user.user_id,
+        "type": "withdrawal",
+        "amount_input": request.amount,
+        "amount_output": amount_ves,
+        "currency_input": key.upper(),   # "USDT" / "USDC"
+        "currency_output": "VES",
+        "rate": crypto_to_ves,
+        "status": "pending",
+        "beneficiary_id": request.beneficiary_id,
+        "beneficiary_data": beneficiary_data,
+        "created_at": datetime.now(timezone.utc),
+        "whatsapp_active": False,
+    }
+
+    # 3) Débito atómico (mismo esquema Decimal128 que usa credit_user al acreditar)
+    amount_dec = to_credit_decimal(request.amount)
+    user = await db.users.find_one_and_update(
+        {"user_id": current_user.user_id, field: {"$gte": Decimal128(amount_dec)}},
+        {"$inc": {field: Decimal128(-amount_dec)}},
+        return_document=True
+    )
+    if user is None:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente")
+
+    # 4) Crear el registro; si falla, devolver el saldo (compensación)
+    try:
+        await db.transactions.insert_one(transaction)
+    except Exception as e:
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$inc": {field: Decimal128(amount_dec)}}
+        )
+        logger.error(f"Fallo al registrar envío cripto {tx_id}, saldo devuelto: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
+
+    # Libro mayor cripto (append-only). Nunca interrumpe el envío.
+    try:
+        from services.ledger_crypto import record_crypto_entry
+        balance_after = user.get(field)
+        balance_after_f = float(to_credit_decimal(balance_after)) if balance_after is not None else None
+        await record_crypto_entry(
+            user_id=current_user.user_id,
+            currency=key,
+            movement_type="envio_ves",
+            amount=float(amount_dec),
+            direction="debit",
+            balance_before=(balance_after_f + float(amount_dec)) if balance_after_f is not None else None,
+            balance_after=balance_after_f,
+            reference_kind="transaction",
+            reference_id=tx_id,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            actor_email=user.get("email"),
+            metadata={"display_id": display_id, "beneficiary": beneficiary_data},
+            notes=f"Envío {key.upper()} → VES",
+        )
+    except Exception as e:
+        logger.warning(f"Ledger cripto envio_ves no registrado: {e}")
+
+    await create_notification(
+        user_id=current_user.user_id,
+        title="Envío Solicitado",
+        message=f"Tu envío de {request.amount} {key.upper()} ({amount_ves:.2f} VES) ha sido recibido y está en cola.",
+        notification_type="withdrawal_pending",
+    )
+
+    try:
+        await send_next_pending_withdrawal_whatsapp()
+    except Exception as e:
+        logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
+
+    _resp_crypto = {
+        "message": "Envío solicitado exitosamente",
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "amount_crypto": request.amount,
+        "amount_ves": amount_ves,
+        "rate": crypto_to_ves,
+        "currency": key.upper(),
+    }
+    await store_idempotency_result(current_user.user_id, idem_scope, request.idempotency_key, _resp_crypto)
+    return _resp_crypto
+
 # ============== RECHARGE VES ==============
 
 @router.post("/recharge/ves")

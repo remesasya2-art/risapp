@@ -23,6 +23,7 @@ import { StatusBadge } from '../components/dashboard/TransactionItem';
 import BtcAdminHistorial from '../components/admin/BtcAdminHistorial';
 import BtcAdminConfig from '../components/admin/BtcAdminConfig';
 import TasasBtcSection from '../components/admin/TasasBtcSection';
+import TasasCriptoSection from '../components/admin/TasasCriptoSection';
 import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
 
 // Convertir URL de imagen a ruta accesible
@@ -1133,7 +1134,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                             )}
                           </td>
                           <td style={{ padding: '16px' }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{fmt(w.amount_input)} RIS</p>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{fmt(w.amount_input)} {w.currency_input || 'RIS'}</p>
                             <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{fmt(w.amount_output)} VES</p>
                           </td>
                           <td style={{ padding: '16px' }}>
@@ -1734,6 +1735,8 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
               {/* Sección unificada: ruta BTC USDI→VES + referencias (BCV, precio BTC) */}
               <TasasBtcSection />
+              {/* Tasa de envíos con saldo cripto (USDTRIS/USDCRIS → VES) */}
+              <TasasCriptoSection />
             </div>
           </div>
         )}
@@ -2347,7 +2350,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                   {fmt(selectedItem.amount_output)} VES
                 </p>
                 <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0', textAlign: 'center' }}>
-                  ({fmt(selectedItem.amount_input)} RIS)
+                  ({fmt(selectedItem.amount_input)} {selectedItem.currency_input || 'RIS'})
                 </p>
               </div>
             </div>

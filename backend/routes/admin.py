@@ -603,6 +603,7 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
             "user_id": tx.get("user_id"),
             "user_name": user.get("name") if user else "Unknown",
             "amount_input": tx.get("amount_input", 0),
+            "currency_input": tx.get("currency_input") or "RIS",
             "amount_output": tx.get("amount_output", 0),
             "status": tx.get("status"),
             "beneficiary_data": tx.get("beneficiary_data", {}),
@@ -634,6 +635,7 @@ async def get_all_withdrawals(admin: User = Depends(get_super_admin)):
             "user_name": user.get("name") if user else "Unknown",
             "user_email": user.get("email") if user else "",
             "amount_input": tx.get("amount_input", 0),
+            "currency_input": tx.get("currency_input") or "RIS",
             "amount_output": tx.get("amount_output", 0),
             "rate": tx.get("rate", 0),
             "status": tx.get("status", "pending"),
@@ -715,39 +717,74 @@ async def process_withdrawal(
         message = "Retiro aprobado"
         
     elif action == "reject":
-        # Refund balance
+        # Refund balance — a la moneda de ORIGEN del envío (RIS, o USDT/USDC si
+        # el saldo debitado fue cripto). Nunca asumir RIS a ciegas.
+        _cur_in = str(transaction.get("currency_input") or "RIS").upper()
         _refund_amount = transaction.get("amount_input", 0)
-        _refunded_user = await db.users.find_one_and_update(
-            {"user_id": transaction["user_id"]},
-            {"$inc": {"balance_ris": to_decimal128(to_decimal(_refund_amount))}},
-            return_document=True
-        )
-        # Libro mayor RIS: crédito de devolución (no interrumpe el rechazo)
-        try:
-            from services.ledger import record_ris_entry
-            _bal_after = (_refunded_user or {}).get("balance_ris")
-            _bal_after = to_float(from_db(_bal_after)) if _bal_after is not None else None
-            await record_ris_entry(
-                user_id=transaction["user_id"],
-                movement_type="refund_envio",
-                amount=_refund_amount,
-                direction="credit",
-                account="balance_ris",
-                balance_before=(_bal_after - _refund_amount) if _bal_after is not None else None,
-                balance_after=_bal_after,
-                reference_kind="transaction",
-                reference_id=transaction_id,
-                transaction_id=transaction_id,
-                display_id=transaction.get("display_id"),
-                actor_type="admin",
-                actor_id=admin.user_id,
-                counterparty=transaction.get("beneficiary_data"),
-                metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
-                notes="Devolución por retiro rechazado",
+
+        if _cur_in in ("USDT", "USDC"):
+            from services.credits import to_credit_decimal
+            from bson.decimal128 import Decimal128
+            _refund_field = "balance_usdt" if _cur_in == "USDT" else "balance_usdc"
+            _refund_dec = to_credit_decimal(_refund_amount)
+            _refunded_user = await db.users.find_one_and_update(
+                {"user_id": transaction["user_id"]},
+                {"$inc": {_refund_field: Decimal128(_refund_dec)}},
+                return_document=True
             )
-        except Exception as e:
-            logger.warning(f"Ledger refund_envio no registrado: {e}")
-        
+            try:
+                from services.ledger_crypto import record_crypto_entry
+                _bal_after = (_refunded_user or {}).get(_refund_field)
+                _bal_after = float(to_credit_decimal(_bal_after)) if _bal_after is not None else None
+                await record_crypto_entry(
+                    user_id=transaction["user_id"],
+                    currency=_cur_in.lower(),
+                    movement_type="refund_envio",
+                    amount=float(_refund_dec),
+                    direction="credit",
+                    balance_before=(_bal_after - float(_refund_dec)) if _bal_after is not None else None,
+                    balance_after=_bal_after,
+                    reference_kind="transaction",
+                    reference_id=transaction_id,
+                    actor_type="admin",
+                    actor_id=admin.user_id,
+                    metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
+                    notes="Devolución por envío rechazado",
+                )
+            except Exception as e:
+                logger.warning(f"Ledger cripto refund_envio no registrado: {e}")
+        else:
+            _refunded_user = await db.users.find_one_and_update(
+                {"user_id": transaction["user_id"]},
+                {"$inc": {"balance_ris": to_decimal128(to_decimal(_refund_amount))}},
+                return_document=True
+            )
+            # Libro mayor RIS: crédito de devolución (no interrumpe el rechazo)
+            try:
+                from services.ledger import record_ris_entry
+                _bal_after = (_refunded_user or {}).get("balance_ris")
+                _bal_after = to_float(from_db(_bal_after)) if _bal_after is not None else None
+                await record_ris_entry(
+                    user_id=transaction["user_id"],
+                    movement_type="refund_envio",
+                    amount=_refund_amount,
+                    direction="credit",
+                    account="balance_ris",
+                    balance_before=(_bal_after - _refund_amount) if _bal_after is not None else None,
+                    balance_after=_bal_after,
+                    reference_kind="transaction",
+                    reference_id=transaction_id,
+                    transaction_id=transaction_id,
+                    display_id=transaction.get("display_id"),
+                    actor_type="admin",
+                    actor_id=admin.user_id,
+                    counterparty=transaction.get("beneficiary_data"),
+                    metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
+                    notes="Devolución por retiro rechazado",
+                )
+            except Exception as e:
+                logger.warning(f"Ledger refund_envio no registrado: {e}")
+
         await db.transactions.update_one(
             {"transaction_id": transaction_id},
             {
@@ -856,7 +893,7 @@ class OrdenClaimRequest(BaseModel):
 def _resolver_coleccion_orden(flujo: str, orden_id: str):
     """Ubica la colección y el filtro correcto para una orden del panel unificado,
     según su flujo. Devuelve (None, None) si el flujo no es válido."""
-    if flujo in ("ris_ves", "ris_reais"):
+    if flujo in ("ris_ves", "ris_reais", "usdt_ves", "usdc_ves"):
         return db.transactions, {"transaction_id": orden_id, "type": "withdrawal"}
     if flujo == "ves_ris":
         return db.transactions, {"transaction_id": orden_id, "type": "recharge_ves"}
@@ -946,8 +983,22 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     ).sort("created_at", 1):
         u = await _user(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
+        cur_in = str(tx.get("currency_input") or "RIS").upper()
         cur_out = str(tx.get("currency_output") or "VES").upper()
-        if cur_out in ("BRL", "REAIS", "REAL"):
+        if cur_in in ("USDT", "USDC"):
+            flujo = "usdt_ves" if cur_in == "USDT" else "usdc_ves"
+            flujo_label = f"{cur_in}RIS → VES"
+            unidad_dest = "VES"
+            beneficiario = {
+                "nombre": b.get("full_name") or b.get("name", ""),
+                "documento": b.get("cedula") or b.get("id_document", ""),
+                "banco": b.get("bank") or b.get("bank_code", ""),
+                "telefono": b.get("phone") or b.get("phone_number", ""),
+                "cuenta": b.get("account_number", ""),
+                "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
+                "pix_key": "",
+            }
+        elif cur_out in ("BRL", "REAIS", "REAL"):
             flujo, flujo_label, unidad_dest = "ris_reais", "RIS → Reais", "BRL"
             beneficiario = {
                 "nombre": b.get("full_name") or b.get("name", ""),
@@ -978,7 +1029,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
             "created_at": tx.get("created_at"),
             "user_name": u.get("full_name") or u.get("name") or "—",
             "user_email": u.get("email", ""),
-            "origen": {"valor": tx.get("amount_input", 0), "unidad": "RIS"},
+            "origen": {"valor": tx.get("amount_input", 0), "unidad": cur_in},
             "destino": {"valor": tx.get("amount_output", 0), "unidad": unidad_dest},
             "beneficiario": beneficiario,
             "comprobante_usuario": None,
@@ -1535,7 +1586,7 @@ async def get_all_gestors(admin: User = Depends(get_super_admin)):
 @router.get("/rates")
 async def get_rates(admin: User = Depends(get_super_admin)):
     """Get exchange rates"""
-    rate = await db.rates.find_one(sort=[("updated_at", -1)])
+    rate = await db.rates.find_one({}, {"_id": 0}, sort=[("updated_at", -1)])
     return rate or {"ris_to_ves": 92.0, "ves_to_ris": 0.0109}
 
 @router.post("/rates")
@@ -1551,6 +1602,12 @@ async def update_rates(request: UpdateRateRequest, admin: User = Depends(get_sup
     
     if request.brl_to_ris is not None:
         update_fields["brl_to_ris"] = request.brl_to_ris
+
+    if request.usdtris_to_ves is not None:
+        update_fields["usdtris_to_ves"] = request.usdtris_to_ves
+
+    if request.usdcris_to_ves is not None:
+        update_fields["usdcris_to_ves"] = request.usdcris_to_ves
     
     if len(update_fields) == 2:  # Only has updated_at and updated_by
         raise HTTPException(status_code=400, detail="Debes proporcionar al menos una tasa")
