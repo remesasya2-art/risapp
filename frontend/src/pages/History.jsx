@@ -310,7 +310,7 @@ const normalized = { ...tx };
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto enviado</p>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} RIS`}</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} ${selectedVoucher.currency_input || 'RIS'}`}</p>
                 </div>
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
