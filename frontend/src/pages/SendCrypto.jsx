@@ -50,7 +50,7 @@ export default function SendCrypto() {
   const balanceField = currency === 'usdt' ? 'balance_usdt' : 'balance_usdc';
   const availableBalance = user?.[balanceField] || 0;
   const hasBalance = availableBalance > 0;
-  const [useBalance, setUseBalance] = useState(false);
+  const [useBalance, setUseBalance] = useState(availableBalance > 0);
   const userToggledRef = useRef(false);
   useEffect(() => {
     userToggledRef.current = false;
