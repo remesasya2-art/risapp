@@ -322,6 +322,9 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         except Exception as e:
             logger.warning(f"Failed to send login notification: {e}")
 
+        for f in ("balance_ris", "balance_ves", "balance_ris_terceros", "balance_personal", "balance_terceros", "balance_usdt", "balance_usdc"):
+            if f in user and user[f] is not None:
+                user[f] = to_float(from_db(user[f]))
         user_response = {
             k: v for k, v in user.items()
             if k not in ["_id", "password_hash", "two_factor_secret",
@@ -826,6 +829,9 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         except Exception as e:
             logger.warning(f"Failed to send login notification: {e}")
 
+        for f in ("balance_ris", "balance_ves", "balance_ris_terceros", "balance_personal", "balance_terceros", "balance_usdt", "balance_usdc"):
+            if f in user and user[f] is not None:
+                user[f] = to_float(from_db(user[f]))
         user_response = {
             k: v for k, v in user.items()
             if k not in ["_id", "password_hash", "two_factor_secret",

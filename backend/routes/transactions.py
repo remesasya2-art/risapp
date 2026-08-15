@@ -1,17 +1,23 @@
 """
 Transaction routes - Withdrawals, Recharges, Beneficiaries
 """
+import os
+import json
 import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from database import db
 
 from services.money import from_db, to_float, to_decimal, to_decimal128
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
+from services import nowpayments
+
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
+CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
 
 # Campos de dinero de una transaccion (para lectura tolerante float/Decimal128)
 _TX_MONEY_2 = (
@@ -430,24 +436,33 @@ class CryptoSendRequest(BaseModel):
     currency: str            # "usdt" o "usdc"
     amount: float            # monto en USDT/USDC
     beneficiary_id: str
+    network: Optional[str] = None
+    use_balance: bool = False   # True: descuenta de balance_usdt/usdc (saldo de reembolsos). False (default): pago directo nuevo via NOWPayments.
     idempotency_key: Optional[str] = None
 
 @router.post("/withdraw-crypto")
 async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: User = Depends(get_current_user)):
-    """Crea un envío de saldo cripto (USDTRIS/USDCRIS) a un beneficiario en VES."""
-    from services.credits import normalize_currency, credit_field_for, to_credit_decimal
-    from bson.decimal128 import Decimal128
+    """Crea un envio de USDT/USDC a un beneficiario en VES.
+
+    Dos caminos:
+      - use_balance=True: descuenta de balance_usdt/balance_usdc (saldo que el
+        usuario tiene por un reembolso previo). Debito atomico, orden queda
+        "pending" de una vez, sin pasar por NOWPayments.
+      - use_balance=False (default): sin custodia previa. Genera un pago
+        NOWPayments ligado a la orden ("awaiting_payment"); el webhook la pasa
+        a "pending" al confirmarse el pago.
+    En ambos casos la orden termina en el mismo lugar: "pending", visible en
+    Ordenes por procesar, con el mismo pipeline de claim/process/approve/reject.
+    """
+    from services.credits import normalize_currency
 
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
     key = normalize_currency(request.currency)
-    field = credit_field_for(request.currency)
-    if not field:
+    if key not in CRYPTO_NETWORK_TICKER:
         raise HTTPException(status_code=400, detail="Moneda no soportada")
 
-    # Idempotencia: scope distinto por moneda para que no colisionen las llaves
-    # con "withdraw_ves" ni entre sí (usdt vs usdc).
     idem_scope = f"withdraw_{key}"
     _idem_new, _idem_existing = await claim_idempotency(current_user.user_id, idem_scope, request.idempotency_key)
     if not _idem_new:
@@ -455,7 +470,7 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
             return _idem_existing["result"]
         raise HTTPException(status_code=409, detail="Esta operación ya se está procesando. Espera un momento.")
 
-    # 1) Validar beneficiario ANTES de tocar el saldo
+    # 1) Validar beneficiario ANTES de tocar saldo o generar el pago
     beneficiary = await db.beneficiaries.find_one({
         "beneficiary_id": request.beneficiary_id,
         "user_id": current_user.user_id
@@ -463,7 +478,7 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
     if not beneficiary:
         raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
 
-    # 2) Leer y validar la tasa ANTES de debitar (fail-closed)
+    # 2) Leer y validar la tasa ANTES de tocar saldo o generar el pago (fail-closed)
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
     rate_field = "usdtris_to_ves" if key == "usdt" else "usdcris_to_ves"
     crypto_to_ves = (rate_doc or {}).get(rate_field)
@@ -471,7 +486,6 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
         raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
 
     amount_ves = round(request.amount * crypto_to_ves, 2)
-
     tx_id = f"tx_{uuid.uuid4().hex[:12]}"
     display_id = await get_next_withdrawal_id()
 
@@ -485,6 +499,101 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
         "payment_type": beneficiary.get("payment_type", "transferencia")
     }
 
+    # ---- Camino A: usar saldo disponible (reembolsos previos) ----
+    if request.use_balance:
+        from services.credits import credit_field_for, to_credit_decimal
+        from bson.decimal128 import Decimal128
+
+        field = credit_field_for(request.currency)
+        amount_dec = to_credit_decimal(request.amount)
+        user = await db.users.find_one_and_update(
+            {"user_id": current_user.user_id, field: {"$gte": Decimal128(amount_dec)}},
+            {"$inc": {field: Decimal128(-amount_dec)}},
+            return_document=True
+        )
+        if user is None:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente")
+
+        transaction = {
+            "transaction_id": tx_id,
+            "display_id": display_id,
+            "user_id": current_user.user_id,
+            "type": "withdrawal",
+            "amount_input": request.amount,
+            "amount_output": amount_ves,
+            "currency_input": key.upper(),
+            "currency_output": "VES",
+            "rate": crypto_to_ves,
+            "status": "pending",
+            "beneficiary_id": request.beneficiary_id,
+            "beneficiary_data": beneficiary_data,
+            "funded_from": "balance",
+            "created_at": datetime.now(timezone.utc),
+            "whatsapp_active": False,
+        }
+        try:
+            await db.transactions.insert_one(transaction)
+        except Exception as e:
+            await db.users.update_one(
+                {"user_id": current_user.user_id},
+                {"$inc": {field: Decimal128(amount_dec)}}
+            )
+            logger.error(f"Fallo al registrar envío cripto (saldo) {tx_id}, saldo devuelto: {e}")
+            raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
+
+        try:
+            from services.ledger_crypto import record_crypto_entry
+            balance_after = user.get(field)
+            balance_after_f = float(to_credit_decimal(balance_after)) if balance_after is not None else None
+            await record_crypto_entry(
+                user_id=current_user.user_id,
+                currency=key,
+                movement_type="envio_ves",
+                amount=float(amount_dec),
+                direction="debit",
+                balance_before=(balance_after_f + float(amount_dec)) if balance_after_f is not None else None,
+                balance_after=balance_after_f,
+                reference_kind="transaction",
+                reference_id=tx_id,
+                actor_type="user",
+                actor_id=current_user.user_id,
+                actor_email=user.get("email"),
+                metadata={"display_id": display_id, "beneficiary": beneficiary_data, "funded_from": "balance"},
+                notes=f"Envío {key.upper()} → VES (desde saldo)",
+            )
+        except Exception as e:
+            logger.warning(f"Ledger cripto envio_ves (saldo) no registrado: {e}")
+
+        await create_notification(
+            user_id=current_user.user_id,
+            title="Envío Solicitado",
+            message=f"Tu envío de {request.amount} {key.upper()} ({amount_ves:.2f} VES) ha sido recibido y está en cola.",
+            notification_type="withdrawal_pending",
+        )
+        try:
+            await send_next_pending_withdrawal_whatsapp()
+        except Exception as e:
+            logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
+
+        _resp_balance = {
+            "transaction_id": tx_id,
+            "display_id": display_id,
+            "status": "pending",
+            "funded_from": "balance",
+            "amount_crypto": request.amount,
+            "amount_ves": amount_ves,
+            "rate": crypto_to_ves,
+            "currency": key.upper(),
+        }
+        await store_idempotency_result(current_user.user_id, idem_scope, request.idempotency_key, _resp_balance)
+        return _resp_balance
+
+    # ---- Camino B: pago directo nuevo (sin custodia), via NOWPayments ----
+    pay_currency = (request.network or CRYPTO_NETWORK_TICKER[key]).strip().lower()
+    if not pay_currency.startswith(key):
+        raise HTTPException(status_code=400, detail="La red elegida no corresponde a la moneda seleccionada.")
+
+    order_id = f"send_{key}_{current_user.user_id}_{uuid.uuid4().hex[:12]}"
     transaction = {
         "transaction_id": tx_id,
         "display_id": display_id,
@@ -492,77 +601,65 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
         "type": "withdrawal",
         "amount_input": request.amount,
         "amount_output": amount_ves,
-        "currency_input": key.upper(),   # "USDT" / "USDC"
+        "currency_input": key.upper(),
         "currency_output": "VES",
         "rate": crypto_to_ves,
-        "status": "pending",
+        "status": "awaiting_payment",
         "beneficiary_id": request.beneficiary_id,
         "beneficiary_data": beneficiary_data,
+        "payment_order_id": order_id,
+        "pay_currency": pay_currency,
+        "funded_from": "payment",
         "created_at": datetime.now(timezone.utc),
         "whatsapp_active": False,
     }
+    await db.transactions.insert_one(transaction)
 
-    # 3) Débito atómico (mismo esquema Decimal128 que usa credit_user al acreditar)
-    amount_dec = to_credit_decimal(request.amount)
-    user = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, field: {"$gte": Decimal128(amount_dec)}},
-        {"$inc": {field: Decimal128(-amount_dec)}},
-        return_document=True
-    )
-    if user is None:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente")
-
-    # 4) Crear el registro; si falla, devolver el saldo (compensación)
     try:
-        await db.transactions.insert_one(transaction)
-    except Exception as e:
-        await db.users.update_one(
-            {"user_id": current_user.user_id},
-            {"$inc": {field: Decimal128(amount_dec)}}
-        )
-        logger.error(f"Fallo al registrar envío cripto {tx_id}, saldo devuelto: {e}")
-        raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
-
-    # Libro mayor cripto (append-only). Nunca interrumpe el envío.
-    try:
-        from services.ledger_crypto import record_crypto_entry
-        balance_after = user.get(field)
-        balance_after_f = float(to_credit_decimal(balance_after)) if balance_after is not None else None
-        await record_crypto_entry(
-            user_id=current_user.user_id,
-            currency=key,
-            movement_type="envio_ves",
-            amount=float(amount_dec),
-            direction="debit",
-            balance_before=(balance_after_f + float(amount_dec)) if balance_after_f is not None else None,
-            balance_after=balance_after_f,
-            reference_kind="transaction",
-            reference_id=tx_id,
-            actor_type="user",
-            actor_id=current_user.user_id,
-            actor_email=user.get("email"),
-            metadata={"display_id": display_id, "beneficiary": beneficiary_data},
-            notes=f"Envío {key.upper()} → VES",
+        payment = await nowpayments.create_payment(
+            price_amount=float(request.amount),
+            price_currency="usd",
+            pay_currency=pay_currency,
+            order_id=order_id,
+            order_description=f"Envío {key.upper()} a {beneficiary_data.get('full_name') or 'beneficiario'}",
+            ipn_callback_url=f"{PUBLIC_BASE_URL}/api/crypto-send/webhook",
+            is_fee_paid_by_user=True,
         )
     except Exception as e:
-        logger.warning(f"Ledger cripto envio_ves no registrado: {e}")
+        await db.transactions.update_one({"transaction_id": tx_id}, {"$set": {"status": "payment_error"}})
+        logger.error(f"NOWPayments create_payment fallo para envío {tx_id}: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo iniciar el pago. Intenta de nuevo.")
 
-    await create_notification(
-        user_id=current_user.user_id,
-        title="Envío Solicitado",
-        message=f"Tu envío de {request.amount} {key.upper()} ({amount_ves:.2f} VES) ha sido recibido y está en cola.",
-        notification_type="withdrawal_pending",
+    pay_address = payment.get("pay_address")
+    pay_amount = payment.get("pay_amount")
+    if not pay_address or not pay_amount:
+        await db.transactions.update_one({"transaction_id": tx_id}, {"$set": {"status": "payment_error"}})
+        logger.error(f"NOWPayments sin pay_address/pay_amount para envío {tx_id}: {payment}")
+        raise HTTPException(status_code=502, detail="No se pudo iniciar el pago. Intenta de nuevo.")
+
+    await db.transactions.update_one(
+        {"transaction_id": tx_id},
+        {"$set": {
+            "payment_id": payment.get("payment_id"),
+            "pay_address": pay_address,
+            "pay_amount": pay_amount,
+            "payin_extra_id": payment.get("payin_extra_id"),
+            "network": payment.get("network"),
+        }}
     )
-
-    try:
-        await send_next_pending_withdrawal_whatsapp()
-    except Exception as e:
-        logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
 
     _resp_crypto = {
-        "message": "Envío solicitado exitosamente",
         "transaction_id": tx_id,
         "display_id": display_id,
+        "order_id": order_id,
+        "status": "awaiting_payment",
+        "funded_from": "payment",
+        "pay_address": pay_address,
+        "pay_amount": pay_amount,
+        "pay_currency": pay_currency,
+        "payin_extra_id": payment.get("payin_extra_id"),
+        "network": payment.get("network"),
+        "network_label": payment.get("network") or pay_currency,
         "amount_crypto": request.amount,
         "amount_ves": amount_ves,
         "rate": crypto_to_ves,
@@ -570,6 +667,82 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
     }
     await store_idempotency_result(current_user.user_id, idem_scope, request.idempotency_key, _resp_crypto)
     return _resp_crypto
+
+
+@router.get("/withdraw-crypto/{transaction_id}/status")
+async def get_crypto_withdrawal_status(transaction_id: str, current_user: User = Depends(get_current_user)):
+    """Polling del estado de una orden de envío cripto (para la pantalla de pago)."""
+    tx = await db.transactions.find_one(
+        {"transaction_id": transaction_id, "user_id": current_user.user_id},
+        {"_id": 0, "status": 1, "amount_output": 1}
+    )
+    if not tx:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    return {"transaction_id": transaction_id, "status": tx.get("status"), "amount_ves": tx.get("amount_output")}
+
+
+@router.post("/crypto-send/webhook")
+async def webhook_crypto_send(request: Request):
+    """IPN de NOWPayments para envíos directos (distinto del webhook de depósitos
+    en /credits/webhook — este busca en 'transactions', no en 'crypto_deposits')."""
+    raw_body = await request.body()
+    signature = request.headers.get("x-nowpayments-sig", "")
+    if not nowpayments.verify_ipn_signature(raw_body, signature):
+        logger.warning("crypto-send webhook: firma inválida o ausente")
+        raise HTTPException(status_code=401, detail="invalid_signature")
+    try:
+        payload = json.loads(raw_body or b"{}")
+    except Exception:
+        payload = {}
+    order_id = payload.get("order_id")
+    payment_status = payload.get("payment_status")
+    if not order_id:
+        return {"received": True, "error": "no_order_id"}
+
+    tx = await db.transactions.find_one({"payment_order_id": order_id})
+    if not tx:
+        logger.warning(f"crypto-send webhook: order_id {order_id} no encontrado")
+        return {"received": True, "error": "order_not_found"}
+
+    if payment_status in ("failed", "expired", "refunded"):
+        await db.transactions.update_one(
+            {"payment_order_id": order_id, "status": "awaiting_payment"},
+            {"$set": {"status": "payment_failed", "payment_status_last": payment_status}}
+        )
+        return {"received": True, "processed": False, "status": payment_status}
+
+    if payment_status != "finished":
+        return {"received": True, "processed": False, "status": payment_status}
+
+    claimed = await db.transactions.find_one_and_update(
+        {"payment_order_id": order_id, "status": "awaiting_payment"},
+        {"$set": {
+            "status": "pending",
+            "paid_at": datetime.now(timezone.utc),
+            "actually_paid": payload.get("actually_paid"),
+        }},
+        return_document=True,
+    )
+    if not claimed:
+        logger.info(f"crypto-send webhook: order_id {order_id} ya estaba procesado, ignorando duplicado")
+        return {"received": True, "already_processed": True}
+
+    try:
+        await create_notification(
+            user_id=claimed["user_id"],
+            title="Pago recibido",
+            message=f"Recibimos tu pago. Tu envío de {claimed.get('amount_output', 0):,.2f} VES será procesado pronto.",
+            notification_type="crypto_send_paid",
+        )
+    except Exception as e:
+        logger.warning(f"crypto-send webhook: no se pudo notificar al usuario: {e}")
+
+    try:
+        await send_next_pending_withdrawal_whatsapp()
+    except Exception as e:
+        logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
+
+    return {"received": True, "processed": True}
 
 # ============== RECHARGE VES ==============
 

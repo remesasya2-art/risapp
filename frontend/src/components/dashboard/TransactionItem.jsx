@@ -83,7 +83,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
     mainUnit = 'VES';
   } else {
     mainAmount = Math.abs(Number(tx.amount_input ?? tx.amount_ris ?? tx.amount ?? tx.amount_output ?? 0));
-    mainUnit = 'RIS';
+    mainUnit = (isWithdrawal && tx.currency_input) ? tx.currency_input : 'RIS';
   }
 
   // Etiqueta: "Recarga" SOLO para entradas (PIX / bolívares); el resto es envío
