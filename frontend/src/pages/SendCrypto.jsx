@@ -2,15 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
-import { ArrowLeft, ArrowRight, AlertCircle, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertCircle, User, ChevronDown, Copy, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
-import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
+import { QRCodeSVG } from 'qrcode.react';
 
 const CURRENCIES = [
-  { key: 'usdt', label: 'USDTRIS', color: '#26A17B', balanceField: 'balance_usdt', rateField: 'usdtris_to_ves' },
-  { key: 'usdc', label: 'USDCRIS', color: '#2775CA', balanceField: 'balance_usdc', rateField: 'usdcris_to_ves' },
+  { key: 'usdt', label: 'USDT', color: '#26A17B' },
+  { key: 'usdc', label: 'USDC', color: '#2775CA' },
 ];
 
 export default function SendCrypto() {
@@ -24,19 +24,46 @@ export default function SendCrypto() {
     : 'usdt';
 
   const [currency, setCurrency] = useState(initialCurrency);
-  const [amount, setAmount] = useState('');
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [minAmount, setMinAmount] = useState(null);
+
+  const [networks, setNetworks] = useState([]);
+  const [network, setNetwork] = useState(null);
+  const [networksLoading, setNetworksLoading] = useState(false);
+  const [networkMenuOpen, setNetworkMenuOpen] = useState(false);
+
   const [loading, setLoading] = useState(false);
-  const [showPin, setShowPin] = useState(false);
+  const [order, setOrder] = useState(null);
+  const [paid, setPaid] = useState(false);
+  const pollRef = useRef(null);
   const idemRef = useRef(null);
 
   const cfg = CURRENCIES.find((c) => c.key === currency);
-  const balance = user?.[cfg.balanceField] || 0;
-  const rate = rates?.[cfg.rateField] || 0;
-  const amountVes = amount ? parseFloat(amount) * rate : 0;
-  const isValidAmount = amount && parseFloat(amount) > 0 && parseFloat(amount) <= balance;
+  const amountNum = parseFloat(amount);
+  const rateField = currency === 'usdt' ? 'usdtris_to_ves' : 'usdcris_to_ves';
+  const rate = rates?.[rateField] || 0;
   const rateAvailable = rate > 0;
+  const amountVes = amountNum > 0 ? amountNum * rate : 0;
+
+  const balanceField = currency === 'usdt' ? 'balance_usdt' : 'balance_usdc';
+  const availableBalance = user?.[balanceField] || 0;
+  const hasBalance = availableBalance > 0;
+  const [useBalance, setUseBalance] = useState(false);
+  const userToggledRef = useRef(false);
+  useEffect(() => {
+    userToggledRef.current = false;
+  }, [currency]);
+  useEffect(() => {
+    if (!userToggledRef.current) setUseBalance(availableBalance > 0);
+  }, [availableBalance, currency]);
+
+  const belowMin = !useBalance && minAmount != null && amountNum > 0 && amountNum < minAmount;
+  const exceedsBalance = useBalance && amountNum > availableBalance;
+  const canContinue = useBalance
+    ? (amountNum > 0 && !exceedsBalance && !!selectedBeneficiary && rateAvailable && !loading)
+    : (amountNum > 0 && !belowMin && !!selectedBeneficiary && !!network && rateAvailable && !loading);
 
   useEffect(() => { loadBeneficiaries(); }, []);
 
@@ -49,145 +76,391 @@ export default function SendCrypto() {
     }
   };
 
-  const pedirConfirmacion = () => {
-    if (!rateAvailable) {
-      toast.error('La tasa no está disponible en este momento. Intenta más tarde.');
-      return;
-    }
-    if (!isValidAmount) {
-      toast.error('Verifica el monto: debe ser mayor a 0 y no superar tu saldo.');
-      return;
-    }
-    if (!selectedBeneficiary) {
-      toast.error('Selecciona un beneficiario');
-      return;
-    }
-    setShowPin(true);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    if (useBalance) { setNetworks([]); setNetwork(null); setNetworksLoading(false); return; }
+    setNetworks([]);
+    setNetwork(null);
+    setNetworksLoading(true);
+    api.get('/credits/networks', { params: { currency } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = data?.networks || [];
+        setNetworks(list);
+        const def = list.find((n) => n.is_default) || list[0];
+        setNetwork(def?.ticker || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const fallbackTicker = currency === 'usdc' ? 'usdc' : 'usdttrc20';
+          const fallbackLabel = currency === 'usdc' ? 'Ethereum (ERC20)' : 'Tron (TRC20)';
+          setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true }]);
+          setNetwork(fallbackTicker);
+        }
+      })
+      .finally(() => { if (!cancelled) setNetworksLoading(false); });
+    return () => { cancelled = true; };
+  }, [currency, useBalance]);
 
-  const handleSend = async () => {
+  useEffect(() => {
+    let cancelled = false;
+    setMinAmount(null);
+    if (useBalance || !network) return;
+    api.get('/credits/min-amount', { params: { currency, network } })
+      .then(({ data }) => { if (!cancelled) setMinAmount(data?.min_amount || 10); })
+      .catch(() => { if (!cancelled) setMinAmount(10); });
+    return () => { cancelled = true; };
+  }, [currency, network, useBalance]);
+
+  const selectedNetwork = networks.find((n) => n.ticker === network);
+
+  const handleCrear = async () => {
+    if (!canContinue) return;
     if (!idemRef.current) idemRef.current = (window.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2)));
     setLoading(true);
     try {
-      await api.post('/withdraw-crypto', {
+      const { data } = await api.post('/withdraw-crypto', {
         currency,
-        amount: parseFloat(amount),
+        amount: amountNum,
         beneficiary_id: selectedBeneficiary.beneficiary_id,
+        network: useBalance ? null : network,
+        use_balance: useBalance,
         idempotency_key: idemRef.current,
       });
-      idemRef.current = null;
-      toast.success('¡Envío registrado! Será procesado pronto.');
-      await refreshUser();
-      navigate('/history');
+      if (data?.funded_from === 'balance') {
+        setOrder(data);
+        setPaid(true);
+        refreshUser();
+      } else if (data?.pay_address && data?.pay_amount) {
+        setOrder(data);
+        setPaid(false);
+      } else {
+        idemRef.current = null;
+        toast.error('No se pudo iniciar el pago. Intenta de nuevo.');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al procesar envío');
+      idemRef.current = null;
+      toast.error(error.response?.data?.detail || 'No se pudo iniciar el pago. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (!order?.transaction_id || paid) return;
+    const checkStatus = async () => {
+      try {
+        const { data } = await api.get(`/withdraw-crypto/${order.transaction_id}/status`);
+        if (data?.status && data.status !== 'awaiting_payment') {
+          setPaid(true);
+          if (data.status === 'payment_failed') {
+            toast.error('El pago no se completó. La orden quedó cancelada.');
+          } else {
+            toast.success('¡Pago recibido! Tu envío está en cola de procesamiento.');
+            refreshUser();
+          }
+        }
+      } catch (e) {
+      }
+    };
+    checkStatus();
+    pollRef.current = setInterval(checkStatus, 5000);
+    return () => clearInterval(pollRef.current);
+  }, [order?.transaction_id, paid]);
+
+  const handleCopy = (text, label) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copiado`);
+  };
+
+  const resetFlow = () => {
+    clearInterval(pollRef.current);
+    setOrder(null);
+    setPaid(false);
+    setAmount('');
+    idemRef.current = null;
+  };
+
+  const cardStyle = { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #eef0f4', padding: 20 };
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', paddingBottom: '40px' }}>
       <header style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button onClick={() => navigate('/dashboard')} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => (order ? resetFlow() : navigate('/dashboard'))} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
         </button>
-        <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar con saldo cripto</h1>
+        <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar con {order ? order.currency : cfg.label}</h1>
       </header>
 
       <div style={{ maxWidth: '600px', margin: '24px auto', padding: '0 20px' }}>
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          {CURRENCIES.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setCurrency(c.key)}
-              style={{
-                flex: 1, padding: '14px', borderRadius: '14px', cursor: 'pointer',
-                border: currency === c.key ? `2px solid ${c.color}` : '1px solid #e5e7eb',
-                backgroundColor: currency === c.key ? `${c.color}14` : '#fff',
-                fontWeight: 700, fontSize: '14px', color: currency === c.key ? c.color : '#6b7280',
-              }}
-            >
-              {c.label}
-              <div style={{ fontSize: '12px', fontWeight: 500, marginTop: '4px', color: '#6b7280' }}>
-                Saldo: {fmt(user?.[c.balanceField] || 0)}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #eef0f4', marginBottom: '16px' }}>
-          <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>
-            Monto en {cfg.label}
-          </label>
-          <input
-            type="number" step="0.01" min="0"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '20px', outline: 'none', boxSizing: 'border-box', fontWeight: 700 }}
-          />
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '8px 0 0 0' }}>
-            Saldo disponible: {fmt(balance)} {cfg.label}
-          </p>
-          {!rateAvailable ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', padding: '10px 12px', backgroundColor: '#fef2f2', borderRadius: '10px', color: '#dc2626', fontSize: '13px' }}>
-              <AlertCircle size={16} /> La tasa de {cfg.label} → VES no está configurada todavía.
-            </div>
-          ) : amount ? (
-            <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: '#f0fdf4', borderRadius: '10px', color: '#16a34a', fontSize: '14px', fontWeight: 600 }}>
-              ≈ {fmt(amountVes)} VES
-            </div>
-          ) : null}
-        </div>
-
-        <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #eef0f4', marginBottom: '20px' }}>
-          <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '12px' }}>
-            Beneficiario en Venezuela
-          </label>
-          {beneficiaries.length === 0 ? (
-            <p style={{ fontSize: '13px', color: '#6b7280' }}>
-              No tienes beneficiarios guardados todavía. Puedes crear uno desde la pantalla de{' '}
-              <a href="/send" style={{ color: '#4338ca', fontWeight: 600 }}>Enviar RIS</a> y luego volver aquí.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {beneficiaries.map((b) => (
+        {!order ? (
+          <>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+              {CURRENCIES.map((c) => (
                 <button
-                  key={b.beneficiary_id}
-                  onClick={() => setSelectedBeneficiary(b)}
+                  key={c.key}
+                  onClick={() => setCurrency(c.key)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px',
-                    border: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '2px solid #4338ca' : '1px solid #e5e7eb',
-                    backgroundColor: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '#eef2ff' : '#fff',
-                    cursor: 'pointer', textAlign: 'left',
+                    flex: 1, padding: '14px', borderRadius: '14px', cursor: 'pointer',
+                    border: currency === c.key ? `2px solid ${c.color}` : '1px solid #e5e7eb',
+                    backgroundColor: currency === c.key ? `${c.color}14` : '#fff',
+                    fontWeight: 700, fontSize: '14px', color: currency === c.key ? c.color : '#6b7280',
                   }}
                 >
-                  <User size={18} color="#6b7280" />
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{b.full_name}</div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.bank || b.payment_type} · {b.account_number || b.phone_number}</div>
-                  </div>
+                  {c.label}
                 </button>
               ))}
             </div>
-          )}
-        </div>
 
-        <button
-          onClick={pedirConfirmacion}
-          disabled={loading}
-          style={{
-            width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
-            backgroundColor: cfg.color, color: '#fff', fontWeight: 700, fontSize: '16px',
-            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          }}
-        >
-          {loading ? 'Enviando...' : <>Enviar {cfg.label} <ArrowRight size={18} /></>}
-        </button>
+            {hasBalance && (
+              <div style={{ ...cardStyle, marginBottom: '16px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '12px' }}>
+                  ¿Cómo querés enviar?
+                </label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { userToggledRef.current = true; setUseBalance(true); }}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
+                      border: useBalance ? `2px solid ${cfg.color}` : '1px solid #e5e7eb',
+                      backgroundColor: useBalance ? `${cfg.color}14` : '#fff',
+                    }}
+                  >
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: useBalance ? cfg.color : '#111827' }}>Usar mi saldo</div>
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>{fmt(availableBalance)} {cfg.label} disponibles</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { userToggledRef.current = true; setUseBalance(false); }}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
+                      border: !useBalance ? `2px solid ${cfg.color}` : '1px solid #e5e7eb',
+                      backgroundColor: !useBalance ? `${cfg.color}14` : '#fff',
+                    }}
+                  >
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: !useBalance ? cfg.color : '#111827' }}>Pagar con cripto nueva</div>
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>Generás un pago nuevo</div>
+                  </button>
+                </div>
+              </div>
+            )}
 
-        <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={handleSend} />
+            <div style={{ ...cardStyle, marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '12px' }}>
+                Beneficiario en Venezuela
+              </label>
+              {beneficiaries.length === 0 ? (
+                <p style={{ fontSize: '13px', color: '#6b7280' }}>
+                  No tienes beneficiarios guardados todavía. Puedes crear uno desde la pantalla de{' '}
+                  <a href="/send" style={{ color: '#4338ca', fontWeight: 600 }}>Enviar RIS</a> y luego volver aquí.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {beneficiaries.map((b) => (
+                    <button
+                      key={b.beneficiary_id}
+                      onClick={() => setSelectedBeneficiary(b)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px',
+                        border: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '2px solid #4338ca' : '1px solid #e5e7eb',
+                        backgroundColor: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '#eef2ff' : '#fff',
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <User size={18} color="#6b7280" />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{b.full_name}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.bank || b.payment_type} · {b.account_number || b.phone_number}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ ...cardStyle, marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>
+                Monto en {cfg.label}
+              </label>
+              <input
+                type="number" step="0.01" min="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '20px', outline: 'none', boxSizing: 'border-box', fontWeight: 700 }}
+              />
+              {minAmount != null && (
+                <p style={{ fontSize: '12px', color: belowMin ? '#dc2626' : '#9ca3af', margin: '8px 0 0 0' }}>
+                  Monto mínimo: {minAmount} {cfg.label}
+                </p>
+              )}
+              {useBalance && exceedsBalance && (
+                <p style={{ fontSize: '12px', color: '#dc2626', margin: '8px 0 0 0' }}>
+                  Supera tu saldo disponible ({fmt(availableBalance)} {cfg.label}).
+                </p>
+              )}
+              {!rateAvailable ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', padding: '10px 12px', backgroundColor: '#fef2f2', borderRadius: '10px', color: '#dc2626', fontSize: '13px' }}>
+                  <AlertCircle size={16} /> La tasa de {cfg.label} → VES no está configurada todavía.
+                </div>
+              ) : amountNum > 0 ? (
+                <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: '#f0fdf4', borderRadius: '10px', color: '#16a34a', fontSize: '14px', fontWeight: 600 }}>
+                  ≈ {fmt(amountVes)} VES
+                </div>
+              ) : null}
+            </div>
+
+            {!useBalance && (
+              <div style={{ ...cardStyle, marginBottom: '20px', position: 'relative' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>
+                  Red
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setNetworkMenuOpen((v) => !v)}
+                  disabled={networksLoading || networks.length === 0}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db',
+                    backgroundColor: '#fff', cursor: networksLoading ? 'default' : 'pointer', fontSize: '14px', fontWeight: 600, color: '#111827',
+                  }}
+                >
+                  <span>
+                    {networksLoading ? 'Consultando redes disponibles...' : (selectedNetwork?.label || 'Selecciona una red')}
+                  </span>
+                  <ChevronDown style={{ width: '18px', height: '18px', transform: networkMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: '#6b7280' }} />
+                </button>
+                {networkMenuOpen && networks.length > 0 && (
+                  <div style={{
+                    position: 'absolute', left: 20, right: 20, marginTop: 6, backgroundColor: '#fff',
+                    border: '1px solid #e5e7eb', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    zIndex: 10, overflow: 'hidden', maxHeight: '260px', overflowY: 'auto',
+                  }}>
+                    {networks.map((n) => (
+                      <button
+                        key={n.ticker}
+                        type="button"
+                        onClick={() => { setNetwork(n.ticker); setNetworkMenuOpen(false); }}
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '12px 16px', border: 'none', cursor: 'pointer',
+                          backgroundColor: network === n.ticker ? '#eef2ff' : '#fff',
+                          color: network === n.ticker ? '#4338ca' : '#374151',
+                          fontSize: '14px', fontWeight: network === n.ticker ? 700 : 500,
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        }}
+                      >
+                        {n.label}
+                        {n.is_default && <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 500 }}>Por defecto</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={handleCrear}
+              disabled={!canContinue}
+              style={{
+                width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
+                backgroundColor: cfg.color, color: '#fff', fontWeight: 700, fontSize: '16px',
+                cursor: canContinue ? 'pointer' : 'not-allowed', opacity: canContinue ? 1 : 0.5,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              }}
+            >
+              {loading ? 'Generando pago...' : <>Continuar <ArrowRight size={18} /></>}
+            </button>
+          </>
+        ) : paid ? (
+          <div style={{ ...cardStyle, textAlign: 'center' }}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#16a34a', margin: '0 0 8px 0' }}>
+              {order.funded_from === 'balance' ? '¡Envío en camino!' : '¡Pago recibido!'}
+            </h2>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0' }}>
+              {order.funded_from === 'balance'
+                ? `Se descontaron ${order.amount_crypto} ${order.currency} de tu saldo disponible. `
+                : ''}
+              Tu envío de {order.amount_ves ? fmt(order.amount_ves) : ''} VES a {selectedBeneficiary?.full_name} quedó en cola de procesamiento.
+            </p>
+            <button
+              onClick={() => navigate('/history')}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+            >
+              Ver historial
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...cardStyle, textAlign: 'center' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+                borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600, marginBottom: 16,
+              }}>
+                <Clock size={14} /> Esperando confirmación del pago...
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                <div style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16, border: '2px solid #e5e7eb' }}>
+                  <QRCodeSVG value={order.pay_address} size={200} />
+                </div>
+              </div>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+                {order.pay_amount} {order.pay_currency?.toUpperCase()}
+              </p>
+              <button
+                onClick={() => handleCopy(String(order.pay_amount), 'Monto')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 999, backgroundColor: '#eff6ff', cursor: 'pointer', marginBottom: 10 }}
+              >
+                <Copy size={12} /> Copiar monto exacto
+              </button>
+              <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px 0' }}>
+                ⚠️ Envía el monto EXACTO. Si envías menos, el pago puede quedar pendiente sin confirmarse.
+              </p>
+              {order.network_label && (
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network_label}</p>
+              )}
+              <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
+                <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de pago</p>
+                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', margin: '0 0 10px 0' }}>
+                  {order.pay_address}
+                </p>
+                <button
+                  onClick={() => handleCopy(order.pay_address, 'Dirección')}
+                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                >
+                  <Copy size={14} /> Copiar dirección
+                </button>
+              </div>
+              {order.payin_extra_id && (
+                <div style={{ padding: 14, backgroundColor: '#fee2e2', borderRadius: 12, textAlign: 'left', marginTop: 12 }}>
+                  <p style={{ fontSize: 11, color: '#991b1b', margin: '0 0 6px 0', fontWeight: 600 }}>
+                    Memo/Tag obligatorio
+                  </p>
+                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: '#374151', margin: '0 0 10px 0' }}>
+                    {order.payin_extra_id}
+                  </p>
+                  <button
+                    onClick={() => handleCopy(order.payin_extra_id, 'Memo/Tag')}
+                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <Copy size={14} /> Copiar memo/tag
+                  </button>
+                </div>
+              )}
+            </div>
+            <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+              La app detecta el pago automáticamente. Puedes cerrar esta pantalla y volver más tarde.
+            </p>
+            <button
+              onClick={resetFlow}
+              style={{ padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
+            >
+              Cancelar y volver
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
