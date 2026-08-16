@@ -1735,7 +1735,7 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
               {/* Sección unificada: ruta BTC USDI→VES + referencias (BCV, precio BTC) */}
               <TasasBtcSection />
-              {/* Tasa de envíos con saldo cripto (USDTRIS/USDCRIS → VES) */}
+              {/* Tasa de envíos con saldo cripto (USDT/USDC → VES) */}
               <TasasCriptoSection />
             </div>
           </div>
