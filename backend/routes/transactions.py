@@ -426,7 +426,7 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     await store_idempotency_result(current_user.user_id, "withdraw_ves", request.idempotency_key, _resp_withdraw)
     return _resp_withdraw
 
-# ---- Saldo cripto (USDTRIS / USDCRIS) → VES ----
+# ---- Saldo cripto (USDT / USDC) → VES ----
 # Replica exactamente el mismo patrón de seguridad de create_withdrawal
 # (idempotencia, validar beneficiario antes de tocar saldo, tasa fail-closed,
 # débito atómico con compensación si falla el registro), pero debitando

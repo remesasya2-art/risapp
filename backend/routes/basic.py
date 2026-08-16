@@ -44,7 +44,7 @@ async def get_current_rate():
     effective["base_ris_to_ves"] = base["ris_to_ves"]
     effective["base_ves_to_ris_rate"] = base["ves_to_ris_rate"]
 
-    # Tasas de envío con saldo cripto (USDTRIS/USDCRIS → VES). No llevan ajuste
+    # Tasas de envío con saldo cripto (USDT/USDC → VES). No llevan ajuste
     # automático por horario (son un valor fijo que configura el admin aparte).
     effective["usdtris_to_ves"] = (rate or {}).get("usdtris_to_ves")
     effective["usdcris_to_ves"] = (rate or {}).get("usdcris_to_ves")
