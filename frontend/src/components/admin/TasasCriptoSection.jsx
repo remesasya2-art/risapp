@@ -33,7 +33,7 @@ export default function TasasCriptoSection() {
     try {
       setBusyUsdt(true);
       await api.post('/admin/rates', { usdtris_to_ves: v });
-      toast.success('Tasa USDTRIS → VES actualizada');
+      toast.success('Tasa USDT → VES actualizada');
       setUsdtInput('');
       await cargar();
     } catch (e) {
@@ -47,7 +47,7 @@ export default function TasasCriptoSection() {
     try {
       setBusyUsdc(true);
       await api.post('/admin/rates', { usdcris_to_ves: v });
-      toast.success('Tasa USDCRIS → VES actualizada');
+      toast.success('Tasa USDC → VES actualizada');
       setUsdcInput('');
       await cargar();
     } catch (e) {
@@ -60,12 +60,12 @@ export default function TasasCriptoSection() {
   return (
     <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e5e7eb' }}>
       <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#374151', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Wallet size={18} /> Envíos con saldo cripto (USDTRIS / USDCRIS → VES)
+        <Wallet size={18} /> Envíos con saldo cripto (USDT / USDC → VES)
       </h4>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
         <div style={{ padding: '20px', backgroundColor: '#f0fdfa', borderRadius: '14px', border: '1px solid #99f6e4' }}>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0d9488', marginBottom: '12px' }}>
-            USDTRIS → VES
+            USDT → VES
           </label>
           <p style={{ fontSize: '13px', color: '#374151', margin: '0 0 12px 0' }}>
             Actual: {rates?.usdtris_to_ves ? `1 USDT = ${rates.usdtris_to_ves} VES` : 'sin configurar'}
@@ -79,12 +79,12 @@ export default function TasasCriptoSection() {
           />
           <button onClick={guardarUsdt} disabled={busyUsdt}
             style={{ width: '100%', height: '44px', borderRadius: '10px', border: 'none', backgroundColor: '#0d9488', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busyUsdt ? 'not-allowed' : 'pointer', opacity: busyUsdt ? 0.6 : 1 }}>
-            Actualizar USDTRIS → VES
+            Actualizar USDT → VES
           </button>
         </div>
         <div style={{ padding: '20px', backgroundColor: '#eff6ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#2563eb', marginBottom: '12px' }}>
-            USDCRIS → VES
+            USDC → VES
           </label>
           <p style={{ fontSize: '13px', color: '#374151', margin: '0 0 12px 0' }}>
             Actual: {rates?.usdcris_to_ves ? `1 USDC = ${rates.usdcris_to_ves} VES` : 'sin configurar'}
@@ -98,7 +98,7 @@ export default function TasasCriptoSection() {
           />
           <button onClick={guardarUsdc} disabled={busyUsdc}
             style={{ width: '100%', height: '44px', borderRadius: '10px', border: 'none', backgroundColor: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busyUsdc ? 'not-allowed' : 'pointer', opacity: busyUsdc ? 0.6 : 1 }}>
-            Actualizar USDCRIS → VES
+            Actualizar USDC → VES
           </button>
         </div>
       </div>
