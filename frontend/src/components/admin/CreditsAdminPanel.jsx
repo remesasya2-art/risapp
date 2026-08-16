@@ -234,8 +234,8 @@ export default function CreditsAdminPanel() {
               data-testid="credits-admin-currency"
               style={{ ...inputStyle, width: '110px' }}
             >
-              <option value="usdt">USDTRIS</option>
-              <option value="usdc">USDCRIS</option>
+              <option value="usdt">USDT</option>
+              <option value="usdc">USDC</option>
             </select>
           </div>
 
