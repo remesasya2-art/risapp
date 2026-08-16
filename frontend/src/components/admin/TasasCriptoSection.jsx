@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Wallet } from 'lucide-react';
 
-// Sección de tasas para envíos con saldo cripto (USDTRIS/USDCRIS → VES).
+// Sección de tasas para envíos con saldo cripto (USDT/USDC → VES).
 // Usa los mismos endpoints genéricos de tasas (GET/POST /admin/rates), solo
 // agregando sus dos campos propios. No lleva ajuste automático por horario.
 export default function TasasCriptoSection() {
