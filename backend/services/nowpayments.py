@@ -149,27 +149,38 @@ async def create_payment(
         return r.json()
 
 
-def verify_ipn_signature(raw_body: bytes, signature_header: str) -> bool:
-    """Verifica la firma HMAC-SHA512 del webhook IPN.
+def verify_ipn_signature(raw_body: bytes, signature_header: str) -> str | None:
+    """Verifica la firma HMAC-SHA512 del webhook (IPN).
 
-    NOWPayments firma el JSON ORDENADO POR CLAVES con el IPN secret.
-    raw_body: cuerpo crudo del request (bytes) tal cual llego.
-    signature_header: valor del header 'x-nowpayments-sig'.
+    NOWPayments firma el body, pero el formato exacto de serializacion que
+    usan internamente no esta garantizado igual al que reconstruimos nosotros
+    con json.loads + json.dumps (numeros, acentos, orden de claves anidadas
+    pueden variar entre su backend y Python). En vez de asumir un formato,
+    probamos varias representaciones candidatas del mismo payload y aceptamos
+    si el HMAC de alguna coincide con la firma recibida.
+
+    Devuelve el nombre de la variante que coincidio ("raw", "sorted_ascii",
+    "sorted_unicode") para que el caller pueda loguear cual es, o None si
+    ninguna calzo (firma invalida o ausente).
     """
     if not IPN_KEY or not signature_header:
-        return False
+        return None
+    sig = signature_header.strip()
+
+    candidates: dict[str, bytes] = {"raw": raw_body}
     try:
         parsed = json.loads(raw_body.decode("utf-8"))
+        candidates["sorted_ascii"] = json.dumps(
+            parsed, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("utf-8")
+        candidates["sorted_unicode"] = json.dumps(
+            parsed, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
     except Exception:
-        return False
+        pass
 
-    # Reordenar por claves (sorted) y serializar de forma estable
-    sorted_body = json.dumps(parsed, sort_keys=True, separators=(",", ":"))
-    digest = hmac.new(
-        IPN_KEY.encode("utf-8"),
-        sorted_body.encode("utf-8"),
-        hashlib.sha512,
-    ).hexdigest()
-
-    # Comparacion en tiempo constante (evita ataques de temporizacion)
-    return hmac.compare_digest(digest, signature_header.strip())
+    for name, body in candidates.items():
+        digest = hmac.new(IPN_KEY.encode("utf-8"), body, hashlib.sha512).hexdigest()
+        if hmac.compare_digest(digest, sig):
+            return name
+    return None
