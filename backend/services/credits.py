@@ -36,8 +36,8 @@ CREDIT_FIELDS = {
 # de la cripto: el deposito/red siguen siendo USDT/USDC reales en la blockchain,
 # esto es solo como se llama el saldo dentro de la app).
 CREDIT_LABELS = {
-    "usdt": "Creditos USDTRIS",
-    "usdc": "Creditos USDCRIS",
+    "usdt": "USDT",
+    "usdc": "USDC",
 }
 
 
