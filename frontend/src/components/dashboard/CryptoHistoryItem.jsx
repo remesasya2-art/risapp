@@ -13,8 +13,8 @@ const STATUS_STYLES = {
 };
 
 const CURRENCY_META = {
-  usdt: { label: 'USDTRIS', color: '#26A17B' },
-  usdc: { label: 'USDCRIS', color: '#2775CA' },
+  usdt: { label: 'USDT', color: '#26A17B' },
+  usdc: { label: 'USDC', color: '#2775CA' },
 };
 
 const fmtCrypto = (n) =>
