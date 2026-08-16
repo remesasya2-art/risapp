@@ -687,13 +687,21 @@ async def webhook_crypto_send(request: Request):
     en /credits/webhook — este busca en 'transactions', no en 'crypto_deposits')."""
     raw_body = await request.body()
     signature = request.headers.get("x-nowpayments-sig", "")
-    if not nowpayments.verify_ipn_signature(raw_body, signature):
-        logger.warning("crypto-send webhook: firma inválida o ausente")
-        raise HTTPException(status_code=401, detail="invalid_signature")
+
     try:
         payload = json.loads(raw_body or b"{}")
     except Exception:
         payload = {}
+    preview_order_id = payload.get("order_id")
+    preview_status = payload.get("payment_status")
+    logger.info(f"crypto-send webhook: intento recibido order_id={preview_order_id} status={preview_status}")
+
+    matched = nowpayments.verify_ipn_signature(raw_body, signature)
+    if not matched:
+        logger.warning(f"crypto-send webhook: firma invalida order_id={preview_order_id} status={preview_status}")
+        raise HTTPException(status_code=401, detail="invalid_signature")
+    logger.info(f"crypto-send webhook: firma valida (variante={matched}) order_id={preview_order_id}")
+
     order_id = payload.get("order_id")
     payment_status = payload.get("payment_status")
     if not order_id:
@@ -704,14 +712,29 @@ async def webhook_crypto_send(request: Request):
         logger.warning(f"crypto-send webhook: order_id {order_id} no encontrado")
         return {"received": True, "error": "order_not_found"}
 
+    await db.transactions.update_one(
+        {"payment_order_id": order_id},
+        {"$set": {"payment_status_last": payment_status, "ipn_last_seen": datetime.now(timezone.utc)}}
+    )
+
     if payment_status in ("failed", "expired", "refunded"):
         await db.transactions.update_one(
             {"payment_order_id": order_id, "status": "awaiting_payment"},
-            {"$set": {"status": "payment_failed", "payment_status_last": payment_status}}
+            {"$set": {"status": "payment_failed"}}
         )
         return {"received": True, "processed": False, "status": payment_status}
 
-    if payment_status != "finished":
+    actually_paid = payload.get("actually_paid")
+    pay_amount = tx.get("pay_amount")
+    is_finished = payment_status == "finished"
+    is_acceptable_partial = False
+    if payment_status == "partially_paid" and actually_paid and pay_amount:
+        try:
+            is_acceptable_partial = (float(actually_paid) / float(pay_amount)) >= 0.99
+        except (TypeError, ValueError, ZeroDivisionError):
+            is_acceptable_partial = False
+
+    if not is_finished and not is_acceptable_partial:
         return {"received": True, "processed": False, "status": payment_status}
 
     claimed = await db.transactions.find_one_and_update(
@@ -719,7 +742,8 @@ async def webhook_crypto_send(request: Request):
         {"$set": {
             "status": "pending",
             "paid_at": datetime.now(timezone.utc),
-            "actually_paid": payload.get("actually_paid"),
+            "actually_paid": actually_paid,
+            "underpaid": bool(is_acceptable_partial and not is_finished),
         }},
         return_document=True,
     )
