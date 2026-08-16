@@ -1,56 +1,53 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
+import { Clock, ArrowUpRight } from 'lucide-react';
 
-function CryptoMini({ currency, label, balance, color }) {
-  const bal = Number(balance || 0);
+export default function CryptoBalanceCard({ usdt = 0, usdc = 0, isMobile = false }) {
+  const fmtCrypto = (n) =>
+    Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
     <div style={{
-      flex: 1,
-      background: '#fff',
-      border: '1px solid #e5e7eb',
-      borderRadius: 14,
-      padding: '14px 16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(2, minmax(0, 240px))',
+      gap: '12px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{
-          width: 28, height: 28, borderRadius: '50%',
-          background: color, color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 700,
-        }}>{label[0]}</div>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>
-        {bal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-      </div>
-      <Link
-        to={`/send-crypto?currency=${currency}`}
-        style={{
-          marginTop: 4,
-          textAlign: 'center',
-          background: color,
-          color: '#fff',
-          borderRadius: 10,
-          padding: '8px 0',
-          fontSize: 13,
-          fontWeight: 600,
-          textDecoration: 'none',
-        }}
-      >
-        Enviar
-      </Link>
+      <CryptoMini label="USDT" color="#26A17B" amount={fmtCrypto(usdt)} currency="usdt" />
+      <CryptoMini label="USDC" color="#2775CA" amount={fmtCrypto(usdc)} currency="usdc" />
     </div>
   );
 }
 
-export default function CryptoBalanceCard({ balanceUsdt, balanceUsdc }) {
+function CryptoMini({ label, color, amount, currency }) {
   return (
-    <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-      <CryptoMini currency="USDT" label="USDTRIS" balance={balanceUsdt} color="#26a17b" />
-      <CryptoMini currency="USDC" label="USDCRIS" balance={balanceUsdc} color="#2775ca" />
+    <div style={{
+      backgroundColor: '#ffffff', borderRadius: '16px', padding: '16px',
+      border: '1px solid #eef0f4', boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      display: 'flex', flexDirection: 'column', gap: '8px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280' }}>{label}</span>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: color }} />
+      </div>
+      <span style={{ fontSize: '22px', fontWeight: 700, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>
+        {amount}
+      </span>
+      <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+        Disponible por reembolso
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Link
+          to={`/send-crypto?currency=${currency}`}
+          style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          <ArrowUpRight size={12} strokeWidth={3} /> Enviar
+        </Link>
+        <Link
+          to="/history?filter=cripto"
+          style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
+          <Clock size={12} strokeWidth={3} /> Historial
+        </Link>
+      </div>
     </div>
   );
 }
