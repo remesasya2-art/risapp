@@ -42,8 +42,8 @@ const FEATURES = [
   {
     icon: TrendingUp,
     color: '#2775CA',
-    title: 'Créditos digitales USDTRIS / USDCRIS',
-    desc: 'Convierte tus depósitos en créditos digitales USDTRIS/USDCRIS para usar dentro de la plataforma.',
+    title: 'Créditos digitales USDT / USDC',
+    desc: 'Convierte tus depósitos en créditos digitales USDT/USDC para usar dentro de la plataforma.',
   },
   {
     icon: LayoutDashboard,
@@ -93,8 +93,8 @@ export default function Landing() {
             Tu plataforma de <span style={{ color: '#5B4FE9' }}>operaciones digitales</span>
           </h1>
           <p style={{ fontSize: 17, color: '#6b7280', lineHeight: 1.6, margin: '0 0 28px 0' }}>
-            Recarga tu cuenta, opera con Bitcoin y activa créditos digitales USDTRIS y
-            USDCRIS. Todo desde una sola cuenta, sin salir de la app.
+            Recarga tu cuenta, opera con Bitcoin y activa créditos digitales USDT y
+            USDC. Todo desde una sola cuenta, sin salir de la app.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Link to="/register" style={{
