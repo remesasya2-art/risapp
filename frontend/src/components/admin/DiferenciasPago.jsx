@@ -46,22 +46,35 @@ export default function DiferenciasPago() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
 
-  const cargar = async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get('/admin/ordenes/revision-pago');
-      setOrdenes(data?.ordenes || []);
-      if (data?.vencidas_ahora > 0) {
-        toast(`${data.vencidas_ahora} orden(es) con plazo vencido pasaron a revisión.`, { icon: '⏱️' });
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'No se pudieron cargar las diferencias de pago');
-    } finally {
-      setLoading(false);
+  // La busqueda se mantiene separada de los setState: el efecto de montaje solo
+  // dispara la promesa y aplica el resultado en el callback, nunca sincronamente.
+  const traer = () => api.get('/admin/ordenes/revision-pago').then(({ data }) => data);
+
+  const aplicar = (data) => {
+    setOrdenes(data?.ordenes || []);
+    if (data?.vencidas_ahora > 0) {
+      toast(`${data.vencidas_ahora} orden(es) con plazo vencido pasaron a revisión.`, { icon: '⏱️' });
     }
   };
 
-  useEffect(() => { cargar(); }, []);
+  const avisarFallo = (error) => {
+    toast.error(error.response?.data?.detail || 'No se pudieron cargar las diferencias de pago');
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    traer()
+      .then((data) => { if (!cancelled) aplicar(data); })
+      .catch((error) => { if (!cancelled) avisarFallo(error); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Recarga manual (boton Actualizar y despues de cada accion).
+  const recargar = () => {
+    setLoading(true);
+    return traer().then(aplicar).catch(avisarFallo).finally(() => setLoading(false));
+  };
 
   const aprobar = async (orden) => {
     if (!window.confirm(
@@ -73,7 +86,7 @@ export default function DiferenciasPago() {
     try {
       const { data } = await api.post(`/admin/ordenes/${orden.orden_id}/aprobar-con-diferencia`);
       toast.success(data?.message || 'Orden aprobada');
-      cargar();
+      recargar();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'No se pudo aprobar la orden');
     } finally {
@@ -90,7 +103,7 @@ export default function DiferenciasPago() {
     try {
       const { data } = await api.post(`/admin/ordenes/${orden.orden_id}/rechazar-y-reembolsar-saldo`);
       toast.success(data?.message || 'Orden cancelada y saldo devuelto');
-      cargar();
+      recargar();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'No se pudo cancelar la orden');
     } finally {
@@ -108,7 +121,7 @@ export default function DiferenciasPago() {
           </p>
         </div>
         <button
-          onClick={cargar}
+          onClick={recargar}
           disabled={loading}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px',
