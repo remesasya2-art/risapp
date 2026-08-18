@@ -4,7 +4,7 @@ Admin routes - User management, Withdrawals, Rates, KYC
 import os
 import uuid
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
@@ -1093,6 +1093,217 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     # Más antiguas primero (orden cronológico robusto ante created_at None)
     ordenes.sort(key=lambda o: str(o.get("created_at") or ""))
     return {"ordenes": ordenes, "total": len(ordenes)}
+
+# ============== ENVIOS CRIPTO CON PAGO INCOMPLETO ==============
+# Ordenes que llegaron con menos dinero del pedido y que el sistema no pudo
+# resolver solo (o el usuario no completo la diferencia a tiempo). Aqui el admin
+# decide: aprobar igual, o cancelar devolviendo lo que si llego como saldo.
+
+
+async def _barrer_topups_vencidos() -> int:
+    """Pasa a 'underpaid_review' los awaiting_topup que ya vencieron.
+
+    Se corre aqui (y no solo en el polling del usuario) para no depender de que
+    el usuario vuelva a abrir la app: si nunca vuelve, la orden aparece igual en
+    la bandeja del admin.
+    """
+    from routes.transactions import TOPUP_EXPIRY_HOURS
+
+    limite = datetime.now(timezone.utc) - timedelta(hours=TOPUP_EXPIRY_HOURS)
+    res = await db.transactions.update_many(
+        {"status": "awaiting_topup", "topup_created_at": {"$lte": limite}},
+        {"$set": {"status": "underpaid_review", "topup_expired": True}},
+    )
+    vencidas = getattr(res, "modified_count", 0) or 0
+    if vencidas:
+        logger.info(f"revision-pago: {vencidas} orden(es) con topup vencido pasaron a revision")
+    return vencidas
+
+
+@router.get("/ordenes/revision-pago")
+async def get_ordenes_revision_pago(admin: User = Depends(get_super_admin)):
+    """Bandeja de 'Diferencias de pago': envios cripto que quedaron incompletos."""
+    vencidas = await _barrer_topups_vencidos()
+
+    ordenes = []
+    user_cache = {}
+
+    async for tx in db.transactions.find(
+        {"status": "underpaid_review", "hidden_from_admin": {"$ne": True}}
+    ).sort("created_at", 1):
+        uid = tx.get("user_id")
+        if uid and uid not in user_cache:
+            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
+        u = user_cache.get(uid, {})
+        b = tx.get("beneficiary_data", {}) or {}
+
+        pagado_original = float(tx.get("actually_paid") or 0)
+        pagado_topup = float(tx.get("topup_actually_paid") or 0)
+        pedido = float(tx.get("pay_amount") or 0)
+        recibido = pagado_original + pagado_topup
+
+        ordenes.append({
+            "orden_id": tx.get("transaction_id"),
+            "display_id": tx.get("display_id"),
+            "created_at": tx.get("created_at"),
+            "user_name": u.get("full_name") or u.get("name") or "—",
+            "user_email": u.get("email", ""),
+            "beneficiario": {
+                "nombre": b.get("full_name") or b.get("name", ""),
+                "documento": b.get("id_document") or b.get("cedula", ""),
+                "banco": b.get("bank") or b.get("bank_code", ""),
+                "telefono": b.get("phone_number") or b.get("phone", ""),
+                "cuenta": b.get("account_number", ""),
+                "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
+            },
+            "moneda": str(tx.get("currency_input") or "").upper(),
+            "red": tx.get("topup_network") or tx.get("network") or tx.get("pay_currency"),
+            "pay_amount": pedido,
+            "actually_paid": pagado_original,
+            "topup_actually_paid": pagado_topup,
+            "recibido_total": round(recibido, 8),
+            "faltante": round(pedido - recibido, 8) if pedido else 0,
+            "paid_ratio": tx.get("paid_ratio"),
+            "topup_expired": bool(tx.get("topup_expired")),
+            "amount_input": tx.get("amount_input"),
+            "amount_output": tx.get("amount_output"),
+            "currency_output": tx.get("currency_output"),
+        })
+
+    return {"ordenes": ordenes, "total": len(ordenes), "vencidas_ahora": vencidas}
+
+
+@router.post("/ordenes/{transaction_id}/aprobar-con-diferencia")
+async def aprobar_orden_con_diferencia(transaction_id: str, admin: User = Depends(get_super_admin)):
+    """Acepta la orden aunque haya llegado menos dinero: pasa a 'pending' y entra
+    al mismo pipeline que un pago completo (nivel 1)."""
+    from routes.transactions import finalizar_orden_pagada
+
+    ahora = datetime.now(timezone.utc)
+    claimed = await db.transactions.find_one_and_update(
+        {"transaction_id": transaction_id, "status": "underpaid_review"},
+        {"$set": {
+            "status": "pending",
+            "underpaid": True,
+            "approved_manually": True,
+            "approved_manually_by": admin.user_id,
+            "approved_manually_at": ahora,
+            "paid_at": ahora,
+        }},
+        return_document=True,
+    )
+    if not claimed:
+        existe = await db.transactions.find_one({"transaction_id": transaction_id}, {"status": 1})
+        if not existe:
+            raise HTTPException(status_code=404, detail="Orden no encontrada")
+        raise HTTPException(status_code=409, detail=f"La orden ya no está en revisión (estado: {existe.get('status')})")
+
+    await finalizar_orden_pagada(claimed)
+    logger.info(f"Orden {transaction_id} aprobada con diferencia por {admin.user_id}")
+    return {"message": "Orden aprobada. Pasó a la cola de procesamiento.", "status": "pending"}
+
+
+@router.post("/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo")
+async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = Depends(get_super_admin)):
+    """Cancela la orden y acredita al usuario, como saldo cripto, todo lo que si
+    llego (pago original + diferencia), para que pueda reusarlo o pedir retiro."""
+    from services.credits import to_credit_decimal
+    from bson.decimal128 import Decimal128
+
+    ahora = datetime.now(timezone.utc)
+    # Se reclama el estado ANTES de acreditar: si dos admins tocan el boton a la
+    # vez, solo uno pasa y el reembolso no se duplica.
+    claimed = await db.transactions.find_one_and_update(
+        {"transaction_id": transaction_id, "status": "underpaid_review"},
+        {"$set": {
+            "status": "rejected",
+            "completed_at": ahora,
+            "processed_by": admin.user_id,
+            "rejected_reason": "pago_incompleto",
+            "whatsapp_active": False,
+        }},
+        return_document=True,
+    )
+    if not claimed:
+        existe = await db.transactions.find_one({"transaction_id": transaction_id}, {"status": 1})
+        if not existe:
+            raise HTTPException(status_code=404, detail="Orden no encontrada")
+        raise HTTPException(status_code=409, detail=f"La orden ya no está en revisión (estado: {existe.get('status')})")
+
+    cur_in = str(claimed.get("currency_input") or "").upper()
+    if cur_in not in ("USDT", "USDC"):
+        logger.error(f"Orden {transaction_id} en revisión con moneda inesperada {cur_in}; se canceló sin reembolso")
+        raise HTTPException(status_code=400, detail="Esta orden no es un envío USDT/USDC; no hay saldo cripto que devolver.")
+
+    monto = float(claimed.get("actually_paid") or 0) + float(claimed.get("topup_actually_paid") or 0)
+    monto_dec = to_credit_decimal(monto)
+    field = "balance_usdt" if cur_in == "USDT" else "balance_usdc"
+
+    acreditado = 0.0
+    if monto > 0:
+        user_doc = await db.users.find_one_and_update(
+            {"user_id": claimed["user_id"]},
+            {"$inc": {field: Decimal128(monto_dec)}},
+            return_document=True,
+        )
+        acreditado = float(monto_dec)
+        try:
+            from services.ledger_crypto import record_crypto_entry
+            bal_after = (user_doc or {}).get(field)
+            bal_after = float(to_credit_decimal(bal_after)) if bal_after is not None else None
+            await record_crypto_entry(
+                user_id=claimed["user_id"],
+                currency=cur_in.lower(),
+                movement_type="reembolso_pago_incompleto",
+                amount=acreditado,
+                direction="credit",
+                balance_before=(bal_after - acreditado) if bal_after is not None else None,
+                balance_after=bal_after,
+                reference_kind="transaction",
+                reference_id=transaction_id,
+                actor_type="admin",
+                actor_id=admin.user_id,
+                actor_email=getattr(admin, "email", None),
+                metadata={
+                    "display_id": claimed.get("display_id"),
+                    "pay_amount": claimed.get("pay_amount"),
+                    "actually_paid": claimed.get("actually_paid"),
+                    "topup_actually_paid": claimed.get("topup_actually_paid"),
+                    "paid_ratio": claimed.get("paid_ratio"),
+                },
+                notes="Devolución como saldo por envío con pago incompleto",
+            )
+        except Exception as e:
+            logger.warning(f"Ledger cripto reembolso_pago_incompleto no registrado: {e}")
+
+    await db.transactions.update_one(
+        {"transaction_id": transaction_id},
+        {"$set": {"refunded_to_balance": acreditado, "refunded_to_balance_field": field}},
+    )
+
+    try:
+        await create_notification(
+            user_id=claimed["user_id"],
+            title="Envío cancelado, saldo devuelto",
+            message=(
+                f"Tu envío no pudo completarse porque el pago llegó incompleto. "
+                f"Te acreditamos {acreditado:.8f} {cur_in} como saldo disponible."
+                if acreditado > 0 else
+                "Tu envío no pudo completarse porque el pago llegó incompleto y fue cancelado."
+            ),
+            notification_type="crypto_send_refunded",
+        )
+    except Exception as e:
+        logger.warning(f"No se pudo notificar el reembolso de {transaction_id}: {e}")
+
+    logger.info(f"Orden {transaction_id} rechazada por {admin.user_id}, {acreditado} {cur_in} devueltos a saldo")
+    return {
+        "message": f"Orden cancelada. Se devolvieron {acreditado:.8f} {cur_in} al saldo del usuario.",
+        "status": "rejected",
+        "refunded": acreditado,
+        "currency": cur_in,
+    }
+
 
 @router.get("/reportes/procesados")
 async def reporte_procesados(

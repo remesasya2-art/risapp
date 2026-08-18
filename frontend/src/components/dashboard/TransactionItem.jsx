@@ -1,4 +1,4 @@
-import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Eye, Building2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Eye, Building2, AlertCircle, Hourglass } from 'lucide-react';
 import { fmt, formatAccountNumber } from '../../utils/format';
 
 /**
@@ -12,6 +12,12 @@ const STATUS_CONFIG = {
   pending_manual_approval:  { label: 'En revisión', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
   rejected:                 { label: 'Rechazado', bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
   failed:                   { label: 'Fallida',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  // Envios cripto pagados via NOWPayments: ciclo de vida del pago
+  awaiting_payment:         { label: 'Esperando pago',    bg: '#EFF6FF', fg: '#2563EB', Icon: Hourglass },
+  awaiting_topup:           { label: 'Falta completar',   bg: '#FFF7ED', fg: '#C2410C', Icon: AlertCircle },
+  underpaid_review:         { label: 'En revisión',       bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
+  payment_failed:           { label: 'Pago no completado', bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  payment_error:            { label: 'Error de pago',     bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
   // Estados en español (transacciones BTC y otras que guardan 'estado' en español)
   procesando:               { label: 'Procesando', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
   pendiente:                { label: 'Pendiente',  bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },

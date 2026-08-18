@@ -5,7 +5,7 @@ import os
 import json
 import uuid
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -48,6 +48,76 @@ from utils.helpers import get_next_withdrawal_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["transactions"])
+
+# ============== ENVIO CRIPTO: PAGOS INCOMPLETOS (3 NIVELES) ==============
+# Sobre paid_ratio = (lo recibido) / (pay_amount pedido por NOWPayments):
+#   ratio >= RATIO_ACEPTA -> se acepta y la orden pasa a 'pending'
+#   ratio >= RATIO_TOPUP  -> 'awaiting_topup': se cobra la diferencia
+#   ratio <  RATIO_TOPUP  -> 'underpaid_review': revision manual
+RATIO_ACEPTA = 0.98
+RATIO_TOPUP = 0.80
+
+# Prefijo FIJO del order_id del pago de la diferencia. Es lo unico que distingue
+# un IPN de topup de uno del pago original, asi que no debe cambiarse a la ligera.
+TOPUP_ORDER_PREFIX = "topup_"
+
+# Ventana para completar la diferencia antes de que la orden caiga a revision.
+TOPUP_EXPIRY_HOURS = 48
+
+# Estados desde los que una orden todavia puede pasar a 'pending' al confirmarse
+# el pago. Incluye awaiting_topup y underpaid_review porque NOWPayments puede
+# mandar un 'finished' tardio despues de un 'partially_paid': si al final entro
+# el dinero completo, la orden debe cerrarse igual y no quedarse trabada.
+ESTADOS_RECLAMABLES = ["awaiting_payment", "awaiting_topup", "underpaid_review"]
+
+
+def _ticker_pagable(tx: dict) -> str | None:
+    """Ticker de red pagable de la orden (ej. 'usdttrc20').
+
+    OJO: tx['network'] es el nombre de red que devuelve NOWPayments (ej. 'trx'),
+    NO un ticker valido para create_payment/min-amount. El ticker es pay_currency;
+    si falta, se reconstruye desde la moneda de origen.
+    """
+    ticker = (tx.get("pay_currency") or "").strip().lower()
+    if ticker:
+        return ticker
+    key = str(tx.get("currency_input") or "").strip().lower()
+    return CRYPTO_NETWORK_TICKER.get(key)
+
+
+def _as_utc(dt):
+    """Normaliza a datetime timezone-aware en UTC (Mongo puede devolver naive)."""
+    if not isinstance(dt, datetime):
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _topup_expira_en(topup_created_at):
+    base = _as_utc(topup_created_at)
+    return base + timedelta(hours=TOPUP_EXPIRY_HOURS) if base else None
+
+
+def _topup_vencido(topup_created_at) -> bool:
+    expira = _topup_expira_en(topup_created_at)
+    return bool(expira and datetime.now(timezone.utc) >= expira)
+
+
+async def _notificar_underpaid_review(
+    user_id: str,
+    title: str = "Tu pago está en revisión",
+    message: str = "Tu pago llegó incompleto. Lo estamos revisando y te contactaremos pronto.",
+):
+    """Aviso de paso a revision manual. Best-effort: nunca rompe el flujo."""
+    try:
+        await create_notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            notification_type="crypto_send_underpaid_review",
+        )
+    except Exception as e:
+        logger.warning(f"crypto-send: no se pudo notificar revision a {user_id}: {e}")
+
 
 # ============== BENEFICIARIES ==============
 
@@ -610,6 +680,7 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
         "payment_order_id": order_id,
         "pay_currency": pay_currency,
         "funded_from": "payment",
+        "paid_ratio": 0.0,
         "created_at": datetime.now(timezone.utc),
         "whatsapp_active": False,
     }
@@ -671,86 +742,77 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
 
 @router.get("/withdraw-crypto/{transaction_id}/status")
 async def get_crypto_withdrawal_status(transaction_id: str, current_user: User = Depends(get_current_user)):
-    """Polling del estado de una orden de envío cripto (para la pantalla de pago)."""
+    """Polling del estado de una orden de envio cripto (para la pantalla de pago).
+
+    Ademas de devolver el estado, aplica el vencimiento del topup: si la orden
+    quedo en 'awaiting_topup' y ya pasaron TOPUP_EXPIRY_HOURS desde que se genero
+    el pago de la diferencia, se mueve a 'underpaid_review' de forma atomica aqui
+    mismo (no se depende de un cron). El admin tiene el mismo barrido en
+    /admin/ordenes/revision-pago por si el usuario nunca vuelve a abrir la app.
+    """
     tx = await db.transactions.find_one(
         {"transaction_id": transaction_id, "user_id": current_user.user_id},
-        {"_id": 0, "status": 1, "amount_output": 1}
+        {
+            "_id": 0, "status": 1, "amount_output": 1, "paid_ratio": 1,
+            "pay_amount": 1, "actually_paid": 1,
+            "topup_order_id": 1, "topup_pay_address": 1, "topup_pay_amount": 1,
+            "topup_pay_currency": 1, "topup_network": 1, "topup_payin_extra_id": 1,
+            "topup_created_at": 1,
+        },
     )
     if not tx:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    return {"transaction_id": transaction_id, "status": tx.get("status"), "amount_ves": tx.get("amount_output")}
 
+    status = tx.get("status")
 
-@router.post("/crypto-send/webhook")
-async def webhook_crypto_send(request: Request):
-    """IPN de NOWPayments para envíos directos (distinto del webhook de depósitos
-    en /credits/webhook — este busca en 'transactions', no en 'crypto_deposits')."""
-    raw_body = await request.body()
-    signature = request.headers.get("x-nowpayments-sig", "")
-
-    try:
-        payload = json.loads(raw_body or b"{}")
-    except Exception:
-        payload = {}
-    preview_order_id = payload.get("order_id")
-    preview_status = payload.get("payment_status")
-    logger.info(f"crypto-send webhook: intento recibido order_id={preview_order_id} status={preview_status}")
-
-    matched = nowpayments.verify_ipn_signature(raw_body, signature)
-    if not matched:
-        logger.warning(f"crypto-send webhook: firma invalida order_id={preview_order_id} status={preview_status}")
-        raise HTTPException(status_code=401, detail="invalid_signature")
-    logger.info(f"crypto-send webhook: firma valida (variante={matched}) order_id={preview_order_id}")
-
-    order_id = payload.get("order_id")
-    payment_status = payload.get("payment_status")
-    if not order_id:
-        return {"received": True, "error": "no_order_id"}
-
-    tx = await db.transactions.find_one({"payment_order_id": order_id})
-    if not tx:
-        logger.warning(f"crypto-send webhook: order_id {order_id} no encontrado")
-        return {"received": True, "error": "order_not_found"}
-
-    await db.transactions.update_one(
-        {"payment_order_id": order_id},
-        {"$set": {"payment_status_last": payment_status, "ipn_last_seen": datetime.now(timezone.utc)}}
-    )
-
-    if payment_status in ("failed", "expired", "refunded"):
-        await db.transactions.update_one(
-            {"payment_order_id": order_id, "status": "awaiting_payment"},
-            {"$set": {"status": "payment_failed"}}
+    if status == "awaiting_topup" and _topup_vencido(tx.get("topup_created_at")):
+        claimed = await db.transactions.find_one_and_update(
+            {"transaction_id": transaction_id, "status": "awaiting_topup"},
+            {"$set": {"status": "underpaid_review", "topup_expired": True}},
+            return_document=True,
         )
-        return {"received": True, "processed": False, "status": payment_status}
+        if claimed:
+            status = "underpaid_review"
+            logger.info(f"crypto-send: topup vencido para {transaction_id}, pasa a underpaid_review")
+            await _notificar_underpaid_review(claimed["user_id"])
+        else:
+            _fresh = await db.transactions.find_one(
+                {"transaction_id": transaction_id}, {"_id": 0, "status": 1}
+            ) or {}
+            status = _fresh.get("status", status)
 
-    actually_paid = payload.get("actually_paid")
-    pay_amount = tx.get("pay_amount")
-    is_finished = payment_status == "finished"
-    is_acceptable_partial = False
-    if payment_status == "partially_paid" and actually_paid and pay_amount:
-        try:
-            is_acceptable_partial = (float(actually_paid) / float(pay_amount)) >= 0.99
-        except (TypeError, ValueError, ZeroDivisionError):
-            is_acceptable_partial = False
+    resp = {
+        "transaction_id": transaction_id,
+        "status": status,
+        "amount_ves": tx.get("amount_output"),
+        "paid_ratio": tx.get("paid_ratio"),
+    }
 
-    if not is_finished and not is_acceptable_partial:
-        return {"received": True, "processed": False, "status": payment_status}
+    if status == "awaiting_topup":
+        _expires = _topup_expira_en(tx.get("topup_created_at"))
+        resp.update({
+            "topup_pay_address": tx.get("topup_pay_address"),
+            "topup_pay_amount": tx.get("topup_pay_amount"),
+            "topup_pay_currency": tx.get("topup_pay_currency"),
+            "topup_network": tx.get("topup_network"),
+            "topup_payin_extra_id": tx.get("topup_payin_extra_id"),
+            "topup_expires_at": _expires.isoformat() if _expires else None,
+        })
 
-    claimed = await db.transactions.find_one_and_update(
-        {"payment_order_id": order_id, "status": "awaiting_payment"},
-        {"$set": {
-            "status": "pending",
-            "paid_at": datetime.now(timezone.utc),
-            "actually_paid": actually_paid,
-            "underpaid": bool(is_acceptable_partial and not is_finished),
-        }},
-        return_document=True,
-    )
-    if not claimed:
-        logger.info(f"crypto-send webhook: order_id {order_id} ya estaba procesado, ignorando duplicado")
-        return {"received": True, "already_processed": True}
+    return resp
 
+
+async def finalizar_orden_pagada(claimed: dict):
+    """Cierre comun cuando una orden de envio queda efectivamente pagada.
+
+    Es exactamente lo que el webhook hacia inline hasta ahora al aceptar un pago;
+    se extrae a una funcion porque ahora se llama desde dos lugares: el pago
+    original y el pago de la diferencia (topup).
+
+    NO escribe en el ledger cripto a proposito: en el camino funded_from="payment"
+    nunca se toca balance_usdt/balance_usdc, asi que un asiento aqui inventaria un
+    movimiento de saldo inexistente y romperia la reconciliacion.
+    """
     try:
         await create_notification(
             user_id=claimed["user_id"],
@@ -766,7 +828,234 @@ async def webhook_crypto_send(request: Request):
     except Exception as e:
         logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
 
-    return {"received": True, "processed": True}
+
+@router.post("/crypto-send/webhook")
+async def webhook_crypto_send(request: Request):
+    """IPN de NOWPayments para envios directos (distinto del webhook de depositos
+    en /credits/webhook — este busca en 'transactions', no en 'crypto_deposits').
+
+    Sistema de 3 niveles para pagos incompletos, sobre paid_ratio = recibido/pay_amount:
+      - ratio >= 0.98  -> se acepta, la orden pasa a 'pending' (underpaid si < 1.0)
+      - 0.80 <= ratio  -> 'awaiting_topup': se genera un segundo pago por la
+                          diferencia y se le pide al usuario completarlo
+      - ratio < 0.80   -> 'underpaid_review': revision manual del admin
+    El mismo endpoint atiende el pago original y el topup; se distinguen por el
+    prefijo fijo "topup_" del order_id.
+    """
+    raw_body = await request.body()
+    signature = request.headers.get("x-nowpayments-sig", "")
+
+    try:
+        payload = json.loads(raw_body or b"{}") if raw_body else {}
+    except Exception:
+        payload = {}
+    order_id = payload.get("order_id")
+    payment_status = payload.get("payment_status")
+    logger.info(f"crypto-send webhook: recibido order_id={order_id} status={payment_status}")
+
+    matched = nowpayments.verify_ipn_signature(raw_body, signature)
+    if not matched:
+        logger.warning(f"crypto-send webhook: firma invalida order_id={order_id} status={payment_status}")
+        raise HTTPException(status_code=401, detail="invalid_signature")
+    logger.info(f"crypto-send webhook: firma valida (variante={matched}) order_id={order_id}")
+
+    if not order_id:
+        return {"received": True, "error": "no_order_id"}
+
+    # --- Identificar si es el pago original o un topup, por el prefijo fijo ---
+    is_topup = order_id.startswith(TOPUP_ORDER_PREFIX)
+    if is_topup:
+        tx = await db.transactions.find_one({"topup_order_id": order_id})
+    else:
+        tx = await db.transactions.find_one({"payment_order_id": order_id})
+
+    if not tx:
+        logger.warning(f"crypto-send webhook: order_id {order_id} no encontrado (topup={is_topup})")
+        return {"received": True, "error": "order_not_found"}
+
+    await db.transactions.update_one(
+        {"_id": tx["_id"]},
+        {"$set": {"payment_status_last": payment_status, "ipn_last_seen": datetime.now(timezone.utc)}},
+    )
+
+    # --- Fallo terminal: no llego nada util ---
+    if payment_status in ("failed", "expired", "refunded"):
+        estado_esperado = "awaiting_topup" if is_topup else "awaiting_payment"
+        nuevo_estado = "underpaid_review" if is_topup else "payment_failed"
+        claimed = await db.transactions.find_one_and_update(
+            {"_id": tx["_id"], "status": estado_esperado},
+            {"$set": {"status": nuevo_estado}},
+            return_document=True,
+        )
+        if claimed and is_topup:
+            await _notificar_underpaid_review(
+                claimed["user_id"],
+                message="No pudimos completar el pago de la diferencia. Lo pasamos a revisión y te contactaremos.",
+            )
+        return {"received": True, "processed": False, "status": payment_status}
+
+    # --- Estados intermedios (waiting/confirming/sending/etc.): no calcular nivel todavia ---
+    if payment_status not in ("finished", "partially_paid"):
+        return {"received": True, "processed": False, "status": payment_status}
+
+    actually_paid = payload.get("actually_paid")
+    if actually_paid is None:
+        return {"received": True, "processed": False, "status": payment_status}
+
+    try:
+        actually_paid = float(actually_paid)
+        pay_amount = float(tx.get("pay_amount") or 0)
+    except (TypeError, ValueError):
+        logger.warning(f"crypto-send webhook: montos ilegibles order_id={order_id}")
+        return {"received": True, "processed": False, "status": payment_status}
+
+    if pay_amount <= 0:
+        logger.warning(f"crypto-send webhook: pay_amount invalido en {tx.get('transaction_id')}")
+        return {"received": True, "processed": False, "status": payment_status}
+
+    if is_topup:
+        total_recibido = float(tx.get("actually_paid") or 0) + actually_paid
+        paid_ratio = total_recibido / pay_amount
+        await db.transactions.update_one(
+            {"_id": tx["_id"]},
+            {"$set": {"topup_actually_paid": actually_paid, "paid_ratio": paid_ratio}},
+        )
+
+        if paid_ratio >= RATIO_ACEPTA:
+            claimed = await db.transactions.find_one_and_update(
+                {"_id": tx["_id"], "status": {"$in": ESTADOS_RECLAMABLES}},
+                {"$set": {
+                    "status": "pending",
+                    "paid_at": datetime.now(timezone.utc),
+                    "underpaid": paid_ratio < 1.0,
+                }},
+                return_document=True,
+            )
+            if not claimed:
+                logger.info(f"crypto-send webhook: order_id {order_id} ya estaba procesado, ignorando duplicado")
+                return {"received": True, "already_processed": True}
+            await finalizar_orden_pagada(claimed)
+            return {"received": True, "processed": True}
+
+        claimed = await db.transactions.find_one_and_update(
+            {"_id": tx["_id"], "status": "awaiting_topup"},
+            {"$set": {"status": "underpaid_review"}},
+            return_document=True,
+        )
+        if claimed:
+            await _notificar_underpaid_review(
+                claimed["user_id"],
+                title="Tu pago sigue incompleto",
+                message="No pudimos completar tu envío con el pago adicional. Lo pasamos a revisión y te contactaremos.",
+            )
+        return {"received": True, "processed": False, "status": "underpaid_review"}
+
+    # ---- Pago original ----
+    paid_ratio = actually_paid / pay_amount
+    await db.transactions.update_one(
+        {"_id": tx["_id"]},
+        {"$set": {"actually_paid": actually_paid, "paid_ratio": paid_ratio}},
+    )
+
+    # --- Nivel 1: alcanza, se acepta ---
+    if paid_ratio >= RATIO_ACEPTA:
+        claimed = await db.transactions.find_one_and_update(
+            {"_id": tx["_id"], "status": {"$in": ESTADOS_RECLAMABLES}},
+            {"$set": {
+                "status": "pending",
+                "paid_at": datetime.now(timezone.utc),
+                "underpaid": paid_ratio < 1.0,
+            }},
+            return_document=True,
+        )
+        if not claimed:
+            logger.info(f"crypto-send webhook: order_id {order_id} ya estaba procesado, ignorando duplicado")
+            return {"received": True, "already_processed": True}
+        await finalizar_orden_pagada(claimed)
+        return {"received": True, "processed": True}
+
+    # --- Nivel 2: falto poco, se pide la diferencia ---
+    if paid_ratio >= RATIO_TOPUP:
+        faltante = round(pay_amount - actually_paid, 8)
+        # El ticker pagable es pay_currency (ej. 'usdttrc20'); tx["network"] es el
+        # nombre de la red que devuelve NOWPayments (ej. 'trx') y NO sirve como ticker.
+        pay_currency = _ticker_pagable(tx)
+
+        min_ok = False
+        if pay_currency:
+            try:
+                min_info = await nowpayments.get_min_amount(pay_currency, fiat_equivalent="usd")
+                min_amount = (min_info or {}).get("min_amount")
+                min_ok = min_amount is not None and faltante >= float(min_amount)
+            except Exception as e:
+                logger.warning(f"crypto-send webhook: no se pudo obtener minimo de {pay_currency}: {e}")
+
+        topup_order_id = f"{TOPUP_ORDER_PREFIX}{tx['payment_order_id']}"
+        topup_payment = None
+        if min_ok:
+            try:
+                topup_payment = await nowpayments.create_payment(
+                    price_amount=faltante,
+                    price_currency="usd",
+                    pay_currency=pay_currency,
+                    order_id=topup_order_id,
+                    order_description=f"Diferencia de envio {tx['payment_order_id']}",
+                    ipn_callback_url=f"{PUBLIC_BASE_URL}/api/crypto-send/webhook",
+                    is_fee_paid_by_user=True,
+                )
+            except Exception as e:
+                logger.warning(f"crypto-send webhook: fallo crear topup para {tx.get('transaction_id')}: {e}")
+
+        if not min_ok or not topup_payment or not topup_payment.get("pay_address"):
+            claimed = await db.transactions.find_one_and_update(
+                {"_id": tx["_id"], "status": "awaiting_payment"},
+                {"$set": {"status": "underpaid_review"}},
+                return_document=True,
+            )
+            if claimed:
+                await _notificar_underpaid_review(claimed["user_id"])
+            return {"received": True, "processed": False, "status": "underpaid_review"}
+
+        claimed = await db.transactions.find_one_and_update(
+            {"_id": tx["_id"], "status": "awaiting_payment"},
+            {"$set": {
+                "status": "awaiting_topup",
+                "topup_order_id": topup_order_id,
+                "topup_payment_id": topup_payment.get("payment_id"),
+                "topup_pay_address": topup_payment["pay_address"],
+                "topup_pay_amount": topup_payment.get("pay_amount"),
+                "topup_pay_currency": pay_currency,
+                "topup_payin_extra_id": topup_payment.get("payin_extra_id"),
+                "topup_network": topup_payment.get("network") or tx.get("network") or pay_currency,
+                "topup_created_at": datetime.now(timezone.utc),
+            }},
+            return_document=True,
+        )
+        if not claimed:
+            logger.info(f"crypto-send webhook: order_id {order_id} ya estaba procesado, ignorando duplicado")
+            return {"received": True, "already_processed": True}
+        try:
+            await create_notification(
+                user_id=claimed["user_id"],
+                title="Falta completar tu pago",
+                message="Tu pago llegó incompleto, probablemente por la comisión de tu wallet. Completá el envío de la diferencia para que se procese.",
+                notification_type="crypto_send_awaiting_topup",
+                data={"transaction_id": claimed.get("transaction_id")},
+            )
+        except Exception as e:
+            logger.warning(f"crypto-send webhook: no se pudo notificar: {e}")
+        return {"received": True, "processed": False, "status": "awaiting_topup"}
+
+    # --- Nivel 3: falto demasiado, revision manual ---
+    claimed = await db.transactions.find_one_and_update(
+        {"_id": tx["_id"], "status": "awaiting_payment"},
+        {"$set": {"status": "underpaid_review"}},
+        return_document=True,
+    )
+    if claimed:
+        await _notificar_underpaid_review(claimed["user_id"])
+    return {"received": True, "processed": False, "status": "underpaid_review"}
+
 
 # ============== RECHARGE VES ==============
 
