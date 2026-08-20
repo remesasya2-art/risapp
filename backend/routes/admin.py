@@ -1211,8 +1211,29 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
     from bson.decimal128 import Decimal128
 
     ahora = datetime.now(timezone.utc)
-    # Se reclama el estado ANTES de acreditar: si dos admins tocan el boton a la
-    # vez, solo uno pasa y el reembolso no se duplica.
+
+    # La moneda se valida ANTES de reclamar el estado. Si no es un envio
+    # USDT/USDC no hay saldo cripto que devolver, y en ese caso la orden tiene
+    # que quedar como estaba (en revision) en vez de terminar cancelada y sin
+    # reembolso, que era lo que pasaba cuando este chequeo iba despues del claim.
+    previa = await db.transactions.find_one(
+        {"transaction_id": transaction_id},
+        {"_id": 0, "status": 1, "currency_input": 1},
+    )
+    if not previa:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if previa.get("status") != "underpaid_review":
+        raise HTTPException(status_code=409, detail=f"La orden ya no está en revisión (estado: {previa.get('status')})")
+
+    cur_in = str(previa.get("currency_input") or "").upper()
+    if cur_in not in ("USDT", "USDC"):
+        logger.error(f"Orden {transaction_id} en revisión con moneda inesperada {cur_in}; no se cancela")
+        raise HTTPException(status_code=400, detail="Esta orden no es un envío USDT/USDC; no hay saldo cripto que devolver.")
+
+    # Recien ahora se reclama el estado, y se sigue reclamando de forma atomica:
+    # si dos admins tocan el boton a la vez, solo uno pasa y el reembolso no se
+    # duplica. El chequeo de arriba no reemplaza al claim, solo evita cancelar
+    # ordenes que despues no vamos a poder reembolsar.
     claimed = await db.transactions.find_one_and_update(
         {"transaction_id": transaction_id, "status": "underpaid_review"},
         {"$set": {
@@ -1229,11 +1250,6 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
         if not existe:
             raise HTTPException(status_code=404, detail="Orden no encontrada")
         raise HTTPException(status_code=409, detail=f"La orden ya no está en revisión (estado: {existe.get('status')})")
-
-    cur_in = str(claimed.get("currency_input") or "").upper()
-    if cur_in not in ("USDT", "USDC"):
-        logger.error(f"Orden {transaction_id} en revisión con moneda inesperada {cur_in}; se canceló sin reembolso")
-        raise HTTPException(status_code=400, detail="Esta orden no es un envío USDT/USDC; no hay saldo cripto que devolver.")
 
     monto = float(claimed.get("actually_paid") or 0) + float(claimed.get("topup_actually_paid") or 0)
     monto_dec = to_credit_decimal(monto)

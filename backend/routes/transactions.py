@@ -977,6 +977,12 @@ async def webhook_crypto_send(request: Request):
     # --- Nivel 2: falto poco, se pide la diferencia ---
     if paid_ratio >= RATIO_TOPUP:
         faltante = round(pay_amount - actually_paid, 8)
+        # OJO - unidades: `faltante` sale de pay_amount/actually_paid, que vienen
+        # en unidades de la cripto, y mas abajo se manda como price_amount con
+        # price_currency="usd". Vale porque este flujo hoy es solo USDT/USDC y se
+        # asume la paridad 1:1 con el dolar. Si alguna vez se acepta otra moneda
+        # aca (BTC, ETH, etc.) esta cuenta queda mal y hay que convertir el
+        # faltante a USD antes de crear el pago de la diferencia.
         # El ticker pagable es pay_currency (ej. 'usdttrc20'); tx["network"] es el
         # nombre de la red que devuelve NOWPayments (ej. 'trx') y NO sirve como ticker.
         pay_currency = _ticker_pagable(tx)
