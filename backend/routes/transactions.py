@@ -803,6 +803,62 @@ async def get_crypto_withdrawal_status(transaction_id: str, current_user: User =
     return resp
 
 
+@router.post("/withdraw-crypto/{transaction_id}/cancelar")
+async def cancelar_orden_cripto(transaction_id: str, current_user: User = Depends(get_current_user)):
+    """Cancela una orden de envio cripto que todavia no recibio ningun pago.
+
+    Solo se permite desde 'awaiting_payment': en ese estado NOWPayments no
+    acredito nada todavia, asi que no hay plata del usuario que devolver. Ni
+    bien entra un pago (aunque sea parcial) la orden deja de ser cancelable y
+    pasa por el circuito normal de topup / revision.
+
+    El claim es atomico (find_one_and_update condicionado al estado) para no
+    pisarnos con el webhook: si justo llego un pago en el medio, el webhook ya
+    movio el status y aca devolvemos 409 en vez de cancelar una orden que en
+    realidad tiene plata adentro. El frontend, ante un 409, refresca el estado
+    con el polling que ya tiene en lugar de asumir que se cancelo.
+    """
+    claimed = await db.transactions.find_one_and_update(
+        {
+            "transaction_id": transaction_id,
+            "user_id": current_user.user_id,
+            "status": "awaiting_payment",
+        },
+        {"$set": {
+            "status": "cancelled_by_user",
+            "cancelled_at": datetime.now(timezone.utc),
+        }},
+        return_document=True,
+    )
+
+    if claimed:
+        logger.info(f"crypto-send: orden {transaction_id} cancelada por el usuario")
+        return {
+            "ok": True,
+            "transaction_id": transaction_id,
+            "status": "cancelled_by_user",
+        }
+
+    # No se pudo reclamar. O la orden no existe / no es de este usuario, o el
+    # estado ya cambio mientras tanto.
+    tx = await db.transactions.find_one(
+        {"transaction_id": transaction_id, "user_id": current_user.user_id},
+        {"_id": 0, "status": 1},
+    )
+    if not tx:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    estado = tx.get("status")
+    logger.info(
+        f"crypto-send: cancelacion rechazada para {transaction_id}, estado actual {estado}"
+    )
+    raise HTTPException(
+        status_code=409,
+        detail="La orden ya no se puede cancelar porque cambio de estado. "
+               "Actualiza la pantalla para ver como quedo.",
+    )
+
+
 async def finalizar_orden_pagada(claimed: dict):
     """Cierre comun cuando una orden de envio queda efectivamente pagada.
 

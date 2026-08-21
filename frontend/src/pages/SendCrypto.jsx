@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
 import { QRCodeSVG } from 'qrcode.react';
+import { NOWPAYMENTS_FEE_RATE, UNKNOWN_NETWORK_FEE_TEXT, estimatedNetworkFee } from '../utils/networkFees';
 
 // Cuenta regresiva legible para el plazo del pago de la diferencia (topup).
 function formatCountdown(ms) {
@@ -52,6 +53,7 @@ export default function SendCrypto() {
   // de pago incompleto (awaiting_topup / underpaid_review) y los datos del topup.
   const [statusData, setStatusData] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pollRef = useRef(null);
   const idemRef = useRef(null);
@@ -63,6 +65,13 @@ export default function SendCrypto() {
   const rate = rates?.[rateField] || 0;
   const rateAvailable = rate > 0;
   const amountVes = amountNum > 0 ? amountNum * rate : 0;
+
+  // ---- Calculadora de costos (camino B: pago con cripto nueva) ----
+  // Aritmetica local pura: no llama a ningun endpoint. Se recalcula sola en
+  // cada render, o sea cada vez que cambia el monto o la red elegida.
+  const nowpaymentsFee = amountNum > 0 ? amountNum * NOWPAYMENTS_FEE_RATE : 0;
+  const networkFee = estimatedNetworkFee(network);
+  const totalEstimado = amountNum > 0 ? amountNum + nowpaymentsFee + (networkFee ?? 0) : 0;
 
   const balanceField = currency === 'usdt' ? 'balance_usdt' : 'balance_usdc';
   const availableBalance = user?.[balanceField] || 0;
@@ -231,6 +240,30 @@ export default function SendCrypto() {
     topupToastRef.current = false;
   };
 
+  // "Cambiar monto": cancela la orden abierta en el backend antes de volver al
+  // formulario, asi no queda una orden fantasma en awaiting_payment.
+  const handleCambiarMonto = async () => {
+    if (!order?.transaction_id || cancelling) return;
+    setCancelling(true);
+    try {
+      await api.post(`/withdraw-crypto/${order.transaction_id}/cancelar`);
+      resetFlow();
+    } catch (e) {
+      if (e?.response?.status === 409) {
+        // Justo entro un pago en el medio: no forzamos nada. El polling que ya
+        // esta corriendo trae el estado real en el proximo tick.
+        toast('Justo llegó un pago para esta orden. Actualizando el estado...');
+      } else {
+        toast.error(e?.response?.data?.detail || 'No pudimos cancelar la orden. Intentá de nuevo.');
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const feeRowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6 };
+  const feeLabelStyle = { fontSize: '13px', color: '#6b7280', lineHeight: 1.4 };
+  const feeValueStyle = { fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' };
   const cardStyle = { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #eef0f4', padding: 20 };
 
   return (
@@ -409,6 +442,43 @@ export default function SendCrypto() {
               </div>
             )}
 
+            {!useBalance && amountNum > 0 && (
+              <div style={{ ...cardStyle, marginBottom: '20px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
+                  Lo que vas a pagar
+                </div>
+
+                <div style={feeRowStyle}>
+                  <span style={feeLabelStyle}>Monto a enviar</span>
+                  <span style={feeValueStyle}>{fmt(amountNum, 2)} {cfg.label}</span>
+                </div>
+
+                <div style={feeRowStyle}>
+                  <span style={feeLabelStyle}>+ Comisión de NOWPayments (~1%)</span>
+                  <span style={feeValueStyle}>{fmt(nowpaymentsFee, 2)} {cfg.label}</span>
+                </div>
+
+                <div style={feeRowStyle}>
+                  <span style={feeLabelStyle}>
+                    + Comisión de red estimada{selectedNetwork?.label ? ` (${selectedNetwork.label})` : ''}
+                  </span>
+                  <span style={feeValueStyle}>
+                    {networkFee !== null ? `${fmt(networkFee, 2)} ${cfg.label}` : UNKNOWN_NETWORK_FEE_TEXT}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid #eef0f4', marginTop: 10, paddingTop: 10 }}>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>Total estimado a pagar</span>
+                  <span style={{ fontSize: '16px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
+                    {networkFee === null ? 'desde ' : ''}{fmt(totalEstimado, 2)} {cfg.label}
+                  </span>
+                </div>
+
+                <p style={{ fontSize: '11px', color: '#9ca3af', margin: '10px 0 0 0', lineHeight: 1.5 }}>
+                  Estimado, puede variar levemente según la congestión de la red.
+                </p>
+              </div>
+            )}
             <button
               onClick={handleCrear}
               disabled={!canContinue}
@@ -622,6 +692,13 @@ export default function SendCrypto() {
             <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
               La app detecta el pago automáticamente. Puedes cerrar esta pantalla y volver más tarde.
             </p>
+            <button
+              onClick={handleCambiarMonto}
+              disabled={cancelling}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 12, backgroundColor: '#fff', cursor: cancelling ? 'default' : 'pointer', opacity: cancelling ? 0.6 : 1 }}
+            >
+              {cancelling ? 'Cancelando...' : 'Cambiar monto'}
+            </button>
             <button
               onClick={resetFlow}
               style={{ padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
