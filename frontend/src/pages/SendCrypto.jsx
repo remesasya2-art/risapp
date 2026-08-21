@@ -2,11 +2,22 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
-import { ArrowLeft, ArrowRight, AlertCircle, User, ChevronDown, Copy, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertCircle, User, ChevronDown, Copy, Clock, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
 import { QRCodeSVG } from 'qrcode.react';
+
+// Cuenta regresiva legible para el plazo del pago de la diferencia (topup).
+function formatCountdown(ms) {
+  if (ms == null || ms <= 0) return null;
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  return `${m}m ${String(s).padStart(2, '0')}s`;
+}
 
 const CURRENCIES = [
   { key: 'usdt', label: 'USDT', color: '#26A17B' },
@@ -37,8 +48,14 @@ export default function SendCrypto() {
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState(null);
   const [paid, setPaid] = useState(false);
+  // Ultima respuesta de /withdraw-crypto/{id}/status: de ahi salen los estados
+  // de pago incompleto (awaiting_topup / underpaid_review) y los datos del topup.
+  const [statusData, setStatusData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const pollRef = useRef(null);
   const idemRef = useRef(null);
+  const topupToastRef = useRef(false);
 
   const cfg = CURRENCIES.find((c) => c.key === currency);
   const amountNum = parseFloat(amount);
@@ -147,26 +164,55 @@ export default function SendCrypto() {
   };
 
   useEffect(() => {
-    if (!order?.transaction_id || paid) return;
+    if (!order?.transaction_id || paid || failed) return;
     const checkStatus = async () => {
       try {
         const { data } = await api.get(`/withdraw-crypto/${order.transaction_id}/status`);
-        if (data?.status && data.status !== 'awaiting_payment') {
-          setPaid(true);
-          if (data.status === 'payment_failed') {
-            toast.error('El pago no se completó. La orden quedó cancelada.');
-          } else {
-            toast.success('¡Pago recibido! Tu envío está en cola de procesamiento.');
-            refreshUser();
+        if (!data?.status) return;
+        setStatusData(data);
+
+        // Sigue esperando: ni el pago original ni la diferencia cerraron todavia.
+        if (data.status === 'awaiting_payment') return;
+        if (data.status === 'awaiting_topup') {
+          if (!topupToastRef.current) {
+            topupToastRef.current = true;
+            toast('Tu pago llegó incompleto. Falta completar la diferencia.', { icon: '⚠️' });
           }
+          return;
         }
+        // En revision manual: no hay nada que el usuario pueda hacer, pero
+        // seguimos consultando por si el admin la aprueba.
+        if (data.status === 'underpaid_review') return;
+
+        if (['payment_failed', 'payment_error', 'rejected'].includes(data.status)) {
+          setFailed(true);
+          toast.error('El pago no se completó. La orden quedó cancelada.');
+          refreshUser();
+          return;
+        }
+
+        setPaid(true);
+        toast.success('¡Pago recibido! Tu envío está en cola de procesamiento.');
+        refreshUser();
       } catch (e) {
       }
     };
     checkStatus();
     pollRef.current = setInterval(checkStatus, 5000);
     return () => clearInterval(pollRef.current);
-  }, [order?.transaction_id, paid]);
+  }, [order?.transaction_id, paid, failed]);
+
+  const orderStatus = statusData?.status || (order ? 'awaiting_payment' : null);
+
+  // Reloj de 1s solo mientras hay cuenta regresiva en pantalla.
+  useEffect(() => {
+    if (orderStatus !== 'awaiting_topup') return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [orderStatus]);
+
+  const topupExpiresAt = statusData?.topup_expires_at ? new Date(statusData.topup_expires_at).getTime() : null;
+  const topupCountdown = topupExpiresAt ? formatCountdown(topupExpiresAt - now) : null;
 
   const handleCopy = (text, label) => {
     if (!text) return;
@@ -178,8 +224,11 @@ export default function SendCrypto() {
     clearInterval(pollRef.current);
     setOrder(null);
     setPaid(false);
+    setFailed(false);
+    setStatusData(null);
     setAmount('');
     idemRef.current = null;
+    topupToastRef.current = false;
   };
 
   const cardStyle = { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #eef0f4', padding: 20 };
@@ -383,6 +432,126 @@ export default function SendCrypto() {
                 ? `Se descontaron ${order.amount_crypto} ${order.currency} de tu saldo disponible. `
                 : ''}
               Tu envío de {order.amount_ves ? fmt(order.amount_ves) : ''} VES a {selectedBeneficiary?.full_name} quedó en cola de procesamiento.
+            </p>
+            <button
+              onClick={() => navigate('/history')}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+            >
+              Ver historial
+            </button>
+          </div>
+        ) : failed ? (
+          <div style={{ ...cardStyle, textAlign: 'center' }}>
+            <XCircle size={40} color="#dc2626" style={{ marginBottom: 12 }} />
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#dc2626', margin: '0 0 8px 0' }}>El pago no se completó</h2>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0' }}>
+              La orden quedó cancelada. Podés generar un envío nuevo cuando quieras.
+            </p>
+            <button
+              onClick={resetFlow}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+            >
+              Empezar de nuevo
+            </button>
+          </div>
+        ) : orderStatus === 'awaiting_topup' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...cardStyle, textAlign: 'center' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+                borderRadius: 999, backgroundColor: '#ffedd5', color: '#c2410c', fontSize: 13, fontWeight: 600, marginBottom: 14,
+              }}>
+                <AlertCircle size={14} /> Falta completar tu pago
+              </div>
+              <p style={{ fontSize: 13.5, color: '#6b7280', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+                Tu pago llegó incompleto, probablemente por la comisión de tu wallet.
+                Enviá la diferencia a esta dirección y el envío se procesa automáticamente.
+              </p>
+
+              {topupCountdown && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                  borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e',
+                  fontSize: 12.5, fontWeight: 600, marginBottom: 16,
+                }}>
+                  <Clock size={13} /> Te quedan {topupCountdown}
+                </div>
+              )}
+
+              {statusData?.topup_pay_address && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                  <div style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16, border: '2px solid #e5e7eb' }}>
+                    <QRCodeSVG value={statusData.topup_pay_address} size={200} />
+                  </div>
+                </div>
+              )}
+
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+                {statusData?.topup_pay_amount} {(statusData?.topup_pay_currency || '').toUpperCase()}
+              </p>
+              <button
+                onClick={() => handleCopy(String(statusData?.topup_pay_amount ?? ''), 'Monto')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 999, backgroundColor: '#eff6ff', cursor: 'pointer', marginBottom: 10 }}
+              >
+                <Copy size={12} /> Copiar monto exacto
+              </button>
+              {statusData?.topup_network && (
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {statusData.topup_network}</p>
+              )}
+
+              <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, textAlign: 'left' }}>
+                <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de pago</p>
+                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', margin: '0 0 10px 0' }}>
+                  {statusData?.topup_pay_address}
+                </p>
+                <button
+                  onClick={() => handleCopy(statusData?.topup_pay_address, 'Dirección')}
+                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                >
+                  <Copy size={14} /> Copiar dirección
+                </button>
+              </div>
+
+              {statusData?.topup_payin_extra_id && (
+                <div style={{ padding: 14, backgroundColor: '#fee2e2', borderRadius: 12, textAlign: 'left', marginTop: 12 }}>
+                  <p style={{ fontSize: 11, color: '#991b1b', margin: '0 0 6px 0', fontWeight: 600 }}>Memo/Tag obligatorio</p>
+                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: '#374151', margin: '0 0 10px 0' }}>
+                    {statusData.topup_payin_extra_id}
+                  </p>
+                  <button
+                    onClick={() => handleCopy(statusData.topup_payin_extra_id, 'Memo/Tag')}
+                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <Copy size={14} /> Copiar memo/tag
+                  </button>
+                </div>
+              )}
+            </div>
+            <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+              Si no completás la diferencia a tiempo, la orden pasa a revisión manual y te contactamos.
+            </p>
+            <button
+              onClick={() => navigate('/history')}
+              style={{ padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
+            >
+              Volver al historial
+            </button>
+          </div>
+        ) : orderStatus === 'underpaid_review' ? (
+          <div style={{ ...cardStyle, textAlign: 'center' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+              borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600, marginBottom: 16,
+            }}>
+              <Clock size={14} /> En revisión
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+              Estamos revisando tu pago
+            </h2>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0', lineHeight: 1.55 }}>
+              Tu pago llegó incompleto y lo pasamos a revisión manual. No hace falta que hagas nada:
+              te contactamos apenas lo resolvamos. Si aprobamos el envío, lo vas a ver en tu historial.
             </p>
             <button
               onClick={() => navigate('/history')}

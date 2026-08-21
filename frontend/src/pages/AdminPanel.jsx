@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
+import DiferenciasPago from '../components/admin/DiferenciasPago';
 import ReportesProcesados from '../components/admin/ReportesProcesados';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import LibroMayor from '../components/admin/LibroMayor';
@@ -65,6 +66,7 @@ const CRM_SUBTABS = [
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
   { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
+  { key: 'diferencias', label: 'Diferencias de pago', icon: AlertCircle, superAdminOnly: true },
   { key: 'reportes', label: 'Reportes', icon: Download },
   { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
@@ -905,6 +907,10 @@ const [searchParams, setSearchParams] = useSearchParams();
         {/* Overview Tab */}
         {activeTab === 'ordenes' && (
           <OrdenesPorProcesar />
+        )}
+
+        {activeTab === 'diferencias' && user?.role === 'super_admin' && (
+          <DiferenciasPago />
         )}
 
         {activeTab === 'reportes' && (

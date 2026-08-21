@@ -57,3 +57,15 @@ class Transaction(BaseModel):
     created_at: datetime = None
     updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # --- Envio cripto pagado via NOWPayments: pagos incompletos (3 niveles) ---
+    # status puede ademas valer: awaiting_payment, awaiting_topup,
+    # underpaid_review, payment_failed, payment_error.
+    paid_ratio: Optional[float] = None          # recibido / pay_amount
+    underpaid: Optional[bool] = None
+    topup_order_id: Optional[str] = None        # formato fijo: f"topup_{payment_order_id}"
+    topup_pay_address: Optional[str] = None
+    topup_pay_amount: Optional[float] = None
+    topup_pay_currency: Optional[str] = None    # ticker pagable, ej. "usdttrc20"
+    topup_network: Optional[str] = None         # nombre de red para mostrar
+    topup_actually_paid: Optional[float] = None
+    topup_created_at: Optional[datetime] = None
