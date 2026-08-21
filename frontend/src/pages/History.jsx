@@ -34,9 +34,15 @@ export default function History() {
   const initialFilter = ['all', 'withdrawals', 'recharges', 'cripto'].includes(searchParams.get('filter'))
     ? searchParams.get('filter')
     : 'all';
+  // La tarjeta de saldo cripto linkea con ?currency=usdt|usdc, para que el
+  // historial abra ya filtrado por la moneda que el usuario tocó.
+  const initialCurrency = ['usdt', 'usdc'].includes((searchParams.get('currency') || '').toLowerCase())
+    ? searchParams.get('currency').toLowerCase()
+    : 'all';
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(initialFilter);
+  const [currency, setCurrency] = useState(initialCurrency);
   const [showFilters, setShowFilters] = useState(initialFilter !== 'all');
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
@@ -65,13 +71,13 @@ export default function History() {
 
   useEffect(() => {
     loadTransactions();
-  }, [page, filter]);
+  }, [page, filter, currency]);
 
   const loadTransactions = async () => {
     setLoading(true);
     try {
       if (filter === 'cripto') {
-        const params = new URLSearchParams({ page, limit: 10 });
+        const params = new URLSearchParams({ page, limit: 10, currency });
         const response = await api.get(`/credits/history?${params}`);
         const data = response.data;
         setTransactions(data.items || []);
@@ -95,6 +101,11 @@ export default function History() {
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
+    setPage(1);
+  };
+
+  const handleCurrencyChange = (newCurrency) => {
+    setCurrency(newCurrency);
     setPage(1);
   };
 
@@ -195,6 +206,32 @@ const normalized = { ...tx };
           </div>
         )}
 
+        {/* Sub-filtro de moneda: solo aplica al historial cripto */}
+        {filter === 'cripto' && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }} data-testid="currency-tabs">
+            {[
+              { key: 'all', label: 'Todas' },
+              { key: 'usdt', label: 'USDT' },
+              { key: 'usdc', label: 'USDC' },
+            ].map((c) => (
+              <button
+                key={c.key}
+                onClick={() => handleCurrencyChange(c.key)}
+                style={{
+                  padding: '8px 16px', borderRadius: '10px', cursor: 'pointer',
+                  fontSize: '13px', fontWeight: 600, transition: 'all 0.2s',
+                  border: currency === c.key ? '1px solid #5B4FE9' : '1px solid #E5E7EB',
+                  backgroundColor: currency === c.key ? '#EEF0FE' : '#ffffff',
+                  color: currency === c.key ? '#5B4FE9' : '#6B7280',
+                }}
+                data-testid={`currency-${c.key}`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Content */}
         {loading ? (
           <div style={{ ...cardStyle, padding: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -223,7 +260,11 @@ const normalized = { ...tx };
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {filter === 'cripto'
               ? transactions.map((item) => (
-                  <CryptoHistoryItem key={item.order_id} item={item} formatDate={formatDate} />
+                  <CryptoHistoryItem
+                    key={item.order_id || item.transaction_id}
+                    item={item}
+                    formatDate={formatDate}
+                  />
                 ))
               : transactions.map((tx) => (
                   <TransactionItem

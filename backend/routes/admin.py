@@ -785,16 +785,24 @@ async def process_withdrawal(
             except Exception as e:
                 logger.warning(f"Ledger refund_envio no registrado: {e}")
 
+        # Marca del reembolso con la MISMA forma que el flujo de pago incompleto
+        # (rechazar-y-reembolsar-saldo), para que el historial no tenga que saber
+        # cual de los dos caminos lo genero.
+        _refunded_amount = float(_refund_amount or 0)
+        _reject_update = {
+            "status": "rejected",
+            "completed_at": datetime.now(timezone.utc),
+            "processed_by": admin.user_id,
+            "whatsapp_active": False,
+            "refunded_to_balance": _refunded_amount > 0,
+            "refunded_to_balance_field": (
+                _refund_field if _cur_in in ("USDT", "USDC") else "balance_ris"
+            ),
+            "refund_amount": _refunded_amount,
+        }
         await db.transactions.update_one(
             {"transaction_id": transaction_id},
-            {
-                "$set": {
-                    "status": "rejected",
-                    "completed_at": datetime.now(timezone.utc),
-                    "processed_by": admin.user_id,
-                    "whatsapp_active": False
-                }
-            }
+            {"$set": _reject_update}
         )
         
         await create_notification(
@@ -1292,9 +1300,16 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
         except Exception as e:
             logger.warning(f"Ledger cripto reembolso_pago_incompleto no registrado: {e}")
 
+    # `refunded_to_balance` es un booleano y el monto va en `refund_amount`. Antes
+    # el monto se guardaba en `refunded_to_balance`; el historial normaliza los
+    # documentos viejos, pero de aca en adelante los dos flujos escriben igual.
     await db.transactions.update_one(
         {"transaction_id": transaction_id},
-        {"$set": {"refunded_to_balance": acreditado, "refunded_to_balance_field": field}},
+        {"$set": {
+            "refunded_to_balance": acreditado > 0,
+            "refunded_to_balance_field": field,
+            "refund_amount": acreditado,
+        }},
     )
 
     try:

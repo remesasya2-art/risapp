@@ -42,7 +42,7 @@ function CryptoMini({ label, color, amount, currency }) {
           <ArrowUpRight size={12} strokeWidth={3} /> Enviar
         </Link>
         <Link
-          to="/history?filter=cripto"
+          to={`/history?filter=cripto&currency=${currency}`}
           style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
           <Clock size={12} strokeWidth={3} /> Historial

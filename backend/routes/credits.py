@@ -335,6 +335,138 @@ async def nowpayments_webhook(request: Request):
 
 
 
+# Monedas de credito soportadas, en el orden en que se muestran.
+CREDIT_KEYS = ("usdt", "usdc")
+
+
+def _currency_input_variants(keys) -> list:
+    """Tickers tal como pueden estar guardados en `transactions.currency_input`.
+
+    El codigo actual guarda siempre mayuscula (`key.upper()`), pero hay envios
+    viejos y datos migrados que quedaron en minuscula, asi que el $match acepta
+    las dos formas en vez de asumir una."""
+    variants = []
+    for k in keys:
+        variants.extend([k.upper(), k.lower()])
+    return variants
+
+
+def build_history_pipeline(user_id: str, key, skip: int, limit: int) -> list:
+    """Pipeline del historial cripto unificado (depositos + envios).
+
+    Se construye aparte del handler para poder testearlo sin Mongo. Arranca en
+    `crypto_deposits`, le suma `transactions` (envios USDT/USDC) con $unionWith,
+    ordena todo junto por fecha descendente y usa $facet para devolver, en una
+    sola vuelta, la pagina pedida y el total combinado. Asi el frontend sigue
+    recibiendo {total, items} sin tener que reconciliar dos paginaciones.
+
+    Requiere MongoDB >= 4.4 ($unionWith).
+    """
+    keys = [key] if key else list(CREDIT_KEYS)
+
+    deposit_match = {"user_id": user_id}
+    if key:
+        deposit_match["currency"] = key
+    else:
+        deposit_match["currency"] = {"$in": list(CREDIT_KEYS)}
+
+    send_match = {
+        "user_id": user_id,
+        "type": "withdrawal",
+        "currency_input": {"$in": _currency_input_variants(keys)},
+    }
+
+    # Forma comun de un item de deposito.
+    deposit_projection = {
+        "_id": 0,
+        "kind": {"$literal": "deposit"},
+        "order_id": 1,
+        "currency": 1,
+        "date": "$created_at",
+        "created_at": 1,
+        "amount": 1,
+        "credit_amount": 1,
+        "credited": 1,
+        "credited_at": 1,
+        "status": 1,
+        "network": 1,
+        "pay_currency": 1,
+        "fee_amount": 1,
+        "source": 1,
+    }
+
+    # Forma comun de un item de envio. `refunded_to_balance` se normaliza a
+    # booleano y el monto devuelto sale siempre por `refund_amount`, porque los
+    # documentos viejos guardaban el monto (float) directamente en
+    # `refunded_to_balance` y el frontend no tiene por que conocer esa historia.
+    send_projection = {
+        "_id": 0,
+        "kind": {"$literal": "send"},
+        "transaction_id": 1,
+        "display_id": 1,
+        "currency": {"$toLower": "$currency_input"},
+        "date": "$created_at",
+        "created_at": 1,
+        "completed_at": 1,
+        "amount": "$amount_input",
+        "amount_output": 1,
+        "currency_output": 1,
+        "rate": 1,
+        "status": 1,
+        "funded_from": 1,
+        "network": "$pay_currency",
+        "beneficiary_data": 1,
+        "rejected_reason": 1,
+        "refund_amount": {"$ifNull": ["$refund_amount", "$_legacy_refund_amount"]},
+        "refunded_to_balance": {
+            "$gt": [
+                {"$ifNull": [{"$ifNull": ["$refund_amount", "$_legacy_refund_amount"]}, 0]},
+                0,
+            ]
+        },
+        "refunded_to_balance_field": 1,
+    }
+
+    return [
+        {"$match": deposit_match},
+        {"$project": deposit_projection},
+        {
+            "$unionWith": {
+                "coll": "transactions",
+                "pipeline": [
+                    {"$match": send_match},
+                    # Compatibilidad hacia atras: antes el monto devuelto vivia
+                    # en `refunded_to_balance` como numero.
+                    {
+                        "$addFields": {
+                            "_legacy_refund_amount": {
+                                "$cond": [
+                                    {
+                                        "$in": [
+                                            {"$type": "$refunded_to_balance"},
+                                            ["double", "int", "long", "decimal"],
+                                        ]
+                                    },
+                                    "$refunded_to_balance",
+                                    None,
+                                ]
+                            }
+                        }
+                    },
+                    {"$project": send_projection},
+                ],
+            }
+        },
+        {"$sort": {"date": -1}},
+        {
+            "$facet": {
+                "items": [{"$skip": skip}, {"$limit": limit}],
+                "total": [{"$count": "count"}],
+            }
+        },
+    ]
+
+
 @router.get("/history")
 async def get_credit_history(
     page: int = Query(1, ge=1),
@@ -342,25 +474,29 @@ async def get_credit_history(
     currency: str = Query("all", description="usdt | usdc | all"),
     current_user: User = Depends(get_current_user),
 ):
-    """Historial propio de depositos de creditos cripto (USDT/USDC) del usuario
-    autenticado. Incluye tanto los depositos reales via NOWPayments como las
-    acreditaciones manuales de soporte (ambos quedan en crypto_deposits). Nunca
-    mezcla con balance_ris ni con /transactions — es un historial totalmente
-    separado, igual que el resto de la billetera cripto."""
-    query: dict = {"user_id": current_user.user_id}
-    key = normalize_currency(currency) if currency != "all" else None
-    if key:
-        query["currency"] = key
+    """Historial cripto unificado (USDT/USDC) del usuario autenticado.
+
+    Trae en una sola lista, ordenada por fecha descendente:
+      - depositos (`crypto_deposits`): NOWPayments + acreditaciones manuales de
+        soporte, con kind="deposit";
+      - envios (`transactions` type=withdrawal en USDT/USDC), con kind="send",
+        incluyendo si el envio termino devuelto a saldo.
+
+    Nunca mezcla con balance_ris ni con /transactions — sigue siendo el
+    historial de la billetera cripto, ahora completo en vez de solo depositos.
+    """
+    key = normalize_currency(currency) if currency and currency != "all" else None
+    if currency and currency != "all" and key is None:
+        raise HTTPException(status_code=400, detail="Moneda no soportada. Usa usdt, usdc o all.")
 
     skip = (page - 1) * limit
-    total = await db.crypto_deposits.count_documents(query)
-    items = (
-        await db.crypto_deposits.find(query, {"_id": 0})
-        .sort("created_at", -1)
-        .skip(skip)
-        .limit(limit)
-        .to_list(limit)
-    )
+    pipeline = build_history_pipeline(current_user.user_id, key, skip, limit)
+
+    result = await db.crypto_deposits.aggregate(pipeline).to_list(1)
+    faceted = result[0] if result else {}
+    items = faceted.get("items") or []
+    total_bucket = faceted.get("total") or []
+    total = total_bucket[0].get("count", 0) if total_bucket else 0
 
     for it in items:
         it["currency_label"] = CREDIT_LABELS.get(it.get("currency"), it.get("currency"))

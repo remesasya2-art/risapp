@@ -3,6 +3,7 @@ Transaction routes - Withdrawals, Recharges, Beneficiaries
 """
 import os
 import json
+import math
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
@@ -1181,6 +1182,9 @@ async def get_transactions(
         "total": total,
         "page": page,
         "limit": limit,
+        # El frontend usa `pages` para habilitar la paginacion; sin este campo
+        # se quedaba siempre en la pagina 1.
+        "pages": math.ceil(total / limit) if limit else 1,
         "transactions": transactions
     }
 
