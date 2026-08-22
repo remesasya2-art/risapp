@@ -7,6 +7,7 @@ import os
 import uuid
 import httpx
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import APIRouter, Request, Response
 from twilio.rest import Client
 from twilio.request_validator import RequestValidator
@@ -24,9 +25,18 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "")
 ADMIN_WHATSAPP_NUMBER = os.environ.get("ADMIN_WHATSAPP_NUMBER", "")
 
-# Directory for storing proof images
-PROOF_IMAGES_DIR = "/app/backend/static/comprobantes"
-os.makedirs(PROOF_IMAGES_DIR, exist_ok=True)
+# Directorio de comprobantes: relativo a este archivo (-> backend/static/comprobantes),
+# la misma ruta que ya calcula server.py con ROOT_DIR, y overrideable por entorno.
+# Antes estaba hardcodeado a la ruta del contenedor ("/app/...") y ademas hacia
+# makedirs al importar, asi que importar `routes` fuera del contenedor moria con
+# PermissionError sobre '/app'. Importar un modulo no debe tocar disco: el makedirs
+# se fue. No hace falta aca -- server.py crea el directorio al arrancar, y hoy nada
+# escribe en el (los comprobantes van como data URI base64 a Mongo). Si algun dia
+# se vuelve a escribir a disco, esa funcion debe asegurar el directorio ella misma.
+PROOF_IMAGES_DIR = os.environ.get(
+    "PROOF_IMAGES_DIR",
+    str(Path(__file__).resolve().parent.parent / "static" / "comprobantes"),
+)
 
 
 async def download_twilio_image(media_url: str, display_id: str, index: int) -> str:
