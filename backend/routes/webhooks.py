@@ -76,6 +76,34 @@ def send_whatsapp_reply(to: str, message: str):
         return False
 
 
+# ============================================================================
+# WHATSAPP ENTRANTE NEUTRALIZADO (Fase 1)
+# ============================================================================
+# Este webhook aceptaba comandos del numero admin que cerraban plata sin pasar
+# por el Panel: "listo" marcaba la orden completed, y "cancelar" la marcaba
+# cancelled y reembolsaba saldo. Esa rama de reembolso ademas acreditaba SIEMPRE
+# balance_ris sin mirar currency_input, asi que un envio pagado en USDT/USDC
+# terminaba devuelto en RIS, y dejaba la orden en "cancelled", un estado que el
+# Panel nunca produce.
+#
+# Agrava el cuadro que la salida esta muerta (falta TWILIO_WHATSAPP_FROM) pero
+# send_next_pending_withdrawal_whatsapp igual escribe whatsapp_active=True antes
+# de intentar enviar y no lo revierte al fallar. O sea que puede haber una orden
+# marcada activa de la que nadie recibio aviso: un "listo" suelto cerraria una
+# orden cualquiera de la cola.
+#
+# Se corta la ENTRADA, que es lo unico que puede mover dinero. El webhook sigue
+# respondiendo 200 y sigue validando la firma de Twilio, para poder ver en los
+# logs que se intenta mandar, pero no ejecuta ninguna escritura en Mongo bajo
+# ninguna condicion.
+#
+# A proposito NO se lee de una variable de entorno: es un cierre de exposicion,
+# no una feature con flag. Reactivarlo tiene que ser un cambio de codigo revisado.
+# El resto del desmantelamiento (salida, whatsapp_service.py, el endpoint
+# duplicado de admin_routes.py) es Fase 2.
+WHATSAPP_INBOUND_DISABLED = True
+
+
 @router.post("/twilio/whatsapp")
 async def twilio_whatsapp_webhook(request: Request):
     """
@@ -121,7 +149,16 @@ async def twilio_whatsapp_webhook(request: Request):
         num_media = int(form_data.get("NumMedia", 0))
         
         logger.info(f"WhatsApp webhook: from={from_number}, body={body}, media={num_media}")
-        
+
+        # --- CORTE: no se procesa ningun comando ni imagen. Ver la nota de
+        # WHATSAPP_INBOUND_DISABLED arriba. Nada debajo de esta linea corre. ---
+        if WHATSAPP_INBOUND_DISABLED:
+            logger.warning(
+                "WhatsApp entrante neutralizado: mensaje descartado sin efecto "
+                f"(from={from_number}, body={body!r}, media={num_media})"
+            )
+            return Response(content="", media_type="text/xml")
+
         # Find the active withdrawal being processed
         active_withdrawal = await db.transactions.find_one({
             "type": {"$in": ["withdrawal", "send"]},
