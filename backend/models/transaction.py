@@ -69,3 +69,15 @@ class Transaction(BaseModel):
     topup_network: Optional[str] = None         # nombre de red para mostrar
     topup_actually_paid: Optional[float] = None
     topup_created_at: Optional[datetime] = None
+    # --- Merma real de NOWPayments (solo medicion, no altera amount_output) ---
+    # outcome_*: lo que NOWPayments acredita al comercio, ya descontada su
+    # comision interna. Se guarda tal cual viene en el IPN.
+    outcome_amount: Optional[float] = None
+    outcome_currency: Optional[str] = None
+    topup_outcome_amount: Optional[float] = None
+    topup_outcome_currency: Optional[str] = None
+    # amount_output - (outcome_amount * rate del alta). None si el IPN no trajo
+    # outcome_amount: nunca 0, para no confundirlo con "no hubo merma".
+    # Puede ser negativa si entro mas de lo esperado.
+    merma_ves: Optional[float] = None
+    merma_calculada_at: Optional[datetime] = None

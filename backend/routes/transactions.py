@@ -103,6 +103,79 @@ def _topup_vencido(topup_created_at) -> bool:
     return bool(expira and datetime.now(timezone.utc) >= expira)
 
 
+# ============== MERMA REAL DE NOWPAYMENTS (solo medicion) ==============
+# `actually_paid` es lo que entro a la direccion de pago; `outcome_amount` es lo
+# que NOWPayments acredita de verdad al comercio, ya descontada su comision
+# interna de procesamiento. Hasta ahora solo se guardaba el primero, asi que esa
+# comision era invisible: el VES prometido al beneficiario (`amount_output`) se
+# fija al crear la orden y no se recalcula nunca.
+#
+# Lo de aca abajo NO cambia ese monto ni el flujo de aprobacion: solo deja
+# registrada la diferencia para poder medirla antes de decidir que hacer con ella.
+
+
+def _leer_outcome_ipn(payload: dict):
+    """Extrae outcome_amount / outcome_currency del IPN.
+
+    Devuelve (crudo, moneda, numero):
+      - `crudo` y `moneda` se guardan tal como vinieron, sin transformarlos.
+      - `numero` es la version usable para calcular, o None si el campo no vino
+        o vino ilegible. Nunca 0: un cero seria indistinguible de "sin merma".
+    """
+    crudo = payload.get("outcome_amount")
+    moneda = payload.get("outcome_currency")
+    if crudo is None:
+        return None, moneda, None
+    try:
+        return crudo, moneda, float(crudo)
+    except (TypeError, ValueError):
+        logger.warning(f"crypto-send webhook: outcome_amount ilegible ({crudo!r}), merma sin calcular")
+        return crudo, moneda, None
+
+
+def _outcome_total_con_topup(tx: dict, outcome_topup: Optional[float]) -> Optional[float]:
+    """Acreditado total cuando hubo pago original + diferencia (topup).
+
+    Si falta el outcome de cualquiera de los dos tramos devuelve None en vez de
+    sumar lo que hay: un total parcial se leeria como una merma enorme y falsa.
+    """
+    original = tx.get("outcome_amount")
+    try:
+        original_num = float(original) if original is not None else None
+    except (TypeError, ValueError):
+        original_num = None
+    if original_num is None or outcome_topup is None:
+        return None
+    return original_num + outcome_topup
+
+
+def _calcular_merma_ves(tx: dict, outcome_total: Optional[float]) -> Optional[float]:
+    """VES prometido menos el VES que respalda lo realmente acreditado.
+
+        esperado_ves = outcome_amount * rate   (el `rate` congelado al crear la orden)
+        merma_ves    = amount_output - esperado_ves
+
+    Se usa a proposito el MISMO rate del alta y no la tasa del momento del pago:
+    asi este numero mide unicamente la comision interna de NOWPayments y no se
+    mezcla con el riesgo cambiario, que se mide aparte.
+
+    Devuelve None -- nunca 0 -- si falta cualquiera de los insumos.
+    Puede ser NEGATIVA (entro mas de lo esperado); es un resultado valido, no un
+    error, y el reporte la muestra como tal.
+    """
+    if outcome_total is None:
+        return None
+    try:
+        rate = to_float(from_db(tx.get("rate"), places=6), places=6)
+        prometido = to_float(from_db(tx.get("amount_output")))
+    except (TypeError, ValueError):
+        return None
+    if not rate or rate <= 0 or prometido is None:
+        return None
+    esperado_ves = outcome_total * rate
+    return round(prometido - esperado_ves, 2)
+
+
 async def _notificar_underpaid_review(
     user_id: str,
     title: str = "Tu pago está en revisión",
@@ -959,6 +1032,9 @@ async def webhook_crypto_send(request: Request):
     if actually_paid is None:
         return {"received": True, "processed": False, "status": payment_status}
 
+    # Solo medicion: no altera el monto prometido ni el flujo de aprobacion.
+    outcome_crudo, outcome_moneda, outcome_num = _leer_outcome_ipn(payload)
+
     try:
         actually_paid = float(actually_paid)
         pay_amount = float(tx.get("pay_amount") or 0)
@@ -973,9 +1049,17 @@ async def webhook_crypto_send(request: Request):
     if is_topup:
         total_recibido = float(tx.get("actually_paid") or 0) + actually_paid
         paid_ratio = total_recibido / pay_amount
+        merma_ves = _calcular_merma_ves(tx, _outcome_total_con_topup(tx, outcome_num))
         await db.transactions.update_one(
             {"_id": tx["_id"]},
-            {"$set": {"topup_actually_paid": actually_paid, "paid_ratio": paid_ratio}},
+            {"$set": {
+                "topup_actually_paid": actually_paid,
+                "paid_ratio": paid_ratio,
+                "topup_outcome_amount": outcome_crudo,
+                "topup_outcome_currency": outcome_moneda,
+                "merma_ves": merma_ves,
+                "merma_calculada_at": datetime.now(timezone.utc),
+            }},
         )
 
         if paid_ratio >= RATIO_ACEPTA:
@@ -1009,9 +1093,17 @@ async def webhook_crypto_send(request: Request):
 
     # ---- Pago original ----
     paid_ratio = actually_paid / pay_amount
+    merma_ves = _calcular_merma_ves(tx, outcome_num)
     await db.transactions.update_one(
         {"_id": tx["_id"]},
-        {"$set": {"actually_paid": actually_paid, "paid_ratio": paid_ratio}},
+        {"$set": {
+            "actually_paid": actually_paid,
+            "paid_ratio": paid_ratio,
+            "outcome_amount": outcome_crudo,
+            "outcome_currency": outcome_moneda,
+            "merma_ves": merma_ves,
+            "merma_calculada_at": datetime.now(timezone.utc),
+        }},
     )
 
     # --- Nivel 1: alcanza, se acepta ---
