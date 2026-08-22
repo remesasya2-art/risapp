@@ -1336,6 +1336,121 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
     }
 
 
+@router.get("/reportes/merma-nowpayments")
+async def reporte_merma_nowpayments(
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD, inclusivo"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD, inclusivo"),
+    admin: User = Depends(get_super_admin),
+):
+    """Solo lectura: cuanto VES se prometio de mas frente a lo que NOWPayments
+    acredito realmente, ya descontada su comision interna de procesamiento.
+
+    `merma_ves` se calcula en el webhook con el `rate` congelado al crear la
+    orden, asi que mide la comision de NOWPayments y NO el movimiento de la tasa.
+    Este endpoint no modifica nada: es para ver el tamano real del problema antes
+    de decidir que hacer con el.
+
+    El rango filtra por `created_at` de la orden (que es como se listan las
+    ordenes en el resto del panel). Ambas fechas son opcionales: sin rango,
+    devuelve todo el historico.
+    """
+    from datetime import timedelta as _td
+
+    def _parse(d):
+        return datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    rango = {}
+    try:
+        if date_from:
+            rango["$gte"] = _parse(date_from).replace(hour=0, minute=0, second=0, microsecond=0)
+        if date_to:
+            rango["$lt"] = _parse(date_to).replace(hour=0, minute=0, second=0, microsecond=0) + _td(days=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fecha inválida (use YYYY-MM-DD)")
+    if "$gte" in rango and "$lt" in rango and rango["$lt"] <= rango["$gte"]:
+        raise HTTPException(status_code=400, detail="El rango de fechas es inválido (desde debe ser ≤ hasta)")
+
+    base = {"funded_from": "payment"}
+    if rango:
+        base["created_at"] = rango
+
+    user_cache = {}
+
+    async def _user(uid):
+        if not uid:
+            return {}
+        if uid not in user_cache:
+            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
+        return user_cache[uid]
+
+    ordenes = []
+    total_merma = 0.0
+    total_merma_positiva = 0.0
+    total_merma_negativa = 0.0
+    total_prometido = 0.0
+
+    async for tx in db.transactions.find({**base, "merma_ves": {"$ne": None}}).sort("created_at", 1):
+        u = await _user(tx.get("user_id"))
+        merma = to_float(from_db(tx.get("merma_ves"))) or 0.0
+        prometido = to_float(from_db(tx.get("amount_output"))) or 0.0
+
+        total_merma += merma
+        total_prometido += prometido
+        if merma >= 0:
+            total_merma_positiva += merma
+        else:
+            total_merma_negativa += merma
+
+        ordenes.append({
+            "orden_id": tx.get("transaction_id"),
+            "display_id": tx.get("display_id"),
+            "created_at": tx.get("created_at"),
+            "paid_at": tx.get("paid_at"),
+            "merma_calculada_at": tx.get("merma_calculada_at"),
+            "status": tx.get("status"),
+            "user_email": u.get("email", ""),
+            "user_name": u.get("full_name") or u.get("name") or "—",
+            "moneda": str(tx.get("currency_input") or "").upper(),
+            "red": tx.get("network") or tx.get("pay_currency"),
+            "rate": to_float(from_db(tx.get("rate"), places=6), places=6),
+            "amount_input": to_float(from_db(tx.get("amount_input"))),
+            "amount_output": prometido,
+            "pay_amount": tx.get("pay_amount"),
+            "actually_paid": tx.get("actually_paid"),
+            "outcome_amount": tx.get("outcome_amount"),
+            "outcome_currency": tx.get("outcome_currency"),
+            "topup_actually_paid": tx.get("topup_actually_paid"),
+            "topup_outcome_amount": tx.get("topup_outcome_amount"),
+            "paid_ratio": tx.get("paid_ratio"),
+            "underpaid": bool(tx.get("underpaid")),
+            "merma_ves": merma,
+        })
+
+    # Ordenes que si recibieron un IPN de pago pero cuyo IPN no trajo
+    # outcome_amount: no se puede medir la merma y quedan fuera del total.
+    # Se informa el conteo para que el numero de arriba no se lea como completo.
+    sin_outcome = await db.transactions.count_documents(
+        {**base, "merma_ves": None, "actually_paid": {"$ne": None}}
+    )
+
+    return {
+        "desde": date_from,
+        "hasta": date_to,
+        "total": len(ordenes),
+        "sin_outcome": sin_outcome,
+        "totales": {
+            "merma_ves": round(total_merma, 2),
+            "merma_ves_a_favor_del_negocio": round(total_merma_negativa, 2),
+            "merma_ves_en_contra": round(total_merma_positiva, 2),
+            "ves_prometido": round(total_prometido, 2),
+            "merma_pct_sobre_prometido": (
+                round(total_merma / total_prometido * 100, 4) if total_prometido else None
+            ),
+        },
+        "ordenes": ordenes,
+    }
+
+
 @router.get("/reportes/procesados")
 async def reporte_procesados(
     period: str = Query("day", pattern="^(day|month|year|range)$"),
