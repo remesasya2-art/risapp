@@ -19,22 +19,58 @@ import os
 import json
 import hmac
 import hashlib
+import logging
 import httpx
+
+logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.nowpayments.io/v1"
 API_KEY = os.environ.get("NOWPAYMENTS_API_KEY", "")
 IPN_KEY = os.environ.get("NOWPAYMENTS_IPN_KEY", "")
+
+# Cuanto del cuerpo de una respuesta de error se guarda en el log. Los errores
+# de NOWPayments son JSON cortos ({"statusCode":400,"code":...,"message":...}),
+# pero un 502 de un proxy puede devolver una pagina HTML entera; el corte evita
+# volcar eso en los logs.
+_MAX_BODY_LOG = 2000
 
 
 def _headers() -> dict:
     return {"x-api-key": API_KEY, "Content-Type": "application/json"}
 
 
+def _revisar(r: httpx.Response, contexto: str) -> httpx.Response:
+    """raise_for_status() que ademas deja el CUERPO de la respuesta en el log.
+
+    httpx solo pone "Client error '400 Bad Request' for url ..." en el mensaje de
+    la excepcion, asi que el motivo real (por ejemplo AMOUNT_MINIMAL_ERROR con el
+    minimo exacto) se perdia y arriba solo se veia un 502 generico.
+
+    El cuerpo es seguro de loguear: NOWPayments responde el error como JSON y no
+    refleja ni la API key (va en el header) ni el payload enviado.
+
+    Re-lanza la excepcion tal cual, asi que ningun llamador cambia de
+    comportamiento: esto solo agrega informacion al log.
+    """
+    try:
+        r.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        cuerpo = (e.response.text or "").strip()
+        if len(cuerpo) > _MAX_BODY_LOG:
+            cuerpo = cuerpo[:_MAX_BODY_LOG] + f"... (+{len(e.response.text.strip()) - _MAX_BODY_LOG} chars)"
+        logger.error(
+            "NOWPayments %s -> HTTP %s. Cuerpo de la respuesta: %s",
+            contexto, e.response.status_code, cuerpo or "(vacio)",
+        )
+        raise
+    return r
+
+
 async def get_status() -> dict:
     """GET /v1/status — comprueba que la API responde."""
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(f"{API_BASE}/status", headers=_headers())
-        r.raise_for_status()
+        _revisar(r, "GET /status")
         return r.json()
 
 
@@ -52,7 +88,7 @@ async def get_min_amount(currency: str, fiat_equivalent: str = "usd") -> dict:
     }
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(f"{API_BASE}/min-amount", headers=_headers(), params=params)
-        r.raise_for_status()
+        _revisar(r, f"GET /min-amount ({currency})")
         return r.json()
 
 
@@ -63,7 +99,7 @@ async def get_merchant_coins() -> list[str]:
     al crear el pago."""
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(f"{API_BASE}/merchant/coins", headers=_headers())
-        r.raise_for_status()
+        _revisar(r, "GET /merchant/coins")
         data = r.json()
         return data.get("selectedCurrencies", []) or []
 
@@ -101,7 +137,7 @@ async def create_invoice(
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{API_BASE}/invoice", headers=_headers(), json=payload)
-        r.raise_for_status()
+        _revisar(r, f"POST /invoice ({pay_currency}, order_id={order_id})")
         return r.json()
 
 
@@ -145,7 +181,7 @@ async def create_payment(
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{API_BASE}/payment", headers=_headers(), json=payload)
-        r.raise_for_status()
+        _revisar(r, f"POST /payment ({pay_currency}, {price_amount} {price_currency}, order_id={order_id})")
         return r.json()
 
 
