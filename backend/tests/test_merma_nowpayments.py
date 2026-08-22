@@ -183,11 +183,7 @@ def entorno(monkeypatch):
         notificaciones.append(notification_type)
         return "notif_test"
 
-    async def fake_whatsapp():
-        return None
-
     monkeypatch.setattr(tx_routes, "create_notification", fake_create_notification)
-    monkeypatch.setattr(tx_routes, "send_next_pending_withdrawal_whatsapp", fake_whatsapp)
 
     class FakeNowPayments:
         verify_ipn_signature = staticmethod(nowpayments_module.verify_ipn_signature)

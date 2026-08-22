@@ -150,7 +150,6 @@ def _orden(**overrides):
 class _Espias:
     def __init__(self):
         self.notificaciones = []
-        self.whatsapp = 0
         self.pagos_creados = []
 
 
@@ -165,11 +164,7 @@ def entorno(monkeypatch):
         )
         return "notif_test"
 
-    async def fake_whatsapp():
-        espias.whatsapp += 1
-
     monkeypatch.setattr(tx_routes, "create_notification", fake_create_notification)
-    monkeypatch.setattr(tx_routes, "send_next_pending_withdrawal_whatsapp", fake_whatsapp)
     return espias
 
 
@@ -224,7 +219,6 @@ def test_nivel1_pago_completo_pasa_a_pending(entorno, monkeypatch):
     assert doc["status"] == "pending"
     assert doc["underpaid"] is False
     assert doc["paid_ratio"] == pytest.approx(1.0)
-    assert entorno.whatsapp == 1
     assert entorno.notificaciones[0]["type"] == "crypto_send_paid"
 
 
@@ -348,7 +342,6 @@ def test_topup_completo_cierra_la_orden(entorno, monkeypatch):
     assert doc["topup_actually_paid"] == 11.0
     assert doc["paid_ratio"] == pytest.approx(1.0)
     assert doc["underpaid"] is False
-    assert entorno.whatsapp == 1
 
 
 def test_topup_insuficiente_va_a_revision(entorno, monkeypatch):

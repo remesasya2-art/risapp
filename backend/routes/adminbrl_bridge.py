@@ -24,7 +24,6 @@ from pydantic import BaseModel
 from database import db
 from services.money import to_decimal, to_decimal128
 from services.notifications import create_notification
-from services.whatsapp import send_next_pending_withdrawal_whatsapp
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/adminbrl", tags=["adminbrl-bridge"])
@@ -239,11 +238,6 @@ async def process_withdrawal(
                 {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc)}}
             )
 
-        try:
-            await send_next_pending_withdrawal_whatsapp()
-        except Exception as e:
-            logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
-
         logger.info(f"[adminbrl] Retiro {transaction_id} APROBADO -- banco {bank_id}")
         return {"message": "Retiro aprobado", "transaction_id": transaction_id}
 
@@ -273,11 +267,6 @@ async def process_withdrawal(
             message="Tu retiro ha sido rechazado. El saldo ha sido devuelto.",
             notification_type="withdrawal_rejected"
         )
-
-        try:
-            await send_next_pending_withdrawal_whatsapp()
-        except Exception as e:
-            logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
 
         logger.info(f"[adminbrl] Retiro {transaction_id} RECHAZADO")
         return {"message": "Retiro rechazado y saldo devuelto", "transaction_id": transaction_id}

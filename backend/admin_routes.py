@@ -581,11 +581,6 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             {"transaction_id": request.transaction_id},
             {"$set": {"whatsapp_active": False}}
         )
-        try:
-            from services.whatsapp import send_next_pending_withdrawal_whatsapp
-            await send_next_pending_withdrawal_whatsapp()
-        except Exception as e_fifo:
-            logger.warning(f"WhatsApp FIFO error tras aprobar retiro: {e_fifo}")
 
         return {"message": "Retiro aprobado y usuario notificado"}
 
@@ -619,11 +614,6 @@ async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin
             {"transaction_id": request.transaction_id},
             {"$set": {"whatsapp_active": False}}
         )
-        try:
-            from services.whatsapp import send_next_pending_withdrawal_whatsapp
-            await send_next_pending_withdrawal_whatsapp()
-        except Exception as e_fifo:
-            logger.warning(f"WhatsApp FIFO error tras rechazar retiro: {e_fifo}")
 
         return {"message": "Retiro rechazado y balance devuelto"}
     
