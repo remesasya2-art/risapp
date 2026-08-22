@@ -11,7 +11,6 @@ from services.money import from_db, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import GestorBeneficiaryRequest, GestorTransactionRequest, GestorRechargeTercerosRequest
 from routes.dependencies import get_current_user
-from services.whatsapp import send_next_pending_withdrawal_whatsapp
 from services.notifications import create_notification
 from utils.helpers import get_next_withdrawal_id
 
@@ -246,9 +245,6 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     }
     
     await db.transactions.insert_one(withdrawal)
-    
-    # Send to WhatsApp queue
-    await send_next_pending_withdrawal_whatsapp()
     
     # Notify gestor
     await create_notification(

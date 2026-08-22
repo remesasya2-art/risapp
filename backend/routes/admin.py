@@ -14,7 +14,6 @@ from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
 from routes.dependencies import get_admin_user, get_super_admin, get_crm_user
-from services.whatsapp import send_next_pending_withdrawal_whatsapp
 from services.notifications import create_notification
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
@@ -275,26 +274,6 @@ async def get_audit_log(
 
 
 # ============== MAINTENANCE ==============
-
-@router.post("/fix-whatsapp-queue")
-async def fix_whatsapp_queue(admin: User = Depends(get_super_admin)):
-    """Reset WhatsApp queue - unblock all stuck withdrawals and trigger next notification"""
-    # Unblock all stuck withdrawals
-    result = await db.transactions.update_many(
-        {"whatsapp_active": True},
-        {"$set": {"whatsapp_active": False}}
-    )
-    
-    # Trigger next pending withdrawal notification
-    await send_next_pending_withdrawal_whatsapp()
-    
-    logger.info(f"WhatsApp queue fixed by {admin.user_id}. Unblocked: {result.modified_count}")
-    
-    return {
-        "message": "Cola de WhatsApp corregida",
-        "unblocked": result.modified_count
-    }
-
 
 @router.post("/fix-media-urls")
 async def fix_media_urls(admin: User = Depends(get_super_admin)):
@@ -816,50 +795,9 @@ async def process_withdrawal(
     else:
         raise HTTPException(status_code=400, detail="Acción inválida")
     
-    # Process next in queue
-    await send_next_pending_withdrawal_whatsapp()
-    
     logger.info(f"Withdrawal {transaction_id} {action}d by {admin.user_id}")
     
     return {"message": message}
-
-@router.get("/withdrawals/cleanup-check")
-async def check_stuck_withdrawals(admin: User = Depends(get_super_admin)):
-    """Check for stuck pending withdrawals"""
-    stuck = await db.transactions.find({
-        "type": "withdrawal",
-        "status": "pending",
-        "whatsapp_active": True,
-        "hidden_from_admin": {"$ne": True}
-    }).to_list(100)
-    
-    return {
-        "count": len(stuck),
-        "transactions": [
-            {
-                "transaction_id": t.get("transaction_id"),
-                "display_id": t.get("display_id"),
-                "amount_output": t.get("amount_output"),
-                "created_at": t.get("created_at")
-            }
-            for t in stuck
-        ]
-    }
-
-@router.post("/withdrawals/cleanup")
-async def cleanup_stuck_withdrawals(admin: User = Depends(get_super_admin)):
-    """Reset whatsapp_active for stuck withdrawals"""
-    result = await db.transactions.update_many(
-        {"type": "withdrawal", "status": "pending", "whatsapp_active": True},
-        {"$set": {"whatsapp_active": False}}
-    )
-    
-    # Restart queue
-    await send_next_pending_withdrawal_whatsapp()
-    
-    logger.info(f"Cleaned up {result.modified_count} stuck withdrawals by {admin.user_id}")
-    
-    return {"message": f"Limpiados {result.modified_count} retiros atascados"}
 
 # ============== PARTNERS/GESTORS ==============
 

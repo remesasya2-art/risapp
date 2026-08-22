@@ -96,11 +96,10 @@ def send_whatsapp_reply(to: str, message: str):
 # terminaba devuelto en RIS, y dejaba la orden en "cancelled", un estado que el
 # Panel nunca produce.
 #
-# Agrava el cuadro que la salida esta muerta (falta TWILIO_WHATSAPP_FROM) pero
-# send_next_pending_withdrawal_whatsapp igual escribe whatsapp_active=True antes
-# de intentar enviar y no lo revierte al fallar. O sea que puede haber una orden
-# marcada activa de la que nadie recibio aviso: un "listo" suelto cerraria una
-# orden cualquiera de la cola.
+# Agravaba el cuadro que la salida estaba muerta (falta TWILIO_WHATSAPP_FROM)
+# pero el emisor igual marcaba whatsapp_active=True antes de intentar enviar y no
+# lo revertia al fallar, asi que podia haber una orden marcada activa de la que
+# nadie recibio aviso. Ese emisor se elimino en la Fase 2.
 #
 # Se corta la ENTRADA, que es lo unico que puede mover dinero. El webhook sigue
 # respondiendo 200 y sigue validando la firma de Twilio, para poder ver en los
@@ -256,10 +255,6 @@ Procesando siguiente retiro..."""
             send_whatsapp_reply(from_number, reply_message)
             logger.info(f"Withdrawal {display_id} completed via WhatsApp")
             
-            # Send next pending withdrawal
-            from services.whatsapp import send_next_pending_withdrawal_whatsapp
-            await send_next_pending_withdrawal_whatsapp()
-            
             return Response(content="", media_type="text/xml")
         
         # Handle "cancelar" command
@@ -298,10 +293,6 @@ Procesando siguiente retiro..."""
             
             send_whatsapp_reply(from_number, reply_message)
             logger.info(f"Withdrawal {display_id} cancelled via WhatsApp")
-            
-            # Send next pending withdrawal
-            from services.whatsapp import send_next_pending_withdrawal_whatsapp
-            await send_next_pending_withdrawal_whatsapp()
             
             return Response(content="", media_type="text/xml")
         

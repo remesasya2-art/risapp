@@ -398,12 +398,6 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
         await create_notification(user_id=remesa["user_id"], title="Envío completado", message=f"Tu envío de {remesa['ves_recibe']:,.2f} Bs fue completado a {nombre}.", notification_type="btc_enviado")
     except Exception as e:
         logger.warning(f"Error notificacion: {e}")
-    # Disparar siguiente orden BTC en cola FIFO por WhatsApp
-    try:
-        from services.whatsapp import send_next_pending_btc_whatsapp
-        await send_next_pending_btc_whatsapp()
-    except Exception as e:
-        logger.warning(f"BTC FIFO WhatsApp error: {e}")
     return {"ok": True, "msg": "Orden marcada como enviada.", "remesa_id": body.remesa_id}
 
 

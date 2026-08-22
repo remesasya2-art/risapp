@@ -41,7 +41,6 @@ def _normalize_tx_money(tx):
 from models.user import User
 from models.requests import WithdrawalRequest, BeneficiaryCreate
 from routes.dependencies import get_current_user, get_verified_user
-from services.whatsapp import send_next_pending_withdrawal_whatsapp
 from services.idempotency import claim_idempotency, store_idempotency_result
 from services.notifications import create_notification
 from services.centro_gestion import registrar_evento
@@ -531,12 +530,6 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         notification_type="withdrawal_pending"
     )
 
-    # Send to WhatsApp queue
-    try:
-        await send_next_pending_withdrawal_whatsapp()
-    except Exception as e:
-        logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
-
     # Registrar en CentroGestion
     try:
         await registrar_evento(
@@ -714,11 +707,6 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
             message=f"Tu envío de {request.amount} {key.upper()} ({amount_ves:.2f} VES) ha sido recibido y está en cola.",
             notification_type="withdrawal_pending",
         )
-        try:
-            await send_next_pending_withdrawal_whatsapp()
-        except Exception as e:
-            logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
-
         _resp_balance = {
             "transaction_id": tx_id,
             "display_id": display_id,
@@ -952,11 +940,6 @@ async def finalizar_orden_pagada(claimed: dict):
         )
     except Exception as e:
         logger.warning(f"crypto-send webhook: no se pudo notificar al usuario: {e}")
-
-    try:
-        await send_next_pending_withdrawal_whatsapp()
-    except Exception as e:
-        logger.warning(f"send_next_pending_withdrawal_whatsapp fallo: {e}")
 
 
 @router.post("/crypto-send/webhook")

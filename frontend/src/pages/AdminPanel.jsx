@@ -107,7 +107,7 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
   const [withdrawals, setWithdrawals] = useState([]);
-  const [queueStats, setQueueStats] = useState({ total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
+  const [queueStats, setQueueStats] = useState({ total_pending: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   const [recharges, setRecharges] = useState([]);
   const [refDigits, setRefDigits] = useState({});
   const [refChecks, setRefChecks] = useState({});
@@ -327,10 +327,10 @@ const [searchParams, setSearchParams] = useSearchParams();
           // Get all withdrawals and queue stats
           const [wAllRes, queueStatsRes] = await Promise.all([
             api.get('/admin/withdrawals/all'),
-            api.get('/withdrawal/queue-stats').catch(() => ({ data: { total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0 } }))
+            api.get('/withdrawal/queue-stats').catch(() => ({ data: { total_pending: 0, waiting_in_queue: 0 } }))
           ]);
           setWithdrawals(wAllRes.data || []);
-          setQueueStats(queueStatsRes.data || { total_pending: 0, active_in_whatsapp: 0, waiting_in_queue: 0 });
+          setQueueStats(queueStatsRes.data || { total_pending: 0, waiting_in_queue: 0 });
           break;
         case 'recharges':
           const rAllRes = await api.get('/admin/recharges/ves');
@@ -756,17 +756,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     return true;
   });
 
-  // Cleanup functions
-  const checkPendingToClean = async () => {
-    try {
-      const response = await api.get('/admin/withdrawals/cleanup-check');
-      setPendingToClean(response.data.pending_transactions || []);
-      setShowCleanupModal(true);
-    } catch (error) {
-      toast.error('Error al verificar transacciones');
-    }
-  };
-
   const deleteSingleWithdrawal = async (txId) => {
     if (!confirm('¿Eliminar esta transacción? El saldo será reembolsado al usuario.')) return;
     setCleaningUp(true);
@@ -777,22 +766,6 @@ const [searchParams, setSearchParams] = useSearchParams();
       loadData();
     } catch (error) {
       toast.error('Error al eliminar');
-    } finally {
-      setCleaningUp(false);
-    }
-  };
-
-  const cleanupAllPending = async () => {
-    if (!confirm('¿Cancelar TODAS las transacciones pendientes? Los saldos serán reembolsados.')) return;
-    setCleaningUp(true);
-    try {
-      const response = await api.post('/admin/withdrawals/cleanup');
-      toast.success(response.data.message);
-      setShowCleanupModal(false);
-      setPendingToClean([]);
-      loadData();
-    } catch (error) {
-      toast.error('Error al limpiar');
     } finally {
       setCleaningUp(false);
     }
@@ -941,28 +914,7 @@ const [searchParams, setSearchParams] = useSearchParams();
             </div>
             
             {/* Maintenance Buttons */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-              <div style={{ ...cardStyle, padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
-                <div>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600', color: '#991b1b' }}>Mantenimiento WhatsApp</h4>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#b91c1c' }}>Si no llegan notificaciones de retiros</p>
-                </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await api.post('/admin/fix-whatsapp-queue');
-                      toast.success(`Cola corregida. Desbloqueados: ${res.data.unblocked}`);
-                    } catch (e) {
-                      toast.error('Error al corregir cola');
-                    }
-                  }}
-                  style={{ padding: '12px 20px', borderRadius: '12px', border: 'none', backgroundColor: '#dc2626', color: 'white', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
-                  data-testid="fix-whatsapp-btn"
-                >
-                  Reparar Cola
-                </button>
-              </div>
-
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               <div style={{ ...cardStyle, padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fefce8', border: '1px solid #fef08a' }}>
                 <div>
                   <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600', color: '#854d0e' }}>Reparar Imágenes</h4>
@@ -1043,30 +995,6 @@ const [searchParams, setSearchParams] = useSearchParams();
                   ({fmt(queueStats.total_ris_pending)} RIS en {queueStats.total_pending} retiros pendientes)
                 </p>
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '20px' }}>📋</span>
-                  <span style={{ fontWeight: '600', color: '#0369a1' }}>Cola WhatsApp (FIFO)</span>
-                </div>
-                <div style={{ display: 'flex', gap: '16px', marginLeft: 'auto' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#0369a1' }}>{queueStats.total_pending}</p>
-                    <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Pendientes</p>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#059669' }}>{queueStats.active_in_whatsapp}</p>
-                    <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Activo WhatsApp</p>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#f59e0b' }}>{queueStats.waiting_in_queue}</p>
-                    <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>En Cola</p>
-                  </div>
-                </div>
-              </div>
-              <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                ℹ️ El sistema FIFO envía un retiro a la vez por WhatsApp. Cuando completes el retiro activo, se enviará automáticamente el siguiente de la cola. También puedes procesar retiros directamente desde este panel.
-              </p>
             </div>
             
             <div style={{ ...cardStyle, padding: '16px' }}>
@@ -1087,15 +1015,6 @@ const [searchParams, setSearchParams] = useSearchParams();
                       {status === 'all' ? 'Todos' : status === 'pending' ? 'Pendientes' : status === 'completed' ? 'Aprobados' : 'Rechazados'}
                     </button>
                   ))}
-                  {/* Cleanup Button - Only for SuperAdmin */}
-                  {user?.role === 'super_admin' && (
-                    <button onClick={checkPendingToClean}
-                      style={{ padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500',
-                        backgroundColor: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      data-testid="cleanup-button">
-                      <Trash2 style={{ width: '16px', height: '16px' }} /> Limpieza
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -3067,9 +2986,6 @@ const [searchParams, setSearchParams] = useSearchParams();
                         <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>
                           R{tx.display_id} • {fmt(tx.amount_ves)} VES
                         </p>
-                        <p style={{ fontSize: '11px', color: '#9ca3af', margin: '2px 0 0 0' }}>
-                          {tx.whatsapp_active ? '🟢 Activo en WhatsApp' : '⏳ En cola'}
-                        </p>
                       </div>
                       <button 
                         onClick={() => deleteSingleWithdrawal(tx.transaction_id)}
@@ -3085,13 +3001,6 @@ const [searchParams, setSearchParams] = useSearchParams();
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button onClick={() => setShowCleanupModal(false)} style={{ ...btnSecondary, flex: 1 }}>
                     Cerrar
-                  </button>
-                  <button 
-                    onClick={cleanupAllPending}
-                    disabled={cleaningUp}
-                    style={{ ...btnDanger, flex: 1, opacity: cleaningUp ? 0.5 : 1 }}
-                  >
-                    {cleaningUp ? 'Limpiando...' : `Eliminar todas (${pendingToClean.length})`}
                   </button>
                 </div>
               </>

@@ -92,14 +92,6 @@ async def get_withdrawal_queue_stats():
         "hidden_from_admin": {"$ne": True}
     })
     
-    # Count active in WhatsApp
-    active_in_whatsapp = await db.transactions.count_documents({
-        "type": "withdrawal",
-        "status": "pending",
-        "whatsapp_active": True,
-        "hidden_from_admin": {"$ne": True}
-    })
-    
     # Calculate total VES pending
     pending_cursor = db.transactions.find({
         "type": "withdrawal",
@@ -113,7 +105,8 @@ async def get_withdrawal_queue_stats():
     
     return {
         "total_pending": total_pending,
-        "active_in_whatsapp": active_in_whatsapp,
-        "waiting_in_queue": total_pending - active_in_whatsapp,
+        # Sin cola de WhatsApp, todo lo pendiente esta esperando a un operador:
+        # waiting_in_queue ya no descuenta nada y coincide con total_pending.
+        "waiting_in_queue": total_pending,
         "total_ves_pending": round(total_ves, 2)
     }
