@@ -65,6 +65,9 @@ export default function BTCLightning() {
   const [countdown, setCountdown] = useState(1800);
   const countdownRef = useRef(null);
   const [paymentStatus, setPaymentStatus] = useState(null);
+  const [loadingWallet, setLoadingWallet] = useState(false);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [btcHistorial, setBtcHistorial] = useState([]);
   const paymentPollingRef = useRef(null);
   const kycVerificado = user?.verification_status === 'verified';
 
