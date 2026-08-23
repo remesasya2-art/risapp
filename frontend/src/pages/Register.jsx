@@ -10,13 +10,13 @@ import api from '../utils/api';
 // regla. Si cambia una, hay que cambiar la otra.
 // Sin export a proposito: react-refresh exige que el archivo exporte solo el componente.
 function validarPassword(pwd) {
-  // Mismo set de simbolos que el backend; " es la comilla doble.
+  // Set identico al de validate_password() en el backend; se lista en los dos mensajes de abajo.
   const ESPECIALES = /[!@#$%^&*(),.?":{}|<>]/;
   if (!pwd || pwd.length < 8) return 'La contraseña debe tener al menos 8 caracteres';
   if (!/[A-Z]/.test(pwd)) return 'La contraseña debe contener al menos una letra mayúscula';
   if (!/[a-z]/.test(pwd)) return 'La contraseña debe contener al menos una letra minúscula';
   if (!/\d/.test(pwd)) return 'La contraseña debe contener al menos un número';
-  if (!ESPECIALES.test(pwd)) return 'La contraseña debe contener al menos un carácter especial';
+  if (!ESPECIALES.test(pwd)) return 'La contraseña debe contener al menos un carácter especial (!@#$%^&*(),.?":{}|<>)';
   return null;
 }
 
@@ -407,7 +407,7 @@ export default function Register() {
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo</p>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>{'Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo (!@#$%^&*(),.?":{}|<>)'}</p>
           </div>
 
           {/* Confirm Password */}
