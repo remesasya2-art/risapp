@@ -260,7 +260,7 @@ ${bankData.transferencia.ci}`;
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <button onClick={() => navigate('/dashboard')} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
               </button>
               <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Recarga con VES</h1>
@@ -303,7 +303,7 @@ ${bankData.transferencia.ci}`;
             </div>
 
             <button 
-              onClick={() => navigate('/dashboard')} 
+              onClick={() => navigate('/')} 
               style={{ ...btnPrimary, marginTop: '24px' }}
             >
               Volver al Inicio
