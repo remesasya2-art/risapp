@@ -97,7 +97,7 @@ export default function Support() {
           id: Date.now() + 1,
           type: 'bot',
           text: response?.data?.status === 'success' 
-            ? '✅ Tu mensaje ha sido enviado al equipo de soporte. Te responderemos por WhatsApp o aquí en la app. Usa el botón 🔄 para ver nuevas respuestas.'
+            ? '✅ Tu mensaje ha sido enviado al equipo de soporte. Te responderemos aquí en la app. Usa el botón 🔄 para ver nuevas respuestas.'
             : 'Tu mensaje ha sido recibido. Un agente de soporte te responderá pronto.',
           time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
         };
