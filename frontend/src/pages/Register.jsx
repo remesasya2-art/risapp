@@ -4,6 +4,22 @@ import { Eye, EyeOff, ArrowLeft, Gift } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 
+// Espejo de validate_password() en backend/utils/security.py: 8 caracteres,
+// mayuscula, minuscula, numero y simbolo. Validarlo aca evita que el usuario
+// pase la pantalla de registro y despues reciba del servidor un error con otra
+// regla. Si cambia una, hay que cambiar la otra.
+// Sin export a proposito: react-refresh exige que el archivo exporte solo el componente.
+function validarPassword(pwd) {
+  // Mismo set de simbolos que el backend; " es la comilla doble.
+  const ESPECIALES = /[!@#$%^&*(),.?":{}|<>]/;
+  if (!pwd || pwd.length < 8) return 'La contraseña debe tener al menos 8 caracteres';
+  if (!/[A-Z]/.test(pwd)) return 'La contraseña debe contener al menos una letra mayúscula';
+  if (!/[a-z]/.test(pwd)) return 'La contraseña debe contener al menos una letra minúscula';
+  if (!/\d/.test(pwd)) return 'La contraseña debe contener al menos un número';
+  if (!ESPECIALES.test(pwd)) return 'La contraseña debe contener al menos un carácter especial';
+  return null;
+}
+
 export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -45,8 +61,9 @@ export default function Register() {
       return;
     }
     
-    if (password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
+    const errorPassword = validarPassword(password);
+    if (errorPassword) {
+      toast.error(errorPassword);
       return;
     }
     
@@ -390,7 +407,7 @@ export default function Register() {
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>Mínimo 7 caracteres con letras, números y símbolos</p>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo</p>
           </div>
 
           {/* Confirm Password */}
@@ -436,7 +453,7 @@ export default function Register() {
             {confirmPassword && password !== confirmPassword && (
               <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
             )}
-            {confirmPassword && password === confirmPassword && password.length >= 6 && (
+            {confirmPassword && password === confirmPassword && !validarPassword(password) && (
               <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>Las contraseñas coinciden</p>
             )}
           </div>
