@@ -134,7 +134,7 @@ export default function Notifications() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button 
-              onClick={() => navigate('/dashboard')} 
+              onClick={() => navigate('/')} 
               style={{ 
                 width: '40px', height: '40px', borderRadius: '12px', border: 'none', 
                 backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', 
