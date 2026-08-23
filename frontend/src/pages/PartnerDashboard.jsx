@@ -23,7 +23,7 @@ export default function PartnerDashboard() {
       console.error('Error loading partner dashboard:', error);
       if (error.response?.status === 403) {
         toast.error('No tienes acceso a esta sección');
-        navigate('/dashboard');
+        navigate('/');
       } else {
         toast.error('Error al cargar el panel');
       }
