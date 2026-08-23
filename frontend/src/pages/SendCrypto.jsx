@@ -269,7 +269,7 @@ export default function SendCrypto() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', paddingBottom: '40px' }}>
       <header style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button onClick={() => (order ? resetFlow() : navigate('/dashboard'))} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => (order ? resetFlow() : navigate('/'))} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
         </button>
         <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar con {order ? order.currency : cfg.label}</h1>
