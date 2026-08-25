@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Mail, User, Phone, FileText, Lock, CheckCircle, AlertCircle, MessageSquare, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { passwordRules as evaluarReglasPassword, PASSWORD_SPECIAL_CHARS, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
 
 export default function PasswordRecovery({ onBack, onSuccess }) {
   const [step, setStep] = useState(1); // 1: Identity, 2: Code, 3: New Password, 4: Success
@@ -38,13 +39,8 @@ export default function PasswordRecovery({ onBack, onSuccess }) {
     return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9, 11)}`;
   };
 
-  // Password validation
-  const passwordRules = {
-    length: newPassword.length >= 8,
-    uppercase: /[A-Z]/.test(newPassword),
-    lowercase: /[a-z]/.test(newPassword),
-    number: /[0-9]/.test(newPassword),
-  };
+  // Password validation — las reglas salen de utils/passwordPolicy.js, que espeja al backend.
+  const passwordRules = evaluarReglasPassword(newPassword);
   const allRulesPass = Object.values(passwordRules).every(Boolean);
 
   const handleVerifyIdentity = async () => {
@@ -397,7 +393,7 @@ export default function PasswordRecovery({ onBack, onSuccess }) {
                 <Lock style={{ width: '14px', height: '14px', display: 'inline', marginRight: '6px' }} />
                 Nueva contraseña
               </label>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputStyle} placeholder="Mínimo 8 caracteres" data-testid="recovery-new-password" />
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={inputStyle} placeholder={PASSWORD_HELP_TEXT} data-testid="recovery-new-password" />
             </div>
             
             {/* Password Rules */}
@@ -413,6 +409,9 @@ export default function PasswordRecovery({ onBack, onSuccess }) {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: passwordRules.number ? '#16a34a' : '#9ca3af' }}>
                 <CheckCircle style={{ width: '14px', height: '14px' }} /> Un número
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '6px', color: passwordRules.special ? '#16a34a' : '#9ca3af' }}>
+                <CheckCircle style={{ width: '14px', height: '14px' }} /> {`Un símbolo (${PASSWORD_SPECIAL_CHARS})`}
               </div>
             </div>
             

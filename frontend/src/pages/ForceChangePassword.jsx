@@ -4,6 +4,7 @@ import { Eye, EyeOff, Lock, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { validarPassword, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
 
 export default function ForceChangePassword() {
   const navigate = useNavigate();
@@ -22,26 +23,9 @@ export default function ForceChangePassword() {
       return;
     }
     
-    if (newPassword.length < 7) {
-      toast.error('La contraseña debe tener al menos 7 caracteres');
-      return;
-    }
-    
-    // Check for letters
-    if (!/[a-zA-Z]/.test(newPassword)) {
-      toast.error('La contraseña debe contener al menos una letra');
-      return;
-    }
-    
-    // Check for numbers
-    if (!/[0-9]/.test(newPassword)) {
-      toast.error('La contraseña debe contener al menos un número');
-      return;
-    }
-    
-    // Check for special characters
-    if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
-      toast.error('La contraseña debe contener al menos un carácter especial');
+    const errorPassword = validarPassword(newPassword);
+    if (errorPassword) {
+      toast.error(errorPassword);
       return;
     }
     
@@ -148,7 +132,7 @@ export default function ForceChangePassword() {
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mín. 7 caracteres, letra, número, carácter especial"
+                placeholder={PASSWORD_HELP_TEXT}
                 style={inputStyle}
                 data-testid="new-password-input"
               />
@@ -205,7 +189,7 @@ export default function ForceChangePassword() {
             {confirmPassword && newPassword !== confirmPassword && (
               <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
             )}
-            {confirmPassword && newPassword === confirmPassword && newPassword.length >= 6 && (
+            {confirmPassword && newPassword === confirmPassword && !validarPassword(newPassword) && (
               <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>✓ Las contraseñas coinciden</p>
             )}
           </div>
