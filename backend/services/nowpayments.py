@@ -76,20 +76,66 @@ async def get_status() -> dict:
 
 async def get_min_amount(currency: str, fiat_equivalent: str = "usd") -> dict:
     """GET /v1/min-amount — monto minimo pagable en currency (cubre la comision de red).
+
+    OJO con currency_to: NOWPayments devuelve DOS minimos distintos para la misma
+    moneda segun contra que se la compare.
+
+      currency_from=usdttrc20&currency_to=usdttrc20 -> 11.72 USDT  (minimo "directo")
+      currency_from=usdttrc20&currency_to=usd       -> 12.36 USDT  (minimo via exchange)
+
+    El que NOWPayments realmente exige es el SEGUNDO, porque todos nuestros pagos se
+    crean con is_fee_paid_by_user=True + fixed_rate=True (deposito, envio y topup de
+    la diferencia), y eso los hace pasar por su exchange interno. Confirmado en
+    produccion: 12.05 USDT fue rechazado con "amountTo is too small" y 13 USDT paso.
+
+    Por eso currency_to va contra `fiat_equivalent` (usd) y no contra la propia
+    moneda: consultando el minimo directo le mostrabamos al usuario un piso mas bajo
+    del que la pasarela iba a exigir, y el pago fallaba con un error generico.
+
     Devuelve el JSON de NOWPayments, que incluye 'min_amount' (en la propia currency)
-    y, si se pide fiat_equivalent, tambien el equivalente en esa moneda fiat.
-    Se usa para avisarle al usuario el minimo ANTES de que NOWPayments rechace el pago
-    con AMOUNT_MINIMAL_ERROR.
+    y el equivalente en la moneda fiat pedida. Se usa para avisarle al usuario el
+    minimo ANTES de que NOWPayments rechace el pago con AMOUNT_MINIMAL_ERROR.
     """
     params = {
         "currency_from": currency,
-        "currency_to": currency,
+        "currency_to": fiat_equivalent,
         "fiat_equivalent": fiat_equivalent,
     }
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(f"{API_BASE}/min-amount", headers=_headers(), params=params)
-        _revisar(r, f"GET /min-amount ({currency})")
+        _revisar(r, f"GET /min-amount ({currency} -> {fiat_equivalent})")
         return r.json()
+
+
+def mensaje_de_error(exc: Exception) -> str | None:
+    """Extrae el campo "message" del cuerpo de error de NOWPayments, si lo hay.
+
+    Complemento de _revisar(): ese deja el cuerpo en el log (PR #36), esto permite
+    ademas mostrarle al usuario el motivo real en vez de un "no se pudo iniciar el
+    pago" generico. NOWPayments responde los errores como
+    {"statusCode":400,"code":"AMOUNT_MINIMAL_ERROR","message":"amountTo is too small"}.
+
+    Devuelve None si la excepcion no trae respuesta HTTP, si el cuerpo no es JSON
+    (un 502 de un proxy puede ser HTML) o si no hay un "message" utilizable; el
+    llamador debe usar entonces su mensaje generico de siempre.
+    """
+    resp = getattr(exc, "response", None)
+    if resp is None:
+        return None
+    try:
+        cuerpo = json.loads(resp.text or "{}")
+    except Exception:
+        return None
+    if not isinstance(cuerpo, dict):
+        return None
+    mensaje = cuerpo.get("message")
+    if not isinstance(mensaje, str):
+        return None
+    mensaje = mensaje.strip()
+    if not mensaje:
+        return None
+    # Corte defensivo: el detail del HTTPException se le muestra al usuario.
+    return mensaje[:300]
 
 
 async def get_merchant_coins() -> list[str]:

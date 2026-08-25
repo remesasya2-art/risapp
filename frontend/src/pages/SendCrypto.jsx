@@ -102,6 +102,9 @@ export default function SendCrypto() {
     }
   };
 
+  // Cada red viene con su `min_amount` (ya con el margen aplicado por el backend) y
+  // la lista llega ordenada de menor a mayor minimo: se respeta ese orden para que la
+  // red mas barata de usar quede primera y el usuario elija viendo todos los minimos.
   useEffect(() => {
     let cancelled = false;
     if (useBalance) { setNetworks([]); setNetwork(null); setNetworksLoading(false); return; }
@@ -120,7 +123,7 @@ export default function SendCrypto() {
         if (!cancelled) {
           const fallbackTicker = currency === 'usdc' ? 'usdc' : 'usdttrc20';
           const fallbackLabel = currency === 'usdc' ? 'Ethereum (ERC20)' : 'Tron (TRC20)';
-          setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true }]);
+          setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true, min_amount: null }]);
           setNetwork(fallbackTicker);
         }
       })
@@ -375,7 +378,7 @@ export default function SendCrypto() {
               />
               {minAmount != null && (
                 <p style={{ fontSize: '12px', color: belowMin ? '#dc2626' : '#9ca3af', margin: '8px 0 0 0' }}>
-                  Monto mínimo: {minAmount} {cfg.label}
+                  Monto mínimo: {fmt(minAmount)} {cfg.label}
                 </p>
               )}
               {useBalance && exceedsBalance && (
@@ -411,6 +414,11 @@ export default function SendCrypto() {
                 >
                   <span>
                     {networksLoading ? 'Consultando redes disponibles...' : (selectedNetwork?.label || 'Selecciona una red')}
+                    {!networksLoading && selectedNetwork?.min_amount != null && (
+                      <span style={{ fontWeight: 500, color: '#6b7280' }}>
+                        {' '}— mín. {fmt(selectedNetwork.min_amount)} {cfg.label}
+                      </span>
+                    )}
                   </span>
                   <ChevronDown style={{ width: '18px', height: '18px', transform: networkMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: '#6b7280' }} />
                 </button>
@@ -433,7 +441,14 @@ export default function SendCrypto() {
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         }}
                       >
-                        {n.label}
+                        <span>
+                          {n.label}
+                          {n.min_amount != null && (
+                            <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: '#6b7280', marginTop: '2px' }}>
+                              mín. {fmt(n.min_amount)} {cfg.label}
+                            </span>
+                          )}
+                        </span>
                         {n.is_default && <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 500 }}>Por defecto</span>}
                       </button>
                     ))}
