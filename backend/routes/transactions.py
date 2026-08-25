@@ -16,6 +16,7 @@ from database import db
 from services.money import from_db, to_float, to_decimal, to_decimal128
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
+from services.min_amount import effective_min_amount
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
@@ -83,6 +84,25 @@ def _ticker_pagable(tx: dict) -> str | None:
         return ticker
     key = str(tx.get("currency_input") or "").strip().lower()
     return CRYPTO_NETWORK_TICKER.get(key)
+
+
+ERROR_PAGO_GENERICO = "No se pudo iniciar el pago. Intenta de nuevo."
+
+
+def _detalle_error_pago(exc: Exception) -> str:
+    """Detalle del 502 cuando NOWPayments rechaza el pago.
+
+    La validacion de minimo de mas arriba cubre el caso conocido, pero quedan
+    rechazos que no anticipamos (ej. un USDC sobre Algorand rechazado a 10 USD sin
+    motivo claro). Si el cuerpo del error trae un "message" — el mismo que PR #36
+    dejo en el log via nowpayments._revisar — se le muestra al usuario en vez de
+    "no se pudo iniciar el pago" a secas, que no dice nada. Si el cuerpo no se
+    puede parsear, queda el mensaje generico de siempre.
+    """
+    mensaje = nowpayments.mensaje_de_error(exc)
+    if not mensaje:
+        return ERROR_PAGO_GENERICO
+    return f"{ERROR_PAGO_GENERICO} Motivo de la pasarela: {mensaje}"
 
 
 def _as_utc(dt):
@@ -725,6 +745,20 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
     if not pay_currency.startswith(key):
         raise HTTPException(status_code=400, detail="La red elegida no corresponde a la moneda seleccionada.")
 
+    # Validar el monto minimo ANTES de escribir nada en la base.
+    # Antes la orden se insertaba primero y el minimo lo terminaba rechazando
+    # NOWPayments: cada intento con monto insuficiente dejaba una fila huerfana en
+    # `transactions` con status "payment_error", sin ningun envio real detras.
+    # Es el mismo minimo (con margen) que devuelve /credits/min-amount y que muestra
+    # la pantalla, calculado sobre pay_currency desde el mismo helper.
+    min_info = await effective_min_amount(pay_currency, currency_key=key)
+    min_amount = min_info["min_amount"]
+    if float(request.amount) < float(min_amount):
+        raise HTTPException(
+            status_code=400,
+            detail=f"El monto mínimo para enviar {key.upper()} por esta red es {min_amount:.2f} {key.upper()}.",
+        )
+
     order_id = f"send_{key}_{current_user.user_id}_{uuid.uuid4().hex[:12]}"
     transaction = {
         "transaction_id": tx_id,
@@ -761,7 +795,7 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
     except Exception as e:
         await db.transactions.update_one({"transaction_id": tx_id}, {"$set": {"status": "payment_error"}})
         logger.error(f"NOWPayments create_payment fallo para envío {tx_id}: {e}")
-        raise HTTPException(status_code=502, detail="No se pudo iniciar el pago. Intenta de nuevo.")
+        raise HTTPException(status_code=502, detail=_detalle_error_pago(e))
 
     pay_address = payment.get("pay_address")
     pay_amount = payment.get("pay_amount")

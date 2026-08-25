@@ -2,7 +2,8 @@
 routes/credits.py — Endpoints de creditos cripto (deposito via NOWPayments).
 
 Flujo DENTRO de la app (sin redireccion externa):
-  GET  /api/credits/networks               -> redes disponibles para depositar una moneda.
+  GET  /api/credits/networks               -> redes disponibles para depositar una moneda,
+                                                cada una con su monto minimo real.
   GET  /api/credits/min-amount              -> monto minimo real para moneda+red elegidas.
   POST /api/credits/deposit                 -> crea un pago directo (create_payment) y
                                                 devuelve pay_address/pay_amount para
@@ -19,6 +20,7 @@ Cumplimiento: corre assert_payment_allowed (IP + declaracion) ANTES de crear el 
 import os
 import json
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -31,6 +33,7 @@ from models.user import User
 from services.geo_restrictions import assert_payment_allowed
 from services import nowpayments
 from services.credits import normalize_currency, CREDIT_LABELS, credit_user
+from services.min_amount import effective_min_amount
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -44,7 +47,10 @@ DEFAULT_NETWORK_TICKER = {
     "usdc": "usdc",
 }
 
-MINAMOUNT_FALLBACK = {"usdt": 10.0, "usdc": 10.0}
+# El piso de negocio (antes MINAMOUNT_FALLBACK aca) y el calculo del minimo real
+# —margen de seguridad incluido— viven ahora en services/min_amount.py, para que el
+# deposito, el envio y el frontend usen exactamente el mismo numero y no se puedan
+# desincronizar.
 
 NETWORK_LABELS = {
     "trc20": "Tron (TRC20)",
@@ -64,6 +70,23 @@ def networklabel(ticker: str, currency_key: str) -> str:
     if not suffix:
         return "Ethereum (ERC20)"
     return NETWORK_LABELS.get(suffix.lower(), suffix.upper())
+
+
+ERROR_PAGO_GENERICO = "No se pudo iniciar el pago. Intenta de nuevo."
+
+
+def _detalle_error_pago(exc: Exception) -> str:
+    """Detalle del 502 cuando NOWPayments rechaza el pago.
+
+    Si el cuerpo del error trae un "message" (ej. "amountTo is too small"), se
+    incluye: sin eso el usuario solo veia "no se pudo iniciar el pago" y no habia
+    forma de saber por que, ni siquiera mirando la pantalla. Si no se puede
+    parsear, queda el mensaje generico de siempre.
+    """
+    mensaje = nowpayments.mensaje_de_error(exc)
+    if not mensaje:
+        return ERROR_PAGO_GENERICO
+    return f"{ERROR_PAGO_GENERICO} Motivo de la pasarela: {mensaje}"
 
 
 class DepositRequest(BaseModel):
@@ -92,11 +115,28 @@ async def list_networks(
         matches = [default_ticker]
     if default_ticker not in matches:
         matches.append(default_ticker)
+
+    # Minimo real de cada red, en paralelo (una consulta por red, todas a la vez) y
+    # cacheado unos minutos en services/min_amount.py: si no, cada vez que alguien
+    # abre la pantalla de deposito le pegariamos N veces seguidas a NOWPayments.
+    minimos = await asyncio.gather(
+        *[effective_min_amount(t, currency_key=key) for t in matches]
+    )
+
     networks = [
-        {"ticker": t, "label": networklabel(t, key), "is_default": t == default_ticker}
-        for t in matches
+        {
+            "ticker": t,
+            "label": networklabel(t, key),
+            "is_default": t == default_ticker,
+            "min_amount": m["min_amount"],
+            "min_amount_raw": m["min_amount_raw"],
+            "min_amount_source": m["source"],
+        }
+        for t, m in zip(matches, minimos)
     ]
-    networks.sort(key=lambda n: (not n["is_default"], n["label"]))
+    # De menor a mayor minimo: la red mas barata de usar aparece primero, asi el
+    # usuario elige viendo el minimo de todas y no se entera despues de elegir.
+    networks.sort(key=lambda n: (n["min_amount"], n["label"]))
     return {"currency": key, "networks": networks, "default_ticker": default_ticker}
 
 
@@ -112,17 +152,17 @@ async def get_min_amount(
     pay_currency = (network or DEFAULT_NETWORK_TICKER[key]).strip().lower()
     if not pay_currency.startswith(key):
         raise HTTPException(status_code=400, detail="La red elegida no corresponde a la moneda seleccionada.")
-    business_min = MINAMOUNT_FALLBACK.get(key, 10.0)
-    try:
-        info = await nowpayments.get_min_amount(pay_currency, fiat_equivalent="usd")
-        nowpayments_min = info.get("min_amount")
-        if not nowpayments_min:
-            raise ValueError("sin min_amount en la respuesta")
-        effective_min = max(float(nowpayments_min), business_min)
-        return {"currency": key, "network": pay_currency, "min_amount": effective_min, "source": "nowpayments"}
-    except Exception as e:
-        logger.warning(f"No se pudo obtener min-amount de NOWPayments para {pay_currency}: {e}")
-        return {"currency": key, "network": pay_currency, "min_amount": business_min, "source": "fallback"}
+    # `min_amount` ya viene con el margen de seguridad aplicado: es el unico valor
+    # que el frontend debe mostrar y contra el que el backend valida. `min_amount_raw`
+    # es informativo (lo que dijo NOWPayments), NUNCA se le vuelve a aplicar margen.
+    info = await effective_min_amount(pay_currency, currency_key=key)
+    return {
+        "currency": key,
+        "network": pay_currency,
+        "min_amount": info["min_amount"],
+        "min_amount_raw": info["min_amount_raw"],
+        "source": info["source"],
+    }
 
 
 @router.post("/deposit")
@@ -140,18 +180,14 @@ async def create_deposit(
     pay_currency = (data.network or DEFAULT_NETWORK_TICKER[key]).strip().lower()
     if not pay_currency.startswith(key):
         raise HTTPException(status_code=400, detail="La red elegida no corresponde a la moneda seleccionada.")
-    business_min = MINAMOUNT_FALLBACK.get(key, 10.0)
-    try:
-        min_info = await nowpayments.get_min_amount(pay_currency, fiat_equivalent="usd")
-        nowpayments_min = min_info.get("min_amount")
-        min_amount = max(float(nowpayments_min), business_min) if nowpayments_min else business_min
-    except Exception as e:
-        logger.warning(f"No se pudo obtener min-amount de NOWPayments para {pay_currency}: {e}")
-        min_amount = business_min
+    # Mismo minimo (con margen) que devuelve /credits/min-amount y que muestra la
+    # pantalla: se consulta desde el mismo helper para que no puedan desincronizarse.
+    min_info = await effective_min_amount(pay_currency, currency_key=key)
+    min_amount = min_info["min_amount"]
     if float(data.amount) < float(min_amount):
         raise HTTPException(
             status_code=400,
-            detail=f"El monto mínimo para depositar {CREDIT_LABELS.get(key, key)} es {min_amount}.",
+            detail=f"El monto mínimo para depositar {CREDIT_LABELS.get(key, key)} es {min_amount:.2f}.",
         )
     order_id = f"credit_{key}_{current_user.user_id}_{uuid.uuid4().hex[:12]}"
     deposit_doc = {
@@ -180,7 +216,7 @@ async def create_deposit(
         await db.crypto_deposits.update_one(
             {"order_id": order_id}, {"$set": {"status": "error"}}
         )
-        raise HTTPException(status_code=502, detail="No se pudo iniciar el pago. Intenta de nuevo.")
+        raise HTTPException(status_code=502, detail=_detalle_error_pago(e))
     pay_address = payment.get("pay_address")
     pay_amount = payment.get("pay_amount")
     if not pay_address or not pay_amount:

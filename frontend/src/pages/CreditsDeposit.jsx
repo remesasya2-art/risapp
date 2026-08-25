@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck, Loader2, Bitcoin, Copy, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { fmt } from '../utils/format';
 import { QRCodeSVG } from 'qrcode.react';
 
 // Monedas de credito disponibles (de cara al usuario: "Creditos")
@@ -34,6 +35,8 @@ export default function CreditsDeposit() {
   const canContinue = amountNum > 0 && declared && !loading && !belowMin && !!network;
 
   // Consulta las redes disponibles cada vez que cambia la moneda elegida.
+  // Cada red viene con su `min_amount` (ya con el margen aplicado por el backend) y
+  // la lista llega ordenada de menor a mayor minimo, asi que se respeta ese orden.
   // Si la consulta falla, cae a la red por defecto de esa moneda (nunca deja al
   // usuario bloqueado sin poder depositar).
   useEffect(() => {
@@ -53,7 +56,7 @@ export default function CreditsDeposit() {
         if (!cancelled) {
           const fallbackTicker = currency === 'usdc' ? 'usdc' : 'usdttrc20';
           const fallbackLabel = currency === 'usdc' ? 'Ethereum (ERC20)' : 'Tron (TRC20)';
-          setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true }]);
+          setNetworks([{ ticker: fallbackTicker, label: fallbackLabel, is_default: true, min_amount: null }]);
           setNetwork(fallbackTicker);
         }
       })
@@ -208,6 +211,11 @@ export default function CreditsDeposit() {
                     }}
                   >
                     {n.label}
+                    {n.min_amount != null && (
+                      <span style={{ fontWeight: 500, opacity: 0.75 }}>
+                        {' '}— mín. {fmt(n.min_amount)} {selected?.key.toUpperCase()}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -237,7 +245,7 @@ export default function CreditsDeposit() {
               <AlertTriangle size={16} color={belowMin ? '#dc2626' : '#2563eb'} />
               <span style={{ fontSize: 13, fontWeight: 600, color: belowMin ? '#dc2626' : '#1d4ed8' }}>
                 {minAmount != null
-                  ? `Monto mínimo para depositar: ${minAmount} ${selected?.key.toUpperCase()}`
+                  ? `Monto mínimo para depositar: ${fmt(minAmount)} ${selected?.key.toUpperCase()}`
                   : 'Consultando monto mínimo...'}
               </span>
             </div>
