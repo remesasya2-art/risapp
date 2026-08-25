@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { validarPassword, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
 import pushService from '../utils/pushService';
 import PinSettings from '../components/PinSettings';
 import WebAuthnSettings from '../components/WebAuthnSettings';
@@ -127,8 +128,9 @@ export default function Profile() {
       toast.error('Las contraseñas no coinciden');
       return;
     }
-    if (passwordData.newPassword.length < 7) {
-      toast.error('La contraseña debe tener al menos 7 caracteres');
+    const errorPassword = validarPassword(passwordData.newPassword);
+    if (errorPassword) {
+      toast.error(errorPassword);
       return;
     }
     setLoading(true);
@@ -602,7 +604,7 @@ export default function Profile() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Nueva contraseña</label>
-                <input type="password" value={passwordData.newPassword} onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})} style={inputStyle} placeholder="Mínimo 7 caracteres" />
+                <input type="password" value={passwordData.newPassword} onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})} style={inputStyle} placeholder={PASSWORD_HELP_TEXT} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Confirmar nueva contraseña</label>
