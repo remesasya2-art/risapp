@@ -33,6 +33,18 @@ export default function Recharge() {
   const timerRef = useRef(null);
   const pollRef = useRef(null);
 
+  // Limites de monto: vienen del servidor (GET /limits) para que el cartel que ve
+  // el usuario y el 400 que devuelve el backend salgan del mismo numero.
+  const [limits, setLimits] = useState(null);
+  useEffect(() => {
+    api.get('/limits')
+      .then((r) => setLimits(r.data))
+      .catch(() => setLimits(null)); // sin limites la pantalla igual funciona: valida el servidor
+  }, []);
+  const pixMin = limits?.pix?.min_brl ?? null;
+  const pixMax = limits?.pix?.max_brl ?? null;
+  const vesMin = limits?.ves?.min_ves ?? null;
+
   // Get user's registered CPF for validation
   const userRegisteredCpf = user?.cpf_number?.replace(/\D/g, '') || '';
 
@@ -180,8 +192,17 @@ export default function Recharge() {
   };
 
   const handleGeneratePix = async () => {
-    if (!amount || parseFloat(amount) < 10) {
-      toast.error('El monto mínimo es 10 BRL');
+    const montoPix = parseFloat(amount);
+    if (!amount || !(montoPix > 0)) {
+      toast.error('El monto debe ser mayor a 0');
+      return;
+    }
+    if (pixMin != null && montoPix < pixMin) {
+      toast.error(`El monto mínimo es R$ ${fmt(pixMin)}`);
+      return;
+    }
+    if (pixMax != null && montoPix > pixMax) {
+      toast.error(`El monto máximo es R$ ${fmt(pixMax)}`);
       return;
     }
     
@@ -285,8 +306,13 @@ export default function Recharge() {
   };
 
   const handleSubmitVesRecharge = async () => {
-    if (!amount || parseFloat(amount) < 100) {
-      toast.error('El monto mínimo es 100 VES');
+    const montoVes = parseFloat(amount);
+    if (!amount || !(montoVes > 0)) {
+      toast.error('El monto debe ser mayor a 0');
+      return;
+    }
+    if (vesMin != null && montoVes < vesMin) {
+      toast.error(`El monto mínimo es ${fmt(vesMin)} VES`);
       return;
     }
     if (!proofImage) {
@@ -571,11 +597,15 @@ export default function Recharge() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   style={{ ...inputStyle, fontSize: '24px', fontWeight: '700' }}
-                  min="10"
-                  max="2000"
+                  min={pixMin ?? undefined}
+                  max={pixMax ?? undefined}
                   data-testid="pix-amount"
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 0 0 0' }}>Mínimo: R$ 10 • Máximo: R$ 2.000</p>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 0 0 0' }}>
+                  {pixMin != null && pixMax != null
+                    ? `Mínimo: R$ ${fmt(pixMin)} • Máximo: R$ ${fmt(pixMax)}`
+                    : 'Consultando límites...'}
+                </p>
               </div>
 
               <div>

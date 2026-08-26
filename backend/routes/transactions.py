@@ -17,6 +17,7 @@ from services.money import from_db, to_float, to_decimal, to_decimal128
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
 from services.min_amount import effective_min_amount
+from services.limits import validate_pix_amount, validate_ves_amount
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
@@ -325,8 +326,10 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     """Crea una orden de envío RIS → Reais (1 RIS = 1 R$, sin comisión: ya viene
     incluida en la recarga). Queda pendiente para que el super_admin la pague
     por PIX en Brasil desde el área de Órdenes por procesar."""
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    # Mismo rango que la recarga: el envio sale por PIX y lo paga la misma via.
+    error_monto = validate_pix_amount(request.amount)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
     # Idempotencia: evita duplicar el envío por doble clic / reintento de red.
     _idem_new, _idem_existing = await claim_idempotency(current_user.user_id, "reais_send", request.idempotency_key)
     if not _idem_new:
@@ -1237,8 +1240,10 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     amount_ves = float(request.get("amount_ves", 0))
     payment_method = request.get("payment_method", "transferencia")
 
-    if amount_ves <= 0:
-        raise HTTPException(status_code=400, detail="Monto inválido")
+    # Piso de negocio en bolivares. Sin techo, a proposito.
+    error_monto = validate_ves_amount(amount_ves)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
     # Idempotencia: evita duplicar la solicitud por doble clic / reintento de red.
     _rch_key = request.get("idempotency_key")
     _rch_new, _rch_existing = await claim_idempotency(current_user.user_id, "recharge_ves", _rch_key)
