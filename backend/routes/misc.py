@@ -13,6 +13,7 @@ from openpyxl import Workbook
 
 from database import db
 from routes.dependencies import get_current_user, get_super_admin
+from services.limits import limits_payload
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,18 @@ async def get_ves_payment_info():
         "holder_name": "RIS APP C.A.",
         "holder_id": "J-00000000-0"
     }
+
+
+# ============== LIMITES DE MONTO ==============
+
+@router.get("/limits")
+async def get_limits():
+    """Limites de monto por operacion, para que la pantalla no los tenga hardcodeados.
+
+    Publico a proposito: son los mismos para todos los usuarios y la pantalla de
+    recarga necesita mostrarlos antes de que el usuario haga nada.
+    """
+    return limits_payload()
 
 
 # ============== USER BALANCE ==============

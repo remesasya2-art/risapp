@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from database import db
+from services.limits import validate_pix_amount
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
@@ -56,8 +57,11 @@ async def require_authenticated_user(current_user: User = Depends(get_current_us
 @router.post("/create")
 async def create_pix_payment(request: CreatePixRequest, current_user: User = Depends(require_authenticated_user)):
     """Create a PIX payment for third-party recharge via Mercado Pago"""
-    if request.amount_ris <= 0:
-        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    # Limite de monto validado ANTES de crear el pago en Mercado Pago: si no,
+    # la pantalla anuncia un techo que el servidor no hace cumplir.
+    error_monto = validate_pix_amount(request.amount_ris)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
     
     # Get current rate
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])

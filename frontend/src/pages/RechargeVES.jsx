@@ -106,6 +106,15 @@ export default function RechargeVES() {
   const [copiedField, setCopiedField] = useState(null);
 
   // Cálculo recarga VES: Si ves_to_ris_rate = 140, entonces 140 VES = 1 RIS
+  // Mismo piso que la otra pantalla de recarga en bolivares: sale de GET /limits,
+  // no de un numero escrito aca. Antes esta pantalla no pedia minimo ninguno.
+  const [vesMin, setVesMin] = useState(null);
+  useEffect(() => {
+    api.get('/limits')
+      .then((r) => setVesMin(r.data?.ves?.min_ves ?? null))
+      .catch(() => setVesMin(null)); // sin limite la pantalla igual funciona: valida el servidor
+  }, []);
+
   const amountRIS = amountVES && rates?.ves_to_ris_rate ? fmt((parseFloat(amountVES) / rates.ves_to_ris_rate)) : '0.00';
 
   const copyToClipboard = async (text, fieldName) => {
@@ -165,6 +174,11 @@ ${bankData.transferencia.ci}`;
   const handleSubmitRecharge = async () => {
     if (!amountVES || !selectedBank || !paymentType || !proofImage) {
       toast.error('Completa todos los campos');
+      return;
+    }
+
+    if (vesMin != null && parseFloat(amountVES) < vesMin) {
+      toast.error(`El monto mínimo es ${fmt(vesMin)} VES`);
       return;
     }
 
