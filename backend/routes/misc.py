@@ -14,6 +14,7 @@ from openpyxl import Workbook
 from database import db
 from routes.dependencies import get_current_user, get_super_admin
 from services.limits import limits_payload
+from services.kyc_quota import quota_payload
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,17 @@ async def get_limits():
     recarga necesita mostrarlos antes de que el usuario haga nada.
     """
     return limits_payload()
+
+
+@router.get("/limits/me")
+async def get_my_limits(current_user: User = Depends(get_current_user)):
+    """Limites por operacion mas el cupo que le queda a ESTE usuario sin verificar.
+
+    La pantalla lo usa para mostrar cuanto le queda y para levantar la ventana
+    flotante cuando se agoto. El servidor valida igual: esto es solo para mostrar.
+    """
+    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    return {**limits_payload(), "cupo_kyc": quota_payload(user_doc)}
 
 
 # ============== USER BALANCE ==============

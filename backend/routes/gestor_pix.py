@@ -15,6 +15,7 @@ from typing import Optional
 
 from database import db
 from services.limits import validate_pix_amount
+from services import kyc_quota
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
@@ -62,6 +63,11 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
     error_monto = validate_pix_amount(request.amount_ris)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
+    # Cupo de la cuenta sin verificar: se comprueba ANTES de crear nada.
+    _kq_user = await db.users.find_one({"user_id": current_user.user_id})
+    _kq_error = kyc_quota.check_amount(_kq_user, request.amount_ris)
+    if _kq_error:
+        raise HTTPException(status_code=403, detail=_kq_error)
     
     # Get current rate
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
@@ -299,7 +305,7 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
         # Gestor receiving third-party payment
         updated = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris_terceros": amount_ris}},
+            {"$inc": {"balance_ris_terceros": amount_ris, **kyc_quota.consume_inc(amount_ris)}},
             return_document=True
         )
         balance_type = "saldo de terceros"
@@ -309,7 +315,7 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
         # Regular user or gestor recharging their own account -> main balance
         updated = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris}},
+            {"$inc": {"balance_ris": amount_ris, **kyc_quota.consume_inc(amount_ris)}},
             return_document=True
         )
         balance_type = "saldo principal"
@@ -317,6 +323,9 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
         balance_after = (updated or {}).get("balance_ris")
 
     balance_before = (balance_after - amount_ris) if balance_after is not None else None
+
+    # Si esta recarga le agoto el cupo sin KYC, avisarle. Nunca interrumpe.
+    await kyc_quota.notify_if_exhausted(updated)
 
     # Libro mayor RIS (append-only). Nunca interrumpe la acreditación.
     try:
