@@ -15,6 +15,7 @@ from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordA
 from pydantic import BaseModel
 from routes.dependencies import get_admin_user, get_super_admin, get_crm_user
 from services.notifications import create_notification
+from services import kyc_quota
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -677,6 +678,25 @@ async def process_withdrawal(
             {"transaction_id": transaction_id},
             {"$set": update_data}
         )
+
+        # Cupo sin KYC: el saldo de un envio se debita al crearlo, asi que aca no
+        # hay ningun $inc de saldo donde colgarse y el consumo va en su propia
+        # escritura. Si fallara, el pago igual queda hecho.
+        try:
+            # amount_input es RIS en los envios de reales y de bolivares, pero USDT
+            # o USDC en los de cripto, con el mismo type "withdrawal". Sumar eso al
+            # contador mezclaria monedas, asi que del envio en cripto se cuenta la
+            # operacion y no el monto.
+            _kq_moneda = (transaction.get("currency_input") or "RIS").upper()
+            _kq_monto = transaction.get("amount_input", 0) if _kq_moneda == "RIS" else 0
+            _kq_after = await db.users.find_one_and_update(
+                {"user_id": transaction["user_id"]},
+                {"$inc": kyc_quota.consume_inc(_kq_monto)},
+                return_document=True,
+            )
+            await kyc_quota.notify_if_exhausted(_kq_after)
+        except Exception as _kq_e:
+            logger.warning(f"kyc_quota: no se pudo consumir cupo en {transaction_id}: {_kq_e}")
 
         # Notify user
         await create_notification(
@@ -1737,9 +1757,11 @@ async def process_ves_recharge(
         # Add balance to user
         _rch_user = await db.users.find_one_and_update(
             {"user_id": user_id},
-            {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris))}},
+            {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris)), **kyc_quota.consume_inc(amount_ris)}},
             return_document=True
         )
+        # Si esta recarga le agoto el cupo sin KYC, avisarle. Nunca interrumpe.
+        await kyc_quota.notify_if_exhausted(_rch_user)
         # Libro mayor RIS (no interrumpe la aprobación)
         try:
             from services.ledger import record_ris_entry

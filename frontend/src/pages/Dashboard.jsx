@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
+import KycQuotaModal from '../components/KycQuotaModal';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
 import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
@@ -235,6 +236,7 @@ const normalized = { ...tx };
       }}
       data-testid="dashboard-page"
     >
+      <KycQuotaModal />
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
         <div 

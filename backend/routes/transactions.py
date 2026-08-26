@@ -18,6 +18,7 @@ from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
 from services.min_amount import effective_min_amount
 from services.limits import validate_pix_amount, validate_ves_amount
+from services import kyc_quota
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
@@ -330,6 +331,11 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     error_monto = validate_pix_amount(request.amount)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
+    # Cupo de la cuenta sin verificar: se comprueba ANTES de crear nada.
+    _kq_user = await db.users.find_one({"user_id": current_user.user_id})
+    _kq_error = kyc_quota.check_amount(_kq_user, request.amount)
+    if _kq_error:
+        raise HTTPException(status_code=403, detail=_kq_error)
     # Idempotencia: evita duplicar el envío por doble clic / reintento de red.
     _idem_new, _idem_existing = await claim_idempotency(current_user.user_id, "reais_send", request.idempotency_key)
     if not _idem_new:
@@ -1266,6 +1272,11 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     amount_ris = round(amount_ves / ves_to_ris, 2)
     if amount_ris <= 0:
         raise HTTPException(status_code=400, detail="El monto en VES es demasiado bajo para la tasa actual.")
+    # Cupo de la cuenta sin verificar: se comprueba ANTES de crear nada.
+    _kq_user = await db.users.find_one({"user_id": current_user.user_id})
+    _kq_error = kyc_quota.check_amount(_kq_user, amount_ris)
+    if _kq_error:
+        raise HTTPException(status_code=403, detail=_kq_error)
 
     amount_input = amount_ves
 
