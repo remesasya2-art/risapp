@@ -91,6 +91,7 @@ INDICES = (
 
     # ─── eventos (append-only, como el ledger) ────────────────────────────
     ("envios_eventos", [("envio_id", 1), ("created_at", 1)], {}),
+    ("envios_eventos", "evento_id", {"unique": True, "sparse": True}),
 
     # ─── catalogo, todo cargado desde el panel ────────────────────────────
     ("transportistas", "transportista_id", {"unique": True, "sparse": True}),

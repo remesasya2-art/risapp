@@ -1,10 +1,12 @@
 """
 routes/envios.py — Las rutas de lectura del módulo de envíos.
 
-ESTADO (PR E)
-    Las dos rutas de lectura, y la cotización. Ninguna mueve un centavo: cotizar
-    es gratis y crear el envío es un paso posterior y separado. Los PRs
-    siguientes agregan el resto acá mismo.
+ESTADO (PR F1)
+    Las dos rutas de lectura, la cotización y la confirmación. **Ninguna mueve un
+    centavo.** Cotizar es gratis, y confirmar tampoco cobra: el usuario paga el
+    tramo 1 directamente al transportista de origen, y RIS App recién cobra
+    cuando puede verificar contra una medición ajena —el peso que figura en el
+    comprobante de despacho—. Eso llega en el PR siguiente.
 
 POR QUE COTIZAR PIDE KYC
     `get_verified_user` y no `get_current_user`. Cotizar escribe un documento en
@@ -32,12 +34,12 @@ POR QUE /envios/limites ES PUBLICA
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from routes.dependencies import get_current_user, get_verified_user
-from services import envios_catalogo, envios_cotizador
+from services import envios_catalogo, envios_cotizador, envios_crear
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
-from models.envios_cotizacion import PedidoDeCotizacion
+from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,30 @@ async def obtener_catalogo(current_user: User = Depends(get_current_user)):
         return {"transportistas": [], "disponible": False, "degradado": True}
 
 
+def _ip_real(request) -> str | None:
+    """La IP del usuario, no la del proxy.
+
+    Detrás del edge de Railway, `request.client.host` es la misma para todos, y
+    este dato existe únicamente para el argumento legal que motiva la doble
+    aceptación: una IP idéntica para todo el mundo no distingue a nadie. El
+    proyecto ya resolvió esto en `routes/security_2fa.get_real_client_ip`, que
+    además es el `key_func` del rate limiter. Acá se repite el criterio en vez de
+    importarlo: importar un módulo de rutas desde otro, en tiempo de petición,
+    arrastra slowapi y media aplicación, y el `except` que eso obliga a poner
+    degradaba en silencio justo a la IP del proxy que se quería evitar. Hay un
+    test que compara las dos implementaciones para que no se separen.
+    """
+    encabezado = ""
+    try:
+        encabezado = (request.headers.get("x-forwarded-for") or "").strip()
+    except Exception:                                         # pragma: no cover
+        encabezado = ""
+    if encabezado:
+        # El primero de la cadena es el cliente; los demás son proxies.
+        return encabezado.split(",")[0].strip() or None
+    return getattr(getattr(request, "client", None), "host", None)
+
+
 @router.post("/cotizar")
 async def cotizar(pedido: PedidoDeCotizacion,
                   current_user: User = Depends(get_verified_user)):
@@ -118,3 +144,28 @@ async def cotizar(pedido: PedidoDeCotizacion,
         logger.error(f"envios: /cotizar falló: {e}")
         raise HTTPException(
             503, "No se pudo cotizar en este momento. Probá de nuevo en un minuto.")
+
+
+@router.post("/crear")
+async def crear(pedido: PedidoDeCreacion, request: Request,
+                current_user: User = Depends(get_verified_user)):
+    """Confirma una cotización y entrega los datos de despacho. **No cobra nada.**
+
+    Es el botón que en cualquier otra app de este rubro sacaría plata, y acá no.
+    Por eso la respuesta trae `cobrado_ahora_ris: "0.00"` explícito y el próximo
+    paso escrito: despachar, y después cargar el comprobante.
+
+    Idempotente: dos `POST` con la misma `idempotency_key` devuelven el mismo
+    resultado y crean un solo envío.
+    """
+    try:
+        return await envios_crear.crear(
+            current_user, pedido.envio_id, pedido.declaracion.model_dump(),
+            idempotency_key=pedido.idempotency_key,
+            ip=_ip_real(request))
+    except envios_crear.NoSePuedeCrear as e:
+        raise HTTPException(e.http, e.mensaje)
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: /crear falló: {e}")
+        raise HTTPException(
+            503, "No se pudo confirmar el envío. Probá de nuevo en un minuto.")

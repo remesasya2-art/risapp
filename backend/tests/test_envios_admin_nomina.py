@@ -105,10 +105,8 @@ def _preparar():
         paquete.__path__ = [os.path.join(_BACKEND, "routes")]
         sys.modules["routes"] = paquete
 
-    if "database" not in sys.modules:
-        base = types.ModuleType("database")
-        base.db = DB
-        sys.modules["database"] = base
+    from conftest import usar_base
+    usar_base(DB)
 
     if "routes.dependencies" not in sys.modules:
         deps = types.ModuleType("routes.dependencies")
@@ -175,6 +173,8 @@ PUNTO = {"setting_id": "envios_punto_origen",
 
 @pytest.fixture(autouse=True)
 def base_limpia():
+    from conftest import usar_base
+    usar_base(DB)
     DB._c.clear()
     DB._c["colaboradores_retiro"] = _Coleccion([dict(MARIA)])
     DB._c["app_settings"] = _Coleccion([dict(PUNTO)])

@@ -22,7 +22,8 @@ LAS MEDIDAS VIAJAN EN TEXTO
 from decimal import Decimal, InvalidOperation
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (BaseModel, ConfigDict, Field, StrictBool,
+                      field_validator)
 
 
 def _medida(valor, campo: str, minimo=None, maximo=None) -> str:
@@ -151,3 +152,37 @@ class PedidoDeCotizacion(_Base):
     # cotiza: el flete no se cobra al cotizar, ni al crear, ni nunca dentro del
     # envio.
     modalidad_flete: Literal["destino", "prepago"] = "destino"
+
+
+class Declaracion(_Base):
+    """Las dos aceptaciones. SON DOS, y ninguna viene tildada por defecto.
+
+    Juntarlas en un solo checkbox esconde la del precio detras de la del
+    contenido, que es justo lo que no se quiere el dia que haya que defender el
+    cobro de un ajuste: "aceptaste que podia variar" no se sostiene si esa frase
+    estaba adentro de un checkbox que decia otra cosa.
+
+    Los dos campos son obligatorios y sin default. Un default en `False` seria
+    igual de correcto tecnicamente y peor en la practica: una peticion que se
+    olvida el campo tiene que fallar, no pasar como "no acepto".
+    """
+    # StrictBool y no bool: Pydantic coacciona "on", "true", "yes", "t", "1" y 1
+    # a True. Un checkbox tildado manda `true`; cualquier otra cosa es un cliente
+    # improvisando, y esto es lo que se lee el dia que haya que defender un
+    # cobro. Una aceptacion es un hecho, no una interpretacion.
+    contenido_aceptado: StrictBool
+    estimado_aceptado: StrictBool
+    # La version que la pantalla le MOSTRO al usuario. No se guarda —se guarda la
+    # congelada en la cotizacion, que es la fuente de verdad— pero se compara: si
+    # no coinciden, el usuario acepto un texto distinto del que el envio dice que
+    # acepto, y eso hay que frenarlo antes y no descubrirlo despues.
+    terminos_version: Optional[str] = Field(default=None, max_length=40)
+
+
+class PedidoDeCreacion(_Base):
+    envio_id: str = Field(min_length=1, max_length=60)
+    declaracion: Declaracion
+    # La clave del cliente contra el doble clic. Opcional porque la idempotencia
+    # de este proyecto degrada con gracia: sin clave se procesa igual, y aca un
+    # duplicado no cuesta plata.
+    idempotency_key: Optional[str] = Field(default=None, max_length=100)
