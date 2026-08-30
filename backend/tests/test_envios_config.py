@@ -387,16 +387,28 @@ RUTAS_QUE_INVALIDAN = (
     # Esta no la llama directo: se la pasa al servicio como `invalidar=`, que es
     # lo que verifica test_el_guardado_de_configuracion_pasa_la_invalidacion.
     "guardar_bloque",
+    # Escribe el bloque punto_origen por el mismo camino auditado.
+    "designar_retirador",
 )
 
-RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = ("guardar_borrador_tarifa", "simular_tarifa")
+RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
+    "guardar_borrador_tarifa", "simular_tarifa",
+    # La nómina no la lee ninguna pantalla cacheada.
+    "crear_colaborador", "editar_colaborador",
+)
 
 
 def _cuerpo_de(fuente: str, funcion: str) -> str:
+    """El cuerpo de la función, SIN comentarios.
+
+    Sin sacarlos, un comentario que explica por qué esta ruta NO llama a
+    `invalidar_cache()` cuenta como si la llamara. Un test que lee código fuente
+    tiene que leer código, no prosa."""
     inicio = fuente.index(f"async def {funcion}(")
     resto = fuente[inicio:]
     fin = resto.find("\n@router.", 1)
-    return resto if fin < 0 else resto[:fin]
+    cuerpo = resto if fin < 0 else resto[:fin]
+    return "\n".join(l for l in cuerpo.split("\n") if not l.lstrip().startswith("#"))
 
 
 def test_toda_escritura_que_importa_invalida_el_cache():

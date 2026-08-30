@@ -36,14 +36,35 @@ from pydantic import BaseModel, Field
 from database import db
 from routes.dependencies import get_super_admin, get_crm_user
 from models.user import User
-from models.envios_config import Transportista, Agencia, CuentaBancaria, ESQUEMAS
+from models.envios_config import (Transportista, Agencia, CuentaBancaria,
+                                  Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
-from services import envios_config, envios_tarifa_editor
+from services import envios_config, envios_retiro, envios_tarifa_editor
 from services.envios_catalogo import invalidar_cache
 from services.envios_tarifas import validar_tarifa
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/envios", tags=["envios-admin"])
+
+
+# Lo que NUNCA sale de una ficha de la nomina hacia un log. El CPF y el telefono
+# existen para la autorizacion ante el transportista y se quedan del lado
+# interno: el log de auditoria lo lee mas gente de la que puede editar la nomina,
+# y una copia del documento ahi es una copia del dato sensible en un lugar con
+# menos control que el original.
+async def _ya_esta_en_la_nomina(ficha: dict) -> bool:
+    """Misma persona: el mismo CPF, o el mismo nombre si no hay CPF cargado."""
+    cpf = (ficha.get("cpf") or "").strip()
+    filtro = {"cpf": cpf} if cpf else {"nombre": ficha.get("nombre")}
+    try:
+        return await db.colaboradores_retiro.find_one(filtro, {"_id": 1}) is not None
+    except Exception as e:                                    # pragma: no cover
+        logger.warning(f"envios: no se pudo chequear duplicados en la nómina: {e}")
+        return False
+
+
+def _sin_datos_personales(ficha: dict) -> dict:
+    return {k: v for k, v in (ficha or {}).items() if k not in ("cpf", "telefono")}
 
 
 def _error(errores: list[str]) -> HTTPException:
@@ -462,3 +483,156 @@ async def publicar_tarifa(datos: Publicacion, admin: User = Depends(get_super_ad
     invalidar_cache()
     return {"ok": True, "version_id": version["version_id"],
             "vigente_desde": version["vigente_desde"].isoformat()}
+
+
+# ─── Nómina de retiro: a nombre de quién se rotulan los paquetes ──────────
+#
+# Escritura solo del super administrador; lectura tambien para el operador. Es la
+# misma separacion que el panel ya usa para las tasas: el que viaja a Pacaraima
+# necesita ver a que nombre estan rotulados los paquetes para saber cuales puede
+# reclamar, pero no tiene por que poder cambiar ese nombre.
+
+@router.get("/retiro")
+async def ver_retiro(admin: User = Depends(get_crm_user)):
+    """La nómina, quién está de turno y la vista previa del bloque de despacho.
+
+    La vista previa se renderiza con la misma función que usa la cotización. Una
+    plantilla se edita a ciegas si no se ve el resultado, y una dirección mal
+    armada no se descubre en el panel: se descubre cuando una caja llega a una
+    agencia que no la esperaba.
+
+    **La nómina sale sin CPF ni teléfono.** El operador necesita saber a qué
+    nombre están rotulados los paquetes para saber cuáles puede reclamar; no
+    necesita el documento de sus compañeros. Es la misma decisión que
+    `listar_transportistas`, que también es `get_crm_user` y también recorta —
+    un listado se comparte en pantalla mucho más seguido de lo que se cree.
+
+    El bloque `punto_origen` completo tampoco baja acá: `GET /config/{bloque}` lo
+    sirve y pide `get_super_admin`. El mismo documento con dos niveles de
+    autorización según por dónde se pida es la clase de inconsistencia que
+    después se cita como precedente.
+    """
+    try:
+        nomina = await db.colaboradores_retiro.find(
+            {}, {"_id": 0, "cpf": 0, "telefono": 0}).to_list(envios_retiro._NOMINA_MAX)
+    except Exception as e:
+        logger.warning(f"envios: no se pudo leer la nómina: {e}")
+        nomina = []
+    return {
+        # Cinturón y tirantes: la proyección ya los excluye, y el filtro atrapa el
+        # día que alguien la toque. Es un dato personal de un empleado.
+        "nomina": [_sin_datos_personales(c) for c in nomina],
+        "vista_previa": await envios_retiro.bloque_de_despacho(),
+    }
+
+
+@router.post("/retiro/colaboradores")
+async def crear_colaborador(datos: Colaborador, admin: User = Depends(get_super_admin)):
+    """Da de alta a alguien autorizado a retirar en la agencia de Pacaraima."""
+    validado = datos.model_dump()
+
+    # Sin esto, un doble clic en Guardar o un reintento del cliente crean dos
+    # fichas de la misma persona. Se da de baja la que se ve seleccionada, la otra
+    # queda vigente, y meses después sale rotulada como suplente: el mostrador
+    # recibe una caja a nombre de alguien que la nómina ya dio de baja.
+    if await _ya_esta_en_la_nomina(validado):
+        raise HTTPException(
+            409, "Esa persona ya está en la nómina. Editá su ficha en vez de darla de "
+                 "alta otra vez: dos fichas de la misma persona se desactivan por "
+                 "separado y una queda viva sin que nadie la vea.")
+
+    validado["colaborador_id"] = envios_retiro.nuevo_colaborador_id()
+    validado["creado_at"] = datetime.now(timezone.utc)
+    validado["creado_por"] = admin.user_id
+    await db.colaboradores_retiro.insert_one(dict(validado))
+    await envios_config.auditar("nomina_retiro", {}, _sin_datos_personales(validado),
+                                admin, accion="alta_colaborador")
+    # No invalida el caché: la nómina no la lee ninguna pantalla cacheada. Llamar
+    # a invalidar_cache() acá sería tirar el catálogo de todos para nada, y —peor—
+    # dejar escrito que existe una dependencia que no existe.
+    return {"ok": True, "valor": validado}
+
+
+@router.put("/retiro/colaboradores/{colaborador_id}")
+async def editar_colaborador(colaborador_id: str, datos: Colaborador,
+                             admin: User = Depends(get_super_admin)):
+    """Edita una ficha. **No borra: se desactiva con `activo: false`.**
+
+    El envío que ya se cotizó guarda el nombre congelado, así que dar de baja a
+    alguien no rompe nada viejo — pero su ficha tiene que seguir existiendo para
+    poder contestar quién retiró el paquete de marzo.
+    """
+    actual = await db.colaboradores_retiro.find_one({"colaborador_id": colaborador_id},
+                                                    {"_id": 0})
+    if not actual:
+        raise HTTPException(404, "Ese colaborador no está en la nómina.")
+
+    # Se FUSIONA con lo actual, igual que editar_transportista, y por dos razones
+    # que se descubren tarde. Una: el panel no muestra el CPF —por la misma razón
+    # de privacidad que motiva todo esto— así que no lo reenvía, y un reemplazo
+    # total lo borraba en silencio. Dos: `activo` tiene default True, así que
+    # editarle el teléfono a alguien dado de baja lo REACTIVABA, y su nombre
+    # volvía a salir rotulado en cajas que ya no está autorizado a retirar.
+    fusionado = {**actual, **datos.model_dump(exclude_unset=True)}
+    for metadato in ("colaborador_id", "creado_at", "creado_por"):
+        fusionado.pop(metadato, None)
+    try:
+        validado = Colaborador(**fusionado).model_dump()
+    except Exception as e:
+        raise _error(envios_config._legible(e))
+
+    await db.colaboradores_retiro.update_one({"colaborador_id": colaborador_id},
+                                             {"$set": validado})
+    await envios_config.auditar("nomina_retiro", _sin_datos_personales(actual),
+                                _sin_datos_personales(validado), admin)
+    return {"ok": True, "valor": {**validado, "colaborador_id": colaborador_id}}
+
+
+class Designacion(BaseModel):
+    colaborador_id: str = Field(min_length=1, max_length=40)
+
+
+@router.put("/retiro/turno")
+async def designar_retirador(datos: Designacion, admin: User = Depends(get_super_admin)):
+    """Marca quién sale rotulado en las cotizaciones **nuevas**.
+
+    No toca ni un envío existente, y eso es deliberado: cambiar la nómina no
+    puede cambiar la etiqueta de una caja que ya está viajando, porque el
+    mostrador va a comparar esa etiqueta contra un documento y no contra la base.
+    """
+    colaborador = await db.colaboradores_retiro.find_one(
+        {"colaborador_id": datos.colaborador_id}, {"_id": 0})
+    if not colaborador:
+        raise HTTPException(404, "Ese colaborador no está en la nómina.")
+    if not envios_retiro._vigente(colaborador, datetime.now(timezone.utc)):
+        raise HTTPException(
+            400, "Ese colaborador no está activo o su autorización no está vigente. "
+                 "Actualizá su ficha antes de ponerlo de turno.")
+
+    punto = await envios_config.leer("punto_origen")
+    if not punto:
+        # `leer` devuelve None tanto si no está cargado como si Mongo no
+        # contestó, y las dos cosas no se responden igual: mandar a "cargá
+        # primero el punto de origen" durante un corte hace que alguien lo
+        # recargue de memoria y pise la plantilla y la Caixa Postal reales.
+        _, se_pudo_leer = await envios_config.leer_con_estado("punto_origen")
+        if not se_pudo_leer:
+            raise HTTPException(
+                503, "No se pudo leer el punto de origen. Reintentá en un momento — no "
+                     "lo vuelvas a cargar, que lo pisarías.")
+        raise HTTPException(
+            400, "Cargá primero el punto de origen: sin la agencia y la razón social no "
+                 "hay bloque de despacho que armar.")
+
+    # Solo los campos que el esquema conoce. Quedarse con todo menos tres claves
+    # dejaba pasar cualquier otra que existiera en el documento —una versión
+    # anterior del esquema, una edición a mano— y como el modelo es
+    # `extra="forbid"`, designar a alguien pasaba a devolver 400 para siempre.
+    limpio = {k: v for k, v in punto.items() if k in ConfigPuntoOrigen.model_fields}
+    limpio["retirador_activo_id"] = datos.colaborador_id
+    valor, errores = await envios_config.guardar("punto_origen", limpio, admin,
+                                                 invalidar=invalidar_cache)
+    if errores:
+        raise _error(errores)
+    return {"ok": True, "de_turno": colaborador.get("nombre"),
+            "vista_previa": await envios_retiro.bloque_de_despacho()}

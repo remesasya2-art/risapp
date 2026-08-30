@@ -67,8 +67,15 @@ def diferencias(antes, despues) -> dict:
     for clave in sorted(set(antes) | set(despues)):
         # Los metadatos del propio guardado no son un cambio de configuración:
         # si entraran, cada guardado registraría que cambió la fecha del guardado.
+        # Los metadatos del propio guardado y los de creación. Sin los de
+        # creación, cada edición de una ficha registraba que `colaborador_id`,
+        # `creado_at` y `creado_por` pasaron a null —porque el modelo validado no
+        # los lleva— y el log terminaba contradiciendo justo lo que existe para
+        # contestar: quién retiró el paquete de marzo.
         if clave.startswith("_") or clave in ("actualizado_at", "actualizado_por",
-                                              "setting_id", "version_id"):
+                                              "setting_id", "version_id",
+                                              "creado_at", "creado_por",
+                                              "colaborador_id"):
             continue
         viejo, nuevo = antes.get(clave), despues.get(clave)
         if viejo != nuevo:
@@ -118,13 +125,25 @@ async def _db(db=None):
 
 
 async def leer(bloque: str, db=None) -> dict | None:
+    return (await leer_con_estado(bloque, db=db))[0]
+
+
+async def leer_con_estado(bloque: str, db=None) -> tuple[dict | None, bool]:
+    """(valor, se_pudo_leer). Existe porque `None` significa dos cosas distintas.
+
+    "Todavía no está cargado" y "Mongo no contestó" se parecen desde afuera y no
+    son lo mismo: al primero se responde "cargalo", al segundo "reintentá". Decir
+    "cargá primero el punto de origen" durante un corte hace que alguien lo
+    recargue de memoria y pise la plantilla y la Caixa Postal reales, que es un
+    dato que después nadie sabe que se perdió.
+    """
     try:
         base = await _db(db)
         return await base.app_settings.find_one(
-            {"setting_id": SETTING_PREFIJO + bloque}, {"_id": 0})
+            {"setting_id": SETTING_PREFIJO + bloque}, {"_id": 0}), True
     except Exception as e:
         logger.warning(f"envios: no se pudo leer la configuración {bloque}: {e}")
-        return None
+        return None, False
 
 
 async def guardar(bloque: str, datos: dict, admin, db=None,

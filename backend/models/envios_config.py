@@ -22,9 +22,17 @@ DECIMALES COMO TEXTO, A PROPOSITO
 """
 
 from decimal import Decimal, InvalidOperation
+from datetime import datetime
 from typing import Literal, Optional
 
+import re
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Cualquier cosa entre llaves, para poder AVISAR de un token mal escrito en vez
+# de dejarlo pasar. El de envios_retiro es mas estricto a proposito: el que
+# renderiza no adivina, el que valida sí.
+_TOKEN_LAXO = re.compile(r"\{([^{}\n]{1,60})\}")
 
 
 def _decimal_valido(valor, campo: str, minimo=None, maximo=None) -> str:
@@ -202,15 +210,43 @@ class ConfigContenido(_Base):
 
 
 class ConfigPuntoOrigen(_Base):
-    """La agencia de Pacaraima a la que el usuario despacha."""
+    """La agencia de Pacaraima a la que el usuario despacha.
+
+    Incluye a nombre de QUIEN se rotula: `retirador_activo_id` apunta a un
+    colaborador de la nomina, y es el que sale en las cotizaciones NUEVAS. El
+    nombre se congela en cada envio al cotizar, asi que designar a otro no cambia
+    la etiqueta de una caja que ya esta viajando.
+    """
     nombre: str = Field(min_length=2, max_length=120)
     cep: str = Field(min_length=8, max_length=9)
     ciudad: str = "Pacaraima"
     uf: str = "RR"
     modalidad: Literal["caixa_postal", "posta_restante", "otro"] = "caixa_postal"
     caixa_postal: Optional[str] = Field(default=None, max_length=20)
+    direccion: Optional[str] = Field(default=None, max_length=200)
     razon_social: str = Field(min_length=2, max_length=120)
     plantilla_direccion: str = Field(min_length=10, max_length=1000)
+    retirador_activo_id: Optional[str] = Field(default=None, max_length=40)
+
+    @field_validator("plantilla_direccion")
+    @classmethod
+    def _plantilla(cls, v):
+        """Los tokens tienen que existir. Se valida al guardar porque es el unico
+        momento en que hay alguien mirando: un `{Razon_Social}` con mayuscula o un
+        `{ retirador_nombre }` con espacios no matchea, queda literal, y termina
+        impreso en la etiqueta que el usuario pega sobre la caja."""
+        from services.envios_retiro import TOKENS
+        # SIN .strip(): "{ retirador_nombre }" con espacios no lo reemplaza el
+        # renderizador, asi que aceptarlo aca es dejar pasar un token que va a
+        # quedar impreso literal en la etiqueta. Se compara tal cual vino.
+        desconocidos = sorted({t for t in _TOKEN_LAXO.findall(v or "")
+                               if t not in TOKENS})
+        if desconocidos:
+            raise ValueError(
+                f"La plantilla usa datos que no existen: {', '.join(desconocidos)}. "
+                f"Los disponibles son: {', '.join(TOKENS)}."
+            )
+        return v
 
     @field_validator("cep")
     @classmethod
@@ -219,6 +255,45 @@ class ConfigPuntoOrigen(_Base):
         if not (limpio.isdigit() and len(limpio) == 8):
             raise ValueError("El CEP tiene ocho dígitos.")
         return limpio
+
+
+class Colaborador(_Base):
+    """Alguien autorizado a retirar paquetes en la agencia de Pacaraima.
+
+    QUE VE EL USUARIO Y QUE NO
+        `nombre` es lo UNICO que sale en una cotizacion. El CPF y el telefono
+        existen para la autorizacion ante el transportista de origen y se quedan
+        del lado interno: no hay ninguna pantalla del usuario donde aparezcan, y
+        la ruta que arma el bloque de despacho no los lee siquiera.
+
+    POR QUE HAY MAS DE UNO
+        Para que una licencia medica no frene la operacion. La nomina se mantiene
+        con dos o tres activos y el super administrador marca cual esta de turno.
+
+    LA AUTORIZACION VENCE
+        `autorizado_hasta` en None es "sin vencimiento". Con fecha, el dia que
+        pasa el colaborador deja de poder rotular paquetes aunque siga activo:
+        una autorizacion vencida en el mostrador es un paquete que no se entrega,
+        y eso se descubre con el paquete adentro.
+    """
+    nombre: str = Field(min_length=3, max_length=120)
+    cpf: Optional[str] = Field(default=None, max_length=20)
+    telefono: Optional[str] = Field(default=None, max_length=30)
+    activo: bool = True
+    autorizado_desde: Optional[datetime] = None
+    autorizado_hasta: Optional[datetime] = None
+    notas: str = Field(default="", max_length=500)
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, v):
+        texto = " ".join(str(v).split())
+        if len(texto.split()) < 2:
+            raise ValueError(
+                "Poné el nombre y el apellido: es el que va rotulado en la caja y el "
+                "que el mostrador compara contra el documento."
+            )
+        return texto
 
 
 # El registro que usa la ruta. Un bloque que no está acá no se puede guardar, y
@@ -233,4 +308,8 @@ ESQUEMAS = {
 # cuenta se guarda enmascarado: el log lo lee más gente de la que puede editar la
 # cuenta, y un número completo ahí es una copia del dato sensible en un lugar con
 # menos control que el original.
-CAMPOS_SENSIBLES = ("numero", "documento")
+# `cpf` y `telefono` estan aca aunque las dos rutas que auditan una ficha ya los
+# filtran a mano: centro_gestion_log no es un log interno —se sirve entero a un
+# sistema externo— y una garantia que descansa en dos llamadas manuales dura
+# hasta el tercer call site.
+CAMPOS_SENSIBLES = ("numero", "documento", "cpf", "telefono")
