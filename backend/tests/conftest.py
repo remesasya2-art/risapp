@@ -77,3 +77,40 @@ if "pywebpush" not in sys.modules:
     _push.WebPushException = _WebPushException
     _push.webpush = lambda *a, **k: None
     sys.modules["pywebpush"] = _push
+
+
+# ─── Los archivos cuyo orden ES el test ───────────────────────────────────
+
+def pytest_collection_modifyitems(items):
+    """Devuelve al orden de definición los módulos que declaran `ORDEN_IMPORTA`.
+
+    Casi todo el repositorio es independiente del orden, y así tiene que ser: un
+    test que necesita que otro haya corrido antes es un test que miente cuando
+    corre solo. Pero un recorrido end-to-end no es eso. Cotizar, confirmar,
+    despachar y entregar SON un orden: es lo único que prueban. Partirlo en
+    pasos independientes obligaría a rearmar el envío entero en cada uno, y ahí
+    el circuito de verdad —el que junta los nueve pasos— deja de probarse.
+
+    La alternativa era un solo test gigante. Se prefiere esto: el reporte dice
+    cuál de los nueve pasos se rompió, en vez de un `assert` a mitad de camino.
+
+    Se aplica a cualquier módulo que ponga `ORDEN_IMPORTA = True` arriba de todo,
+    y no hace nada con el resto. Con `pytest-randomly` instalado, sin este gancho
+    el end-to-end se desintegra: veintiún tests en rojo por `KeyError`.
+    """
+    fijos = {}
+    for posicion, item in enumerate(items):
+        modulo = getattr(item, "module", None)
+        if getattr(modulo, "ORDEN_IMPORTA", False):
+            fijos.setdefault(modulo.__name__, []).append((posicion, item))
+
+    for grupo in fijos.values():
+        posiciones = sorted(p for p, _ in grupo)
+        # Por número de línea de la función, que es el orden en que están
+        # escritos: es lo que el autor quiso decir con "en orden".
+        en_orden = sorted((i for _, i in grupo),
+                          key=lambda i: getattr(i.function, "__code__",
+                                                None).co_firstlineno
+                          if getattr(i, "function", None) else 0)
+        for posicion, item in zip(posiciones, en_orden):
+            items[posicion] = item
