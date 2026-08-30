@@ -106,7 +106,10 @@ class _Coleccion:
     def _match(self, d, filtro):
         for k, v in (filtro or {}).items():
             actual = _camino(d, k)
-            if isinstance(v, dict) and "$gte" in v:
+            if isinstance(v, dict) and "$ne" in v:
+                if actual == v["$ne"]:
+                    return False
+            elif isinstance(v, dict) and "$gte" in v:
                 a, b = _num(actual), _num(v["$gte"])
                 if a is None or not isinstance(a, Decimal) or a < b:
                     return False

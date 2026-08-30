@@ -87,10 +87,16 @@ async def cola(estado: str = "disponible_retiro", db=None, limite: int = 200,
             {"_id": 0, "envio_id": 1, "display_id": 1, "user_id": 1, "estado": 1,
              "origen": 1, "destino": 1, "destino_brasil": 1, "cobros": 1,
              "created_at": 1},
-        ).sort("created_at", 1).to_list(limite)
+        ).sort("created_at", 1).to_list(limite + 1)
     except Exception as e:
         logger.error(f"envios: no se pudo leer la cola de {estado}: {e}")
         return {"estado": estado, "grupos": [], "total": 0, "degradado": True}
+
+    # Se pide uno mas para poder DECIR que hay mas. Truncar en silencio hace que
+    # quien viaja a Pacaraima arme la lista con doscientos y deje las cajas 201 a
+    # 250 en el mostrador consumiendo dias de guarda, sin ninguna senal.
+    hay_mas = len(filas or []) > limite
+    filas = (filas or [])[:limite]
 
     grupos = {}
     for envio in filas or []:
@@ -101,6 +107,7 @@ async def cola(estado: str = "disponible_retiro", db=None, limite: int = 200,
     return {
         "estado": estado,
         "total": len(filas or []),
+        "hay_mas": hay_mas,
         "grupos": [{"retirador_nombre": nombre, "envios": envios,
                     "cuantos": len(envios)}
                    for nombre, envios in sorted(grupos.items())],
@@ -116,6 +123,14 @@ def _fila_de_cola(envio: dict, ahora) -> dict:
         "envio_id": envio.get("envio_id"),
         "display_id": envio.get("display_id"),
         "codigo_objeto": origen.get("codigo_objeto"),
+        # El operador necesita PODER MIRAR la foto que despues se le pide
+        # verificar. Sin el asset, el paso de verificacion es tipear un peso a
+        # ciegas.
+        "comprobante_asset_id": origen.get("comprobante_asset_id"),
+        "comprobante_verificado": bool((origen.get("verificado") or {}).get("at")),
+        # Y si esa misma foto ya estaba en otro envio: es la forma barata de
+        # intentar que a uno de los dos no se lo cobren.
+        "foto_repetida_en": origen.get("foto_repetida_en"),
         "agencia_destino": (envio.get("destino") or {}).get("agencia_nombre"),
         "estado_ve": (envio.get("destino") or {}).get("estado_ve"),
         "guarda_vence_at": vence,
@@ -285,6 +300,17 @@ async def repesar(operador, envio_id: str, *, peso_kg, largo_cm, ancho_cm, alto_
     envio = await _envio(base, envio_id)
     _exigir_transicion(envio, "repesado", "admin")
 
+    # Que el cobro inicial exista NO es un detalle: `ajuste_por_repesaje` lo
+    # necesita para calcular contra que ajustar, y sin el lanza un error que
+    # decia "revisa las medidas que cargaste" — culpando al operador de que
+    # nadie verifico el comprobante todavia.
+    inicial = ((envio.get("cobros") or {}).get("inicial")) or {}
+    if not inicial.get("monto_ris"):
+        raise OperacionRechazada(
+            "Este envío todavía no tiene el cobro inicial emitido. Verificá primero el "
+            "comprobante de despacho: sin ese número no hay contra qué ajustar.",
+            http=409)
+
     tarifa = await envios_cobros._tarifa_congelada(base, envio)
     tolerancia = await _tolerancia(base)
     try:
@@ -295,6 +321,31 @@ async def repesar(operador, envio_id: str, *, peso_kg, largo_cm, ancho_cm, alto_
         raise OperacionRechazada(
             "No se pudo calcular el ajuste con esas medidas. Revisá lo que cargaste.",
             http=400) from e
+
+    # EL AJUSTE VA ANTES DE MOVER EL ESTADO, y el orden es el defecto mas caro
+    # que tuvo este archivo. Al reves, si el cobro fallaba por un 503 pasajero el
+    # estado ya habia cambiado a `repesado`, el reintento chocaba contra "el
+    # envio ya esta en ese estado", ninguna otra ruta emite la partida `ajuste`,
+    # y el paquete salia de Pacaraima sin la diferencia cobrada. La rama de
+    # devolver tenia el mismo agujero al reves: el usuario nunca la recibia.
+    #
+    # Cobrar primero es seguro porque `cobrar` es idempotente por partida: un
+    # reintento devuelve la que ya existe en vez de emitir otra.
+    resultado = {"rama": ajuste["rama"], "diferencia_ris": str(ajuste["diferencia"]),
+                 "total_final_ris": str(ajuste["total_final"]),
+                 "cobro": None, "devolucion": None}
+
+    if ajuste["rama"] == "cobrar":
+        resultado["cobro"] = await envios_cobros.cobrar(
+            envio, "ajuste", ajuste["diferencia"], db=base, ahora=ahora,
+            idempotency_key=idempotency_key, base_calculo="repesaje",
+            peso_base_kg=peso_kg, detalle={"tarifa_version": ajuste["tarifa_version"]},
+            actor_type="admin", actor_id=getattr(operador, "user_id", None))
+    elif ajuste["rama"] == "devolver":
+        resultado["devolucion"] = await envios_cobros.devolver(
+            envio, ajuste["diferencia"], db=base, ahora=ahora,
+            motivo="repesaje", actor_type="admin",
+            actor_id=getattr(operador, "user_id", None))
 
     verificado = {"peso_kg": str(peso_kg), "largo_cm": str(largo_cm),
                   "ancho_cm": str(ancho_cm), "alto_cm": str(alto_cm),
@@ -308,39 +359,41 @@ async def repesar(operador, envio_id: str, *, peso_kg, largo_cm, ancho_cm, alto_
         operador, ahora,
         detalle={"rama": ajuste["rama"], "diferencia": str(ajuste["diferencia"])})
 
-    # El ajuste se ejecuta DESPUÉS de registrar el repesaje: al revés, un fallo
-    # al registrar dejaría un cobro emitido sin nada que lo explique.
-    resultado = {"rama": ajuste["rama"], "diferencia_ris": str(ajuste["diferencia"]),
-                 "total_final_ris": str(ajuste["total_final"]),
-                 "cobro": None, "devolucion": None}
-
-    if ajuste["rama"] == "cobrar":
-        resultado["cobro"] = await envios_cobros.cobrar(
-            actualizado, "ajuste", ajuste["diferencia"], db=base, ahora=ahora,
-            idempotency_key=idempotency_key, base_calculo="repesaje",
-            peso_base_kg=peso_kg, detalle={"tarifa_version": ajuste["tarifa_version"]},
-            actor_type="admin", actor_id=getattr(operador, "user_id", None))
-    elif ajuste["rama"] == "devolver":
-        resultado["devolucion"] = await envios_cobros.devolver(
-            actualizado, ajuste["diferencia"], db=base, ahora=ahora,
-            motivo="repesaje", actor_type="admin",
-            actor_id=getattr(operador, "user_id", None))
-
-    # A dónde va el paquete lo decide el saldo, no el operador.
-    fresco = await _envio(base, envio_id)
-    impagas = partidas_impagas(fresco)
+    # A donde va el paquete lo decide el saldo, no el operador — y se ESCRIBE,
+    # no se sugiere. `pago_pendiente` existe para que el usuario reciba el aviso
+    # de que su paquete espera un pago; dejarlo como sugerencia lo volvia un
+    # estado inalcanzable y ese aviso, codigo muerto.
+    impagas = partidas_impagas(actualizado)
     siguiente = "pago_pendiente" if impagas else SALIDA_DE_PACARAIMA
+    if siguiente == "pago_pendiente":
+        actualizado = await _mover(base, actualizado, "pago_pendiente",
+                                   {"estado": "pago_pendiente"}, operador, ahora,
+                                   actor="system",
+                                   detalle={"partidas_impagas": impagas})
+
     resultado.update({"ok": True, "envio_id": envio_id,
+                      "estado": actualizado.get("estado"),
                       "partidas_impagas": impagas,
-                      "puede_salir": not impagas,
-                      "siguiente_sugerido": siguiente})
+                      "puede_salir": not impagas})
     return resultado
 
 
 async def _tolerancia(base):
+    """La tolerancia del panel, o None para que rija el piso del codigo.
+
+    `to_decimal(None)` devuelve 0 —es su contrato— y 0 es finito y >= 0, asi que
+    pasarlo tal cual entregaba una tolerancia EXPLICITA de cero: la rama
+    "sin_ajuste" desaparecia y una diferencia de un peso con cincuenta se
+    cobraba, con lo cual un envio podia quedar frenado en Pacaraima por 1,50. Y
+    pasaba en toda instalacion nueva, porque el bloque `operacion` no existe
+    hasta que alguien lo guarda desde el panel.
+    """
     from services.envios_config import leer
     operacion = await leer("operacion", db=base) or {}
-    valor = to_decimal(operacion.get("tolerancia_ajuste_ris"))
+    bruto = operacion.get("tolerancia_ajuste_ris")
+    if bruto is None or bruto == "":
+        return None
+    valor = to_decimal(bruto)
     return valor if valor.is_finite() and valor >= ZERO else None
 
 
@@ -448,7 +501,7 @@ def _exigir_transicion(envio: dict, hacia: str, actor: str, **banderas) -> None:
 
 
 async def _mover(base, envio: dict, hacia: str, parche: dict, operador, ahora,
-                 detalle: dict = None) -> dict:
+                 detalle: dict = None, actor: str = "admin") -> dict:
     """Aplica la transición con el estado en el FILTRO, y deja su línea.
 
     El estado va en el filtro y no solo en el chequeo previo: entre que se leyó y
@@ -470,7 +523,7 @@ async def _mover(base, envio: dict, hacia: str, parche: dict, operador, ahora,
             "El envío cambió de estado mientras trabajabas. Recargá la cola.", http=409)
 
     await envios_eventos.registrar(
-        actualizado, desde, hacia, "admin",
+        actualizado, desde, hacia, actor,
         actor_id=getattr(operador, "user_id", None), detalle=detalle,
         db=base, ahora=ahora)
 
@@ -479,3 +532,151 @@ async def _mover(base, envio: dict, hacia: str, parche: dict, operador, ahora,
     from services import envios_seguimiento
     await envios_seguimiento.avisar(actualizado, hacia, db=base)
     return actualizado
+
+
+# ─── 6. Los caminos que no son el feliz ───────────────────────────────────
+#
+# Sin esto, la mitad de las transiciones que `envios_estados` declara no las
+# implementaba nadie y los paquetes quedaban atascados. El caso mas caro: un
+# paquete cuya guarda vence en la agencia y que la agencia devuelve al remitente
+# — el envio se quedaba en `disponible_retiro` para siempre, y `cola()` lo
+# mostraba con los dias en negativo sin ninguna salida.
+
+# Los estados a los que se puede llevar un envio "a mano", con su motivo. NO es
+# cualquier transicion: es la lista de las que un operador tiene que poder hacer
+# desde el panel, y cada una sigue pasando por `puede_transicionar`.
+DESVIOS = ("retenido", "devuelto", "siniestrado", "cancelado")
+
+
+async def desviar(operador, envio_id: str, hacia: str, *, motivo: str,
+                  db=None, ahora=None, actor: str = "admin") -> dict:
+    """Lleva un envío a un estado que no es el camino feliz. Exige un motivo.
+
+    El motivo no es burocracia: estos estados abren consecuencias —una
+    indemnización, una devolución, un reclamo— y dentro de seis meses la única
+    forma de entender por qué un paquete terminó así es lo que alguien escribió
+    acá.
+    """
+    ahora = ahora or datetime.now(timezone.utc)
+    base = await _db(db)
+    if hacia not in DESVIOS:
+        raise OperacionRechazada(
+            f"No se puede llevar un envío a {hacia!r} desde acá.", http=400)
+    razon = (motivo or "").strip()
+    if len(razon) < 10:
+        raise OperacionRechazada(
+            "Escribí qué pasó, con al menos diez caracteres. Es lo único que va a "
+            "explicar este envío dentro de seis meses.")
+
+    envio = await _envio(base, envio_id)
+    _exigir_transicion(envio, hacia, actor)
+    actualizado = await _mover(base, envio, hacia,
+                               {"estado": hacia, "desvio": {
+                                   "motivo": razon[:500], "at": ahora,
+                                   "por": getattr(operador, "user_id", None)}},
+                               operador, ahora, detalle={"motivo": razon[:200]},
+                               actor=actor)
+    return {"ok": True, "envio_id": envio_id, "estado": actualizado.get("estado")}
+
+
+async def cancelar(usuario, envio_id: str, *, motivo: str = "", db=None,
+                   ahora=None) -> dict:
+    """El usuario cancela un envío suyo. Solo antes de que exista un paquete.
+
+    `puede_transicionar` ya limita desde dónde: cotizado y esperando_postagem. Un
+    envío ya despachado no se cancela — el paquete está viajando y cancelarlo en
+    una pantalla no lo trae de vuelta.
+    """
+    ahora = ahora or datetime.now(timezone.utc)
+    base = await _db(db)
+    user_id = getattr(usuario, "user_id", None)
+    try:
+        envio = await base.envios.find_one(
+            {"envio_id": envio_id, "user_id": user_id}, {"_id": 0})
+    except Exception as e:                                    # pragma: no cover
+        raise OperacionRechazada("No se pudo leer el envío.", http=503) from e
+    if not envio:
+        raise OperacionRechazada("No encontramos ese envío.", http=404)
+
+    _exigir_transicion(envio, "cancelado", "user")
+    actualizado = await _mover(
+        base, envio, "cancelado",
+        {"estado": "cancelado", "desvio": {
+            "motivo": (motivo or "cancelado por el usuario").strip()[:500],
+            "at": ahora, "por": user_id}},
+        usuario, ahora, actor="user")
+    return {"ok": True, "envio_id": envio_id, "estado": actualizado.get("estado")}
+
+
+# ─── 7. El flete del tramo de destino ─────────────────────────────────────
+#
+# En modalidad `prepago` el usuario le paga el flete al transportista de destino
+# por el circuito de remesas que la aplicacion ya tiene. Este modulo NO cobra ese
+# flete y no lo factura: solo registra cuanto pidio el mostrador y si la remesa
+# se acredito, porque de eso depende que el paquete se entregue.
+
+async def cargar_flete(operador, envio_id: str, *, monto, db=None, ahora=None) -> dict:
+    """Registra lo que el transportista de destino pidió por el tramo final.
+
+    Lo carga el operador que está parado en el mostrador, porque hasta ese
+    momento el precio no existe: nadie puede cotizarlo antes. Y no es un cobro de
+    RIS App — es el número que el usuario tiene que enviar como remesa.
+    """
+    ahora = ahora or datetime.now(timezone.utc)
+    base = await _db(db)
+    envio = await _envio(base, envio_id)
+
+    importe = to_decimal(monto)
+    if not importe.is_finite() or importe <= ZERO:
+        raise OperacionRechazada(
+            "Cargá el monto que pidió el transportista. Sin ese número el usuario no "
+            "sabe cuánto tiene que enviar.")
+
+    await _actualizar(base, envio_id, {
+        "flete.monto_acordado_ris": str(quantize_money(importe)),
+        "flete.cargado_por": getattr(operador, "user_id", None),
+        "flete.cargado_at": ahora,
+        "flete.estado": (envio.get("flete") or {}).get("estado") or "pendiente",
+    })
+    return {"ok": True, "envio_id": envio_id,
+            "monto_acordado_ris": str(quantize_money(importe)),
+            "estado": (envio.get("flete") or {}).get("estado") or "pendiente"}
+
+
+async def acreditar_flete(operador, envio_id: str, *, referencia: str = "",
+                          db=None, ahora=None) -> dict:
+    """Marca que la remesa del usuario al transportista llegó.
+
+    Es lo que destraba la entrega en modalidad prepago. Lo confirma una persona
+    porque la remesa se ejecuta por fuera de este módulo y nadie de acá puede
+    verla llegar.
+    """
+    ahora = ahora or datetime.now(timezone.utc)
+    base = await _db(db)
+    envio = await _envio(base, envio_id)
+    flete = envio.get("flete") or {}
+    if not flete.get("monto_acordado_ris"):
+        raise OperacionRechazada(
+            "Cargá primero cuánto pidió el transportista.", http=409)
+    if flete.get("estado") == "acreditado":
+        return {"ok": True, "envio_id": envio_id, "estado": "acreditado"}
+
+    await _actualizar(base, envio_id, {
+        "flete.estado": "acreditado",
+        "flete.acreditado_at": ahora,
+        "flete.acreditado_por": getattr(operador, "user_id", None),
+        "flete.referencia": (referencia or "").strip()[:80] or None,
+    })
+    return {"ok": True, "envio_id": envio_id, "estado": "acreditado"}
+
+
+async def _actualizar(base, envio_id: str, parche: dict) -> None:
+    try:
+        resultado = await base.envios.update_one({"envio_id": envio_id},
+                                                 {"$set": parche})
+    except Exception as e:
+        logger.error(f"envios: no se pudo actualizar {envio_id}: {e}")
+        raise OperacionRechazada(
+            "No se pudo guardar. Reintentá en un momento.", http=503) from e
+    if getattr(resultado, "matched_count", 1) == 0:            # pragma: no cover
+        raise OperacionRechazada("Ese envío no existe.", http=404)

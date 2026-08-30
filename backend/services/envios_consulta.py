@@ -79,12 +79,24 @@ async def listar(usuario, *, pagina: int = 1, por_pagina: int = POR_PAGINA,
 
     desde = (pagina - 1) * por_pagina
     ventana = (filas or [])[desde:desde + por_pagina]
+    # Cada fila se arma por separado: un documento a medio migrar —con
+    # `destino.destinatario` como texto, por ejemplo— no puede llevarse puesta la
+    # lista entera del usuario.
     return {
-        "envios": [_fila(e) for e in ventana],
+        "envios": [f for f in (_fila_segura(e) for e in ventana) if f],
         "pagina": pagina,
         "hay_mas": len(filas or []) > desde + por_pagina,
         "degradado": False,
     }
+
+
+def _fila_segura(envio: dict):
+    try:
+        return _fila(envio)
+    except Exception as e:
+        logger.warning(
+            f"envios: no se pudo mostrar {envio.get('envio_id')} en la lista: {e}")
+        return None
 
 
 def _fila(envio: dict) -> dict:
@@ -143,6 +155,18 @@ async def detalle(usuario, envio_id: str, db=None) -> dict | None:
     if not envio:
         return None
 
+    try:
+        return await _detalle(envio, base)
+    except Exception as e:
+        logger.warning(f"envios: no se pudo armar el detalle de {envio_id}: {e}")
+        return None
+
+
+async def _detalle(envio: dict, base) -> dict:
+    from services.envios_eventos import historial
+    from services.envios_seguimiento import PUBLICO
+
+    envio_id = envio.get("envio_id")
     eventos = await historial(envio_id, db=base)
     cot = envio.get("cotizacion") or {}
     despacho = envio.get("destino_brasil") or {}

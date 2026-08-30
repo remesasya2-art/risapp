@@ -81,6 +81,10 @@ INDICES = (
     # El lote de retiro: agrupa los envios que viajaron juntos, que es lo que
     # hace posible la vista de rentabilidad por viaje (§2.3).
     ("envios", "origen.lote_retiro_id", {"sparse": True}),
+    # El barrido de precios observados ordena por fecha sin filtrar. Sin este
+    # indice es un COLLSCAN con sort en memoria, y Mongo aborta el sort al pasar
+    # los 32 MB: la pantalla empieza a decir "sin observaciones" con un 200 OK.
+    ("envios", [("created_at", -1)], {}),
     # La deduplicacion de cotizaciones: mismo usuario, mismo pedido, todavia
     # vigente. Sin esto, un doble clic deja dos envios de los que uno queda a la
     # deriva con datos personales de un tercero adentro.

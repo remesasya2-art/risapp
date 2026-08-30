@@ -162,6 +162,13 @@ async def cargar(usuario, envio_id: str, *, codigo_objeto, posteado_at, foto: by
                       **{f"origen.{k}": v for k, v in origen.items()}}},
             return_document=True)
     except Exception as e:
+        # El indice de `origen.codigo_objeto` es unico, asi que dos cargas
+        # simultaneas del mismo codigo terminan aca. Responder 503 le dice al
+        # usuario "reintenta" sobre algo que nunca va a funcionar.
+        if "e11000" in str(e).lower() or "duplicate key" in str(e).lower():
+            raise ComprobanteRechazado(
+                "Ese código de objeto ya está cargado en otro envío. Revisá que no "
+                "hayas copiado el comprobante equivocado.", http=409) from e
         logger.error(f"envios: no se pudo cargar el comprobante de {envio_id}: {e}")
         raise ComprobanteRechazado(
             "No se pudo guardar el comprobante. Probá de nuevo en un momento.",

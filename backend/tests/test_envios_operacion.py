@@ -108,7 +108,10 @@ class _Coleccion:
     def _match(self, d, filtro):
         for k, v in (filtro or {}).items():
             actual = _camino(d, k)
-            if isinstance(v, dict) and "$gte" in v:
+            if isinstance(v, dict) and "$ne" in v:
+                if actual == v["$ne"]:
+                    return False
+            elif isinstance(v, dict) and "$gte" in v:
                 a, b = _num(actual), _num(v["$gte"])
                 if a is None or not isinstance(a, Decimal) or a < b:
                     return False
@@ -545,7 +548,11 @@ def test_si_no_hay_saldo_el_ajuste_queda_pendiente_y_el_paquete_no_sale():
                          ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
     assert r["cobro"]["estado"] == "pendiente"
     assert r["puede_salir"] is False
-    assert r["siguiente_sugerido"] == "pago_pendiente"
+    # El estado se ESCRIBE, no se sugiere: `pago_pendiente` existe para que el
+    # usuario reciba el aviso de que su paquete espera un pago, y dejarlo como
+    # sugerencia lo volvia un estado inalcanzable y ese aviso, codigo muerto.
+    assert r["estado"] == "pago_pendiente"
+    assert envio_de(base)["estado"] == "pago_pendiente"
 
 
 # ─── 5. La salida de Pacaraima ────────────────────────────────────────────
@@ -671,3 +678,295 @@ def test_el_modulo_no_menciona_ninguna_marca():
                   encoding="utf-8").read().lower()
     for marca in ("mrw", "correios", "zoom", "tealca", "domesa"):
         assert marca not in fuente
+
+
+# ─── 8. Lo que encontro la revision adversarial ───────────────────────────
+
+def test_si_el_cobro_del_ajuste_falla_el_paquete_no_sale_igual():
+    """EL DEFECTO P0. El estado cambiaba ANTES de cobrar: si el cobro fallaba por
+    un 503 pasajero, el reintento chocaba contra "el envío ya está en ese
+    estado", ninguna otra ruta emite la partida `ajuste`, y el paquete salía de
+    Pacaraima sin la diferencia cobrada."""
+    cobros = _cargar("envios_cobros")
+    base = db_completa(envios=[_listo_para_repesar()])
+    original = cobros.cobrar
+
+    async def revienta(*a, **k):
+        cobros.cobrar = original
+        raise cobros.CobroImposible("mongo caído", http=503)
+    cobros.cobrar = revienta
+    try:
+        with pytest.raises(Exception):
+            corre(op.repesar(_Operador(), "env_aaa111", peso_kg="6.00",
+                             largo_cm="40", ancho_cm="30", alto_cm="20",
+                             db=base, ahora=AHORA))
+    finally:
+        cobros.cobrar = original
+
+    # El estado NO se movió, así que el reintento funciona.
+    assert envio_de(base)["estado"] == "recibido_pacaraima"
+    r = corre(op.repesar(_Operador(), "env_aaa111", peso_kg="6.00", largo_cm="40",
+                         ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
+    assert r["cobro"]["estado"] == "pagado"
+    assert envio_de(base)["estado"] == "repesado"     # listo para despachar
+    assert r["puede_salir"] is True
+
+
+def test_reintentar_un_repesaje_no_cobra_dos_veces():
+    """Cobrar antes de mover es seguro porque `cobrar` es idempotente por
+    partida: un reintento devuelve la que ya existe."""
+    base = db_completa(envios=[_listo_para_repesar()])
+    corre(op.repesar(_Operador(), "env_aaa111", peso_kg="6.00", largo_cm="40",
+                     ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
+    saldo = saldo_de(base)
+    envio_de(base)["estado"] = "recibido_pacaraima"      # como si nada se hubiera movido
+    corre(op.repesar(_Operador(), "env_aaa111", peso_kg="6.00", largo_cm="40",
+                     ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
+    assert saldo_de(base) == saldo
+
+
+def test_sin_el_bloque_de_operacion_la_tolerancia_no_es_cero():
+    """`to_decimal(None)` da 0 —es su contrato— y pasarlo tal cual entregaba una
+    tolerancia EXPLÍCITA de cero: la rama "sin_ajuste" desaparecía y un envío
+    podía quedar frenado en Pacaraima por un peso con cincuenta. Y pasaba en toda
+    instalación nueva, porque el bloque no existe hasta que alguien lo guarda."""
+    apenas = _listo_para_repesar(
+        cobros={"inicial": {"monto_ris": "130.50", "estado": "pagado",
+                            "peso_base_kg": "2.30"},
+                "ajuste": None, "total_cobrado_ris": "130.50",
+                "reembolsado_ris": "0.00"})
+    base = db_completa(envios=[apenas])
+    base.app_settings.filas.clear()          # panel recién instalado
+
+    r = corre(op.repesar(_Operador(), "env_aaa111", peso_kg="2.30", largo_cm="40",
+                         ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
+    assert r["rama"] == "sin_ajuste"
+    assert envio_de(base)["cobros"]["ajuste"] is None
+    assert saldo_de(base) == Decimal("500.00")
+
+
+def test_sin_cobro_inicial_el_error_no_culpa_al_operador():
+    """El error decía "revisá las medidas que cargaste", culpándolo de que nadie
+    verificó el comprobante todavía. Y el operador volvía a tipear el peso
+    indefinidamente."""
+    sin_inicial = _listo_para_repesar(
+        cobros={"inicial": None, "ajuste": None, "total_cobrado_ris": "0.00"})
+    base = db_completa(envios=[sin_inicial])
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.repesar(_Operador(), "env_aaa111", peso_kg="2.30", largo_cm="40",
+                         ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
+    assert e.value.http == 409
+    assert "comprobante" in e.value.mensaje
+
+
+def test_el_usuario_se_entera_de_que_su_paquete_espera_un_pago():
+    """Es el único aviso que el propio módulo llama "el que importaba"."""
+    base = db_completa(saldo="0.00", envios=[_listo_para_repesar()])
+    corre(op.repesar(_Operador(), "env_aaa111", peso_kg="6.00", largo_cm="40",
+                     ancho_cm="30", alto_cm="20", db=base, ahora=AHORA))
+    avisos = [n for n in base.notifications.filas
+              if "espera un pago" in (n.get("title") or "")]
+    assert avisos, "sin este aviso el usuario no sabe que su paquete está frenado"
+
+
+def test_la_cola_avisa_cuando_hay_mas_de_los_que_muestra():
+    """Truncar en silencio hace que quien viaja arme la lista con doscientos y
+    deje el resto en el mostrador consumiendo días de guarda."""
+    envios = [envio_base(envio_id=f"env_{i:03d}", display_id=f"E{i:06d}",
+                         estado="disponible_retiro",
+                         origen={"codigo_objeto": f"AA{i:09d}BR"})
+              for i in range(1, 8)]
+    base = db_completa(envios=envios)
+    r = corre(op.cola("disponible_retiro", db=base, limite=5, ahora=AHORA))
+    assert r["total"] == 5 and r["hay_mas"] is True
+
+    completa = corre(op.cola("disponible_retiro", db=base, limite=50, ahora=AHORA))
+    assert completa["total"] == 7 and completa["hay_mas"] is False
+
+
+# ─── 9. Los caminos que no son el feliz ───────────────────────────────────
+
+def test_un_paquete_devuelto_por_la_agencia_tiene_salida():
+    """Sin esto, un paquete cuya guarda vencía y que la agencia devolvía al
+    remitente se quedaba en `disponible_retiro` para siempre, y la cola lo
+    mostraba con los días en negativo sin ninguna salida."""
+    base = db_completa(envios=[envio_base(estado="disponible_retiro")])
+    r = corre(op.desviar(_Operador(), "env_aaa111", "devuelto",
+                         motivo="venció la guarda y la agencia lo devolvió",
+                         db=base, ahora=AHORA))
+    assert r["estado"] == "devuelto"
+    assert envio_de(base)["desvio"]["por"] == "usr_operador"
+
+
+@pytest.mark.parametrize("desde,hacia", [
+    ("recibido_pacaraima", "retenido"),
+    ("recibido_pacaraima", "siniestrado"),
+    ("en_transito_int", "retenido"),
+    ("disponible_retiro", "devuelto"),
+])
+def test_los_desvios_declarados_se_pueden_hacer(desde, hacia):
+    base = db_completa(envios=[envio_base(estado=desde)])
+    r = corre(op.desviar(_Operador(), "env_aaa111", hacia,
+                         motivo="aduana observó el contenido", db=base, ahora=AHORA))
+    assert r["estado"] == hacia
+
+
+def test_un_desvio_exige_un_motivo_de_verdad():
+    """Estos estados abren consecuencias —una indemnización, una devolución— y
+    dentro de seis meses la única forma de entender por qué un paquete terminó
+    así es lo que alguien escribió acá."""
+    base = db_completa(envios=[envio_base(estado="recibido_pacaraima")])
+    for malo in ("", "   ", "ok", "problema"):
+        with pytest.raises(op.OperacionRechazada):
+            corre(op.desviar(_Operador(), "env_aaa111", "retenido", motivo=malo,
+                             db=base, ahora=AHORA))
+    assert envio_de(base)["estado"] == "recibido_pacaraima"
+
+
+def test_no_se_puede_desviar_a_cualquier_estado():
+    base = db_completa(envios=[envio_base(estado="recibido_pacaraima")])
+    with pytest.raises(op.OperacionRechazada):
+        corre(op.desviar(_Operador(), "env_aaa111", "entregado_transportista",
+                         motivo="quiero saltearme el repesaje", db=base, ahora=AHORA))
+
+
+def test_un_desvio_invalido_para_ese_estado_se_rechaza():
+    """Sigue pasando por la máquina de estados: no es una puerta trasera."""
+    base = db_completa(envios=[envio_base(estado="entregado_transportista")])
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.desviar(_Operador(), "env_aaa111", "retenido",
+                         motivo="me equivoqué de envío", db=base, ahora=AHORA))
+    assert e.value.http == 409
+
+
+def test_el_usuario_puede_cancelar_antes_de_despachar():
+    base = db_completa(envios=[envio_base(estado="esperando_postagem")])
+
+    class _Ana:
+        user_id = "usr_ana"
+
+    r = corre(op.cancelar(_Ana(), "env_aaa111", db=base, ahora=AHORA))
+    assert r["estado"] == "cancelado"
+
+
+def test_el_usuario_no_puede_cancelar_un_paquete_que_ya_esta_viajando():
+    """Cancelarlo en una pantalla no lo trae de vuelta."""
+    base = db_completa(envios=[envio_base(estado="recibido_pacaraima")])
+
+    class _Ana:
+        user_id = "usr_ana"
+
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.cancelar(_Ana(), "env_aaa111", db=base, ahora=AHORA))
+    assert e.value.http == 409
+
+
+def test_nadie_cancela_el_envio_de_otro():
+    base = db_completa(envios=[envio_base(estado="esperando_postagem")])
+
+    class _Otro:
+        user_id = "usr_otro"
+
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.cancelar(_Otro(), "env_aaa111", db=base, ahora=AHORA))
+    assert e.value.http == 404
+
+
+# ─── 10. El flete del tramo final ─────────────────────────────────────────
+
+def test_un_envio_prepago_se_puede_entregar_despues_de_acreditar_el_flete():
+    """Nada escribía `flete.*`, así que un envío `prepago` no se podía entregar
+    NUNCA: la validación lo bloqueaba y no existía la ruta que lo destrabara."""
+    prepago = envio_base(estado="en_transito_int", modalidad_flete="prepago")
+    base = db_completa(envios=[prepago])
+
+    with pytest.raises(op.OperacionRechazada):
+        corre(op.entregar(_Operador(), "env_aaa111", guia="GUIA-1", db=base,
+                          ahora=AHORA))
+
+    corre(op.cargar_flete(_Operador(), "env_aaa111", monto="310.00", db=base,
+                          ahora=AHORA))
+    corre(op.acreditar_flete(_Operador(), "env_aaa111", referencia="wd_123",
+                             db=base, ahora=AHORA))
+    r = corre(op.entregar(_Operador(), "env_aaa111", guia="GUIA-1", db=base,
+                          ahora=AHORA))
+    assert r["estado"] == "entregado_transportista"
+
+
+def test_no_se_acredita_un_flete_que_nadie_cargo():
+    base = db_completa(envios=[envio_base(estado="en_transito_int",
+                                          modalidad_flete="prepago")])
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.acreditar_flete(_Operador(), "env_aaa111", db=base, ahora=AHORA))
+    assert e.value.http == 409
+
+
+def test_el_flete_queda_donde_lo_lee_la_rentabilidad():
+    """Es la fuente de la mitad venezolana de los precios observados. Si el nombre
+    del campo no coincide, esa mitad queda vacía para siempre y nadie se entera."""
+    rent = _cargar("envios_rentabilidad")
+    base = db_completa(envios=[envio_base(estado="en_transito_int",
+                                          destino={"zona_tarifa": "zona_a"})])
+    corre(op.cargar_flete(_Operador(), "env_aaa111", monto="310.00", db=base,
+                          ahora=AHORA))
+    obs = corre(rent.observaciones(db=base, ahora=AHORA))
+    venezuela = [o for o in obs if o["rol"] == "venezuela"]
+    assert venezuela and Decimal(venezuela[0]["promedio"]) == Decimal("310.00")
+
+
+def test_un_monto_de_flete_ilegible_se_rechaza():
+    base = db_completa(envios=[envio_base(estado="en_transito_int")])
+    for malo in ("0", "", "gratis", "-10"):
+        with pytest.raises(op.OperacionRechazada):
+            corre(op.cargar_flete(_Operador(), "env_aaa111", monto=malo, db=base,
+                                  ahora=AHORA))
+
+
+def test_no_queda_ninguna_transicion_declarada_sin_forma_de_hacerla():
+    """La máquina de estados declara treinta transiciones. Las que ninguna ruta
+    implementa son paquetes que quedan atascados, y el costo se descubre con el
+    paquete adentro."""
+    estados = _cargar("envios_estados")
+    # Lo que el módulo sabe mover: el camino feliz más los desvíos.
+    implementadas = {
+        ("cotizado", "esperando_postagem"), ("esperando_postagem", "en_transito_origen"),
+        ("en_transito_origen", "disponible_retiro"),
+        ("disponible_retiro", "recibido_pacaraima"),
+        ("recibido_pacaraima", "repesado"), ("repesado", "pago_pendiente"),
+        ("repesado", "en_transito_int"), ("pago_pendiente", "en_transito_int"),
+        ("en_transito_int", "entregado_transportista"), ("retenido", "repesado"),
+        ("retenido", "en_transito_int"),
+    }
+    for desde, hacia in ((d, h) for d, hs in estados.TRANSICIONES.items() for h in hs):
+        if hacia in op.DESVIOS:
+            continue          # la ruta de desvío las cubre todas
+        assert (desde, hacia) in implementadas, f"{desde} -> {hacia} no la hace nadie"
+
+
+def test_desviar_no_es_una_puerta_para_saltearse_el_repesaje():
+    """`repesado` es una transición VÁLIDA desde `recibido_pacaraima`, así que la
+    máquina de estados sola no la frena: lo que la frena es que `repesado` no
+    está en la lista de desvíos. Sin esa lista, `desviar(..., "repesado")` movería
+    el paquete sin calcular ni cobrar el ajuste."""
+    base = db_completa(envios=[envio_base(estado="recibido_pacaraima")])
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.desviar(_Operador(), "env_aaa111", "repesado",
+                         motivo="quiero saltearme el ajuste", db=base, ahora=AHORA))
+    assert e.value.http == 400
+    assert envio_de(base)["estado"] == "recibido_pacaraima"
+    assert envio_de(base)["cotizacion"]["es_estimado"] is True
+
+
+def test_la_cola_le_da_al_operador_la_foto_que_le_va_a_pedir_verificar():
+    """Sin el asset en la cola, el paso de verificación es tipear un peso a
+    ciegas: la única ruta que servía archivos exigía ser el dueño del envío."""
+    con_comprobante = envio_base(
+        estado="disponible_retiro",
+        origen={"codigo_objeto": "AA123456789BR",
+                "comprobante_asset_id": "ast_abc", "foto_repetida_en": "env_xxx"})
+    base = db_completa(envios=[con_comprobante])
+    r = corre(op.cola("disponible_retiro", db=base, ahora=AHORA))
+    fila = r["grupos"][0]["envios"][0]
+    assert fila["comprobante_asset_id"] == "ast_abc"
+    assert fila["foto_repetida_en"] == "env_xxx"
+    assert fila["comprobante_verificado"] is False

@@ -337,12 +337,21 @@ def _fuente_ruta():
 # Escrita a mano y verificada contra el archivo, para que agregar una ruta
 # operativa sea una decisión y no un descuido.
 ESCRITURAS_DEL_OPERADOR = (
-    "verificar_comprobante",
     # La operacion: mover paquetes que el operador tiene en la mano.
-    "marcar_disponible", "retirar_lote", "repesar", "despachar", "entregar",
+    "marcar_disponible", "retirar_lote", "despachar", "entregar",
     # El costo de un viaje lo carga el operador que lo hizo, que es el unico que
     # sabe cuanto salio.
     "cargar_costo_viaje",
+    # El monto del flete lo carga el operador parado en el mostrador: hasta ese
+    # momento ese precio no existe.
+    "cargar_flete",
+)
+
+# Las escrituras que mueven SALDO REAL o cierran un envio. Exigen `admin` y no
+# `agent`: el rol de soporte de chat no tiene por que poder emitir un cobro ni
+# acreditarle plata a nadie, y `repesar` puede hacer las dos cosas.
+ESCRITURAS_DE_ADMIN = (
+    "verificar_comprobante", "repesar", "desviar_envio", "acreditar_flete",
 )
 
 
@@ -356,7 +365,10 @@ def test_solo_el_super_administrador_escribe_la_configuracion():
         r"@router\.(?:post|put|patch)\([^)]*\)\s*\nasync def (\w+)", fuente)
     for funcion in escrituras:
         cabecera = _cabecera_de(fuente, funcion)
-        if funcion in ESCRITURAS_DEL_OPERADOR:
+        if funcion in ESCRITURAS_DE_ADMIN:
+            assert "get_admin_user" in cabecera, funcion
+            assert "get_crm_user" not in cabecera, funcion
+        elif funcion in ESCRITURAS_DEL_OPERADOR:
             assert "get_crm_user" in cabecera, funcion
             assert "get_super_admin" not in cabecera, funcion
         else:
@@ -370,6 +382,7 @@ def test_las_escrituras_del_operador_estan_declaradas_y_existen():
     escrituras = set(re.findall(
         r"@router\.(?:post|put|patch)\([^)]*\)\s*\nasync def (\w+)", fuente))
     assert set(ESCRITURAS_DEL_OPERADOR) <= escrituras
+    assert set(ESCRITURAS_DE_ADMIN) <= escrituras
 
 
 def _cabecera_de(fuente: str, funcion: str) -> str:
@@ -444,6 +457,8 @@ RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
     "despachar", "entregar",
     # El costo de un viaje lo carga el operador que lo hizo.
     "cargar_costo_viaje",
+    # Desviar un envio y registrar el flete tocan UN envio, no la configuracion.
+    "desviar_envio", "cargar_flete", "acreditar_flete",
 )
 
 

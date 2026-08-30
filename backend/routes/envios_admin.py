@@ -32,10 +32,12 @@ from datetime import date, datetime, timezone
 
 from fastapi import (APIRouter, Depends, File, Form, HTTPException,
                      UploadFile)
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from database import db
-from routes.dependencies import get_super_admin, get_crm_user
+from routes.dependencies import (get_admin_user, get_crm_user,
+                                 get_super_admin)
 from models.user import User
 from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
@@ -660,10 +662,15 @@ class Verificacion(BaseModel):
 
 @router.post("/envios/{envio_id}/comprobante/verificar")
 async def verificar_comprobante(envio_id: str, datos: Verificacion,
-                                admin: User = Depends(get_crm_user)):
+                                admin: User = Depends(get_admin_user)):
     """Confirma el comprobante y **emite el cobro inicial**.
 
-    Es la única ruta del panel que hace que se mueva saldo, y lo hace con el peso
+    `get_admin_user` y no `get_crm_user`: esta ruta mueve saldo real, y el rol
+    `agent` —soporte de chat— no tiene por qué poder emitir un cobro. Es la misma
+    razón por la que el repesaje, que puede acreditarle plata a un usuario,
+    tampoco lo acepta.
+
+    Es una de las dos rutas del panel que hacen que se mueva saldo, y lo hace con el peso
     que el operador leyó en la foto. Si el cobro no se puede pagar, la partida
     queda pendiente y el envío sigue: el paquete ya está viajando.
     """
@@ -765,8 +772,12 @@ class Repesaje(BaseModel):
 
 @router.post("/envios/{envio_id}/repesar")
 async def repesar(envio_id: str, datos: Repesaje,
-                  admin: User = Depends(get_crm_user)):
+                  admin: User = Depends(get_admin_user)):
     """Pesa con balanza propia y cierra el precio. Las tres ramas del ajuste.
+
+    `get_admin_user` y no `get_crm_user`: la rama "devolver" **acredita saldo
+    real** con un monto derivado de las medidas que teclea quien llama. Un rol
+    `agent` con esta ruta puede transferirse plata a sí mismo en dos pasos.
 
     Devuelve `puede_salir`, que es lo que el operador necesita saber antes de
     cargar la camioneta y no después.
@@ -801,11 +812,11 @@ async def entregar(envio_id: str, guia: str = Form(...),
     La guía es obligatoria: sin ella, la única prueba de la entrega es la palabra
     del operador.
     """
-    datos = None
-    if foto is not None:
-        from services.envios_archivos import TAMANO_MAX_BYTES
-        datos = await foto.read(TAMANO_MAX_BYTES + 1)
     try:
+        datos = None
+        if foto is not None:
+            from services.envios_archivos import TAMANO_MAX_BYTES
+            datos = await foto.read(TAMANO_MAX_BYTES + 1)
         return await envios_operacion.entregar(admin, envio_id, guia=guia, foto=datos)
     except Exception as e:
         raise _operacion(e)
@@ -891,3 +902,87 @@ async def aprobar_observado(datos: Aprobacion,
         raise _rentabilidad(e)
     invalidar_cache()
     return resultado
+
+
+# ─── Los caminos que no son el feliz, y el flete del tramo final ──────────
+
+class Desvio(BaseModel):
+    # El motivo no es burocracia: estos estados abren consecuencias —una
+    # indemnizacion, una devolucion, un reclamo— y dentro de seis meses la unica
+    # forma de entender por que un paquete termino asi es lo que alguien
+    # escribio aca.
+    motivo: str = Field(min_length=10, max_length=500)
+
+
+@router.post("/envios/{envio_id}/desviar/{hacia}")
+async def desviar_envio(envio_id: str, hacia: str, datos: Desvio,
+                        admin: User = Depends(get_admin_user)):
+    """Lleva un envío a `retenido`, `devuelto`, `siniestrado` o `cancelado`.
+
+    Sin esta ruta, la mitad de las transiciones que la máquina de estados declara
+    no las implementaba nadie: un paquete cuya guarda vencía y que la agencia
+    devolvía al remitente se quedaba en `disponible_retiro` para siempre.
+    """
+    try:
+        return await envios_operacion.desviar(admin, envio_id, hacia,
+                                              motivo=datos.motivo)
+    except Exception as e:
+        raise _operacion(e)
+
+
+class Flete(BaseModel):
+    monto_ris: str = Field(min_length=1, max_length=20)
+
+
+@router.put("/envios/{envio_id}/flete")
+async def cargar_flete(envio_id: str, datos: Flete,
+                       admin: User = Depends(get_crm_user)):
+    """Registra lo que el transportista de destino pidió por el tramo final.
+
+    Lo carga el operador parado en el mostrador, porque hasta ese momento el
+    precio no existe: nadie puede cotizarlo antes. **No es un cobro de RIS App**
+    — es el número que el usuario tiene que enviar como remesa.
+    """
+    try:
+        return await envios_operacion.cargar_flete(admin, envio_id,
+                                                   monto=datos.monto_ris)
+    except Exception as e:
+        raise _operacion(e)
+
+
+class AcreditacionFlete(BaseModel):
+    referencia: str = Field(default="", max_length=80)
+
+
+@router.post("/envios/{envio_id}/flete/acreditar")
+async def acreditar_flete(envio_id: str, datos: AcreditacionFlete,
+                          admin: User = Depends(get_admin_user)):
+    """Marca que la remesa del usuario al transportista llegó.
+
+    Es lo que destraba la entrega en modalidad prepago. Lo confirma una persona
+    porque la remesa se ejecuta por fuera de este módulo y nadie de acá puede
+    verla llegar. Sin esta ruta, un envío `prepago` no se podía entregar nunca.
+    """
+    try:
+        return await envios_operacion.acreditar_flete(
+            admin, envio_id, referencia=datos.referencia)
+    except Exception as e:
+        raise _operacion(e)
+
+
+@router.get("/envios/{envio_id}/foto/{asset_id}")
+async def ver_foto_admin(envio_id: str, asset_id: str,
+                         admin: User = Depends(get_crm_user)):
+    """La foto de un envío, para el operador.
+
+    Sin esto, la ruta que le pide al operador "lo que LEE en la foto del
+    comprobante" le pedía tipear un peso a ciegas: la única ruta que servía
+    archivos exigía ser el dueño del envío.
+    """
+    from services import envios_archivos
+    ficha = await envios_archivos.leer(asset_id, envio_id=envio_id)
+    if not ficha or not ficha.get("contenido"):
+        raise HTTPException(404, "No encontramos esa foto.")
+    return Response(content=bytes(ficha["contenido"]),
+                    media_type=ficha.get("content_type") or "image/jpeg",
+                    headers={"Cache-Control": "private, max-age=300"})

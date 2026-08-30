@@ -116,7 +116,10 @@ class _Coleccion:
     def _match(self, d, filtro):
         for k, v in (filtro or {}).items():
             actual = _camino(d, k)
-            if isinstance(v, dict) and "$gte" in v:
+            if isinstance(v, dict) and "$ne" in v:
+                if actual == v["$ne"]:
+                    return False
+            elif isinstance(v, dict) and "$gte" in v:
                 a, b = _num(actual), _num(v["$gte"])
                 if a is None or not isinstance(a, Decimal) or a < b:
                     return False
@@ -526,3 +529,24 @@ def test_ni_la_pagina_ni_el_tamano_pueden_pedirle_de_todo_a_la_base(pagina, por_
     r = corre(con.listar(_Usuario(), pagina=pagina, por_pagina=por_pagina, db=base))
     assert r["degradado"] is False
     assert pedidos[0] <= con.PAGINA_MAX * con.POR_PAGINA_MAX + 1
+
+
+def test_un_documento_roto_no_se_lleva_puesta_la_lista_entera():
+    """`_fila` corría fuera del try. Con un envío a medio migrar —`destinatario`
+    como texto en vez de dict— la lista entera del usuario devolvía un 500."""
+    roto = envio(2)
+    # `cobros` viaja entero en la proyección, así que un valor con otra forma
+    # llega hasta `partidas_impagas`. (Un `destinatario` roto no sirve para este
+    # test: la proyección con notación de punto ya lo descarta antes.)
+    roto["cobros"] = "esto no es un dict"
+    base = db_completa(envios=[envio(1), roto])
+    r = corre(con.listar(_Usuario(), db=base))
+    assert [e["envio_id"] for e in r["envios"]] == ["env_001"]
+    assert r["degradado"] is False
+
+
+def test_un_documento_roto_tampoco_rompe_el_detalle():
+    roto = envio(1)
+    roto["cobros"] = "esto no es un dict"
+    base = db_completa(envios=[roto])
+    assert corre(con.detalle(_Usuario(), "env_001", db=base)) is None

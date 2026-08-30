@@ -107,7 +107,10 @@ class _Coleccion:
     def _match(self, d, filtro):
         for k, v in (filtro or {}).items():
             actual = _camino(d, k)
-            if isinstance(v, dict) and "$gte" in v:
+            if isinstance(v, dict) and "$ne" in v:
+                if actual == v["$ne"]:
+                    return False
+            elif isinstance(v, dict) and "$gte" in v:
                 a, b = _num(actual), _num(v["$gte"])
                 if a is None or not isinstance(a, Decimal) or a < b:
                     return False
@@ -326,9 +329,16 @@ def saldo_de(base) -> Decimal:
 CODIGO = "AA123456789BR"
 
 
+# RELATIVA al reloj, no fija. Con "2026-08-29" escrito a mano y un limite de
+# sesenta dias hacia atras, toda la suite de este archivo empezaba a fallar el
+# 28 de octubre de 2026 — y el fallo no habria dicho "el test tiene una fecha
+# vieja", habria dicho "el comprobante tiene mas de 60 dias".
+AYER = (AHORA - timedelta(days=1)).date().isoformat()
+ANTEAYER = (AHORA - timedelta(days=2)).date().isoformat()
+
+
 def cargar(base, **cambios):
-    datos = {"codigo_objeto": CODIGO, "posteado_at": "2026-08-29",
-             "foto": _jpeg()}
+    datos = {"codigo_objeto": CODIGO, "posteado_at": AYER, "foto": _jpeg()}
     datos.update(cambios)
     return corre(comp.cargar(_Usuario(), "env_aaa111", db=base, ahora=AHORA, **datos))
 
@@ -528,7 +538,7 @@ def test_el_mismo_archivo_en_otro_envio_se_marca_pero_no_frena():
     base.envios.filas.append(otro)
     foto = _jpeg()
     corre(comp.cargar(_Usuario(), "env_bbb222", codigo_objeto="ZZ987654321BR",
-                      posteado_at="2026-08-28", foto=foto, db=base, ahora=AHORA))
+                      posteado_at=ANTEAYER, foto=foto, db=base, ahora=AHORA))
 
     cargar(base, foto=foto)
     assert envio_de(base)["origen"]["foto_repetida_en"] == "env_bbb222"
@@ -545,7 +555,7 @@ def test_al_usuario_no_se_le_dice_en_que_otro_envio_estaba_la_foto():
     base.envios.filas.append(otro)
     foto = _jpeg()
     corre(comp.cargar(_Usuario(), "env_bbb222", codigo_objeto="ZZ987654321BR",
-                      posteado_at="2026-08-28", foto=foto, db=base, ahora=AHORA))
+                      posteado_at=ANTEAYER, foto=foto, db=base, ahora=AHORA))
     r = cargar(base, foto=foto)
     assert "env_bbb222" not in repr(r)
 
@@ -631,7 +641,7 @@ def test_no_se_carga_el_comprobante_de_un_envio_ajeno():
 
     with pytest.raises(comp.ComprobanteRechazado) as e:
         corre(comp.cargar(_Otro(), "env_aaa111", codigo_objeto=CODIGO,
-                          posteado_at="2026-08-29", foto=_jpeg(), db=base,
+                          posteado_at=AYER, foto=_jpeg(), db=base,
                           ahora=AHORA))
     assert e.value.http == 404
 
@@ -744,3 +754,63 @@ def test_una_lectura_rancia_no_deja_verificar_dos_veces():
     assert r["ya_verificado"] is True
     assert envio_de(base)["origen"]["verificado"]["peso_kg"] == "2.65"
     assert saldo_de(base) == saldo
+
+
+def test_ninguna_fecha_de_despacho_esta_escrita_a_mano():
+    """Una fecha de despacho fija contra un reloj real es una bomba: la suite
+    empieza a fallar sola un día, y el fallo no dice "el test tiene una fecha
+    vieja", dice "el comprobante tiene más de 60 días".
+
+    La fecha de la COTIZACIÓN sí puede ser fija, y tiene que serlo: está congelada
+    en el envío y es lo que hace reproducible el monto que se cobra.
+    """
+    import re as _re
+    fuente = open(__file__, encoding="utf-8").read()
+    codigo = "\n".join(l for l in fuente.split("\n")
+                       if not l.lstrip().startswith("#"))
+    fijas = _re.findall(r'posteado_at\s*[=:]\s*"20\d\d-\d\d-\d\d"', codigo)
+    assert fijas == [], f"fechas de despacho fijas: {fijas}"
+
+
+def test_una_fecha_de_despacho_de_hace_dos_meses_ya_no_entra():
+    """El límite es real y este test lo fija: si alguien lo sube a 365, esto
+    falla y hay que decidirlo, no descubrirlo."""
+    base = db_completa()
+    vieja = (AHORA - timedelta(days=comp.DIAS_ATRAS_MAX + 1)).date().isoformat()
+    with pytest.raises(comp.ComprobanteRechazado):
+        cargar(base, posteado_at=vieja)
+    justo = (AHORA - timedelta(days=comp.DIAS_ATRAS_MAX - 1)).date().isoformat()
+    assert cargar(base, posteado_at=justo)["ok"] is True
+
+
+def test_la_deteccion_de_foto_repetida_no_depende_del_orden_de_mongo():
+    """`guardar` INSERTA antes de consultar, así que si la base devolvía primero
+    el documento recién insertado la marca se perdía en silencio. Depender del
+    orden natural para una señal de fraude es no tener la señal."""
+    base = db_completa()
+    base.envios_archivos.filas.extend([
+        {"asset_id": "ast_viejo", "sha256": "abc", "envio_id": "env_otro"},
+        {"asset_id": "ast_nuevo", "sha256": "abc", "envio_id": "env_aaa111"},
+    ])
+    # Se fuerza el peor orden: el propio primero, que es el que hacía perder la
+    # marca.
+    base.envios_archivos.filas.reverse()
+    assert corre(archivos.ya_usado("abc", "env_aaa111", db=base)) == "env_otro"
+
+
+def test_dos_cargas_simultaneas_del_mismo_codigo_dan_un_motivo_y_no_un_503():
+    """El índice de `origen.codigo_objeto` es único, así que la segunda carga
+    termina en un E11000. Responder 503 le dice al usuario "reintentá" sobre algo
+    que nunca va a funcionar."""
+    base = db_completa()
+    original = base.envios.find_one_and_update
+
+    async def choca(*a, **k):
+        base.envios.find_one_and_update = original
+        raise RuntimeError("E11000 duplicate key error collection: envios")
+    base.envios.find_one_and_update = choca
+
+    with pytest.raises(comp.ComprobanteRechazado) as e:
+        cargar(base)
+    assert e.value.http == 409
+    assert "otro envío" in e.value.mensaje

@@ -179,8 +179,13 @@ async def ya_usado(sha256: str, envio_id: str, db=None) -> str | None:
     """
     try:
         base = await _db(db)
+        # `$ne` sobre el propio envio: `guardar` INSERTA antes de llamar aca, y
+        # si Mongo devolvia primero el documento recien insertado la marca se
+        # perdia en silencio. Depender del orden natural para una senal de fraude
+        # es no tener la senal.
         otro = await base.envios_archivos.find_one(
-            {"sha256": sha256}, {"_id": 0, "envio_id": 1})
+            {"sha256": sha256, "envio_id": {"$ne": envio_id}},
+            {"_id": 0, "envio_id": 1})
     except Exception as e:                                    # pragma: no cover
         logger.warning(f"envios: no se pudo chequear duplicados de archivo: {e}")
         return None

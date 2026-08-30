@@ -297,6 +297,13 @@ def _resumen(rol: str, clave: str, hasta: str, valores: list) -> dict:
     }
 
 
+def _tope_normalizado(tope) -> str:
+    """El tope de peso siempre escrito igual: "10", no "10.0" ni "10.00"."""
+    entero = tope.quantize(to_decimal("0.001")).normalize()
+    texto = format(entero, "f")
+    return texto.rstrip("0").rstrip(".") if "." in texto else texto
+
+
 def _fecha(valor):
     if isinstance(valor, str):
         try:
@@ -332,10 +339,13 @@ async def aprobar(admin, *, transportista_id: str, clave: str, hasta_kg,
             "Falta la clave, el tope de peso o el precio. Los tres tienen que ser "
             "valores usables.")
 
+    # `hasta_kg` NORMALIZADO. El indice de la matriz no es unico, asi que "10" y
+    # "10.0" dejaban dos filas para el mismo tope y el precio viejo se quedaba
+    # ahi esperando a ganar un desempate.
     fila = {
         "transportista_id": transportista_id,
         "clave": str(clave).strip(),
-        "hasta_kg": str(tope),
+        "hasta_kg": _tope_normalizado(tope),
         "precio": str(quantize_money(monto)),
         "moneda": (moneda or "").strip() or None,
         "origen": "observado",

@@ -118,7 +118,10 @@ class _Coleccion:
     def _match(self, d, filtro):
         for k, v in (filtro or {}).items():
             actual = _camino(d, k)
-            if isinstance(v, dict) and "$gte" in v:
+            if isinstance(v, dict) and "$ne" in v:
+                if actual == v["$ne"]:
+                    return False
+            elif isinstance(v, dict) and "$gte" in v:
                 a, b = _num(actual), _num(v["$gte"])
                 if a is None or not isinstance(a, Decimal) or a < b:
                     return False
@@ -537,3 +540,30 @@ def test_el_modulo_no_menciona_ninguna_marca():
                   encoding="utf-8").read().lower()
     for marca in ("mrw", "correios", "zoom", "tealca", "domesa"):
         assert marca not in fuente
+
+
+def test_el_tope_de_peso_se_escribe_siempre_igual():
+    """"10" y "10.0" son claves distintas y el índice de la matriz no es único:
+    dejaban dos filas para el mismo tope, y el precio viejo se quedaba ahí
+    esperando a ganar un desempate."""
+    base = db_completa()
+    for tope in ("10", "10.0", "10.00", " 10 "):
+        corre(rent.aprobar(_Admin(), transportista_id="trp_br1", clave="SP",
+                           hasta_kg=tope, precio="61.00", db=base, ahora=AHORA))
+    assert len(base.matrices_referencia.filas) == 1
+    assert base.matrices_referencia.filas[0]["hasta_kg"] == "10"
+
+
+def test_un_tope_con_decimales_de_verdad_se_conserva():
+    base = db_completa()
+    corre(rent.aprobar(_Admin(), transportista_id="trp_br1", clave="SP",
+                       hasta_kg="0.5", precio="30.00", db=base, ahora=AHORA))
+    assert base.matrices_referencia.filas[0]["hasta_kg"] == "0.5"
+
+
+def test_el_barrido_de_observaciones_tiene_indice():
+    """Sin índice es un COLLSCAN con sort en memoria, y Mongo aborta el sort al
+    pasar los 32 MB: la pantalla empieza a decir "sin observaciones" con un
+    200 OK y nadie sabe que la consulta explotó."""
+    indices = _cargar("envios_indices").INDICES
+    assert any(c == "envios" and k == [("created_at", -1)] for c, k, _ in indices)
