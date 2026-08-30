@@ -58,6 +58,7 @@ COLECCIONES = (
     "matrices_referencia",
     "colaboradores_retiro",
     "envios_archivos",
+    "envios_lotes",
 )
 
 # (coleccion, claves, opciones). Las opciones son las de create_index.
@@ -127,6 +128,10 @@ INDICES = (
     ("envios_archivos", [("envio_id", 1), ("clase", 1)], {}),
     # Para detectar el mismo comprobante subido en dos envios distintos.
     ("envios_archivos", "sha256", {}),
+
+    # ─── lotes de retiro: el viaje a la agencia ───────────────────────────
+    ("envios_lotes", "lote_id", {"unique": True, "sparse": True}),
+    ("envios_lotes", [("created_at", -1)], {}),
 
     # ─── nomina de retiro ─────────────────────────────────────────────────
     ("colaboradores_retiro", "colaborador_id", {"unique": True, "sparse": True}),

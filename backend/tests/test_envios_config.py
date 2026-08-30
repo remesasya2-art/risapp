@@ -336,7 +336,11 @@ def _fuente_ruta():
 #
 # Escrita a mano y verificada contra el archivo, para que agregar una ruta
 # operativa sea una decisión y no un descuido.
-ESCRITURAS_DEL_OPERADOR = ("verificar_comprobante",)
+ESCRITURAS_DEL_OPERADOR = (
+    "verificar_comprobante",
+    # La operacion: mover paquetes que el operador tiene en la mano.
+    "marcar_disponible", "retirar_lote", "repesar", "despachar", "entregar",
+)
 
 
 def test_solo_el_super_administrador_escribe_la_configuracion():
@@ -428,9 +432,10 @@ RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
     "guardar_borrador_tarifa", "simular_tarifa",
     # La nómina no la lee ninguna pantalla cacheada.
     "crear_colaborador", "editar_colaborador",
-    # Verificar un comprobante mueve un paquete y emite un cobro; no cambia
-    # ninguna configuracion que se lea desde el catalogo.
-    "verificar_comprobante",
+    # Las operativas mueven paquetes y emiten cobros; no cambian ninguna
+    # configuracion que el catalogo o los limites lean.
+    "verificar_comprobante", "marcar_disponible", "retirar_lote", "repesar",
+    "despachar", "entregar",
 )
 
 

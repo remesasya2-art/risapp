@@ -30,7 +30,8 @@ import logging
 import uuid
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import (APIRouter, Depends, File, Form, HTTPException,
+                     UploadFile)
 from pydantic import BaseModel, Field
 
 from database import db
@@ -39,8 +40,8 @@ from models.user import User
 from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
-from services import (envios_comprobante, envios_config, envios_retiro,
-                      envios_tarifa_editor)
+from services import (envios_comprobante, envios_config, envios_operacion,
+                      envios_retiro, envios_tarifa_editor)
 from services.envios_catalogo import invalidar_cache
 from services.envios_tarifas import validar_tarifa
 
@@ -678,3 +679,132 @@ async def verificar_comprobante(envio_id: str, datos: Verificacion,
             raise HTTPException(e.http, e.mensaje)
         logger.error(f"envios: verificar comprobante falló: {e}")
         raise HTTPException(503, "No se pudo verificar. Reintentá en un momento.")
+
+
+# ─── La operación: lo que pasa con el paquete ─────────────────────────────
+#
+# Todas son del OPERADOR (`get_crm_user`), no del super administrador. El que
+# viaja a Pacaraima y pesa cajas no tiene por que poder cambiar los precios ni la
+# cuenta que recibe los fletes, y el que fija los precios no necesita mover
+# paquetes. Es la misma separacion que el panel ya usa para las tasas.
+
+def _operacion(e: Exception):
+    if isinstance(e, envios_operacion.OperacionRechazada):
+        return HTTPException(e.http, e.mensaje)
+    from services.envios_archivos import ArchivoRechazado
+    from services.envios_cobros import CobroImposible
+    if isinstance(e, (CobroImposible, ArchivoRechazado)):
+        return HTTPException(e.http, e.mensaje)
+    logger.error(f"envios: operación falló: {e}")
+    return HTTPException(503, "No se pudo completar. Reintentá en un momento.")
+
+
+@router.get("/envios/cola")
+async def ver_cola(estado: str = "disponible_retiro",
+                   admin: User = Depends(get_crm_user)):
+    """La cola del operador, agrupada por el nombre rotulado en cada caja.
+
+    El agrupamiento es lo que hace útil esta pantalla: en el mostrador comparan
+    la etiqueta contra un documento, así que quien va necesita saber cuáles puede
+    reclamar él. Agrupar por quien esté de turno hoy sería mandarlo a reclamar
+    cajas que no puede.
+    """
+    return await envios_operacion.cola(estado)
+
+
+class Disponible(BaseModel):
+    dias_guarda: int = Field(default=None, ge=1, le=180)
+
+
+@router.post("/envios/{envio_id}/disponible")
+async def marcar_disponible(envio_id: str, datos: Disponible = None,
+                            admin: User = Depends(get_crm_user)):
+    """El paquete está en el mostrador. **Arranca el reloj de guarda.**
+
+    Pasado el plazo la agencia lo devuelve al remitente, con el costo del retorno
+    y un usuario que ya pagó. Es el parámetro operativo más caro del módulo.
+    """
+    try:
+        return await envios_operacion.marcar_disponible(
+            admin, envio_id, dias_guarda=(datos.dias_guarda if datos else None))
+    except Exception as e:
+        raise _operacion(e)
+
+
+class Lote(BaseModel):
+    # Por CODIGO DE OBJETO: es lo que esta impreso en la caja que el operador
+    # tiene en la mano. Pedirle el envio_id seria pedirle que busque cada caja en
+    # una pantalla, parado en un mostrador con treinta cajas.
+    codigos: list[str] = Field(min_length=1, max_length=200)
+    nota: str = Field(default="", max_length=300)
+
+
+@router.post("/envios/retiro-lote")
+async def retirar_lote(datos: Lote, admin: User = Depends(get_crm_user)):
+    """Retira varios paquetes del mostrador de una vez.
+
+    Un código desconocido **no aborta el lote**: vuelven en `rechazados` con el
+    motivo. El operador está en un mostrador con treinta cajas y que una no se
+    reconozca no puede hacerle perder las veintinueve que sí.
+    """
+    try:
+        return await envios_operacion.retirar_lote(admin, datos.codigos,
+                                                   nota=datos.nota)
+    except Exception as e:
+        raise _operacion(e)
+
+
+class Repesaje(BaseModel):
+    peso_kg: str = Field(min_length=1, max_length=20)
+    largo_cm: str = Field(min_length=1, max_length=20)
+    ancho_cm: str = Field(min_length=1, max_length=20)
+    alto_cm: str = Field(min_length=1, max_length=20)
+    idempotency_key: str = Field(default=None, max_length=100)
+
+
+@router.post("/envios/{envio_id}/repesar")
+async def repesar(envio_id: str, datos: Repesaje,
+                  admin: User = Depends(get_crm_user)):
+    """Pesa con balanza propia y cierra el precio. Las tres ramas del ajuste.
+
+    Devuelve `puede_salir`, que es lo que el operador necesita saber antes de
+    cargar la camioneta y no después.
+    """
+    try:
+        return await envios_operacion.repesar(
+            admin, envio_id, peso_kg=datos.peso_kg, largo_cm=datos.largo_cm,
+            ancho_cm=datos.ancho_cm, alto_cm=datos.alto_cm,
+            idempotency_key=datos.idempotency_key)
+    except Exception as e:
+        raise _operacion(e)
+
+
+@router.post("/envios/{envio_id}/despachar")
+async def despachar(envio_id: str, admin: User = Depends(get_crm_user)):
+    """El paquete sale hacia Santa Elena. **Solo con todo pago.**
+
+    Es la única palanca de cobro real del negocio: la posesión física.
+    """
+    try:
+        return await envios_operacion.despachar(admin, envio_id)
+    except Exception as e:
+        raise _operacion(e)
+
+
+@router.post("/envios/{envio_id}/entregar")
+async def entregar(envio_id: str, guia: str = Form(...),
+                   foto: UploadFile = File(None),
+                   admin: User = Depends(get_crm_user)):
+    """Entregado en la oficina del transportista. El servicio terminó acá.
+
+    La guía es obligatoria: sin ella, la única prueba de la entrega es la palabra
+    del operador.
+    """
+    datos = None
+    if foto is not None:
+        from services.envios_archivos import TAMANO_MAX_BYTES
+        datos = await foto.read(TAMANO_MAX_BYTES + 1)
+    try:
+        return await envios_operacion.entregar(admin, envio_id, guia=guia, foto=datos)
+    except Exception as e:
+        raise _operacion(e)
