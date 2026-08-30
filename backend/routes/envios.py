@@ -1,10 +1,17 @@
 """
 routes/envios.py — Las rutas de lectura del módulo de envíos.
 
-ESTADO (PR D)
-    Solo lectura. No crea envíos, no cotiza y no mueve un centavo: las dos rutas
-    contestan lo que la pantalla necesita antes de que el usuario tipee nada.
-    Los PRs siguientes agregan el resto acá mismo.
+ESTADO (PR E)
+    Las dos rutas de lectura, y la cotización. Ninguna mueve un centavo: cotizar
+    es gratis y crear el envío es un paso posterior y separado. Los PRs
+    siguientes agregan el resto acá mismo.
+
+POR QUE COTIZAR PIDE KYC
+    `get_verified_user` y no `get_current_user`. Cotizar escribe un documento en
+    `envios` con el nombre, el documento y el teléfono de un destinatario en
+    Venezuela; una cuenta sin verificar que puede escribir eso es un formulario
+    de carga de datos de terceros abierto a cualquiera. Ver los límites y el
+    catálogo, en cambio, no escribe nada.
 
 POR QUE /envios/limites ES PUBLICA
     Mismo criterio que `/limits`: los límites físicos y la leyenda de tarifas no
@@ -25,11 +32,12 @@ POR QUE /envios/limites ES PUBLICA
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from routes.dependencies import get_current_user
-from services import envios_catalogo
+from routes.dependencies import get_current_user, get_verified_user
+from services import envios_catalogo, envios_cotizador
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
+from models.envios_cotizacion import PedidoDeCotizacion
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -85,3 +93,28 @@ async def obtener_catalogo(current_user: User = Depends(get_current_user)):
     except Exception as e:                                    # pragma: no cover
         logger.warning(f"envios: /catalogo falló: {e}")
         return {"transportistas": [], "disponible": False, "degradado": True}
+
+
+@router.post("/cotizar")
+async def cotizar(pedido: PedidoDeCotizacion,
+                  current_user: User = Depends(get_verified_user)):
+    """El precio del servicio, más las dos orientaciones. **No cobra nada.**
+
+    Cotizar es gratis y no reserva nada: el número es un ESTIMADO sobre lo que
+    el usuario declaró, y se confirma al repesar en Pacaraima con balanza
+    propia. Por eso la respuesta trae `es_estimado: true` y `aviso_estimado`
+    siempre, sin condición.
+
+    Los errores del usuario —una descripción de tres letras, una caja de 80 kg,
+    una agencia que ya no recibe— vuelven como 400 con el texto exacto de qué
+    arreglar. Lo que depende de la configuración vuelve como 503 con un mensaje
+    que no le explica a un anónimo qué le falta al panel.
+    """
+    try:
+        return await envios_cotizador.cotizar(current_user, pedido.model_dump())
+    except envios_cotizador.NoSePuedeCotizar as e:
+        raise HTTPException(e.http, e.mensaje)
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: /cotizar falló: {e}")
+        raise HTTPException(
+            503, "No se pudo cotizar en este momento. Probá de nuevo en un minuto.")

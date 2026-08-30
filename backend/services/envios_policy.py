@@ -93,20 +93,51 @@ CATEGORIAS_PROHIBIDAS_POR_DEFECTO = [
 DESCRIPCION_MIN_CARACTERES = 10
 
 
-def validar_descripcion(descripcion) -> str | None:
+def validar_descripcion(descripcion, minimo: int | None = None) -> str | None:
     """La descripcion de contenido es obligatoria y tiene que decir algo.
 
     Diez caracteres no hacen que una descripcion sea buena, pero descartan la
     mitad de las que no son descripciones: "cosas", "ropa", un punto.
+
+    El minimo es configurable (`contenido.descripcion_min_caracteres`) porque es
+    un criterio de aduana y no una constante de ingenieria; el parametro existe
+    para que el que llama pueda pasar el del panel en vez del piso del codigo.
     """
     texto = (descripcion or "").strip()
-    if len(texto) < DESCRIPCION_MIN_CARACTERES:
+    try:
+        piso = int(minimo)
+    except (TypeError, ValueError):
+        piso = DESCRIPCION_MIN_CARACTERES
+    piso = piso if 3 <= piso <= 200 else DESCRIPCION_MIN_CARACTERES
+    if len(texto) < piso:
         return (
-            f"Describí el contenido con al menos {DESCRIPCION_MIN_CARACTERES} caracteres. "
+            f"Describí el contenido con al menos {piso} caracteres. "
             "Es lo que se declara ante la aduana."
         )
     return None
 
+
+# POR QUE NO HAY UN VALIDADOR DE CONTENIDO PROHIBIDO ACA
+#
+# Es la primera cosa que pide todo el que revisa este modulo: la lista de
+# prohibidos existe, esta configurada, y nada la compara contra la descripcion.
+# No es un olvido, es una decision, y conviene que quede escrita para no
+# rediscutirla cada seis meses.
+#
+# Buscar los terminos de la lista dentro de la descripcion falla en las dos
+# direcciones. Rechaza "armazon de lentes" y "material escolar" por "armas" y
+# "material biologico" —y un rechazo incomprensible manda al usuario a soporte
+# igual que un permiso indebido—, y no atrapa a nadie que simplemente no escriba
+# la palabra. O sea: molesta al que dice la verdad y no frena al que miente.
+#
+# Las barreras reales son otras tres, y las tres estan implementadas:
+#   1. La lista VISIBLE al cotizar, que es lo que informa al que no sabia — que
+#      es la mayoria — antes de que pague el tramo 1.
+#   2. Las dos aceptaciones explicitas al crear el envio, sin tildar por defecto.
+#   3. Los limites fisicos, que es lo que efectivamente saca del alcance a la
+#      maquinaria industrial: no hay forma de que entre en 30 kg y 100 cm.
+# Y despues, la revision del operador en el mostrador de Pacaraima, que es la
+# unica que ve el contenido de verdad.
 
 # ─── Limites fisicos: la interseccion ─────────────────────────────────────
 

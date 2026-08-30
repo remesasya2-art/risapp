@@ -77,6 +77,17 @@ INDICES = (
     # El lote de retiro: agrupa los envios que viajaron juntos, que es lo que
     # hace posible la vista de rentabilidad por viaje (§2.3).
     ("envios", "origen.lote_retiro_id", {"sparse": True}),
+    # La deduplicacion de cotizaciones: mismo usuario, mismo pedido, todavia
+    # vigente. Sin esto, un doble clic deja dos envios de los que uno queda a la
+    # deriva con datos personales de un tercero adentro.
+    ("envios", [("user_id", 1), ("estado", 1), ("cotizacion.huella", 1)], {}),
+    # TTL PARCIAL: solo borra las cotizaciones que nunca se confirmaron, cuando
+    # su propia fecha de vencimiento paso. Un TTL a secas sobre `vence_at`
+    # borraria envios reales; con el filtro, un documento deja de ser candidato
+    # en el instante en que su estado cambia. Lo que queda es basura: un precio
+    # que ya no se puede aceptar, guardando el nombre y el telefono de alguien.
+    ("envios", "cotizacion.vence_at",
+     {"expireAfterSeconds": 0, "partialFilterExpression": {"estado": "cotizado"}}),
 
     # ─── eventos (append-only, como el ledger) ────────────────────────────
     ("envios_eventos", [("envio_id", 1), ("created_at", 1)], {}),

@@ -353,7 +353,8 @@ def _esta_vieja(actualizada_at, dias: int) -> bool:
 async def referencias_para(clave_brasil: str, clave_venezuela: str, peso_kg,
                            largo_cm=None, ancho_cm=None, alto_cm=None,
                            db=None, dias_frescura: int = DIAS_FRESCURA,
-                           timeout_s: float = TIMEOUT_S) -> list[dict]:
+                           timeout_s: float = TIMEOUT_S,
+                           solo_transportista: str = None) -> list[dict]:
     """Las orientaciones de los dos tramos que el usuario paga por su cuenta.
 
     Recorre los transportistas activos por ROL. El de Brasil es uno solo hoy; los
@@ -368,11 +369,20 @@ async def referencias_para(clave_brasil: str, clave_venezuela: str, peso_kg,
     Las consultas van en paralelo: en serie, cinco lecturas de 200 ms le agregan
     un segundo entero a la cotización, y el precio que RIS App cobra no depende de
     ninguna de ellas.
+
+    `solo_transportista` acota el rol de Venezuela a uno. Es necesario y no una
+    optimización: la clave de ese rol es la ZONA, y las zonas son de cada
+    transportista —el índice es `[transportista_id, estado]`—, así que buscar
+    `"zona_a"` en la matriz de otra empresa devuelve el precio de una zona que
+    para ella significa otra cosa. Sin esto, el usuario que elige una agencia ve
+    al lado una orientación de una empresa que no contrató, calculada con una
+    clave que no es la suya.
     """
     try:
         return await asyncio.wait_for(
             _referencias(clave_brasil, clave_venezuela, peso_kg,
-                         largo_cm, ancho_cm, alto_cm, db, dias_frescura),
+                         largo_cm, ancho_cm, alto_cm, db, dias_frescura,
+                         solo_transportista),
             timeout=timeout_s,
         )
     except asyncio.TimeoutError:
@@ -384,13 +394,17 @@ async def referencias_para(clave_brasil: str, clave_venezuela: str, peso_kg,
 
 
 async def _referencias(clave_brasil, clave_venezuela, peso_kg,
-                       largo_cm, ancho_cm, alto_cm, db, dias_frescura) -> list[dict]:
+                       largo_cm, ancho_cm, alto_cm, db, dias_frescura,
+                       solo_transportista=None) -> list[dict]:
     salida = []
     for rol, clave in (("brasil", clave_brasil), ("venezuela", clave_venezuela)):
         transportistas, ok = await _catalogo(rol, db=db)
         if not ok:
             salida.append(_referencia({"rol": rol}, clave, fuente="catalogo_no_disponible"))
             continue
+        if rol == "venezuela" and solo_transportista:
+            transportistas = [t for t in transportistas
+                              if t.get("transportista_id") == solo_transportista]
         if not transportistas:
             continue
         resultados = await asyncio.gather(*[

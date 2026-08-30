@@ -366,6 +366,54 @@ def _tarifa_del_envio(envio: dict, tarifa: dict) -> str:
     return recibida
 
 
+def declarado_de(envio: dict) -> dict:
+    """Las medidas que el usuario declaró al cotizar, vengan como vengan.
+
+    ESTA FUNCION EXISTE POR UN DEFECTO CONCRETO, y conviene contarlo porque es el
+    error mas caro que puede tener este modulo. El documento del envio guarda las
+    medidas anidadas —`paquete.declarado.peso_kg`, para poder ponerlas al lado de
+    `paquete.verificado` cuando el operador repese— y este modulo las leia planas.
+    Ninguna de las dos partes estaba mal por si sola; lo que estaba mal era que
+    fueran dos. El resultado: el desglose que veia el usuario decia "declarado:
+    0 kg / 0 cm", y el mismo desajuste en el valor declarado hacia que el
+    sobrecargo ad-valorem cotizado NO se cobrara.
+
+    Se lee el anidado primero y el plano despues, con el mismo criterio que
+    `envios_tarifas._bloque` usa para la forma vieja de la tarifa: un documento a
+    medio migrar no puede cobrar mal.
+    """
+    paquete = (envio or {}).get("paquete") or {}
+    anidado = paquete.get("declarado")
+    return anidado if isinstance(anidado, dict) and anidado else paquete
+
+
+def _valor_declarado(envio: dict):
+    """El valor declarado del envio. Con `is not None` y no con `or`: un valor
+    declarado de 0 es un dato, no una ausencia."""
+    paquete = (envio or {}).get("paquete") or {}
+    declarado = declarado_de(envio)
+    for fuente in (declarado, paquete):
+        for clave in ("valor_declarado", "valor_declarado_brl"):
+            if fuente.get(clave) is not None:
+                return fuente[clave]
+    return 0
+
+
+def fecha_de_cotizacion(envio: dict):
+    """La fecha con la que se calcula, que es la de la COTIZACION y no la de hoy.
+
+    Sin ella `multiplicador_temporada` devuelve 1 y un recargo de temporada
+    cotizado no se cobra —o, peor, uno que empezo despues se cobra sin que el
+    usuario lo haya aceptado. Se aceptan los dos nombres por lo mismo que
+    `declarado_de`.
+    """
+    cotizacion = (envio or {}).get("cotizacion") or {}
+    for clave in ("fecha", "cotizada_at"):
+        if cotizacion.get(clave):
+            return cotizacion[clave]
+    return None
+
+
 def _cotizar(envio: dict, tarifa: dict, peso, largo, ancho, alto) -> dict:
     """Precio del servicio para ese paquete, con los parámetros congelados del envío.
 
@@ -373,13 +421,12 @@ def _cotizar(envio: dict, tarifa: dict, peso, largo, ancho, alto) -> dict:
     nunca de quien llama: son parte de lo que el usuario aceptó, y moverlos es
     cobrarle algo distinto sin decírselo.
     """
-    declarado = (envio or {}).get("paquete") or {}
-    cotizacion = (envio or {}).get("cotizacion") or {}
+    paquete = (envio or {}).get("paquete") or {}
     return cotizar_servicio(
         tarifa, peso, largo, ancho, alto,
-        valor_declarado=declarado.get("valor_declarado", 0),
-        bultos=declarado.get("bultos") or 1,
-        fecha=cotizacion.get("fecha"),      # la de la cotización, no la de hoy
+        valor_declarado=_valor_declarado(envio),
+        bultos=paquete.get("bultos") or 1,
+        fecha=fecha_de_cotizacion(envio),   # la de la cotización, no la de hoy
     )
 
 
@@ -406,7 +453,7 @@ def cobro_inicial(envio, tarifa_congelada, peso_comprobante_kg,
     alto = _medida_positiva(alto_cm, "el alto del comprobante")
 
     cotizacion = _cotizar(envio, tarifa_congelada, peso, largo, ancho, alto)
-    declarado = (envio or {}).get("paquete") or {}
+    declarado = declarado_de(envio)
 
     return {
         "partida": "inicial",
