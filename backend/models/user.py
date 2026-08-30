@@ -16,6 +16,10 @@ class User(BaseModel):
     must_change_password: bool = False
     google_id: Optional[str] = None
     profile_picture: Optional[str] = None
+    # De dónde despacha el usuario sus paquetes. Se guarda una vez y el
+    # formulario de envíos lo trae precargado: es el dato que más se repite y el
+    # que más se tipea mal.
+    cep_origen: Optional[str] = None
     balance_ris: float = 0.0
     balance_ves: float = 0.0
     balance_ris_terceros: float = 0.0  # For gestor third-party funds
