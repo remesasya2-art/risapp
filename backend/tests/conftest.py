@@ -62,3 +62,18 @@ if "database" not in sys.modules:
     sys.modules["database"] = _modulo
 elif getattr(sys.modules["database"], "db", None) is None:  # pragma: no cover
     sys.modules["database"].db = PROXY
+
+
+# `services/notifications.create_notification` importa `push_notifications`, que
+# importa `pywebpush`. En este entorno esa dependencia no compila, y sin el stub
+# TODO aviso falla — con lo cual un test de avisos verificaria el except y no el
+# aviso. En produccion la libreria esta instalada.
+if "pywebpush" not in sys.modules:
+    _push = types.ModuleType("pywebpush")
+
+    class _WebPushException(Exception):
+        pass
+
+    _push.WebPushException = _WebPushException
+    _push.webpush = lambda *a, **k: None
+    sys.modules["pywebpush"] = _push

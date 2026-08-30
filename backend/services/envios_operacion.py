@@ -473,4 +473,9 @@ async def _mover(base, envio: dict, hacia: str, parche: dict, operador, ahora,
         actualizado, desde, hacia, "admin",
         actor_id=getattr(operador, "user_id", None), detalle=detalle,
         db=base, ahora=ahora)
+
+    # El aviso va al final y no puede deshacer nada: el paquete ya esta donde
+    # esta, y un aviso que falla no lo devuelve.
+    from services import envios_seguimiento
+    await envios_seguimiento.avisar(actualizado, hacia, db=base)
     return actualizado

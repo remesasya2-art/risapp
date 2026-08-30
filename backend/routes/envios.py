@@ -42,7 +42,8 @@ from fastapi.responses import Response
 
 from routes.dependencies import get_current_user, get_verified_user
 from services import (envios_archivos, envios_catalogo, envios_cobros,
-                      envios_comprobante, envios_cotizador, envios_crear)
+                      envios_comprobante, envios_cotizador, envios_crear,
+                      envios_seguimiento)
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
 from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.user import User
@@ -259,3 +260,22 @@ async def ver_foto(envio_id: str, asset_id: str,
     return Response(content=bytes(ficha["contenido"]),
                     media_type=ficha.get("content_type") or "image/jpeg",
                     headers={"Cache-Control": "private, max-age=300"})
+
+
+@router.get("/seguimiento/{token}")
+async def seguimiento(token: str):
+    """El seguimiento público. **Sin un solo dato personal.**
+
+    El link se comparte por WhatsApp —al destinatario, a la familia, al grupo— y
+    va a terminar en manos que no son la del usuario. Está diseñado asumiendo
+    eso: sale el número visible, el estado, la ciudad de destino y la línea de
+    tiempo, y nada más. Con eso se contesta "dónde está mi paquete", que es la
+    única pregunta que esta pantalla responde.
+
+    Un token que no existe y uno mal formado dan la misma respuesta:
+    distinguirlos convierte la ruta en un oráculo para adivinar tokens.
+    """
+    datos = await envios_seguimiento.seguir(token)
+    if not datos:
+        raise HTTPException(404, "No encontramos ese envío.")
+    return datos
