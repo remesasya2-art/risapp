@@ -95,9 +95,17 @@ INDICES = (
     # forma barata de bloquear el panel el dia que exista.
     ("zonas", [("transportista_id", 1), ("estado", 1)], {}),
 
-    # ─── tarifas: la vigente es la que no tiene vigente_hasta ─────────────
+    # ─── tarifas: la vigente se resuelve por VENTANA, no por "sin cierre" ──
+    # La consulta que elige la vigente no filtra por vigente_hasta —eso se
+    # decide en Python, porque las fechas guardadas como texto no matchean un
+    # $gte— y ordena por vigente_desde. Sin este indice esa consulta es un
+    # COLLSCAN, y la sirve un endpoint publico y sin rate limit.
     ("tarifas_envio", "version_id", {"unique": True, "sparse": True}),
+    ("tarifas_envio", [("vigente_desde", -1)], {}),
     ("tarifas_envio", [("vigente_hasta", 1), ("vigente_desde", -1)], {}),
+    # El historial del panel ordena por fecha de creacion, no de vigencia: una
+    # version programada se crea hoy y rige el mes que viene.
+    ("tarifas_envio", [("creada_at", -1)], {}),
 
     # ─── nomina de retiro ─────────────────────────────────────────────────
     ("colaboradores_retiro", "colaborador_id", {"unique": True, "sparse": True}),

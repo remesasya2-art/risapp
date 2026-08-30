@@ -28,17 +28,19 @@ import csv
 import io
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database import db
 from routes.dependencies import get_super_admin, get_crm_user
 from models.user import User
 from models.envios_config import Transportista, Agencia, CuentaBancaria, ESQUEMAS
-from services import envios_config
+from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
+from services import envios_config, envios_tarifa_editor
 from services.envios_catalogo import invalidar_cache
+from services.envios_tarifas import validar_tarifa
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/envios", tags=["envios-admin"])
@@ -334,3 +336,129 @@ async def importar_agencias(transportista_id: str, archivo: UploadFile = File(..
     invalidar_cache()
     return {"creadas": creadas, "actualizadas": actualizadas,
             "rechazadas": rechazadas, "total_rechazadas": len(rechazadas)}
+
+
+# ─── Tarifas: la consola de precios ───────────────────────────────────────
+
+@router.get("/tarifas")
+async def listar_tarifas(admin: User = Depends(get_super_admin)):
+    """El historial con sus notas, y qué hay en el borrador."""
+    borrador, origen = await envios_tarifa_editor.borrador_o_copia()
+    if origen == "error":
+        raise HTTPException(
+            503, "No se pudo leer el borrador. No edites hasta que vuelva: lo que "
+                 "guardes ahora puede pisar lo que ya había.")
+    # Todo pasa por `serializable`: en esta colección puede haber Decimal128
+    # —es como services/money.py guarda dinero— y el encoder de FastAPI no sabe
+    # serializarlo. Un solo campo así tumbaba la consola de precios entera.
+    return envios_tarifa_editor.serializable({
+        "vigente": await envios_tarifa_editor.vigente(),
+        "borrador": borrador,
+        "origen_borrador": origen,
+        "historial": await envios_tarifa_editor.historial(),
+    })
+
+
+@router.put("/tarifas/borrador")
+async def guardar_borrador_tarifa(datos: TarifaBorrador,
+                                  admin: User = Depends(get_super_admin)):
+    """Guarda el borrador. No publica nada y no valida la coherencia de la tabla.
+
+    Recibe `TarifaBorrador` y no `TarifaEnvio`: guardar tiene que poder hacerse
+    con la tabla a medio cargar —alguien carga cuatro escalones un martes y
+    vuelve el jueves— y con el mismo objeto que devolvió el GET, metadatos
+    incluidos. Lo que se valida es publicar, que es cuando el número empieza a
+    cobrarse. Igual se devuelven las advertencias, para que la pantalla las
+    muestre mientras se edita.
+    """
+    limpio = datos.como_borrador()
+    guardado = await envios_tarifa_editor.guardar_borrador(limpio, admin)
+    return envios_tarifa_editor.serializable({
+        "ok": True, "borrador": guardado,
+        "advertencias": validar_tarifa(limpio),
+    })
+
+
+class Simulacion(BaseModel):
+    # El tope no es una opinión de producto: cada caja son dos cotizaciones
+    # Decimal síncronas dentro del event loop, y una lista sin cota bloquea el
+    # worker entero, no solo esta request.
+    cajas: list[CajaDePrueba] = Field(default_factory=list, max_length=50)
+    tarifa: TarifaEnvio | None = None      # si no viene, se usa el borrador
+    fecha: date | None = None              # para ver una temporada sin esperarla
+
+
+@router.post("/tarifas/simular")
+async def simular_tarifa(datos: Simulacion, admin: User = Depends(get_super_admin)):
+    """Cotiza las cajas contra el borrador y contra la vigente, lado a lado.
+
+    Es lo que evita publicar un aumento del 40 % creyendo que era del 4 %. La
+    fecha es opcional y por defecto es hoy: sin ella los recargos de temporada
+    valen 1 y un aumento de temporada del 50 % se vería como 0 %.
+    """
+    if datos.tarifa is not None:
+        borrador = datos.tarifa.model_dump()
+    else:
+        borrador, origen = await envios_tarifa_editor.borrador_o_copia()
+        if origen == "error":
+            raise HTTPException(503, "No se pudo leer el borrador.")
+
+    return envios_tarifa_editor.serializable({
+        "comparacion": envios_tarifa_editor.comparar(
+            borrador, await envios_tarifa_editor.vigente(),
+            [c.model_dump() for c in datos.cajas], fecha=datos.fecha),
+        "bloqueos": validar_tarifa(borrador),
+        "fecha_simulada": (datos.fecha or date.today()).isoformat(),
+    })
+
+
+class Publicacion(BaseModel):
+    nota: str = Field(min_length=1, max_length=500)
+    vigente_desde: datetime | None = None
+    tarifa: TarifaEnvio | None = None
+
+
+@router.post("/tarifas/publicar")
+async def publicar_tarifa(datos: Publicacion, admin: User = Depends(get_super_admin)):
+    """Crea la versión nueva y reordena las ventanas. **Nunca edita una existente.**
+
+    Pide una nota de qué cambió y por qué. No es burocracia: es lo que alguien va
+    a leer dentro de seis meses para entender por qué un envío de marzo costó lo
+    que costó.
+    """
+    if datos.tarifa is not None:
+        # Vino la tarifa entera: el borrador guardado no tiene nada que ver con
+        # esta publicación y no se toca. Consumirlo acá borraba, sin aviso y sin
+        # deshacer, el trabajo a medio cargar de quien estuviera editando.
+        borrador, consumir, marca = datos.tarifa.model_dump(), False, None
+    else:
+        borrador, origen = await envios_tarifa_editor.borrador_o_copia()
+        if origen == "error":
+            raise HTTPException(
+                503, "No se pudo leer el borrador. Publicar ahora podría pisarlo.")
+        if origen == "vacio":
+            raise HTTPException(400, "No hay borrador ni versión vigente que publicar.")
+        if origen == "copia_de_vigente":
+            raise HTTPException(
+                400, "No hay cambios que publicar: el borrador es una copia idéntica de "
+                     "la versión vigente. Editá algo primero.")
+        consumir, marca = True, borrador.get("actualizado_at")
+
+    version, errores = await envios_tarifa_editor.publicar(
+        borrador, datos.nota, admin, vigente_desde=datos.vigente_desde,
+        consumir_borrador=consumir, marca_borrador=marca)
+    if errores:
+        raise _error(errores)
+
+    # La clave es `version_publicada` y no `version_id` porque envios_config
+    # descarta `version_id` de las diferencias —es metadato del guardado, no un
+    # cambio— y el asiento quedaba con la nota y sin forma de atarla a la versión
+    # que un envío de marzo tiene congelada, que es justo lo que la auditoría
+    # existe para poder contestar.
+    await envios_config.auditar(
+        "tarifas", {}, {"version_publicada": version["version_id"], "nota": version["nota"],
+                        "vigente_desde": version["vigente_desde"].isoformat()},
+        admin, accion="publicar")
+    invalidar_cache()
+    return {"ok": True, "version_id": version["version_id"],
+            "vigente_desde": version["vigente_desde"].isoformat()}

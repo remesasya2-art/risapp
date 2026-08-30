@@ -49,6 +49,7 @@ LO QUE ESTE MODULO NO HACE
     servicio propio es una funcion de UNA sola variable, el peso facturable.
 """
 
+from math import isfinite
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 
 from services.money import to_decimal, quantize_money
@@ -592,6 +593,31 @@ _TEMPORADA_MIN = Decimal("0.5")
 _TEMPORADA_MAX = Decimal("3")
 
 
+def _valores_no_finitos(valor, camino: str = "la tarifa") -> list[tuple[str, object]]:
+    """Los caminos que llevan a un NaN o a un Infinity, para poder nombrarlos."""
+    if isinstance(valor, dict):
+        salida = []
+        for clave, sub in valor.items():
+            salida += _valores_no_finitos(sub, f"{camino}.{clave}")
+        return salida
+    if isinstance(valor, (list, tuple)):
+        salida = []
+        for i, sub in enumerate(valor):
+            salida += _valores_no_finitos(sub, f"{camino}[{i}]")
+        return salida
+    if isinstance(valor, float) and not isfinite(valor):
+        return [(camino, valor)]
+    if isinstance(valor, Decimal) and not valor.is_finite():
+        return [(camino, str(valor))]
+    if isinstance(valor, str):
+        try:
+            d = Decimal(valor.strip())
+        except (InvalidOperation, ValueError):
+            return []
+        return [] if d.is_finite() else [(camino, valor)]
+    return []
+
+
 def validar_tarifa(tarifa) -> list[str]:
     """Todo lo que impide publicar una version de tarifa. Lista vacia = adelante.
 
@@ -601,6 +627,25 @@ def validar_tarifa(tarifa) -> list[str]:
     arreglar.
     """
     tarifa = tarifa or {}
+
+    # Los NO FINITOS primero y solos. Un "NaN" guardado en la base —lo escribio
+    # una version vieja, una migracion o una mano— sale de to_decimal como un
+    # Decimal valido, y `Decimal("NaN") < 0` no devuelve False: LANZA
+    # InvalidOperation. O sea que el validador, que existe para que nada rompa
+    # mas adelante, rompia el primero. No se sigue validando: con un valor asi
+    # adentro cualquier comparacion posterior es una ruleta.
+    #
+    # No se arregla en money.to_decimal a proposito. Ahi un no finito tiene que
+    # seguir llegando como no finito, porque services/envios_policy lo lee como
+    # "limite roto = limite no declarado", y convertirlo en 0 haria que un peso
+    # maximo roto pase a ser el limite mas chico de todos y no se pueda despachar
+    # nada.
+    no_finitos = _valores_no_finitos(tarifa)
+    if no_finitos:
+        return [f"{camino} no es un número finito ({valor!r}). Corregilo antes de "
+                f"publicar: con eso adentro, cada cotización falla."
+                for camino, valor in no_finitos[:12]]
+
     errores = list(validar_escalones(_bloque(tarifa, "escalones_peso", "escalones"),
                                      _bloque(tarifa, "adicional_por_kg", "adicional_por_kg"),
                                      "kg"))
@@ -608,6 +653,15 @@ def validar_tarifa(tarifa) -> list[str]:
     if (tarifa.get("modo_tarifa") or "peso") == "peso_o_volumen":
         errores += validar_escalones(tarifa.get("escalones_volumen"),
                                      tarifa.get("adicional_por_m3"), "m³")
+        # Mismo criterio que la tabla de kilos: sin adicional, todo lo que excede
+        # el ultimo escalon de m³ viaja gratis. validar_escalones no lo puede
+        # decir por su cuenta porque un adicional ausente y uno en cero son
+        # indistinguibles desde adentro.
+        if tarifa.get("adicional_por_m3") is None:
+            errores.append(
+                "La tabla de volumen no tiene 'adicional_por_m3': todo lo que exceda el "
+                "último escalón de m³ viajaría gratis."
+            )
 
     regla = tarifa.get("regla_peso") or {}
     if to_decimal(regla.get("divisor")) <= 0 and (tarifa.get("modo_tarifa") or "peso") == "peso":
@@ -615,6 +669,27 @@ def validar_tarifa(tarifa) -> list[str]:
             "La regla de peso no tiene divisor volumétrico: los bultos grandes y livianos "
             "cotizarían solo por su peso real."
         )
+
+    # El minimo y el escalon de la regla de peso se validan CONTRA LA TABLA, no
+    # contra un rango abstracto: un minimo_kg de 1000 con una tabla que llega a
+    # 30 kg no es un numero fuera de rango, es una caja de 1 kg cobrada como si
+    # pesara una tonelada. Es el mismo error de tipeo que el margen "20" en vez
+    # de "0.20", una celda mas a la derecha, y sin esto se publica sin que nada
+    # chille.
+    _filas = _escalones_ordenados(_bloque(tarifa, "escalones_peso", "escalones"))
+    if _filas:
+        tope = _filas[-1]["hasta"]
+        for clave, comodin in (("minimo_kg", "mínimo facturable"),
+                               ("escalon_kg", "escalón de redondeo de peso")):
+            if regla.get(clave) is None:
+                continue
+            valor = to_decimal(regla.get(clave))
+            if valor > tope:
+                errores.append(
+                    f"El {comodin} de la regla de peso es {valor} kg y la tabla termina en "
+                    f"{tope} kg: cualquier paquete saldría del último escalón. Suele ser un "
+                    f"cero de más."
+                )
 
     margen = tarifa.get("margen") or {}
     if margen.get("tipo") == "porcentual":

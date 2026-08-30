@@ -82,13 +82,50 @@ async def _db(db=None):
 
 # ─── Tarifa vigente ───────────────────────────────────────────────────────
 
-async def tarifa_vigente(db=None, ahora=None) -> dict | None:
-    """La versión sin cerrar y YA vigente. Nunca lanza.
+# Cuántas versiones se miran para elegir la vigente. Con una tarifa nueva por
+# mes son dieciséis años; el corte existe para que la consulta no crezca sola.
+_VERSIONES_A_MIRAR = 200
 
-    El filtro por fecha no es un detalle: `vigente_desde` existe para poder dejar
-    un aumento programado, y sin comparar contra hoy ese aumento rige desde el
-    momento en que se guarda. El super administrador cree que programó algo para
-    el mes que viene y en realidad lo publicó.
+# Solo las fechas y la identidad: es lo único que hace falta para decidir CUÁL
+# rige. El documento entero se trae después, y solo el que ganó.
+#
+# No es una micro-optimización. `GET /envios/limites` es pública, no pide sesión,
+# no está cacheada y no tiene rate limit; traer 200 tarifas completas —con sus
+# escalones, sobrecargos, descuentos y temporadas— en cada request anónima es una
+# amplificación de doscientos a uno contra el único endpoint que cualquiera puede
+# martillar. Esta proyección la cubre el índice.
+_PROYECCION_VENTANA = {"_id": 0, "version_id": 1, "vigente_desde": 1,
+                       "vigente_hasta": 1, "anulada": 1}
+
+
+def _fecha(valor):
+    """Una fecha comparable, o None. Tolera el ISO en texto y el naive de motor."""
+    if isinstance(valor, str):
+        try:
+            valor = datetime.fromisoformat(valor.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if not isinstance(valor, datetime):
+        return None
+    return valor.replace(tzinfo=timezone.utc) if valor.tzinfo is None else valor
+
+
+async def tarifa_vigente(db=None, ahora=None) -> dict | None:
+    """La versión que está cobrando en este momento. Nunca lanza.
+
+    Vigente es `vigente_desde <= ahora < vigente_hasta`, y las dos mitades de esa
+    condición importan por razones distintas.
+
+    **La de abajo**, porque `vigente_desde` existe para poder dejar un aumento
+    programado: sin compararlo contra hoy, ese aumento rige desde que se guarda y
+    el super administrador cree que programó algo cuando en realidad lo publicó.
+
+    **La de arriba**, porque al publicar un aumento programado la versión actual
+    se cierra con la fecha FUTURA en que dejará de regir. Buscar solo las que
+    tienen `vigente_hasta: None` la dejaría afuera desde el instante en que se
+    programa el reemplazo — y el módulo se quedaría sin tarifa un mes entero
+    antes de tiempo, que fue exactamente lo que encontró el test del aumento
+    programado.
 
     Sin tarifa el módulo no cotiza, y eso se responde con `disponible: false`,
     no con un 500.
@@ -97,31 +134,33 @@ async def tarifa_vigente(db=None, ahora=None) -> dict | None:
     try:
         base = await _db(db)
         candidatas = await base.tarifas_envio.find(
-            {"vigente_hasta": None}, {"_id": 0}).sort("vigente_desde", -1).to_list(None)
+            {}, _PROYECCION_VENTANA).sort("vigente_desde", -1).to_list(_VERSIONES_A_MIRAR)
     except Exception as e:
         logger.warning(f"envios: no se pudo leer la tarifa vigente: {e}")
         return None
 
     vigentes = []
     for t in candidatas or []:
-        desde = t.get("vigente_desde")
-        if desde is None:
-            # Sin fecha de inicio no es una versión publicada, es un borrador.
+        if t.get("anulada"):
+            # Programada y después reemplazada por una corrección: nunca rigió.
             continue
-        if isinstance(desde, str):
-            try:
-                desde = datetime.fromisoformat(desde.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-        if not isinstance(desde, datetime):
+        desde = _fecha(t.get("vigente_desde"))
+        if desde is None or desde > ahora:
+            # Sin fecha de inicio es un borrador; con una futura, algo programado.
             continue
-        if desde.tzinfo is None:
-            desde = desde.replace(tzinfo=timezone.utc)
-        if desde <= ahora:
-            vigentes.append((desde, t))
+        hasta = _fecha(t.get("vigente_hasta"))
+        if hasta is not None and hasta <= ahora:
+            continue                       # ya la reemplazaron
+        vigentes.append((desde, t.get("version_id")))
     if not vigentes:
         return None
-    return max(vigentes, key=lambda x: x[0])[1]
+
+    gana = max(vigentes, key=lambda x: x[0])[1]
+    try:
+        return await base.tarifas_envio.find_one({"version_id": gana}, {"_id": 0})
+    except Exception as e:                                    # pragma: no cover
+        logger.warning(f"envios: no se pudo leer la versión {gana}: {e}")
+        return None
 
 
 # ─── Límites ──────────────────────────────────────────────────────────────

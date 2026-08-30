@@ -22,6 +22,7 @@ Los modulos se cargan por ruta directa para no arrastrar services/__init__.py.
 import asyncio
 import importlib.util
 import os
+import re
 import sys
 import types
 
@@ -376,14 +377,68 @@ def test_ninguna_ruta_borra_nada():
         assert borrado not in fuente
 
 
-def test_toda_escritura_invalida_el_cache():
+# Las rutas que cambian algo que el catálogo o los límites leen. Escritas a mano
+# porque contar decoradores es una heurística: hay escrituras que NO tienen que
+# invalidar nada —guardar un borrador de tarifa no afecta a ningún usuario— y
+# confundir las dos cosas hace que el test moleste sin proteger.
+RUTAS_QUE_INVALIDAN = (
+    "crear_transportista", "editar_transportista", "cambiar_cuenta",
+    "crear_agencia", "importar_agencias", "publicar_tarifa",
+    # Esta no la llama directo: se la pasa al servicio como `invalidar=`, que es
+    # lo que verifica test_el_guardado_de_configuracion_pasa_la_invalidacion.
+    "guardar_bloque",
+)
+
+RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = ("guardar_borrador_tarifa", "simular_tarifa")
+
+
+def _cuerpo_de(fuente: str, funcion: str) -> str:
+    inicio = fuente.index(f"async def {funcion}(")
+    resto = fuente[inicio:]
+    fin = resto.find("\n@router.", 1)
+    return resto if fin < 0 else resto[:fin]
+
+
+def test_toda_escritura_que_importa_invalida_el_cache():
     """Si una sola se olvida, el panel guarda y la pantalla sigue mostrando lo
     viejo — y el que guardó cree que no se guardó."""
     fuente = _fuente_ruta()
-    escrituras = fuente.count("@router.post") + fuente.count("@router.put") + \
-        fuente.count("@router.patch")
-    assert fuente.count("invalidar_cache()") >= escrituras - 1   # el PUT de config la pasa
-    assert "invalidar=invalidar_cache" in fuente
+    for funcion in RUTAS_QUE_INVALIDAN:
+        assert "invalidar_cache" in _cuerpo_de(fuente, funcion), funcion
+
+
+def test_ninguna_escritura_queda_fuera_de_las_dos_listas():
+    """La guardia que hace que las listas de arriba no se queden viejas.
+
+    Escritas a mano son una lista blanca: la ruta de escritura que agregue el PR
+    siguiente no está en ninguna de las dos, no invalida nada, y el test pasa en
+    verde igual. Este barrido obliga a decidir: o invalida, o se declara que no
+    hace falta. Las dos cosas son respuestas válidas; olvidarse no.
+    """
+    fuente = _fuente_ruta()
+    escrituras = set(re.findall(
+        r"@router\.(?:post|put|patch)\([^)]*\)\s*\nasync def (\w+)", fuente))
+    declaradas = set(RUTAS_QUE_INVALIDAN) | set(RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE)
+    sin_declarar = escrituras - declaradas
+    assert sin_declarar == set(), (
+        f"Estas rutas de escritura no están en ninguna lista: {sorted(sin_declarar)}. "
+        f"Agregalas a RUTAS_QUE_INVALIDAN o, si de verdad no tocan nada que se lea, "
+        f"a RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE.")
+    # Y las declaradas tienen que existir: una lista que nombra funciones
+    # borradas protege tanto como una lista vacía.
+    assert declaradas <= escrituras, sorted(declaradas - escrituras)
+
+
+def test_guardar_un_borrador_no_invalida_nada():
+    """Un borrador no lo lee ninguna cotización: invalidar ahí sería tirar el
+    caché de todos cada vez que alguien tipea un número en el editor."""
+    fuente = _fuente_ruta()
+    for funcion in RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE:
+        assert "invalidar_cache" not in _cuerpo_de(fuente, funcion), funcion
+
+
+def test_el_guardado_de_configuracion_pasa_la_invalidacion_al_servicio():
+    assert "invalidar=invalidar_cache" in _fuente_ruta()
 
 
 def test_el_panel_no_menciona_ninguna_marca():

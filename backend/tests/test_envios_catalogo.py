@@ -349,7 +349,7 @@ INDICES_QUE_NO_PUEDEN_FALTAR = {
     ("envios", (("user_id", 1), ("created_at", -1))),     # "mis envíos"
     ("envios_eventos", (("envio_id", 1), ("created_at", 1))),
     ("agencias", (("transportista_id", 1), ("codigo", 1))),
-    ("tarifas_envio", (("vigente_hasta", 1), ("vigente_desde", -1))),
+    ("tarifas_envio", (("vigente_desde", -1),)),
     ("matrices_referencia", (("transportista_id", 1), ("clave", 1), ("hasta_kg", 1))),
 }
 
@@ -604,3 +604,68 @@ def test_el_saneo_para_json_es_la_ultima_barrera(valor, esperado):
     antes de que starlette serialice con allow_nan=False — donde un ValueError
     ocurre DESPUÉS de que el handler retornó y ningún try/except lo atrapa."""
     assert cat._json_seguro({"peso_max_kg": valor})["peso_max_kg"] == esperado
+
+
+def test_una_version_ya_reemplazada_deja_de_regir_en_su_fecha():
+    """Al publicar un aumento programado, la versión actual se cierra con la
+    fecha FUTURA en que dejará de regir. Si la búsqueda pidiera solo las que
+    tienen `vigente_hasta: None`, esa versión quedaría afuera desde el instante
+    en que se programa el reemplazo, y el módulo se quedaría sin tarifa un mes
+    antes de tiempo."""
+    manana = datetime.now(timezone.utc) + timedelta(days=1)
+    actual = dict(TARIFA, version_id="tar_actual", vigente_hasta=manana)
+    futura = dict(TARIFA, version_id="tar_futura", vigente_desde=manana,
+                  vigente_hasta=None)
+    base = _Db(tarifas_envio=[actual, futura])
+
+    # Hoy rige la que se está por reemplazar, no la programada.
+    assert corre(cat.tarifa_vigente(db=base))["version_id"] == "tar_actual"
+    # Y pasado mañana, la otra.
+    pasado = datetime.now(timezone.utc) + timedelta(days=2)
+    assert corre(cat.tarifa_vigente(db=base, ahora=pasado))["version_id"] == "tar_futura"
+
+
+def test_sin_ninguna_version_vigente_hoy_no_se_inventa_una():
+    ayer = datetime.now(timezone.utc) - timedelta(days=1)
+    vencida = dict(TARIFA, version_id="tar_vencida", vigente_hasta=ayer)
+    assert corre(cat.tarifa_vigente(db=_Db(tarifas_envio=[vencida]))) is None
+
+
+# ─── La ventana de vigencia, despues de la revision adversarial ────────────
+
+def test_una_version_anulada_nunca_llega_a_regir():
+    """Se programa un aumento, se descubre que estaba mal y se publica la
+    corrección. La equivocada queda anulada: existe en el historial, pero no
+    cobra ni un envío. Sin este filtro, el precio equivocado empezaba a cobrar
+    solo el mes siguiente sin que nadie hubiera publicado nada en el medio."""
+    anulada = {**TARIFA, "version_id": "tar_mala", "vigente_desde": _AYER,
+               "tarifa_minima": "600", "anulada": True}
+    base = _Db(transportistas=[TRP_BR, TRP_VE], tarifas_envio=[TARIFA, anulada])
+    assert corre(cat.tarifa_vigente(db=base))["version_id"] == TARIFA["version_id"]
+
+
+def test_si_la_unica_version_esta_anulada_no_hay_tarifa():
+    anulada = {**TARIFA, "anulada": True}
+    base = _Db(transportistas=[TRP_BR, TRP_VE], tarifas_envio=[anulada])
+    assert corre(cat.tarifa_vigente(db=base)) is None
+
+
+def test_elegir_la_vigente_no_arrastra_las_tarifas_enteras():
+    """`GET /envios/limites` es pública, no pide sesión, no está cacheada y no
+    tiene rate limit. Traer doscientas tarifas COMPLETAS —con sus escalones,
+    sobrecargos y temporadas— en cada request anónima es una amplificación de
+    doscientos a uno contra el único endpoint que cualquiera puede martillar. La
+    ventana se decide con las fechas; el documento entero se trae después, y solo
+    el que ganó."""
+    base = _Db(transportistas=[TRP_BR, TRP_VE], tarifas_envio=[TARIFA])
+    proyecciones = []
+    original = base.tarifas_envio.find
+
+    def espiar(filtro, proyeccion=None):
+        proyecciones.append(proyeccion)
+        return original(filtro, proyeccion)
+    base.tarifas_envio.find = espiar
+
+    assert corre(cat.tarifa_vigente(db=base))["escalones_peso"] == TARIFA["escalones_peso"]
+    assert proyecciones and "escalones_peso" not in (proyecciones[0] or {})
+    assert (proyecciones[0] or {}).get("vigente_desde") == 1

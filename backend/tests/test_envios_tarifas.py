@@ -583,3 +583,60 @@ def test_la_tolerancia_de_hueco_es_de_un_centesimo_y_no_mas():
     con_salto = [{"desde_kg": "0.00", "hasta_kg": "3.00", "precio": "78.00"},
                  {"desde_kg": "3.10", "hasta_kg": "5.00", "precio": "110.00"}]
     assert any("hueco" in e for e in tarifas.validar_escalones(con_salto))
+
+
+# ─── Lo que encontro la revision adversarial de la consola de precios ──────
+
+def test_un_minimo_facturable_absurdo_no_se_puede_publicar():
+    """Es el mismo error de tipeo que el margen "20" en vez de "0.20", una celda
+    mas a la derecha. Con minimo_kg = 1000 y una tabla que llega a 10 kg, una
+    caja de 1 kg se cobra como si pesara una tonelada: 45 se vuelven 21.000. Ni
+    el modelo ni el validador lo miraban, porque 1000 esta dentro del rango
+    admitido — solo es absurdo CONTRA ESTA TABLA."""
+    rota = {**TARIFA, "regla_peso": {**REGLA_PROPIA, "minimo_kg": "1000"}}
+    errores = tarifas.validar_tarifa(rota)
+    assert any("mínimo facturable" in e for e in errores)
+
+    caro = tarifas.cotizar_servicio(rota, "1", "20", "20", "20")
+    sano = tarifas.cotizar_servicio(TARIFA, "1", "20", "20", "20")
+    assert caro["total"] > sano["total"] * 100     # el daño que el error evita
+
+
+def test_un_escalon_de_redondeo_absurdo_tampoco():
+    rota = {**TARIFA, "regla_peso": {**REGLA_PROPIA, "escalon_kg": "1000"}}
+    assert any("escalón de redondeo" in e for e in tarifas.validar_tarifa(rota))
+
+
+def test_una_regla_de_peso_normal_sigue_pasando():
+    assert tarifas.validar_tarifa(TARIFA) == []
+
+
+def test_el_volumen_sin_adicional_no_se_puede_publicar():
+    """Mismo criterio que la tabla de kilos: sin adicional, todo lo que excede el
+    ultimo escalon de m³ viaja gratis. En kilos se bloqueaba y en volumen no,
+    porque un adicional ausente y uno en cero son indistinguibles desde adentro
+    de validar_escalones."""
+    con_volumen = {
+        **TARIFA, "modo_tarifa": "peso_o_volumen",
+        "escalones_volumen": [{"desde_kg": "0.00", "hasta_kg": "0.10", "precio": "50.00"}],
+    }
+    assert any("adicional_por_m3" in e for e in tarifas.validar_tarifa(con_volumen))
+    # Con un adicional cargado, la misma tabla pasa.
+    assert tarifas.validar_tarifa({**con_volumen, "adicional_por_m3": "120.00"}) == []
+
+
+def test_un_no_finito_se_reporta_en_vez_de_reventar_el_validador():
+    """`Decimal("NaN") < 0` no devuelve False: lanza InvalidOperation. El
+    validador, que existe para que nada rompa mas adelante, rompia primero — y lo
+    hacia dentro de la ruta que publica, o sea un 500."""
+    for valor in ("NaN", "Infinity", float("nan"), float("inf")):
+        errores = tarifas.validar_tarifa({**TARIFA, "tarifa_minima": valor})
+        assert errores and all("finito" in e for e in errores)
+        assert any("tarifa_minima" in e for e in errores)
+
+
+def test_un_no_finito_escondido_en_un_escalon_tambien_se_ve():
+    rota = {**TARIFA, "escalones_peso": [
+        {**TARIFA["escalones_peso"][0], "precio": "NaN"}, *TARIFA["escalones_peso"][1:]]}
+    errores = tarifas.validar_tarifa(rota)
+    assert any("escalones_peso[0].precio" in e for e in errores)
