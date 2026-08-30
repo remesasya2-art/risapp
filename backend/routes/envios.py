@@ -1,12 +1,14 @@
 """
 routes/envios.py — Las rutas de lectura del módulo de envíos.
 
-ESTADO (PR F1)
-    Las dos rutas de lectura, la cotización y la confirmación. **Ninguna mueve un
-    centavo.** Cotizar es gratis, y confirmar tampoco cobra: el usuario paga el
-    tramo 1 directamente al transportista de origen, y RIS App recién cobra
-    cuando puede verificar contra una medición ajena —el peso que figura en el
-    comprobante de despacho—. Eso llega en el PR siguiente.
+ESTADO (PR F2)
+    Lectura, cotización, confirmación y el pago de una partida pendiente.
+
+    Cotizar y confirmar NO mueven un centavo: el usuario paga el tramo 1
+    directamente al transportista de origen, y RIS App recién cobra cuando puede
+    verificar contra una medición ajena —el peso que figura en el comprobante de
+    despacho—. La única ruta de este archivo que toca saldo es
+    `/{envio_id}/cobros/{partida}/pagar`, y solo salda algo ya emitido.
 
 POR QUE COTIZAR PIDE KYC
     `get_verified_user` y no `get_current_user`. Cotizar escribe un documento en
@@ -37,7 +39,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from routes.dependencies import get_current_user, get_verified_user
-from services import envios_catalogo, envios_cotizador, envios_crear
+from services import (envios_catalogo, envios_cobros, envios_cotizador,
+                      envios_crear)
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
 from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.user import User
@@ -169,3 +172,29 @@ async def crear(pedido: PedidoDeCreacion, request: Request,
         logger.error(f"envios: /crear falló: {e}")
         raise HTTPException(
             503, "No se pudo confirmar el envío. Probá de nuevo en un minuto.")
+
+
+@router.post("/{envio_id}/cobros/{partida}/pagar")
+async def pagar_cobro(envio_id: str, partida: str,
+                      current_user: User = Depends(get_verified_user)):
+    """Salda una partida pendiente con el saldo RIS del usuario.
+
+    Que una partida esté pendiente no es un error: cuando se emitió, el paquete
+    ya estaba viajando y quedarse sin saldo no cancela nada. Esta ruta existe
+    para que el usuario pueda ponerse al día cuando quiera — y para que el
+    paquete pueda salir de Pacaraima, que es el único lugar donde una deuda
+    detiene algo.
+
+    Sin saldo devuelve 200 con `estado: "pendiente"`, no un 402: el usuario no
+    hizo nada mal y no hay nada que revertir.
+    """
+    try:
+        envio = await envios_cobros.envio_del_usuario(current_user, envio_id)
+        return await envios_cobros.pagar_pendiente(
+            envio, partida, actor_type="user", actor_id=current_user.user_id)
+    except envios_cobros.CobroImposible as e:
+        raise HTTPException(e.http, e.mensaje)
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: /cobros/pagar falló: {e}")
+        raise HTTPException(
+            503, "No se pudo procesar el pago. Probá de nuevo en un minuto.")
