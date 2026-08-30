@@ -43,7 +43,7 @@ from fastapi.responses import Response
 from routes.dependencies import get_current_user, get_verified_user
 from services import (envios_archivos, envios_catalogo, envios_cobros,
                       envios_comprobante, envios_cotizador, envios_crear,
-                      envios_seguimiento)
+                      envios_consulta, envios_seguimiento)
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
 from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.user import User
@@ -276,6 +276,31 @@ async def seguimiento(token: str):
     distinguirlos convierte la ruta en un oráculo para adivinar tokens.
     """
     datos = await envios_seguimiento.seguir(token)
+    if not datos:
+        raise HTTPException(404, "No encontramos ese envío.")
+    return datos
+
+
+@router.get("")
+async def listar_envios(pagina: int = 1, por_pagina: int = 20, estado: str = None,
+                        current_user: User = Depends(get_current_user)):
+    """Los envíos del usuario, del más nuevo al más viejo."""
+    if current_user is None:
+        raise HTTPException(401, "Iniciá sesión para ver tus envíos.")
+    return await envios_consulta.listar(current_user, pagina=pagina,
+                                        por_pagina=por_pagina, estado=estado)
+
+
+@router.get("/{envio_id}")
+async def ver_envio(envio_id: str, current_user: User = Depends(get_current_user)):
+    """El detalle de un envío, con su línea de tiempo.
+
+    El mismo 404 para "no existe" y para "es de otro": distinguirlos convierte la
+    ruta en un oráculo que confirma qué identificadores existen.
+    """
+    if current_user is None:
+        raise HTTPException(401, "Iniciá sesión para ver tus envíos.")
+    datos = await envios_consulta.detalle(current_user, envio_id)
     if not datos:
         raise HTTPException(404, "No encontramos ese envío.")
     return datos
