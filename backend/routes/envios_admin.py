@@ -78,6 +78,26 @@ def _error(errores: list[str]) -> HTTPException:
     return HTTPException(status_code=400, detail=" ".join(errores))
 
 
+# ─── La portada: qué falta para poder operar ──────────────────────────────
+
+@router.get("/estado")
+async def estado_del_modulo(admin: User = Depends(get_super_admin)):
+    """El checklist de puesta en marcha, en el orden en que hay que cargarlo.
+
+    `GET /envios/limites` contesta `disponible: false` y **no dice por qué**: el
+    diagnóstico de configuración es interno. Esta es la otra mitad, del lado de
+    adentro, para que la primera señal de que falta cargar algo no sea una
+    cotización que falla en la cara de un usuario.
+    """
+    from services import envios_puesta_en_marcha
+    try:
+        return await envios_puesta_en_marcha.estado()
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: no se pudo armar el estado del módulo: {e}")
+        raise HTTPException(
+            503, "No se pudo leer el estado del módulo. Probá de nuevo.")
+
+
 # ─── Bloques de configuración ─────────────────────────────────────────────
 
 @router.get("/config")
@@ -166,6 +186,17 @@ async def editar_transportista(transportista_id: str, datos: dict,
     if not actual:
         raise HTTPException(404, "Transportista no encontrado")
 
+    # Cambiar el rol de venezuela a brasil deja la cuenta bancaria viva colgando
+    # de un transportista que no cobra flete, y encima invisible: el panel solo
+    # muestra la sección de cuenta en el rol venezuela. Es la misma regla que
+    # `crear_transportista` ya aplica al alta.
+    if (datos.get("rol") and datos["rol"] != actual.get("rol")
+            and actual.get("cuenta_bancaria")):
+        raise HTTPException(
+            400, "Ese transportista tiene una cuenta bancaria cargada: solo el de "
+                 "Venezuela cobra flete. Si de verdad cambió de rol, dalo de baja y "
+                 "cargá uno nuevo — su historial de envíos apunta a esta ficha.")
+
     for prohibido in ("codigo", "transportista_id", "cuenta_bancaria"):
         if prohibido in datos:
             raise HTTPException(
@@ -175,7 +206,13 @@ async def editar_transportista(transportista_id: str, datos: dict,
                       " La cuenta bancaria tiene su propia ruta." if
                       prohibido == "cuenta_bancaria" else ""))
 
-    fusionado = {**actual, **datos}
+    # Solo los campos que el esquema conoce. Quedarse con todo menos tres claves
+    # dejaba pasar `cuentas_anteriores` —que `cambiar_cuenta` agrega con $push— y
+    # como el modelo es `extra="forbid"`, la ficha quedaba inservible a partir del
+    # PRIMER cambio de cuenta: cualquier edición posterior devolvía 400. Es el
+    # mismo criterio que ya usa `designar_retirador`, por la misma razón.
+    fusionado = {k: v for k, v in {**actual, **datos}.items()
+                 if k in Transportista.model_fields}
     fusionado.pop("transportista_id", None)
     fusionado.pop("creado_at", None)
     fusionado.pop("cuenta_bancaria", None)
@@ -310,6 +347,47 @@ async def _liberar_punto_entrega(transportista_id: str) -> None:
     await db.agencias.update_many(
         {"transportista_id": transportista_id, "es_punto_entrega": True},
         {"$set": {"es_punto_entrega": False}})
+
+
+@router.patch("/transportistas/{transportista_id}/agencias/{codigo}")
+async def editar_agencia(transportista_id: str, codigo: str, datos: dict,
+                         admin: User = Depends(get_super_admin)):
+    """Corrige una agencia. **No borra: se desactiva con `activa: false`.**
+
+    Sin esta ruta, una agencia cargada sin marcar como punto de entrega solo se
+    podía arreglar reimportando un CSV — y un CSV que no trae una columna la
+    borra en todas las filas. Alguien que instala el módulo una sola vez no tiene
+    por qué descubrir eso.
+
+    El **código no se edita**: es la identidad de la fila dentro de la empresa y
+    lo que el CSV usa para no duplicar.
+    """
+    actual = await db.agencias.find_one(
+        {"transportista_id": transportista_id, "codigo": codigo}, {"_id": 0})
+    if not actual:
+        raise HTTPException(404, "Esa agencia no existe.")
+    if "codigo" in datos and datos["codigo"] != codigo:
+        raise HTTPException(
+            400, "El código de una agencia no se cambia: es cómo la identifica el CSV "
+                 "y cómo la referencian los envíos viejos.")
+
+    fusionado = {k: v for k, v in {**actual, **datos}.items()
+                 if k in Agencia.model_fields}
+    try:
+        validada = Agencia(**fusionado).model_dump()
+    except Exception as e:
+        raise _error(envios_config._legible(e))
+
+    # Solo una puede ser el punto de entrega: dos es un envío que no sabe a dónde
+    # va. Se libera la anterior ANTES de marcar esta.
+    if validada["es_punto_entrega"] and not actual.get("es_punto_entrega"):
+        await _liberar_punto_entrega(transportista_id)
+
+    await db.agencias.update_one(
+        {"transportista_id": transportista_id, "codigo": codigo}, {"$set": validada})
+    await envios_config.auditar("agencias", actual, validada, admin)
+    invalidar_cache()
+    return {"ok": True, "valor": {**validada, "transportista_id": transportista_id}}
 
 
 @router.post("/transportistas/{transportista_id}/agencias/csv")

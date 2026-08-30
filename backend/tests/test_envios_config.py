@@ -499,7 +499,7 @@ def test_ningun_servicio_de_envios_borra_datos_sin_declararlo():
 # confundir las dos cosas hace que el test moleste sin proteger.
 RUTAS_QUE_INVALIDAN = (
     "crear_transportista", "editar_transportista", "cambiar_cuenta",
-    "crear_agencia", "importar_agencias", "publicar_tarifa",
+    "crear_agencia", "editar_agencia", "importar_agencias", "publicar_tarifa",
     # Esta no la llama directo: se la pasa al servicio como `invalidar=`, que es
     # lo que verifica test_el_guardado_de_configuracion_pasa_la_invalidacion.
     "guardar_bloque",

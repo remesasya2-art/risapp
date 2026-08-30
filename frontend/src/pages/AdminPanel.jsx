@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
-  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, 
+  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -26,6 +26,7 @@ import BtcAdminConfig from '../components/admin/BtcAdminConfig';
 import TasasBtcSection from '../components/admin/TasasBtcSection';
 import TasasCriptoSection from '../components/admin/TasasCriptoSection';
 import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
+import EnviosPanel from '../components/admin/envios/EnviosPanel';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -75,6 +76,10 @@ const TABS = [
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
   { key: 'btc', label: 'BTC Lightning', icon: Zap },
   { key: 'credits', label: 'Créditos Cripto', icon: Wallet, superAdminOnly: true },
+  // El modulo de envios se configura entero desde su propia pestana. Solo el
+  // super administrador: cambia precios, la cuenta que recibe los fletes y a
+  // nombre de quien se rotulan las cajas.
+  { key: 'envios', label: 'Envíos', icon: Package, superAdminOnly: true },
 ];
 
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
@@ -2234,6 +2239,12 @@ const [searchParams, setSearchParams] = useSearchParams();
           </>)}
         </div>
       )}
+      {activeTab === 'envios' && user?.role === 'super_admin' && (
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 16px 40px 16px' }}>
+          <EnviosPanel />
+        </div>
+      )}
+
       {/* Credits Cripto Tab (USDT/USDC via NOWPayments) — solo super_admin */}
       {activeTab === 'credits' && user?.role === 'super_admin' && (
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 0' }}>
