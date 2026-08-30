@@ -255,8 +255,10 @@ async def ver_foto(envio_id: str, asset_id: str,
         raise HTTPException(e.http, e.mensaje)
 
     ficha = await envios_archivos.leer(asset_id, envio_id=envio.get("envio_id"))
-    if not ficha or not ficha.get("contenido"):
-        raise HTTPException(404, "No encontramos esa foto.")
+    try:
+        envios_archivos.exigir_bytes(ficha)
+    except envios_archivos.ArchivoRechazado as e:
+        raise HTTPException(e.http, e.mensaje)
     return Response(content=bytes(ficha["contenido"]),
                     media_type=ficha.get("content_type") or "image/jpeg",
                     headers={"Cache-Control": "private, max-age=300"})

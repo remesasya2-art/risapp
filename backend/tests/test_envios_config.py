@@ -427,6 +427,72 @@ def test_ninguna_ruta_borra_nada():
         assert borrado not in fuente
 
 
+# Los borrados de datos que el módulo se permite, cada uno con su motivo.
+# Cualquier otro hace fallar el test de abajo: la forma de que un borrado sea una
+# decisión y no un olvido es que agregarlo cueste escribir por qué.
+BORRADOS_PERMITIDOS = {
+    ("envios_archivos.py", "$unset"):
+        "La migración al almacén de objetos, DESPUÉS de escribir, releer y "
+        "comparar. Los bytes no desaparecen: cambian de lugar.",
+    ("envios_cobros.py", "delete_one("):
+        "Libera una clave de idempotencia reclamada cuando la operación falló. "
+        "No es un dato del negocio: es una reserva que quedó colgada.",
+    ("envios_crear.py", "delete_one("):
+        "Lo mismo: la clave de idempotencia de una confirmación que no ocurrió.",
+    ("envios_tarifa_editor.py", "delete_one("):
+        "Borra el BORRADOR de tarifa al publicarlo. La versión publicada queda; "
+        "el borrador es un papel de trabajo.",
+}
+
+_OPERACIONES_QUE_BORRAN = ("delete_one(", "delete_many(", "drop(", "$unset",
+                           "delete_object")
+
+
+def _codigo_sin_prosa(ruta: str) -> str:
+    """El código del archivo, sin comentarios NI docstrings.
+
+    Sin sacar los docstrings, el párrafo de `envios_almacen` que explica que este
+    módulo NO borra —y que por eso nombra `delete_object`— cuenta como un
+    borrado. Un test que lee código fuente tiene que leer código, no prosa.
+    """
+    import ast as _ast
+    arbol = _ast.parse(open(ruta, encoding="utf-8").read())
+    for nodo in _ast.walk(arbol):
+        cuerpo = getattr(nodo, "body", None)
+        if (isinstance(nodo, (_ast.Module, _ast.FunctionDef, _ast.AsyncFunctionDef,
+                              _ast.ClassDef)) and cuerpo
+                and isinstance(cuerpo[0], _ast.Expr)
+                and isinstance(cuerpo[0].value, _ast.Constant)
+                and isinstance(cuerpo[0].value.value, str)):
+            cuerpo.pop(0)
+    return _ast.unparse(arbol)
+
+
+def test_ningun_servicio_de_envios_borra_datos_sin_declararlo():
+    """La guardia de arriba mira el archivo de RUTAS, y la operación que destruye
+    bytes en este módulo es un `$unset` adentro de un SERVICIO.
+
+    Una regla de negocio con una guardia automática que no cubre el caso más
+    peligroso es una guardia que tranquiliza sin proteger.
+    """
+    import glob
+    servicios = sorted(glob.glob(os.path.join(_BACKEND, "services", "envios_*.py")))
+    assert servicios, "no se encontró ningún servicio de envíos"
+    encontrados = {(os.path.basename(r), op)
+                   for r in servicios
+                   for op in _OPERACIONES_QUE_BORRAN
+                   if op in _codigo_sin_prosa(r)}
+    sin_declarar = encontrados - set(BORRADOS_PERMITIDOS)
+    assert sin_declarar == set(), (
+        f"Estos servicios borran datos y no está declarado por qué: "
+        f"{sorted(sin_declarar)}. Agregalos a BORRADOS_PERMITIDOS con el motivo, "
+        f"o sacá el borrado.")
+    # Y al revés: una excepción que ya no corresponde a nada es una licencia
+    # abierta que nadie va a revisar.
+    assert set(BORRADOS_PERMITIDOS) <= encontrados, sorted(
+        set(BORRADOS_PERMITIDOS) - encontrados)
+
+
 # Las rutas que cambian algo que el catálogo o los límites leen. Escritas a mano
 # porque contar decoradores es una heurística: hay escrituras que NO tienen que
 # invalidar nada —guardar un borrador de tarifa no afecta a ningún usuario— y
@@ -459,6 +525,10 @@ RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
     "cargar_costo_viaje",
     # Desviar un envio y registrar el flete tocan UN envio, no la configuracion.
     "desviar_envio", "cargar_flete", "acreditar_flete",
+    # El almacen de las fotos no lo lee ninguna pantalla cacheada: mueve bytes de
+    # Mongo al bucket y no cambia un precio, un limite ni una direccion. Probar
+    # la conexion, ademas, no escribe nada del negocio.
+    "probar_almacen", "migrar_almacen",
 )
 
 

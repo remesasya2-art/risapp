@@ -45,6 +45,8 @@ from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
 from services import (envios_comprobante, envios_config, envios_operacion,
                       envios_rentabilidad, envios_retiro,
                       envios_tarifa_editor)
+from services.envios_archivos import (MIGRACION_LOTE_MAX,
+                                      MIGRACION_LOTE_POR_DEFECTO)
 from services.envios_catalogo import invalidar_cache
 from services.envios_tarifas import validar_tarifa
 
@@ -981,8 +983,76 @@ async def ver_foto_admin(envio_id: str, asset_id: str,
     """
     from services import envios_archivos
     ficha = await envios_archivos.leer(asset_id, envio_id=envio_id)
-    if not ficha or not ficha.get("contenido"):
-        raise HTTPException(404, "No encontramos esa foto.")
+    try:
+        envios_archivos.exigir_bytes(ficha)
+    except envios_archivos.ArchivoRechazado as e:
+        raise HTTPException(e.http, e.mensaje)
     return Response(content=bytes(ficha["contenido"]),
                     media_type=ficha.get("content_type") or "image/jpeg",
                     headers={"Cache-Control": "private, max-age=300"})
+
+
+# --- El almacén de las fotos ------------------------------------------------
+#
+# Tres rutas, y ninguna edita credenciales. Las credenciales viven en variables
+# de entorno (ver services/envios_almacen.py): una clave con permiso de escritura
+# sobre el bucket es la capacidad de reemplazar cualquier comprobante del
+# historial, y eso no se edita desde una pantalla web ni se guarda en la misma
+# base que el log de auditoría.
+#
+# Lo que el panel SÍ necesita es contestar tres preguntas: ¿está prendido?,
+# ¿funciona?, ¿cuánto falta mover?
+
+
+class Migracion(BaseModel):
+    # Los topes salen del servicio, no de acá. Duplicarlos hace que subir el
+    # máximo en `envios_archivos` deje la ruta rechazando 51 con un 422 y nadie
+    # entienda por qué.
+    limite: int = Field(default=MIGRACION_LOTE_POR_DEFECTO, ge=1,
+                        le=MIGRACION_LOTE_MAX)
+
+
+@router.get("/almacen")
+async def estado_almacen(admin: User = Depends(get_super_admin)):
+    """Dónde están los bytes hoy. Sin la clave ni el secreto, nunca."""
+    from services import envios_almacen, envios_archivos
+    try:
+        return {**envios_almacen.estado(), **(await envios_archivos.conteo())}
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: no se pudo leer el estado del almacén: {e}")
+        raise HTTPException(
+            503, "No se pudo leer el estado del almacén. Probá de nuevo.")
+
+
+@router.post("/almacen/probar")
+async def probar_almacen(admin: User = Depends(get_super_admin)):
+    """Escribe y lee un objeto minúsculo contra el bucket.
+
+    Existe para que el super administrador descubra que la credencial está mal
+    ANTES de migrar tres mil fotos, y no en el medio.
+    """
+    from services import envios_almacen
+    try:
+        return await envios_almacen.probar()
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: no se pudo probar el almacén: {e}")
+        raise HTTPException(503, "No se pudo probar el almacén. Probá de nuevo.")
+
+
+@router.post("/almacen/migrar")
+async def migrar_almacen(datos: Migracion = None,
+                         admin: User = Depends(get_super_admin)):
+    """Mueve un lote de fotos de Mongo al almacén de objetos.
+
+    Por lotes y reanudable: se llama de nuevo hasta que `en_mongo` llegue a cero.
+    Cada archivo se escribe, se vuelve a leer y se compara antes de borrarlo de
+    Mongo — nunca al revés.
+    """
+    from services import envios_archivos
+    limite = datos.limite if datos else MIGRACION_LOTE_POR_DEFECTO
+    try:
+        return await envios_archivos.migrar_lote(limite=limite)
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: la migración de archivos falló: {e}")
+        raise HTTPException(
+            503, "No se pudo migrar el lote. Probá de nuevo en un minuto.")

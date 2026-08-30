@@ -132,6 +132,9 @@ INDICES = (
     ("envios_archivos", [("envio_id", 1), ("clase", 1)], {}),
     # Para detectar el mismo comprobante subido en dos envios distintos.
     ("envios_archivos", "sha256", {}),
+    # La migracion pregunta "cuales siguen en Mongo" en cada lote. Sin esto es un
+    # scan de la coleccion mas pesada del modulo por cada click del panel.
+    ("envios_archivos", "almacen", {}),
 
     # ─── lotes de retiro: el viaje a la agencia ───────────────────────────
     ("envios_lotes", "lote_id", {"unique": True, "sparse": True}),
