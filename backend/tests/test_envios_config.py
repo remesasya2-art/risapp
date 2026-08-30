@@ -329,16 +329,46 @@ def _fuente_ruta():
     return open(os.path.join(_BACKEND, "routes", "envios_admin.py"), encoding="utf-8").read()
 
 
-def test_solo_el_super_administrador_escribe():
-    """El operador lee lo que necesita para trabajar. Que cargar el monto de un
-    flete y cambiar la cuenta que lo recibe sean dos permisos distintos es lo que
-    impide que una sola persona haga las dos cosas."""
+# Las escrituras que hace el OPERADOR y no el super administrador. Son las
+# operativas —tocar un paquete que está viajando— y no las de configuración: el
+# que verifica un comprobante en el mostrador no tiene por qué poder cambiar los
+# precios ni la cuenta que recibe los fletes.
+#
+# Escrita a mano y verificada contra el archivo, para que agregar una ruta
+# operativa sea una decisión y no un descuido.
+ESCRITURAS_DEL_OPERADOR = ("verificar_comprobante",)
+
+
+def test_solo_el_super_administrador_escribe_la_configuracion():
+    """El operador lee lo que necesita para trabajar y toca los paquetes que
+    tiene en la mano. Que cargar el monto de un flete y cambiar la cuenta que lo
+    recibe sean dos permisos distintos es lo que impide que una sola persona haga
+    las dos cosas."""
     fuente = _fuente_ruta()
-    for escritura in ("@router.post", "@router.put", "@router.patch"):
-        bloques = fuente.split(escritura)[1:]
-        for b in bloques:
-            cabecera = b[:b.index("):") + 2] if "):" in b else b[:400]
-            assert "get_super_admin" in cabecera, f"escritura sin super admin: {cabecera[:80]}"
+    escrituras = re.findall(
+        r"@router\.(?:post|put|patch)\([^)]*\)\s*\nasync def (\w+)", fuente)
+    for funcion in escrituras:
+        cabecera = _cabecera_de(fuente, funcion)
+        if funcion in ESCRITURAS_DEL_OPERADOR:
+            assert "get_crm_user" in cabecera, funcion
+            assert "get_super_admin" not in cabecera, funcion
+        else:
+            assert "get_super_admin" in cabecera, f"escritura sin super admin: {funcion}"
+
+
+def test_las_escrituras_del_operador_estan_declaradas_y_existen():
+    """Una lista blanca que nombra funciones borradas protege tanto como una
+    lista vacía."""
+    fuente = _fuente_ruta()
+    escrituras = set(re.findall(
+        r"@router\.(?:post|put|patch)\([^)]*\)\s*\nasync def (\w+)", fuente))
+    assert set(ESCRITURAS_DEL_OPERADOR) <= escrituras
+
+
+def _cabecera_de(fuente: str, funcion: str) -> str:
+    inicio = fuente.index(f"async def {funcion}(")
+    resto = fuente[inicio:]
+    return resto[:resto.index("):") + 2] if "):" in resto[:600] else resto[:600]
 
 
 def test_las_lecturas_las_puede_hacer_el_operador():
@@ -391,10 +421,16 @@ RUTAS_QUE_INVALIDAN = (
     "designar_retirador",
 )
 
+# Las operativas no invalidan cache de configuracion: no tocan nada que el
+# catalogo o los limites lean.
+
 RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
     "guardar_borrador_tarifa", "simular_tarifa",
     # La nómina no la lee ninguna pantalla cacheada.
     "crear_colaborador", "editar_colaborador",
+    # Verificar un comprobante mueve un paquete y emite un cobro; no cambia
+    # ninguna configuracion que se lea desde el catalogo.
+    "verificar_comprobante",
 )
 
 

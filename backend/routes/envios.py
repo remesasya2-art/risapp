@@ -1,7 +1,7 @@
 """
 routes/envios.py — Las rutas de lectura del módulo de envíos.
 
-ESTADO (PR F2)
+ESTADO (PR G)
     Lectura, cotización, confirmación y el pago de una partida pendiente.
 
     Cotizar y confirmar NO mueven un centavo: el usuario paga el tramo 1
@@ -36,11 +36,13 @@ POR QUE /envios/limites ES PUBLICA
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import (APIRouter, Depends, File, Form, HTTPException,
+                     Request, UploadFile)
+from fastapi.responses import Response
 
 from routes.dependencies import get_current_user, get_verified_user
-from services import (envios_catalogo, envios_cobros, envios_cotizador,
-                      envios_crear)
+from services import (envios_archivos, envios_catalogo, envios_cobros,
+                      envios_comprobante, envios_cotizador, envios_crear)
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
 from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.user import User
@@ -198,3 +200,62 @@ async def pagar_cobro(envio_id: str, partida: str,
         logger.error(f"envios: /cobros/pagar falló: {e}")
         raise HTTPException(
             503, "No se pudo procesar el pago. Probá de nuevo en un minuto.")
+
+
+@router.post("/{envio_id}/comprobante")
+async def cargar_comprobante(envio_id: str,
+                             codigo_objeto: str = Form(...),
+                             posteado_at: str = Form(...),
+                             foto: UploadFile = File(...),
+                             servicio: str = Form(None),
+                             monto_pagado_brl: str = Form(None),
+                             current_user: User = Depends(get_verified_user)):
+    """El usuario avisa que despachó. **No cobra nada.**
+
+    Sin API de rastreo, es la única forma de que el sistema se entere. Lo que se
+    carga acá se verifica después contra la foto, y recién ahí se emite el cobro
+    inicial: el peso no puede salir de lo que el usuario tipeó.
+    """
+    try:
+        datos = await foto.read(envios_archivos.TAMANO_MAX_BYTES + 1)
+    except Exception as e:                                    # pragma: no cover
+        logger.warning(f"envios: no se pudo leer la foto: {e}")
+        raise HTTPException(400, "No se pudo leer el archivo. Probá de nuevo.")
+
+    try:
+        return await envios_comprobante.cargar(
+            current_user, envio_id, codigo_objeto=codigo_objeto,
+            posteado_at=posteado_at, foto=datos, servicio=servicio,
+            monto_pagado_brl=monto_pagado_brl)
+    except envios_comprobante.ComprobanteRechazado as e:
+        raise HTTPException(e.http, e.mensaje)
+    except envios_archivos.ArchivoRechazado as e:
+        raise HTTPException(e.http, e.mensaje)
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: /comprobante falló: {e}")
+        raise HTTPException(
+            503, "No se pudo guardar el comprobante. Probá de nuevo en un minuto.")
+
+
+@router.get("/{envio_id}/foto/{asset_id}")
+async def ver_foto(envio_id: str, asset_id: str,
+                   current_user: User = Depends(get_current_user)):
+    """Devuelve una foto del envío, si el envío es de quien la pide.
+
+    El `asset_id` no alcanza por sí solo: se exige que pertenezca a ESE envío y
+    que ese envío sea del usuario. Un identificador de archivo suelto no puede
+    ser una llave — es lo que convierte una galería privada en una pública.
+    """
+    if current_user is None:
+        raise HTTPException(401, "Iniciá sesión para ver esta foto.")
+    try:
+        envio = await envios_cobros.envio_del_usuario(current_user, envio_id)
+    except envios_cobros.CobroImposible as e:
+        raise HTTPException(e.http, e.mensaje)
+
+    ficha = await envios_archivos.leer(asset_id, envio_id=envio.get("envio_id"))
+    if not ficha or not ficha.get("contenido"):
+        raise HTTPException(404, "No encontramos esa foto.")
+    return Response(content=bytes(ficha["contenido"]),
+                    media_type=ficha.get("content_type") or "image/jpeg",
+                    headers={"Cache-Control": "private, max-age=300"})

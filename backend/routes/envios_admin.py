@@ -39,7 +39,8 @@ from models.user import User
 from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
-from services import envios_config, envios_retiro, envios_tarifa_editor
+from services import (envios_comprobante, envios_config, envios_retiro,
+                      envios_tarifa_editor)
 from services.envios_catalogo import invalidar_cache
 from services.envios_tarifas import validar_tarifa
 
@@ -636,3 +637,44 @@ async def designar_retirador(datos: Designacion, admin: User = Depends(get_super
         raise _error(errores)
     return {"ok": True, "de_turno": colaborador.get("nombre"),
             "vista_previa": await envios_retiro.bloque_de_despacho()}
+
+
+# ─── Comprobantes: verificar es lo que emite el cobro inicial ─────────────
+
+class Verificacion(BaseModel):
+    """Lo que el operador LEE en la foto del comprobante.
+
+    No es lo que el usuario tipeó: con eso, cualquiera escribiría 0,1 kg y el
+    servicio se cobraría solo. La medición sigue siendo ajena —la hizo el
+    transportista de origen— y acá alguien de este lado la confirma mirando el
+    papel.
+    """
+    peso_kg: str = Field(min_length=1, max_length=20)
+    largo_cm: str = Field(min_length=1, max_length=20)
+    ancho_cm: str = Field(min_length=1, max_length=20)
+    alto_cm: str = Field(min_length=1, max_length=20)
+    idempotency_key: str = Field(default=None, max_length=100)
+
+
+@router.post("/envios/{envio_id}/comprobante/verificar")
+async def verificar_comprobante(envio_id: str, datos: Verificacion,
+                                admin: User = Depends(get_crm_user)):
+    """Confirma el comprobante y **emite el cobro inicial**.
+
+    Es la única ruta del panel que hace que se mueva saldo, y lo hace con el peso
+    que el operador leyó en la foto. Si el cobro no se puede pagar, la partida
+    queda pendiente y el envío sigue: el paquete ya está viajando.
+    """
+    try:
+        return await envios_comprobante.verificar(
+            admin, envio_id, peso_kg=datos.peso_kg, largo_cm=datos.largo_cm,
+            ancho_cm=datos.ancho_cm, alto_cm=datos.alto_cm,
+            idempotency_key=datos.idempotency_key)
+    except envios_comprobante.ComprobanteRechazado as e:
+        raise HTTPException(e.http, e.mensaje)
+    except Exception as e:
+        from services.envios_cobros import CobroImposible
+        if isinstance(e, CobroImposible):
+            raise HTTPException(e.http, e.mensaje)
+        logger.error(f"envios: verificar comprobante falló: {e}")
+        raise HTTPException(503, "No se pudo verificar. Reintentá en un momento.")

@@ -57,6 +57,7 @@ COLECCIONES = (
     "tarifas_envio",
     "matrices_referencia",
     "colaboradores_retiro",
+    "envios_archivos",
 )
 
 # (coleccion, claves, opciones). Las opciones son las de create_index.
@@ -73,7 +74,9 @@ INDICES = (
     # La cola del operador, que es la consulta mas frecuente del panel.
     ("envios", [("estado", 1), ("created_at", -1)], {}),
     ("envios", "destino.agencia_codigo", {"sparse": True}),
-    ("envios", "origen.codigo_objeto", {"sparse": True}),
+    # Unico: dos envios con el mismo comprobante son dos cobros sobre un solo
+    # despacho, y el segundo se descubre en el mostrador de Pacaraima.
+    ("envios", "origen.codigo_objeto", {"unique": True, "sparse": True}),
     # El lote de retiro: agrupa los envios que viajaron juntos, que es lo que
     # hace posible la vista de rentabilidad por viaje (§2.3).
     ("envios", "origen.lote_retiro_id", {"sparse": True}),
@@ -118,6 +121,12 @@ INDICES = (
     # El historial del panel ordena por fecha de creacion, no de vigencia: una
     # version programada se crea hoy y rige el mes que viene.
     ("tarifas_envio", [("creada_at", -1)], {}),
+
+    # ─── archivos: comprobantes y evidencias ──────────────────────────────
+    ("envios_archivos", "asset_id", {"unique": True, "sparse": True}),
+    ("envios_archivos", [("envio_id", 1), ("clase", 1)], {}),
+    # Para detectar el mismo comprobante subido en dos envios distintos.
+    ("envios_archivos", "sha256", {}),
 
     # ─── nomina de retiro ─────────────────────────────────────────────────
     ("colaboradores_retiro", "colaborador_id", {"unique": True, "sparse": True}),
