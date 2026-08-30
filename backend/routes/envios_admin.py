@@ -41,7 +41,8 @@ from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
 from services import (envios_comprobante, envios_config, envios_operacion,
-                      envios_retiro, envios_tarifa_editor)
+                      envios_rentabilidad, envios_retiro,
+                      envios_tarifa_editor)
 from services.envios_catalogo import invalidar_cache
 from services.envios_tarifas import validar_tarifa
 
@@ -808,3 +809,85 @@ async def entregar(envio_id: str, guia: str = Form(...),
         return await envios_operacion.entregar(admin, envio_id, guia=guia, foto=datos)
     except Exception as e:
         raise _operacion(e)
+
+
+# ─── Rentabilidad y precios observados ────────────────────────────────────
+
+def _rentabilidad(e: Exception):
+    if isinstance(e, envios_rentabilidad.RentabilidadRechazada):
+        return HTTPException(e.http, e.mensaje)
+    logger.error(f"envios: rentabilidad falló: {e}")
+    return HTTPException(503, "No se pudo calcular. Reintentá en un momento.")
+
+
+@router.get("/envios/viajes/{lote_id}")
+async def ver_viaje(lote_id: str, admin: User = Depends(get_crm_user)):
+    """Qué dejó un viaje a Pacaraima: lo cobrado, lo pendiente y el resultado.
+
+    Lo pendiente se muestra **aparte** y no se suma a lo cobrado: sumarlo daría
+    un viaje rentable con plata que todavía no entró, que es la forma clásica de
+    creerse rentable seis meses seguidos.
+    """
+    try:
+        return await envios_rentabilidad.por_lote(lote_id)
+    except Exception as e:
+        raise _rentabilidad(e)
+
+
+class CostoDelViaje(BaseModel):
+    costo_ris: str = Field(min_length=1, max_length=20)
+
+
+@router.put("/envios/viajes/{lote_id}/costo")
+async def cargar_costo_viaje(lote_id: str, datos: CostoDelViaje,
+                             admin: User = Depends(get_crm_user)):
+    """Carga lo que costó el viaje: combustible, peajes y horas.
+
+    Es el único número que no se deduce de ningún lado, y sin él la cuenta del
+    viaje no significa nada. Estimarlo sería inventar justamente la parte que
+    hace que el resultado sea un resultado.
+    """
+    try:
+        return await envios_rentabilidad.cargar_costo(admin, lote_id, datos.costo_ris)
+    except Exception as e:
+        raise _rentabilidad(e)
+
+
+@router.get("/envios/observado")
+async def ver_observado(dias: int = 90, admin: User = Depends(get_super_admin)):
+    """Lo que costó de verdad cada tramo, sacado de las operaciones.
+
+    **No escribe nada.** Cada propuesta viaja con sus muestras y su dispersión, y
+    con un `confiable` que dice si el módulo se animaría a usarla: una sugerencia
+    con dos observaciones y una dispersión del 40 % no es un precio, es ruido.
+    """
+    return {"observaciones": await envios_rentabilidad.observaciones(dias=dias),
+            "muestras_minimas": envios_rentabilidad.MUESTRAS_MINIMAS}
+
+
+class Aprobacion(BaseModel):
+    transportista_id: str = Field(min_length=1, max_length=60)
+    clave: str = Field(min_length=1, max_length=40)
+    hasta_kg: str = Field(min_length=1, max_length=20)
+    precio: str = Field(min_length=1, max_length=20)
+    moneda: str = Field(default=None, max_length=8)
+
+
+@router.post("/envios/observado/aprobar")
+async def aprobar_observado(datos: Aprobacion,
+                            admin: User = Depends(get_super_admin)):
+    """Lleva un valor observado a la matriz de referencia. **Nadie más escribe ahí.**
+
+    Es una ruta aparte y no el final de la anterior a propósito: un job que
+    corrige precios solo es un job que un día mueve un número por una muestra
+    rara, y nadie se entera hasta que un usuario pregunta por qué le dijimos que
+    iba a pagar el doble.
+    """
+    try:
+        resultado = await envios_rentabilidad.aprobar(
+            admin, transportista_id=datos.transportista_id, clave=datos.clave,
+            hasta_kg=datos.hasta_kg, precio=datos.precio, moneda=datos.moneda)
+    except Exception as e:
+        raise _rentabilidad(e)
+    invalidar_cache()
+    return resultado

@@ -340,6 +340,9 @@ ESCRITURAS_DEL_OPERADOR = (
     "verificar_comprobante",
     # La operacion: mover paquetes que el operador tiene en la mano.
     "marcar_disponible", "retirar_lote", "repesar", "despachar", "entregar",
+    # El costo de un viaje lo carga el operador que lo hizo, que es el unico que
+    # sabe cuanto salio.
+    "cargar_costo_viaje",
 )
 
 
@@ -423,6 +426,9 @@ RUTAS_QUE_INVALIDAN = (
     "guardar_bloque",
     # Escribe el bloque punto_origen por el mismo camino auditado.
     "designar_retirador",
+    # Aprobar un precio observado escribe en la matriz que leen las
+    # orientaciones: eso si invalida.
+    "aprobar_observado",
 )
 
 # Las operativas no invalidan cache de configuracion: no tocan nada que el
@@ -436,6 +442,8 @@ RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
     # configuracion que el catalogo o los limites lean.
     "verificar_comprobante", "marcar_disponible", "retirar_lote", "repesar",
     "despachar", "entregar",
+    # El costo de un viaje lo carga el operador que lo hizo.
+    "cargar_costo_viaje",
 )
 
 
