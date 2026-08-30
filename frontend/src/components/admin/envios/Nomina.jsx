@@ -21,8 +21,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BadgeCheck, Plus, Save, UserCheck, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
-import { Area, Aviso, Boton, Campo, Cargando, Interruptor, NoSePudoLeer, Texto, Vacio } from './ui';
-import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Area, Aviso, Boton, Campo, Cargando, Interruptor, NoSePudoLeer, Texto, Vacio } from '../../envios/ui';
+import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 
 const NUEVO = {
   nombre: '', cpf: '', telefono: '', activo: true,

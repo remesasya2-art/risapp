@@ -27,6 +27,10 @@ import SendReais from './pages/SendReais';
 import SendCrypto from './pages/SendCrypto';
 import LegalPage from './pages/LegalPage';
 import Landing from './pages/Landing';
+import EnviosMis from './pages/EnviosMis';
+import EnvioNuevo from './pages/EnvioNuevo';
+import EnvioDetalle from './pages/EnvioDetalle';
+import Seguimiento from './pages/Seguimiento';
 
 // Protected Route Component
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -112,6 +116,9 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/legal" element={<LegalPage />} />
+      {/* Publica a proposito: es el link que el usuario le manda a quien espera
+          la caja. No muestra ningun dato personal — ver Seguimiento.jsx. */}
+      <Route path="/seguimiento/:token" element={<Seguimiento />} />
       
       {/* Protected Routes */}
       <Route path="/" element={<HomeGate />} />
@@ -123,6 +130,9 @@ function AppRoutes() {
       <Route path="/credits/deposit" element={<ProtectedRoute><CreditsDeposit /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+      <Route path="/envios" element={<ProtectedRoute><EnviosMis /></ProtectedRoute>} />
+      <Route path="/envios/nuevo" element={<ProtectedRoute><EnvioNuevo /></ProtectedRoute>} />
+      <Route path="/envios/:envioId" element={<ProtectedRoute><EnvioDetalle /></ProtectedRoute>} />
       <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />

@@ -16,8 +16,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Save, Scale, ShieldAlert, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
-import { Area, Aviso, Boton, Campo, Cargando, NoSePudoLeer, Texto } from './ui';
-import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Area, Aviso, Boton, Campo, Cargando, NoSePudoLeer, Texto } from '../../envios/ui';
+import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 
 
 /**

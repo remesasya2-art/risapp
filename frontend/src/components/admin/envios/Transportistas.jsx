@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
-import { Area, Aviso, Boton, Campo, Cargando, Interruptor, NoSePudoLeer, Seleccion, Texto, Vacio } from './ui';
-import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Area, Aviso, Boton, Campo, Cargando, Interruptor, NoSePudoLeer, Seleccion, Texto, Vacio } from '../../envios/ui';
+import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 
 const NUEVO = {
   codigo: '', nombre: '', rol: 'brasil', activo: true, orden: 1, moneda: '',

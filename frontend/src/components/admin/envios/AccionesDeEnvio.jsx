@@ -20,8 +20,8 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
 import { fmt } from '../../../utils/format';
-import { Aviso, Boton, Campo, Cargando, Interruptor, Texto, Area } from './ui';
-import { COLOR, bajada, grilla, mensajeDeError, titulo } from './estilos';
+import { Aviso, Boton, Campo, Cargando, Interruptor, Texto, Area } from '../../envios/ui';
+import { COLOR, bajada, grilla, mensajeDeError, titulo } from '../../envios/estilos';
 import { DESVIOS, DESVIOS_LEGALES, claveDe, olvidarClave } from './operacion';
 
 const MEDIDAS = [['peso_kg', 'Peso (kg)'], ['largo_cm', 'Largo (cm)'],

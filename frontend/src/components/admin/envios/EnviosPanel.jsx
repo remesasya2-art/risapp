@@ -22,7 +22,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Building2, ClipboardCheck, FileText, HardDrive, MapPin, Tags, Users,
 } from 'lucide-react';
-import { COLOR } from './estilos';
+import { COLOR } from '../../envios/estilos';
 import PuestaEnMarcha from './PuestaEnMarcha';
 import PuntoOrigen from './PuntoOrigen';
 import Contenido from './Contenido';

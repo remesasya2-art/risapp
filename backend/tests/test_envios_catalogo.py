@@ -669,3 +669,36 @@ def test_elegir_la_vigente_no_arrastra_las_tarifas_enteras():
     assert corre(cat.tarifa_vigente(db=base))["escalones_peso"] == TARIFA["escalones_peso"]
     assert proyecciones and "escalones_peso" not in (proyecciones[0] or {})
     assert (proyecciones[0] or {}).get("vigente_desde") == 1
+
+
+# ─── El minimo de la descripcion es un dato de la pantalla ────────────────
+
+def test_los_limites_publican_el_minimo_de_la_descripcion():
+    """La pantalla lo necesita para avisar ANTES de que alguien complete seis
+    campos y los datos de un tercero. Tenerlo escrito en el cliente es cómo el
+    PR #40 llegó a anunciar topes que el servidor no validaba — el mismo error,
+    en el otro sentido."""
+    base = _Db(app_settings=[{"setting_id": "envios_contenido",
+                              "prohibidos": ["armas"], "terminos_version": "v1",
+                              "texto_estimado": "x" * 40,
+                              "descripcion_min_caracteres": 25}])
+    r = corre(cat.limites(db=base))
+    assert r["descripcion_min_caracteres"] == 25
+
+
+def test_sin_el_bloque_contenido_el_minimo_es_el_del_codigo():
+    r = corre(cat.limites(db=_Db()))
+    from services.envios_policy import DESCRIPCION_MIN_CARACTERES
+    assert r["descripcion_min_caracteres"] == DESCRIPCION_MIN_CARACTERES
+
+
+@pytest.mark.parametrize("valor", [0, 2, 201, 9999, -5, "muchos", None])
+def test_un_minimo_fuera_de_rango_no_se_publica(valor):
+    """El mismo rango que aplica `validar_descripcion`. Publicar un número que el
+    validador después rechaza hace que la pantalla habilite el botón y el
+    servidor conteste 400."""
+    base = _Db(app_settings=[{"setting_id": "envios_contenido",
+                              "descripcion_min_caracteres": valor}])
+    from services.envios_policy import DESCRIPCION_MIN_CARACTERES
+    assert corre(cat.limites(db=base))["descripcion_min_caracteres"] \
+        == DESCRIPCION_MIN_CARACTERES

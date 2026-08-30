@@ -196,7 +196,32 @@ async def limites(db=None) -> dict:
         "moneda": (tarifa or {}).get("moneda") or "RIS",
         "prohibidos": (tarifa or {}).get("prohibidos") or CATEGORIAS_PROHIBIDAS_POR_DEFECTO,
         "terminos_version": TERMINOS_VERSION,
+        # El minimo de caracteres de la descripcion. Sale acá porque la pantalla
+        # lo necesita para avisar ANTES de que alguien complete seis campos, y
+        # porque tenerlo escrito en el cliente es como el PR #40 llego a anunciar
+        # topes que el servidor no validaba — el mismo error, en el otro sentido.
+        "descripcion_min_caracteres": await _minimo_de_descripcion(db=db),
     }
+
+
+async def _minimo_de_descripcion(db=None) -> int:
+    """Cuantos caracteres pide la descripcion del contenido. Nunca lanza.
+
+    El default de codigo y no el de la pantalla: si el bloque `contenido` no se
+    puede leer, contestar un numero inventado hace que la pantalla habilite el
+    boton y el servidor rechace.
+    """
+    from services.envios_policy import DESCRIPCION_MIN_CARACTERES as DESCRIPCION_MINIMA
+    try:
+        from services.envios_config import leer
+        contenido = await leer("contenido", db=db) or {}
+        valor = int(contenido.get("descripcion_min_caracteres") or DESCRIPCION_MINIMA)
+        # El MISMO rango que aplica `validar_descripcion`. Contestar un número
+        # que el validador después no acepta es peor que no contestarlo.
+        return valor if 3 <= valor <= 200 else DESCRIPCION_MINIMA
+    except Exception as e:                                    # pragma: no cover
+        logger.warning(f"envios: no se pudo leer el mínimo de descripción: {e}")
+        return DESCRIPCION_MINIMA
 
 
 def _quien(activos, clave, propios):

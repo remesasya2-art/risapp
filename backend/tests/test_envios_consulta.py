@@ -550,3 +550,34 @@ def test_un_documento_roto_tampoco_rompe_el_detalle():
     roto["cobros"] = "esto no es un dict"
     base = db_completa(envios=[roto])
     assert corre(con.detalle(_Usuario(), "env_001", db=base)) is None
+
+
+# ─── El detalle no lleva datos internos ───────────────────────────────────
+
+def test_el_detalle_no_le_da_al_usuario_quien_peso_su_paquete():
+    """`repesar` escribe `verificado_por` —el user_id del OPERADOR— adentro de
+    `paquete.verificado`, y el detalle devolvía el bloque entero.
+
+    No lo renderizaba ninguna pantalla, que es la peor forma de filtrar un dato:
+    la que nadie ve, y que aparece el día que alguien mira el JSON. El resto del
+    módulo usa listas blancas por esta misma razón.
+    """
+    doc = envio(1)
+    doc["paquete"]["verificado"] = {
+        "peso_kg": "3.10", "largo_cm": "41", "ancho_cm": "30", "alto_cm": "21",
+        "verificado_por": "usr_operador_secreto",
+        "verificado_at": AHORA, "tarifa_version": "tar_2026_08_a",
+    }
+    base = db_completa(envios=[doc])
+    salida = corre(con.detalle(_Usuario(), "env_001", db=base))
+
+    verificado = salida["paquete"]["verificado"]
+    assert verificado["peso_kg"] == "3.10"
+    assert "verificado_por" not in verificado
+    assert "usr_operador_secreto" not in repr(salida)
+
+
+def test_el_detalle_sin_repesaje_no_inventa_un_bloque_vacio():
+    base = db_completa()
+    salida = corre(con.detalle(_Usuario(), "env_001", db=base))
+    assert salida["paquete"]["verificado"] is None

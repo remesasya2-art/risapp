@@ -17,8 +17,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, MapPin, RefreshCw, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
-import { Area, Aviso, Boton, Campo, Cargando, NoSePudoLeer, Seleccion, Texto } from './ui';
-import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Area, Aviso, Boton, Campo, Cargando, NoSePudoLeer, Seleccion, Texto } from '../../envios/ui';
+import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 
 const TOKENS = ['razon_social', 'retirador_nombre', 'linea_agencia', 'agencia',
   'caixa_postal', 'direccion', 'ciudad', 'uf', 'cep'];

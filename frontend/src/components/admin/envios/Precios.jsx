@@ -28,8 +28,8 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
 import { fmt } from '../../../utils/format';
-import { Aviso, Boton, Campo, Cargando, NoSePudoLeer, Seleccion, Texto, Vacio } from './ui';
-import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Aviso, Boton, Campo, Cargando, NoSePudoLeer, Seleccion, Texto, Vacio } from '../../envios/ui';
+import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 
 const CAJAS_POR_DEFECTO = [
   { nombre: 'Chica', peso_kg: '1.0', largo_cm: '20', ancho_cm: '15', alto_cm: '10',

@@ -37,8 +37,8 @@ import toast from 'react-hot-toast';
 import api from '../../../utils/api';
 import { fmt } from '../../../utils/format';
 import AccionesDeEnvio from './AccionesDeEnvio';
-import { Aviso, Boton, Campo, Cargando, NoSePudoLeer, Texto, Vacio, Area } from './ui';
-import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Aviso, Boton, Campo, Cargando, NoSePudoLeer, Texto, Vacio, Area } from '../../envios/ui';
+import { COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 import { MOTIVOS_DE_RECHAZO, PARADAS, POR_ESTADO } from './operacion';
 
 const ESTADOS = PARADAS.map((p) => p.estado);

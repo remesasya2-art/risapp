@@ -175,8 +175,12 @@ async def _detalle(envio: dict, base) -> dict:
     return {
         **_fila(envio),
         "paquete": {
-            "declarado": (envio.get("paquete") or {}).get("declarado"),
-            "verificado": (envio.get("paquete") or {}).get("verificado"),
+            "declarado": _medidas((envio.get("paquete") or {}).get("declarado")),
+            # Lista blanca, igual que el resto del módulo. El bloque `verificado`
+            # lleva `verificado_por` —el user_id del OPERADOR que pesó— y salía
+            # entero al navegador del usuario. No lo renderizaba ninguna
+            # pantalla, que es la peor forma de filtrar un dato: la que nadie ve.
+            "verificado": _medidas((envio.get("paquete") or {}).get("verificado")),
             "contenido": (envio.get("paquete") or {}).get("contenido_descripcion"),
         },
         "modalidad_flete": envio.get("modalidad_flete"),
@@ -200,6 +204,16 @@ async def _detalle(envio: dict, base) -> dict:
             for e in eventos or [] if e.get("a_estado") in PUBLICO
         ],
     }
+
+
+_MEDIDAS = ("peso_kg", "largo_cm", "ancho_cm", "alto_cm", "valor_declarado")
+
+
+def _medidas(bloque) -> dict | None:
+    """Solo las medidas. Nada de quién las tomó ni cuándo."""
+    if not isinstance(bloque, dict) or not bloque:
+        return None
+    return {k: bloque.get(k) for k in _MEDIDAS if bloque.get(k) is not None}
 
 
 def _cobros_visibles(envio: dict) -> list[dict]:

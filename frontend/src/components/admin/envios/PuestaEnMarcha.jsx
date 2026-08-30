@@ -17,8 +17,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, Check, CircleDashed, RefreshCw } from 'lucide-react';
 import api from '../../../utils/api';
-import { Aviso, Boton, Cargando } from './ui';
-import { COLOR, mensajeDeError, tarjeta } from './estilos';
+import { Aviso, Boton, Cargando } from '../../envios/ui';
+import { COLOR, mensajeDeError, tarjeta } from '../../envios/estilos';
 
 const ICONO = {
   listo: { Icono: Check, color: COLOR.ok, fondo: COLOR.okSuave, borde: '#a7f3d0' },

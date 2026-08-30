@@ -19,8 +19,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Database, HardDrive, PlugZap, RefreshCw, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
-import { Aviso, Boton, Cargando } from './ui';
-import { COLOR, bajada, grilla, mensajeDeError, tarjeta, titulo } from './estilos';
+import { Aviso, Boton, Cargando } from '../../envios/ui';
+import { COLOR, bajada, grilla, mensajeDeError, tarjeta, titulo } from '../../envios/estilos';
 
 const VARIABLES = ['ENVIOS_R2_ENDPOINT', 'ENVIOS_R2_BUCKET', 'ENVIOS_R2_ACCESS_KEY_ID',
   'ENVIOS_R2_SECRET_ACCESS_KEY'];
