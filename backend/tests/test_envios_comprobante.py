@@ -814,3 +814,111 @@ def test_dos_cargas_simultaneas_del_mismo_codigo_dan_un_motivo_y_no_un_503():
         cargar(base)
     assert e.value.http == 409
     assert "otro envío" in e.value.mensaje
+
+
+# ─── El hueco entre las dos escrituras ────────────────────────────────────
+#
+# `verificar` marca `origen.verificado` y DESPUES emite el cobro. El orden es
+# deliberado —al reves, un fallo al registrar dejaria un cobro sin nada que lo
+# explique— pero abre un hueco: si el cobro falla, el envio queda verificado y
+# sin cobrar.
+#
+# Y ese estado era MORTAL y silencioso. `verificar` no se podia correr de nuevo
+# (el guard de "ya verificado" devolvia 200), `repesar` lo rechazaba por no tener
+# cobro inicial, y `partidas_impagas` no cuenta una partida AUSENTE — asi que en
+# la cola del operador el envio se veia sano, con `puede_salir: true`. El paquete
+# se movia habiendo cobrado cero, y nadie se enteraba.
+#
+# El disparador mas probable es una coma decimal tipeada en el mostrador, que es
+# como se escribe "seis kilos y medio" en español y en portugues. Pero el agujero
+# es generico: cualquier falla entre las dos escrituras lo produce.
+
+def _cargado(base):
+    """Deja el envio con el comprobante cargado y listo para verificar."""
+    cargar(base)
+    return base
+
+
+def test_una_medida_ilegible_no_deja_el_envio_verificado_sin_cobro():
+    base = db_completa()
+    _cargado(base)
+
+    # La coma decimal: el cobro no se puede calcular.
+    with pytest.raises(Exception):
+        corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="6,5",
+                             largo_cm="40", ancho_cm="30", alto_cm="20"))
+    assert envio_de(base)["origen"]["verificado"]["at"] is not None
+    assert (envio_de(base).get("cobros") or {}).get("inicial") is None
+    assert saldo_de(base) == Decimal("500.00")
+
+    # El operador corrige y vuelve a apretar. ANTES esto devolvia 200 con
+    # "ya verificado" y el cobro nunca se emitia.
+    salida = corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="6.5",
+                                  largo_cm="40", ancho_cm="30", alto_cm="20"))
+    assert salida["ok"] is True
+    assert salida.get("corregido") is True
+    assert (envio_de(base).get("cobros") or {}).get("inicial") is not None
+    assert saldo_de(base) < Decimal("500.00"), "no se cobró nada"
+
+
+def test_la_correccion_cobra_con_la_medida_nueva_y_no_con_la_mala():
+    """La medición vieja es justamente la que no se pudo calcular. Dejarla sería
+    cobrar contra un número que ya se sabe malo."""
+    base = db_completa()
+    _cargado(base)
+    with pytest.raises(Exception):
+        corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="6,5",
+                             largo_cm="40", ancho_cm="30", alto_cm="20"))
+    corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="6.5",
+                         largo_cm="40", ancho_cm="30", alto_cm="20"))
+    verificado = envio_de(base)["origen"]["verificado"]
+    assert verificado["peso_kg"] == "6.5"
+    assert verificado["corregido_at"] is not None
+
+
+def test_un_envio_ya_cobrado_no_se_vuelve_a_cobrar():
+    """La rama de corrección no puede convertirse en una segunda emisión."""
+    base = db_completa()
+    _cargado(base)
+    corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="2.30",
+                         largo_cm="40", ancho_cm="30", alto_cm="20"))
+    saldo = saldo_de(base)
+    cobro = dict(envio_de(base)["cobros"]["inicial"])
+
+    salida = corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="9.99",
+                                  largo_cm="40", ancho_cm="30", alto_cm="20"))
+    assert salida["ya_verificado"] is True
+    assert saldo_de(base) == saldo
+    assert envio_de(base)["cobros"]["inicial"] == cobro
+    # Y la medición verificada NO se pisa con la que alguien tipeó después.
+    assert envio_de(base)["origen"]["verificado"]["peso_kg"] == "2.30"
+
+
+def test_si_otro_emitio_el_cobro_en_el_medio_no_se_pisa_la_medicion():
+    """La guardia de carrera de la corrección.
+
+    Entre que se lee el envío y que se escribe la medición corregida, otra
+    petición pudo emitir el cobro. Sin `cobros.inicial: None` en el filtro, la
+    medición nueva pisaría a la que efectivamente se cobró — y el envío quedaría
+    diciendo que se cobró 9,99 kg cuando se cobraron 2,30.
+
+    Se llama a la función interna a propósito: es la única forma de reproducir
+    el estado exacto que deja la carrera, que por definición no se puede
+    provocar desde afuera.
+    """
+    base = db_completa()
+    _cargado(base)
+    corre(comp.verificar(_Operador(), "env_aaa111", peso_kg="2.30",
+                         largo_cm="40", ancho_cm="30", alto_cm="20"))
+    saldo = saldo_de(base)
+    envio_leido = dict(envio_de(base))
+    # Lo que vio quien leyó ANTES de que el otro cobrara.
+    envio_leido["cobros"] = {"inicial": None, "ajuste": None}
+
+    salida = corre(comp._emitir_lo_que_falto(
+        base, envio_leido, _Operador(), "9.99", "40", "30", "20", ahora=AHORA))
+
+    assert salida["ya_verificado"] is True
+    assert saldo_de(base) == saldo, "se cobró dos veces"
+    assert envio_de(base)["origen"]["verificado"]["peso_kg"] == "2.30", \
+        "la medición corregida pisó la que se cobró"

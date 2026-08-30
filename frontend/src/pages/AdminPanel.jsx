@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
-  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, 
+  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -27,6 +27,7 @@ import TasasBtcSection from '../components/admin/TasasBtcSection';
 import TasasCriptoSection from '../components/admin/TasasCriptoSection';
 import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
 import EnviosPanel from '../components/admin/envios/EnviosPanel';
+import OperacionPanel from '../components/admin/envios/OperacionPanel';
 
 // Convertir URL de imagen a ruta accesible
 const convertTwilioUrl = (url) => {
@@ -76,10 +77,17 @@ const TABS = [
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
   { key: 'btc', label: 'BTC Lightning', icon: Zap },
   { key: 'credits', label: 'Créditos Cripto', icon: Wallet, superAdminOnly: true },
-  // El modulo de envios se configura entero desde su propia pestana. Solo el
-  // super administrador: cambia precios, la cuenta que recibe los fletes y a
-  // nombre de quien se rotulan las cajas.
-  { key: 'envios', label: 'Envíos', icon: Package, superAdminOnly: true },
+  // La cola de Pacaraima. SIN `superAdminOnly`: la usa el operador todos los
+  // dias y el super administrador tambien puede hacer cualquier tarea de
+  // operador —pasa por `get_crm_user` y por `get_admin_user`, asi que ninguna
+  // ruta lo rechaza—. La separacion de roles va en el otro sentido: el que viaja
+  // y pesa cajas no puede cambiar los precios ni la cuenta que recibe los
+  // fletes.
+  { key: 'operacion', label: 'Cola de envíos', icon: Boxes },
+  // La configuracion, en cambio, si es solo del super administrador: cambia
+  // precios, la cuenta que recibe los fletes y a nombre de quien se rotulan las
+  // cajas.
+  { key: 'envios', label: 'Config. de envíos', icon: Package, superAdminOnly: true },
 ];
 
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
@@ -107,7 +115,11 @@ const [searchParams, setSearchParams] = useSearchParams();
 
   const isAgent = user?.role === 'agent';
   useEffect(() => {
-    if (isAgent && !['chat', 'support', 'users', 'kyc', 'blacklist'].includes(activeTab)) setActiveTab('chat');
+    // 'operacion' entra en la lista: un agente puede VER la cola de envíos. Las
+    // acciones que mueven saldo (verificar, repesar, desviar, acreditar flete)
+    // piden `get_admin_user` y le van a devolver 403 desde el servidor, que es
+    // donde tiene que estar la regla.
+    if (isAgent && !['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion'].includes(activeTab)) setActiveTab('chat');
   }, [isAgent]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
@@ -857,7 +869,7 @@ const [searchParams, setSearchParams] = useSearchParams();
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', rowGap: '8px' }}>
-            {(isAgent ? TABS.filter(t => t.key === 'crm') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => (
+            {(isAgent ? TABS.filter(t => t.key === 'crm' || t.key === 'operacion') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? (isAgent ? 'chat' : 'users') : tab.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
                   backgroundColor: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#6366f1' : 'transparent', color: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#ffffff' : '#6b7280' }}
@@ -2239,6 +2251,12 @@ const [searchParams, setSearchParams] = useSearchParams();
           </>)}
         </div>
       )}
+      {activeTab === 'operacion' && (
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 16px 40px 16px' }}>
+          <OperacionPanel />
+        </div>
+      )}
+
       {activeTab === 'envios' && user?.role === 'super_admin' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 16px 40px 16px' }}>
           <EnviosPanel />

@@ -213,8 +213,32 @@ async def verificar(operador, envio_id: str, *, peso_kg, largo_cm, ancho_cm, alt
         raise ComprobanteRechazado(
             "Este envío todavía no tiene comprobante cargado.", http=409)
     if (origen.get("verificado") or {}).get("at"):
-        return {"ok": True, "ya_verificado": True,
-                "cobro": _cobro_de(envio)}
+        # Verificado Y con el cobro emitido: no hay nada que hacer.
+        #
+        # Se mira la PARTIDA y no `_cobro_de`, que devuelve un dict con
+        # `estado: "pendiente"` y `monto: 0` incluso cuando no hay ninguna: es
+        # siempre verdadero, y usarlo acá dejaba la rama de abajo inalcanzable.
+        if (envio.get("cobros") or {}).get("inicial"):
+            return {"ok": True, "ya_verificado": True, "cobro": _cobro_de(envio)}
+        # Verificado y SIN cobro: el envío quedó en el hueco entre las dos
+        # escrituras de más abajo. Pasa con una medida ilegible —una coma
+        # decimal tipeada en el mostrador es la forma más común—, con una tarifa
+        # que no se pudo leer, o con un corte de base en el medio.
+        #
+        # Sin esta rama el envío quedaba MUERTO y en silencio: `verificar` no se
+        # podía correr de nuevo, `repesar` lo rechazaba por no tener cobro
+        # inicial, y `partidas_impagas` no cuenta una partida ausente, así que en
+        # la cola se veía sano y con `puede_salir: true`. El paquete se movía
+        # habiendo cobrado cero.
+        #
+        # Se re-emite con las medidas NUEVAS y se deja registrada la corrección:
+        # las viejas son justamente las que no se pudieron calcular. Reintentar
+        # es seguro porque `cobrar` corta en `_partida_existente`.
+        logger.warning(
+            f"envios: {envio_id} estaba verificado sin cobro inicial; se reintenta")
+        return await _emitir_lo_que_falto(
+            base, envio, operador, peso_kg, largo_cm, ancho_cm, alto_cm,
+            ahora=ahora, idempotency_key=idempotency_key)
 
     verificado = {
         "peso_kg": str(peso_kg), "largo_cm": str(largo_cm),
@@ -248,6 +272,54 @@ async def verificar(operador, envio_id: str, *, peso_kg, largo_cm, ancho_cm, alt
                  "cobro": cobro.get("estado"), "monto_ris": cobro.get("monto_ris")},
         db=base, ahora=ahora)
     return {"ok": True, "ya_verificado": False, "cobro": cobro}
+
+
+async def _emitir_lo_que_falto(base, envio, operador, peso_kg, largo_cm, ancho_cm,
+                               alto_cm, *, ahora, idempotency_key=None) -> dict:
+    """Emite el cobro inicial de un envío que quedó verificado sin cobrar.
+
+    Actualiza la medición con la que se acaba de tipear: la anterior es la que no
+    se pudo calcular, y dejarla sería cobrar contra un número que ya se sabe
+    malo. La corrección queda en la bitácora.
+    """
+    from services import envios_cobros, envios_eventos
+    envio_id = envio.get("envio_id")
+    anterior = (envio.get("origen") or {}).get("verificado") or {}
+    verificado = {
+        "peso_kg": str(peso_kg), "largo_cm": str(largo_cm),
+        "ancho_cm": str(ancho_cm), "alto_cm": str(alto_cm),
+        "at": anterior.get("at") or ahora,
+        "por": getattr(operador, "user_id", None),
+        "corregido_at": ahora,
+    }
+    try:
+        actualizado = await base.envios.find_one_and_update(
+            # `cobros.inicial: None` en el filtro: entre que se leyó y que se
+            # escribe, otra petición pudo emitir el cobro. Sin esto, la medición
+            # buena pisaría la que efectivamente se cobró.
+            {"envio_id": envio_id, "cobros.inicial": None},
+            {"$set": {"origen.verificado": verificado}}, return_document=True)
+    except Exception as e:                                    # pragma: no cover
+        logger.error(f"envios: no se pudo corregir la verificación de {envio_id}: {e}")
+        raise ComprobanteRechazado(
+            "No se pudo registrar la corrección. Reintentá en un momento.",
+            http=503) from e
+    if actualizado is None:
+        actualizado = await _envio(base, envio_id)
+        return {"ok": True, "ya_verificado": True, "cobro": _cobro_de(actualizado)}
+
+    cobro = await envios_cobros.emitir_inicial(
+        actualizado, peso_kg, largo_cm, ancho_cm, alto_cm,
+        db=base, ahora=ahora, idempotency_key=idempotency_key,
+        actor_id=getattr(operador, "user_id", None))
+    await envios_eventos.registrar(
+        actualizado, ESTADO_DESTINO, ESTADO_DESTINO, "admin",
+        actor_id=getattr(operador, "user_id", None),
+        detalle={"verificacion": "correccion", "peso_anterior": anterior.get("peso_kg"),
+                 "peso_kg": str(peso_kg), "cobro": cobro.get("estado"),
+                 "monto_ris": cobro.get("monto_ris")},
+        db=base, ahora=ahora)
+    return {"ok": True, "ya_verificado": False, "corregido": True, "cobro": cobro}
 
 
 # ─── Piezas ───────────────────────────────────────────────────────────────
