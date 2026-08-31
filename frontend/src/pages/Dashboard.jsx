@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   LayoutDashboard, Wallet, ArrowLeftRight, History, 
   LogOut, Plus, ArrowUpRight, ArrowDownLeft, TrendingUp, TrendingDown,
-  ChevronRight, Settings, User, HelpCircle, Menu, X, Clock, CheckCircle, XCircle, Eye, Download, Zap
+  ChevronRight, Settings, User, HelpCircle, Menu, X, Clock, CheckCircle, XCircle, Eye, Download, Zap, Package
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
@@ -163,6 +163,7 @@ const normalized = { ...tx };
     { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
     { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
     { icon: Zap, label: 'Bitcoin Lightning', path: '/btc-lightning' },
+    { icon: Package, label: 'Enviar un paquete', path: '/envios' },
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },

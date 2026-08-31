@@ -90,6 +90,13 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Security indexes warning: {e}")
     try:
+        # Estructura del módulo de envíos. Crea índices, nunca datos: los
+        # transportistas, agencias y tarifas se cargan desde el panel.
+        from services.envios_indices import ensure_envios_indexes
+        await ensure_envios_indexes()
+    except Exception as e:
+        logger.warning(f"Envios indexes warning: {e}")
+    try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
     except Exception as e:
