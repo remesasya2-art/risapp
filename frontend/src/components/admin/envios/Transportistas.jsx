@@ -231,6 +231,7 @@ function Ficha({ transportista, nuevo, onListo, onCancelar }) {
   const [base, setBase] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
+  const [avisos, setAvisos] = useState([]);
 
   // Un clic accidental sobre «Guardar» reescribía la ficha entera y dejaba línea
   // de auditoría: una edición que nadie hizo, indistinguible de una real el día
@@ -263,6 +264,11 @@ function Ficha({ transportista, nuevo, onListo, onCancelar }) {
         } else {
           setBase(datos);
         }
+        // Los avisos son cosas que se guardaron IGUAL pero conviene mirar: hoy,
+        // una plantilla de rastreo heredada que no rastrea. No bloquean —para eso
+        // esta el 400— y por eso no van a un toast, que se va en cuatro segundos:
+        // quedan en la ficha hasta que alguien los resuelva.
+        setAvisos(res.data?.avisos || []);
         toast.success('Guardado');
       }
       onListo();
@@ -386,6 +392,15 @@ function Ficha({ transportista, nuevo, onListo, onCancelar }) {
       </div>
 
       {error ? <Aviso tono="error" titulo="No se guardó" style={{ marginTop: '14px' }}>{error}</Aviso> : null}
+
+      {avisos.length ? (
+        <Aviso tono="alerta" titulo="Se guardó, pero mirá esto"
+          style={{ marginTop: '14px' }}>
+          <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px' }}>
+            {avisos.map((a, i) => <li key={i}>{a}</li>)}
+          </ul>
+        </Aviso>
+      ) : null}
 
       <div style={{ display: 'flex', gap: '10px', marginTop: '16px',
         alignItems: 'center' }}>

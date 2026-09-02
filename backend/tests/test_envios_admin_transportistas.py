@@ -434,3 +434,58 @@ def test_una_plantilla_de_rastreo_con_codigo_se_acepta():
         "trp_ve", {"plantilla_rastreo": "https://rastreo.example/g/{codigo}"},
         _Admin()))
     assert salida["valor"]["plantilla_rastreo"].endswith("{codigo}")
+
+
+# ─── Una plantilla rota no toma de rehen al resto de la ficha ─────────────
+
+def test_una_plantilla_vieja_rota_no_bloquea_editar_otro_campo():
+    """La ficha entera se valida —hace falta, es un merge— pero una plantilla
+    YA GUARDADA sin `{codigo}` no puede tomar de rehen al resto.
+
+    Sin esto, cambiarle el nombre a un transportista devolvia un 400 hablando
+    del rastreo, un campo que la persona no toco. Y es la misma pantalla donde
+    se corrige un limite mal cargado: el mensaje llegaba en el peor momento
+    posible, hablando de otra cosa.
+    """
+    DB.transportistas.filas[0]["plantilla_rastreo"] = "https://rastreo.example/consulta"
+
+    salida = corre(ra.editar_transportista(
+        "trp_ve", {"nombre": "Otro nombre"}, _Admin()))
+
+    assert salida["valor"]["nombre"] == "Otro nombre"
+    # Y la plantilla rota se guardo TAL CUAL: no se pisa ni se borra.
+    assert salida["valor"]["plantilla_rastreo"] == "https://rastreo.example/consulta"
+    # Pero no se guarda en silencio: se avisa.
+    assert salida["avisos"] and "{codigo}" in salida["avisos"][0]
+
+
+def test_editar_la_plantilla_rota_si_la_valida():
+    """La excepcion es SOLO para la heredada. En cuanto se toca el campo, el
+    validador manda: si no, la puerta quedaria abierta para siempre.
+
+    MUTACION: sacar el `"plantilla_rastreo" not in datos` de la condicion deja
+    pasar esto y el test se pone en rojo.
+    """
+    DB.transportistas.filas[0]["plantilla_rastreo"] = "https://rastreo.example/consulta"
+
+    with pytest.raises(HTTPException) as e:
+        corre(ra.editar_transportista(
+            "trp_ve", {"plantilla_rastreo": "https://otra.example/tambien-sin-token"},
+            _Admin()))
+    assert e.value.status_code == 400
+    assert "{codigo}" in e.value.detail
+
+
+def test_arreglar_la_plantilla_rota_se_puede_y_no_deja_aviso():
+    DB.transportistas.filas[0]["plantilla_rastreo"] = "https://rastreo.example/consulta"
+
+    salida = corre(ra.editar_transportista(
+        "trp_ve", {"plantilla_rastreo": "https://rastreo.example/g/{codigo}"},
+        _Admin()))
+    assert salida["valor"]["plantilla_rastreo"].endswith("{codigo}")
+    assert salida["avisos"] == []
+
+
+def test_una_ficha_sana_no_arrastra_ningun_aviso():
+    salida = corre(ra.editar_transportista("trp_ve", {"nombre": "Sano"}, _Admin()))
+    assert salida["avisos"] == []

@@ -101,7 +101,7 @@ export default function EnviosPanel() {
       {actual === 'transportistas' ? <Transportistas /> : null}
       {actual === 'retiro' ? <Nomina /> : null}
       {actual === 'tarifas' ? <Precios /> : null}
-      {actual === 'origenes' ? <Origenes /> : null}
+      {actual === 'origenes' ? <Origenes onIr={ir} /> : null}
       {actual === 'matrices' ? <Matrices /> : null}
       {actual === 'almacen' ? <Almacen /> : null}
     </div>

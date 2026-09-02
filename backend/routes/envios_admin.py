@@ -217,17 +217,47 @@ async def editar_transportista(transportista_id: str, datos: dict,
     fusionado.pop("transportista_id", None)
     fusionado.pop("creado_at", None)
     fusionado.pop("cuenta_bancaria", None)
+
+    # Una plantilla de rastreo YA GUARDADA que no tiene `{codigo}` no puede
+    # bloquear la edición de otra cosa. Como acá se valida la ficha ENTERA
+    # —hace falta: es un merge y el modelo es la única fuente de verdad—, sin
+    # esto cambiarle el nombre a un transportista devolvía un 400 hablando del
+    # rastreo, un campo que la persona no tocó. Y encima es la misma pantalla
+    # donde se corrige un límite mal cargado: el mensaje llegaba en el peor
+    # momento posible, hablando de otra cosa.
+    #
+    # Se saca de la validación, se guarda TAL CUAL estaba —no se pisa ni se
+    # borra— y se devuelve un aviso. La plantilla rota sigue rota y sigue
+    # visible; lo que deja de hacer es tomar de rehén al resto de la ficha.
+    #
+    # Editarla SÍ la valida: en cuanto `plantilla_rastreo` viene en `datos`,
+    # esta excepción no aplica y el validador manda.
+    heredada = (fusionado.get("plantilla_rastreo") or "").strip()
+    rastreo_viejo_invalido = ("plantilla_rastreo" not in datos
+                              and heredada and "{codigo}" not in heredada)
+    if rastreo_viejo_invalido:
+        fusionado["plantilla_rastreo"] = None
+
     try:
         validado = Transportista(**fusionado).model_dump()
     except Exception as e:
         raise _error(envios_config._legible(e))
+
+    avisos = []
+    if rastreo_viejo_invalido:
+        validado["plantilla_rastreo"] = actual.get("plantilla_rastreo")
+        avisos.append(
+            "La plantilla de rastreo de esta ficha no incluye {codigo}, así que el "
+            "enlace lleva a la portada del transportista en vez de al paquete. Se "
+            "guardó tal cual estaba: corregila cuando puedas, o dejala vacía si esa "
+            "empresa no tiene enlace directo.")
 
     validado.pop("cuenta_bancaria", None)      # no se toca desde acá
     await db.transportistas.update_one({"transportista_id": transportista_id},
                                        {"$set": validado})
     await envios_config.auditar("transportistas", actual, validado, admin)
     invalidar_cache()
-    return {"ok": True, "valor": _sin_cuenta(validado)}
+    return {"ok": True, "valor": _sin_cuenta(validado), "avisos": avisos}
 
 
 class CambioDeCuenta(BaseModel):

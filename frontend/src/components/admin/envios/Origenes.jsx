@@ -22,7 +22,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, Check, Inbox, MapPin, Plus, Search, Upload, X,
+  AlertTriangle, Check, Inbox, MapPin, Plus, Search, Table2, Upload, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
@@ -41,11 +41,15 @@ const conGuion = (crudo) => {
   return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
 };
 
-export default function Origenes() {
+export default function Origenes({ onIr }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [noSeLeyo, setNoSeLeyo] = useState(null);
   const [busqueda, setBusqueda] = useState('');
+  // La UF que acaba de entrar al catálogo sin tener precios. Se guarda para
+  // decirlo EN EL MOMENTO de aprobar, con el atajo puesto: es cuando la persona
+  // todavía tiene el contexto y puede resolverlo de una.
+  const [sinPrecio, setSinPrecio] = useState(null);
 
   // Corta las respuestas que llegan después de que la pantalla se fue: el panel
   // tiene ocho sub-pantallas y se salta entre ellas con peticiones en vuelo.
@@ -104,11 +108,32 @@ export default function Origenes() {
         </p>
       </div>
 
+      {sinPrecio ? (
+        <Aviso tono="alerta" titulo={`${sinPrecio} todavía no tiene precios cargados`}>
+          La ciudad ya está en el catálogo y cotiza, pero al usuario no le va a aparecer
+          ninguna referencia del tramo dentro de Brasil hasta que cargues precios para{' '}
+          <strong>{sinPrecio}</strong>.
+          {onIr ? (
+            <div style={{ marginTop: '10px' }}>
+              <Boton onClick={() => onIr('matrices')}>
+                <Table2 size={14} /> Cargar precios de {sinPrecio}
+              </Boton>
+            </div>
+          ) : null}
+        </Aviso>
+      ) : null}
+
       {sinMatriz.length ? (
         <Aviso tono="alerta" titulo={`${sinMatriz.length} ciudad(es) sin precios cargados`}>
           {sinMatriz.map((o) => `${o.ciudad} (${o.uf})`).join(', ')}. Cotizan igual, pero al
-          usuario no le va a aparecer ninguna referencia del tramo dentro de Brasil. Se cargan
-          en <strong>Matrices de referencia</strong>.
+          usuario no le va a aparecer ninguna referencia del tramo dentro de Brasil.
+          {onIr ? (
+            <div style={{ marginTop: '10px' }}>
+              <Boton variante="secundario" onClick={() => onIr('matrices')}>
+                <Table2 size={14} /> Ir a cargar precios
+              </Boton>
+            </div>
+          ) : null}
         </Aviso>
       ) : null}
 
@@ -116,7 +141,8 @@ export default function Origenes() {
 
       {propuestos.length ? (
         <ColaDePropuestos filas={propuestos} uf={datos?.uf_disponibles || []}
-          onListo={cargar} />
+          conMatriz={new Set(origenes.filter((o) => o.tiene_matriz).map((o) => o.uf))}
+          onListo={cargar} onSinPrecio={setSinPrecio} />
       ) : null}
 
       <div style={tarjeta}>
@@ -318,7 +344,7 @@ function Fila({ origen, uf, matrizLegible, onListo }) {
 
 
 /** Lo que la gente pidió y no estaba, del más pedido al menos pedido. */
-function ColaDePropuestos({ filas, uf, onListo }) {
+function ColaDePropuestos({ filas, uf, conMatriz, onListo, onSinPrecio }) {
   return (
     <div style={tarjeta}>
       <h3 style={titulo}>
@@ -333,7 +359,7 @@ function ColaDePropuestos({ filas, uf, onListo }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ textAlign: 'left', color: COLOR.suave }}>
-              {['CEP', 'Ciudad declarada', 'UF', 'Pedidos', ''].map((h) => (
+              {['CEP', 'Ciudad declarada', 'UF', 'Pedidos', 'Matriz', ''].map((h) => (
                 <th key={h} style={{ padding: '8px 10px', fontWeight: 600,
                   borderBottom: `1px solid ${COLOR.borde}` }}>{h}</th>
               ))}
@@ -341,7 +367,8 @@ function ColaDePropuestos({ filas, uf, onListo }) {
           </thead>
           <tbody>
             {filas.map((p) => (
-              <Propuesto key={p.cep} fila={p} uf={uf} onListo={onListo} />
+              <Propuesto key={p.cep} fila={p} uf={uf} conMatriz={conMatriz}
+                onListo={onListo} onSinPrecio={onSinPrecio} />
             ))}
           </tbody>
         </table>
@@ -351,7 +378,7 @@ function ColaDePropuestos({ filas, uf, onListo }) {
 }
 
 
-function Propuesto({ fila, uf, onListo }) {
+function Propuesto({ fila, uf, conMatriz, onListo, onSinPrecio }) {
   const [datos, setDatos] = useState({ ciudad: fila.ciudad || '', uf: fila.uf || '' });
   const [trabajando, setTrabajando] = useState(false);
   const celda = { padding: '8px 10px', borderBottom: `1px solid ${COLOR.borde}` };
@@ -365,6 +392,13 @@ function Propuesto({ fila, uf, onListo }) {
           ? { ciudad: datos.ciudad.trim(), uf: datos.uf } : {}),
       });
       toast.success(estado === 'aprobado' ? 'Agregada al catálogo' : 'Descartada');
+      // El encargo lo pide con todas las letras: si esa UF no tiene matriz,
+      // decirlo ACA MISMO. Aprobar una ciudad cuyo tramo no tiene precio deja un
+      // bloque mudo en la pantalla de un usuario, y enterarse después es
+      // enterarse por un reclamo.
+      if (estado === 'aprobado' && conMatriz && !conMatriz.has(datos.uf)) {
+        onSinPrecio?.(datos.uf);
+      }
       onListo();
     } catch (err) {
       toast.error(mensajeDeError(err, 'No se pudo resolver.'));
@@ -392,6 +426,13 @@ function Propuesto({ fila, uf, onListo }) {
             ...uf.map((u) => ({ valor: u, texto: u }))]} />
       </td>
       <td style={{ ...celda, fontWeight: 700 }}>{fila.pedidos}</td>
+      <td style={celda}>
+        {datos.uf && conMatriz && !conMatriz.has(datos.uf) ? (
+          <span style={{ color: COLOR.alerta, fontSize: '12px' }}>
+            <AlertTriangle size={11} style={{ display: 'inline' }} /> {datos.uf} sin precios
+          </span>
+        ) : null}
+      </td>
       <td style={{ ...celda, textAlign: 'right', whiteSpace: 'nowrap' }}>
         <Boton onClick={() => resolver('aprobado')} cargando={trabajando}
           disabled={!puedeAprobar}>
