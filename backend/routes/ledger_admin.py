@@ -88,3 +88,153 @@ async def list_entries(
         "count": len(rows),
         "entries": rows,
     }
+
+
+# ─── El libro contable ────────────────────────────────────────────────────
+#
+# Lo de arriba es lo que habia: crear la apertura, reconciliar y listar las
+# lineas de UN usuario. Lo de abajo es el libro propiamente dicho — diario,
+# mayor y balance de comprobacion — que la pantalla nunca tuvo.
+
+from fastapi import HTTPException                                  # noqa: E402
+from fastapi.responses import Response, StreamingResponse          # noqa: E402
+
+from services import contabilidad                                  # noqa: E402
+
+
+def _error(e: Exception):
+    if isinstance(e, contabilidad.ContabilidadInvalida):
+        return HTTPException(e.http, e.mensaje)
+    logger.error(f"contabilidad: falló una consulta del libro: {e}")
+    return HTTPException(503, "No se pudo leer el libro. Reintentá en un momento.")
+
+
+@router.get("/plan-de-cuentas")
+async def plan_de_cuentas(admin: User = Depends(get_super_admin)):
+    """El plan de cuentas y el mapa de asientos.
+
+    La pantalla NO los tiene escritos: los pide. Así el plan vive en un solo
+    lugar, y un `movement_type` nuevo aparece en la pantalla sin tocar el
+    frontend.
+    """
+    return {
+        "cuentas": [{"codigo": codigo, **ficha}
+                    for codigo, ficha in contabilidad.PLAN_DE_CUENTAS.items()],
+        "asientos": [{"movement_type": tipo, "contra": regla["contra"],
+                      "glosa": regla["glosa"]}
+                     for tipo, regla in sorted(contabilidad.ASIENTOS.items())],
+        "cuenta_del_usuario": contabilidad.CUENTA_DEL_USUARIO,
+    }
+
+
+@router.get("/diario")
+async def ver_diario(
+    desde: str = Query(..., description="AAAA-MM-DD"),
+    hasta: str = Query(..., description="AAAA-MM-DD"),
+    libro: str = Query(None, description="RIS | USDT | USDC"),
+    user_id: str = Query(None),
+    movement_type: str = Query(None),
+    tz_min: int = Query(0, ge=-840, le=840),
+    limite: int = Query(100, ge=1, le=2000),
+    saltear: int = Query(0, ge=0),
+    admin: User = Depends(get_super_admin),
+):
+    """El libro diario: cada asiento, cronológico, con sus dos partidas."""
+    try:
+        return await contabilidad.libro_diario(
+            desde=desde, hasta=hasta, libro=libro, user_id=user_id,
+            movement_type=movement_type, tz_min=tz_min,
+            limite=limite, saltear=saltear)
+    except Exception as e:
+        raise _error(e)
+
+
+@router.get("/mayor")
+async def ver_mayor(
+    desde: str = Query(..., description="AAAA-MM-DD"),
+    hasta: str = Query(..., description="AAAA-MM-DD"),
+    libro: str = Query(None),
+    tz_min: int = Query(0, ge=-840, le=840),
+    admin: User = Depends(get_super_admin),
+):
+    """El libro mayor: los movimientos agrupados por cuenta, con saldo."""
+    try:
+        return await contabilidad.libro_mayor(
+            desde=desde, hasta=hasta, libro=libro, tz_min=tz_min)
+    except Exception as e:
+        raise _error(e)
+
+
+@router.get("/balance")
+async def ver_balance(
+    desde: str = Query(..., description="AAAA-MM-DD"),
+    hasta: str = Query(..., description="AAAA-MM-DD"),
+    libro: str = Query(None),
+    tz_min: int = Query(0, ge=-840, le=840),
+    formato: str = Query("json", pattern="^(json|csv|xlsx)$"),
+    admin: User = Depends(get_super_admin),
+):
+    """El balance de comprobación: sumas y saldos por cuenta.
+
+    **Cuadra por construcción** —las partidas se derivan de cada línea— así que
+    no es un control de que los datos estén bien: es la estructura. Los controles
+    son `/reconciliacion` y `/integridad`.
+    """
+    try:
+        balance = await contabilidad.libro_mayor(
+            desde=desde, hasta=hasta, libro=libro, tz_min=tz_min)
+        resumen = await contabilidad.balance_de_comprobacion(
+            desde=desde, hasta=hasta, libro=libro, tz_min=tz_min)
+    except Exception as e:
+        raise _error(e)
+
+    if formato == "json":
+        return resumen
+
+    from services import contabilidad_export
+    quien = getattr(admin, "email", "") or getattr(admin, "user_id", "")
+    nombre = f"risapp_balance_{desde}_a_{hasta}.{formato}"
+    if formato == "csv":
+        return StreamingResponse(
+            iter([contabilidad_export.balance_a_csv(resumen, balance, quien)]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
+    return Response(
+        content=contabilidad_export.balance_a_xlsx(resumen, balance, quien),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
+
+
+@router.get("/reconciliacion")
+async def ver_reconciliacion(
+    libro: str = Query("RIS"),
+    limite: int = Query(200, ge=1, le=1000),
+    admin: User = Depends(get_super_admin),
+):
+    """Compara el saldo guardado de cada usuario contra la suma de su libro.
+
+    Reemplaza a `/reconcile`, que hacía una agregación POR USUARIO —con diez mil
+    usuarios, diez mil viajes en una sola petición— y sumaba floats con una
+    tolerancia de un centavo por cuenta. Acá son dos lecturas, la suma es en
+    Decimal y la tolerancia es cero.
+    """
+    try:
+        return await contabilidad.reconciliacion(libro=libro, limite=limite)
+    except Exception as e:
+        raise _error(e)
+
+
+@router.get("/integridad")
+async def ver_integridad(
+    libro: str = Query(None),
+    admin: User = Depends(get_super_admin),
+):
+    """Los defectos que impiden defender el libro ante un auditor.
+
+    No corrige nada: un libro que se auto-corrige es un libro que nadie puede
+    auditar. Devuelve también lo que este libro **todavía no puede probar**.
+    """
+    try:
+        return await contabilidad.integridad(libro=libro)
+    except Exception as e:
+        raise _error(e)
