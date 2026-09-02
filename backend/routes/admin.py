@@ -845,10 +845,24 @@ async def get_pending_ves_recharges(admin: User = Depends(get_super_admin)):
             "rate_used": tx.get("rate_used", 0),
             "status": tx.get("status", "pending"),
             "proof_image": tx.get("proof_image"),
+            # Esta proyeccion NO los traia, y son justo los que el panel lee
+            # para mostrar el banco y decidir si hace falta elegirlo a mano. Es
+            # el mismo defecto de clase que el de la creacion: un campo que
+            # existe en la base y se pierde en el camino.
+            "destination_bank": tx.get("destination_bank"),
+            "destination_bank_id": tx.get("destination_bank_id"),
+            "destination_bank_name": tx.get("destination_bank_name"),
             "created_at": tx.get("created_at"),
         })
-    
-    return {"recharges": recharges}
+
+    # El tamaño del problema, para no tener que contarlo a mano. Son las que
+    # nacieron rotas: el arreglo de la creacion no las alcanza y las tiene que
+    # resolver una persona, una por una, mirando el comprobante.
+    faltantes = {"total_pendientes": len(recharges),
+                 "sin_banco": sum(1 for r in recharges if not r["destination_bank_id"]),
+                 "sin_comprobante": sum(1 for r in recharges if not r["proof_image"])}
+
+    return {"recharges": recharges, "faltantes": faltantes}
 
 
 class OrdenClaimRequest(BaseModel):
@@ -1710,14 +1724,28 @@ async def process_ves_recharge(
         from routes.transactions import resolve_ves_bank
         bank_id, _ = await resolve_ves_bank(recharge.get("destination_bank"))
     # Final fallback: optional override from request body
+    #
+    # Es la red para las recargas que ya estan cargadas SIN banco: nacieron
+    # rotas y el arreglo de la creacion no las alcanza. Las resuelve una
+    # persona, mirando el comprobante. Se anota QUIEN y CUANDO porque es una
+    # decision manual sobre plata ajena, y dentro de seis meses la unica forma
+    # de entender por que esa recarga entro a ese banco es esto.
+    banco_elegido_a_mano = False
     if not bank_id:
         bank_id = request.get("bank_id")
+        banco_elegido_a_mano = bool(bank_id)
     
     if action == "approve":
         if not bank_id:
+            # El mensaje viejo decia "El usuario no eligio un banco valido al
+            # crear la recarga". Era FALSO —la pantalla no lo deja avanzar sin
+            # elegirlo; lo perdia el servidor— y le llegaba al operador, que se
+            # lo repetia al cliente. Que diga lo que pasa y que hacer.
             raise HTTPException(
                 status_code=400,
-                detail="No se pudo identificar el banco destino. El usuario no eligió un banco válido al crear la recarga."
+                detail="Esta solicitud no tiene registrado el banco destino. Elegilo "
+                       "abajo mirando el comprobante, o pedile al usuario que confirme "
+                       "por dónde pagó."
             )
         bank = await db.bank_accounts.find_one({"bank_id": bank_id})
         if not bank:
@@ -1751,6 +1779,10 @@ async def process_ves_recharge(
                 "destination_bank_id": bank_id,
                 "destination_bank_name": bank["name"],
                 "reference_digits": reference_digits,
+                **({"banco_elegido_a_mano": True,
+                    "banco_elegido_por": admin.user_id,
+                    "banco_elegido_at": datetime.now(timezone.utc)}
+                   if banco_elegido_a_mano else {}),
             }}
         )
         

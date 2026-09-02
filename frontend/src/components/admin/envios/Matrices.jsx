@@ -275,7 +275,10 @@ function ImportarCsv({ transportistas, onListo }) {
       cuerpo.append('transportista_id', transportista);
       cuerpo.append('archivo', archivo);
       cuerpo.append('confirmar', confirmar ? 'true' : 'false');
-      const res = await api.post('/admin/envios/matrices/csv', cuerpo);
+      // Ver el comentario en Origenes.jsx: sin este header axios manda el
+      // FormData como JSON y el archivo no llega.
+      const res = await api.post('/admin/envios/matrices/csv', cuerpo,
+        { headers: { 'Content-Type': 'multipart/form-data' } });
       if (confirmar) {
         toast.success(`${res.data.guardadas} fila(s) cargadas`);
         setPlan(null);

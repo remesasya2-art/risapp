@@ -189,8 +189,12 @@ ${bankData.transferencia.ci}`;
         amount_ves: parseFloat(amountVES),
         amount_ris: parseFloat(amountRIS),
         payment_method: paymentType,
-        voucher_image: proofImage,
-        bank: selectedBank,
+        // UN nombre por concepto, el que el panel ya leia. Antes esta pantalla
+        // mandaba `bank` y `voucher_image`, la otra `proof_image`, el panel leia
+        // `destination_bank` y gestor.py `voucher_url`: cuatro nombres para dos
+        // cosas, y una ruta que no guardaba ninguno.
+        destination_bank: selectedBank,
+        proof_image: proofImage,
         idempotency_key: idemRef.current
       });
       idemRef.current = null;

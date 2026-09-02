@@ -114,3 +114,95 @@ def pytest_collection_modifyitems(items):
                           if getattr(i, "function", None) else 0)
         for posicion, item in zip(posiciones, en_orden):
             items[posicion] = item
+
+
+# ─── Decimal128 para los tests que mueven saldo ───────────────────────────
+
+def ensenarle_decimal128_a_mongomock():
+    """Compartida: la usan el e2e de envios y los tests de recarga VES.
+
+    Vive aca y no en un archivo de test porque el saldo en `Decimal128` es una
+    propiedad de TODA la app, no del modulo de envios: cualquier test que
+    acredite o debite plata contra mongomock la necesita. Es idempotente y NO se
+    aplica sola — cada archivo la llama, para que ningun test cambie de
+    comportamiento sin haberlo pedido.
+
+    ES UNA LIMITACION DE MONGOMOCK, NO DEL PRODUCTO, y por eso se arregla acá y
+    no allá. El saldo
+    se guarda como `Decimal128` —así lo guarda el resto de la app— y el débito
+    atómico hace dos cosas con él que el servidor de verdad resuelve sin
+    pestañear:
+
+        {"balance_ris": {"$gte": Decimal128(monto)}}     comparar
+        {"$inc": {"balance_ris": Decimal128(-monto)}}    sumar
+
+    Mongomock levanta "'>=' not supported" en la primera y "unsupported operand
+    type(s) for +" en la segunda. Sin esto el guard del débito falla SIEMPRE, y
+    el E2E daría por bueno un mundo donde ningún cobro se puede pagar — que es
+    peor que no probarlo.
+
+    Se le enseña al TIPO, no a mongomock: `bson.Decimal128` es Python puro, y
+    darle aritmética y orden es exactamente lo que hace el servidor. Sale una
+    línea por operación en vez de tres parches contra los internos de una
+    librería de tests.
+
+    Y que quede escrito, porque es lo que este archivo vino a hacer visible:
+    **el cobro del módulo depende de que la base sume y ordene `Decimal128`.**
+    Es un requisito real sobre MongoDB, y no había un solo test que lo dijera.
+    """
+    from decimal import Decimal
+    from bson.decimal128 import Decimal128
+
+    def valor(x):
+        if isinstance(x, Decimal128):
+            return x.to_decimal()
+        if isinstance(x, float):
+            return Decimal(str(x))
+        if isinstance(x, (int, Decimal)):
+            return Decimal(x)
+        return None
+
+    def binaria(nombre, operacion, invertida=False):
+        def metodo(self, otro):
+            a, b = valor(self), valor(otro)
+            if a is None or b is None:
+                return NotImplemented
+            resultado = operacion(b, a) if invertida else operacion(a, b)
+            return (Decimal128(resultado) if isinstance(resultado, Decimal)
+                    else resultado)
+        metodo.__name__ = nombre
+        return metodo
+
+    # Se aplica UNA vez. pytest importa todos los módulos de test en la
+    # colección, así que sin esta guarda una segunda importación anidaría
+    # lambdas sobre `_get_compare_type`.
+    if getattr(Decimal128, "_ris_app_parchado", False):
+        return
+    Decimal128._ris_app_parchado = True
+
+    import operator as op
+    for nombre, fn in (("__add__", op.add), ("__sub__", op.sub),
+                       ("__mul__", op.mul), ("__truediv__", op.truediv),
+                       ("__lt__", op.lt), ("__le__", op.le),
+                       ("__gt__", op.gt), ("__ge__", op.ge)):
+        setattr(Decimal128, nombre, binaria(nombre, fn))
+    for nombre, fn in (("__radd__", op.add), ("__rsub__", op.sub),
+                       ("__rmul__", op.mul)):
+        setattr(Decimal128, nombre, binaria(nombre, fn, invertida=True))
+
+    # Y el orden de tipos: `Decimal128` es un número y va en el mismo grupo, que
+    # es lo que hace que el type bracketing de Mongo no lo descarte contra un int.
+    import mongomock.filtering as filtrado
+    original_tipo = filtrado._get_compare_type
+    filtrado._get_compare_type = (
+        lambda val: 10 if isinstance(val, Decimal128) else original_tipo(val))
+
+    # LO QUE ESTE PARCHE NO HACE, a propósito: `__eq__`. El que trae `bson`
+    # compara la representación binaria, así que `Decimal128("2.00")` no es
+    # igual a `Decimal128("2.0")` aunque ahora `<=` y `>=` digan que sí. MongoDB
+    # resuelve las dos numéricamente. Se deja como está porque ninguna query del
+    # módulo hace `$eq` ni `$in` sobre un monto —el débito compara con `$gte` y
+    # suma con `$inc`, y todo lo demás pasa por `services/money.py`, que
+    # convierte a `Decimal` antes de tocar nada—. Si alguien escribe esa query,
+    # que la escriba con este comentario a la vista: acá el E2E daría verde
+    # sobre un comportamiento que producción no tiene.

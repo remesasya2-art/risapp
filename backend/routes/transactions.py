@@ -1240,6 +1240,110 @@ async def webhook_crypto_send(request: Request):
 
 # ============== RECHARGE VES ==============
 
+# ─── El banco destino de una recarga en bolivares ─────────────────────────
+#
+# El usuario elige un banco en una lista del frontend y manda su clave
+# (`banco_venezuela`, `banesco`…). Contabilidad, en cambio, tiene bancos con un
+# `bank_id` opaco y un nombre comercial. Traducir de una cosa a la otra es lo
+# que hace esta funcion, y es lo que permite que la aprobacion sepa a que
+# cuenta entro la plata.
+#
+# ESTA FUNCION FALTABA. `routes/admin.py` la importaba y la llamaba desde
+# siempre, y no existia en ningun archivo del backend: el import reventaba con
+# un ImportError. No se notaba porque esa rama solo corre cuando la recarga
+# tiene `destination_bank`, y nadie lo escribia — el defecto de mas arriba
+# mantenia desarmada la bomba de mas abajo.
+
+_ACENTOS = str.maketrans("áéíóúÁÉÍÓÚàâãêôõçÀÂÃÊÔÕÇ", "aeiouAEIOUaaaeoocAAAEOOC")
+
+
+def _clave_de_banco(texto) -> str:
+    """Un nombre de banco reducido a lo comparable: sin acentos, sin puntuacion.
+
+    'Banco de Venezuela', 'banco_venezuela' y 'BANCO DE VENEZUELA' tienen que
+    ser la misma cosa. Sin esto, la traduccion depende de como lo tipeo quien
+    cargo el banco en contabilidad, que es una fuente distinta de quien escribio
+    la lista del frontend.
+    """
+    limpio = str(texto or "").translate(_ACENTOS).lower()
+    palabras = [p for p in "".join(c if c.isalnum() else " " for c in limpio).split()
+                # 'de' y 'del' sobran: "Banco de Venezuela" y "banco_venezuela"
+                # tienen que colapsar al mismo valor.
+                if p not in ("de", "del", "la", "el", "banco")]
+    return " ".join(palabras)
+
+
+async def resolve_ves_bank(valor):
+    """(bank_id, documento) del banco de contabilidad que corresponde, o (None, None).
+
+    Acepta las dos formas que pueden llegar:
+      - un `bank_id` ya resuelto, tal como lo guarda el panel;
+      - la clave o el nombre que eligio el usuario, que se compara contra el
+        nombre de los bancos en VES.
+
+    NUNCA lanza y NUNCA adivina: si no hay una coincidencia clara devuelve
+    (None, None) y el que llama decide. Elegir "el mas parecido" seria acreditar
+    plata contra una cuenta que nadie eligio, y es exactamente lo que la guarda
+    del aprobador viene evitando.
+
+    Una coincidencia AMBIGUA —dos bancos que reducen a la misma clave— tambien
+    es (None, None): con dos candidatos no hay respuesta, hay un empate, y un
+    empate lo rompe una persona.
+    """
+    if not valor:
+        return None, None
+    texto = str(valor).strip()
+    if not texto:
+        return None, None
+
+    try:
+        # 1. Un bank_id explicito. Es lo que manda el panel al resolver a mano.
+        #    Se exige `currency: VES` TAMBIEN aca: sin ese filtro, un usuario que
+        #    mande el bank_id de una cuenta en reales como `destination_bank`
+        #    consigue que la aprobacion sume bolivares a una cuenta en reales.
+        #    El aprobador no chequea la moneda —y no lo tocamos—, asi que la
+        #    unica forma de que no llegue ahi es no resolverlo nunca.
+        directo = await db.bank_accounts.find_one(
+            {"bank_id": texto, "currency": "VES"}, {"_id": 0})
+        if directo:
+            return directo.get("bank_id"), directo
+
+        # 2. La clave o el nombre. Se compara contra los bancos en VES: un banco
+        #    en BRL no puede recibir una transferencia en bolivares, y dejarlo
+        #    entrar seria un asiento contra la cuenta equivocada.
+        bancos = await db.bank_accounts.find(
+            {"currency": "VES"}, {"_id": 0}).to_list(200)
+    except Exception as e:
+        logger.warning(f"resolve_ves_bank: no se pudo leer bank_accounts: {e}")
+        return None, None
+
+    buscada = _clave_de_banco(texto)
+    if not buscada:
+        return None, None
+    candidatos = [b for b in bancos if _clave_de_banco(b.get("name")) == buscada]
+    if len(candidatos) != 1:
+        if len(candidatos) > 1:
+            logger.warning(
+                f"resolve_ves_bank: {len(candidatos)} bancos VES coinciden con "
+                f"{texto!r}; hace falta que alguien elija")
+        return None, None
+    return candidatos[0].get("bank_id"), candidatos[0]
+
+
+async def bancos_ves_disponibles() -> list[str]:
+    """Los nombres de los bancos en VES, para poder decirlo en un error.
+
+    Un 400 que dice "ese banco no existe" y no dice cuales existen manda a
+    alguien a adivinar. Nunca lanza: es para un mensaje, no para una decision.
+    """
+    try:
+        bancos = await db.bank_accounts.find(
+            {"currency": "VES"}, {"_id": 0, "name": 1}).sort("name", 1).to_list(200)
+        return [b.get("name") for b in bancos if b.get("name")]
+    except Exception:                                         # pragma: no cover
+        return []
+
+
 @router.post("/recharge/ves")
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
     """Create a VES recharge request"""
@@ -1250,6 +1354,53 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     error_monto = validate_ves_amount(amount_ves)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
+
+    # ─── El banco y el comprobante, que antes se perdian ──────────────────
+    #
+    # Los dos llegaban en el `request` y no se leian nunca: el documento se
+    # insertaba sin ellos y la aprobacion despues no encontraba nada. Ninguna
+    # recarga VES se podia aprobar por el camino normal, y el operador quedaba
+    # por acreditar dinero sin poder ver el comprobante que el usuario si habia
+    # subido.
+    #
+    # `bank` y `voucher_image` son los nombres que manda la pantalla vieja. Se
+    # aceptan por compatibilidad —hay clientes ya cargados en el navegador de
+    # la gente— pero adentro se guarda UN nombre por concepto, el que el panel
+    # ya lee: `destination_bank` / `destination_bank_id` y `proof_image`.
+    banco_elegido = (request.get("destination_bank") or request.get("bank") or "")
+    banco_elegido = str(banco_elegido).strip()
+    comprobante = request.get("proof_image") or request.get("voucher_image")
+
+    # SE RECHAZA ACA, NO EN LA APROBACION. Antes el servidor aceptaba una
+    # solicitud que el mismo sabia que no iba a poder procesar, y el usuario se
+    # enteraba dias despues, por telefono.
+    if not banco_elegido:
+        raise HTTPException(
+            status_code=400,
+            detail="Elegí a qué banco transferiste. Sin eso no podemos verificar tu "
+                   "pago ni acreditarte el saldo.")
+
+    bank_id, bank_doc = await resolve_ves_bank(banco_elegido)
+    if not bank_id:
+        # No es culpa del usuario: eligio de la lista que le mostramos. Es que
+        # ese banco no esta cargado en contabilidad, o esta con otro nombre.
+        disponibles = await bancos_ves_disponibles()
+        logger.error(
+            f"recharge_ves: el banco {banco_elegido!r} no resuelve contra "
+            f"bank_accounts (VES disponibles: {disponibles})")
+        raise HTTPException(
+            status_code=400,
+            detail=("Ese banco no está disponible en este momento. Probá con otro o "
+                    "escribinos." + (f" Disponibles: {', '.join(disponibles)}."
+                                     if disponibles else "")))
+
+    if not comprobante:
+        # Obligatorio: el operador acredita dinero MIRANDOLO. Una recarga sin
+        # comprobante es una que alguien va a tener que resolver por telefono.
+        raise HTTPException(
+            status_code=400,
+            detail="Subí el comprobante de la transferencia. Es lo que miramos para "
+                   "acreditarte el saldo.")
     # Idempotencia: evita duplicar la solicitud por doble clic / reintento de red.
     _rch_key = request.get("idempotency_key")
     _rch_new, _rch_existing = await claim_idempotency(current_user.user_id, "recharge_ves", _rch_key)
@@ -1302,6 +1453,14 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
         "currency_input": "VES",
         "currency_output": "RIS",
         "payment_method": payment_method,
+        # Lo que eligio el usuario, CRUDO, y lo que eso resolvio en
+        # contabilidad. Se guardan los dos: el crudo es lo que la persona
+        # efectivamente eligio —y es lo que hay que mirar el dia que un banco
+        # cambie de nombre— y el resuelto es contra que cuenta va el asiento.
+        "destination_bank": banco_elegido,
+        "destination_bank_id": bank_id,
+        "destination_bank_name": (bank_doc or {}).get("name"),
+        "proof_image": comprobante,
         "status": "pending",
         "created_at": datetime.now(timezone.utc)
     }
