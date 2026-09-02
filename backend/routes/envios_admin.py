@@ -29,6 +29,7 @@ import io
 import logging
 import uuid
 from datetime import date, datetime, timezone
+from typing import Literal, Optional
 
 from fastapi import (APIRouter, Depends, File, Form, HTTPException,
                      UploadFile)
@@ -43,7 +44,7 @@ from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
 from services import (envios_comprobante, envios_config, envios_operacion,
-                      envios_rentabilidad, envios_retiro,
+                      envios_origenes, envios_rentabilidad, envios_retiro,
                       envios_tarifa_editor)
 from services.envios_archivos import (MIGRACION_LOTE_MAX,
                                       MIGRACION_LOTE_POR_DEFECTO)
@@ -484,6 +485,236 @@ async def importar_agencias(transportista_id: str, archivo: UploadFile = File(..
     invalidar_cache()
     return {"creadas": creadas, "actualizadas": actualizadas,
             "rechazadas": rechazadas, "total_rechazadas": len(rechazadas)}
+
+
+# ─── Orígenes de Brasil ───────────────────────────────────────────────────
+#
+# La UF de origen es la CLAVE con la que se busca el precio del tramo brasileño.
+# Cargarla desde acá, una vez por ciudad y mirando lo que se carga, es lo que
+# evita que la tipee cada usuario en un campo de dos letras al lado del CEP.
+
+
+class OrigenNuevo(BaseModel):
+    """El alta rápida de una ciudad. Tres campos y nada más."""
+    model_config = {"extra": "forbid"}
+    cep: str = Field(min_length=8, max_length=9)
+    ciudad: str = Field(min_length=2, max_length=80)
+    uf: str = Field(min_length=2, max_length=2)
+    activo: bool = True
+
+
+class OrigenEditado(BaseModel):
+    """Lo que se puede corregir de una ciudad ya cargada. El CEP no: es su
+    identidad, y cambiarlo sería dar de alta otra."""
+    model_config = {"extra": "forbid"}
+    ciudad: Optional[str] = Field(default=None, min_length=2, max_length=80)
+    uf: Optional[str] = Field(default=None, min_length=2, max_length=2)
+    activo: Optional[bool] = None
+
+
+class PropuestoResuelto(BaseModel):
+    model_config = {"extra": "forbid"}
+    estado: Literal["aprobado", "descartado"]
+    motivo: Optional[str] = Field(default=None, max_length=300)
+    # Solo al aprobar: permite corregir lo que el usuario declaró antes de que
+    # entre al catálogo. Aprobar a ciegas lo que alguien tipeó sería exactamente
+    # el autocompletado que este módulo no hace.
+    ciudad: Optional[str] = Field(default=None, min_length=2, max_length=80)
+    uf: Optional[str] = Field(default=None, min_length=2, max_length=2)
+
+
+async def _uf_con_matriz() -> tuple[set, bool]:
+    """Las UF que tienen precios cargados, para la columna «Matriz».
+
+    Un origen sin matriz cotiza igual, pero su bloque de referencia queda mudo
+    —y hoy eso pasa sin que nadie se entere—. Decirlo en la misma tabla donde se
+    cargan los orígenes es lo que convierte ese silencio en una tarea visible.
+    """
+    from services.referencias import claves_cargadas, transportistas_activos
+    brasileños = await transportistas_activos("brasil")
+    claves, ok = set(), True
+    for t in brasileños:
+        propias, ok_propias = await claves_cargadas(t.get("transportista_id"))
+        claves |= propias
+        ok = ok and ok_propias
+    return claves, ok
+
+
+@router.get("/origenes")
+async def listar_origenes(admin: User = Depends(get_super_admin)):
+    """El catálogo, la cobertura de matriz y la cola de propuestos, en una sola
+    lectura: es una sola pantalla y pedirla en tres llamadas es pintarla en tres
+    pasos."""
+    catalogo, ok = await envios_origenes.listar(db=None, solo_activos=False)
+    if not ok:
+        raise HTTPException(
+            503, "No se pudo leer el catálogo de orígenes. No cargues nada encima "
+                 "hasta que vuelva: un catálogo que no se puede leer no es un "
+                 "catálogo vacío.")
+    con_matriz, ok_matriz = await _uf_con_matriz()
+    propuestos, _ok_cola = await envios_origenes.listar_propuestos()
+    return {
+        "origenes": [{**o, "tiene_matriz": (o["uf"] in con_matriz) if ok_matriz else None}
+                     for o in catalogo],
+        "uf_disponibles": list(envios_origenes.UF_BRASIL),
+        # `None` en `tiene_matriz` es «no lo pude averiguar», y la pantalla tiene
+        # que mostrarlo distinto de «no tiene»: mandar a cargar precios que ya
+        # están es peor que no avisar.
+        "matriz_legible": ok_matriz,
+        "propuestos": propuestos,
+    }
+
+
+@router.post("/origenes")
+async def crear_origen(datos: OrigenNuevo, admin: User = Depends(get_super_admin)):
+    """Alta de UNA ciudad. Es el camino corto: agregar un CEP no puede exigir
+    armar un CSV entero."""
+    fila, errores = envios_origenes.validar(datos.cep, datos.ciudad, datos.uf)
+    if errores:
+        raise _error(errores)
+    anterior = await db.origenes_brasil.find_one({"cep": fila["cep"]}, {"_id": 0})
+    guardado = await envios_origenes.guardar(
+        {**fila, "activo": datos.activo}, admin=admin)
+    await envios_config.auditar("origenes", anterior or {}, guardado, admin,
+                                accion="editar" if anterior else "crear")
+    invalidar_cache()
+    return {"ok": True, "valor": {**guardado,
+                                  "cep_legible": envios_origenes.formatear_cep(guardado["cep"])},
+            "ya_existia": bool(anterior)}
+
+
+@router.patch("/origenes/{cep}")
+async def editar_origen(cep: str, datos: OrigenEditado,
+                        admin: User = Depends(get_super_admin)):
+    """Corrige una ciudad. **No borra: se desactiva con `activo: false`.**"""
+    limpio = envios_origenes.normalizar_cep(cep)
+    actual = await db.origenes_brasil.find_one({"cep": limpio}, {"_id": 0}) if limpio else None
+    if not actual:
+        raise HTTPException(404, "Ese CEP no está en el catálogo.")
+
+    fila, errores = envios_origenes.validar(
+        limpio,
+        datos.ciudad if datos.ciudad is not None else actual.get("ciudad"),
+        datos.uf if datos.uf is not None else actual.get("uf"))
+    if errores:
+        raise _error(errores)
+    activo = datos.activo if datos.activo is not None else actual.get("activo", True)
+    guardado = await envios_origenes.guardar({**fila, "activo": activo}, admin=admin)
+    await envios_config.auditar("origenes", actual, guardado, admin)
+    invalidar_cache()
+    return {"ok": True, "valor": {**guardado,
+                                  "cep_legible": envios_origenes.formatear_cep(guardado["cep"])}}
+
+
+@router.post("/origenes/csv")
+async def importar_origenes(archivo: UploadFile = File(...),
+                            confirmar: bool = Form(False),
+                            admin: User = Depends(get_super_admin)):
+    """Importa ciudades desde un CSV de `cep,ciudad,uf`.
+
+    **La vista previa es obligatoria y es este mismo endpoint sin `confirmar`.**
+    Contesta cuántas filas son nuevas, cuántas actualizan una que ya está y
+    cuántas se rechazan con su motivo y su número de línea — y NO escribe nada.
+    Recién con `confirmar` se guarda.
+
+    Son dos viajes y no uno a propósito: un CSV de orígenes cambia la clave con
+    la que se busca el precio de un tramo, y «lo subí y ya está» es cómo se
+    entera alguien de que puso la UF equivocada en doscientas ciudades. Ver el
+    plan antes cuesta un clic.
+
+    Una fila mala no frena a las demás: se listan aparte, con su línea, y esa
+    lista es lo que la persona corrige y vuelve a subir.
+    """
+    try:
+        crudo = (await archivo.read()).decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(400, "El archivo no está en UTF-8. Guardalo de nuevo como CSV UTF-8.")
+
+    nuevas, actualiza, rechazadas = [], [], []
+    vistos = set()
+    for numero, fila in enumerate(csv.DictReader(io.StringIO(crudo)), start=2):
+        limpia = {(k or "").strip().lower(): (v.strip() if isinstance(v, str) else v)
+                  for k, v in fila.items() if k}
+        validada, errores = envios_origenes.validar(
+            limpia.get("cep"), limpia.get("ciudad"), limpia.get("uf"))
+        if errores:
+            rechazadas.append({"fila": numero, "motivo": "; ".join(errores)})
+            continue
+        # El mismo CEP dos veces DENTRO del archivo: se avisa en vez de dejar que
+        # la última gane en silencio. Son dos ciudades distintas para el mismo
+        # código postal, y cuál queda no lo puede decidir el orden de las filas.
+        if validada["cep"] in vistos:
+            rechazadas.append({
+                "fila": numero,
+                "motivo": f"El CEP {envios_origenes.formatear_cep(validada['cep'])} ya aparece "
+                          f"antes en este mismo archivo."})
+            continue
+        vistos.add(validada["cep"])
+        existente = await db.origenes_brasil.find_one({"cep": validada["cep"]}, {"_id": 0})
+        destino = actualiza if existente else nuevas
+        destino.append({**validada,
+                        "cep_legible": envios_origenes.formatear_cep(validada["cep"]),
+                        **({"antes": {"ciudad": existente.get("ciudad"),
+                                      "uf": existente.get("uf")}} if existente else {})})
+
+    plan = {
+        "nuevas": len(nuevas), "actualiza": len(actualiza),
+        "rechazadas": rechazadas, "total_rechazadas": len(rechazadas),
+        # La muestra alcanza para revisar sin volver ilegible la respuesta de un
+        # CSV de miles de filas.
+        "muestra_nuevas": nuevas[:20], "muestra_actualiza": actualiza[:20],
+    }
+    if not confirmar:
+        return {"ok": True, "confirmado": False, **plan}
+
+    for fila in nuevas + actualiza:
+        await envios_origenes.guardar(
+            {k: fila[k] for k in ("cep", "ciudad", "uf")}, admin=admin)
+    await envios_config.auditar(
+        "origenes", {}, {"importacion": {"nuevas": len(nuevas),
+                                         "actualizadas": len(actualiza),
+                                         "rechazadas": len(rechazadas)}},
+        admin, accion="importar")
+    invalidar_cache()
+    return {"ok": True, "confirmado": True, **plan}
+
+
+@router.post("/origenes/propuestos/{cep}")
+async def resolver_origen_propuesto(cep: str, datos: PropuestoResuelto,
+                                    admin: User = Depends(get_super_admin)):
+    """Aprueba una ciudad de la cola —y ahí entra al catálogo— o la descarta.
+
+    **Nada entra solo.** Es la misma regla que rige para los precios observados
+    y por el mismo motivo: un catálogo que se autocompleta es un catálogo donde
+    un error de tipeo se vuelve permanente sin que nadie lo mire.
+    """
+    limpio = envios_origenes.normalizar_cep(cep)
+    propuesto = await db.origenes_propuestos.find_one({"cep": limpio}, {"_id": 0}) if limpio else None
+    if not propuesto:
+        raise HTTPException(404, "Ese CEP no está en la cola.")
+
+    creado = None
+    if datos.estado == "aprobado":
+        fila, errores = envios_origenes.validar(
+            limpio,
+            datos.ciudad or propuesto.get("ciudad"),
+            datos.uf or propuesto.get("uf"))
+        if errores:
+            # Lo que declaró el usuario puede estar incompleto —la UF es
+            # opcional en el formulario— y eso no es un error suyo: es lo que
+            # esta pantalla viene a completar.
+            raise _error(errores + [
+                "Completá la ciudad y la UF acá antes de aprobar: es lo que va a "
+                "quedar en el catálogo."])
+        creado = await envios_origenes.guardar(fila, admin=admin)
+        invalidar_cache()
+
+    await envios_origenes.resolver_propuesto(limpio, datos.estado, datos.motivo)
+    await envios_config.auditar("origenes_propuestos", propuesto,
+                                {"estado": datos.estado, "motivo": datos.motivo,
+                                 "catalogo": creado},
+                                admin, accion=datos.estado)
+    return {"ok": True, "estado": datos.estado, "valor": creado}
 
 
 # ─── Tarifas: la consola de precios ───────────────────────────────────────

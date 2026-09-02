@@ -508,6 +508,14 @@ RUTAS_QUE_INVALIDAN = (
     # Aprobar un precio observado escribe en la matriz que leen las
     # orientaciones: eso si invalida.
     "aprobar_observado",
+    # Los origenes viajan DENTRO de `GET /envios/catalogo`, que esta cacheado.
+    # Sin invalidar, una ciudad recien cargada no aparece en el formulario hasta
+    # que venza el TTL, y el que la cargo cree que no se guardo.
+    "crear_origen", "editar_origen", "importar_origenes",
+    # Aprobar un propuesto lo mete en el catalogo, asi que invalida por el mismo
+    # motivo. Descartarlo no toca nada que se lea, pero la ruta es una sola y se
+    # declara por lo mas fuerte que puede hacer.
+    "resolver_origen_propuesto",
 )
 
 # Las operativas no invalidan cache de configuracion: no tocan nada que el

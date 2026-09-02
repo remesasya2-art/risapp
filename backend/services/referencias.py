@@ -440,3 +440,36 @@ def resumen(referencias: list[dict]) -> dict:
         "monedas": sorted({r.get("moneda") for r in con_dato if r.get("moneda")}),
         "completo": bool(refs) and len(con_dato) == len(refs),
     }
+
+
+# ─── Que hay cargado en la matriz, para el panel ──────────────────────────
+
+async def claves_cargadas(transportista_id: str, db=None) -> tuple[set, bool]:
+    """(claves con al menos una fila, se_pudo_leer).
+
+    Existe para que el panel pueda decir QUE FALTA sin que nadie lo descubra por
+    un bloque de referencia mudo en la pantalla de un usuario. Cruzada contra los
+    origenes activos da «tenes 4 origenes en UF sin precio»; cruzada contra las
+    zonas de las agencias, lo mismo del lado venezolano.
+
+    Devuelve un `set` y no una lista: quien llama cruza, no enumera.
+
+    El segundo valor separa «no hay ninguna clave cargada» de «no pude leer la
+    matriz». Sin esa distincion, un hipo de la base le diria al super
+    administrador que tiene que cargar de nuevo todos los precios.
+    """
+    if not transportista_id:
+        return set(), True
+    try:
+        if db is None:
+            from database import db as db_real
+            db = db_real
+        filas = await db.matrices_referencia.find(
+            {"transportista_id": transportista_id}, {"_id": 0, "clave": 1},
+        ).to_list(None)
+    except Exception as e:
+        logger.warning(f"referencias: no se pudieron leer las claves de "
+                       f"{transportista_id}: {e}")
+        return set(), False
+    return {str(f.get("clave")).strip() for f in (filas or [])
+            if str(f.get("clave") or "").strip()}, True
