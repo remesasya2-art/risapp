@@ -267,3 +267,57 @@ def test_resolver_un_propuesto_lo_marca_y_no_lo_borra():
     assert pendientes == []
     assert len(descartados) == 1
     assert descartados[0]["motivo"] == "Fuera del área de retiro"
+
+
+# ─── El catalogo no puede colgar una cotizacion ───────────────────────────
+
+def test_una_base_colgada_no_deja_la_resolucion_de_uf_esperando_para_siempre():
+    """Resolver la UF es una lectura —y a veces una escritura— en el camino de
+    una cotizacion. Sus excepciones estan atrapadas, pero una excepcion no es lo
+    unico que puede pasar: el cliente de Mongo del proyecto no fija
+    socketTimeout, asi que una consulta COLGADA espera para siempre.
+
+    Sin el limite del cotizador, el catalogo de origenes seria una forma nueva
+    de que una cotizacion no conteste nunca. Al vencer se sigue con la UF que
+    declaro el usuario, que es lo que pasaba antes de que el catalogo existiera.
+
+    MUTACION: sacar el `asyncio.wait_for` de `_uf_de_origen` en el cotizador
+    hace que esto se cuelgue en vez de resolver.
+    """
+    import asyncio as _asyncio
+    import importlib.util
+    import os
+
+    class _Colgada:
+        """Una base que acepta la consulta y no contesta nunca."""
+
+        def __getattr__(self, _):
+            return self
+
+        async def find_one(self, *a, **k):
+            await _asyncio.sleep(3600)
+
+        async def update_one(self, *a, **k):
+            await _asyncio.sleep(3600)
+
+    ruta = os.path.join(os.path.dirname(__file__), "..", "services",
+                        "envios_cotizador.py")
+    spec = importlib.util.spec_from_file_location("_cotizador_para_timeout",
+                                                  os.path.abspath(ruta))
+    cotizador = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cotizador)
+
+    async def caso():
+        # El timeout real son seis segundos; se baja para que el test sea rapido.
+        cotizador.TIMEOUT_ACCESORIOS_S = 0.05
+        return await _asyncio.wait_for(
+            cotizador._en_paralelo(_Colgada(), {"origen": {"cep": "01310100",
+                                                           "uf": "SP"}},
+                                   {"zona": "z"}, {"peso_kg": "1"}, None),
+            timeout=5)
+
+    referencias, despacho = corre(caso())
+    # Contesto: no se colgo. Degradado, que es lo correcto ante una base que no
+    # responde, y NO con la cotizacion caida.
+    assert referencias == []
+    assert despacho["disponible"] is False

@@ -327,7 +327,23 @@ async def _en_paralelo(base, pedido, agencia, paquete, ahora):
     from services.referencias import referencias_para
 
     origen = pedido.get("origen") or {}
-    uf = await _uf_de_origen(origen, base)
+    # BAJO EL MISMO TIMEOUT que el resto de lo accesorio. Resolver la UF es una
+    # lectura y —cuando el CEP no esta en el catalogo— tambien una escritura, las
+    # dos en el camino de una cotizacion. Sus excepciones ya estan atrapadas
+    # adentro, pero una excepcion no es lo unico que puede pasar: el cliente de
+    # Mongo del proyecto no fija socketTimeout, asi que una consulta COLGADA
+    # espera para siempre. Sin este limite, el catalogo de origenes se convertia
+    # en una forma nueva de que una cotizacion no conteste nunca.
+    #
+    # Al vencer se sigue con la UF que declaro el usuario, que es exactamente lo
+    # que pasaba antes de que el catalogo existiera.
+    try:
+        uf = await asyncio.wait_for(_uf_de_origen(origen, base),
+                                    timeout=TIMEOUT_ACCESORIOS_S)
+    except asyncio.TimeoutError:
+        logger.error("envios: la UF de origen no llegó a tiempo; se usa la declarada")
+        from services import envios_origenes
+        uf = envios_origenes.normalizar_uf(origen.get("uf"))
     tareas = (
         referencias_para(
             clave_brasil=uf,
