@@ -127,6 +127,8 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [queueStats, setQueueStats] = useState({ total_pending: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   const [recharges, setRecharges] = useState([]);
   const [refDigits, setRefDigits] = useState({});
+  // El banco que el operador elige a mano para una recarga que nacio sin el.
+  const [bancoManual, setBancoManual] = useState({});
   const [refChecks, setRefChecks] = useState({});
   const [users, setUsers] = useState([]);
 
@@ -438,6 +440,10 @@ const [searchParams, setSearchParams] = useSearchParams();
 
   const handleApproveRechargeVES = async (txId) => {
     const digits = refDigits[txId] || '';
+    // El banco que el operador eligió a mano, para las recargas que nacieron sin
+    // banco: la ruta ya aceptaba este `bank_id` como red, y no había forma de
+    // usarla porque el panel no tenía el control.
+    const bankId = bancoManual[txId] || undefined;
     const check = refChecks[txId];
     if (check && check.has_collision) {
       const first = check.first_registered;
@@ -447,7 +453,7 @@ const [searchParams, setSearchParams] = useSearchParams();
       }
     }
     try {
-      await api.post(`/admin/recharges/ves/process/${txId}`, { action: 'approve', reference_digits: digits });
+      await api.post(`/admin/recharges/ves/process/${txId}`, { action: 'approve', reference_digits: digits, bank_id: bankId });
       toast.success('Recarga aprobada - Saldo acreditado');
       loadData();
     } catch (error) { toast.error(error.response?.data?.detail || 'Error al aprobar');  loadData();}
@@ -1210,9 +1216,36 @@ const [searchParams, setSearchParams] = useSearchParams();
                       </div>
                     )}
                     {!hasBankResolved && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', backgroundColor: '#fef3c7', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#92400e' }}>
-                        <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-                        <span>El banco no está vinculado a Contabilidad. Verifica que existe en Contabilidad → Bancos antes de aprobar.</span>
+                      <div style={{ padding: '10px 12px', backgroundColor: '#fef3c7', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#92400e' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+                          <span>
+                            Esta solicitud no tiene registrado el banco destino. <strong>No es un error del usuario</strong>: se
+                            perdió al crearse. Elegí abajo a qué banco entró la plata, mirando el comprobante.
+                          </span>
+                        </div>
+                        {/* Queda registrado QUIÉN eligió este banco y CUÁNDO: es una
+                            decisión manual sobre plata ajena, y dentro de seis meses
+                            es lo único que explica por qué entró a esa cuenta. */}
+                        <select
+                          value={bancoManual[r.transaction_id] || ''}
+                          onChange={(e) => setBancoManual((p) => ({ ...p, [r.transaction_id]: e.target.value }))}
+                          style={{ marginTop: '8px', width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d97706', fontSize: '13px', backgroundColor: '#fff' }}
+                          data-testid={`bank-select-${r.transaction_id}`}
+                        >
+                          <option value="">Elegí el banco…</option>
+                          {(accountingBanks || []).filter((b) => b.currency === 'VES').map((b) => (
+                            <option key={b.bank_id} value={b.bank_id}>{b.name}</option>
+                          ))}
+                        </select>
+                        {(accountingBanks || []).filter((b) => b.currency === 'VES').length === 0 && (
+                          /* Sin esto el boton queda gris para siempre y el operador
+                             no tiene como saber por que. */
+                          <div style={{ marginTop: '6px', fontSize: '11px' }}>
+                            No hay ningun banco en VES cargado en Contabilidad, asi que no hay nada
+                            que elegir. Cargalo en <strong>Contabilidad &rarr; Bancos</strong> y volve.
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1241,7 +1274,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                         onClick={() => handleApproveRechargeVES(r.transaction_id)}
-                        style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                        disabled={!hasBankResolved && !bancoManual[r.transaction_id]}
+                        style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: (!hasBankResolved && !bancoManual[r.transaction_id]) ? '#9ca3af' : '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: (!hasBankResolved && !bancoManual[r.transaction_id]) ? 'not-allowed' : 'pointer' }}
                         data-testid={`approve-recharge-${r.transaction_id}`}
                       >Aprobar</button>
                       <button
