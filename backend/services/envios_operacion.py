@@ -86,7 +86,12 @@ async def cola(estado: str = "disponible_retiro", db=None, limite: int = 200,
             {"estado": estado},
             {"_id": 0, "envio_id": 1, "display_id": 1, "user_id": 1, "estado": 1,
              "origen": 1, "destino": 1, "destino_brasil": 1, "cobros": 1,
-             "created_at": 1},
+             "created_at": 1,
+             # Sin estos dos, `_fila_de_cola` no puede decir si el flete traba la
+             # entrega y la cola contesta que si a todo. Un campo que existe en
+             # la base y se pierde en la proyeccion es peor que uno que falta:
+             # la respuesta se ve completa.
+             "modalidad_flete": 1, "flete": 1},
         ).sort("created_at", 1).to_list(limite + 1)
     except Exception as e:
         logger.error(f"envios: no se pudo leer la cola de {estado}: {e}")
@@ -141,6 +146,15 @@ def _fila_de_cola(envio: dict, ahora) -> dict:
         # camioneta y no después.
         "partidas_impagas": impagas,
         "puede_salir": not impagas,
+        # Y lo mismo para el OTRO candado, el de la entrega. El operador estaba
+        # llenando el numero de guia, adjuntando la foto del remito, apretando
+        # «Registrar la entrega» y RECIEN AHI se enteraba de que el flete no
+        # estaba acreditado. Con el paquete en el mostrador y el cliente
+        # enfrente. El candado esta bien —no se suelta un paquete contra una
+        # remesa que nadie vio llegar—; lo que estaba mal es enterarse al final.
+        "flete_modalidad": (envio.get("modalidad_flete") or "contra_entrega"),
+        "flete_estado": ((envio.get("flete") or {}).get("estado") or "sin_registrar"),
+        "puede_entregar": not _flete_impago(envio),
     }
 
 

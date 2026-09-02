@@ -383,6 +383,43 @@ def test_la_cola_dice_cuales_pueden_salir():
     assert por_id["env_ccc333"]["partidas_impagas"] == ["inicial"]
 
 
+def test_la_cola_dice_cuales_pueden_entregarse():
+    """El otro candado, el del flete, contado ANTES y no despues de apretar.
+
+    Paso en produccion: el operador lleno el numero de guia, adjunto la foto del
+    remito, apreto «Registrar la entrega» y recien ahi le salto que el flete no
+    estaba acreditado. Con el paquete en el mostrador y el cliente enfrente.
+
+    El candado esta bien y no se toca —no se suelta un paquete contra una remesa
+    que nadie de este lado vio llegar—; lo que faltaba era decirlo a tiempo.
+    `puede_salir` ya se calculaba asi para el despacho por exactamente el mismo
+    motivo.
+    """
+    prepago_pendiente = envio_base(estado="en_transito_int", envio_id="env_ccc333",
+                                   modalidad_flete="prepago",
+                                   flete={"estado": "pendiente"})
+    prepago_ok = envio_base(estado="en_transito_int", envio_id="env_ddd444",
+                            modalidad_flete="prepago",
+                            flete={"estado": "acreditado"})
+    base = db_completa(envios=[envio_base(estado="en_transito_int"),
+                               prepago_pendiente, prepago_ok])
+    r = corre(op.cola("en_transito_int", db=base, ahora=AHORA))
+    por_id = {f["envio_id"]: f for g in r["grupos"] for f in g["envios"]}
+
+    # Contra entrega: no hay remesa que esperar.
+    assert por_id["env_aaa111"]["puede_entregar"] is True
+    assert por_id["env_ccc333"]["puede_entregar"] is False
+    assert por_id["env_ccc333"]["flete_estado"] == "pendiente"
+    assert por_id["env_ddd444"]["puede_entregar"] is True
+
+    # Y lo que la cola dice tiene que ser lo MISMO que la transicion hace: una
+    # segunda version de la regla en la cola se despega de la de verdad y el
+    # cartel termina mintiendo en la direccion peligrosa.
+    with pytest.raises(op.OperacionRechazada):
+        corre(op.entregar(_Operador(), "env_ccc333", guia="GUIA-1", db=base,
+                          ahora=AHORA))
+
+
 def test_si_la_cola_no_se_puede_leer_no_revienta():
     base = db_completa()
     base.envios.find = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x"))
