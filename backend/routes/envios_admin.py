@@ -1214,6 +1214,24 @@ def _rentabilidad(e: Exception):
     return HTTPException(503, "No se pudo calcular. Reintentá en un momento.")
 
 
+@router.get("/envios/{envio_id}/ticket")
+async def ver_ticket(envio_id: str, admin: User = Depends(get_crm_user)):
+    """Los datos del papel que se pega en la caja antes de que salga.
+
+    Consulta aparte y no un campo mas de la cola: la direccion de la agencia hay
+    que ir a buscarla a `agencias`, y hacer esa lectura por cada fila de una cola
+    de doscientas es un N+1 en la pantalla que el operador usa todo el dia.
+
+    `get_crm_user` y no `get_admin_user`: no mueve saldo ni cambia un estado. Es
+    la misma gente que ya ve la cola, mirando los mismos datos que la cola le
+    muestra — solo que ordenados para leerlos de parado.
+    """
+    try:
+        return await envios_operacion.ticket(envio_id)
+    except Exception as e:
+        raise _operacion(e)
+
+
 @router.get("/envios/viajes/{lote_id}")
 async def ver_viaje(lote_id: str, admin: User = Depends(get_crm_user)):
     """Qué dejó un viaje a Pacaraima: lo cobrado, lo pendiente y el resultado.

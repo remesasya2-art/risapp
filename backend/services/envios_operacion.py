@@ -431,6 +431,121 @@ async def despachar(operador, envio_id: str, *, db=None, ahora=None) -> dict:
     return {"ok": True, "envio_id": envio_id, "estado": SALIDA_DE_PACARAIMA}
 
 
+# ─── El ticket que se pega en la caja ─────────────────────────────────────
+
+# Como se lee en el mostrador de Santa Elena: no es una etiqueta de sistema, es
+# un papel que alguien mira de parado, con la caja en la mano y otras veinte
+# esperando. Por eso el ticket dice CUATRO cosas y en este orden: a quien se le
+# entrega, donde, quien paga el tramo final, y si la caja puede salir.
+
+PAGO_A_DESTINO = "destino"
+PAGO_PREPAGO = "prepago"
+
+
+async def ticket(envio_id: str, db=None) -> dict:
+    """Los datos del papel que se pega en la caja antes de que salga.
+
+    Es una consulta aparte y no un campo mas de la cola por dos motivos. Uno: la
+    direccion de la agencia no esta congelada en el envio, hay que ir a buscarla
+    a `agencias`, y hacer esa lectura por cada fila de una cola de doscientas es
+    un N+1 en la pantalla que el operador usa todo el dia. Dos: un ticket se
+    imprime de a uno.
+
+    **La direccion se lee VIVA, no congelada.** Es lo contrario de la etiqueta
+    del tramo brasileno, y a proposito: aquella tiene que decir lo mismo que leyo
+    el usuario cuando despacho, porque es un compromiso con el. Esta se pega
+    ahora sobre una caja que sale ahora, y tiene que decir donde esta la agencia
+    HOY. Si se mudo, la direccion vieja manda la caja al lugar equivocado.
+
+    Nunca lanza por la agencia: si no se puede leer, el ticket sale igual con el
+    nombre —que es lo que esta congelado— y sin la calle. Un ticket incompleto se
+    completa a mano en el mostrador; un ticket que no se imprime frena la caja.
+    """
+    base = await _db(db)
+    envio = await _envio(base, envio_id)
+
+    destino = envio.get("destino") or {}
+    destinatario = destino.get("destinatario") or {}
+    paquete = envio.get("paquete") or {}
+    verificado = paquete.get("verificado") or {}
+    declarado = paquete.get("declarado") or {}
+    impagas = partidas_impagas(envio)
+
+    agencia = await _agencia_de(base, destino)
+    transportista = await _nombre_de_transportista(base, destino.get("transportista_id"))
+
+    modalidad = envio.get("modalidad_flete") or PAGO_A_DESTINO
+    flete = envio.get("flete") or {}
+
+    return {
+        "envio_id": envio.get("envio_id"),
+        "display_id": envio.get("display_id"),
+        "estado": envio.get("estado"),
+        "codigo_objeto": (envio.get("origen") or {}).get("codigo_objeto"),
+        "destinatario": {
+            "nombre": destinatario.get("nombre"),
+            "documento": destinatario.get("documento"),
+            "telefono": destinatario.get("telefono"),
+        },
+        "agencia": {
+            "nombre": destino.get("agencia_nombre"),
+            "codigo": destino.get("agencia_codigo"),
+            "ciudad": destino.get("ciudad"),
+            "estado_ve": destino.get("estado_ve"),
+            # Puede venir vacia: la agencia se pudo borrar del catalogo, o
+            # cargarse sin calle. El ticket lo dice en vez de mentir un renglon.
+            "direccion": (agencia or {}).get("direccion"),
+            "transportista": transportista,
+        },
+        # LO QUE DECIDE QUE PASA EN EL MOSTRADOR. "destino" = lo cobra el
+        # transportista a quien recibe. "prepago" = ya se pago por remesa, y no
+        # se le cobra nada a quien retira — cobrarle de nuevo es cobrar dos
+        # veces el mismo tramo.
+        "pago": {
+            "modalidad": modalidad,
+            "cobrar_al_recibir": modalidad == PAGO_A_DESTINO,
+            "flete_estado": flete.get("estado") or "sin_registrar",
+            "flete_monto_ris": flete.get("monto_ris"),
+        },
+        "paquete": {
+            # El peso de la balanza propia si ya se repeso; si no, lo declarado.
+            # Se dice CUAL de los dos: un peso sin origen en un papel que viaja
+            # es el que despues nadie puede defender.
+            "peso_kg": verificado.get("peso_kg") or declarado.get("peso_kg"),
+            "peso_es_verificado": bool(verificado.get("peso_kg")),
+            "contenido": paquete.get("contenido_descripcion"),
+        },
+        "puede_salir": not impagas,
+        "partidas_impagas": impagas,
+    }
+
+
+async def _agencia_de(base, destino: dict) -> dict | None:
+    codigo = destino.get("agencia_codigo")
+    transportista_id = destino.get("transportista_id")
+    if not (codigo and transportista_id):
+        return None
+    try:
+        return await base.agencias.find_one(
+            {"transportista_id": transportista_id, "codigo": codigo},
+            {"_id": 0, "direccion": 1, "nombre": 1, "ciudad": 1, "estado": 1})
+    except Exception as e:
+        logger.warning(f"envios: no se pudo leer la agencia {codigo} para el ticket: {e}")
+        return None
+
+
+async def _nombre_de_transportista(base, transportista_id) -> str | None:
+    if not transportista_id:
+        return None
+    try:
+        ficha = await base.transportistas.find_one(
+            {"transportista_id": transportista_id}, {"_id": 0, "nombre": 1})
+    except Exception as e:
+        logger.warning(f"envios: no se pudo leer el transportista para el ticket: {e}")
+        return None
+    return (ficha or {}).get("nombre")
+
+
 # ─── 5. Entregado en el mostrador de destino ──────────────────────────────
 
 async def entregar(operador, envio_id: str, *, guia: str, foto: bytes = None,

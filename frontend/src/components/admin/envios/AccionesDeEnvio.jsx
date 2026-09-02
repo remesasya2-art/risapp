@@ -15,7 +15,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle, Camera, CheckCircle2, PackageCheck, Scale, Send, Truck,
+  AlertTriangle, Camera, CheckCircle2, PackageCheck, Printer, Scale, Send, Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../utils/api';
@@ -23,6 +23,7 @@ import { fmt } from '../../../utils/format';
 import { Aviso, Boton, Campo, Cargando, Interruptor, Texto, Area } from '../../envios/ui';
 import { COLOR, bajada, grilla, mensajeDeError, titulo } from '../../envios/estilos';
 import { DESVIOS, DESVIOS_LEGALES, claveDe, olvidarClave } from './operacion';
+import { imprimirTicket } from './ticket';
 
 const MEDIDAS = [['peso_kg', 'Peso (kg)'], ['largo_cm', 'Largo (cm)'],
   ['ancho_cm', 'Ancho (cm)'], ['alto_cm', 'Alto (cm)']];
@@ -332,7 +333,26 @@ function Repesar({ envio, medidas, onMedidas, onListo }) {
 
 function Despachar({ envio, onListo }) {
   const [enviando, setEnviando] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
   const bloqueado = !envio.puede_salir;
+
+  // El ticket se pide al servidor y no se arma con lo que ya tiene la cola: la
+  // dirección de la agencia no está congelada en el envío y hay que ir a
+  // buscarla VIVA. Ver el comentario de `ticket()` en envios_operacion.py.
+  const imprimir = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await api.get(`/admin/envios/envios/${envio.envio_id}/ticket`);
+      if (!imprimirTicket(res.data)) {
+        toast.error('El navegador bloqueó la ventana. Permití las ventanas '
+          + 'emergentes de este sitio y volvé a intentar.');
+      }
+    } catch (err) {
+      toast.error(mensajeDeError(err, 'No se pudo armar el ticket.'));
+    } finally {
+      setImprimiendo(false);
+    }
+  };
 
   const despachar = async () => {
     setEnviando(true);
@@ -362,9 +382,25 @@ function Despachar({ envio, onListo }) {
       ) : (
         <p style={bajada}>Todo pago y el precio cerrado. Puede cargarse en la camioneta.</p>
       )}
-      <Boton onClick={despachar} cargando={enviando} disabled={bloqueado}>
-        <Truck size={14} /> Despachar
-      </Boton>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <Boton onClick={despachar} cargando={enviando} disabled={bloqueado}>
+          <Truck size={14} /> Despachar
+        </Boton>
+        {/*
+          El ticket se puede imprimir aunque la caja esté trabada: el papel se
+          prepara antes de cargar la camioneta, y si hay una partida impaga sale
+          con la banda «NO DESPACHAR» arriba. Deshabilitarlo acá solo lograría
+          que alguien rotule a mano.
+        */}
+        <Boton variante="secundario" onClick={imprimir} cargando={imprimiendo}>
+          <Printer size={14} /> Imprimir ticket
+        </Boton>
+      </div>
+      <p style={{ ...bajada, marginTop: '10px', marginBottom: 0 }}>
+        El ticket va pegado sobre la caja: dice a quién se le entrega, en qué agencia
+        y <strong>si hay que cobrarle el flete o no</strong>. Es lo único que mira quien
+        la recibe en el mostrador de destino.
+      </p>
     </div>
   );
 }
