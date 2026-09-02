@@ -292,14 +292,61 @@ async def _demasiadas_abiertas(base, user_id, ahora) -> bool:
     return len(vigentes) >= COTIZACIONES_ABIERTAS_MAX
 
 
+async def _uf_de_origen(origen: dict, base) -> str | None:
+    """La UF con la que se busca el precio del tramo brasileño.
+
+    MANDA EL CATALOGO, no lo que vino en el pedido. Es la razón de ser del
+    catálogo: la UF es la clave de la matriz, y una tipeada a mano trae el precio
+    de otro estado sin que nadie se entere —la referencia sale, es plausible y
+    está mal—. Si el CEP está cargado, su UF es la buena, aunque el formulario
+    haya mandado otra.
+
+    Si el CEP NO está en el catálogo se usa la que declaró el usuario y el CEP
+    queda propuesto para que alguien lo cargue. **La cotización sigue igual**:
+    no tener la ciudad en el catálogo no bloquea a nadie, solo deja el bloque de
+    referencia mudo si además falta la UF.
+
+    Anotar el propuesto va en su propio `try` adentro de `registrar_propuesto`,
+    que no lanza nunca: es telemetría, no parte del cálculo, y no puede tumbar
+    el precio que el usuario está esperando.
+    """
+    from services import envios_origenes
+
+    declarada = envios_origenes.normalizar_uf(origen.get("uf"))
+    del_catalogo = await envios_origenes.buscar_uf(origen.get("cep"), db=base)
+    if del_catalogo:
+        return del_catalogo
+
+    await envios_origenes.registrar_propuesto(
+        origen.get("cep"), origen.get("ciudad"), declarada, db=base)
+    return declarada
+
+
 async def _en_paralelo(base, pedido, agencia, paquete, ahora):
-    from services import envios_retiro
+    from services import envios_origenes, envios_retiro
     from services.referencias import referencias_para
 
     origen = pedido.get("origen") or {}
+    # BAJO EL MISMO TIMEOUT que el resto de lo accesorio. Resolver la UF es una
+    # lectura y —cuando el CEP no esta en el catalogo— tambien una escritura, las
+    # dos en el camino de una cotizacion. Sus excepciones ya estan atrapadas
+    # adentro, pero una excepcion no es lo unico que puede pasar: el cliente de
+    # Mongo del proyecto no fija socketTimeout, asi que una consulta COLGADA
+    # espera para siempre. Sin este limite, el catalogo de origenes se convertia
+    # en una forma nueva de que una cotizacion no conteste nunca.
+    #
+    # Al vencer se sigue con la UF que declaro el usuario, que es exactamente lo
+    # que pasaba antes de que el catalogo existiera.
+    try:
+        uf = await asyncio.wait_for(_uf_de_origen(origen, base),
+                                    timeout=TIMEOUT_ACCESORIOS_S)
+    except asyncio.TimeoutError:
+        logger.error("envios: la UF de origen no llegó a tiempo; se usa la declarada")
+        from services import envios_origenes
+        uf = envios_origenes.normalizar_uf(origen.get("uf"))
     tareas = (
         referencias_para(
-            clave_brasil=(origen.get("uf") or "").strip().upper() or None,
+            clave_brasil=uf,
             clave_venezuela=agencia.get("zona"),
             peso_kg=paquete.get("peso_kg"),
             largo_cm=paquete.get("largo_cm"), ancho_cm=paquete.get("ancho_cm"),

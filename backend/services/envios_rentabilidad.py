@@ -318,7 +318,8 @@ def _fecha(valor):
 # ─── 3. Aprobar: lo unico que escribe ─────────────────────────────────────
 
 async def aprobar(admin, *, transportista_id: str, clave: str, hasta_kg,
-                  precio, moneda: str = None, db=None, ahora=None) -> dict:
+                  precio, moneda: str = None, origen: str = "observado",
+                  db=None, ahora=None) -> dict:
     """Lleva un valor a la matriz de referencia. **Nadie más escribe ahí.**
 
     Es una función aparte y no el final de `observaciones()` a propósito: un job
@@ -326,8 +327,20 @@ async def aprobar(admin, *, transportista_id: str, clave: str, hasta_kg,
     rara, y nadie se entera hasta que un usuario pregunta por qué le dijimos que
     iba a pagar el doble.
 
-    La fila queda con `origen: "observado"`, que es lo que después permite
-    distinguir un precio que vimos de uno que alguien tipeó.
+    `origen` es de dónde salió el número, y queda guardado en la fila: es lo que
+    después permite distinguir un precio que VIMOS operando de uno que alguien
+    TIPEÓ. Son dos niveles de confianza distintos y la pantalla no los puede
+    confundir.
+
+    El default es `"observado"` para no cambiarle el significado a ningún
+    llamador existente: la aprobación de un precio observado —que era la única
+    vía de escritura— sigue guardando exactamente lo que guardaba. Las vías de
+    carga manual pasan `"manual"`.
+
+    Que las tres vías entren por acá y no por rutas propias no es comodidad: es
+    esta función la que normaliza `hasta_kg`. El índice de la matriz no es único,
+    así que "10" y "10.0" dejaban dos filas para el mismo tope y el precio viejo
+    se quedaba esperando a ganar un desempate.
     """
     ahora = ahora or datetime.now(timezone.utc)
     base = await _db(db)
@@ -348,7 +361,7 @@ async def aprobar(admin, *, transportista_id: str, clave: str, hasta_kg,
         "hasta_kg": _tope_normalizado(tope),
         "precio": str(quantize_money(monto)),
         "moneda": (moneda or "").strip() or None,
-        "origen": "observado",
+        "origen": origen,
         "actualizada_at": ahora,
         "aprobada_por": getattr(admin, "user_id", None),
     }

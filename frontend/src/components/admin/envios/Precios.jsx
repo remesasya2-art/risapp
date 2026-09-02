@@ -43,6 +43,30 @@ const CAJAS_POR_DEFECTO = [
 const num = (v) => (v === null || v === undefined || v === '' ? '—' : fmt(v, 2));
 
 /**
+ * Dónde empieza el escalón que se está agregando: un centavo de kilo después
+ * del tope del anterior.
+ *
+ * Antes prellenaba con el `hasta_kg` anterior TAL CUAL, y eso fabricaba un
+ * borde compartido en cada fila: con 3–6 y 6–10, un paquete de 6,00 kg cae
+ * adentro de las dos. El precio no queda librado al azar —manda la banda de
+ * abajo, y `precio_por_escalon` lo hace explícito—, pero que la tabla no lo
+ * diga es lo que hizo que alguien mirara un cobro de 110 esperando 150.
+ *
+ * Con el +0,01 cada peso pertenece a una sola fila y la tabla se lee sin tener
+ * que saber la convención. No toca las tablas ya cargadas: siguen cobrando
+ * igual, solo dejan de crearse nuevas así.
+ */
+const siguienteDesde = (escalones) => {
+  if (!escalones.length) return '0.00';
+  const tope = Number(String(escalones[escalones.length - 1].hasta_kg ?? '').replace(',', '.'));
+  // Si el tope anterior está vacío o no es un número, no se inventa: se deja en
+  // blanco para que lo escriba la persona. Prellenar con basura calculada sobre
+  // basura es peor que no prellenar.
+  if (!Number.isFinite(tope)) return '';
+  return (tope + 0.01).toFixed(2);
+};
+
+/**
  * La fecha en la hora de acá.
  *
  * El campo «Vigente desde» es un `datetime-local`: se tipea en hora local y se
@@ -197,7 +221,7 @@ export default function Precios() {
           onClick={() => editar((b) => ({
             ...b,
             escalones_peso: [...(b.escalones_peso || []), {
-              desde_kg: escalones.length ? escalones[escalones.length - 1].hasta_kg : '0.00',
+              desde_kg: siguienteDesde(escalones),
               hasta_kg: '', precio: '',
             }],
           }))}>
@@ -214,11 +238,21 @@ export default function Precios() {
             <Texto value={borrador.tarifa_minima ?? '0'}
               onChange={(e) => cambiar('tarifa_minima', e.target.value)} />
           </Campo>
-          <Campo etiqueta="Modo">
+          {/* «Solo por peso» hacía pensar que el volumen se ignoraba y que el
+              motor estaba roto. No se ignora: el peso facturable YA es el mayor
+              entre el real y el volumétrico. La diferencia entre los dos modos
+              es cuántas TABLAS hay, no si se mira el volumen. */}
+          <Campo etiqueta="Modo"
+            ayuda={(borrador.modo_tarifa || 'peso') === 'peso_o_volumen'
+              ? 'Se cotiza con las dos tablas y se cobra la más cara. En este modo la tabla de kilos usa el peso REAL, porque el volumen ya lo cobra su propia tabla.'
+              : 'Una sola tabla. El volumen no se ignora: entra por el peso facturable, que es el mayor entre el real y el volumétrico.'}>
             <Seleccion value={borrador.modo_tarifa || 'peso'}
               onChange={(e) => cambiar('modo_tarifa', e.target.value)}
-              opciones={[{ valor: 'peso', texto: 'Solo por peso' },
-                { valor: 'peso_o_volumen', texto: 'La mayor entre peso y volumen' }]} />
+              opciones={[
+                { valor: 'peso',
+                  texto: 'Una tabla, por peso facturable (el mayor entre real y volumétrico)' },
+                { valor: 'peso_o_volumen',
+                  texto: 'Dos tablas, una de kg y otra de m³: se cobra la más cara' }]} />
           </Campo>
           <Campo etiqueta="Moneda">
             <Texto value={borrador.moneda || 'RIS'}
@@ -261,14 +295,25 @@ export default function Precios() {
               opciones={[{ valor: 'porcentual', texto: 'Porcentual (%)' },
                 { valor: 'fijo', texto: `Fijo (${borrador.moneda || 'RIS'} por envío)` }]} />
           </Campo>
+          {/* Decía «Margen (%)» y esperaba una FRACCIÓN: 0,15 es 15 %. Quien
+              escribía 20 pensando en 20 % era rechazado al publicar, así que
+              nunca hubo riesgo de cobrar un 2000 %, pero la etiqueta engañaba.
+              Se corrige la ETIQUETA y no la unidad a propósito: reinterpretar el
+              0.15 que ya está publicado como 0,15 % sería bajar el margen a la
+              nada en el despliegue, sin que nadie lo pida. */}
           <Campo
             etiqueta={borrador.margen?.tipo === 'fijo'
-              ? `Margen (${borrador.moneda || 'RIS'})` : 'Margen (%)'}
-            ayuda="Se aplica sobre el subtotal.">
+              ? `Margen (${borrador.moneda || 'RIS'})` : 'Margen (fracción)'}
+            ayuda={borrador.margen?.tipo === 'fijo'
+              ? 'Se suma al subtotal.'
+              : 'Se aplica sobre el subtotal, y se escribe como fracción: 0.15 es 15 %.'}>
             <Texto value={borrador.margen?.valor ?? '0'}
               onChange={(e) => cambiar('margen', {
                 ...(borrador.margen || { tipo: 'porcentual' }), valor: e.target.value,
               })} />
+            {borrador.margen?.tipo !== 'fijo' ? (
+              <EnPorciento valor={borrador.margen?.valor} />
+            ) : null}
           </Campo>
         </div>
 
@@ -325,6 +370,25 @@ function Vigente({ vigente, origen }) {
     </div>
   );
 }
+
+/** Lo que la fracción significa, mientras se escribe.
+ *
+ * Es la mitad barata de arreglar la etiqueta: decir «fracción» evita el error,
+ * pero ver «= 15 %» debajo del campo lo hace obvio sin leer la ayuda. Un valor
+ * que no se puede leer como número no muestra nada — no dice «= NaN %» ni
+ * bloquea: de rechazarlo ya se encarga el servidor al publicar, con su mensaje.
+ */
+function EnPorciento({ valor }) {
+  const n = Number(String(valor ?? '').replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  const pct = n * 100;
+  return (
+    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+      = {Number.isInteger(pct) ? pct : pct.toFixed(2).replace(/\.?0+$/, '')} %
+    </div>
+  );
+}
+
 
 function Simulador({ sucio, onPublicado }) {
   const [cajas, setCajas] = useState(CAJAS_POR_DEFECTO);

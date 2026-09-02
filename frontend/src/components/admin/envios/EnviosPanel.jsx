@@ -20,7 +20,7 @@
  */
 import { useSearchParams } from 'react-router-dom';
 import {
-  Building2, ClipboardCheck, FileText, HardDrive, MapPin, Tags, Users,
+  Building2, ClipboardCheck, FileText, HardDrive, MapPin, Table2, Tags, Users,
 } from 'lucide-react';
 import { COLOR } from '../../envios/estilos';
 import PuestaEnMarcha from './PuestaEnMarcha';
@@ -29,6 +29,8 @@ import Contenido from './Contenido';
 import Transportistas from './Transportistas';
 import Nomina from './Nomina';
 import Precios from './Precios';
+import Origenes from './Origenes';
+import Matrices from './Matrices';
 import Almacen from './Almacen';
 
 const PANTALLAS = [
@@ -38,6 +40,11 @@ const PANTALLAS = [
   { clave: 'transportistas', etiqueta: 'Transportistas y agencias', Icono: Building2 },
   { clave: 'retiro', etiqueta: 'Nómina de retiro', Icono: Users },
   { clave: 'tarifas', etiqueta: 'Precios', Icono: Tags },
+  // Los dos van DESPUES de transportistas y agencias, y en este orden entre
+  // ellos: la pantalla de matrices cruza las UF de los origenes contra lo
+  // cargado, asi que sin origenes no tiene contra que avisar que falta.
+  { clave: 'origenes', etiqueta: 'Orígenes de Brasil', Icono: MapPin },
+  { clave: 'matrices', etiqueta: 'Precios de referencia', Icono: Table2 },
   { clave: 'almacen', etiqueta: 'Fotos', Icono: HardDrive },
 ];
 
@@ -94,6 +101,8 @@ export default function EnviosPanel() {
       {actual === 'transportistas' ? <Transportistas /> : null}
       {actual === 'retiro' ? <Nomina /> : null}
       {actual === 'tarifas' ? <Precios /> : null}
+      {actual === 'origenes' ? <Origenes onIr={ir} /> : null}
+      {actual === 'matrices' ? <Matrices /> : null}
       {actual === 'almacen' ? <Almacen /> : null}
     </div>
   );

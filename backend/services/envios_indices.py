@@ -59,6 +59,8 @@ COLECCIONES = (
     "colaboradores_retiro",
     "envios_archivos",
     "envios_lotes",
+    "origenes_brasil",
+    "origenes_propuestos",
 )
 
 # (coleccion, claves, opciones). Las opciones son las de create_index.
@@ -142,6 +144,19 @@ INDICES = (
 
     # ─── nomina de retiro ─────────────────────────────────────────────────
     ("colaboradores_retiro", "colaborador_id", {"unique": True, "sparse": True}),
+
+    # ─── origenes de Brasil ───────────────────────────────────────────────
+    # El CEP es la identidad de la fila: cargar la misma ciudad dos veces tiene
+    # que corregirla, no duplicarla. Sin este unico, "01310-100" y "01310100"
+    # —o el mismo CSV subido dos veces— dejarian dos ciudades donde hay una, con
+    # UF distintas si alguien corrigio una sola.
+    ("origenes_brasil", "cep", {"unique": True, "sparse": True}),
+    # El listado del panel y el del formulario, los dos ordenados asi.
+    ("origenes_brasil", [("uf", 1), ("ciudad", 1)], {}),
+    # Y el unico de la cola, que es lo que hace que el segundo pedido del mismo
+    # CEP incremente el contador en vez de agregar otra fila.
+    ("origenes_propuestos", "cep", {"unique": True, "sparse": True}),
+    ("origenes_propuestos", [("estado", 1), ("pedidos", -1)], {}),
 ) + tuple(
     # Los de las matrices los declara referencias.py, al lado de las consultas
     # que los usan, para que no se desincronicen.

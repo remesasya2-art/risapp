@@ -39,6 +39,7 @@ from datetime import datetime, timezone
 
 from decimal import Decimal
 
+from services import envios_origenes
 from services.referencias import transportistas_activos, codigo_de, _activo
 from services.envios_policy import (
     limites_efectivos, limites_payload, configuracion_incompleta,
@@ -255,8 +256,20 @@ async def catalogo(db=None, usar_cache: bool = True) -> dict:
             "agencias": agencias,
         })
 
+    # Los orígenes viajan acá y no en una ruta propia: el formulario ya pide este
+    # catálogo, ya está cacheado, y una ruta más sería una llamada más para
+    # pintar la misma pantalla. Las escrituras del panel invalidan el caché, que
+    # es lo que hace que una ciudad recién cargada aparezca sin esperar el TTL.
+    origenes, ok_origenes = await envios_origenes.listar(db=db)
+    ok = ok and ok_origenes
+
     resultado = {
         "transportistas": salida,
+        # Un catálogo VACÍO no es un error y no apaga nada: el usuario escribe su
+        # CEP a mano, cotiza igual, y su ciudad queda propuesta. Lo único que se
+        # pierde sin catálogo es la referencia del tramo brasileño, que es
+        # orientativa y nunca entró en ningún total.
+        "origenes": origenes,
         # Sin transportistas de destino no hay a dónde mandar, y la pantalla
         # tiene que decirlo en vez de mostrar un desplegable vacío.
         "disponible": ok and bool(salida) and any(t["agencias"] for t in salida),

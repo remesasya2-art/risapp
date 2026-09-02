@@ -273,28 +273,8 @@ export default function EnvioNuevo() {
           Tu ciudad en Brasil. Sirve para estimar lo que te va a cobrar el transportista
           hasta Pacaraima — un monto que <strong>no cobra RIS App</strong>.
         </p>
-        <div style={grilla('160px')}>
-          <Campo etiqueta="CEP" error={datos.origen.cep ? problemas.cep : null}>
-            <Texto inputMode="numeric" value={datos.origen.cep} maxLength={9}
-              invalido={!!problemas.cep}
-              onChange={(e) => setDatos((d) => ({
-                ...d, origen: { ...d.origen, cep: e.target.value },
-              }))} />
-          </Campo>
-          <Campo etiqueta="Ciudad" ayuda="Opcional.">
-            <Texto value={datos.origen.ciudad} maxLength={80}
-              onChange={(e) => setDatos((d) => ({
-                ...d, origen: { ...d.origen, ciudad: e.target.value },
-              }))} />
-          </Campo>
-          <Campo etiqueta="UF" ayuda="Opcional. Sin ella igual se cotiza."
-            error={problemas.uf}>
-            <Texto value={datos.origen.uf} maxLength={2} invalido={!!problemas.uf}
-              onChange={(e) => setDatos((d) => ({
-                ...d, origen: { ...d.origen, uf: e.target.value.toUpperCase() },
-              }))} />
-          </Campo>
-        </div>
+        <Origen catalogo={catalogo} datos={datos.origen} problemas={problemas}
+          onCambio={(origen) => setDatos((d) => ({ ...d, origen }))} />
       </div>
 
       <div style={tarjeta}>
@@ -409,6 +389,101 @@ export default function EnvioNuevo() {
     </Chrome>
   );
 }
+
+/**
+ * De dónde despacha el usuario: se ELIGE la ciudad, no se tipea un CEP.
+ *
+ * POR QUE IMPORTA
+ *   La UF de origen es la clave con la que se busca el precio del tramo
+ *   brasileño. Cuando la tipeaba el usuario, un error de dos letras traía el
+ *   precio de otro estado sin que nadie se enterara: la referencia salía, era
+ *   plausible, y estaba mal. Eligiendo del catálogo, el CEP y la UF vienen de
+ *   una ficha que cargó el super administrador mirando lo que cargaba.
+ *
+ * LA SALIDA SIEMPRE ESTA A LA VISTA
+ *   «Mi ciudad no está en la lista» no es una excepción escondida: el catálogo
+ *   arranca vacío y se llena de a poco, y una pantalla que solo funcione con
+ *   catálogo cargado sería una pantalla rota el primer día. Quien elige esa
+ *   opción escribe su CEP a mano, COTIZA IGUAL, y su ciudad queda propuesta
+ *   para que alguien la cargue.
+ */
+function Origen({ catalogo, datos, problemas, onCambio }) {
+  const ciudades = catalogo?.origenes || [];
+  // Arranca a mano si no hay catálogo, o si el CEP que trae el usuario —de su
+  // perfil— no es ninguna de las ciudades cargadas: mostrarle un desplegable
+  // donde su ciudad no está sería pedirle que elija cualquier otra.
+  const [aMano, setAMano] = useState(
+    () => !ciudades.length || !ciudades.some((c) => c.cep === (datos.cep || '').replace(/\D/g, '')));
+  const [busqueda, setBusqueda] = useState('');
+
+  const filtro = busqueda.trim().toLowerCase();
+  const visibles = filtro
+    ? ciudades.filter((c) => `${c.ciudad} ${c.uf}`.toLowerCase().includes(filtro))
+    : ciudades;
+
+  const elegir = (cep) => {
+    const ciudad = ciudades.find((c) => c.cep === cep);
+    onCambio(ciudad
+      ? { cep: ciudad.cep, ciudad: ciudad.ciudad, uf: ciudad.uf }
+      : { cep: '', ciudad: '', uf: '' });
+  };
+
+  if (!aMano && ciudades.length) {
+    return (
+      <>
+        <div style={grilla('260px')}>
+          <Campo etiqueta="Buscá tu ciudad">
+            <Texto value={busqueda} placeholder="Escribí las primeras letras"
+              onChange={(e) => setBusqueda(e.target.value)} />
+          </Campo>
+          <Campo etiqueta="Ciudad"
+            ayuda={visibles.length ? undefined : 'Ninguna coincide con lo que escribiste.'}>
+            <Seleccion value={datos.cep || ''} onChange={(e) => elegir(e.target.value)}
+              opciones={[{ valor: '', texto: 'Elegí tu ciudad…' },
+                ...visibles.map((c) => ({ valor: c.cep,
+                  texto: `${c.ciudad} (${c.uf}) · ${c.cep_legible}` }))]} />
+          </Campo>
+        </div>
+        <button type="button" onClick={() => { setAMano(true); elegir(null); }}
+          style={{ marginTop: '10px', background: 'none', border: 'none', padding: 0,
+            color: COLOR.primario, fontSize: '13px', cursor: 'pointer',
+            textDecoration: 'underline' }}>
+          Mi ciudad no está en la lista
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div style={grilla('160px')}>
+        <Campo etiqueta="CEP" error={datos.cep ? problemas.cep : null}>
+          <Texto inputMode="numeric" value={datos.cep} maxLength={9}
+            invalido={!!problemas.cep}
+            onChange={(e) => onCambio({ ...datos, cep: e.target.value })} />
+        </Campo>
+        <Campo etiqueta="Ciudad" ayuda="Opcional.">
+          <Texto value={datos.ciudad} maxLength={80}
+            onChange={(e) => onCambio({ ...datos, ciudad: e.target.value })} />
+        </Campo>
+        <Campo etiqueta="UF" ayuda="Opcional. Sin ella igual se cotiza."
+          error={problemas.uf}>
+          <Texto value={datos.uf} maxLength={2} invalido={!!problemas.uf}
+            onChange={(e) => onCambio({ ...datos, uf: e.target.value.toUpperCase() })} />
+        </Campo>
+      </div>
+      {ciudades.length ? (
+        <button type="button" onClick={() => { setAMano(false); elegir(null); }}
+          style={{ marginTop: '10px', background: 'none', border: 'none', padding: 0,
+            color: COLOR.primario, fontSize: '13px', cursor: 'pointer',
+            textDecoration: 'underline' }}>
+          Buscar mi ciudad en la lista
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 
 function Prohibidos({ limites }) {
   const [abierto, setAbierto] = useState(false);
@@ -559,6 +634,23 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
         )}
       </div>
 
+      {/*
+        La dirección de despacho, A LA VISTA y ANTES de las dos aceptaciones.
+        Confirmar es comprometerse a mandar una caja a nombre de alguien, y
+        pedirle eso a una persona que no vio ese nombre es pedirle una firma en
+        blanco. Ya viene congelada en la respuesta de `cotizar`, en el mismo
+        momento que el precio: mostrarla acá no adelanta ninguna decisión.
+
+        Va en modo `previa`: se ve el texto, no el botón de copiar. La versión
+        accionable —«rotulá la caja así»— vive en el detalle del envío, que es
+        adonde se llega al confirmar. Estaba plegada acá abajo justamente
+        porque entregar el texto listo para copiar ANTES de confirmar hizo que
+        alguien lo copiara, fuera a despachar y no confirmara nunca: a las 48 h
+        la cotización se borra por TTL y la caja llega sin envío que la reclame.
+        Mostrar sin accionar resuelve las dos cosas.
+      */}
+      <Etiqueta retiro={cotizacion.retiro} previa />
+
       <div style={tarjeta}>
         <h3 style={titulo}>Antes de confirmar</h3>
         <p style={bajada}>
@@ -583,22 +675,6 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
           </Boton>
           <Boton variante="secundario" onClick={onVolver}>Cambiar algo</Boton>
         </div>
-        {/*
-          La dirección de despacho, PLEGADA y debajo de la confirmación. Es una
-          instrucción operativa —«copiá esto sobre la caja»— y ponerla antes del
-          botón hacía que alguien la copiara, fuera a despachar, y no confirmara
-          nunca: a las 48 h la cotización se borra sola por TTL y la caja llega a
-          Pacaraima sin ningún envío que la reclame.
-        */}
-        <details style={{ marginTop: '16px' }}>
-          <summary style={{ fontSize: '13px', color: COLOR.suave, cursor: 'pointer' }}>
-            Ver a dónde vas a despachar (después de confirmar)
-          </summary>
-          <div style={{ marginTop: '10px' }}>
-            <Etiqueta retiro={cotizacion.retiro} />
-          </div>
-        </details>
-
         {vence ? (
           <p style={{ ...bajada, margin: '12px 0 0 0', textAlign: 'center' }}>
             {/* Sin punto final: `toLocaleString` en es-AR ya termina en «p. m.»

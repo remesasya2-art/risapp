@@ -1320,3 +1320,168 @@ def test_34_verificar_sin_saldo_deja_el_cobro_inicial_pendiente_y_el_paquete_via
     assert repesado["puede_salir"] is False
     assert CLIENTE.post(
         f"/api/admin/envios/envios/{envio_id}/despachar").status_code == 409
+
+
+def test_35_un_cep_fuera_del_catalogo_cotiza_igual_y_queda_propuesto():
+    """Que la ciudad no este cargada NO bloquea a nadie.
+
+    El catalogo arranca vacio y se llena de a poco: una pantalla que solo
+    funcione con catalogo cargado seria una pantalla rota el primer dia. Se
+    cotiza con la UF que declaro el usuario, y el CEP queda anotado para que
+    alguien lo cargue.
+
+    Y anotar eso no puede tumbar una cotizacion: es telemetria, no parte del
+    calculo.
+    """
+    from decimal import Decimal
+
+    como("user")
+    _saldo("usr_user", "500.00")
+
+    pedido = {**PEDIDO}
+    pedido["destino"] = {**PEDIDO["destino"], "transportista_id": ESTADO["trp_ve"]}
+    pedido["origen"] = {"cep": "88010001", "ciudad": "Florianópolis", "uf": "SC"}
+    datos = _ok(CLIENTE.post("/api/envios/cotizar", json=pedido))
+
+    # Cotizo de verdad: hay precio.
+    assert Decimal(datos["a_pagar_en_risapp"]["total_estimado_ris"]) > 0
+
+    como("super_admin")
+    catalogo = _ok(CLIENTE.get("/api/admin/envios/origenes"))
+    propuestos = {p["cep"]: p for p in catalogo["propuestos"]}
+    assert "88010001" in propuestos, "el CEP no quedo en la cola"
+    assert propuestos["88010001"]["ciudad"] == "Florianópolis"
+    assert propuestos["88010001"]["pedidos"] >= 1
+    # Y NO entro solo al catalogo.
+    assert "88010001" not in {o["cep"] for o in catalogo["origenes"]}
+
+
+def test_36_pedir_dos_veces_la_misma_ciudad_no_duplica_la_cola():
+    """El indice unico hace que el segundo pedido incremente el contador. Sin
+    eso la cola se llena de la misma ciudad y el orden por `pedidos` —que es lo
+    que dice cual cargar primero— no significa nada."""
+    como("super_admin")
+    antes = {p["cep"]: p["pedidos"]
+             for p in _ok(CLIENTE.get("/api/admin/envios/origenes"))["propuestos"]}
+
+    como("user")
+    pedido = {**PEDIDO}
+    pedido["destino"] = {**PEDIDO["destino"], "transportista_id": ESTADO["trp_ve"]}
+    pedido["origen"] = {"cep": "88010-001", "ciudad": "Florianópolis", "uf": "SC"}
+    _ok(CLIENTE.post("/api/envios/cotizar", json=pedido))
+
+    como("super_admin")
+    cola = _ok(CLIENTE.get("/api/admin/envios/origenes"))["propuestos"]
+    fila = next(p for p in cola if p["cep"] == "88010001")
+    assert fila["pedidos"] == antes.get("88010001", 0) + 1
+    assert len([p for p in cola if p["cep"] == "88010001"]) == 1
+
+
+def test_37_la_uf_del_catalogo_le_gana_a_la_que_venga_tipeada():
+    """Es la razon de ser del catalogo.
+
+    Se carga São Paulo con su UF correcta y se cotiza declarando OTRA. La
+    referencia del tramo brasileño tiene que salir por la clave del catalogo:
+    una UF tipeada mal trae el precio de otro estado, la referencia sale, es
+    plausible, y esta mal.
+    """
+    como("super_admin")
+    _ok(CLIENTE.post("/api/admin/envios/origenes",
+                     json={"cep": "01310100", "ciudad": "São Paulo", "uf": "SP"}))
+
+    como("user")
+    pedido = {**PEDIDO}
+    pedido["destino"] = {**PEDIDO["destino"], "transportista_id": ESTADO["trp_ve"]}
+    # El CEP es el de São Paulo pero la UF declarada dice Minas Gerais.
+    pedido["origen"] = {"cep": "01310-100", "ciudad": "São Paulo", "uf": "MG"}
+    datos = _ok(CLIENTE.post("/api/envios/cotizar", json=pedido))
+
+    # La matriz de este e2e solo tiene cargada la clave "SP". Si mandara la UF
+    # tipeada —"MG"— la referencia saldria sin dato; si manda la del catalogo,
+    # sale con monto. Se verifica el EFECTO y no una clave interna, que no viaja
+    # al usuario a proposito.
+    brasil = next(r for r in datos["referencias"] if r["rol"] == "brasil")
+    assert brasil["monto"] is not None, "mando la UF tipeada en vez de la del catalogo"
+    assert brasil["fuente"] == "matriz"
+
+
+def test_38_el_catalogo_de_origenes_le_llega_al_formulario():
+    """Viajan dentro de `/envios/catalogo`, que el formulario ya pide. Y una
+    ciudad recien cargada tiene que aparecer sin esperar el TTL del cache: si no,
+    el que la cargo cree que no se guardo."""
+    como("super_admin")
+    _ok(CLIENTE.post("/api/admin/envios/origenes",
+                     json={"cep": "30130010", "ciudad": "Belo Horizonte", "uf": "MG"}))
+
+    como("user")
+    catalogo = _ok(CLIENTE.get("/api/envios/catalogo"))
+    por_cep = {o["cep"]: o for o in catalogo["origenes"]}
+    assert "30130010" in por_cep, "la ciudad recien cargada no llego al formulario"
+    assert por_cep["30130010"]["cep_legible"] == "30130-010"
+    assert por_cep["30130010"]["uf"] == "MG"
+
+
+def test_39_una_ciudad_desactivada_desaparece_del_formulario():
+    como("super_admin")
+    _ok(CLIENTE.patch("/api/admin/envios/origenes/30130010", json={"activo": False}))
+
+    como("user")
+    catalogo = _ok(CLIENTE.get("/api/envios/catalogo"))
+    assert "30130010" not in {o["cep"] for o in catalogo["origenes"]}
+
+    # Pero sigue en el panel, para poder volver a prenderla: nada se borra.
+    como("super_admin")
+    del_panel = _ok(CLIENTE.get("/api/admin/envios/origenes"))["origenes"]
+    assert next(o for o in del_panel if o["cep"] == "30130010")["activo"] is False
+
+
+def test_40_aprobar_un_propuesto_lo_deja_cotizando_por_su_clave():
+    """El circuito entero de la cola: alguien pide una ciudad, el super
+    administrador la aprueba corrigiendo lo que haga falta, y a partir de ahi esa
+    ciudad resuelve su UF por el catalogo."""
+    como("super_admin")
+    _ok(CLIENTE.post("/api/admin/envios/origenes/propuestos/88010001",
+                     json={"estado": "aprobado", "ciudad": "Florianópolis",
+                           "uf": "SC"}))
+
+    catalogo = _ok(CLIENTE.get("/api/admin/envios/origenes"))
+    assert "88010001" in {o["cep"] for o in catalogo["origenes"]}
+    assert "88010001" not in {p["cep"] for p in catalogo["propuestos"]}
+
+    # Y a partir de ahora esa ciudad resuelve por el catalogo. Se le carga
+    # precio a su UF y se cotiza declarando OTRA: si manda la del catalogo, la
+    # referencia sale con monto.
+    _ok(CLIENTE.post("/api/admin/envios/matrices",
+                     json={"transportista_id": ESTADO["trp_br"], "clave": "SC",
+                           "hasta_kg": "30", "precio": "99.00", "moneda": "BRL"}))
+
+    como("user")
+    pedido = {**PEDIDO}
+    pedido["destino"] = {**PEDIDO["destino"], "transportista_id": ESTADO["trp_ve"]}
+    pedido["origen"] = {"cep": "88010001", "ciudad": "Florianópolis", "uf": "RJ"}
+    datos = _ok(CLIENTE.post("/api/envios/cotizar", json=pedido))
+    brasil = next(r for r in datos["referencias"] if r["rol"] == "brasil")
+    assert brasil["monto"] == "99.00", "no resolvio por la UF del catalogo"
+
+
+def test_41_una_tarifa_con_dos_escalones_que_comparten_borde_se_puede_publicar():
+    """El borde compartido es lo que fabrica el editor —prellena el `desde` con
+    el `hasta` anterior— y por eso NO se rechaza: hacerlo volveria irrepublicable
+    toda tarifa cargada desde el panel, la que esta viva incluida.
+
+    Lo que si esta fijado es a que banda pertenece el peso del borde: la de
+    ABAJO. Eso lo cubre test_envios_tarifas; aca se verifica que la publicacion
+    no se frene.
+    """
+    como("super_admin")
+    con_borde = {**TARIFA, "escalones_peso": [
+        {"desde_kg": "0.00", "hasta_kg": "1.00", "precio": "45.00"},
+        {"desde_kg": "1.00", "hasta_kg": "3.00", "precio": "78.00"},
+        {"desde_kg": "3.00", "hasta_kg": "5.00", "precio": "112.00"},
+        {"desde_kg": "5.00", "hasta_kg": "10.00", "precio": "186.00"},
+        {"desde_kg": "10.00", "hasta_kg": "10.50", "precio": "187.00"},
+    ]}
+    _ok(CLIENTE.put("/api/admin/envios/tarifas/borrador", json=con_borde))
+    _ok(CLIENTE.post("/api/admin/envios/tarifas/simular", json={}))
+    _ok(CLIENTE.post("/api/admin/envios/tarifas/publicar",
+                     json={"nota": "Escalones contiguos, como los escribe el editor."}))
