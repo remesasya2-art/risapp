@@ -206,6 +206,25 @@ def precio_por_escalon(peso_kg, escalones, adicional_por_unidad=0) -> Decimal:
     que no lo supere: con la comparacion a medias, dos filas que empiezan en el
     mismo punto hacian que el precio dependiera del orden de la lista.
 
+    EL BORDE COMPARTIDO: `desde` y `hasta` son los dos INCLUSIVOS, asi que en una
+    tabla contigua —3–6 seguida de 6–10— el 6,00 cae adentro de las dos filas.
+    Gana la de ABAJO: un paquete de 6 kg justos paga el escalon "hasta 6". Es lo
+    que dice el nombre del campo —`hasta_kg`, o sea que el 6 esta incluido—, es
+    lo que cobra el sitio desde que existe, y es coherente con el criterio de
+    todo el modulo: ante la duda, de menos y no de mas.
+
+    Lo hace la iteracion en orden: `_escalones_ordenados` ordena por `hasta`, asi
+    que la primera fila que matchea es siempre la de tope mas bajo. NO cambiar
+    esto por un `max`, un `reversed` o un "la ultima que matchea" sin entender
+    que es una decision de precio: cada borde de la tabla cambiaria de banda y
+    los paquetes de peso redondo —que son muchos, porque el facturable se
+    redondea al escalon— pasarian a pagar el tramo siguiente.
+
+    La ambiguedad de fondo la resuelve el editor de precios, que escribe el
+    `desde` siguiente en +0,01 para que cada peso pertenezca a una sola fila.
+    Esto es lo que hace que las tablas YA cargadas, con el borde compartido,
+    sigan cobrando exactamente lo mismo.
+
     Por encima del ultimo escalon se cobra el adicional por cada unidad que
     sobra. Por debajo del primero —una tabla que no arranca en cero, que
     validar_tarifa() rechaza— se cobra el escalon mas barato: ante una tabla mal

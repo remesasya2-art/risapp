@@ -43,6 +43,30 @@ const CAJAS_POR_DEFECTO = [
 const num = (v) => (v === null || v === undefined || v === '' ? '—' : fmt(v, 2));
 
 /**
+ * Dónde empieza el escalón que se está agregando: un centavo de kilo después
+ * del tope del anterior.
+ *
+ * Antes prellenaba con el `hasta_kg` anterior TAL CUAL, y eso fabricaba un
+ * borde compartido en cada fila: con 3–6 y 6–10, un paquete de 6,00 kg cae
+ * adentro de las dos. El precio no queda librado al azar —manda la banda de
+ * abajo, y `precio_por_escalon` lo hace explícito—, pero que la tabla no lo
+ * diga es lo que hizo que alguien mirara un cobro de 110 esperando 150.
+ *
+ * Con el +0,01 cada peso pertenece a una sola fila y la tabla se lee sin tener
+ * que saber la convención. No toca las tablas ya cargadas: siguen cobrando
+ * igual, solo dejan de crearse nuevas así.
+ */
+const siguienteDesde = (escalones) => {
+  if (!escalones.length) return '0.00';
+  const tope = Number(String(escalones[escalones.length - 1].hasta_kg ?? '').replace(',', '.'));
+  // Si el tope anterior está vacío o no es un número, no se inventa: se deja en
+  // blanco para que lo escriba la persona. Prellenar con basura calculada sobre
+  // basura es peor que no prellenar.
+  if (!Number.isFinite(tope)) return '';
+  return (tope + 0.01).toFixed(2);
+};
+
+/**
  * La fecha en la hora de acá.
  *
  * El campo «Vigente desde» es un `datetime-local`: se tipea en hora local y se
@@ -197,7 +221,7 @@ export default function Precios() {
           onClick={() => editar((b) => ({
             ...b,
             escalones_peso: [...(b.escalones_peso || []), {
-              desde_kg: escalones.length ? escalones[escalones.length - 1].hasta_kg : '0.00',
+              desde_kg: siguienteDesde(escalones),
               hasta_kg: '', precio: '',
             }],
           }))}>

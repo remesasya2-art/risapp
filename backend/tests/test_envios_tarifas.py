@@ -178,6 +178,66 @@ def test_tabla_vacia_devuelve_cero_sin_romper():
     assert tarifas.precio_por_escalon(5, None, None) == Decimal("0")
 
 
+def test_el_borde_compartido_lo_cobra_la_banda_de_abajo():
+    """La tabla que fabrica el panel: cada fila empieza donde termina la anterior.
+
+    A 3,00 kg exactos el paquete cae adentro de las DOS filas —`desde` y `hasta`
+    son los dos inclusivos— y tiene que ganar la de abajo: «hasta 3» incluye el
+    3. Es lo que el sitio cobra desde que existe, y cambiarlo repreciaria todos
+    los paquetes de peso redondo, que son muchos porque el facturable se redondea
+    al escalon.
+
+    MUTACION: devolver la ultima fila que matchea en vez de la primera —o
+    invertir el orden de `_escalones_ordenados`— pone este test en rojo.
+    """
+    compartida = [
+        {"desde_kg": "0.00", "hasta_kg": "1.00", "precio": "45.00"},
+        {"desde_kg": "1.00", "hasta_kg": "3.00", "precio": "78.00"},
+        {"desde_kg": "3.00", "hasta_kg": "6.00", "precio": "110.00"},
+        {"desde_kg": "6.00", "hasta_kg": "10.00", "precio": "150.00"},
+    ]
+    # Los bordes, uno por uno: siempre la banda de abajo.
+    assert tarifas.precio_por_escalon("1", compartida, "17.50") == Decimal("45.00")
+    assert tarifas.precio_por_escalon("3", compartida, "17.50") == Decimal("78.00")
+    assert tarifas.precio_por_escalon("6", compartida, "17.50") == Decimal("110.00")
+    # Y lo de al lado del borde no se movio.
+    assert tarifas.precio_por_escalon("6.01", compartida, "17.50") == Decimal("150.00")
+    assert tarifas.precio_por_escalon("5.99", compartida, "17.50") == Decimal("110.00")
+
+
+def test_el_borde_compartido_no_depende_del_orden_en_que_venga_la_tabla():
+    """El mismo peso, la misma tabla guardada al reves: el mismo precio.
+
+    Un array de Mongo no garantiza orden, y sin `_escalones_ordenados` la misma
+    tarifa cotizaria distinto segun como volviera de la base.
+    """
+    compartida = [
+        {"desde_kg": "3.00", "hasta_kg": "6.00", "precio": "110.00"},
+        {"desde_kg": "0.00", "hasta_kg": "1.00", "precio": "45.00"},
+        {"desde_kg": "6.00", "hasta_kg": "10.00", "precio": "150.00"},
+        {"desde_kg": "1.00", "hasta_kg": "3.00", "precio": "78.00"},
+    ]
+    for peso in ("1", "3", "6", "5.99", "6.01"):
+        assert tarifas.precio_por_escalon(peso, compartida, "17.50") == \
+               tarifas.precio_por_escalon(peso, list(reversed(compartida)), "17.50")
+    assert tarifas.precio_por_escalon("6", compartida, "17.50") == Decimal("110.00")
+
+
+def test_la_tabla_con_mas_001_pone_cada_peso_en_una_sola_fila():
+    """La forma que escribe el editor de precios desde ahora. Sin ambiguedad que
+    resolver: el 3,00 esta en una fila y en una sola."""
+    explicita = [
+        {"desde_kg": "0.00", "hasta_kg": "3.00", "precio": "78.00"},
+        {"desde_kg": "3.01", "hasta_kg": "6.00", "precio": "110.00"},
+    ]
+    assert tarifas.precio_por_escalon("3", explicita, "17.50") == Decimal("78.00")
+    assert tarifas.precio_por_escalon("3.01", explicita, "17.50") == Decimal("110.00")
+    # El centavo de kilo entre las dos filas no es un hueco que deje sin precio:
+    # validar_tarifa lo tolera y no hay peso facturable que caiga ahi.
+    assert not [e for e in tarifas.validar_tarifa(
+        {**TARIFA, "escalones_peso": explicita}) if "hueco" in e]
+
+
 def test_la_forma_vieja_de_la_tabla_sigue_cotizando_igual():
     """Antes del panel las filas tenian solo hasta_kg y cada una arrancaba donde
     terminaba la anterior. Una tarifa cargada asi no puede cambiar de precio."""
