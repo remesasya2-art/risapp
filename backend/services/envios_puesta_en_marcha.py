@@ -162,6 +162,19 @@ async def _paso_agencias(base, vivos):
                      f"donde RIS App deja los paquetes, y es lo que después le dice "
                      f"al operador dónde termina el traslado.",
                      "transportistas", {"total": total, "punto_entrega": 0})
+    # EXACTAMENTE una, no "al menos una". Con varias marcadas el operador no
+    # tiene una respuesta a "donde termina el traslado", y el semaforo en verde
+    # es peor que el rojo: dice que ese paso esta resuelto cuando no lo esta. Un
+    # CSV con la columna en verdadero en todas las filas dejo 250 marcadas en
+    # produccion y este paso seguia verde.
+    if entrega > 1:
+        return _paso("agencias", "Agencias de destino", FALTA,
+                     f"Hay {entrega} agencias activas marcadas como punto de entrega, y "
+                     f"solo puede haber **una**: es la oficina donde RIS App deja los "
+                     f"paquetes. Suele venir de un CSV con esa columna en verdadero en "
+                     f"todas las filas. Abrí la que corresponda y guardala marcada: eso "
+                     f"desmarca las demás.",
+                     "transportistas", {"total": total, "punto_entrega": entrega})
     return _paso("agencias", "Agencias de destino", LISTO,
                  f"{total} activa(s), con punto de entrega marcado.",
                  "transportistas", {"total": total, "punto_entrega": entrega})

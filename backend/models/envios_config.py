@@ -143,6 +143,31 @@ class Transportista(_Base):
     # Solo tiene sentido en el rol venezuela; la ruta lo verifica.
     cuenta_bancaria: Optional[CuentaBancaria] = None
 
+    @field_validator("plantilla_rastreo")
+    @classmethod
+    def _rastreo(cls, v):
+        """Una plantilla sin `{codigo}` no rastrea: manda a la portada.
+
+        VACIA ES VALIDA, a proposito: hay transportistas cuyo rastreo es un
+        formulario que se completa a mano y no tienen deep link. Lo que no puede
+        pasar es una URL que PARECE rastrear y no rastrea — el usuario hace clic,
+        cae en la home de una empresa que no conoce y cree que perdio el paquete.
+
+        Se compara sin .strip() adentro del token por el mismo motivo que
+        `plantilla_direccion`: `{ codigo }` con espacios no lo reemplaza el
+        renderizador y quedaria literal en la URL.
+        """
+        if v is None or not v.strip():
+            return v
+        if "{codigo}" not in v:
+            raise ValueError(
+                "La plantilla de rastreo tiene que incluir {codigo}, que es donde se "
+                "inserta el número de guía. Sin eso el enlace apunta a la portada del "
+                "transportista y no rastrea nada. Si esa empresa no tiene enlace "
+                "directo, dejá el campo vacío."
+            )
+        return v
+
 
 class Agencia(_Base):
     """Una oficina de un transportista. El código es único DENTRO de la empresa:

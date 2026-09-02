@@ -287,6 +287,37 @@ def test_agencias_sin_punto_de_entrega_no_alcanzan():
     assert paso["total"] == 1 and paso["punto_entrega"] == 0
 
 
+def test_varias_agencias_marcadas_como_punto_de_entrega_tampoco_alcanzan():
+    """EXACTAMENTE una, no "al menos una".
+
+    En producción quedaron 250 marcadas —un CSV con la columna en verdadero en
+    todas las filas— y este paso seguía en verde. El verde es peor que el rojo:
+    dice que el paso está resuelto cuando el operador no tiene una respuesta a
+    "dónde termina el traslado".
+
+    Mutación: volver la condición a `if not entrega` deja este caso en LISTO y
+    este test se pone en rojo.
+    """
+    _base(agencias=[{**copy.deepcopy(AGENCIA), "codigo": "001",
+                     "es_punto_entrega": True},
+                    {**copy.deepcopy(AGENCIA), "codigo": "014",
+                     "es_punto_entrega": True}])
+    paso = next(p for p in corre(puesta.estado())["pasos"] if p["clave"] == "agencias")
+    assert paso["estado"] == puesta.FALTA
+    assert paso["punto_entrega"] == 2
+    # Y le dice a la persona cómo salir del estado inválido, que es guardar la
+    # correcta desde el panel: eso desmarca las demás.
+    assert "una" in paso["detalle"]
+
+
+def test_una_sola_marcada_deja_el_paso_listo():
+    """El borde de arriba del test anterior: con una, y solo una, se puede operar."""
+    _base(agencias=[{**copy.deepcopy(AGENCIA), "es_punto_entrega": True}])
+    paso = next(p for p in corre(puesta.estado())["pasos"] if p["clave"] == "agencias")
+    assert paso["estado"] == puesta.LISTO
+    assert paso["punto_entrega"] == 1
+
+
 def test_si_no_se_pueden_contar_las_agencias_no_se_dice_que_no_hay():
     """Cero agencias y "no pude contar" mandan a lugares distintos: el primero a
     cargar un CSV, el segundo a esperar. Confundirlos hace que alguien reimporte

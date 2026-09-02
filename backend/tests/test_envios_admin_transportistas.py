@@ -334,3 +334,103 @@ def test_los_metadatos_de_la_fila_no_entran_al_modelo():
     assert salida["valor"]["transportista_id"] == "trp_ve"
     assert "creada_at" not in salida["valor"]
     assert DB.agencias.filas[0]["creada_at"] == AGENCIA["creada_at"]
+
+
+# ─── La marca de punto de entrega es UNA, y se puede reparar ──────────────
+#
+# En produccion quedaron 250 agencias marcadas: un CSV con la columna en
+# verdadero en todas las filas. El semaforo de puesta en marcha lo daba por
+# bueno —exigia "al menos una"— y el panel no tenia forma de arreglarlo.
+
+def test_guardar_la_correcta_desmarca_a_las_demas_aunque_ya_estuviera_marcada():
+    """El camino de REPARACION de una base que ya quedo con varias marcadas.
+
+    Antes se liberaba solo `if es_punto_entrega and not actual.es_punto_entrega`:
+    con las dos ya marcadas, guardar la buena no desmarcaba a la otra y no habia
+    forma de salir del estado invalido desde el panel. Es la mutacion de esta
+    guarda: restaurar esa condicion vuelve a dejar ['001', '014'].
+    """
+    import copy
+    DB._c["agencias"].filas.append({**copy.deepcopy(AGENCIA), "codigo": "014",
+                                    "nombre": "Puerto Ordaz", "es_punto_entrega": True})
+    DB.agencias.filas[0]["es_punto_entrega"] = True
+
+    corre(ra.editar_agencia("trp_ve", "014", {"es_punto_entrega": True}, _Admin()))
+
+    marcadas = [a["codigo"] for a in DB.agencias.filas if a["es_punto_entrega"]]
+    assert marcadas == ["014"]
+
+
+def test_un_csv_que_marca_dos_puntos_de_entrega_no_escribe_nada():
+    """El archivo entero se rechaza, no la fila: es una instruccion contradictoria
+    sobre una marca unica, y no hay forma de elegir por la persona cual quiso.
+
+    Importar "casi todo" dejaria exactamente el estado que esto viene a impedir.
+    """
+    csv_malo = (
+        "codigo,nombre,estado,ciudad,es_punto_entrega\n"
+        "010,Uno,Bolívar,Santa Elena,true\n"
+        "011,Dos,Bolívar,Tumeremo,true\n"
+    )
+    with pytest.raises(HTTPException) as e:
+        corre(ra.importar_agencias("trp_ve", _Archivo(csv_malo), _Admin()))
+    assert e.value.status_code == 400
+    assert "2 filas" in e.value.detail
+    # Y NADA se escribio: sigue estando solo la agencia del fixture.
+    assert [a["codigo"] for a in DB.agencias.filas] == ["001"]
+
+
+def test_un_csv_que_marca_una_sola_libera_a_las_anteriores():
+    """La otra mitad: el CSV valido tiene que dejar la marca donde dice, y sola."""
+    DB.agencias.filas[0]["es_punto_entrega"] = True
+    csv_bueno = (
+        "codigo,nombre,estado,ciudad,es_punto_entrega\n"
+        "010,Uno,Bolívar,Santa Elena,true\n"
+        "011,Dos,Bolívar,Tumeremo,false\n"
+    )
+    corre(ra.importar_agencias("trp_ve", _Archivo(csv_bueno), _Admin()))
+    marcadas = [a["codigo"] for a in DB.agencias.filas if a["es_punto_entrega"]]
+    assert marcadas == ["010"]
+
+
+class _Archivo:
+    """El UploadFile que espera la ruta, reducido a lo unico que usa: read()."""
+
+    def __init__(self, texto: str):
+        self._bytes = texto.encode("utf-8")
+
+    async def read(self):
+        return self._bytes
+
+
+# ─── La plantilla de rastreo tiene que rastrear ───────────────────────────
+
+def test_una_plantilla_de_rastreo_sin_codigo_se_rechaza():
+    """Sin `{codigo}` la URL apunta a la portada: el usuario hace clic, cae en la
+    home de una empresa que no conoce y cree que perdio el paquete.
+
+    Mutacion: sacar la guarda deja pasar la URL y este test se pone en rojo.
+    """
+    with pytest.raises(HTTPException) as e:
+        corre(ra.editar_transportista(
+            "trp_ve", {"plantilla_rastreo": "https://rastreo.example/consulta"},
+            _Admin()))
+    assert e.value.status_code == 400
+    assert "{codigo}" in e.value.detail
+
+
+def test_una_plantilla_de_rastreo_vacia_es_valida():
+    """A proposito: hay transportistas cuyo rastreo es un formulario que se
+    completa a mano y no tienen enlace directo. Obligarlos a inventar uno seria
+    obligarlos a cargar un enlace que no rastrea."""
+    for vacia in (None, "", "   "):
+        salida = corre(ra.editar_transportista(
+            "trp_ve", {"plantilla_rastreo": vacia}, _Admin()))
+        assert not (salida["valor"].get("plantilla_rastreo") or "").strip()
+
+
+def test_una_plantilla_de_rastreo_con_codigo_se_acepta():
+    salida = corre(ra.editar_transportista(
+        "trp_ve", {"plantilla_rastreo": "https://rastreo.example/g/{codigo}"},
+        _Admin()))
+    assert salida["valor"]["plantilla_rastreo"].endswith("{codigo}")

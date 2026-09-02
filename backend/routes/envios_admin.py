@@ -343,6 +343,12 @@ async def _liberar_punto_entrega(transportista_id: str) -> None:
     agencia nueva como punto de entrega está diciendo justamente que quiere
     cambiarla, y hacerle desmarcar la anterior primero es una fricción que no
     protege de nada.
+
+    Libera TODAS, incluida la que se está guardando, porque quien llama escribe
+    su agencia DESPUES de esto y esa escritura la vuelve a marcar. Que la limpie
+    y la reponga en vez de excluirla es lo que hace que esto sirva también de
+    REPARACION: una base donde un CSV dejó varias marcadas se arregla guardando
+    la correcta, aunque esa ya viniera marcada.
     """
     await db.agencias.update_many(
         {"transportista_id": transportista_id, "es_punto_entrega": True},
@@ -379,8 +385,13 @@ async def editar_agencia(transportista_id: str, codigo: str, datos: dict,
         raise _error(envios_config._legible(e))
 
     # Solo una puede ser el punto de entrega: dos es un envío que no sabe a dónde
-    # va. Se libera la anterior ANTES de marcar esta.
-    if validada["es_punto_entrega"] and not actual.get("es_punto_entrega"):
+    # va. Se liberan las demás ANTES de marcar esta.
+    #
+    # Se libera SIEMPRE que el resultado quede marcado, no solo cuando la agencia
+    # venia sin marcar. Guardar una que ya estaba marcada tiene que limpiar a las
+    # otras: es el unico camino para reparar una base donde un CSV dejo varias, y
+    # con la condicion vieja ese guardado no hacia nada.
+    if validada["es_punto_entrega"]:
         await _liberar_punto_entrega(transportista_id)
 
     await db.agencias.update_one(
@@ -399,6 +410,14 @@ async def importar_agencias(transportista_id: str, archivo: UploadFile = File(..
     rechazadas y un CSV que no entra nunca porque la fila 87 tiene el estado en
     blanco. El informe dice cuáles fallaron y por qué, y esa lista es lo que la
     persona corrige y vuelve a subir.
+
+    LA EXCEPCION A ESA REGLA es `es_punto_entrega` en más de una fila, y se
+    rechaza el ARCHIVO ENTERO antes de escribir nada. No es una fila mala entre
+    doscientas buenas: es un archivo que da una instrucción contradictoria sobre
+    una marca que por definición es única, y no hay forma de elegir por la
+    persona cuál de las 250 quiso. Importar "casi todo" dejaría la base en el
+    estado exacto que este arreglo viene a impedir — que es como se marcaron 250
+    en producción con el semáforo en verde.
     """
     if not await db.transportistas.find_one({"transportista_id": transportista_id}):
         raise HTTPException(404, "Transportista no encontrado")
@@ -408,7 +427,10 @@ async def importar_agencias(transportista_id: str, archivo: UploadFile = File(..
     except UnicodeDecodeError:
         raise HTTPException(400, "El archivo no está en UTF-8. Guardalo de nuevo como CSV UTF-8.")
 
-    creadas, actualizadas, rechazadas = 0, 0, []
+    # Se materializan las filas ANTES de escribir para poder contar los puntos de
+    # entrega sobre el archivo completo. Un CSV de agencias son cientos de filas,
+    # no millones: entra en memoria sin drama.
+    limpias = []
     for numero, fila in enumerate(csv.DictReader(io.StringIO(crudo)), start=2):
         limpia = {k.strip(): (v.strip() if isinstance(v, str) else v)
                   for k, v in fila.items() if k}
@@ -416,11 +438,31 @@ async def importar_agencias(transportista_id: str, archivo: UploadFile = File(..
             if booleano in limpia:
                 limpia[booleano] = str(limpia[booleano]).strip().lower() in (
                     "1", "true", "si", "sí", "x")
+        limpias.append((numero, limpia))
+
+    marcadas = [n for n, f in limpias if f.get("es_punto_entrega")]
+    if len(marcadas) > 1:
+        muestra = ", ".join(str(n) for n in marcadas[:10])
+        y_mas = f" y {len(marcadas) - 10} más" if len(marcadas) > 10 else ""
+        raise HTTPException(
+            400,
+            f"El archivo marca {len(marcadas)} filas como punto de entrega y solo puede "
+            f"haber una: es la única oficina donde RIS App deja los paquetes. Están en "
+            f"las líneas {muestra}{y_mas}. No se importó nada. Dejá la columna "
+            f"`es_punto_entrega` en verdadero en una sola fila —o vacía en todas, y "
+            f"marcala después desde el panel— y volvé a subirlo.")
+
+    creadas, actualizadas, rechazadas = 0, 0, []
+    for numero, limpia in limpias:
         try:
             validada = Agencia(**limpia).model_dump()
         except Exception as e:
             rechazadas.append({"fila": numero, "motivo": "; ".join(envios_config._legible(e))})
             continue
+
+        # Como mucho una fila llega marcada: lo garantiza el chequeo de arriba.
+        if validada["es_punto_entrega"]:
+            await _liberar_punto_entrega(transportista_id)
 
         existente = await db.agencias.find_one(
             {"transportista_id": transportista_id, "codigo": validada["codigo"]}, {"_id": 0})
