@@ -1423,6 +1423,76 @@ async def reporte_merma_nowpayments(
     }
 
 
+@router.get("/reportes/fuentes")
+async def reportes_fuentes(admin: User = Depends(get_super_admin)):
+    """Los flujos de dinero sobre los que se puede pedir un reporte.
+
+    La pantalla NO tiene la lista escrita: la pide. Así, agregar una fuente en
+    `services/reportes.py` la hace aparecer en el panel sin tocar el frontend —
+    y no puede pasar que el panel ofrezca un flujo que el motor no conoce.
+    """
+    from services import reportes
+    return {"fuentes": [{"clave": k, "etiqueta": v["etiqueta"]}
+                        for k, v in reportes.FUENTES.items()]}
+
+
+@router.get("/reportes")
+async def generar_reporte(
+    desde: str = Query(..., description="AAAA-MM-DD"),
+    hasta: str = Query(..., description="AAAA-MM-DD"),
+    flujos: Optional[str] = Query(None, description="claves separadas por coma"),
+    buscar: Optional[str] = Query(None, max_length=120),
+    operador: Optional[str] = Query(None, max_length=120),
+    monto_min: Optional[str] = Query(None, max_length=20),
+    monto_max: Optional[str] = Query(None, max_length=20),
+    tz_min: int = Query(0, ge=-840, le=840, description="minutos respecto de UTC"),
+    limite: int = Query(100, ge=1, le=1000),
+    saltear: int = Query(0, ge=0),
+    formato: str = Query("json", pattern="^(json|csv|xlsx)$"),
+    admin: User = Depends(get_super_admin),
+):
+    """El reporte de operaciones, ajustable.
+
+    `json` devuelve los totales del periodo entero más una página de filas;
+    `csv` y `xlsx` devuelven el archivo con TODAS las filas y el mismo bloque de
+    totales, para que sumar la columna dé con el encabezado.
+
+    Los totales se calculan siempre sobre el periodo completo, nunca sobre la
+    página: un total que solo suma lo que se ve en pantalla es la forma más
+    silenciosa de reportar de menos.
+    """
+    from fastapi.responses import Response, StreamingResponse
+    from services import reportes, reportes_export
+
+    criterios = dict(
+        desde=desde, hasta=hasta,
+        flujos=[f.strip() for f in flujos.split(",") if f.strip()] if flujos else None,
+        buscar=buscar, operador=operador,
+        monto_min=monto_min, monto_max=monto_max, tz_min=tz_min,
+    )
+    try:
+        if formato == "json":
+            return await reportes.generar(limite=limite, saltear=saltear, **criterios)
+        reporte = await reportes.reporte_completo(**criterios)
+    except reportes.ReporteInvalido as e:
+        raise HTTPException(e.http, e.mensaje)
+    except Exception as e:
+        logger.error(f"reportes: no se pudo generar: {e}")
+        raise HTTPException(503, "No se pudo generar el reporte. Reintentá en un momento.")
+
+    quien = getattr(admin, "email", "") or getattr(admin, "user_id", "")
+    nombre = reportes_export.nombre_de_archivo(reporte, formato)
+    if formato == "csv":
+        return StreamingResponse(
+            iter([reportes_export.a_csv(reporte, quien)]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
+    return Response(
+        content=reportes_export.a_xlsx(reporte, quien),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
+
+
 @router.get("/reportes/procesados")
 async def reporte_procesados(
     period: str = Query("day", pattern="^(day|month|year|range)$"),

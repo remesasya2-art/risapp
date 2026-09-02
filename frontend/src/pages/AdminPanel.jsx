@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import DiferenciasPago from '../components/admin/DiferenciasPago';
-import ReportesProcesados from '../components/admin/ReportesProcesados';
+import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import LibroMayor from '../components/admin/LibroMayor';
 import ListaNegra from '../components/admin/ListaNegra';
@@ -910,7 +910,7 @@ const [searchParams, setSearchParams] = useSearchParams();
         )}
 
         {activeTab === 'reportes' && (
-          <ReportesProcesados />
+          <Reportes />
         )}
         {activeTab === 'ledger' && (
           <LibroMayor />
