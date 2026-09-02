@@ -14,8 +14,9 @@ import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import LibroMayor from '../components/admin/LibroMayor';
 import RecargasVES from '../components/admin/RecargasVES';
+import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
-import { fmt, formatAccountNumber } from '../utils/format';
+import { fmt } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
 import { AutoRateCard } from '../components/common/AutoRateCard';
@@ -124,18 +125,10 @@ const [searchParams, setSearchParams] = useSearchParams();
   }, [isAgent]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
-  const [withdrawals, setWithdrawals] = useState([]);
-  const [queueStats, setQueueStats] = useState({ total_pending: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
   // El banco que el operador elige a mano para una recarga que nacio sin el.
   const [users, setUsers] = useState([]);
 
   const [bannedEmails, setBannedEmails] = useState(() => new Set());
-  const [statusFilter, setStatusFilter] = useState('pending');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [showProcessModal, setShowProcessModal] = useState(false);
-  const [processBankId, setProcessBankId] = useState('');
-  const [proofImages, setProofImages] = useState([]);  // Array for multiple images
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
   const [newRateBrlToRis, setNewRateBrlToRis] = useState('');
@@ -335,15 +328,6 @@ const [searchParams, setSearchParams] = useSearchParams();
             pending_kyc: (kRes.data?.counts?.pending ?? 0)
           });
           break;
-        case 'withdrawals':
-          // Get all withdrawals and queue stats
-          const [wAllRes, queueStatsRes] = await Promise.all([
-            api.get('/admin/withdrawals/all'),
-            api.get('/withdrawal/queue-stats').catch(() => ({ data: { total_pending: 0, waiting_in_queue: 0 } }))
-          ]);
-          setWithdrawals(wAllRes.data || []);
-          setQueueStats(queueStatsRes.data || { total_pending: 0, waiting_in_queue: 0 });
-          break;
         case 'partners':
           // Load both socios and gestores
           const [partnersRes, gestorsRes] = await Promise.all([
@@ -380,35 +364,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleProcessWithdrawal = async () => {
-    if (!selectedItem || proofImages.length === 0) { toast.error('Sube al menos un comprobante de pago'); return; }
-    try {
-      await api.post('/admin/withdrawals/process', {
-        transaction_id: selectedItem.transaction_id,
-        action: 'approve',
-        proof_images: proofImages,
-        proof_image: proofImages[0],
-        bank_id: processBankId
-      });
-      toast.success('Retiro procesado exitosamente');
-      setShowProcessModal(false); setSelectedItem(null); setProofImages([]); setProcessBankId(''); loadData();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Error al procesar'); }
-  };
-
-  const handleRejectWithdrawal = async (txId) => {
-    if (!confirm('¿Rechazar este retiro? El monto será devuelto al usuario.')) return;
-    try { 
-      await api.post('/admin/withdrawals/process', { 
-        transaction_id: txId, 
-        action: 'reject',
-        rejection_reason: 'Rechazado por administrador'
-      }); 
-      toast.success('Retiro rechazado y balance devuelto'); 
-      loadData(); 
-    } 
-    catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar'); }
   };
 
   const handleApproveRecharge = async (txId) => {
@@ -677,35 +632,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   };
 
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      const newImages = [];
-      let processed = 0;
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          newImages.push(reader.result);
-          processed++;
-          if (processed === files.length) {
-            setProofImages(prev => [...prev, ...newImages]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-  };
-
-  const removeProofImage = (index) => {
-    setProofImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const filteredWithdrawals = withdrawals.filter(w => {
-    if (statusFilter !== 'all' && w.status !== statusFilter) return false;
-    if (searchQuery && !w.beneficiary_data?.full_name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
-
   const deleteSingleWithdrawal = async (txId) => {
     if (!confirm('¿Eliminar esta transacción? El saldo será reembolsado al usuario.')) return;
     setCleaningUp(true);
@@ -925,142 +851,11 @@ const [searchParams, setSearchParams] = useSearchParams();
 
         {/* Withdrawals Tab */}
         {activeTab === 'withdrawals' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* FIFO Queue Status Banner */}
-            <div style={{ ...cardStyle, padding: '16px', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px solid #7dd3fc' }}>
-              {/* Total VES Required - Highlighted */}
-              <div style={{ 
-                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
-                border: '2px solid #f59e0b', 
-                borderRadius: '12px', 
-                padding: '16px', 
-                marginBottom: '16px',
-                textAlign: 'center'
-              }}>
-                <p style={{ margin: 0, fontSize: '12px', color: '#92400e', fontWeight: '600', textTransform: 'uppercase' }}>💵 Total VES Necesarios</p>
-                <p style={{ margin: '4px 0 0 0', fontSize: '28px', fontWeight: '800', color: '#b45309' }}>
-                  {fmt(queueStats.total_ves_pending)} VES
-                </p>
-                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#78350f' }}>
-                  ({fmt(queueStats.total_ris_pending)} RIS en {queueStats.total_pending} retiros pendientes)
-                </p>
-              </div>
-            </div>
-            
-            <div style={{ ...cardStyle, padding: '16px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-                  <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
-                  <input type="text" placeholder="Buscar por beneficiario..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ width: '100%', padding: '10px 10px 10px 40px', borderRadius: '12px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }} />
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {['all', 'pending', 'completed', 'rejected'].map((status) => (
-                    <button key={status} onClick={() => setStatusFilter(status)}
-                      style={{ padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600,
-                        backgroundColor: statusFilter === status ? '#5B4FE9' : '#f3f4f6',
-                        color: statusFilter === status ? '#ffffff' : '#374151',
-                        boxShadow: statusFilter === status ? '0 4px 10px rgba(91,79,233,0.30)' : 'none',
-                        transition: 'all 0.2s' }}>
-                      {status === 'all' ? 'Todos' : status === 'pending' ? 'Pendientes' : status === 'completed' ? 'Aprobados' : 'Rechazados'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {loading ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
-            ) : filteredWithdrawals.length === 0 ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No hay retiros</p></div>
-            ) : (
-              <div style={{ ...cardStyle, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ backgroundColor: '#f8f9fa' }}>
-                      <tr>
-                        {['ID', 'Fecha', 'Beneficiario', 'Monto', 'Imágenes', 'Estado', 'Acciones'].map(h => (
-                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredWithdrawals.map((w) => {
-                        const pendingImgCount = w.pending_images?.length || 0;
-                        const proofImgCount = w.proof_images?.length || (w.proof_image ? 1 : 0);
-                        const totalImages = w.status === 'pending' ? pendingImgCount : proofImgCount;
-                        
-                        return (
-                        <tr key={w.transaction_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`withdrawal-${w.transaction_id}`}>
-                          <td style={{ padding: '16px' }}>
-                            <span style={{ fontSize: '13px', fontFamily: 'monospace', fontWeight: '600', color: '#6366f1', backgroundColor: '#eef2ff', padding: '4px 8px', borderRadius: '6px' }}>
-                              {w.display_id || w.transaction_id?.slice(0, 8)}
-                            </span>
-                          </td>
-                          <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>{new Date(w.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Caracas' })}</td>
-                          <td style={{ padding: '16px' }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#1A1A2E', margin: 0 }}>{w.beneficiary_data?.full_name}</p>
-                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              {w.beneficiary_data?.bank}
-                            </p>
-                            {(w.beneficiary_data?.account_number || w.beneficiary_data?.phone) && (
-                              <p style={{ fontSize: '11px', color: '#8E8E9A', margin: '2px 0 0 0', fontFamily: 'monospace', letterSpacing: '0.02em' }}>
-                                {formatAccountNumber(w.beneficiary_data?.account_number || w.beneficiary_data?.phone) || (w.beneficiary_data?.account_number || w.beneficiary_data?.phone)}
-                              </p>
-                            )}
-                          </td>
-                          <td style={{ padding: '16px' }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{fmt(w.amount_input)} {w.currency_input || 'RIS'}</p>
-                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{fmt(w.amount_output)} VES</p>
-                          </td>
-                          <td style={{ padding: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ 
-                                fontSize: '13px', 
-                                fontWeight: '600', 
-                                color: totalImages > 0 ? '#16a34a' : '#9ca3af',
-                                backgroundColor: totalImages > 0 ? '#dcfce7' : '#f3f4f6',
-                                padding: '4px 10px', 
-                                borderRadius: '20px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}>
-                                📷 {totalImages}
-                              </span>
-                              {w.status === 'pending' && pendingImgCount > 0 && (
-                                <span style={{ fontSize: '11px', color: '#d97706', fontWeight: '500' }}>pendiente</span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{ padding: '16px' }}><StatusBadge status={w.status} /></td>
-                          <td style={{ padding: '16px' }}>
-                            {w.status === 'pending' && (
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => { setSelectedItem(w); setProofImages(w.pending_images || []); setShowProcessModal(true); }} style={btnSuccess}>Procesar</button>
-                                <button onClick={() => handleRejectWithdrawal(w.transaction_id)} style={btnDanger}>Rechazar</button>
-                              </div>
-                            )}
-                            {w.status === 'completed' && proofImgCount > 0 && (
-                              <button onClick={() => { 
-                                setSelectedItem(w); 
-                                // Load images from proof_images array or fallback to single proof_image
-                                const images = w.proof_images?.length > 0 ? w.proof_images.map(convertTwilioUrl) : (w.proof_image ? [convertTwilioUrl(w.proof_image)] : []);
-                                setProofImages(images);
-                                setShowProcessModal(true); 
-                              }} style={{ ...btnSecondary, fontSize: '12px', padding: '6px 12px' }}>
-                                Ver {proofImgCount} img
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <Retiros
+            accountingBanks={accountingBanks}
+            user={user}
+            onProcesada={loadData}
+          />
         )}
 
         {/* Recharges Tab */}
@@ -2094,131 +1889,6 @@ const [searchParams, setSearchParams] = useSearchParams();
 </main>
 
       {/* Process Withdrawal Modal */}
-      {showProcessModal && selectedItem && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' }}>
-            <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 20px 0' }}>
-              {selectedItem.status === 'completed' ? 'Ver Comprobantes' : 'Procesar Retiro'}
-            </h3>
-            <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
-                  <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.full_name}</p>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>{selectedItem.beneficiary_data?.bank}</p>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>{selectedItem.beneficiary_data?.account_number}</p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>ID</p>
-                  <p style={{ fontSize: '14px', fontWeight: '600', fontFamily: 'monospace', color: '#6366f1', margin: 0 }}>
-                    {selectedItem.display_id || selectedItem.transaction_id?.slice(0, 8)}
-                  </p>
-                </div>
-              </div>
-              <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#dbeafe', borderRadius: '10px' }}>
-                <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0, textAlign: 'center' }}>
-                  {fmt(selectedItem.amount_output)} VES
-                </p>
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0', textAlign: 'center' }}>
-                  ({fmt(selectedItem.amount_input)} {selectedItem.currency_input || 'RIS'})
-                </p>
-              </div>
-            </div>
-            
-            {/* Images Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '12px' }}>
-                <span>📷 Comprobantes de pago ({proofImages.length})</span>
-                {selectedItem.status === 'pending' && (
-                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}>Puedes subir múltiples imágenes</span>
-                )}
-              </label>
-              
-              {/* Image Grid */}
-              {proofImages.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-                  {proofImages.map((img, idx) => (
-                    <div key={idx} style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
-                      <img src={img} alt={`Comprobante ${idx + 1}`} style={{ width: '100%', height: '100px', objectFit: 'cover' }} />
-                      {selectedItem.status === 'pending' && (
-                        <button 
-                          onClick={() => removeProofImage(idx)} 
-                          style={{ 
-                            position: 'absolute', top: '4px', right: '4px', 
-                            width: '22px', height: '22px', borderRadius: '50%', 
-                            backgroundColor: '#dc2626', color: 'white', border: 'none', 
-                            cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                          }}
-                        >
-                          ×
-                        </button>
-                      )}
-                      <div style={{ position: 'absolute', bottom: '4px', left: '4px', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>
-                        #{idx + 1}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Upload Button (only for pending) */}
-              {selectedItem.status === 'pending' && (
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  multiple 
-                  onChange={handleFileChange} 
-                  style={{ width: '100%' }} 
-                  data-testid="upload-proof-images"
-                />
-              )}
-              
-              {/* Empty state */}
-              {proofImages.length === 0 && selectedItem.status === 'completed' && (
-                <p style={{ color: '#9ca3af', fontSize: '14px', textAlign: 'center', padding: '20px' }}>No hay imágenes de comprobantes</p>
-              )}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => { setShowProcessModal(false); setSelectedItem(null); setProofImages([]); setProcessBankId(''); }} style={{ ...btnSecondary, flex: 1 }}>
-                {selectedItem.status === 'completed' ? 'Cerrar' : 'Cancelar'}
-              </button>
-              {selectedItem.status === 'pending' && (
-                <button onClick={handleProcessWithdrawal} disabled={proofImages.length === 0} style={{ ...btnSuccess, flex: 1, opacity: (proofImages.length > 0) ? 1 : 0.5 }}>
-                  Confirmar ({proofImages.length} img)
-                </button>
-              )}
-            </div>
-            {selectedItem.status === 'pending' && (
-              <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '10px', border: '1px solid #fcd34d' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#92400e', marginBottom: '6px' }}>
-                  Banco desde donde se pagó al beneficiario (opcional)
-                </label>
-                <select value={processBankId} onChange={e => setProcessBankId(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', backgroundColor: '#fff' }}
-                  data-testid="process-bank-select"
-                >
-                  <option value="">-- Seleccionar banco --</option>
-                  {accountingBanks.filter(b => b.currency === 'VES').map(b => (
-                    <option key={b.bank_id} value={b.bank_id}>
-                      {b.name} (Saldo: {fmt(b.balance)} VES)
-                    </option>
-                  ))}
-                </select>
-                {accountingBanks.filter(b => b.currency === 'VES').length === 0 && (
-                  <p style={{ fontSize: '11px', color: '#991b1b', margin: '6px 0 0 0' }}>
-                    No hay bancos VES registrados. Registra uno en Contabilidad antes de aprobar.
-                  </p>
-                )}
-                <p style={{ fontSize: '11px', color: '#78350f', margin: '6px 0 0 0' }}>
-                  Si el banco no tiene saldo suficiente, se registrará como déficit y se compensará cuando entre liquidez.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* User History Modal */}
       {selectedUser && (
