@@ -516,6 +516,9 @@ RUTAS_QUE_INVALIDAN = (
     # motivo. Descartarlo no toca nada que se lea, pero la ruta es una sola y se
     # declara por lo mas fuerte que puede hacer.
     "resolver_origen_propuesto",
+    # Las dos vias nuevas de carga de matriz escriben en la misma coleccion que
+    # lee la orientacion, igual que aprobar_observado.
+    "cargar_fila_de_matriz", "importar_matrices",
 )
 
 # Las operativas no invalidan cache de configuracion: no tocan nada que el

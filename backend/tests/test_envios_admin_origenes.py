@@ -322,3 +322,128 @@ def test_dice_que_origenes_quedan_sin_precio_cargado():
     por_uf = {o["uf"]: o["tiene_matriz"] for o in listado["origenes"]}
     assert por_uf == {"SP": True, "MG": False}
     assert listado["matriz_legible"] is True
+
+
+# ─── Matrices de referencia ───────────────────────────────────────────────
+
+async def _un_transportista(rol="brasil", tid="trp_br", codigo="TRP-BRL"):
+    await BASE["db"].transportistas.insert_one(
+        {"transportista_id": tid, "codigo": codigo, "rol": rol, "activo": True,
+         "nombre": "Empresa"})
+
+
+def test_una_fila_manual_queda_marcada_como_manual_y_no_como_observada():
+    """Son dos niveles de confianza distintos y la pantalla no los puede
+    confundir: `observado` es un precio que vimos operando, `manual` uno que
+    alguien tipeó.
+
+    MUTACIÓN: volver `origen` a la constante "observado" pone esto en rojo.
+    """
+    async def caso():
+        await _un_transportista()
+        await ra.cargar_fila_de_matriz(
+            ra.FilaDeMatriz(transportista_id="trp_br", clave="SP", hasta_kg="30",
+                            precio="120.00", moneda="BRL"), _Admin())
+        return await ra.listar_matrices(_Admin())
+
+    salida = corre(caso())
+    assert len(salida["filas"]) == 1
+    assert salida["filas"][0]["origen"] == "manual"
+
+
+def test_cargar_el_mismo_tope_escrito_distinto_no_deja_dos_filas():
+    """«30» y «30.0» son el mismo tope. Sin la normalización de `aprobar` quedan
+    dos filas y el precio viejo espera a ganar un desempate."""
+    async def caso():
+        await _un_transportista()
+        for tope, precio in (("30", "120.00"), ("30.0", "150.00")):
+            await ra.cargar_fila_de_matriz(
+                ra.FilaDeMatriz(transportista_id="trp_br", clave="SP",
+                                hasta_kg=tope, precio=precio), _Admin())
+        return await ra.listar_matrices(_Admin())
+
+    salida = corre(caso())
+    assert len(salida["filas"]) == 1
+    assert salida["filas"][0]["precio"] == "150.00"
+
+
+def test_la_pantalla_dice_que_claves_faltan():
+    """«Tenés 4 orígenes en UF sin precio» es el aviso que evita el bloque mudo."""
+    async def caso():
+        await _un_transportista()
+        await ra.crear_origen(ra.OrigenNuevo(cep="01310100", ciudad="São Paulo",
+                                             uf="SP"), _Admin())
+        await ra.crear_origen(ra.OrigenNuevo(cep="30130010", ciudad="Belo Horizonte",
+                                             uf="MG"), _Admin())
+        await ra.cargar_fila_de_matriz(
+            ra.FilaDeMatriz(transportista_id="trp_br", clave="SP", hasta_kg="30",
+                            precio="120.00"), _Admin())
+        return await ra.listar_matrices(_Admin())
+
+    cobertura = corre(caso())["cobertura"]
+    brasil = next(t for t in cobertura["transportistas"] if t["rol"] == "brasil")
+    assert brasil["necesarias"] == ["MG", "SP"]
+    assert brasil["faltan"] == ["MG"]
+
+
+def test_una_fila_recien_cargada_no_se_muestra_vieja():
+    async def caso():
+        await _un_transportista()
+        await ra.cargar_fila_de_matriz(
+            ra.FilaDeMatriz(transportista_id="trp_br", clave="SP", hasta_kg="30",
+                            precio="120.00"), _Admin())
+        return await ra.listar_matrices(_Admin())
+
+    assert corre(caso())["filas"][0]["desactualizada"] is False
+
+
+def test_una_fila_sin_fecha_cuenta_como_vieja():
+    """Por diseño: una matriz que no dice cuándo se cargó no puede presentarse
+    como fresca. Está anotado en el encargo porque sorprende."""
+    async def caso():
+        await _un_transportista()
+        await BASE["db"].matrices_referencia.insert_one(
+            {"transportista_id": "trp_br", "clave": "SP", "hasta_kg": "30",
+             "precio": "120.00", "origen": "manual"})
+        return await ra.listar_matrices(_Admin())
+
+    assert corre(caso())["filas"][0]["desactualizada"] is True
+
+
+def test_la_vista_previa_del_csv_de_matrices_no_escribe():
+    csv_matriz = ("clave,hasta_kg,precio,moneda\n"
+                  "SP,30,120.00,BRL\n"
+                  "MG,30,140.00,BRL\n")
+
+    async def caso():
+        await _un_transportista()
+        plan = await ra.importar_matrices("trp_br", _Archivo(csv_matriz), False, _Admin())
+        despues = await ra.listar_matrices(_Admin())
+        return plan, despues
+
+    plan, despues = corre(caso())
+    assert plan["confirmado"] is False and plan["validas"] == 2
+    assert despues["filas"] == []
+
+
+def test_confirmar_el_csv_de_matrices_carga_las_filas_como_manuales():
+    csv_matriz = ("clave,hasta_kg,precio,moneda\n"
+                  "SP,30,120.00,BRL\n"
+                  "MG,30,140.00,BRL\n")
+
+    async def caso():
+        await _un_transportista()
+        hecho = await ra.importar_matrices("trp_br", _Archivo(csv_matriz), True, _Admin())
+        return hecho, await ra.listar_matrices(_Admin())
+
+    hecho, despues = corre(caso())
+    assert hecho["guardadas"] == 2
+    assert {f["clave"] for f in despues["filas"]} == {"SP", "MG"}
+    assert {f["origen"] for f in despues["filas"]} == {"manual"}
+
+
+def test_el_csv_de_matrices_de_un_transportista_que_no_existe_es_404():
+    with pytest.raises(HTTPException) as e:
+        corre(ra.importar_matrices("trp_nada", _Archivo("clave,hasta_kg,precio\n"),
+                                   False, _Admin()))
+    assert e.value.status_code == 404

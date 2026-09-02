@@ -43,9 +43,9 @@ from models.user import User
 from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
-from services import (envios_comprobante, envios_config, envios_operacion,
-                      envios_origenes, envios_rentabilidad, envios_retiro,
-                      envios_tarifa_editor)
+from services import (envios_catalogo, envios_comprobante, envios_config,
+                      envios_operacion, envios_origenes, envios_rentabilidad,
+                      envios_retiro, envios_tarifa_editor)
 from services.envios_archivos import (MIGRACION_LOTE_MAX,
                                       MIGRACION_LOTE_POR_DEFECTO)
 from services.envios_catalogo import invalidar_cache
@@ -1255,6 +1255,181 @@ async def aprobar_observado(datos: Aprobacion,
         raise _rentabilidad(e)
     invalidar_cache()
     return resultado
+
+
+# ─── Matrices de referencia ───────────────────────────────────────────────
+#
+# La coleccion existe desde el principio y no cambia de forma. Lo que faltaba
+# eran las ENTRADAS para escribirla: se diseño para alimentarse sola con los
+# precios que la operacion observa, y en regimen funciona — pero al arrancar no
+# funciona nunca, porque para observar un precio hay que haber despachado un
+# paquete y para que alguien despache tiene que ver un precio.
+
+
+class FilaDeMatriz(BaseModel):
+    """Una fila cargada a mano. Misma forma que la aprobación de un observado."""
+    model_config = {"extra": "forbid"}
+    transportista_id: str = Field(min_length=1, max_length=60)
+    clave: str = Field(min_length=1, max_length=40)
+    hasta_kg: str = Field(min_length=1, max_length=20)
+    precio: str = Field(min_length=1, max_length=20)
+    moneda: Optional[str] = Field(default=None, max_length=8)
+
+
+async def _claves_que_faltan() -> dict:
+    """Qué claves tiene cargadas cada transportista, y cuáles se van a necesitar.
+
+    Es lo que evita el bloque mudo. Del lado de Brasil las claves que hacen falta
+    son las UF de los orígenes ACTIVOS; del lado de Venezuela, las zonas de las
+    agencias activas. Decirlo acá, en la pantalla donde se cargan los precios, es
+    lo que convierte «a este usuario no le apareció la referencia» en una tarea
+    visible antes de que pase.
+    """
+    from services.referencias import claves_cargadas, transportistas_activos
+
+    origenes, ok_origenes = await envios_origenes.listar()
+    necesarias_brasil = sorted({o["uf"] for o in origenes if o.get("uf")})
+
+    salida, legible = [], ok_origenes
+    for rol in ("brasil", "venezuela"):
+        for t in await transportistas_activos(rol):
+            cargadas, ok = await claves_cargadas(t.get("transportista_id"))
+            legible = legible and ok
+            if rol == "brasil":
+                necesarias = necesarias_brasil
+            else:
+                agencias, ok_ag = await envios_catalogo._agencias_de(
+                    t.get("transportista_id"))
+                legible = legible and ok_ag
+                necesarias = sorted({a["zona"] for a in agencias if a.get("zona")})
+            salida.append({
+                "transportista_id": t.get("transportista_id"),
+                "codigo": (t.get("codigo") or "?"),
+                "rol": rol,
+                "cargadas": sorted(cargadas),
+                "necesarias": necesarias,
+                "faltan": [c for c in necesarias if c not in cargadas],
+            })
+    return {"transportistas": salida, "legible": legible}
+
+
+@router.get("/matrices")
+async def listar_matrices(admin: User = Depends(get_super_admin)):
+    """Las filas cargadas, con de dónde salió cada número y cuál está vieja.
+
+    Las dos cosas que la pantalla tiene que decir sin que se las pidan:
+
+      - **De dónde salió**: `observado` es un precio que vimos operando,
+        `manual` uno que alguien tipeó. Son dos niveles de confianza distintos.
+      - **Cuál está vieja**: a los `DIAS_FRESCURA` el usuario ve la advertencia
+        de que la referencia puede haber cambiado. Verlo acá ANTES que allá es
+        la diferencia entre corregirlo y enterarse por un reclamo.
+
+    Y una fila SIN `actualizada_at` legible cuenta como vieja, por diseño: una
+    matriz que no dice cuándo se cargó no puede presentarse como fresca.
+    """
+    from services.referencias import DIAS_FRESCURA, _esta_vieja
+    try:
+        filas = await db.matrices_referencia.find({}, {"_id": 0}).sort(
+            [("transportista_id", 1), ("clave", 1), ("hasta_kg", 1)]).to_list(None)
+    except Exception as e:
+        logger.error(f"envios: no se pudieron leer las matrices: {e}")
+        raise HTTPException(
+            503, "No se pudieron leer las matrices. No cargues nada encima hasta que "
+                 "vuelva: lo que guardes ahora puede pisar lo que ya había.")
+    return {
+        "filas": [{**f, "desactualizada": _esta_vieja(f.get("actualizada_at"),
+                                                      DIAS_FRESCURA)}
+                  for f in (filas or [])],
+        "dias_frescura": DIAS_FRESCURA,
+        "cobertura": await _claves_que_faltan(),
+    }
+
+
+@router.post("/matrices")
+async def cargar_fila_de_matriz(datos: FilaDeMatriz,
+                                admin: User = Depends(get_super_admin)):
+    """Carga o corrige UNA fila. Agregar un precio no puede exigir un CSV.
+
+    Entra por `envios_rentabilidad.aprobar` y no por una escritura propia: esa
+    función normaliza `hasta_kg`, y el índice de la matriz no es único, así que
+    "10" y "10.0" dejarían dos filas para el mismo tope con el precio viejo
+    esperando a ganar un desempate. Se pasa `origen="manual"` para que la fila
+    diga que la tipeó una persona.
+    """
+    try:
+        resultado = await envios_rentabilidad.aprobar(
+            admin, transportista_id=datos.transportista_id, clave=datos.clave,
+            hasta_kg=datos.hasta_kg, precio=datos.precio, moneda=datos.moneda,
+            origen="manual")
+    except Exception as e:
+        raise _rentabilidad(e)
+    invalidar_cache()
+    return resultado
+
+
+@router.post("/matrices/csv")
+async def importar_matrices(transportista_id: str = Form(...),
+                            archivo: UploadFile = File(...),
+                            confirmar: bool = Form(False),
+                            admin: User = Depends(get_super_admin)):
+    """Importa filas desde un CSV de `clave,hasta_kg,precio,moneda`.
+
+    **Misma vista previa obligatoria que la de orígenes**, y por el mismo motivo:
+    estos números son los que se le muestran a un usuario como orientación de lo
+    que va a pagar por fuera, y subir un archivo con la columna corrida es
+    mostrarle el precio de otro tramo.
+    """
+    if not await db.transportistas.find_one({"transportista_id": transportista_id}):
+        raise HTTPException(404, "Transportista no encontrado")
+    try:
+        crudo = (await archivo.read()).decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(400, "El archivo no está en UTF-8. Guardalo de nuevo como CSV UTF-8.")
+
+    validas, rechazadas = [], []
+    for numero, fila in enumerate(csv.DictReader(io.StringIO(crudo)), start=2):
+        limpia = {(k or "").strip().lower(): (v.strip() if isinstance(v, str) else v)
+                  for k, v in fila.items() if k}
+        try:
+            candidata = FilaDeMatriz(transportista_id=transportista_id,
+                                     clave=limpia.get("clave") or "",
+                                     hasta_kg=limpia.get("hasta_kg") or "",
+                                     precio=limpia.get("precio") or "",
+                                     moneda=limpia.get("moneda") or None)
+        except Exception as e:
+            rechazadas.append({"fila": numero,
+                               "motivo": "; ".join(envios_config._legible(e))})
+            continue
+        validas.append({"fila": numero, **candidata.model_dump()})
+
+    plan = {"validas": len(validas), "rechazadas": rechazadas,
+            "total_rechazadas": len(rechazadas), "muestra": validas[:20]}
+    if not confirmar:
+        return {"ok": True, "confirmado": False, **plan}
+
+    guardadas = 0
+    for fila in validas:
+        try:
+            await envios_rentabilidad.aprobar(
+                admin, transportista_id=transportista_id, clave=fila["clave"],
+                hasta_kg=fila["hasta_kg"], precio=fila["precio"],
+                moneda=fila["moneda"], origen="manual")
+            guardadas += 1
+        except Exception as e:
+            # Una fila rechazada por el validador de negocio —un precio en cero,
+            # un tope ilegible— no aborta el resto: se suma a la misma lista que
+            # la persona corrige y vuelve a subir.
+            rechazadas.append({"fila": fila["fila"], "motivo": str(e)})
+    invalidar_cache()
+    await envios_config.auditar(
+        "matrices_referencia", {},
+        {"importacion": {"transportista_id": transportista_id, "guardadas": guardadas,
+                         "rechazadas": len(rechazadas)}},
+        admin, accion="importar")
+    return {"ok": True, "confirmado": True, "guardadas": guardadas,
+            "validas": len(validas), "rechazadas": rechazadas,
+            "total_rechazadas": len(rechazadas)}
 
 
 # ─── Los caminos que no son el feliz, y el flete del tramo final ──────────
