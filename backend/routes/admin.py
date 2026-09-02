@@ -598,41 +598,35 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     return withdrawals
 
 @router.get("/withdrawals/all")
-async def get_all_withdrawals(admin: User = Depends(get_super_admin)):
-    """Get all withdrawals"""
-    cursor = db.transactions.find({
-        "type": "withdrawal",
-        "hidden_from_admin": {"$ne": True}
-    }).sort("created_at", -1).limit(200)
-    
-    withdrawals = []
-    async for tx in cursor:
-        user = await db.users.find_one({"user_id": tx.get("user_id")})
-        withdrawals.append({
-            "transaction_id": tx.get("transaction_id"),
-            "display_id": tx.get("display_id"),
-            "user_id": tx.get("user_id"),
-            "user_name": user.get("name") if user else "Unknown",
-            "user_email": user.get("email") if user else "",
-            "amount_input": tx.get("amount_input", 0),
-            "currency_input": tx.get("currency_input") or "RIS",
-            "amount_output": tx.get("amount_output", 0),
-            "rate": tx.get("rate", 0),
-            "status": tx.get("status", "pending"),
-            "beneficiary_data": tx.get("beneficiary_data", {}),
-            "payment_type": tx.get("payment_type") or tx.get("beneficiary_data", {}).get("payment_type"),
-            "is_gestor_transaction": tx.get("is_gestor_transaction", False),
-            "client_name": tx.get("client_name"),
-            "created_at": tx.get("created_at"),
-            "completed_at": tx.get("completed_at"),
-            "proof_image": tx.get("proof_image"),
-            "proof_images": tx.get("proof_images", []),
-            "pending_images": tx.get("pending_images", []),
-            "whatsapp_active": tx.get("whatsapp_active", False),
-            "processed_by": tx.get("processed_by"),
-        })
-    
-    return withdrawals
+async def get_all_withdrawals(
+    status: str = "pending",
+    q: str = "",
+    currency: str = "",
+    limit: int = 50,
+    skip: int = 0,
+    admin: User = Depends(get_super_admin),
+):
+    """La cola de pagos: una página filtrada, ordenada y contada.
+
+    Antes devolvía **los 200 retiros más nuevos de cualquier estado** y la
+    pantalla filtraba en el navegador. Pasados los 200, el pendiente MAS VIEJO
+    se caía de la lista, y es gente esperando su plata. Ahora el filtro y el
+    conteo van en la base, y las pendientes salen FIFO.
+    """
+    from services import retiros
+    try:
+        pagina = await retiros.cola(
+            db, estado=status, texto=q, moneda=(currency or None),
+            limite=limit, saltear=skip)
+    except retiros.ColaInvalida as e:
+        raise HTTPException(status_code=e.http, detail=e.mensaje)
+    except Exception as e:
+        logger.error(f"retiros: no se pudo leer la cola: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo leer la cola de retiros. Reintentá en un momento.")
+    pagina["counters"] = await retiros.contadores(db)
+    return pagina
 
 @router.post("/withdrawals/process")
 async def process_withdrawal(

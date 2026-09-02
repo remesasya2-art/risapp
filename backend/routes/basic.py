@@ -9,7 +9,7 @@ import os
 
 from database import db
 from models.user import User
-from routes.dependencies import get_current_user
+from routes.dependencies import get_current_user, get_super_admin
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config, caracas_now
 from services.rate_history import log_if_changed, determine_auto_change_type
 
@@ -83,30 +83,39 @@ async def download_build():
     return {"error": "Build not available"}
 
 @router.get("/withdrawal/queue-stats")
-async def get_withdrawal_queue_stats():
-    """Get withdrawal queue statistics"""
-    # Count pending withdrawals
-    total_pending = await db.transactions.count_documents({
-        "type": "withdrawal",
-        "status": "pending",
-        "hidden_from_admin": {"$ne": True}
-    })
-    
-    # Calculate total VES pending
-    pending_cursor = db.transactions.find({
-        "type": "withdrawal",
-        "status": "pending",
-        "hidden_from_admin": {"$ne": True}
-    })
-    
-    total_ves = 0
-    async for tx in pending_cursor:
-        total_ves += tx.get("amount_output", 0)
-    
+async def get_withdrawal_queue_stats(admin=Depends(get_super_admin)):
+    """Resumen de la cola de pagos, para la cabecera del panel.
+
+    DOS COSAS QUE ESTABAN MAL
+
+    1. NO PEDIA SESION. Cualquiera que supiera la URL veía cuánta plata había
+       esperando pago y cuántas órdenes había en cola. Es información operativa
+       del negocio y ahora exige super admin, como el resto del panel. Tiene un
+       solo consumidor —la cabecera del panel de administración— así que no
+       rompe nada más.
+
+    2. EL TOTAL MEZCLABA MONEDAS. Sumaba `amount_output` de todos los retiros
+       pendientes en una cifra rotulada «total VES necesarios», pero un retiro
+       puede salir en VES o en BRL. Un envío en reales sumaba sus reales al
+       total de bolívares, y quien mira ese número para saber cuánto poner en
+       las cuentas venezolanas provisionaba mal sin poder notarlo.
+
+       `total_ves_pending` ahora es SOLO lo que sale en VES. El detalle por
+       moneda va en `por_moneda`, que es lo que la pantalla muestra.
+    """
+    from services import retiros
+    c = await retiros.contadores(db)
+    ves = next((m["total"] for m in c["por_moneda"] if m["moneda"] == "VES"), 0.0)
     return {
-        "total_pending": total_pending,
-        # Sin cola de WhatsApp, todo lo pendiente esta esperando a un operador:
-        # waiting_in_queue ya no descuenta nada y coincide con total_pending.
-        "waiting_in_queue": total_pending,
-        "total_ves_pending": round(total_ves, 2)
+        "total_pending": c["pendientes"],
+        # Sin cola de WhatsApp, todo lo pendiente esta esperando a un operador.
+        "waiting_in_queue": c["pendientes"],
+        "total_ves_pending": ves,
+        # La pantalla leía este campo y la ruta nunca lo devolvió: era
+        # `undefined` y se dibujaba como «0,00». Un número que siempre miente
+        # es peor que no mostrarlo.
+        "total_ris_pending": next(
+            (m["total"] for m in c["por_origen"] if m["moneda"] == "RIS"), 0.0),
+        "por_moneda": c["por_moneda"],
+        "por_origen": c["por_origen"],
     }

@@ -461,24 +461,60 @@ def test_el_monto_se_lee_del_campo_viejo_si_el_nuevo_no_esta():
 # Estos leen el fuente del frontend. Son guardias contra que una edición futura
 # vuelva a poner la cola en el navegador, o saque la confirmación de aprobar.
 
-import re  # noqa: E402
-
 _FRONT = os.path.abspath(os.path.join(_BACKEND, "..", "frontend", "src"))
 _PANTALLA = os.path.join(_FRONT, "components", "admin", "RecargasVES.jsx")
 
 
 def _codigo(ruta):
-    """El fuente SIN comentarios.
+    r"""El fuente SIN comentarios: un test que lee código lee código, no prosa.
 
-    Sin sacarlos, el comentario que explica por qué la pantalla ya NO filtra en
-    el navegador cuenta como si filtrara. Un test que lee código fuente tiene
-    que leer código, no prosa.
+    Sin sacarlos, el comentario que explica por qué la pantalla ya NO filtra
+    en el navegador contaría como si filtrara.
+
+    POR QUE NO ALCANZA UN `re.sub(r"/\*.*?\*/", ...)`
+        Porque `accept="image/*"` contiene `/*` DENTRO DE UNA CADENA. Esa
+        expresión lo toma por apertura de comentario y borra todo hasta el
+        siguiente `*/` real: en este archivo eran 4.787 caracteres de código,
+        el botón de pagar incluido. Un test que afirma que algo NO está
+        habría pasado en verde justamente porque el limpiador lo borró.
+
+        Así que se recorre el texto respetando comillas simples, dobles y
+        backticks, y sólo se saca lo que es comentario de verdad.
     """
     with open(ruta, encoding="utf-8") as f:
         texto = f.read()
-    texto = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
-    return "\n".join(l for l in texto.split("\n")
-                     if not l.lstrip().startswith("//"))
+
+    salida = []
+    i, n = 0, len(texto)
+    comilla = None
+    while i < n:
+        c = texto[i]
+        if comilla:
+            salida.append(c)
+            if c == "\\" and i + 1 < n:
+                salida.append(texto[i + 1])
+                i += 2
+                continue
+            if c == comilla:
+                comilla = None
+            i += 1
+            continue
+        if c in "\"'`":
+            comilla = c
+            salida.append(c)
+            i += 1
+            continue
+        if c == "/" and i + 1 < n and texto[i + 1] == "*":
+            fin = texto.find("*/", i + 2)
+            i = n if fin < 0 else fin + 2
+            continue
+        if c == "/" and i + 1 < n and texto[i + 1] == "/":
+            fin = texto.find("\n", i)
+            i = n if fin < 0 else fin
+            continue
+        salida.append(c)
+        i += 1
+    return "".join(salida)
 
 
 @pytest.fixture
