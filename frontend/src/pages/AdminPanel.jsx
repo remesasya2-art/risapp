@@ -13,6 +13,7 @@ import DiferenciasPago from '../components/admin/DiferenciasPago';
 import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import LibroMayor from '../components/admin/LibroMayor';
+import RecargasVES from '../components/admin/RecargasVES';
 import ListaNegra from '../components/admin/ListaNegra';
 import { fmt, formatAccountNumber } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
@@ -125,11 +126,7 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
   const [withdrawals, setWithdrawals] = useState([]);
   const [queueStats, setQueueStats] = useState({ total_pending: 0, waiting_in_queue: 0, total_ves_pending: 0, total_ris_pending: 0 });
-  const [recharges, setRecharges] = useState([]);
-  const [refDigits, setRefDigits] = useState({});
   // El banco que el operador elige a mano para una recarga que nacio sin el.
-  const [bancoManual, setBancoManual] = useState({});
-  const [refChecks, setRefChecks] = useState({});
   const [users, setUsers] = useState([]);
 
   const [bannedEmails, setBannedEmails] = useState(() => new Set());
@@ -138,7 +135,6 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [selectedItem, setSelectedItem] = useState(null);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [processBankId, setProcessBankId] = useState('');
-  const [rechargeBankSel, setRechargeBankSel] = useState({}); // txId -> bankId
   const [proofImages, setProofImages] = useState([]);  // Array for multiple images
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
@@ -303,9 +299,6 @@ const [searchParams, setSearchParams] = useSearchParams();
   };
   const [accountingBanks, setAccountingBanks] = useState([]);
   // Modal para rechazar recarga VES
-  const [showRejectRechargeModal, setShowRejectRechargeModal] = useState(false);
-  const [rejectRechargeId, setRejectRechargeId] = useState(null);
-  const [rejectRechargeReason, setRejectRechargeReason] = useState('');
 
   // === BTC Orders State ===
   const [btcOrdenesP, setBtcOrdenesP] = useState([]);
@@ -350,10 +343,6 @@ const [searchParams, setSearchParams] = useSearchParams();
           ]);
           setWithdrawals(wAllRes.data || []);
           setQueueStats(queueStatsRes.data || { total_pending: 0, waiting_in_queue: 0 });
-          break;
-        case 'recharges':
-          const rAllRes = await api.get('/admin/recharges/ves');
-          setRecharges(rAllRes.data || []);
           break;
         case 'partners':
           // Load both socios and gestores
@@ -420,68 +409,6 @@ const [searchParams, setSearchParams] = useSearchParams();
       loadData(); 
     } 
     catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar'); }
-  };
-
-  // Aprobar recarga VES (banco se toma automáticamente de la transacción)
-  const checkRefDigits = async (txId, value) => {
-    const digits = String(value || '').replace(/\D/g, '').slice(0, 3);
-    setRefDigits((prev) => ({ ...prev, [txId]: digits }));
-    if (digits.length === 3) {
-      try {
-        const res = await api.get('/admin/recharges/ves/check-reference', {
-          params: { digits, exclude_transaction_id: txId },
-        });
-        setRefChecks((prev) => ({ ...prev, [txId]: res.data }));
-      } catch (e) { /* el chequeo es opcional, no bloquea */ }
-    } else {
-      setRefChecks((prev) => ({ ...prev, [txId]: null }));
-    }
-  };
-
-  const handleApproveRechargeVES = async (txId) => {
-    const digits = refDigits[txId] || '';
-    // El banco que el operador eligió a mano, para las recargas que nacieron sin
-    // banco: la ruta ya aceptaba este `bank_id` como red, y no había forma de
-    // usarla porque el panel no tenía el control.
-    const bankId = bancoManual[txId] || undefined;
-    const check = refChecks[txId];
-    if (check && check.has_collision) {
-      const first = check.first_registered;
-      const quien = first ? `${first.user_name || first.user_email || 'otro usuario'}` : 'otro usuario';
-      if (!window.confirm(`⚠️ La referencia ${digits} ya aparece en una recarga de ${quien}. Posible pago duplicado: el saldo corresponde a quien la registró primero. ¿Aprobar de todas formas?`)) {
-        return;
-      }
-    }
-    try {
-      await api.post(`/admin/recharges/ves/process/${txId}`, { action: 'approve', reference_digits: digits, bank_id: bankId });
-      toast.success('Recarga aprobada - Saldo acreditado');
-      loadData();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Error al aprobar');  loadData();}
-  };
-
-  // Rechazar recarga VES
-  const handleRejectRechargeVES = (txId) => {
-    setRejectRechargeId(txId);
-    setRejectRechargeReason('');
-    setShowRejectRechargeModal(true);
-  };
-
-  const handleConfirmRejectRechargeVES = async () => {
-    if (!rejectRechargeReason.trim()) {
-      toast.error('Debes proporcionar un motivo de rechazo');
-      return;
-    }
-    try {
-      await api.post(`/admin/recharges/ves/process/${rejectRechargeId}`, { 
-        action: 'reject', 
-        rejection_reason: rejectRechargeReason.trim()
-      });
-      toast.success('Recarga rechazada');
-      setShowRejectRechargeModal(false);
-      setRejectRechargeId(null);
-      setRejectRechargeReason('');
-      loadData();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Error al rechazar');  loadData();}
   };
 
   const handleApproveRecharge = async (txId) => {
@@ -1139,156 +1066,11 @@ const [searchParams, setSearchParams] = useSearchParams();
         {/* Recharges Tab */}
         {/* Recharges VES Tab */}
         {activeTab === 'recharges' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ ...cardStyle, padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>Recargas VES Pendientes</h3>
-              <button onClick={loadData} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#dbeafe', color: '#2563eb', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <RefreshCw style={{ width: '14px', height: '14px' }} />
-                Actualizar
-              </button>
-            </div>
-
-            {loading ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
-            ) : recharges.length === 0 ? (
-              <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}>
-                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#f3f4f6', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ArrowDownLeft style={{ width: '28px', height: '28px', color: '#9ca3af' }} />
-                </div>
-                <p style={{ color: '#6b7280', margin: 0 }}>No hay recargas VES pendientes</p>
-              </div>
-            ) : (
-              recharges.filter(r => r.status === 'pending').map((r) => {
-                const legacyMap = {
-                  banco_venezuela: 'Banco de Venezuela',
-                  banesco: 'Banesco',
-                  mercantil: 'Mercantil',
-                  provincial: 'Provincial',
-                };
-                const destBankLabel = r.destination_bank_name || legacyMap[r.destination_bank] || r.destination_bank || '—';
-                const hasBankResolved = !!r.destination_bank_id;
-                const dt = new Date(r.created_at);
-                const dateStr = dt.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Caracas' });
-                const timeStr = dt.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Caracas' });
-                return (
-                  <div key={r.transaction_id} style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }} data-testid={`recharge-${r.transaction_id}`}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px', gap: '12px' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '15px', fontWeight: '700', color: '#111827', margin: 0 }}>{r.user_name || r.user_email}</p>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{r.user_email}</p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', fontSize: '11px', color: '#9ca3af' }}>
-                          <span>{dateStr}</span>
-                          <span>•</span>
-                          <span>{timeStr}</span>
-                          <span>•</span>
-                          <span style={{ color: '#6366f1', fontWeight: '600' }}>Caracas</span>
-                        </div>
-                      </div>
-                      <StatusBadge status="pending" />
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-                      {r.proof_image && (
-                        <a href={r.proof_image} target="_blank" rel="noreferrer" style={{ display: 'block', width: '96px', height: '96px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #e5e7eb', cursor: 'zoom-in' }}>
-                          <img src={r.proof_image} alt="Comprobante" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        </a>
-                      )}
-                      <div style={{ padding: '12px', backgroundColor: '#dbeafe', borderRadius: '10px' }}>
-                        <p style={{ fontSize: '10px', color: '#2563eb', margin: 0, fontWeight: '700', letterSpacing: '0.5px' }}>PAGÓ EN</p>
-                        <p style={{ fontSize: '18px', fontWeight: '700', color: '#1e3a5f', margin: '2px 0 0 0' }}>{fmt(parseFloat(r.amount_ves || r.amount_input || 0))} VES</p>
-                        <p style={{ fontSize: '11px', color: '#6b7280', margin: '4px 0 0 0' }}>Banco: <strong>{destBankLabel}</strong></p>
-                      </div>
-                      <div style={{ padding: '12px', backgroundColor: '#dcfce7', borderRadius: '10px' }}>
-                        <p style={{ fontSize: '10px', color: '#16a34a', margin: 0, fontWeight: '700', letterSpacing: '0.5px' }}>A ACREDITAR</p>
-                        <p style={{ fontSize: '18px', fontWeight: '700', color: '#166534', margin: '2px 0 0 0' }}>{fmt(parseFloat(r.amount_ris || r.amount_output || 0))} RI$</p>
-                        <p style={{ fontSize: '11px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa: 1 RIS = {fmt(r.rate || r.rate_used || 140)} VES</p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#1e40af' }}>
-                      <CheckCircle style={{ width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                      <span>Verifica el comprobante: debe mostrar una transferencia de <strong>{fmt(parseFloat(r.amount_ves || r.amount_input || 0))} VES</strong> a <strong>{destBankLabel}</strong>. Si coincide, aprueba para acreditar <strong>{fmt(parseFloat(r.amount_ris || r.amount_output || 0))} RI$</strong>.</span>
-                    </div>
-                    {!r.proof_image && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#b91c1c' }}>
-                        <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-                        <span>Esta solicitud no tiene comprobante adjunto. Confírmalo con el usuario antes de aprobar.</span>
-                      </div>
-                    )}
-                    {!hasBankResolved && (
-                      <div style={{ padding: '10px 12px', backgroundColor: '#fef3c7', borderRadius: '10px', marginBottom: '10px', fontSize: '12px', color: '#92400e' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                          <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                          <span>
-                            Esta solicitud no tiene registrado el banco destino. <strong>No es un error del usuario</strong>: se
-                            perdió al crearse. Elegí abajo a qué banco entró la plata, mirando el comprobante.
-                          </span>
-                        </div>
-                        {/* Queda registrado QUIÉN eligió este banco y CUÁNDO: es una
-                            decisión manual sobre plata ajena, y dentro de seis meses
-                            es lo único que explica por qué entró a esa cuenta. */}
-                        <select
-                          value={bancoManual[r.transaction_id] || ''}
-                          onChange={(e) => setBancoManual((p) => ({ ...p, [r.transaction_id]: e.target.value }))}
-                          style={{ marginTop: '8px', width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d97706', fontSize: '13px', backgroundColor: '#fff' }}
-                          data-testid={`bank-select-${r.transaction_id}`}
-                        >
-                          <option value="">Elegí el banco…</option>
-                          {(accountingBanks || []).filter((b) => b.currency === 'VES').map((b) => (
-                            <option key={b.bank_id} value={b.bank_id}>{b.name}</option>
-                          ))}
-                        </select>
-                        {(accountingBanks || []).filter((b) => b.currency === 'VES').length === 0 && (
-                          /* Sin esto el boton queda gris para siempre y el operador
-                             no tiene como saber por que. */
-                          <div style={{ marginTop: '6px', fontSize: '11px' }}>
-                            No hay ningun banco en VES cargado en Contabilidad, asi que no hay nada
-                            que elegir. Cargalo en <strong>Contabilidad &rarr; Bancos</strong> y volve.
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>Últimos 3 dígitos de la referencia del comprobante</label>
-                      <input
-                        value={refDigits[r.transaction_id] || ''}
-                        onChange={(e) => checkRefDigits(r.transaction_id, e.target.value)}
-                        inputMode="numeric"
-                        maxLength={3}
-                        placeholder="000"
-                        style={{ width: '90px', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', letterSpacing: '3px', textAlign: 'center' }}
-                      />
-                      {refChecks[r.transaction_id] && refChecks[r.transaction_id].has_collision && (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', marginTop: '8px', fontSize: '12px', color: '#b91c1c' }}>
-                          <AlertCircle style={{ width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                          <span>
-                            Esta referencia ya aparece en una recarga de otro usuario (posible pago duplicado).
-                            {refChecks[r.transaction_id].first_registered && (
-                              <> Registrada primero por <strong>{refChecks[r.transaction_id].first_registered.user_name || refChecks[r.transaction_id].first_registered.user_email}</strong>. El saldo corresponde a quien la registró primero.</>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => handleApproveRechargeVES(r.transaction_id)}
-                        disabled={!hasBankResolved && !bancoManual[r.transaction_id]}
-                        style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: (!hasBankResolved && !bancoManual[r.transaction_id]) ? '#9ca3af' : '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: (!hasBankResolved && !bancoManual[r.transaction_id]) ? 'not-allowed' : 'pointer' }}
-                        data-testid={`approve-recharge-${r.transaction_id}`}
-                      >Aprobar</button>
-                      <button
-                        onClick={() => handleRejectRechargeVES(r.transaction_id)}
-                        style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: '#dc2626', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                        data-testid={`reject-recharge-${r.transaction_id}`}
-                      >Rechazar</button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <RecargasVES
+            accountingBanks={accountingBanks}
+            user={user}
+            onProcesada={loadData}
+          />
         )}
 
         {/* Partners Tab - Socios y Gestores */}
@@ -3073,57 +2855,6 @@ const [searchParams, setSearchParams] = useSearchParams();
       )}
 
       {/* Modal para rechazar recarga VES */}
-      {showRejectRechargeModal && (
-        <div style={{
-          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '16px', padding: '24px',
-            width: '100%', maxWidth: '440px', margin: '0 16px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-          }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '700', color: '#111827' }}>
-              Rechazar recarga
-            </h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#6b7280' }}>
-              Indica el motivo del rechazo. El usuario recibirá esta información.
-            </p>
-            <textarea
-              value={rejectRechargeReason}
-              onChange={(e) => setRejectRechargeReason(e.target.value)}
-              placeholder="Ej: Comprobante ilegible, monto incorrecto..."
-              rows={4}
-              style={{
-                width: '100%', padding: '12px', borderRadius: '10px',
-                border: '1.5px solid #d1d5db', fontSize: '14px',
-                fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
-                outline: 'none'
-              }}
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-              <button
-                onClick={() => { setShowRejectRechargeModal(false); setRejectRechargeReason(''); setRejectRechargeId(null); }}
-                style={{
-                  flex: 1, padding: '12px', borderRadius: '10px', border: '1.5px solid #d1d5db',
-                  backgroundColor: '#fff', color: '#374151', fontSize: '14px',
-                  fontWeight: '600', cursor: 'pointer'
-                }}
-              >Cancelar</button>
-              <button
-                onClick={handleConfirmRejectRechargeVES}
-                style={{
-                  flex: 1, padding: '12px', borderRadius: '10px', border: 'none',
-                  backgroundColor: '#dc2626', color: '#fff', fontSize: '14px',
-                  fontWeight: '700', cursor: 'pointer'
-                }}
-              >Confirmar rechazo</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

@@ -1671,36 +1671,39 @@ async def reporte_procesados(
 
 
 @router.get("/recharges/ves")
-async def get_all_ves_recharges(admin: User = Depends(get_super_admin)):
-    """Get all VES recharge requests"""
-    cursor = db.transactions.find({
-        "type": "recharge_ves",
-        "hidden_from_admin": {"$ne": True}
-    }).sort("created_at", -1).limit(100)
-    
-    recharges = []
-    async for tx in cursor:
-        user = await db.users.find_one({"user_id": tx.get("user_id")})
-        recharges.append({
-            "transaction_id": tx.get("transaction_id"),
-            "user_id": tx.get("user_id"),
-            "user_name": user.get("name") if user else "Unknown",
-            "user_email": user.get("email") if user else "",
-            "amount_ves": tx.get("amount_ves", 0),
-            "amount_ris": tx.get("amount_ris", 0),
-            "rate_used": tx.get("rate_used", 0),
-            "status": tx.get("status", "pending"),
-            "proof_image": tx.get("proof_image"),
-            "destination_bank": tx.get("destination_bank"),
-            "destination_bank_id": tx.get("destination_bank_id"),
-            "destination_bank_name": tx.get("destination_bank_name"),
-            "rejection_reason": tx.get("rejection_reason"),
-            "created_at": tx.get("created_at"),
-            "processed_at": tx.get("processed_at"),
-            "processed_by": tx.get("processed_by"),
-        })
-    
-    return recharges
+async def get_all_ves_recharges(
+    status: str = "pending",
+    q: str = "",
+    limit: int = 50,
+    skip: int = 0,
+    admin: User = Depends(get_super_admin),
+):
+    """La cola de recargas VES: una página filtrada, ordenada y contada.
+
+    Antes devolvía **las 100 más nuevas de cualquier estado** y la pantalla
+    filtraba las pendientes en el navegador. Eso escondía dos defectos:
+
+      - con cien recargas viejas y ninguna pendiente, la pantalla quedaba muda
+        (ni lista ni cartel de «no hay nada»);
+      - con más de cien recargas, la pendiente MAS VIEJA caía fuera del corte y
+        desaparecía de la cola. Plata esperando que nadie veía.
+
+    Ahora el filtro y el conteo van en la base, y las pendientes salen FIFO: la
+    que más esperó, primero.
+    """
+    from services import recargas_ves
+    try:
+        pagina = await recargas_ves.cola(
+            db, estado=status, texto=q, limite=limit, saltear=skip)
+    except recargas_ves.ColaInvalida as e:
+        raise HTTPException(status_code=e.http, detail=e.mensaje)
+    except Exception as e:
+        logger.error(f"recargas_ves: no se pudo leer la cola: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo leer la cola de recargas. Reintentá en un momento.")
+    pagina["counters"] = await recargas_ves.contadores(db)
+    return pagina
 
 
 @router.get("/recharges/ves/check-reference")
