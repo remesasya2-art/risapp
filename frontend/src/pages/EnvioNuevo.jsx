@@ -559,6 +559,23 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
         )}
       </div>
 
+      {/*
+        La dirección de despacho, A LA VISTA y ANTES de las dos aceptaciones.
+        Confirmar es comprometerse a mandar una caja a nombre de alguien, y
+        pedirle eso a una persona que no vio ese nombre es pedirle una firma en
+        blanco. Ya viene congelada en la respuesta de `cotizar`, en el mismo
+        momento que el precio: mostrarla acá no adelanta ninguna decisión.
+
+        Va en modo `previa`: se ve el texto, no el botón de copiar. La versión
+        accionable —«rotulá la caja así»— vive en el detalle del envío, que es
+        adonde se llega al confirmar. Estaba plegada acá abajo justamente
+        porque entregar el texto listo para copiar ANTES de confirmar hizo que
+        alguien lo copiara, fuera a despachar y no confirmara nunca: a las 48 h
+        la cotización se borra por TTL y la caja llega sin envío que la reclame.
+        Mostrar sin accionar resuelve las dos cosas.
+      */}
+      <Etiqueta retiro={cotizacion.retiro} previa />
+
       <div style={tarjeta}>
         <h3 style={titulo}>Antes de confirmar</h3>
         <p style={bajada}>
@@ -583,22 +600,6 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
           </Boton>
           <Boton variante="secundario" onClick={onVolver}>Cambiar algo</Boton>
         </div>
-        {/*
-          La dirección de despacho, PLEGADA y debajo de la confirmación. Es una
-          instrucción operativa —«copiá esto sobre la caja»— y ponerla antes del
-          botón hacía que alguien la copiara, fuera a despachar, y no confirmara
-          nunca: a las 48 h la cotización se borra sola por TTL y la caja llega a
-          Pacaraima sin ningún envío que la reclame.
-        */}
-        <details style={{ marginTop: '16px' }}>
-          <summary style={{ fontSize: '13px', color: COLOR.suave, cursor: 'pointer' }}>
-            Ver a dónde vas a despachar (después de confirmar)
-          </summary>
-          <div style={{ marginTop: '10px' }}>
-            <Etiqueta retiro={cotizacion.retiro} />
-          </div>
-        </details>
-
         {vence ? (
           <p style={{ ...bajada, margin: '12px 0 0 0', textAlign: 'center' }}>
             {/* Sin punto final: `toLocaleString` en es-AR ya termina en «p. m.»
