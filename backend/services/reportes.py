@@ -156,6 +156,55 @@ def _fila_btc(r: dict, usuario: dict) -> dict:
     }
 
 
+# Las etiquetas de marca de las billeteras de credito. Se leen del servicio en
+# vez de escribirlas aca para que no se despeguen del resto de la app.
+_CRIPTO = {"usdt": "USDT", "usdc": "USDC"}
+
+
+def _fila_cripto(deposito: dict, usuario: dict) -> dict:
+    """Un depósito de créditos USDT/USDC, o un ajuste manual.
+
+    SE SEPARAN EN DOS FLUJOS, y no es un capricho. Un depósito es plata que un
+    cliente puso; un ajuste manual lo tecleó un administrador desde el panel
+    —soporte, una prueba, una corrección—. Sumarlos en un mismo total dice que
+    entró plata que no entró, y es el número que después se usa para decidir.
+
+    Estas billeteras son SEPARADAS de `balance_ris`, que está en reales. No se
+    mezclan, y por eso el reporte tampoco las convierte a nada: el total de USDT
+    es en USDT.
+    """
+    clave = _texto(deposito.get("currency")).lower()
+    moneda = _CRIPTO.get(clave, clave.upper() or "?")
+    manual = _texto(deposito.get("source")) == "admin_manual"
+    return {
+        "flujo": f"{'Ajuste manual' if manual else 'Depósito'} {moneda}",
+        "fecha": deposito.get("credited_at"),
+        "referencia": deposito.get("order_id"),
+        "usuario": usuario.get("full_name") or usuario.get("name") or "",
+        "email": usuario.get("email", ""),
+        # De dónde salió: la red por la que llegó, o que lo puso una persona.
+        "contraparte": ("Crédito manual del panel" if manual
+                        else _texto(deposito.get("pay_currency")).upper()),
+        "documento": "",
+        "destino": _texto(deposito.get("admin_note")) if manual else "",
+        # `credit_amount` es lo que de verdad se acreditó —el webhook usa lo
+        # `actually_paid` cuando difiere de lo pedido— y `amount` es lo que el
+        # usuario había pedido depositar. Para un reporte de plata vale el
+        # primero.
+        "monto_origen": deposito.get("credit_amount") or deposito.get("amount"),
+        "unidad_origen": moneda,
+        # No hay conversión: el depósito acredita la MISMA moneda.
+        "monto_destino": None,
+        "unidad_destino": "",
+        "tasa": None,
+        "operador": _texto(deposito.get("admin_id")) if manual else "",
+        # Para una cripto el «comprobante» es el pago confirmado en la cadena por
+        # la pasarela. Un ajuste manual no tiene ninguno detrás, y esa diferencia
+        # es justo la que alguien quiere ver al auditar.
+        "comprobante": not manual,
+    }
+
+
 def _filas_envio(envio: dict, usuario: dict) -> list:
     """UN envío puede haber cobrado VARIAS veces: el inicial y el ajuste.
 
@@ -265,6 +314,22 @@ FUENTES = {
             "tiene_comprobante": {"$ne": [{"$ifNull": ["$comprobante_pago", None]}, None]},
         },
         "fila": _fila_btc,
+    },
+    "cripto": {
+        "etiqueta": "Créditos cripto (USDT / USDC)",
+        "coleccion": "crypto_deposits",
+        # `credited_at` y no `created_at`: la fecha del reporte es cuando la
+        # plata ENTRO, no cuando alguien abrio la pantalla de depositar. Un
+        # deposito iniciado el 31 y acreditado el 1 es del mes nuevo.
+        "campo_fecha": "credited_at",
+        # Solo lo acreditado. Un deposito `pending` es una intencion, no plata.
+        "filtro": {"credited": True},
+        "proyeccion": {
+            "_id": 0, "order_id": 1, "user_id": 1, "currency": 1,
+            "credited_at": 1, "credit_amount": 1, "amount": 1,
+            "pay_currency": 1, "source": 1, "admin_id": 1, "admin_note": 1,
+        },
+        "fila": _fila_cripto,
     },
     # El negocio que faltaba entero en el reporte viejo.
     "envios": {

@@ -578,3 +578,131 @@ def test_un_flujo_sin_destino_no_reporta_cero_sino_nada():
     total = r["totales"]["Envío — inicial"]
     assert total["total_destino"] == ""
     assert total["unidad_destino"] == ""
+
+
+# ─── 11. Los creditos cripto (USDT / USDC) ────────────────────────────────
+
+def sembrar_cripto(**extra):
+    doc = {"order_id": "credit_usdt_usr_ana_abc123", "user_id": "usr_ana",
+           "currency": "usdt", "amount": 100.0, "credit_amount": 99.5,
+           "status": "finished", "credited": True, "credited_at": DIA,
+           "pay_currency": "usdttrc20", "created_at": DIA}
+    doc.update(extra)
+    corre(BASE["db"].crypto_deposits.insert_one(doc))
+    return doc
+
+
+def test_los_depositos_de_cripto_entran_al_reporte():
+    """Faltaban: la pantalla mostraba las billeteras USDT y USDC y el reporte no
+    las contaba, así que el total de la app no era el total de la app."""
+    sembrar_cripto()
+    sembrar_cripto(order_id="credit_usdc_1", currency="usdc",
+                   credit_amount=250.0, pay_currency="usdcerc20")
+    r = reporte(flujos=["cripto"])
+
+    assert r["totales"]["Depósito USDT"]["total_origen"] == "99.50"
+    assert r["totales"]["Depósito USDT"]["unidad_origen"] == "USDT"
+    assert r["totales"]["Depósito USDC"]["total_origen"] == "250.00"
+    assert r["totales"]["Depósito USDC"]["unidad_origen"] == "USDC"
+
+
+def test_un_deposito_de_cripto_NO_se_convierte_a_nada():
+    """Estas billeteras son separadas de `balance_ris`, que está en reales. El
+    depósito acredita la MISMA moneda: inventarle un monto de destino sería
+    inventar una conversión que no ocurrió."""
+    sembrar_cripto()
+    r = reporte(flujos=["cripto"])
+    assert r["filas"][0]["monto_destino"] is None
+    assert r["totales"]["Depósito USDT"]["total_destino"] == ""
+
+
+def test_el_ajuste_manual_NO_se_suma_con_los_depositos():
+    """Un depósito es plata que puso un cliente; un ajuste manual lo tecleó un
+    administrador. Sumarlos dice que entró plata que no entró, y ese número se
+    usa para decidir.
+
+    MUTACIÓN: usar la misma etiqueta para los dos y este test se pone en rojo.
+    """
+    sembrar_cripto(credit_amount=99.5)
+    sembrar_cripto(order_id="manual_1", credit_amount=500.0,
+                   source="admin_manual", admin_id="usr_super",
+                   admin_note="reposición por soporte")
+    r = reporte(flujos=["cripto"])
+
+    assert r["totales"]["Depósito USDT"]["total_origen"] == "99.50"
+    assert r["totales"]["Ajuste manual USDT"]["total_origen"] == "500.00"
+
+
+def test_el_ajuste_manual_dice_quien_lo_hizo_y_que_no_tiene_pago_detras():
+    """Para una cripto el «comprobante» es el pago confirmado en la cadena. Un
+    ajuste manual no tiene ninguno, y esa diferencia es la que se audita."""
+    sembrar_cripto(order_id="manual_1", source="admin_manual",
+                   admin_id="usr_super", admin_note="reposición por soporte")
+    fila = reporte(flujos=["cripto"])["filas"][0]
+    assert fila["operador"] == "usr_super"
+    assert fila["comprobante"] is False
+    assert fila["contraparte"] == "Crédito manual del panel"
+    assert fila["destino"] == "reposición por soporte"
+
+
+def test_un_deposito_por_la_pasarela_dice_por_que_red_llego():
+    sembrar_cripto(pay_currency="usdttrc20")
+    fila = reporte(flujos=["cripto"])["filas"][0]
+    assert fila["contraparte"] == "USDTTRC20"
+    assert fila["comprobante"] is True
+
+
+def test_se_reporta_lo_ACREDITADO_y_no_lo_pedido():
+    """`credit_amount` es lo que de verdad entró —el webhook usa `actually_paid`
+    cuando difiere de lo pedido— y `amount` es lo que el usuario había pedido.
+    Para un reporte de plata vale el primero."""
+    sembrar_cripto(amount=100.0, credit_amount=87.25)
+    r = reporte(flujos=["cripto"])
+    assert r["totales"]["Depósito USDT"]["total_origen"] == "87.25"
+
+
+def test_un_deposito_sin_acreditar_no_es_plata_que_entro():
+    """Un depósito `pending` es una intención: el usuario abrió la pantalla y
+    nunca pagó."""
+    sembrar_cripto(order_id="pendiente_1", credited=False, credited_at=None,
+                   status="pending")
+    r = reporte(flujos=["cripto"])
+    assert r["operaciones"] == 0
+
+
+def test_una_acreditacion_FALLIDA_no_cuenta_aunque_tenga_fecha():
+    """El caso que de verdad justifica el filtro `credited: True`.
+
+    El webhook marca `credited: True` y pone `credited_at` ANTES de acreditar
+    (`routes/credits.py`: el `find_one_and_update` que reclama la orden). Si
+    `credit_user` después falla, vuelve `credited` a False **y deja
+    `credited_at` puesto**. O sea que en la base quedan documentos con fecha de
+    acreditación cuya plata NUNCA entró a la billetera.
+
+    La primera versión de este test seedeaba `credited_at=None`, así que lo
+    filtraba la FECHA y no la guarda: al mutar el filtro a `{}` el test seguía
+    en verde. El documento de acá es el real.
+    """
+    sembrar_cripto(order_id="fallido_1", credited=False, credited_at=DIA,
+                   credit_error="saldo_no_actualizado", credit_amount=999.0)
+    r = reporte(flujos=["cripto"])
+    assert r["operaciones"] == 0, (
+        "una acreditación fallida se está contando como plata que entró")
+
+
+def test_la_fecha_de_un_deposito_es_cuando_se_ACREDITO():
+    """Un depósito iniciado el 31 y acreditado el 1 es del mes nuevo: la plata
+    entró en el mes nuevo."""
+    sembrar_cripto(created_at=DIA - timedelta(days=3), credited_at=DIA)
+    assert reporte(flujos=["cripto"])["operaciones"] == 1
+    assert corre(rep.generar(db=BASE["db"], desde="2026-08-12", hasta="2026-08-12",
+                             flujos=["cripto"]))["operaciones"] == 0
+
+
+def test_la_cripto_aparece_cuando_no_se_filtra_nada():
+    """Sin elegir flujos entran todos: si la cripto se quedara afuera, el total
+    de la app seguiría sin ser el total de la app."""
+    sembrar_cripto()
+    sembrar_retiro()
+    flujos = {f["flujo"] for f in reporte()["filas"]}
+    assert "Depósito USDT" in flujos and "RIS → VES" in flujos
