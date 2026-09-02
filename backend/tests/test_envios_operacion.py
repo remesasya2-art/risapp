@@ -1007,3 +1007,178 @@ def test_la_cola_le_da_al_operador_la_foto_que_le_va_a_pedir_verificar():
     assert fila["comprobante_asset_id"] == "ast_abc"
     assert fila["foto_repetida_en"] == "env_xxx"
     assert fila["comprobante_verificado"] is False
+
+
+# ─── El ticket que se pega en la caja ─────────────────────────────────────
+
+def _con_agencia(base, direccion="Av. Bolívar, local 4", nombre="Centro"):
+    """La agencia VIVA en el catálogo, que es de donde sale la calle."""
+    base.agencias.filas.append({
+        "transportista_id": "trp_vzl", "codigo": "AG-01", "nombre": nombre,
+        "direccion": direccion, "ciudad": "El Tigre", "estado": "Anzoátegui",
+        "activa": True})
+    base.transportistas.filas.append({
+        "transportista_id": "trp_vzl", "nombre": "Transporte Zoom"})
+    return base
+
+
+def _envio_con_destino(**cambios):
+    destino = {"agencia_nombre": "Centro", "agencia_codigo": "AG-01",
+               "transportista_id": "trp_vzl", "estado_ve": "Anzoátegui",
+               "ciudad": "El Tigre",
+               "destinatario": {"nombre": "Ana Pérez", "documento": "V-12345678",
+                                "telefono": "+58 412 5551234"}}
+    return envio_base(estado="repesado", destino=destino, **cambios)
+
+
+def test_el_ticket_trae_a_quien_se_le_entrega_y_donde():
+    """Las dos cosas que alguien lee de parado con la caja en la mano."""
+    base = _con_agencia(db_completa(envios=[_envio_con_destino()]))
+    t = corre(op.ticket("env_aaa111", db=base))
+
+    assert t["destinatario"]["nombre"] == "Ana Pérez"
+    assert t["destinatario"]["documento"] == "V-12345678"
+    assert t["destinatario"]["telefono"] == "+58 412 5551234"
+    assert t["agencia"]["nombre"] == "Centro"
+    assert t["agencia"]["direccion"] == "Av. Bolívar, local 4"
+    assert t["agencia"]["transportista"] == "Transporte Zoom"
+
+
+def test_la_direccion_del_ticket_se_lee_viva_y_no_congelada():
+    """Es lo contrario de la etiqueta del tramo brasileño, y a propósito.
+
+    Aquella tiene que decir lo mismo que leyó el usuario cuando despachó: es un
+    compromiso con él. Esta se pega AHORA sobre una caja que sale AHORA, y tiene
+    que decir dónde está la agencia HOY. Si la agencia se mudó y el ticket sale
+    con la calle vieja, la caja va al lugar equivocado.
+
+    MUTACION: leer `destino.agencia_direccion` del envío en vez de ir a
+    `agencias` y este test se pone en rojo — el envío no tiene ese campo, así
+    que el ticket saldría siempre sin calle.
+    """
+    base = _con_agencia(db_completa(envios=[_envio_con_destino()]),
+                        direccion="La NUEVA, calle 5")
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["agencia"]["direccion"] == "La NUEVA, calle 5"
+    # Y el NOMBRE sí sale del envío, congelado: es con lo que el usuario eligió.
+    assert t["agencia"]["nombre"] == "Centro"
+
+
+def test_sin_agencia_en_el_catalogo_el_ticket_sale_igual():
+    """Un ticket incompleto se completa a mano en el mostrador; un ticket que no
+    se imprime frena la caja. La calle es lo único que se pierde."""
+    base = db_completa(envios=[_envio_con_destino()])   # sin agencias cargadas
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["agencia"]["direccion"] is None
+    assert t["agencia"]["nombre"] == "Centro"
+    assert t["destinatario"]["nombre"] == "Ana Pérez"
+
+
+def test_si_el_catalogo_no_se_puede_leer_el_ticket_sale_igual():
+    """Mongo caído no puede frenar una caja que ya está lista para viajar."""
+    base = _con_agencia(db_completa(envios=[_envio_con_destino()]))
+
+    class _Rota:
+        async def find_one(self, *a, **k):
+            raise RuntimeError("mongo caído")
+    base._c["agencias"] = _Rota()
+
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["agencia"]["direccion"] is None
+    assert t["destinatario"]["nombre"] == "Ana Pérez"
+
+
+def test_el_ticket_dice_si_hay_que_cobrarle_a_quien_recibe():
+    """En `destino` lo cobra el transportista en el mostrador."""
+    base = _con_agencia(db_completa(envios=[_envio_con_destino(
+        modalidad_flete="destino")]))
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["pago"]["modalidad"] == "destino"
+    assert t["pago"]["cobrar_al_recibir"] is True
+
+
+def test_en_prepago_el_ticket_dice_que_NO_se_cobra():
+    """Ya se pagó por remesa. Cobrarle de nuevo a quien retira es cobrar dos
+    veces el mismo tramo, y el que lo paga es alguien que ya pagó.
+
+    MUTACION: que `cobrar_al_recibir` sea siempre True y este test se pone en
+    rojo. Es el error caro de los dos: no cobrar cuando había que cobrar se
+    arregla con una llamada; cobrar de más ya salió del bolsillo de alguien.
+    """
+    base = _con_agencia(db_completa(envios=[_envio_con_destino(
+        modalidad_flete="prepago", flete={"estado": "acreditado",
+                                          "monto_ris": "40.00"})]))
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["pago"]["modalidad"] == "prepago"
+    assert t["pago"]["cobrar_al_recibir"] is False
+    assert t["pago"]["flete_estado"] == "acreditado"
+
+
+def test_el_ticket_dice_cuando_la_caja_NO_puede_salir():
+    """El papel se imprime antes de que la caja se cargue, así que tiene que
+    poder decir «esta no sale». Un ticket que se ve igual con la partida impaga
+    es un ticket que ayuda a despachar lo que no se puede despachar."""
+    con_deuda = _envio_con_destino(
+        cobros={"inicial": {"monto_ris": "132.00", "estado": "pendiente"},
+                "ajuste": None})
+    base = _con_agencia(db_completa(envios=[con_deuda]))
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["puede_salir"] is False
+    assert t["partidas_impagas"] == ["inicial"]
+
+
+def test_el_ticket_dice_si_el_peso_es_de_la_balanza_o_lo_declarado():
+    """Un peso sin origen en un papel que viaja es el que después nadie puede
+    defender."""
+    base = _con_agencia(db_completa(envios=[_envio_con_destino()]))
+    t = corre(op.ticket("env_aaa111", db=base))
+    assert t["paquete"]["peso_es_verificado"] is False
+    assert t["paquete"]["peso_kg"] == "2.30"
+
+    pesado = _envio_con_destino(envio_id="env_bbb222")
+    pesado["paquete"]["verificado"] = {"peso_kg": "3.10"}
+    base2 = _con_agencia(db_completa(envios=[pesado]))
+    t2 = corre(op.ticket("env_bbb222", db=base2))
+    assert t2["paquete"]["peso_es_verificado"] is True
+    assert t2["paquete"]["peso_kg"] == "3.10"
+
+
+def test_un_envio_que_no_existe_no_devuelve_un_ticket_en_blanco():
+    with pytest.raises(op.OperacionRechazada) as e:
+        corre(op.ticket("env_no_existe", db=db_completa()))
+    assert e.value.http == 404
+
+
+def test_el_ticket_nunca_mete_datos_de_una_persona_en_innerHTML():
+    """El nombre de quien recibe y la direccion los escribio una persona.
+
+    Meterlos en un `innerHTML` es dejar que un nombre con `<script>` corra en una
+    ventana que se abre con la sesion del operador. En `ticket.js` el HTML es una
+    cascara FIJA y los datos entran siempre por `textContent`, que no interpreta
+    nada.
+
+    Este test permite exactamente una asignacion a innerHTML —la de la cascara,
+    que es una constante del modulo— y falla ante cualquier otra. Se verifica
+    sobre el fuente porque el frontend no tiene runner de tests, y porque el dia
+    que alguien agregue un renglon al ticket la salida facil es interpolarlo.
+    """
+    import re
+
+    ruta = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", "..",
+        "frontend", "src", "components", "admin", "envios", "ticket.js"))
+    if not os.path.isfile(ruta):                              # pragma: no cover
+        pytest.skip("el frontend no esta en este arbol")
+    with open(ruta, encoding="utf-8") as f:
+        fuente = f.read()
+
+    asignaciones = re.findall(r"\.innerHTML\s*=\s*([^;\n]+)", fuente)
+    assert asignaciones == ["CASCARA"], (
+        "El ticket asigna a innerHTML algo que no es la cascara fija:\n  "
+        + "\n  ".join(asignaciones)
+        + "\nLos datos de una persona van por textContent (mira `poner`)."
+    )
+    # Y que no se cuele por la otra puerta.
+    for prohibido in ("insertAdjacentHTML", "outerHTML", "document.writeln"):
+        assert prohibido not in fuente, (
+            f"`{prohibido}` interpreta HTML igual que innerHTML. Usa textContent.")
