@@ -1819,8 +1819,16 @@ async def process_ves_recharge(
             raise HTTPException(status_code=404, detail="Banco destino no encontrado en contabilidad")
         
         # Register in bank ledger (VES received from user)
-        new_balance = bank["balance"] + amount_ves
-        await db.bank_accounts.update_one({"bank_id": bank_id}, {"$inc": {"balance": amount_ves}})
+        #
+        # Esta línea hacía `bank["balance"] + amount_ves`. Cuando la cuenta ya
+        # había pasado por el ajuste manual de contabilidad, su saldo es
+        # `Decimal128`, y sumarle un float levanta TypeError: un 500 crudo, sin
+        # `try` que lo atrape, en TODA aprobación sobre esa cuenta. Además el
+        # saldo posterior salía de una lectura anterior al `$inc`, así que con
+        # dos aprobaciones simultáneas las dos anotaban el mismo número.
+        from services import bancos
+        _mov = await bancos.ajustar(db, bank_id, amount_ves)
+        new_balance = to_float(_mov["saldo_nuevo"])
         
         user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "full_name": 1, "name": 1, "email": 1})
         user_name = user_doc.get("full_name", user_doc.get("name", user_doc.get("email", ""))) if user_doc else ""
@@ -1830,7 +1838,7 @@ async def process_ves_recharge(
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "type": "entrada",
             "concept": f"Recarga VES de {user_name} (TX {transaction_id[:8]})",
-            "amount": amount_ves, "balance_after": round(new_balance, 2),
+            "amount": amount_ves, "balance_after": new_balance,
             "reference": transaction_id, "notes": "Recarga VES aprobada",
             "created_at": datetime.now(timezone.utc).isoformat()
         })

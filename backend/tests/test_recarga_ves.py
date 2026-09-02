@@ -30,6 +30,7 @@ import sys
 import types
 
 import pytest
+from decimal import Decimal
 
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _BACKEND)
@@ -276,8 +277,15 @@ def test_crear_y_aprobar_acredita_el_saldo_contra_el_banco_correcto():
     assert to_float(from_db(usuario["balance_ris"])) == pytest.approx(100.0)
 
     # El banco recibió los bolívares.
+    #
+    # Se lee con `from_db` y no comparando el valor crudo: el saldo bancario se
+    # guarda en `Decimal128` —lo escribe `services/bancos.py`, para que sumar
+    # centavos no derive— y `Decimal128('15000.00') == 15000.0` es falso aunque
+    # el monto sea exacto. Afirmar sobre el tipo guardado en vez de sobre el
+    # monto ata el test a un detalle de almacenamiento.
     banco = corre(BASE["db"].bank_accounts.find_one({"bank_id": "bank_ve01"}))
-    assert banco["balance"] == pytest.approx(1000.0 + 14000.0)
+    from services.money import from_db as _from_db
+    assert _from_db(banco["balance"]) == Decimal("15000.00")
 
     # Y quedó el asiento, contra el banco correcto.
     asiento = corre(BASE["db"].bank_ledger.find_one({"reference": tx_id}))
