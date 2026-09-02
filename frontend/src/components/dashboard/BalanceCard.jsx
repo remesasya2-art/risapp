@@ -13,8 +13,8 @@ import useCountUp from '../../hooks/useCountUp';
  *
  * Props:
  *   balance: number
- *   risToVes: number (1 RIS = X Bs)
- *   bcvUsdVes: number (1 USD = X Bs)
+ *   risToVes: number (1 RIS = X Bs)  ← el que convierte el SALDO a bolívares
+ *   bcvUsdVes: number (1 USD = X Bs)  ← solo para la referencia en dólares
  *   updatedAt: Date | string  (when rates were last updated)
  *   isMobile: boolean
  */
@@ -28,6 +28,19 @@ export default function BalanceCard({
   const [hidden, setHidden] = useState(false);
   const animated = useCountUp(balance, 900);
   const accent = '#5B4FE9';
+
+  // El saldo en bolivares es `saldo x risToVes`, y NO `saldo x bcvUsdVes`.
+  //
+  // Esta tarjeta multiplicaba por la tasa del DOLAR, o sea que trataba 1 RIS
+  // como 1 USD. El RIS esta denominado en reales —`rate_engine` llama a
+  // `ris_to_ves` la tasa BRL->VES, y la contabilidad valua la circulacion RIS
+  // con ella— asi que el numero salia inflado por el factor BRL/USD: unas 5,8
+  // veces. Con 206,85 RIS y las tasas de hoy mostraba Bs 165.723 cuando el
+  // saldo vale Bs 28.545.
+  //
+  // No era un redondeo: era una unidad equivocada, en el numero mas grande de
+  // la pantalla principal, y sobre el saldo de una persona.
+  const enBolivares = balance * risToVes;
 
   return (
     <div
@@ -121,11 +134,13 @@ export default function BalanceCard({
             value={`1 RIS = ${fmt(risToVes)} Bs`}
             label="Tasa RIS"
           />
-          {bcvUsdVes > 0 && (
+          {risToVes > 0 && (
             <RatePill
               icon={<TrendingUp size={13} />}
-              value={hidden ? 'Bs ••••••' : `Bs ${fmt(animated * bcvUsdVes)}`}
-              label="Equivalente BCV de tu saldo"
+              value={hidden ? 'Bs ••••••' : `Bs ${fmt(animated * risToVes)}`}
+              label={bcvUsdVes > 0
+                ? `Tu saldo en bolívares · ≈ $${fmt(enBolivares / bcvUsdVes)} al BCV`
+                : 'Tu saldo en bolívares'}
             />
           )}
         </div>
