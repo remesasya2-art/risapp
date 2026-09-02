@@ -66,6 +66,15 @@ PUBLICO = {
     "devuelto": ("Devuelto", "El paquete volvió al remitente."),
     "cancelado": ("Cancelado", "El envío se canceló."),
     "siniestrado": ("Con un problema", "Estamos gestionando una incidencia."),
+    # NO es un estado: es la anotacion que deja `envios_entrega_final` cuando el
+    # equipo ve en la web del transportista que la caja se retiro. No esta en
+    # `TRANSICIONES` ni en `TERMINALES` a proposito —no lo movimos nosotros— y
+    # esta aca porque para el usuario ES el ultimo paso de su envio: para el, el
+    # envio termina cuando su familiar tiene la caja, no cuando nosotros la
+    # dejamos en un mostrador.
+    "retiro_final": (
+        "Retirado en la oficina",
+        "El destinatario ya tiene el paquete."),
 }
 
 # Los estados por los que se avisa. No es "todos": un aviso por cada movimiento
@@ -190,6 +199,15 @@ async def avisar(envio: dict, estado: str, db=None) -> str | None:
         return None
 
     numero = (envio or {}).get("display_id")
+    envio_id = (envio or {}).get("envio_id")
+
+    # CUANTO. Un aviso que dice «quedó un cobro pendiente» y no dice el número
+    # obliga a entrar a averiguarlo, y el que no entra no paga. Solo se calcula
+    # donde significa algo: en los demás estados no hay ninguna deuda que contar.
+    deuda = _deuda_pendiente(envio) if estado == "pago_pendiente" else None
+    if deuda:
+        cuerpo = f"{cuerpo} Son {deuda} {(envio or {}).get('moneda') or 'RIS'}."
+
     try:
         from services.notifications import create_notification
         return await create_notification(
@@ -200,11 +218,45 @@ async def avisar(envio: dict, estado: str, db=None) -> str | None:
             # El token NO va en el aviso. Un aviso se reenvía y se captura de
             # pantalla; el link de seguimiento es una credencial y vive en la
             # pantalla del envío, detrás de la sesión.
-            data={"envio_id": envio.get("envio_id"), "display_id": numero,
-                  "estado": estado},
+            data={"envio_id": envio_id, "display_id": numero,
+                  "estado": estado,
+                  **({"a_pagar_ris": deuda} if deuda else {}),
+                  # A DONDE LLEVA. Hasta ahora el aviso era un callejón sin
+                  # salida: la campana abría un cartel que decía «tu paquete
+                  # espera un pago» y no tenía ni un botón. El usuario tenía que
+                  # adivinar que la pantalla del envío existe y cómo llegar.
+                  #
+                  # La acción viaja EN el aviso y no en un `switch` de la
+                  # pantalla de notificaciones: ese switch es de otro módulo, no
+                  # conoce los envíos, y cada módulo nuevo tendría que ir a
+                  # editarlo. La pantalla valida que el destino sea interno.
+                  **({"accion": {
+                      "label": "Pagar ahora" if deuda else "Ver el envío",
+                      "path": f"/envios/{envio_id}"}} if envio_id else {})},
         )
     except Exception as e:
         logger.error(f"envios: no se pudo avisar el cambio a {estado}: {e}")
+        return None
+
+
+def _deuda_pendiente(envio: dict) -> str | None:
+    """Lo que falta pagar, como texto listo para un mensaje. None si no hay.
+
+    Nunca lanza: esto corre dentro de `avisar`, y un aviso que revienta por no
+    poder sumar un número no puede tumbar el movimiento del paquete.
+    """
+    try:
+        from services.envios_estados import partidas_impagas
+        from services.money import quantize_money, to_decimal
+        cobros = (envio or {}).get("cobros") or {}
+        total = to_decimal(0)
+        for partida in partidas_impagas(envio):
+            total += to_decimal((cobros.get(partida) or {}).get("monto_ris"))
+        if not total.is_finite() or total <= 0:
+            return None
+        return str(quantize_money(total))
+    except Exception as e:                                    # pragma: no cover
+        logger.warning(f"envios: no se pudo calcular la deuda para el aviso: {e}")
         return None
 
 

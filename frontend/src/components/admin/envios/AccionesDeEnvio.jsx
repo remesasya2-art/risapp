@@ -57,6 +57,31 @@ function problemaDeMedida(valor) {
 
 const medidasCompletas = (m) => MEDIDAS.every(([k]) => !problemaDeMedida(m[k]));
 
+/**
+ * El monto del flete es PLATA, no una medida de la caja.
+ *
+ * Estaba validado con `problemaDeMedida`, que corta en 1000 porque «ese número
+ * no parece de un paquete» — cierto para los centímetros de una caja y falso
+ * para un flete. Un flete de mil y pico dejaba el botón muerto para siempre,
+ * con un cartel que hablaba de paquetes y que además NO SE VEÍA: el campo no
+ * mostraba el error, así que desde afuera el botón simplemente no andaba.
+ *
+ * El tope de acá es contra el error de tipeo —pegar un teléfono en el campo del
+ * monto—, no contra un flete caro. El servidor no tiene tope: acepta cualquier
+ * positivo finito, y este número no puede ser más estricto que él sin volver a
+ * trabar lo que el servidor sí aceptaría.
+ */
+function problemaDeMonto(valor) {
+  const texto = String(valor ?? '').trim();
+  if (!texto) return 'Falta.';
+  if (texto.includes(',')) return 'Usá punto, no coma: 1500.50';
+  if (!NUMERO.test(texto)) return 'Solo números.';
+  const n = Number(texto);
+  if (n <= 0) return 'Tiene que ser mayor que cero.';
+  if (n > 1000000) return 'Revisá el monto: parece un error de tipeo.';
+  return null;
+}
+
 const num = (v) => (v === null || v === undefined || v === '' ? '—' : fmt(v, 2));
 
 export default function AccionesDeEnvio({ envio, parada, borrador, onBorrador, onListo }) {
@@ -525,8 +550,13 @@ function Flete({ envio, onListo }) {
             nadie puede cotizarlo antes.
           </p>
           <div style={grilla('200px')}>
-            <Campo etiqueta="Monto que pidió el transportista">
-              <Texto value={monto} onChange={(e) => setMonto(e.target.value)} />
+            {/* El error SE MUESTRA. Un botón deshabilitado sin un cartel al
+                lado es indistinguible de un botón roto. */}
+            <Campo etiqueta="Monto que pidió el transportista"
+              ayuda="En RIS. Es lo que el usuario tiene que mandar como remesa."
+              error={monto.trim() ? problemaDeMonto(monto) : null}>
+              <Texto value={monto} onChange={(e) => setMonto(e.target.value)}
+                inputMode="decimal" invalido={!!problemaDeMonto(monto)} />
             </Campo>
             <Campo etiqueta="Referencia de la remesa"
               ayuda="Al acreditar: la remesa se ejecuta fuera de este módulo y nadie de acá puede verla llegar.">
@@ -535,7 +565,7 @@ function Flete({ envio, onListo }) {
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
             <Boton variante="secundario" cargando={enviando}
-              disabled={!!problemaDeMedida(monto)}
+              disabled={!!problemaDeMonto(monto)}
               onClick={() => llamar(
                 () => api.put(`/admin/envios/envios/${envio.envio_id}/flete`,
                   { monto_ris: monto }), 'Flete registrado')}>
@@ -559,6 +589,15 @@ function Flete({ envio, onListo }) {
                 etiqueta="Vi la remesa acreditada, y entiendo que esto no se puede deshacer"
                 ayuda="La remesa se ejecuta fuera de este módulo: acá nadie la puede verificar." />
             </div>
+            {/* Mismo criterio que el monto: si el botón está gris, que el
+                cartel diga por qué. */}
+            {(!confirmado || !referencia.trim()) ? (
+              <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: COLOR.suave }}>
+                Para poder marcarla: {!referencia.trim() ? 'cargá la referencia de la remesa'
+                  : ''}{(!referencia.trim() && !confirmado) ? ' y ' : ''}
+                {!confirmado ? 'tildá la confirmación de arriba' : ''}.
+              </p>
+            ) : null}
             <Boton variante="peligro" cargando={enviando}
               disabled={!confirmado || !referencia.trim()}
               onClick={() => llamar(

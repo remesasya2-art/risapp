@@ -533,3 +533,108 @@ def test_el_modulo_no_menciona_ninguna_marca():
                   encoding="utf-8").read().lower()
     for marca in ("mrw", "correios", "zoom", "tealca", "domesa"):
         assert marca not in fuente
+
+
+# ─── El aviso tiene que llevar a algun lado ───────────────────────────────
+
+def _con_deuda(monto="45.00"):
+    import copy
+    envio = copy.deepcopy(ENVIO)
+    envio["estado"] = "pago_pendiente"
+    envio["cobros"] = {"inicial": {"monto_ris": "132.00", "estado": "pagado"},
+                       "ajuste": {"monto_ris": monto, "estado": "pendiente"}}
+    return envio
+
+
+def test_el_aviso_lleva_a_donde_se_paga():
+    """Hasta ahora el aviso era un callejon sin salida.
+
+    La campana abria un cartel que decia «tu paquete espera un pago» y no tenia
+    ni un boton: `getNotificationAction` es un switch por tipo y no tiene el caso
+    `envio`, asi que devolvia null. El usuario tenia que adivinar que la pantalla
+    del envio existe y como llegar.
+
+    La accion viaja EN el aviso —y no en el switch de la pantalla— para que cada
+    modulo decida a donde lleva el suyo sin editar un archivo de otro.
+    """
+    base = db_completa()
+    corre(seg.avisar(_con_deuda(), "pago_pendiente", db=base))
+    accion = base.notifications.filas[0]["data"]["accion"]
+    assert accion["path"] == "/envios/env_aaa111"
+    assert accion["label"] == "Pagar ahora"
+
+
+def test_el_aviso_de_un_estado_sin_deuda_lleva_al_envio_igual():
+    base = db_completa()
+    corre(seg.avisar(ENVIO, "en_transito_int", db=base))
+    accion = base.notifications.filas[0]["data"]["accion"]
+    assert accion["path"] == "/envios/env_aaa111"
+    assert accion["label"] == "Ver el envío"
+
+
+def test_el_aviso_de_pago_dice_CUANTO():
+    """Un aviso que dice «quedo un cobro pendiente» y no dice el numero obliga a
+    entrar a averiguarlo, y el que no entra no paga."""
+    base = db_completa()
+    corre(seg.avisar(_con_deuda("45.00"), "pago_pendiente", db=base))
+    aviso = base.notifications.filas[0]
+    assert "45.00" in aviso["message"]
+    assert aviso["data"]["a_pagar_ris"] == "45.00"
+
+
+def test_la_deuda_del_aviso_suma_TODAS_las_partidas_impagas():
+    """Con dos partidas impagas, decir solo una es decirle al usuario que pague
+    de menos y dejarle el paquete parado igual."""
+    envio = _con_deuda("45.00")
+    envio["cobros"]["inicial"] = {"monto_ris": "132.00", "estado": "pendiente"}
+    base = db_completa()
+    corre(seg.avisar(envio, "pago_pendiente", db=base))
+    assert base.notifications.filas[0]["data"]["a_pagar_ris"] == "177.00"
+
+
+def test_un_estado_sin_deuda_no_inventa_un_monto():
+    base = db_completa()
+    corre(seg.avisar(ENVIO, "en_transito_int", db=base))
+    assert "a_pagar_ris" not in base.notifications.filas[0]["data"]
+
+
+def test_una_deuda_ilegible_no_tumba_el_aviso():
+    """Esto corre dentro de `avisar`, y un aviso que revienta por no poder sumar
+    un numero no puede tumbar el movimiento del paquete."""
+    envio = _con_deuda()
+    envio["cobros"]["ajuste"]["monto_ris"] = "no-es-un-numero"
+    base = db_completa()
+    assert corre(seg.avisar(envio, "pago_pendiente", db=base)) is not None
+    assert base.notifications.filas[0]["user_id"] == "usr_ana"
+
+
+def test_el_destino_del_aviso_siempre_es_una_ruta_interna():
+    """El `path` sale de la base y termina en `navigate`. Si pudiera ser
+    absoluto, una fila de `notifications` seria un redirect a donde sea."""
+    base = db_completa()
+    for estado in seg.AVISOS:
+        base.notifications.filas.clear()
+        corre(seg.avisar(_con_deuda(), estado, db=base))
+        path = base.notifications.filas[0]["data"]["accion"]["path"]
+        assert path.startswith("/") and not path.startswith("//")
+        assert ":" not in path
+
+
+def test_la_pantalla_de_notificaciones_valida_el_destino():
+    """La otra mitad de la guarda, del lado que hace `navigate`.
+
+    El backend hoy solo escribe rutas internas, pero la pantalla no puede confiar
+    en eso: lee una fila de la base, y el dia que otro modulo emita un aviso con
+    un `path` absoluto —o alguien escriba uno a mano en la coleccion— seria un
+    redirect abierto.
+    """
+    ruta = os.path.abspath(os.path.join(
+        _BACKEND, "..", "frontend", "src", "pages", "Notifications.jsx"))
+    if not os.path.isfile(ruta):                              # pragma: no cover
+        pytest.skip("el frontend no esta en este arbol")
+    with open(ruta, encoding="utf-8") as f:
+        fuente = f.read()
+    assert "destinoInterno" in fuente, (
+        "La pantalla dejo de validar el destino de los avisos.")
+    for guarda in ("startsWith('//')", "includes(':')", "startsWith('/')"):
+        assert guarda in fuente, f"Falta la guarda `{guarda}` en destinoInterno."

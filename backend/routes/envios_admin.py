@@ -44,8 +44,8 @@ from models.envios_config import (Transportista, Agencia, CuentaBancaria,
                                   Colaborador, ConfigPuntoOrigen, ESQUEMAS)
 from models.envios_tarifa import TarifaEnvio, TarifaBorrador, CajaDePrueba
 from services import (envios_catalogo, envios_comprobante, envios_config,
-                      envios_operacion, envios_origenes, envios_rentabilidad,
-                      envios_retiro, envios_tarifa_editor)
+                      envios_entrega_final, envios_operacion, envios_origenes,
+                      envios_rentabilidad, envios_retiro, envios_tarifa_editor)
 from services.envios_archivos import (MIGRACION_LOTE_MAX,
                                       MIGRACION_LOTE_POR_DEFECTO)
 from services.envios_catalogo import invalidar_cache
@@ -1084,7 +1084,8 @@ def _operacion(e: Exception):
         return HTTPException(e.http, e.mensaje)
     from services.envios_archivos import ArchivoRechazado
     from services.envios_cobros import CobroImposible
-    if isinstance(e, (CobroImposible, ArchivoRechazado)):
+    if isinstance(e, (CobroImposible, ArchivoRechazado,
+                      envios_entrega_final.RetiroInvalido)):
         return HTTPException(e.http, e.mensaje)
     logger.error(f"envios: operación falló: {e}")
     return HTTPException(503, "No se pudo completar. Reintentá en un momento.")
@@ -1228,6 +1229,60 @@ async def ver_ticket(envio_id: str, admin: User = Depends(get_crm_user)):
     """
     try:
         return await envios_operacion.ticket(envio_id)
+    except Exception as e:
+        raise _operacion(e)
+
+
+@router.get("/envios/historial")
+async def ver_historial(estado: str = None, buscar: str = None,
+                        saltear: int = 0,
+                        admin: User = Depends(get_crm_user)):
+    """Los envíos, del más nuevo al más viejo. Para buscar, no para operar.
+
+    La cola muestra UN estado y sirve para mover paquetes. Esto contesta la otra
+    pregunta, la que llega por teléfono: «¿qué pasó con mi envío?».
+
+    La búsqueda es por `display_id` o por código de objeto —los dos con índice
+    único— y no por nombre: un regex sobre la colección entera, en una pantalla
+    que alguien deja abierta y refresca, es un incidente esperando al día que
+    haya cien mil envíos.
+    """
+    try:
+        return await envios_entrega_final.historial(
+            estado=estado, buscar=buscar, saltear=saltear)
+    except Exception as e:
+        raise _operacion(e)
+
+
+class RetiroFinal(BaseModel):
+    retirado_por: str = Field(min_length=3, max_length=120)
+    retirado_at: str = Field(default="", max_length=40)
+    documento: str = Field(default="", max_length=40)
+    nota: str = Field(default="", max_length=500)
+    fuente: str = Field(default="", max_length=60)
+
+
+@router.post("/envios/{envio_id}/retiro-final")
+async def registrar_retiro_final(envio_id: str, datos: RetiroFinal,
+                                 admin: User = Depends(get_crm_user)):
+    """Anota que el destinatario retiró la caja en la oficina, y le avisa.
+
+    **No es una transición.** El envío se queda en `entregado_transportista`,
+    que es terminal: nuestro servicio terminó cuando la caja quedó en el
+    mostrador. Esto es una OBSERVACIÓN — alguien del equipo leyó la web del
+    transportista— y por eso vive en un bloque aparte y deja su propia línea en
+    la bitácora, con un `a_estado` que no existe en la máquina de estados.
+
+    El motivo de que exista: para el usuario el envío no terminó cuando nosotros
+    lo entregamos, sino cuando su familiar tiene la caja. Esa parte pasa en un
+    mostrador al que no tenemos acceso, y hasta ahora se quedaba en la cabeza de
+    quien la miró.
+    """
+    try:
+        return await envios_entrega_final.registrar(
+            admin, envio_id, retirado_por=datos.retirado_por,
+            retirado_at=datos.retirado_at, documento=datos.documento,
+            nota=datos.nota, fuente=datos.fuente)
     except Exception as e:
         raise _operacion(e)
 

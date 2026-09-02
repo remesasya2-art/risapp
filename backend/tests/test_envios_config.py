@@ -345,6 +345,10 @@ ESCRITURAS_DEL_OPERADOR = (
     # El monto del flete lo carga el operador parado en el mostrador: hasta ese
     # momento ese precio no existe.
     "cargar_flete",
+    # Quien retiro la caja en la oficina del transportista. Lo averigua el mismo
+    # equipo que mueve paquetes, entrando a la web del transportista, y no mueve
+    # saldo ni cierra nada: el envio ya estaba cerrado. Es una ANOTACION.
+    "registrar_retiro_final",
 )
 
 # Las escrituras que mueven SALDO REAL o cierran un envio. Exigen `admin` y no
@@ -536,6 +540,9 @@ RUTAS_QUE_NO_TOCAN_LO_QUE_SE_LEE = (
     "cargar_costo_viaje",
     # Desviar un envio y registrar el flete tocan UN envio, no la configuracion.
     "desviar_envio", "cargar_flete", "acreditar_flete",
+    # El retiro en la oficina tambien: escribe un bloque en UN envio y manda un
+    # aviso. No hay catalogo, limite ni precio que dependa de eso.
+    "registrar_retiro_final",
     # El almacen de las fotos no lo lee ninguna pantalla cacheada: mueve bytes de
     # Mongo al bucket y no cambia un precio, un limite ni una direccion. Probar
     # la conexion, ademas, no escribe nada del negocio.
