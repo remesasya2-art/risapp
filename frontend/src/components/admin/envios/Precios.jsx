@@ -214,11 +214,21 @@ export default function Precios() {
             <Texto value={borrador.tarifa_minima ?? '0'}
               onChange={(e) => cambiar('tarifa_minima', e.target.value)} />
           </Campo>
-          <Campo etiqueta="Modo">
+          {/* «Solo por peso» hacía pensar que el volumen se ignoraba y que el
+              motor estaba roto. No se ignora: el peso facturable YA es el mayor
+              entre el real y el volumétrico. La diferencia entre los dos modos
+              es cuántas TABLAS hay, no si se mira el volumen. */}
+          <Campo etiqueta="Modo"
+            ayuda={(borrador.modo_tarifa || 'peso') === 'peso_o_volumen'
+              ? 'Se cotiza con las dos tablas y se cobra la más cara. En este modo la tabla de kilos usa el peso REAL, porque el volumen ya lo cobra su propia tabla.'
+              : 'Una sola tabla. El volumen no se ignora: entra por el peso facturable, que es el mayor entre el real y el volumétrico.'}>
             <Seleccion value={borrador.modo_tarifa || 'peso'}
               onChange={(e) => cambiar('modo_tarifa', e.target.value)}
-              opciones={[{ valor: 'peso', texto: 'Solo por peso' },
-                { valor: 'peso_o_volumen', texto: 'La mayor entre peso y volumen' }]} />
+              opciones={[
+                { valor: 'peso',
+                  texto: 'Una tabla, por peso facturable (el mayor entre real y volumétrico)' },
+                { valor: 'peso_o_volumen',
+                  texto: 'Dos tablas, una de kg y otra de m³: se cobra la más cara' }]} />
           </Campo>
           <Campo etiqueta="Moneda">
             <Texto value={borrador.moneda || 'RIS'}
@@ -261,14 +271,25 @@ export default function Precios() {
               opciones={[{ valor: 'porcentual', texto: 'Porcentual (%)' },
                 { valor: 'fijo', texto: `Fijo (${borrador.moneda || 'RIS'} por envío)` }]} />
           </Campo>
+          {/* Decía «Margen (%)» y esperaba una FRACCIÓN: 0,15 es 15 %. Quien
+              escribía 20 pensando en 20 % era rechazado al publicar, así que
+              nunca hubo riesgo de cobrar un 2000 %, pero la etiqueta engañaba.
+              Se corrige la ETIQUETA y no la unidad a propósito: reinterpretar el
+              0.15 que ya está publicado como 0,15 % sería bajar el margen a la
+              nada en el despliegue, sin que nadie lo pida. */}
           <Campo
             etiqueta={borrador.margen?.tipo === 'fijo'
-              ? `Margen (${borrador.moneda || 'RIS'})` : 'Margen (%)'}
-            ayuda="Se aplica sobre el subtotal.">
+              ? `Margen (${borrador.moneda || 'RIS'})` : 'Margen (fracción)'}
+            ayuda={borrador.margen?.tipo === 'fijo'
+              ? 'Se suma al subtotal.'
+              : 'Se aplica sobre el subtotal, y se escribe como fracción: 0.15 es 15 %.'}>
             <Texto value={borrador.margen?.valor ?? '0'}
               onChange={(e) => cambiar('margen', {
                 ...(borrador.margen || { tipo: 'porcentual' }), valor: e.target.value,
               })} />
+            {borrador.margen?.tipo !== 'fijo' ? (
+              <EnPorciento valor={borrador.margen?.valor} />
+            ) : null}
           </Campo>
         </div>
 
@@ -325,6 +346,25 @@ function Vigente({ vigente, origen }) {
     </div>
   );
 }
+
+/** Lo que la fracción significa, mientras se escribe.
+ *
+ * Es la mitad barata de arreglar la etiqueta: decir «fracción» evita el error,
+ * pero ver «= 15 %» debajo del campo lo hace obvio sin leer la ayuda. Un valor
+ * que no se puede leer como número no muestra nada — no dice «= NaN %» ni
+ * bloquea: de rechazarlo ya se encarga el servidor al publicar, con su mensaje.
+ */
+function EnPorciento({ valor }) {
+  const n = Number(String(valor ?? '').replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  const pct = n * 100;
+  return (
+    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+      = {Number.isInteger(pct) ? pct : pct.toFixed(2).replace(/\.?0+$/, '')} %
+    </div>
+  );
+}
+
 
 function Simulador({ sucio, onPublicado }) {
   const [cajas, setCajas] = useState(CAJAS_POR_DEFECTO);

@@ -187,8 +187,35 @@ export default function Transportistas() {
   );
 }
 
+/** Lo que se manda al servidor, a partir de lo que hay en el formulario.
+ *
+ * Es una función aparte de `guardar` para poder construir DOS: el cuerpo de lo
+ * que está en pantalla y el de lo que se cargó. Comparar esos dos es lo que
+ * dice si hay algo para guardar. Compararlos a ellos y no a los estados crudos
+ * importa: el formulario tiene un '' donde el documento tiene un null, y esas
+ * diferencias de forma marcarían como editada una ficha que nadie tocó.
+ */
+const cuerpoDeLaFicha = (datos) => ({
+  nombre: datos.nombre, rol: datos.rol, activo: datos.activo,
+  orden: datos.orden === '' ? 1 : Number(datos.orden),
+  moneda: datos.moneda || null,
+  regla_peso: {
+    ...nuloSiVacio(datos.regla_peso, REGLA_OPCIONAL),
+    // Sin `|| 5000`: `Number('')` es 0 y `0 || 5000` es 5000, así que borrar
+    // el campo para retipearlo y guardar grababa 5000 con un toast verde. El
+    // divisor cambia el peso facturable de todo bulto grande y liviano, que
+    // es justo lo que cada empresa cotiza distinto.
+    divisor: datos.regla_peso.divisor === '' ? null : Number(datos.regla_peso.divisor),
+  },
+  limites: nuloSiVacio(datos.limites, Object.keys(NUEVO.limites)),
+  plantilla_rastreo: datos.plantilla_rastreo || null,
+  fuente_referencia: datos.fuente_referencia || null,
+  notas: datos.notas || null,
+});
+
+
 function Ficha({ transportista, nuevo, onListo, onCancelar }) {
-  const [datos, setDatos] = useState(() => ({
+  const inicial = () => ({
     ...NUEVO, ...transportista,
     moneda: transportista.moneda || '',
     plantilla_rastreo: transportista.plantilla_rastreo || '',
@@ -197,30 +224,25 @@ function Ficha({ transportista, nuevo, onListo, onCancelar }) {
     regla_peso: { ...NUEVO.regla_peso, ...(transportista.regla_peso || {}),
       umbral_cubado_kg: transportista.regla_peso?.umbral_cubado_kg || '' },
     limites: { ...NUEVO.limites, ...(transportista.limites || {}) },
-  }));
+  });
+  const [datos, setDatos] = useState(inicial);
+  // Lo que había cuando se abrió la ficha, o lo que devolvió el último guardado.
+  // Es contra esto que se decide si hay algo para guardar.
+  const [base, setBase] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
 
+  // Un clic accidental sobre «Guardar» reescribía la ficha entera y dejaba línea
+  // de auditoría: una edición que nadie hizo, indistinguible de una real el día
+  // que alguien lea el log para entender quién cambió qué.
+  const sinCambios = !nuevo && (
+    JSON.stringify(cuerpoDeLaFicha(datos)) === JSON.stringify(cuerpoDeLaFicha(base)));
+
   const guardar = async () => {
+    if (sinCambios) return;          // La red, por si el botón se dispara igual.
     setGuardando(true);
     setError(null);
-    const cuerpo = {
-      nombre: datos.nombre, rol: datos.rol, activo: datos.activo,
-      orden: datos.orden === '' ? 1 : Number(datos.orden),
-      moneda: datos.moneda || null,
-      regla_peso: {
-        ...nuloSiVacio(datos.regla_peso, REGLA_OPCIONAL),
-        // Sin `|| 5000`: `Number('')` es 0 y `0 || 5000` es 5000, así que borrar
-        // el campo para retipearlo y guardar grababa 5000 con un toast verde. El
-        // divisor cambia el peso facturable de todo bulto grande y liviano, que
-        // es justo lo que cada empresa cotiza distinto.
-        divisor: datos.regla_peso.divisor === '' ? null : Number(datos.regla_peso.divisor),
-      },
-      limites: nuloSiVacio(datos.limites, Object.keys(NUEVO.limites)),
-      plantilla_rastreo: datos.plantilla_rastreo || null,
-      fuente_referencia: datos.fuente_referencia || null,
-      notas: datos.notas || null,
-    };
+    const cuerpo = cuerpoDeLaFicha(datos);
     try {
       if (nuevo) {
         await api.post('/admin/envios/transportistas', { ...cuerpo, codigo: datos.codigo });
@@ -233,7 +255,14 @@ function Ficha({ transportista, nuevo, onListo, onCancelar }) {
           `/admin/envios/transportistas/${transportista.transportista_id}`, cuerpo);
         // Se muestra lo que quedó, no lo que se tipeó: el servidor normaliza y
         // ver el valor efectivo es lo que evita creer que se guardó algo que no.
-        if (res.data?.valor) setDatos((d) => ({ ...d, ...res.data.valor }));
+        // Y la base se mueve con él: recién guardado no hay nada para guardar.
+        if (res.data?.valor) {
+          const efectivo = { ...datos, ...res.data.valor };
+          setDatos(efectivo);
+          setBase(efectivo);
+        } else {
+          setBase(datos);
+        }
         toast.success('Guardado');
       }
       onListo();
@@ -358,11 +387,17 @@ function Ficha({ transportista, nuevo, onListo, onCancelar }) {
 
       {error ? <Aviso tono="error" titulo="No se guardó" style={{ marginTop: '14px' }}>{error}</Aviso> : null}
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-        <Boton onClick={guardar} cargando={guardando}>
+      <div style={{ display: 'flex', gap: '10px', marginTop: '16px',
+        alignItems: 'center' }}>
+        <Boton onClick={guardar} cargando={guardando} disabled={sinCambios}>
           <Save size={14} /> {nuevo ? 'Crear' : 'Guardar'}
         </Boton>
         {onCancelar ? <Boton variante="secundario" onClick={onCancelar}>Cancelar</Boton> : null}
+        {sinCambios ? (
+          <span style={{ fontSize: '12px', color: COLOR.suave }}>
+            No hay cambios para guardar.
+          </span>
+        ) : null}
       </div>
     </div>
   );
