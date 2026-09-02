@@ -505,7 +505,10 @@ async def ticket(envio_id: str, db=None) -> dict:
             "modalidad": modalidad,
             "cobrar_al_recibir": modalidad == PAGO_A_DESTINO,
             "flete_estado": flete.get("estado") or "sin_registrar",
-            "flete_monto_ris": flete.get("monto_ris"),
+            # `monto_acordado_ris` es el nombre que ESCRIBE `cargar_flete`. Lo
+            # tuve mal —`monto_ris`— y el ticket de prepago salia siempre sin el
+            # monto, porque esa clave no existe en ningun envio.
+            "flete_monto_ris": flete.get("monto_acordado_ris"),
         },
         "paquete": {
             # El peso de la balanza propia si ya se repeso; si no, lo declarado.

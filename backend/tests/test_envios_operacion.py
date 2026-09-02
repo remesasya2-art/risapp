@@ -1107,11 +1107,16 @@ def test_en_prepago_el_ticket_dice_que_NO_se_cobra():
     """
     base = _con_agencia(db_completa(envios=[_envio_con_destino(
         modalidad_flete="prepago", flete={"estado": "acreditado",
-                                          "monto_ris": "40.00"})]))
+                                          "monto_acordado_ris": "40.00"})]))
     t = corre(op.ticket("env_aaa111", db=base))
     assert t["pago"]["modalidad"] == "prepago"
     assert t["pago"]["cobrar_al_recibir"] is False
     assert t["pago"]["flete_estado"] == "acreditado"
+    # El monto SALE. Lo tuve mal —leia `monto_ris`, que no existe en ningun
+    # envio— y el test lo daba por bueno porque yo mismo habia sembrado el
+    # campo con el nombre equivocado: un test que pasaba con el producto roto.
+    # El nombre real es el que escribe `cargar_flete`.
+    assert t["pago"]["flete_monto_ris"] == "40.00"
 
 
 def test_el_ticket_dice_cuando_la_caja_NO_puede_salir():
@@ -1182,3 +1187,46 @@ def test_el_ticket_nunca_mete_datos_de_una_persona_en_innerHTML():
     for prohibido in ("insertAdjacentHTML", "outerHTML", "document.writeln"):
         assert prohibido not in fuente, (
             f"`{prohibido}` interpreta HTML igual que innerHTML. Usa textContent.")
+
+
+def test_el_monto_del_flete_no_se_valida_con_el_validador_de_medidas():
+    """El flete es PLATA, no los centimetros de una caja.
+
+    Estaba validado con `problemaDeMedida`, que corta en 1000 porque «ese numero
+    no parece de un paquete»: cierto para el largo de una caja y falso para un
+    flete. Un flete de mil y pico dejaba el boton muerto para siempre, con un
+    cartel que hablaba de paquetes y que ademas no se veia, porque el campo no
+    mostraba el error. Desde afuera: «registro todo y no me deja continuar».
+
+    El servidor no tiene tope —`cargar_flete` acepta cualquier positivo finito—
+    asi que el frontend no puede ser mas estricto sin volver a trabar lo que el
+    servidor si aceptaria.
+    """
+    import re
+
+    ruta = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", "..",
+        "frontend", "src", "components", "admin", "envios", "AccionesDeEnvio.jsx"))
+    if not os.path.isfile(ruta):                              # pragma: no cover
+        pytest.skip("el frontend no esta en este arbol")
+    with open(ruta, encoding="utf-8") as f:
+        fuente = f.read()
+
+    # El componente del flete, no el aviso que lo nombra: el texto «El flete del
+    # tramo final» aparece antes, en el cartel de `Entregar`, y anclar ahi
+    # media un bloque que no contiene ninguna validacion.
+    inicio = fuente.find("function Flete(")
+    assert inicio > 0, "cambio el nombre del componente Flete; actualiza este test"
+    bloque = fuente[inicio:inicio + 4000]
+
+    assert "problemaDeMedida" not in bloque, (
+        "El monto del flete esta usando el validador de MEDIDAS, que corta en "
+        "1000 y habla de paquetes. Usa `problemaDeMonto`.")
+    assert "problemaDeMonto(monto)" in bloque, (
+        "El monto del flete tiene que validarse con `problemaDeMonto`.")
+
+    # Y que el tope del monto no sea mas chico que lo que el servidor acepta.
+    tope = re.search(r"function problemaDeMonto[\s\S]*?n > (\d+)", fuente)
+    assert tope and int(tope.group(1)) >= 1000000, (
+        "El tope del monto quedo por debajo de lo que `cargar_flete` acepta: "
+        "vuelve a trabar fletes que el servidor guardaria sin chistar.")
