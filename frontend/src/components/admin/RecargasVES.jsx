@@ -74,7 +74,7 @@ const SEMAFORO = {
   desconocida: { fondo: '#f3f4f6', borde: COLOR.borde, texto: COLOR.suave },
 };
 
-const POR_PAGINA = 25;
+const POR_PAGINA = 50;
 
 /** «hace 3 h», «hace 2 d». Un número de horas con dos decimales no le dice
  *  nada a nadie a las tres de la tarde. */
@@ -139,6 +139,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
   const [rechazando, setRechazando] = useState(null);
   const [motivo, setMotivo] = useState('');
   const [ocupado, setOcupado] = useState(null);
+  const [abierta, setAbierta] = useState(null);
 
   const vivo = useRef(true);
 
@@ -193,6 +194,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
   const cambiarEstado = (clave) => {
     setEstado(clave);
     setPagina(0);
+    setAbierta(null);
     setConfirmando(null);
     setRechazando(null);
   };
@@ -239,6 +241,15 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
     } finally { setOcupado(null); }
   };
 
+  /* Al cerrar una orden se abre la que sigue en la cola. Sin esto, procesar
+     cien es cerrar, buscar dónde estabas, y abrir la próxima: cien veces. */
+  const siguiente = (idActual) => {
+    const lista = datos.recharges || [];
+    const i = lista.findIndex((x) => x.transaction_id === idActual);
+    const proxima = lista.slice(i + 1).find((x) => x.status === 'pending');
+    setAbierta(proxima ? proxima.transaction_id : null);
+  };
+
   const aprobar = async (r) => {
     setOcupado(r.transaction_id);
     try {
@@ -249,6 +260,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
       });
       toast.success(`Acreditados ${fmt(r.amount_ris)} RI$ a ${r.user_name || r.user_email}`);
       setConfirmando(null);
+      siguiente(r.transaction_id);
       onProcesada?.();
       await cargar({ silencioso: true });
     } catch (e) {
@@ -267,6 +279,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
       toast.success('Recarga rechazada');
       setRechazando(null);
       setMotivo('');
+      siguiente(r.transaction_id);
       onProcesada?.();
       await cargar({ silencioso: true });
     } catch (e) {
@@ -394,7 +407,12 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
         </form>
       </div>
 
-      {/* ── La cola ────────────────────────────────────────────────────── */}
+      {/* ── La cola ────────────────────────────────────────────────────
+          Una FILA por orden, no una tarjeta. Con tarjetas, cien órdenes eran
+          doce mil píxeles de scroll: el operador perdía más tiempo buscando la
+          próxima que procesándola. El detalle completo sigue estando, pero se
+          abre sólo en la orden que se está trabajando —una por vez— así que la
+          página no crece con la cola. */}
       {cargando ? (
         <div style={{ ...tarjeta, padding: '56px', textAlign: 'center' }}>
           <RefreshCw size={28} style={{ color: COLOR.primario, animation: 'spin 1s linear infinite' }} />
@@ -419,32 +437,70 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
           </p>
         </div>
       ) : (
-        filas.map((r) => (
-          <Orden
-            key={r.transaction_id}
-            r={r}
-            user={user}
-            bancosVES={bancosVES}
-            digitos={digitos[r.transaction_id] || ''}
-            choque={choques[r.transaction_id]}
-            bancoElegido={bancoManual[r.transaction_id] || ''}
-            confirmando={confirmando === r.transaction_id}
-            rechazando={rechazando === r.transaction_id}
-            motivo={motivo}
-            ocupado={ocupado === r.transaction_id}
-            onDigitos={(v) => verificarDigitos(r.transaction_id, v)}
-            onBanco={(v) => setBancoManual((p) => ({ ...p, [r.transaction_id]: v }))}
-            onPedirConfirmacion={() => { setRechazando(null); setConfirmando(r.transaction_id); }}
-            onCancelarConfirmacion={() => setConfirmando(null)}
-            onAprobar={() => aprobar(r)}
-            onPedirRechazo={() => { setConfirmando(null); setMotivo(''); setRechazando(r.transaction_id); }}
-            onCancelarRechazo={() => { setRechazando(null); setMotivo(''); }}
-            onMotivo={setMotivo}
-            onRechazar={() => rechazar(r)}
-            onTomar={() => tomar(r)}
-            onLiberar={() => liberar(r)}
-          />
-        ))
+        <div style={{ ...tarjeta, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{
+              width: '100%', minWidth: '880px', borderCollapse: 'collapse',
+              fontSize: '13px',
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  {[
+                    { t: '#', ancho: '38px', der: false },
+                    { t: 'Orden', ancho: '116px', der: false },
+                    { t: 'Espera', ancho: '92px', der: false },
+                    { t: 'Usuario', ancho: 'auto', der: false },
+                    { t: 'Recibimos', ancho: '128px', der: true },
+                    { t: 'Acreditamos', ancho: '116px', der: true },
+                    { t: 'Banco', ancho: '160px', der: false },
+                    { t: '', ancho: '150px', der: true },
+                  ].map((c) => (
+                    <th key={c.t || 'acc'} style={{
+                      width: c.ancho, padding: '9px 10px',
+                      textAlign: c.der ? 'right' : 'left',
+                      fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.5px',
+                      textTransform: 'uppercase', color: COLOR.tenue,
+                      borderBottom: `1px solid ${COLOR.borde}`, whiteSpace: 'nowrap',
+                    }}>{c.t}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((r) => (
+                  <Fila
+                    key={r.transaction_id}
+                    r={r}
+                    user={user}
+                    bancosVES={bancosVES}
+                    abierta={abierta === r.transaction_id}
+                    onAbrir={() => {
+                      setConfirmando(null); setRechazando(null);
+                      setAbierta(abierta === r.transaction_id ? null : r.transaction_id);
+                    }}
+                    digitos={digitos[r.transaction_id] || ''}
+                    choque={choques[r.transaction_id]}
+                    bancoElegido={bancoManual[r.transaction_id] || ''}
+                    confirmando={confirmando === r.transaction_id}
+                    rechazando={rechazando === r.transaction_id}
+                    motivo={motivo}
+                    ocupado={ocupado === r.transaction_id}
+                    onDigitos={(v) => verificarDigitos(r.transaction_id, v)}
+                    onBanco={(v) => setBancoManual((p) => ({ ...p, [r.transaction_id]: v }))}
+                    onPedirConfirmacion={() => { setRechazando(null); setConfirmando(r.transaction_id); }}
+                    onCancelarConfirmacion={() => setConfirmando(null)}
+                    onAprobar={() => aprobar(r)}
+                    onPedirRechazo={() => { setConfirmando(null); setMotivo(''); setRechazando(r.transaction_id); }}
+                    onCancelarRechazo={() => { setRechazando(null); setMotivo(''); }}
+                    onMotivo={setMotivo}
+                    onRechazar={() => rechazar(r)}
+                    onTomar={() => tomar(r)}
+                    onLiberar={() => liberar(r)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* ── Paginación ─────────────────────────────────────────────────── */}
@@ -487,390 +543,432 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
   );
 }
 
-/* ─── Una orden ──────────────────────────────────────────────────────────
-   Sale a función aparte porque una orden es la unidad de trabajo: todo lo que
-   el operador necesita para decidir tiene que caber en una sola mirada, y
-   mezclarla con el armado de la cola hacía imposible leer ni una cosa ni la
-   otra. */
-function Orden({
-  r, user, bancosVES, digitos, choque, bancoElegido, confirmando, rechazando,
-  motivo, ocupado, onDigitos, onBanco, onPedirConfirmacion, onCancelarConfirmacion,
-  onAprobar, onPedirRechazo, onCancelarRechazo, onMotivo, onRechazar,
-  onTomar, onLiberar,
-}) {
+/* ─── Una orden: la fila, y su detalle ───────────────────────────────────
+   La fila entra en una línea y dice lo justo para decidir si hay que abrirla:
+   cuánto esperó, quién, cuánto, contra qué banco, y qué la traba. Lo demás
+   —comprobante, elección de banco, referencia, aprobar y rechazar— vive en el
+   detalle, que se abre en una sola orden por vez. */
+function Fila(props) {
+  const { r, user, abierta, onAbrir, ocupado, onTomar } = props;
   const pendiente = r.status === 'pending';
   const sem = SEMAFORO[r.antiguedad?.nivel] || SEMAFORO.desconocida;
   const mia = r.assigned_to && user?.user_id && r.assigned_to === user.user_id;
   const deOtro = r.assigned_to && !mia;
+  const banco = r.destination_bank_name || r.destination_bank || null;
+
+  const celda = {
+    padding: '8px 10px', borderBottom: `1px solid ${COLOR.borde}`,
+    verticalAlign: 'middle',
+  };
+
+  return (
+    <>
+      <tr
+        onClick={onAbrir}
+        style={{
+          cursor: 'pointer',
+          backgroundColor: abierta ? COLOR.primarioSuave : deOtro ? '#fafafa' : '#fff',
+        }}
+        data-testid={`recarga-${r.transaction_id}`}
+      >
+        <td style={{ ...celda, color: COLOR.tenue, ...CIFRAS, fontSize: '12px' }}>
+          {pendiente && r.posicion ? r.posicion : ''}
+        </td>
+
+        <td style={{ ...celda, whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ChevronRight size={13} style={{
+              color: COLOR.tenue, flexShrink: 0,
+              transform: abierta ? 'rotate(90deg)' : 'none', transition: 'transform .12s',
+            }} />
+            <span style={{ ...MONO, fontSize: '12.5px', fontWeight: 700, color: COLOR.texto }}>
+              {r.referencia}
+            </span>
+          </div>
+        </td>
+
+        <td style={{ ...celda, whiteSpace: 'nowrap' }}>
+          {pendiente ? (
+            <Chip {...sem} titulo={`Ingresó ${fechaHora(r.created_at)}`}>
+              <Clock size={10} />{espera(r.antiguedad)}
+            </Chip>
+          ) : (
+            <Chip
+              fondo={r.status === 'approved' ? COLOR.bienSuave : COLOR.maloSuave}
+              borde={r.status === 'approved' ? COLOR.bienBorde : COLOR.maloBorde}
+              texto={r.status === 'approved' ? COLOR.bien : COLOR.malo}
+              titulo={fechaHora(r.processed_at)}
+            >
+              {r.status === 'approved' ? <Check size={10} /> : <Ban size={10} />}
+              {r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+            </Chip>
+          )}
+        </td>
+
+        <td style={{ ...celda, maxWidth: 0 }}>
+          <div style={{
+            fontWeight: 600, color: COLOR.texto, overflow: 'hidden',
+            textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }} title={r.user_email}>
+            {r.user_name || r.user_email || '—'}
+          </div>
+        </td>
+
+        <td style={{ ...celda, textAlign: 'right', whiteSpace: 'nowrap', ...CIFRAS, fontWeight: 600 }}>
+          {fmt(r.amount_ves)}
+        </td>
+
+        <td style={{
+          ...celda, textAlign: 'right', whiteSpace: 'nowrap',
+          ...CIFRAS, fontWeight: 700, color: COLOR.bien,
+        }}>
+          {fmt(r.amount_ris)}
+        </td>
+
+        <td style={{ ...celda, maxWidth: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0,
+            color: banco ? COLOR.suave : COLOR.alerta, fontSize: '12px',
+          }} title={banco || 'sin registrar'}>
+            <Landmark size={11} style={{ flexShrink: 0 }} />
+            <span style={{
+              minWidth: 0, overflow: 'hidden',
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{banco || 'sin registrar'}</span>
+          </div>
+        </td>
+
+        {/* Lo que traba la orden, en iconos: se puede saltear una fila sin
+            abrirla. Con el detalle desplegado había que bajar hasta el fondo
+            de cada tarjeta para descubrir que faltaba el comprobante. */}
+        <td style={{ ...celda, textAlign: 'right', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            {pendiente && r.falta_comprobante ? (
+              <FileImage size={14} style={{ color: COLOR.malo }} aria-label="Sin comprobante" />
+            ) : null}
+            {pendiente && r.falta_banco ? (
+              <AlertTriangle size={14} style={{ color: COLOR.alerta }} aria-label="Sin banco" />
+            ) : null}
+            {deOtro ? (
+              <span title={`La tiene ${r.assigned_to_name || 'otro operador'}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '3px',
+                  fontSize: '11px', fontWeight: 700, color: COLOR.alerta,
+                  maxWidth: '84px', overflow: 'hidden', whiteSpace: 'nowrap',
+                }}>
+                <Lock size={11} />{r.assigned_to_name || 'otro'}
+              </span>
+            ) : mia ? (
+              <Chip fondo={COLOR.primarioSuave} borde={COLOR.primarioBorde} texto={COLOR.primario}>
+                <Lock size={10} />Tuya
+              </Chip>
+            ) : pendiente ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onTomar(); }}
+                disabled={ocupado}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  padding: '4px 9px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 700,
+                  border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                  color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
+                }}
+                data-testid={`tomar-${r.transaction_id}`}
+              >
+                <Lock size={11} />Tomar
+              </button>
+            ) : null}
+          </div>
+        </td>
+      </tr>
+
+      {abierta ? (
+        <tr>
+          <td colSpan={8} style={{
+            padding: 0, borderBottom: `1px solid ${COLOR.borde}`,
+            backgroundColor: '#fbfbfd',
+          }}>
+            <Detalle {...props} />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function Detalle(props) {
+  const {
+    r, user, bancosVES, digitos, choque, bancoElegido, confirmando, rechazando,
+    motivo, ocupado, onDigitos, onBanco, onPedirConfirmacion,
+    onCancelarConfirmacion, onAprobar, onPedirRechazo, onCancelarRechazo,
+    onMotivo, onRechazar, onLiberar,
+  } = props;
+
+  const pendiente = r.status === 'pending';
+  const mia = r.assigned_to && user?.user_id && r.assigned_to === user.user_id;
   const bancoResuelto = !r.falta_banco || !!bancoElegido;
   const puedeAprobar = bancoResuelto && !ocupado;
-
   const banco = r.destination_bank_name || r.destination_bank || null;
 
   return (
-    <div style={{ ...tarjeta, overflow: 'hidden' }} data-testid={`recarga-${r.transaction_id}`}>
+    <div style={{ padding: '14px 16px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
 
-      {/* Cabecera: identidad de la orden y su estado en la cola */}
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        gap: '12px', padding: '13px 16px', flexWrap: 'wrap',
-        borderBottom: `1px solid ${COLOR.borde}`,
-        backgroundColor: deOtro ? '#fafafa' : '#fff',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0 }}>
-          {pendiente && r.posicion ? (
-            <span style={{
-              ...CIFRAS, flexShrink: 0, width: '30px', height: '30px', borderRadius: '8px',
-              backgroundColor: '#f3f4f6', color: COLOR.suave, fontSize: '13px', fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }} title="Posición en la cola">{r.posicion}</span>
+      {/* El comprobante, grande: es lo único que hay que MIRAR. */}
+      {r.proof_image ? (
+        <a href={r.proof_image} target="_blank" rel="noreferrer" title="Abrir el comprobante"
+          style={{
+            flexShrink: 0, display: 'block', width: '150px', height: '150px',
+            borderRadius: '10px', overflow: 'hidden', cursor: 'zoom-in',
+            border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+          }}>
+          <img src={r.proof_image} alt="Comprobante"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </a>
+      ) : (
+        <div style={{
+          flexShrink: 0, width: '150px', height: '150px', borderRadius: '10px',
+          border: `1px dashed ${COLOR.maloBorde}`, backgroundColor: COLOR.maloSuave,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: '7px', textAlign: 'center', padding: '12px',
+        }}>
+          <FileImage size={22} style={{ color: COLOR.malo }} />
+          <span style={{ fontSize: '11.5px', fontWeight: 700, color: COLOR.malo, lineHeight: 1.3 }}>
+            Sin comprobante
+          </span>
+          <span style={{ fontSize: '10.5px', color: COLOR.malo, lineHeight: 1.3 }}>
+            No hay contra qué verificar
+          </span>
+        </div>
+      )}
+
+      <div style={{ flex: '1 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+        <div style={{
+          display: 'flex', gap: '18px', flexWrap: 'wrap', fontSize: '12px',
+          color: COLOR.suave, alignItems: 'center',
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <User size={12} />{r.user_email || '—'}
+          </span>
+          <span style={{ ...CIFRAS }}>1 RI$ = {fmt(r.rate_used)} VES</span>
+          <span>{fechaHora(r.created_at)} · Caracas</span>
+          {mia && pendiente ? (
+            <button type="button" onClick={onLiberar} disabled={ocupado} style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              padding: '3px 9px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 600,
+              border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+              color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
+            }}><LockOpen size={11} />Liberar</button>
           ) : null}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ ...MONO, fontSize: '13px', fontWeight: 700, color: COLOR.texto }}>
-                {r.referencia}
-              </span>
-              {pendiente ? (
-                <Chip {...sem} titulo={`Ingresó ${fechaHora(r.created_at)}`}>
-                  <Clock size={11} />{espera(r.antiguedad)}
-                </Chip>
-              ) : (
-                <Chip
-                  fondo={r.status === 'approved' ? COLOR.bienSuave : COLOR.maloSuave}
-                  borde={r.status === 'approved' ? COLOR.bienBorde : COLOR.maloBorde}
-                  texto={r.status === 'approved' ? COLOR.bien : COLOR.malo}
-                >
-                  {r.status === 'approved' ? <Check size={11} /> : <Ban size={11} />}
-                  {r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
-                </Chip>
-              )}
-            </div>
-            <p style={{ fontSize: '11.5px', color: COLOR.tenue, margin: '3px 0 0 0' }}>
-              {fechaHora(r.created_at)} · Caracas
-            </p>
-          </div>
         </div>
 
-        {pendiente ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {deOtro ? (
-              <Chip fondo={COLOR.alertaSuave} borde={COLOR.alertaBorde} texto={COLOR.alerta}>
-                <Lock size={11} />La tiene {r.assigned_to_name || 'otro operador'}
-              </Chip>
-            ) : mia ? (
-              <>
-                <Chip fondo={COLOR.primarioSuave} borde={COLOR.primarioBorde} texto={COLOR.primario}>
-                  <Lock size={11} />Tuya
-                </Chip>
-                <button type="button" onClick={onLiberar} disabled={ocupado} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '5px',
-                  padding: '6px 11px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
-                  border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
-                  color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
-                }}><LockOpen size={12} />Liberar</button>
-              </>
-            ) : (
-              <button type="button" onClick={onTomar} disabled={ocupado} style={{
-                display: 'inline-flex', alignItems: 'center', gap: '5px',
-                padding: '7px 13px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700,
-                border: `1px solid ${COLOR.primarioBorde}`, backgroundColor: COLOR.primarioSuave,
-                color: COLOR.primario, cursor: ocupado ? 'wait' : 'pointer',
-              }} data-testid={`tomar-${r.transaction_id}`}>
-                <Lock size={12} />Tomar
-              </button>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {/* Cuerpo: quién, cuánto, contra qué comprobante */}
-      <div style={{ padding: '15px 16px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-        {r.proof_image ? (
-          <a href={r.proof_image} target="_blank" rel="noreferrer" title="Abrir el comprobante"
-            style={{
-              flexShrink: 0, display: 'block', width: '104px', height: '104px',
-              borderRadius: '10px', overflow: 'hidden', cursor: 'zoom-in',
-              border: `1px solid ${COLOR.borde}`,
-            }}>
-            <img src={r.proof_image} alt="Comprobante"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-          </a>
-        ) : (
+        {!pendiente && (
           <div style={{
-            flexShrink: 0, width: '104px', height: '104px', borderRadius: '10px',
-            border: `1px dashed ${COLOR.maloBorde}`, backgroundColor: COLOR.maloSuave,
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', gap: '6px', textAlign: 'center', padding: '8px',
+            padding: '9px 12px', borderRadius: '9px', backgroundColor: '#fff',
+            border: `1px solid ${COLOR.borde}`, fontSize: '12px', color: COLOR.suave,
           }}>
-            <FileImage size={20} style={{ color: COLOR.malo }} />
-            <span style={{ fontSize: '10.5px', fontWeight: 700, color: COLOR.malo, lineHeight: 1.25 }}>
-              Sin comprobante
-            </span>
+            <div>Procesada {fechaHora(r.processed_at)}{r.processed_by ? ` · por ${r.processed_by}` : ''}</div>
+            {r.reference_digits ? <div>Referencia terminada en <strong style={MONO}>{r.reference_digits}</strong></div> : null}
+            {r.rejection_reason ? (
+              <div style={{ color: COLOR.malo, marginTop: '3px' }}>Motivo: {r.rejection_reason}</div>
+            ) : null}
+            {r.banco_elegido_a_mano ? (
+              <div style={{ color: COLOR.alerta, marginTop: '3px' }}>El banco lo eligió a mano un operador.</div>
+            ) : null}
           </div>
         )}
 
-        <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-            <User size={13} style={{ color: COLOR.tenue, flexShrink: 0 }} />
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: COLOR.texto, margin: 0 }}>
-                {r.user_name || r.user_email || '—'}
-              </p>
-              <p style={{ fontSize: '12px', color: COLOR.suave, margin: 0, wordBreak: 'break-all' }}>
-                {r.user_email}
-              </p>
-            </div>
-          </div>
+        {pendiente && (
+          <>
+            {r.falta_comprobante && (
+              <Aviso tono="malo" Icono={AlertTriangle}>
+                Confirmalo con el usuario antes de acreditar: sin comprobante no hay contra
+                qué verificar el monto ni la referencia.
+              </Aviso>
+            )}
 
-          {/* El movimiento, leído de izquierda a derecha: entra esto, sale esto. */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))',
-            gap: '1px', backgroundColor: COLOR.borde,
-            border: `1px solid ${COLOR.borde}`, borderRadius: '10px', overflow: 'hidden',
-          }}>
-            <div style={{ backgroundColor: '#fff', padding: '11px 13px' }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', color: COLOR.tenue, margin: 0 }}>
-                RECIBIMOS
-              </p>
-              <p style={{ fontSize: '19px', fontWeight: 700, color: COLOR.texto, margin: '3px 0 0 0', ...CIFRAS }}>
-                {fmt(r.amount_ves)} <span style={{ fontSize: '12px', color: COLOR.suave }}>VES</span>
-              </p>
-              <p style={{ fontSize: '11.5px', color: COLOR.suave, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Landmark size={11} />{banco || <em style={{ color: COLOR.alerta }}>banco sin registrar</em>}
-              </p>
-            </div>
-            <div style={{ backgroundColor: '#fff', padding: '11px 13px' }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', color: COLOR.tenue, margin: 0 }}>
-                ACREDITAMOS
-              </p>
-              <p style={{ fontSize: '19px', fontWeight: 700, color: COLOR.bien, margin: '3px 0 0 0', ...CIFRAS }}>
-                {fmt(r.amount_ris)} <span style={{ fontSize: '12px', color: COLOR.suave }}>RI$</span>
-              </p>
-              <p style={{ fontSize: '11.5px', color: COLOR.suave, margin: '4px 0 0 0', ...CIFRAS }}>
-                1 RI$ = {fmt(r.rate_used)} VES
-              </p>
-            </div>
-          </div>
-
-          {/* Cerrada: qué pasó y quién lo hizo. Estaba en la base y no se veía. */}
-          {!pendiente && (
-            <div style={{
-              marginTop: '10px', padding: '9px 12px', borderRadius: '9px',
-              backgroundColor: '#f9fafb', border: `1px solid ${COLOR.borde}`,
-              fontSize: '12px', color: COLOR.suave,
-            }}>
-              <div>Procesada {fechaHora(r.processed_at)}{r.processed_by ? ` · por ${r.processed_by}` : ''}</div>
-              {r.reference_digits ? <div>Referencia terminada en <strong style={MONO}>{r.reference_digits}</strong></div> : null}
-              {r.rejection_reason ? (
-                <div style={{ color: COLOR.malo, marginTop: '3px' }}>Motivo: {r.rejection_reason}</div>
-              ) : null}
-              {r.banco_elegido_a_mano ? (
-                <div style={{ color: COLOR.alerta, marginTop: '3px' }}>El banco lo eligió a mano un operador.</div>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Lo que traba esta orden, y el trabajo del operador */}
-      {pendiente && (
-        <div style={{ padding: '0 16px 15px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-          {!r.proof_image && (
-            <Aviso tono="malo" Icono={AlertTriangle}>
-              No hay comprobante adjunto. Confirmalo con el usuario antes de acreditar:
-              sin comprobante no hay contra qué verificar el monto ni la referencia.
-            </Aviso>
-          )}
-
-          {r.falta_banco && (
-            <div style={{
-              padding: '11px 13px', borderRadius: '10px',
-              backgroundColor: COLOR.alertaSuave, border: `1px solid ${COLOR.alertaBorde}`,
-            }}>
-              <div style={{ display: 'flex', gap: '8px', fontSize: '12.5px', color: COLOR.alerta }}>
-                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
-                <span>
-                  Esta orden no tiene registrado el banco destino. <strong>No es un error del
-                  usuario</strong>: se perdió al crearse. Elegí abajo a qué banco entró la plata,
-                  mirando el comprobante. Queda anotado quién lo eligió y cuándo.
-                </span>
-              </div>
-              <select
-                value={bancoElegido}
-                onChange={(e) => onBanco(e.target.value)}
-                style={{
-                  marginTop: '9px', width: '100%', padding: '10px 12px', borderRadius: '9px',
-                  border: `1px solid ${COLOR.alerta}`, fontSize: '13px', backgroundColor: '#fff',
-                }}
-                data-testid={`bank-select-${r.transaction_id}`}
-              >
-                <option value="">Elegí el banco…</option>
-                {bancosVES.map((b) => (
-                  <option key={b.bank_id} value={b.bank_id}>{b.name}</option>
-                ))}
-              </select>
-              {bancosVES.length === 0 && (
-                <div style={{ marginTop: '7px', fontSize: '11.5px', color: COLOR.alerta }}>
-                  No hay ningún banco en VES cargado en Contabilidad, así que no hay nada que
-                  elegir y esta orden no se puede aprobar. Cargalo en <strong>Contabilidad →
-                  Bancos</strong> y volvé.
+            {r.falta_banco && (
+              <div style={{
+                padding: '10px 12px', borderRadius: '10px',
+                backgroundColor: COLOR.alertaSuave, border: `1px solid ${COLOR.alertaBorde}`,
+              }}>
+                <div style={{ display: 'flex', gap: '8px', fontSize: '12px', color: COLOR.alerta }}>
+                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+                  <span>
+                    Sin banco destino registrado. <strong>No es un error del usuario</strong>: se
+                    perdió al crearse. Elegí a qué banco entró la plata, mirando el comprobante.
+                    Queda anotado quién lo eligió y cuándo.
+                  </span>
                 </div>
-              )}
-            </div>
-          )}
+                <select
+                  value={bancoElegido}
+                  onChange={(e) => onBanco(e.target.value)}
+                  style={{
+                    marginTop: '8px', width: '100%', maxWidth: '340px',
+                    padding: '8px 11px', borderRadius: '8px',
+                    border: `1px solid ${COLOR.alerta}`, fontSize: '13px', backgroundColor: '#fff',
+                  }}
+                  data-testid={`bank-select-${r.transaction_id}`}
+                >
+                  <option value="">Elegí el banco…</option>
+                  {bancosVES.map((b) => (
+                    <option key={b.bank_id} value={b.bank_id}>{b.name}</option>
+                  ))}
+                </select>
+                {bancosVES.length === 0 && (
+                  <div style={{ marginTop: '6px', fontSize: '11.5px', color: COLOR.alerta }}>
+                    No hay ningún banco en VES cargado en Contabilidad, así que esta orden no se
+                    puede aprobar. Cargalo en <strong>Contabilidad → Bancos</strong> y volvé.
+                  </div>
+                )}
+              </div>
+            )}
 
-          <div>
-            <label style={{
-              display: 'block', fontSize: '12px', fontWeight: 700,
-              color: COLOR.texto, marginBottom: '5px',
-            }}>
-              Últimos 3 dígitos de la referencia del comprobante
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: COLOR.texto }}>
+                Últimos 3 dígitos de la referencia
+              </label>
               <input
                 value={digitos}
                 onChange={(e) => onDigitos(e.target.value)}
                 inputMode="numeric" maxLength={3} placeholder="000"
                 style={{
-                  ...MONO, ...CIFRAS, width: '92px', padding: '10px 12px',
-                  borderRadius: '9px', border: `1px solid ${COLOR.bordeFuerte}`,
-                  fontSize: '16px', letterSpacing: '4px', textAlign: 'center',
+                  ...MONO, ...CIFRAS, width: '84px', padding: '8px 10px',
+                  borderRadius: '8px', border: `1px solid ${COLOR.bordeFuerte}`,
+                  fontSize: '15px', letterSpacing: '4px', textAlign: 'center',
                 }}
                 data-testid={`ref-${r.transaction_id}`}
               />
-              <span style={{ fontSize: '11.5px', color: COLOR.tenue, maxWidth: '340px' }}>
-                Es lo que permite detectar que el mismo pago se acredite dos veces.
+              <span style={{ fontSize: '11.5px', color: COLOR.tenue }}>
+                Detecta que el mismo pago se acredite dos veces.
               </span>
             </div>
+
             {choque?.has_collision && (
-              <div style={{ marginTop: '9px' }}>
-                <Aviso tono="malo" Icono={ShieldAlert}>
-                  Esta referencia ya aparece en una recarga de otro usuario: posible pago
-                  duplicado.
-                  {choque.first_registered ? (
-                    <> La registró primero <strong>{choque.first_registered.user_name
-                      || choque.first_registered.user_email}</strong>, y el saldo le corresponde
-                      a quien la registró primero.</>
-                  ) : null}
-                </Aviso>
-              </div>
+              <Aviso tono="malo" Icono={ShieldAlert}>
+                Esta referencia ya aparece en una recarga de otro usuario: posible pago
+                duplicado.
+                {choque.first_registered ? (
+                  <> La registró primero <strong>{choque.first_registered.user_name
+                    || choque.first_registered.user_email}</strong>, y el saldo le corresponde
+                    a quien la registró primero.</>
+                ) : null}
+              </Aviso>
             )}
-          </div>
 
-          {/* Acciones. Aprobar no acredita: abre la confirmación. */}
-          {!confirmando && !rechazando && (
-            <div style={{ display: 'flex', gap: '9px', flexWrap: 'wrap' }}>
-              <button
-                type="button" onClick={onPedirConfirmacion} disabled={!puedeAprobar}
-                title={!bancoResuelto ? 'Falta elegir el banco destino' : undefined}
-                style={{
-                  flex: '1 1 180px', padding: '12px', borderRadius: '10px', border: 'none',
-                  backgroundColor: puedeAprobar ? COLOR.bien : '#d1d5db',
-                  color: '#fff', fontSize: '13.5px', fontWeight: 700,
-                  cursor: puedeAprobar ? 'pointer' : 'not-allowed',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-                }}
-                data-testid={`approve-recharge-${r.transaction_id}`}
-              >
-                <Check size={16} />Aprobar y acreditar
-              </button>
-              <button
-                type="button" onClick={onPedirRechazo}
-                style={{
-                  flex: '1 1 140px', padding: '12px', borderRadius: '10px', cursor: 'pointer',
-                  border: `1px solid ${COLOR.maloBorde}`, backgroundColor: COLOR.maloSuave,
-                  color: COLOR.malo, fontSize: '13.5px', fontWeight: 700,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-                }}
-                data-testid={`reject-recharge-${r.transaction_id}`}
-              >
-                <Ban size={16} />Rechazar
-              </button>
-            </div>
-          )}
-
-          {confirmando && (
-            <div style={{
-              padding: '13px', borderRadius: '10px',
-              backgroundColor: COLOR.bienSuave, border: `1px solid ${COLOR.bienBorde}`,
-            }}>
-              <p style={{ fontSize: '13px', color: COLOR.texto, margin: '0 0 4px 0', fontWeight: 700 }}>
-                Vas a acreditar {fmt(r.amount_ris)} RI$ a {r.user_name || r.user_email}
-              </p>
-              <p style={{ fontSize: '12px', color: COLOR.suave, margin: '0 0 11px 0' }}>
-                Contra {fmt(r.amount_ves)} VES recibidos en {banco || bancosVES.find((b) => b.bank_id === bancoElegido)?.name || '—'}
-                {digitos ? <>, referencia terminada en <strong style={MONO}>{digitos}</strong></> : ', sin referencia cargada'}.
-                Esto acredita saldo real y no se puede deshacer.
-              </p>
+            {!confirmando && !rechazando && (
               <div style={{ display: 'flex', gap: '9px', flexWrap: 'wrap' }}>
                 <button
-                  type="button" onClick={onAprobar} disabled={ocupado}
+                  type="button" onClick={onPedirConfirmacion} disabled={!puedeAprobar}
+                  title={!bancoResuelto ? 'Falta elegir el banco destino' : undefined}
                   style={{
-                    flex: '1 1 170px', padding: '11px', borderRadius: '9px', border: 'none',
-                    backgroundColor: COLOR.bien, color: '#fff', fontSize: '13px', fontWeight: 700,
-                    cursor: ocupado ? 'wait' : 'pointer',
+                    flex: '0 1 220px', padding: '10px', borderRadius: '9px', border: 'none',
+                    backgroundColor: puedeAprobar ? COLOR.bien : '#d1d5db',
+                    color: '#fff', fontSize: '13px', fontWeight: 700,
+                    cursor: puedeAprobar ? 'pointer' : 'not-allowed',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
                   }}
-                  data-testid={`confirm-approve-${r.transaction_id}`}
+                  data-testid={`approve-recharge-${r.transaction_id}`}
                 >
-                  {ocupado ? 'Acreditando…' : 'Sí, acreditar ahora'}
+                  <Check size={15} />Aprobar y acreditar
                 </button>
                 <button
-                  type="button" onClick={onCancelarConfirmacion} disabled={ocupado}
+                  type="button" onClick={onPedirRechazo}
                   style={{
-                    flex: '0 1 120px', padding: '11px', borderRadius: '9px', cursor: 'pointer',
-                    border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
-                    color: COLOR.suave, fontSize: '13px', fontWeight: 600,
+                    flex: '0 1 150px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
+                    border: `1px solid ${COLOR.maloBorde}`, backgroundColor: '#fff',
+                    color: COLOR.malo, fontSize: '13px', fontWeight: 700,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
                   }}
-                >Volver</button>
+                  data-testid={`reject-recharge-${r.transaction_id}`}
+                >
+                  <Ban size={15} />Rechazar
+                </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {rechazando && (
-            <div style={{
-              padding: '13px', borderRadius: '10px',
-              backgroundColor: COLOR.maloSuave, border: `1px solid ${COLOR.maloBorde}`,
-            }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: COLOR.malo, marginBottom: '6px' }}>
-                Motivo del rechazo — se lo va a leer el usuario
-              </label>
-              <textarea
-                value={motivo} onChange={(e) => onMotivo(e.target.value)} rows={2}
-                placeholder="Ej.: el comprobante muestra 80.000 VES y la solicitud dice 100.000"
-                style={{
-                  width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-                  borderRadius: '9px', border: `1px solid ${COLOR.maloBorde}`,
-                  fontSize: '13px', resize: 'vertical', fontFamily: 'inherit',
-                }}
-                data-testid={`motivo-${r.transaction_id}`}
-              />
-              <div style={{ display: 'flex', gap: '9px', marginTop: '9px', flexWrap: 'wrap' }}>
-                <button
-                  type="button" onClick={onRechazar} disabled={ocupado || !motivo.trim()}
-                  style={{
-                    flex: '1 1 170px', padding: '11px', borderRadius: '9px', border: 'none',
-                    backgroundColor: motivo.trim() ? COLOR.malo : '#d1d5db', color: '#fff',
-                    fontSize: '13px', fontWeight: 700,
-                    cursor: (ocupado || !motivo.trim()) ? 'not-allowed' : 'pointer',
-                  }}
-                  data-testid={`confirm-reject-${r.transaction_id}`}
-                >
-                  {ocupado ? 'Rechazando…' : 'Rechazar la recarga'}
-                </button>
-                <button
-                  type="button" onClick={onCancelarRechazo} disabled={ocupado}
-                  style={{
-                    flex: '0 1 120px', padding: '11px', borderRadius: '9px', cursor: 'pointer',
-                    border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
-                    color: COLOR.suave, fontSize: '13px', fontWeight: 600,
-                  }}
-                >Volver</button>
+            {confirmando && (
+              <div style={{
+                padding: '12px', borderRadius: '10px',
+                backgroundColor: COLOR.bienSuave, border: `1px solid ${COLOR.bienBorde}`,
+              }}>
+                <p style={{ fontSize: '13px', color: COLOR.texto, margin: '0 0 3px 0', fontWeight: 700 }}>
+                  Vas a acreditar {fmt(r.amount_ris)} RI$ a {r.user_name || r.user_email}
+                </p>
+                <p style={{ fontSize: '12px', color: COLOR.suave, margin: '0 0 10px 0' }}>
+                  Contra {fmt(r.amount_ves)} VES recibidos en {banco || bancosVES.find((b) => b.bank_id === bancoElegido)?.name || '—'}
+                  {digitos ? <>, referencia terminada en <strong style={MONO}>{digitos}</strong></> : ', sin referencia cargada'}.
+                  Acredita saldo real y no se puede deshacer.
+                </p>
+                <div style={{ display: 'flex', gap: '9px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button" onClick={onAprobar} disabled={ocupado}
+                    style={{
+                      flex: '0 1 200px', padding: '10px', borderRadius: '9px', border: 'none',
+                      backgroundColor: COLOR.bien, color: '#fff', fontSize: '13px', fontWeight: 700,
+                      cursor: ocupado ? 'wait' : 'pointer',
+                    }}
+                    data-testid={`confirm-approve-${r.transaction_id}`}
+                  >
+                    {ocupado ? 'Acreditando…' : 'Sí, acreditar ahora'}
+                  </button>
+                  <button
+                    type="button" onClick={onCancelarConfirmacion} disabled={ocupado}
+                    style={{
+                      flex: '0 1 110px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
+                      border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                      color: COLOR.suave, fontSize: '13px', fontWeight: 600,
+                    }}
+                  >Volver</button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+
+            {rechazando && (
+              <div style={{
+                padding: '12px', borderRadius: '10px',
+                backgroundColor: COLOR.maloSuave, border: `1px solid ${COLOR.maloBorde}`,
+              }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: COLOR.malo, marginBottom: '5px' }}>
+                  Motivo del rechazo — se lo va a leer el usuario
+                </label>
+                <textarea
+                  value={motivo} onChange={(e) => onMotivo(e.target.value)} rows={2}
+                  placeholder="Ej.: el comprobante muestra 80.000 VES y la solicitud dice 100.000"
+                  style={{
+                    width: '100%', boxSizing: 'border-box', padding: '9px 11px',
+                    borderRadius: '8px', border: `1px solid ${COLOR.maloBorde}`,
+                    fontSize: '13px', resize: 'vertical', fontFamily: 'inherit',
+                  }}
+                  data-testid={`motivo-${r.transaction_id}`}
+                />
+                <div style={{ display: 'flex', gap: '9px', marginTop: '9px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button" onClick={onRechazar} disabled={ocupado || !motivo.trim()}
+                    style={{
+                      flex: '0 1 200px', padding: '10px', borderRadius: '9px', border: 'none',
+                      backgroundColor: motivo.trim() ? COLOR.malo : '#d1d5db', color: '#fff',
+                      fontSize: '13px', fontWeight: 700,
+                      cursor: (ocupado || !motivo.trim()) ? 'not-allowed' : 'pointer',
+                    }}
+                    data-testid={`confirm-reject-${r.transaction_id}`}
+                  >
+                    {ocupado ? 'Rechazando…' : 'Rechazar la recarga'}
+                  </button>
+                  <button
+                    type="button" onClick={onCancelarRechazo} disabled={ocupado}
+                    style={{
+                      flex: '0 1 110px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
+                      border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                      color: COLOR.suave, fontSize: '13px', fontWeight: 600,
+                    }}
+                  >Volver</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
