@@ -66,6 +66,15 @@ PUBLICO = {
     "devuelto": ("Devuelto", "El paquete volvió al remitente."),
     "cancelado": ("Cancelado", "El envío se canceló."),
     "siniestrado": ("Con un problema", "Estamos gestionando una incidencia."),
+    # NO es un estado: es la anotacion que deja `envios_entrega_final` cuando el
+    # equipo ve en la web del transportista que la caja se retiro. No esta en
+    # `TRANSICIONES` ni en `TERMINALES` a proposito —no lo movimos nosotros— y
+    # esta aca porque para el usuario ES el ultimo paso de su envio: para el, el
+    # envio termina cuando su familiar tiene la caja, no cuando nosotros la
+    # dejamos en un mostrador.
+    "retiro_final": (
+        "Retirado en la oficina",
+        "El destinatario ya tiene el paquete."),
 }
 
 # Los estados por los que se avisa. No es "todos": un aviso por cada movimiento

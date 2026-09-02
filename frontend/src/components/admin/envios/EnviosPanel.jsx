@@ -20,7 +20,8 @@
  */
 import { useSearchParams } from 'react-router-dom';
 import {
-  Building2, ClipboardCheck, FileText, HardDrive, MapPin, Table2, Tags, Users,
+  Building2, ClipboardCheck, FileText, HardDrive, MapPin, PackageSearch, Table2,
+  Tags, Users,
 } from 'lucide-react';
 import { COLOR } from '../../envios/estilos';
 import PuestaEnMarcha from './PuestaEnMarcha';
@@ -32,6 +33,7 @@ import Precios from './Precios';
 import Origenes from './Origenes';
 import Matrices from './Matrices';
 import Almacen from './Almacen';
+import Historial from './Historial';
 
 const PANTALLAS = [
   { clave: 'inicio', etiqueta: 'Puesta en marcha', Icono: ClipboardCheck },
@@ -46,6 +48,10 @@ const PANTALLAS = [
   { clave: 'origenes', etiqueta: 'Orígenes de Brasil', Icono: MapPin },
   { clave: 'matrices', etiqueta: 'Precios de referencia', Icono: Table2 },
   { clave: 'almacen', etiqueta: 'Fotos', Icono: HardDrive },
+  // El historial va al final: no es configuracion, es consulta. Pero vive aca y
+  // no en la cola porque la cola es para operar —un estado por vez— y esto es
+  // para buscar: «que paso con el envio de la senora que llamo».
+  { clave: 'historial', etiqueta: 'Historial de envíos', Icono: PackageSearch },
 ];
 
 /** `config/operacion` y `config/contenido` son la misma pantalla. */
@@ -104,6 +110,7 @@ export default function EnviosPanel() {
       {actual === 'origenes' ? <Origenes onIr={ir} /> : null}
       {actual === 'matrices' ? <Matrices /> : null}
       {actual === 'almacen' ? <Almacen /> : null}
+      {actual === 'historial' ? <Historial /> : null}
     </div>
   );
 }
