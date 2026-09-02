@@ -377,6 +377,12 @@ function Entregar({ envio, onListo }) {
   const MAX = 8 * 1024 * 1024;
   const fotoGrande = foto && foto.size > MAX;
 
+  // El candado del flete, ANTES del formulario y no despues de apretar.
+  // `puede_entregar` viene calculado del servidor, igual que `puede_salir` en
+  // Despachar: es el mismo dato que la transicion va a mirar, y no una segunda
+  // version de la regla escrita en el frontend que se despega con el tiempo.
+  const fleteTrabado = envio.puede_entregar === false;
+
   const entregar = async () => {
     setEnviando(true);
     const cuerpo = new FormData();
@@ -401,6 +407,17 @@ function Entregar({ envio, onListo }) {
         Acá termina el servicio de RIS App. La guía es obligatoria: sin ella, la única prueba
         de la entrega es la palabra del operador.
       </p>
+      {fleteTrabado ? (
+        <Aviso tono="alerta" titulo="Falta acreditar el flete del tramo final">
+          Este envío es <strong>prepago</strong>: el usuario le manda la remesa al
+          transportista de destino, y el paquete no se entrega hasta que esa remesa esté
+          acreditada. No es un error del sistema — es la regla, y es lo único que evita
+          soltar el paquete contra una remesa que nadie vio llegar.
+          {' '}<strong>Abrí «El flete del tramo final», acá abajo</strong>: registrá el monto
+          que pidió el transportista y, cuando veas la remesa, marcala como recibida. Ahí se
+          habilita este botón.
+        </Aviso>
+      ) : null}
       <div style={grilla('220px')}>
         <Campo etiqueta="Número de guía"
           ayuda="El que emite el transportista de destino. Al menos cuatro caracteres."
@@ -428,7 +445,8 @@ function Entregar({ envio, onListo }) {
         </Campo>
       </div>
       <Boton style={{ marginTop: '14px' }} onClick={entregar}
-        cargando={enviando} disabled={guia.trim().length < 4 || fotoGrande}>
+        cargando={enviando}
+        disabled={fleteTrabado || guia.trim().length < 4 || fotoGrande}>
         <PackageCheck size={14} /> Registrar la entrega
       </Boton>
     </div>
