@@ -535,3 +535,34 @@ def test_el_boton_de_aprobar_se_apaga_si_falta_el_banco(pantalla):
     """Dejarlo activo manda al operador a un 400 que ya se puede evitar."""
     assert "falta_banco" in pantalla
     assert "puedeAprobar" in pantalla
+
+
+def test_la_cola_se_dibuja_como_FILAS_y_no_como_tarjetas(pantalla):
+    """Con una tarjeta por orden, cien órdenes eran doce mil píxeles de scroll:
+    el operador perdía más tiempo buscando la próxima que procesándola."""
+    assert "<table" in pantalla
+    assert "filas.map((r) => (\n                  <Fila" in pantalla
+
+
+def test_el_detalle_se_abre_en_UNA_orden_por_vez(pantalla):
+    """Si se pudieran abrir varias, la página vuelve a crecer con la cola y el
+    rediseño no sirvió de nada."""
+    assert "abierta={abierta === r.transaction_id}" in pantalla
+    # Un único id abierto, no un conjunto: `useState(null)`, no `useState([])`.
+    assert "const [abierta, setAbierta] = useState(null);" in pantalla
+
+
+def test_la_fila_avisa_lo_que_la_traba_SIN_abrirla(pantalla):
+    """Poder saltear una orden trabada sin desplegarla es la mitad de la
+    velocidad cuando hay cien."""
+    cuerpo = pantalla[pantalla.index("function Fila("):pantalla.index("function Detalle(")]
+    assert "r.falta_comprobante" in cuerpo
+    assert "r.falta_banco" in cuerpo
+
+
+def test_al_cerrar_una_orden_se_abre_la_SIGUIENTE(pantalla):
+    """Sin esto, procesar cien es cerrar, buscar dónde estabas y abrir la
+    próxima, cien veces."""
+    assert "const siguiente = (idActual)" in pantalla
+    assert pantalla.count("siguiente(r.transaction_id);") == 2, \
+        "el avance automático tiene que estar en aprobar Y en rechazar"
