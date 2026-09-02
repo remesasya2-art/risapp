@@ -14,7 +14,7 @@
  *      Pacaraima, y eso se dice con todas las letras.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Camera, CheckCircle2, CreditCard, Link2, PackageSearch, RefreshCw,
 } from 'lucide-react';
@@ -30,6 +30,7 @@ import {
   COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo,
 } from '../components/envios/estilos';
 import { PIDE_ALGO, TITULOS, tonoDe } from '../components/envios/estados';
+import { useAuth } from '../contexts/AuthContext';
 
 const num = (v) => (v === null || v === undefined || v === '' ? '—' : fmt(v, 2));
 /** Los estados en los que todavía hay una caja que rotular. */
@@ -308,7 +309,17 @@ function Cobros({ envio }) {
 
 function Pagar({ envio, partidas, onListo }) {
   const [pagando, setPagando] = useState(null);
+  const navigate = useNavigate();
+  const { user, refreshUser } = useAuth();
   const total = partidas.reduce((s, p) => s + Number(p.monto_ris || 0), 0);
+
+  // EL SALDO, ANTES DE APRETAR. Hasta ahora el usuario apretaba «pagar con mi
+  // saldo», el servidor contestaba que no alcanzaba, y salía un toast que se iba
+  // solo a los tres segundos sin dejar a dónde ir. Saber cuánto tiene y cuánto
+  // falta es lo que convierte «no se pudo» en «me faltan 40».
+  const saldo = Number(user?.balance_ris || 0);
+  const alcanza = saldo >= total;
+  const falta = Math.max(0, total - saldo);
 
   const pagar = async (partida) => {
     setPagando(partida);
@@ -321,8 +332,12 @@ function Pagar({ envio, partidas, onListo }) {
       // quedar esperando un paquete que no sale de Pacaraima.
       if (data?.estado === 'pagado') {
         toast.success(`Pagado ${num(data.monto_ris)} ${envio.moneda}`);
+        // El saldo del contexto quedó viejo: sin esto la tarjeta sigue
+        // mostrando lo que había ANTES de pagar.
+        refreshUser?.();
       } else if (data?.motivo === 'saldo') {
         toast.error('No te alcanza el saldo. Cargá saldo y volvé a intentar.');
+        refreshUser?.();
       } else if (data?.motivo === 'en_curso') {
         toast('Ya se está procesando. Esperá unos segundos y actualizá.');
       } else {
@@ -344,17 +359,49 @@ function Pagar({ envio, partidas, onListo }) {
         no sale de Pacaraima</strong> — no es una multa ni un error: es la regla, y hasta
         que se salde el paquete espera ahí.
       </p>
-      {partidas.map((p) => (
-        <div key={p.partida} style={{ display: 'flex', gap: '12px', alignItems: 'center',
-          marginTop: '10px', flexWrap: 'wrap' }}>
-          <span style={{ flex: 1, fontSize: '14px', color: '#92400e' }}>
-            {p.concepto || p.partida} · <strong>{num(p.monto_ris)} {envio.moneda}</strong>
-          </span>
-          <Boton cargando={pagando === p.partida} onClick={() => pagar(p.partida)}>
-            <CheckCircle2 size={14} /> Pagar con mi saldo
+      <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '10px',
+        backgroundColor: '#fff', border: '1px solid #fde68a', fontSize: '13px',
+        color: '#92400e', display: 'flex', justifyContent: 'space-between', gap: '10px',
+        flexWrap: 'wrap' }}>
+        <span>Tu saldo: <strong>{num(saldo)} {envio.moneda}</strong></span>
+        {alcanza
+          ? <span>Alcanza para pagarlo.</span>
+          : <span><strong>Te faltan {num(falta)} {envio.moneda}.</strong></span>}
+      </div>
+
+      {!alcanza ? (
+        /* El camino de salida, ACÁ. Decirle «cargá saldo» en un toast que se va
+           solo, sin un botón, es mandarlo a buscar la pantalla de recargas por
+           su cuenta — y el que no la encuentra deja el paquete parado. */
+        <div style={{ marginTop: '12px' }}>
+          <Boton onClick={() => navigate('/recharge')} data-testid="recargar-saldo">
+            <CreditCard size={14} /> Recargar saldo
           </Boton>
+          <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#92400e' }}>
+            Cuando la recarga se acredite, volvé acá y pagá. El paquete te espera en
+            Pacaraima mientras tanto.
+          </p>
         </div>
-      ))}
+      ) : null}
+
+      {partidas.map((p) => {
+        // Cada partida se paga sola, asi que lo que decide su boton es SU monto
+        // y no el total: con dos partidas y saldo para una, la primera se puede
+        // pagar y la segunda no.
+        const alcanzaEsta = saldo >= Number(p.monto_ris || 0);
+        return (
+          <div key={p.partida} style={{ display: 'flex', gap: '12px', alignItems: 'center',
+            marginTop: '10px', flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, fontSize: '14px', color: '#92400e' }}>
+              {p.concepto || p.partida} · <strong>{num(p.monto_ris)} {envio.moneda}</strong>
+            </span>
+            <Boton cargando={pagando === p.partida} disabled={!alcanzaEsta}
+              onClick={() => pagar(p.partida)}>
+              <CheckCircle2 size={14} /> Pagar con mi saldo
+            </Boton>
+          </div>
+        );
+      })}
     </div>
   );
 }

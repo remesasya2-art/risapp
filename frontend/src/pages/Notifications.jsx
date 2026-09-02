@@ -97,7 +97,33 @@ export default function Notifications() {
     }
   };
 
+  /**
+   * Un destino interno, o null.
+   *
+   * El `path` viene de la BASE DE DATOS: lo escribió el módulo que emitió el
+   * aviso. Pasarlo a `navigate` sin mirarlo convierte cualquier fila de
+   * `notifications` en un redirect a donde sea — `//evil.com` y `http://…` los
+   * toma el router como externos, y `javascript:` corre. Se exige que empiece
+   * con UNA barra y que la segunda no lo sea.
+   */
+  const destinoInterno = (path) => {
+    if (typeof path !== 'string') return null;
+    const limpio = path.trim();
+    if (!limpio.startsWith('/') || limpio.startsWith('//')) return null;
+    if (limpio.includes(':')) return null;      // javascript:, data:, http:
+    return limpio;
+  };
+
   const getNotificationAction = (notification) => {
+    // Lo que el aviso trae puesto gana. Asi cada modulo decide a donde lleva su
+    // propio aviso sin venir a editar este switch, que no conoce ni los envios
+    // ni lo que venga despues. Los avisos viejos siguen cayendo en el switch.
+    const propia = notification?.data?.accion;
+    const path = destinoInterno(propia?.path);
+    if (path && propia?.label) {
+      return { label: String(propia.label).slice(0, 40), path };
+    }
+
     switch (notification.type) {
       case 'transaction':
       case 'recharge':
@@ -107,6 +133,12 @@ export default function Notifications() {
         return { label: 'Ver perfil', path: '/profile' };
       case 'support':
         return { label: 'Ir a soporte', path: '/support' };
+      case 'envio':
+        // Los avisos de envio guardados ANTES de que llevaran su destino
+        // adentro. Sin esto quedan como estaban: un cartel sin salida.
+        return notification?.data?.envio_id
+          ? { label: 'Ver el envío', path: `/envios/${notification.data.envio_id}` }
+          : { label: 'Ver mis envíos', path: '/envios' };
       default:
         return null;
     }
