@@ -447,3 +447,65 @@ def test_el_csv_de_matrices_de_un_transportista_que_no_existe_es_404():
         corre(ra.importar_matrices("trp_nada", _Archivo("clave,hasta_kg,precio\n"),
                                    False, _Admin()))
     assert e.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# El header de multipart, que no se puede olvidar.
+# ---------------------------------------------------------------------------
+
+def test_toda_subida_de_archivo_manda_el_header_de_multipart():
+    """Un `new FormData()` que se postea sin `Content-Type: multipart/form-data`
+    NO llega al servidor.
+
+    `utils/api.js` crea el cliente de axios con `Content-Type: application/json`
+    fijo. Con ese default, axios ve el FormData y toma la rama
+
+        return hasJSONContentType ? JSON.stringify(formDataToJSON(data)) : data
+
+    o sea: lo serializa a JSON. El archivo se convierte en `{}`, el parser de
+    multipart de FastAPI no ve un cuerpo, y `archivo: UploadFile = File(...)`
+    contesta **«Field required»** — un error que no nombra ni al archivo ni al
+    header y que manda a revisar el CSV, que no tiene nada malo.
+
+    Paso en produccion con la subida de origenes y con la de matrices. Es
+    invisible en revision —el codigo se lee perfecto— y ESLint no lo ve. Por eso
+    esto se verifica sobre el fuente: es la unica forma de que no vuelva.
+
+    (Poner el header sin boundary es correcto: axios detecta que falta el
+    boundary, borra el header y deja que el navegador lo ponga bien.)
+    """
+    import re
+
+    raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
+                                        "frontend", "src"))
+    if not os.path.isdir(raiz):                               # pragma: no cover
+        pytest.skip("el frontend no esta en este arbol")
+
+    sin_header = []
+    for base, _, archivos in os.walk(raiz):
+        for nombre in archivos:
+            if not nombre.endswith((".jsx", ".js")):
+                continue
+            ruta = os.path.join(base, nombre)
+            with open(ruta, encoding="utf-8") as f:
+                fuente = f.read()
+            for m in re.finditer(r"new FormData\(\)", fuente):
+                # El post que usa ese FormData esta a unas pocas lineas: se mira
+                # la ventana que va desde el `new FormData()` hasta el final de
+                # la llamada a `api.post(...)` que le sigue.
+                ventana = fuente[m.start():m.start() + 1200]
+                post = re.search(r"api\.(post|put|patch)\(", ventana)
+                if not post:
+                    continue
+                hasta = ventana[post.start():post.start() + 600]
+                if "multipart/form-data" not in hasta:
+                    linea = fuente[:m.start()].count("\n") + 1
+                    sin_header.append(f"{os.path.relpath(ruta, raiz)}:{linea}")
+
+    assert not sin_header, (
+        "Estas subidas mandan un FormData sin `Content-Type: multipart/form-data`, "
+        "asi que axios lo va a convertir a JSON y el archivo no va a llegar:\n  "
+        + "\n  ".join(sin_header)
+        + "\nAgregale el tercer argumento: "
+        "{ headers: { 'Content-Type': 'multipart/form-data' } }"
+    )

@@ -461,7 +461,12 @@ function ImportarCsv({ onListo }) {
       const cuerpo = new FormData();
       cuerpo.append('archivo', archivo);
       cuerpo.append('confirmar', confirmar ? 'true' : 'false');
-      const res = await api.post('/admin/envios/origenes/csv', cuerpo);
+      // El header va SI O SI: el cliente de axios tiene
+      // `Content-Type: application/json` por defecto, y con eso axios convierte
+      // el FormData a JSON (`formDataToJSON`) en vez de mandarlo como multipart.
+      // El archivo se pierde en el camino y el servidor contesta «Field required».
+      const res = await api.post('/admin/envios/origenes/csv', cuerpo,
+        { headers: { 'Content-Type': 'multipart/form-data' } });
       if (confirmar) {
         toast.success(`${res.data.nuevas} nuevas, ${res.data.actualiza} actualizadas`);
         setPlan(null);
