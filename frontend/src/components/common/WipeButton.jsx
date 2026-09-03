@@ -30,7 +30,10 @@ export const WipeButton = ({ mode = 'all', label, onSuccess, userRole, size = 'm
     : {
         endpoint: '/admin/wipe-all',
         title: 'Limpiar TODA la App',
-        warning: 'Se eliminarán TODAS las transacciones, pagos, retiros, verificaciones pendientes, contabilidad completa, notificaciones, mensajes de soporte y se resetean los saldos de TODOS los usuarios a 0. Los usuarios, tasas y configuración se conservan.',
+        // El texto describe lo que el endpoint hace HOY. Antes decía que se
+        // reseteaban los saldos —sin aclarar que las billeteras cripto quedaban
+        // vivas— y no mencionaba que el libro mayor sobrevivía huérfano.
+        warning: 'Se eliminarán TODAS las transacciones, pagos con tarjeta, depósitos cripto, retiros, remesas BTC, verificaciones pendientes, contabilidad completa, comisiones de pasarela, ganancias de socios, notificaciones y mensajes de soporte. Los saldos de TODOS los usuarios se ponen en 0, incluidas las billeteras USDT y USDC. Los usuarios, las tasas y la configuración se conservan. El LIBRO MAYOR no se borra: se cierra con asientos que lo llevan a cero, así que la historia queda entera y la reconciliación sigue cuadrando.',
         defaultLabel: 'Limpiar TODO'
       };
 

@@ -142,7 +142,8 @@ async def record_ris_entry(
         return None
 
 
-async def sum_ris_balance(user_id: str, account: str = "balance_ris") -> Decimal:
+async def sum_ris_balance(user_id: str, account: str = "balance_ris",
+                          decimales: int = 2) -> Decimal:
     """Suma todas las líneas del libro de un usuario/cuenta, en Decimal.
 
     Se suma en Python y NO con el `$sum` de Mongo a propósito: `signed_amount`
@@ -153,6 +154,9 @@ async def sum_ris_balance(user_id: str, account: str = "balance_ris") -> Decimal
 
     Devuelve `Decimal`. Antes devolvía `float`; quien necesite un número suelto
     lo convierte al mostrarlo, que es donde el redondeo no hace daño.
+
+    `decimales` existe por el libro cripto: USDT y USDC llevan ocho, y cerrarlos
+    a dos dejaría un residuo del que después nadie sabe el origen.
     """
     try:
         total = ZERO
@@ -162,7 +166,7 @@ async def sum_ris_balance(user_id: str, account: str = "balance_ris") -> Decimal
         )
         async for linea in cursor:
             total += to_decimal(linea.get("signed_amount"))
-        return quantize_money(total)
+        return quantize_money(total, decimales)
     except Exception as e:
         logger.warning(f"sum_ris_balance fallo: {e}")
         return ZERO
@@ -234,3 +238,108 @@ async def create_opening_entries():
     except Exception as e:
         logger.error(f"create_opening_entries fallo: {e}")
         return {"revisados": revisados, "aperturas_creadas": creados, "error": str(e)}
+
+
+# ─── El cierre del libro ──────────────────────────────────────────────────
+#
+# Las cuentas que este cierre alcanza, con los decimales de cada una. Las de
+# cripto llevan ocho: cerrarlas a dos dejaría un resto invisible.
+CUENTAS_A_CERRAR = (
+    ("balance_ris", 2, "RIS"),
+    ("balance_ris_terceros", 2, "RIS"),
+    ("balance_usdt", 8, "USDT"),
+    ("balance_usdc", 8, "USDC"),
+)
+
+
+async def create_closing_entries(*, actor_id: str, actor_email: str = None,
+                                 motivo: str = "wipe_all") -> dict:
+    """Lleva el libro de cada usuario a CERO sin borrar una sola línea.
+
+    POR QUE ESTO Y NO BORRAR EL LIBRO
+
+        El borrado de datos pone los saldos en cero y no toca el libro. A partir
+        de ahí la reconciliación marca descuadre en TODOS los usuarios a la vez,
+        y el informe deja de servir para encontrar el descuadre que sí importa.
+
+        La salida obvia sería agregar `ledger` a la lista de colecciones que se
+        borran. Sería un error: un libro contable es append-only justamente para
+        que no se pueda borrar, y el día que un auditor —o el propio proveedor de
+        pagos— pida la historia, «la borramos» no es una respuesta.
+
+        Así que el borrado CIERRA el libro en vez de tirarlo: por cada cuenta con
+        saldo se escribe una línea que lo lleva a cero. Después del cierre,
+        suma(libro) == 0 == saldo, la reconciliación cuadra, y cada peso que
+        alguna vez se movió sigue teniendo su renglón.
+
+        Es la operación simétrica de `create_opening_entries`, y las dos van
+        contra la misma cuenta de patrimonio, así que se anulan entre sí.
+
+    El cierre se calcula sobre la SUMA DEL LIBRO, no sobre el saldo guardado: lo
+    que hay que llevar a cero es el libro. Si el saldo y el libro no coincidían
+    —que es justo lo que la reconciliación denuncia— la diferencia queda visible
+    en la línea de cierre, con el `balance_before` real.
+    """
+    from services.ledger_crypto import record_crypto_entry
+
+    creados = 0
+    revisados = 0
+    por_cuenta = {}
+    try:
+        await _ensure_indexes()
+        async for u in db.users.find(
+            {},
+            {"user_id": 1, "email": 1, "name": 1, "full_name": 1, "role": 1},
+        ):
+            uid = u.get("user_id")
+            if not uid:
+                continue
+            revisados += 1
+            snapshot = {
+                "email": u.get("email"),
+                "name": u.get("full_name") or u.get("name"),
+                "role": u.get("role", "user"),
+            }
+            for account, decimales, libro in CUENTAS_A_CERRAR:
+                saldo_libro = await sum_ris_balance(uid, account, decimales)
+                if saldo_libro == ZERO:
+                    continue
+
+                # El saldo baja a cero: si el libro estaba en positivo, la línea
+                # es un débito; si estaba en negativo, un crédito.
+                direccion = "debit" if saldo_libro > ZERO else "credit"
+                # `to_float` redondea a DOS decimales por defecto, y sobre un
+                # saldo cripto de ocho eso dejaría un resto —el cierre de
+                # 12.3456789 se escribiría como 12.35 y el libro quedaría en
+                # -0.0043211—. Se le pasan los decimales de la cuenta.
+                monto = to_float(abs(saldo_libro), decimales)
+                comun = dict(
+                    user_id=uid,
+                    movement_type="cierre_de_libro",
+                    amount=monto,
+                    direction=direccion,
+                    balance_before=to_float(saldo_libro, decimales),
+                    balance_after=0.0,
+                    reference_kind="manual",
+                    reference_id=f"cierre_{motivo}",
+                    actor_type="admin",
+                    actor_id=actor_id,
+                    actor_email=actor_email,
+                    user_snapshot=snapshot,
+                    metadata={"motivo": motivo},
+                    notes="Cierre del libro por borrado de datos",
+                )
+                if libro == "RIS":
+                    await record_ris_entry(account=account, **comun)
+                else:
+                    await record_crypto_entry(currency=libro.lower(), **comun)
+
+                creados += 1
+                por_cuenta[account] = por_cuenta.get(account, 0) + 1
+
+        return {"revisados": revisados, "cierres_creados": creados,
+                "por_cuenta": por_cuenta}
+    except Exception as e:
+        logger.error(f"create_closing_entries fallo: {e}")
+        return {"revisados": revisados, "cierres_creados": creados,
+                "por_cuenta": por_cuenta, "error": str(e)}

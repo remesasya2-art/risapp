@@ -159,6 +159,12 @@ ASIENTOS = {
     "saldo_apertura": {
         "contra": "3.1.01",
         "glosa": "Saldo de apertura del libro"},
+    # El cierre es la operación simétrica de la apertura y va contra la misma
+    # cuenta, así que las dos se anulan: un libro abierto y después cerrado no
+    # deja rastro en el patrimonio, que es exactamente lo que tiene que pasar.
+    "cierre_de_libro": {
+        "contra": "3.1.01",
+        "glosa": "Cierre del libro por borrado de datos"},
     "recarga_pix": {
         "contra": "1.1.01",
         "glosa": "Recarga por PIX (Brasil)"},
