@@ -29,12 +29,14 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from database import db, client as mongo_client
-from services.money import ZERO, from_db, quantize_money, to_float
+from services.money import (ZERO, from_db, quantize_money, to_decimal,
+                            to_float)
 from services import bancos
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,8 @@ logger = logging.getLogger(__name__)
 CARACAS_TZ = timezone(timedelta(hours=-4))
 DEFAULT_GATEWAY_FEE_PERCENTAGE = 0.01  # 1% — TODO: move to GatewayConfig
 WEBHOOK_TTL_DAYS = 180
+# Cuánto puede diferir el monto que avisa la pasarela del que esperábamos.
+TOLERANCIA_DESCUADRE = Decimal("0.01")
 
 # Cached at startup: True if replica set, False if standalone
 _SUPPORTS_TRANSACTIONS: Optional[bool] = None
@@ -250,7 +254,13 @@ class WebhookConciliationService:
                     if currency == "BRL"
                     else tx.get("amount_ves", 0)
                 )
-                if abs(expected - amount_received) > 0.01:
+                # La tolerancia se compara en Decimal, no en float. En
+                # float, `abs(100.0 - 100.01)` da 0.010000000000005 — mayor
+                # que 0.01— y un cobro legítimo que difiere en exactamente un
+                # centavo queda SUSPENDIDO. Es plata del cliente que entró y
+                # que el sistema no acredita.
+                if (abs(to_decimal(expected) - to_decimal(amount_received))
+                        > TOLERANCIA_DESCUADRE):
                     await db.transactions.update_one(
                         {"transaction_id": transaction_id},
                         {"$set": {"status": "suspended"}},
@@ -438,6 +448,18 @@ class CoreAccountingEngine:
             )
             lots = [lot async for lot in cursor]
 
+            # Se comprueba el stock ANTES de tocar el primer lote. Sobre un
+            # mongod suelto no hay transacción que revierta: si el motor
+            # descontara lote por lote y recién al final descubriera que no
+            # alcanzaba, el inventario quedaría comido por una venta que nunca
+            # ocurrió — USDT que desaparece del stock sin haberse vendido.
+            disponible = sum(float(lot["remaining_usdt"]) for lot in lots)
+            if disponible + 1e-9 < float(amount_usdt_to_sell):
+                raise ValueError(
+                    "Inventario insuficiente. Faltan "
+                    f"{float(amount_usdt_to_sell) - disponible} USDT."
+                )
+
             usdt_remaining = float(amount_usdt_to_sell)
             total_cost_brl = 0.0
             lots_consumed: List[Dict[str, Any]] = []
@@ -502,9 +524,19 @@ class CoreAccountingEngine:
                 )
 
             # Dimensional analysis
+            if rates["bcv_ves_usd"] <= 0:
+                raise RuntimeError("bcv_ves_usd no configurado")
+
             rate_sell_ves_usdt = amount_ves_received / amount_usdt_to_sell
             total_cost_in_usd = total_cost_brl / rates["market_brl_usd"]
-            total_revenue_in_usd = amount_ves_received / rate_sell_ves_usdt
+            # Los VES cobrados se pasan a USD a la tasa BCV, que es lo que dice
+            # el encabezado de este módulo: "VES→USD via bcv_ves_usd".
+            # Dividirlos por la tasa de la propia venta
+            # (rate_sell_ves_usdt = ves/usdt) cancelaba la división contra sí
+            # misma y dejaba total_revenue_in_usd == amount_usdt_to_sell: los
+            # VES cobrados no influían en nada. Vender 50 USDT por 2.500 VES o
+            # por 1 VES reportaba la misma ganancia.
+            total_revenue_in_usd = amount_ves_received / rates["bcv_ves_usd"]
             net_profit_usdt = total_revenue_in_usd - total_cost_in_usd
             profit_percentage = (
                 ((total_revenue_in_usd / total_cost_in_usd) - 1) * 100
