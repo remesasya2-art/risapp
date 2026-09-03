@@ -366,11 +366,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   };
 
-  const handleApproveRecharge = async (txId) => {
-    try { await api.post('/admin/recharge/approve', { transaction_id: txId, approved: true }); toast.success('Recarga aprobada'); loadData(); } 
-    catch { toast.error('Error al aprobar'); }
-  };
-
   // Refresh overview stats after KYC actions (the KycPanel manages its own state)
   const refreshKycStats = async () => {
     try {

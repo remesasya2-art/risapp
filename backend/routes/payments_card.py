@@ -31,6 +31,7 @@ from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
 from services.money import to_decimal128
+from services import saldos
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -296,32 +297,17 @@ async def process_card_payment(
                 "processed_at": datetime.now(timezone.utc),
             })
 
-            # 1. Credit RIS to user
-            _card_user = await db.users.find_one_and_update(
-                {"user_id": current_user.user_id},
-                {"$inc": {"balance_ris": body.amount_ris}},
-                return_document=True
+            # 1. Credit RIS to user, y asentar en la misma operación.
+            _card_mov = await saldos.mover(
+                db, current_user.user_id, body.amount_ris,
+                movimiento="pago_tarjeta",
+                reference_kind="card_payment",
+                reference_id=payment_id,
+                actor_type="user",
+                actor_id=current_user.user_id,
+                notes="Recarga con tarjeta",
             )
-            # Libro mayor RIS (no interrumpe la acreditación)
-            try:
-                from services.ledger import record_ris_entry
-                _card_after = (_card_user or {}).get("balance_ris")
-                await record_ris_entry(
-                    user_id=current_user.user_id,
-                    movement_type="pago_tarjeta",
-                    amount=body.amount_ris,
-                    direction="credit",
-                    account="balance_ris",
-                    balance_before=(_card_after - body.amount_ris) if _card_after is not None else None,
-                    balance_after=_card_after,
-                    reference_kind="card_payment",
-                    reference_id=payment_id,
-                    actor_type="user",
-                    actor_id=current_user.user_id,
-                    notes="Recarga con tarjeta",
-                )
-            except Exception as e:
-                logger.warning(f"Ledger pago_tarjeta no registrado: {e}")
+            _card_user = _card_mov["usuario"]
 
             # 2. Notification
             await create_notification(

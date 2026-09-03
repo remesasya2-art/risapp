@@ -13,6 +13,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 import uuid
 import os
+from services import saldos
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -410,12 +411,23 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin
     if not has_permission(admin_user, "users.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    result = await db.users.update_one(
-        {"user_id": user_id},
-        {"$inc": {"balance_ris": request.amount}}
-    )
-    
-    if result.modified_count == 0:
+    # Un ajuste a mano es el movimiento que MAS necesita quedar asentado: no
+    # tiene una operación detrás que lo explique, sólo la decisión de un
+    # administrador. Antes movía el saldo con un `$inc` de un float crudo y no
+    # dejaba línea en el mayor; el registro en `admin_logs` de acá abajo no es
+    # el libro y la conciliación no lo mira.
+    try:
+        movido = await saldos.mover(
+            db, user_id, request.amount,
+            movimiento="ajuste_admin",
+            reference_kind="manual",
+            reference_id=f"ajuste_{user_id}",
+            actor_type="admin",
+            actor_id=admin_user.get("user_id"),
+            actor_email=admin_user.get("email"),
+            notes="Ajuste manual de saldo desde el panel",
+        )
+    except saldos.UsuarioInexistente:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     # Log the adjustment
@@ -424,11 +436,15 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin
         "user_id": user_id,
         "amount": request.amount,
         "admin_id": admin_user.get('user_id'),
+        "balance_before": float(movido["saldo_anterior"]),
+        "balance_after": float(movido["saldo_nuevo"]),
+        "ledger_entry_id": movido["entry_id"],
         "created_at": datetime.now(timezone.utc)
     }
     await db.admin_logs.insert_one(adjustment)
     
-    return {"message": f"Balance ajustado en {request.amount} RIS"}
+    return {"message": f"Balance ajustado en {request.amount} RIS",
+            "balance_after": float(movido["saldo_nuevo"])}
 
 # =======================
 # KYC/VERIFICATION MANAGEMENT
@@ -588,11 +604,29 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user: dict = D
     amount_ris = transaction.get("amount_output", 0)
     
     if request.approved:
-        # Credit user's balance
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris}}
-        )
+        # Acreditar y asentar en la misma operación. Antes era un `$inc` con un
+        # float crudo, sin línea de libro y sin consumir el cupo sin KYC: una
+        # recarga aprobada por acá no aparecía en el mayor y tampoco contaba
+        # para el límite de quien no verificó su cuenta.
+        try:
+            await saldos.mover(
+                db, user_id, amount_ris,
+                movimiento="recarga_brl",
+                consumir_cupo=True,
+                reference_kind="transaction",
+                reference_id=request.transaction_id,
+                transaction_id=request.transaction_id,
+                display_id=transaction.get("display_id"),
+                actor_type="admin",
+                actor_id=admin_user.get("user_id"),
+                actor_email=admin_user.get("email"),
+                amount_output=transaction.get("amount_input", 0),
+                currency_output="BRL",
+                metadata={"verification_method": "admin_manual_approval"},
+                notes="Recarga en reales aprobada a mano",
+            )
+        except saldos.UsuarioInexistente:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
         
         # Update transaction status
         await db.transactions.update_one(

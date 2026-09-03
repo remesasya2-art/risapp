@@ -15,7 +15,7 @@ from typing import Optional
 
 from database import db
 from services.limits import validate_pix_amount
-from services import kyc_quota
+from services import kyc_quota, saldos
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
@@ -304,57 +304,41 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
     
     if user_role == "socio_gestor" and is_gestor_recharge:
         # Gestor receiving third-party payment
-        updated = await db.users.find_one_and_update(
-            {"user_id": user_id},
-            {"$inc": {"balance_ris_terceros": amount_ris, **kyc_quota.consume_inc(amount_ris)}},
-            return_document=True
-        )
-        balance_type = "saldo de terceros"
         ledger_account = "balance_ris_terceros"
-        balance_after = (updated or {}).get("balance_ris_terceros")
+        balance_type = "saldo de terceros"
     else:
         # Regular user or gestor recharging their own account -> main balance
-        updated = await db.users.find_one_and_update(
-            {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris, **kyc_quota.consume_inc(amount_ris)}},
-            return_document=True
-        )
-        balance_type = "saldo principal"
         ledger_account = "balance_ris"
-        balance_after = (updated or {}).get("balance_ris")
+        balance_type = "saldo principal"
 
-    balance_before = (balance_after - amount_ris) if balance_after is not None else None
+    # El saldo y la línea del libro salen de la misma operación. Antes el saldo
+    # posterior se leía crudo del documento y se le restaba el monto para sacar
+    # el anterior: con el campo en Decimal128 esa resta es un TypeError, y esta
+    # línea NO estaba dentro de ningún `try` —el $inc ya había ocurrido, así que
+    # el usuario quedaba acreditado y la confirmación reventaba sin avisar.
+    movido = await saldos.mover(
+        db, user_id, amount_ris,
+        movimiento="recarga_pix",
+        cuenta=ledger_account,
+        consumir_cupo=True,
+        reference_kind="pix_payment",
+        reference_id=payment_id,
+        actor_type="webhook",
+        actor_id="mercadopago",
+        user_snapshot=({"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user_role} if user else None),
+        counterparty={"client_name": payment.get("client_name")},
+        metadata={
+            "amount_brl": payment.get("amount_brl"),
+            "amount_ves": payment.get("amount_ves"),
+            "mp_payment_id": payment.get("mp_payment_id"),
+            "is_gestor_terceros": is_gestor_recharge,
+        },
+        notes="Recarga por PIX (Mercado Pago)",
+    )
+    updated = movido["usuario"]
 
     # Si esta recarga le agoto el cupo sin KYC, avisarle. Nunca interrumpe.
     await kyc_quota.notify_if_exhausted(updated)
-
-    # Libro mayor RIS (append-only). Nunca interrumpe la acreditación.
-    try:
-        from services.ledger import record_ris_entry
-        await record_ris_entry(
-            user_id=user_id,
-            movement_type="recarga_pix",
-            amount=amount_ris,
-            direction="credit",
-            account=ledger_account,
-            balance_before=balance_before,
-            balance_after=balance_after,
-            reference_kind="pix_payment",
-            reference_id=payment_id,
-            actor_type="webhook",
-            actor_id="mercadopago",
-            user_snapshot=({"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user_role} if user else None),
-            counterparty={"client_name": payment.get("client_name")},
-            metadata={
-                "amount_brl": payment.get("amount_brl"),
-                "amount_ves": payment.get("amount_ves"),
-                "mp_payment_id": payment.get("mp_payment_id"),
-                "is_gestor_terceros": is_gestor_recharge,
-            },
-            notes="Recarga por PIX (Mercado Pago)",
-        )
-    except Exception as e:
-        logger.warning(f"Ledger recarga_pix no registrado: {e}")
 
     # Notify user (in-app)
     await create_notification(
@@ -770,37 +754,47 @@ async def _handle_card_webhook(card_payment: dict, mp_payment_id: str) -> dict:
         amount_ris = card_payment.get("amount_ris", 0)
         fee_brl = card_payment.get("fee_brl", 0)
         total_brl = card_payment.get("total_charged_brl", amount_ris)
-        
-        # Credit RIS
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$inc": {"balance_ris": amount_ris}}
+
+        # Acreditar y asentar en la misma operación. Antes esto era un `$inc`
+        # con un float crudo y NINGUNA línea de libro: la plata entraba al
+        # usuario y el mayor no se enteraba.
+        movido = await saldos.mover(
+            db, user_id, amount_ris,
+            movimiento="pago_tarjeta",
+            reference_kind="card_payment",
+            reference_id=mp_payment_id,
+            actor_type="webhook",
+            actor_id="mercadopago",
+            metadata={"fee_brl": fee_brl, "total_charged_brl": total_brl,
+                      "via": "webhook"},
+            notes="Pago con tarjeta confirmado por webhook",
         )
-        
-        # Notify
-        user = await db.users.find_one({"user_id": user_id})
-        if user:
-            await create_notification(
-                user_id=user_id,
-                title="💳 Pago con Tarjeta Aprobado",
-                message=f"Se han añadido R$ {amount_ris:.2f} a tu saldo.",
-                notification_type="card_received",
-                data={"payment_id": mp_payment_id, "amount": amount_ris},
+        user = movido["usuario"]
+
+        # La contabilidad va FUERA del `if user`. Antes colgaba de que la
+        # relectura del usuario devolviera algo: si no, la plata quedaba
+        # acreditada y el banco de la pasarela sin registrar.
+        try:
+            await _credit_mp_bank_card(
+                payment_id=mp_payment_id,
+                client_name=(user or {}).get("name", "Cliente"),
+                amount_brl_net=amount_ris,
             )
-            # Accounting
-            try:
-                await _credit_mp_bank_card(
-                    payment_id=mp_payment_id,
-                    client_name=user.get("name", "Cliente"),
-                    amount_brl_net=amount_ris,
-                )
-                await _register_card_fee(
-                    payment_id=mp_payment_id,
-                    fee_brl=fee_brl,
-                    gross_brl=total_brl,
-                )
-            except Exception as exc:
-                logger.warning(f"Webhook card accounting failed: {exc}")
+            await _register_card_fee(
+                payment_id=mp_payment_id,
+                fee_brl=fee_brl,
+                gross_brl=total_brl,
+            )
+        except Exception as exc:
+            logger.warning(f"Webhook card accounting failed: {exc}")
+
+        await create_notification(
+            user_id=user_id,
+            title="💳 Pago con Tarjeta Aprobado",
+            message=f"Se han añadido R$ {amount_ris:.2f} a tu saldo.",
+            notification_type="card_received",
+            data={"payment_id": mp_payment_id, "amount": amount_ris},
+        )
         
         logger.info(f"Card webhook credited {amount_ris} RIS to {user_id} (MP {mp_payment_id})")
         return {"received": True, "processed": True, "kind": "card", "status": "approved"}
