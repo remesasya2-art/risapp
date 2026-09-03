@@ -78,6 +78,98 @@ def _lee_saldo_crudo(nodo):
     return False
 
 
+ESCRITURAS = frozenset({"insert_one", "insert_many"})
+OPERADORES_QUE_ESCRIBEN = frozenset({"$set", "$setOnInsert"})
+
+
+def _dicts_que_se_escriben(arbol):
+    """Los diccionarios que terminan guardados en la base.
+
+    Sigue también el patrón habitual, que es el que de verdad usa el código:
+
+        user = {...}                 <- el literal está acá
+        await db.users.insert_one(user)
+
+    Mirar sólo los literales pasados directo perdía justo ese caso, que es el
+    de `routes/auth.py` creando cada usuario nuevo.
+    """
+    porNombre = {}
+    for nodo in ast.walk(arbol):
+        if isinstance(nodo, ast.Assign) and len(nodo.targets) == 1 \
+                and isinstance(nodo.targets[0], ast.Name) \
+                and isinstance(nodo.value, ast.Dict):
+            porNombre[nodo.targets[0].id] = nodo.value
+
+    def literal(arg):
+        if isinstance(arg, ast.Dict):
+            return [arg]
+        if isinstance(arg, ast.Name) and arg.id in porNombre:
+            return [porNombre[arg.id]]
+        if isinstance(arg, ast.List):                 # insert_many([...])
+            salida = []
+            for e in arg.elts:
+                salida.extend(literal(e))
+            return salida
+        return []
+
+    salida = []
+    for nodo in ast.walk(arbol):
+        if not isinstance(nodo, ast.Call):
+            continue
+        if _nombre(nodo) in ESCRITURAS:
+            for arg in nodo.args:
+                salida.extend(literal(arg))
+        # {"$set": {...}} en un update: el dict de adentro es lo que se guarda
+        for arg in nodo.args:
+            if not isinstance(arg, ast.Dict):
+                continue
+            for clave, valor in zip(arg.keys, arg.values):
+                if isinstance(clave, ast.Constant) \
+                        and clave.value in OPERADORES_QUE_ESCRIBEN \
+                        and isinstance(valor, ast.Dict):
+                    salida.append(valor)
+    return salida
+
+
+def _crea_saldo_crudo(arbol):
+    """`{"balance_ris": 0}` — un saldo que NACE en int o float.
+
+    La otra mitad de la misma clase. El guard de arriba prohíbe LEER un saldo
+    sin conversor; esto prohíbe ESCRIBIRLO crudo al crear el documento, que es
+    por donde volvió a colarse: `routes/auth.py` creaba cada usuario nuevo con
+    `"balance_ris": 0.0` y `admin_routes.py` cada sub-admin con
+    `"balance_ris": 0`, mientras el resto de la app guarda Decimal128.
+
+    Naciendo crudo, el tipo del saldo depende de quién creó el documento, y
+    después hay que adivinar con qué te vas a encontrar en cada lectura. Es
+    exactamente lo que `bancos.asegurar_cuenta` documenta desde hace tres PR:
+    "naciendo en Decimal128 se evita que el tipo dependa de quién la tocó
+    primero".
+
+    Sólo mira los diccionarios que SE ESCRIBEN: el documento de un
+    `insert_one`/`insert_many` y el valor de un `$set`/`$setOnInsert`. Un
+    `{"balance_ris": 1}` dentro de un `find` es una PROYECCIÓN —el 1 dice
+    "traeme este campo", no es un saldo— y marcarlo sería ruido que enseña a
+    ignorar la guarda.
+
+    Devuelve [(línea, campo)] de cada literal crudo.
+    """
+    malos = []
+    for nodo in _dicts_que_se_escriben(arbol):
+        for clave, valor in zip(nodo.keys, nodo.values):
+            if not (isinstance(clave, ast.Constant)
+                    and clave.value in CAMPOS_DE_SALDO):
+                continue
+            # Un número escrito a mano, con o sin signo.
+            crudo = valor
+            if isinstance(crudo, ast.UnaryOp) and isinstance(crudo.op, ast.USub):
+                crudo = crudo.operand
+            if isinstance(crudo, ast.Constant) and isinstance(crudo.value, (int, float)) \
+                    and not isinstance(crudo.value, bool):
+                malos.append((clave.lineno, clave.value))
+    return malos
+
+
 def _nombre(llamada):
     fn = llamada.func
     if isinstance(fn, ast.Attribute):
@@ -157,6 +249,56 @@ def test_nadie_hace_aritmetica_sobre_un_saldo_crudo():
           "TypeError. Leelo con `services.bancos.saldo_de`, "
           "`services.saldos.saldo_de` o `services.money.from_db` antes de "
           "operarlo.")
+
+
+def test_ningun_saldo_NACE_en_int_o_float():
+    """La otra mitad: prohibir que un saldo se cree crudo, no sólo leerlo."""
+    hallazgos = []
+    for archivo in _FUENTES:
+        try:
+            arbol = ast.parse(archivo.read_text())
+        except SyntaxError:                                   # pragma: no cover
+            continue
+        for linea, campo in _crea_saldo_crudo(arbol):
+            hallazgos.append(f"{archivo.name}:{linea}  {campo}")
+    assert not hallazgos, (
+        "Estos documentos nacen con el saldo en int o float, mientras el resto "
+        "de la app lo guarda en Decimal128. Así el tipo del saldo depende de "
+        "quién creó el documento.\n  " + "\n  ".join(hallazgos) +
+        "\n\nUsá to_decimal128(0).")
+
+
+def test_LA_GUARDA_DE_NACIMIENTO_SE_PONE_EN_ROJO(tmp_path):
+    """Una guarda que no se puede romper no guarda nada."""
+    def mira(fuente):
+        return _crea_saldo_crudo(ast.parse(textwrap.dedent(fuente)))
+
+    assert mira('db.users.insert_one({"balance_ris": 0, "email": "a@b.c"})') \
+        == [(1, "balance_ris")]
+    assert mira('db.users.insert_one({"balance_usdt": 0.0})') \
+        == [(1, "balance_usdt")]
+    assert mira('db.x.insert_one({"balance": -5})') == [(1, "balance")]
+    assert mira('db.x.insert_many([{"balance_ris": 0}])') == [(1, "balance_ris")]
+    # El patrón habitual: el literal en una variable y el insert más abajo.
+    assert mira("""
+        user = {"email": "a@b.c", "balance_ris": 0.0}
+        db.users.insert_one(user)
+    """) == [(2, "balance_ris")]
+    assert mira('db.x.update_one(f, {"$set": {"balance_ris": 0}})') \
+        == [(1, "balance_ris")]
+    assert mira('db.x.update_one(f, {"$setOnInsert": {"balance_ris": 0}})') \
+        == [(1, "balance_ris")]
+
+    # Lo que NO tiene que marcar:
+    assert mira('db.x.insert_one({"balance_ris": to_decimal128(0)})') == []
+    # una proyección: el 1 dice "traeme el campo", no es un saldo
+    assert mira('db.x.find({}, {"_id": 0, "balance_ris": 1})') == []
+    # un campo que no es de saldo
+    assert mira('db.x.insert_one({"intentos": 0})') == []
+    # `True` es un int en Python, pero no es un saldo escrito a mano
+    assert mira('db.x.insert_one({"balance_ris": True})') == []
+    # un `$inc`, que suma sobre lo que ya hay: no crea el tipo
+    assert mira('db.x.update_one(f, {"$inc": {"balance_ris": 5}})') == []
 
 
 def test_la_guarda_de_verdad_encuentra_las_formas_que_reventaban():

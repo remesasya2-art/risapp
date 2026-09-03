@@ -10,6 +10,7 @@ from bson import ObjectId
 from openpyxl import Workbook
 from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
+from services.money import to_decimal128
 import logging
 import uuid
 import os
@@ -297,7 +298,9 @@ async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = De
             "role": "admin",
             "permissions": request.permissions,
             "is_active": True,
-            "balance_ris": 0,
+            # En Decimal128, como el resto de la app. Naciendo en int, el
+            # tipo del saldo dependía de quién creó al usuario.
+            "balance_ris": to_decimal128(0),
             "verification_status": "verified",
             "created_by_admin": admin_user.get('user_id'),
             "created_at": datetime.now(timezone.utc)
