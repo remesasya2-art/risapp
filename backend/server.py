@@ -113,6 +113,11 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Indices de cuentas bancarias: {e}")
     try:
+        from services.auditoria import asegurar_indices as indices_auditoria
+        await indices_auditoria(db)
+    except Exception as e:
+        logger.error(f"Indices del libro de auditoria: {e}")
+    try:
         # Estructura del módulo de envíos. Crea índices, nunca datos: los
         # transportistas, agencias y tarifas se cargan desde el panel.
         from services.envios_indices import ensure_envios_indexes

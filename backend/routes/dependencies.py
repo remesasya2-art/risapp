@@ -113,6 +113,23 @@ async def get_verified_user(current_user: User = Depends(get_current_user)) -> U
         raise HTTPException(status_code=403, detail="User verification required")
     return current_user
 
+async def sin_transacciones_personales(
+        current_user: User = Depends(get_current_user)) -> User:
+    """Frena a una cuenta de personal en las rutas donde un usuario mueve plata.
+
+    Es la puerta, y da el mensaje claro. El candado de fondo está en
+    `saldos.mover`, porque nueve de las diez formas de mover plata liquidan
+    después por un webhook que no pasa por acá. Ver services/personal.py.
+    """
+    from services import personal
+    if personal.es_personal(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Las cuentas del personal no pueden hacer transacciones a "
+                   "título personal. Usá una cuenta propia, no la del trabajo.")
+    return current_user
+
+
 def has_permission(user: User, permission: str) -> bool:
     """Check if user has a specific permission"""
     if user.role == "super_admin":
