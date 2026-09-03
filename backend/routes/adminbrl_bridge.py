@@ -188,13 +188,14 @@ async def process_withdrawal(
         if not bank:
             raise HTTPException(status_code=400, detail="Banco no encontrado.")
 
-        new_balance = bank["balance"] - amount_output
         transaction_id = request.transaction_id
 
-        await db.bank_accounts.update_one(
-            {"bank_id": bank_id},
-            {"$inc": {"balance": -amount_output}}
-        )
+        # `bank["balance"] - amount_output` reventaba si la cuenta ya estaba en
+        # Decimal128, y el saldo posterior salía de una lectura previa al `$inc`.
+        from services import bancos
+        from services.money import to_float as _to_float
+        _mov = await bancos.ajustar(db, bank_id, -amount_output)
+        new_balance = _to_float(_mov["saldo_nuevo"])
 
         beneficiary = transaction.get("beneficiary_data", {})
         beneficiary_name = beneficiary.get("full_name", beneficiary.get("name", ""))
@@ -215,7 +216,6 @@ async def process_withdrawal(
             "status": "completed",
             "completed_at": datetime.now(timezone.utc),
             "bank_id": bank_id,
-            "whatsapp_active": False,
         }
         if request.proof_images:
             update_data["proof_images"] = request.proof_images
@@ -257,7 +257,6 @@ async def process_withdrawal(
                 "status": "rejected",
                 "rejected_at": datetime.now(timezone.utc),
                 "rejection_reason": rejection_reason,
-                "whatsapp_active": False,
             }}
         )
 

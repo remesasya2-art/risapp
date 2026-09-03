@@ -503,121 +503,26 @@ async def decide_verification(decision: VerificationDecision, admin_user: dict =
 # WITHDRAWALS MANAGEMENT
 # =======================
 
-@admin_router.get("/withdrawals/pending")
-async def get_pending_withdrawals(admin_user: dict = Depends(get_admin_user)):
-    """Get all pending withdrawals"""
-    if not has_permission(admin_user, "withdrawals.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    withdrawals = await db.transactions.find(
-        {"type": "withdrawal", "status": "pending"},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(1000)
-    
-    # Add user info
-    for w in withdrawals:
-        user = await db.users.find_one({"user_id": w.get('user_id')}, {"name": 1, "email": 1})
-        w['user_name'] = user.get('name', 'N/A') if user else 'N/A'
-        w['user_email'] = user.get('email', 'N/A') if user else 'N/A'
-    
-    return withdrawals
-
-@admin_router.post("/withdrawals/process")
-async def process_withdrawal_admin(request: ProcessWithdrawalAdminRequest, admin_user: dict = Depends(get_admin_user)):
-    """Process withdrawal from admin panel"""
-    if not has_permission(admin_user, "withdrawals.process"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    tx = await db.transactions.find_one({"transaction_id": request.transaction_id, "status": "pending"})
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacción no encontrada o ya procesada")
-    
-    if request.action == "approve":
-        if not request.proof_image:
-            raise HTTPException(status_code=400, detail="Se requiere imagen de comprobante")
-        
-        await db.transactions.update_one(
-            {"transaction_id": request.transaction_id},
-            {"$set": {
-                "status": "completed",
-                "proof_image": request.proof_image,
-                "completed_at": datetime.now(timezone.utc),
-                "processed_by": admin_user.get('user_id'),
-                "processed_via": "admin_panel"
-            }}
-        )
-        
-        # Save admin record
-        user = await db.users.find_one({"user_id": tx['user_id']})
-        beneficiary = tx.get('beneficiary_data', {})
-        
-        admin_record = {
-            "record_type": "withdrawal_completed",
-            "transaction_id": request.transaction_id,
-            "user_id": tx['user_id'],
-            "user_name": user.get('name', 'N/A') if user else 'N/A',
-            "user_email": user.get('email', 'N/A') if user else 'N/A',
-            "amount_ris": tx['amount_input'],
-            "amount_ves": tx['amount_output'],
-            "beneficiary": beneficiary,
-            "proof_image": request.proof_image,
-            "processed_by": admin_user.get('user_id'),
-            "processed_via": "admin_panel",
-            "completed_at": datetime.now(timezone.utc)
-        }
-        await db.admin_payment_records.insert_one(admin_record)
-        
-        # Notify user
-        await create_notification(
-            user_id=tx['user_id'],
-            title="✅ Retiro Completado",
-            message=f"Tu retiro de {tx['amount_input']:.2f} RIS a {beneficiary.get('full_name', 'beneficiario')} fue procesado.",
-            notification_type="withdrawal_completed",
-            data={"transaction_id": request.transaction_id}
-        )
-
-        # Marcar whatsapp_active=False y disparar siguiente en cola FIFO
-        await db.transactions.update_one(
-            {"transaction_id": request.transaction_id},
-            {"$set": {"whatsapp_active": False}}
-        )
-
-        return {"message": "Retiro aprobado y usuario notificado"}
-
-    elif request.action == "reject":
-        # Return balance to user
-        await db.users.update_one(
-            {"user_id": tx['user_id']},
-            {"$inc": {"balance_ris": tx['amount_input']}}
-        )
-
-        await db.transactions.update_one(
-            {"transaction_id": request.transaction_id},
-            {"$set": {
-                "status": "rejected",
-                "rejection_reason": request.rejection_reason or "Rechazado por administrador",
-                "rejected_at": datetime.now(timezone.utc),
-                "rejected_by": admin_user.get('user_id')
-            }}
-        )
-
-        await create_notification(
-            user_id=tx['user_id'],
-            title="❌ Retiro Rechazado",
-            message=f"Tu retiro de {tx['amount_input']:.2f} RIS fue rechazado. {request.rejection_reason or ''}. El monto fue devuelto a tu balance.",
-            notification_type="withdrawal_rejected",
-            data={"transaction_id": request.transaction_id}
-        )
-
-        # Disparar siguiente en cola FIFO
-        await db.transactions.update_one(
-            {"transaction_id": request.transaction_id},
-            {"$set": {"whatsapp_active": False}}
-        )
-
-        return {"message": "Retiro rechazado y balance devuelto"}
-    
-    raise HTTPException(status_code=400, detail="Acción inválida")
+# ─── Retiros: las rutas vivían acá y estaban MUERTAS ──────────────────────
+#
+# `admin_routes.py` registraba `GET /api/admin/withdrawals/pending` y
+# `POST /api/admin/withdrawals/process`, que `routes/admin.py` ya registra con
+# los mismos caminos. `server.py` monta primero el router modular, así que
+# FastAPI resolvía siempre contra `routes/admin.py` y estas dos nunca corrían.
+#
+# No era código inofensivo. La versión muerta de `process`:
+#
+#   - acreditaba la devolución con `{"$inc": {"balance_ris": tx['amount_input']}}`
+#     —un float crudo, sin `to_decimal128`— cuando el resto de la app usa
+#     Decimal;
+#   - no dejaba línea en el diario RIS;
+#   - devolvía SIEMPRE a `balance_ris`, sin mirar `currency_input`, así que un
+#     envío pagado en USDT o USDC volvía en RIS;
+#   - no respetaba el candado por operador ni el cupo sin KYC.
+#
+# Bastaba con que alguien cambiara el orden de los `include_router` en
+# `server.py` para que esa versión pasara a atender los retiros, en silencio.
+# Se eliminaron: la buena vive en `routes/admin.py`.
 
 # =======================
 # RECHARGES MANAGEMENT

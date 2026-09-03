@@ -30,6 +30,7 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
+from services.money import to_decimal128
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -88,17 +89,17 @@ async def _credit_mp_bank_card(payment_id: str, client_name: str, amount_brl_net
             "bank_id": f"mp_{uuid.uuid4().hex[:8]}",
             "name": "Mercado Pago",
             "currency": "BRL",
-            "balance": 0.0,
+            "balance": to_decimal128(0),   # nace en Decimal128: el tipo no depende de quién la toque primero
             "is_gateway": True,
             "created_at": datetime.now(timezone.utc),
         }
         await db.bank_accounts.insert_one(bank)
 
-    new_balance = round(float(bank.get("balance", 0)) + float(amount_brl_net), 2)
-    await db.bank_accounts.update_one(
-        {"bank_id": bank["bank_id"]},
-        {"$inc": {"balance": float(amount_brl_net)}},
-    )
+    # Igual que en Mercado Pago: `float()` sobre un Decimal128 levanta TypeError.
+    from services import bancos as _bancos
+    from services.money import to_float as _to_float
+    _mov = await _bancos.ajustar(db, bank["bank_id"], amount_brl_net)
+    new_balance = _to_float(_mov["saldo_nuevo"])
     await db.bank_ledger.insert_one({
         "bank_id": bank["bank_id"],
         "bank_name": "Mercado Pago",

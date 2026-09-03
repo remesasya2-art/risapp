@@ -386,7 +386,6 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
         "beneficiary_id": request.beneficiary_id,
         "beneficiary_data": beneficiary_data,
         "created_at": datetime.now(timezone.utc),
-        "whatsapp_active": False,
     }
     try:
         await db.transactions.insert_one(transaction)
@@ -498,7 +497,6 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         "beneficiary_id": request.beneficiary_id,
         "beneficiary_data": beneficiary_data,
         "created_at": datetime.now(timezone.utc),
-        "whatsapp_active": False
     }
 
     # 3) Débito atómico (impide sobregiro y condiciones de carrera)
@@ -695,7 +693,6 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
             "beneficiary_data": beneficiary_data,
             "funded_from": "balance",
             "created_at": datetime.now(timezone.utc),
-            "whatsapp_active": False,
         }
         try:
             await db.transactions.insert_one(transaction)
@@ -787,7 +784,6 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
         "funded_from": "payment",
         "paid_ratio": 0.0,
         "created_at": datetime.now(timezone.utc),
-        "whatsapp_active": False,
     }
     await db.transactions.insert_one(transaction)
 

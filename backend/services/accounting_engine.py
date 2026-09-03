@@ -35,6 +35,7 @@ from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from database import db, client as mongo_client
 from services.money import from_db, to_float
+from services import bancos
 
 logger = logging.getLogger(__name__)
 
@@ -281,11 +282,10 @@ class WebhookConciliationService:
                 # 6. Credit net to bank atomically
                 bank_id = tx.get("bank_account_id") or tx.get("destination_bank_id")
                 if bank_id:
-                    await db.bank_accounts.update_one(
-                        {"bank_id": bank_id},
-                        {"$inc": {"balance": net}},
-                        session=session,
-                    )
+                    # En Decimal, como el resto de las escrituras a este
+                    # campo: un `$inc` con float arrastra su imprecisión al
+                    # total del pozo, que es justo lo que la conciliación mira.
+                    await bancos.ajustar(db, bank_id, net, session=session)
 
                 # 7. Register in gateway fee ledger (multi-currency)
                 await db.gateway_fee_ledger.insert_one(
@@ -390,22 +390,21 @@ class CoreAccountingEngine:
         bank_id: str, amount_required: float, session
     ) -> Dict[str, Any]:
         """TOCTOU-safe bank debit. Filters by balance>=amount before $inc."""
-        result = await db.bank_accounts.find_one_and_update(
-            {
-                "bank_id": bank_id,
-                "balance": {"$gte": amount_required},
-                "hidden_from_admin": {"$ne": True},
-            },
-            {"$inc": {"balance": -amount_required}},
-            session=session,
-            return_document=True,
-        )
-        if not result:
+        # El guard sigue yendo DENTRO del filtro de la escritura, que es lo que
+        # lo hace a prueba de TOCTOU; lo que cambia es que compara y descuenta
+        # en Decimal.
+        try:
+            movimiento = await bancos.ajustar(
+                db, bank_id, -amount_required,
+                session=session, exigir_saldo=True,
+                filtro_extra={"hidden_from_admin": {"$ne": True}})
+        except (bancos.SaldoInsuficiente, bancos.CuentaInexistente,
+                bancos.CuentaNoDisponible) as e:
             raise ValueError(
                 f"Operación denegada: fondos insuficientes en banco {bank_id} "
                 f"o cuenta deshabilitada (requerido: {amount_required})"
-            )
-        return result
+            ) from e
+        return movimiento["banco"]
 
     @staticmethod
     async def execute_p2p_arbitrage(
@@ -550,11 +549,8 @@ class CoreAccountingEngine:
             await db.p2p_sales.insert_one(sale_doc, session=session)
 
             # Credit VES to bank atomically
-            await db.bank_accounts.update_one(
-                {"bank_id": bank_account_id},
-                {"$inc": {"balance": float(amount_ves_received)}},
-                session=session,
-            )
+            await bancos.ajustar(db, bank_account_id, amount_ves_received,
+                                 session=session)
 
             # Final close audit
             await _audit(

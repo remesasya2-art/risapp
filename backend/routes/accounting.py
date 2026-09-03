@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from services.money import from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
+from services import bancos
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -88,7 +89,7 @@ async def create_bank(data: BankInput, admin: User = Depends(get_super_admin)):
         "bank_id": bank_id,
         "name": data.name,
         "currency": data.currency.upper(),
-        "balance": data.initial_balance,
+        "balance": to_decimal128(data.initial_balance),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": admin.user_id
     }
@@ -160,9 +161,11 @@ async def add_manual_ledger_entry(data: ManualLedgerEntry, admin: User = Depends
         delta = amount
     else:
         delta = -amount
-    new_balance = quantize_money(current_balance + delta)
-    # $inc con operando Decimal128: atomico y convierte el campo a Decimal128
-    await db.bank_accounts.update_one({"bank_id": data.bank_id}, {"$inc": {"balance": to_decimal128(delta)}})
+    # Este ajuste es el que dejaba la cuenta en Decimal128 y, a partir de ahí,
+    # rompía a las otras cinco rutas que le sumaban floats. Ahora todas pasan
+    # por el mismo camino, así que el tipo dejó de ser una trampa.
+    _mov = await bancos.ajustar(db, data.bank_id, delta)
+    new_balance = _mov["saldo_nuevo"]
     
     entry_id = f"manual_{uuid.uuid4().hex[:8]}"
     await db.bank_ledger.insert_one({
@@ -260,11 +263,11 @@ async def register_usdt_operation(data: UsdtOperationInput, admin: User = Depend
     # Update bank balance and register in ledger
     if data.operation_type == "sell":
         # Selling USDT = receiving fiat in bank
-        await db.bank_accounts.update_one(
-            {"bank_id": data.bank_id},
-            {"$inc": {"balance": total_fiat}}
-        )
-        new_balance = bank["balance"] + total_fiat
+        # `bank["balance"] + total_fiat` reventaba con TypeError si la cuenta
+        # ya estaba en Decimal128, y el saldo salía de una lectura anterior al
+        # `$inc`. Ahora sale del resultado de la propia escritura.
+        _mov = await bancos.ajustar(db, data.bank_id, total_fiat)
+        new_balance = to_float(_mov["saldo_nuevo"])
         await db.bank_ledger.insert_one({
             "bank_id": data.bank_id, "bank_name": bank["name"],
             "date": data.date, "type": "entrada", "concept": f"Venta {data.amount_usdt:.2f} USDT @ {data.rate}",
@@ -290,11 +293,10 @@ async def register_usdt_operation(data: UsdtOperationInput, admin: User = Depend
         })
     elif data.operation_type == "buy":
         # Buying USDT = spending fiat from bank (allow negative)
-        await db.bank_accounts.update_one(
-            {"bank_id": data.bank_id},
-            {"$inc": {"balance": -total_fiat}}
-        )
-        new_balance = bank["balance"] - total_fiat
+        # Se permite que la cuenta quede en negativo, como antes: es una compra
+        # que puede anticiparse a la reposición. No se cambia ese criterio.
+        _mov = await bancos.ajustar(db, data.bank_id, -total_fiat)
+        new_balance = to_float(_mov["saldo_nuevo"])
         await db.bank_ledger.insert_one({
             "bank_id": data.bank_id, "bank_name": bank["name"],
             "date": data.date, "type": "salida", "concept": f"Compra {data.amount_usdt:.2f} USDT @ {data.rate}",

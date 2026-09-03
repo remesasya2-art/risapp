@@ -48,7 +48,6 @@ class Transaction(BaseModel):
     proof_image: Optional[str] = None
     proof_images: List[str] = []
     pending_images: List[str] = []
-    whatsapp_active: bool = False
     is_gestor_transaction: bool = False
     gestor_transaction_id: Optional[str] = None
     client_name: Optional[str] = None
