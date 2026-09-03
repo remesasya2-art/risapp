@@ -458,22 +458,16 @@ async def simulate_pix_payment(payment_id: str, current_user: User = Depends(req
         "new_balance_terceros": new_balance
     }
 
-@router.post("/cancel/{payment_id}")
-async def cancel_pix_payment(payment_id: str, current_user: User = Depends(require_authenticated_user)):
-    """Cancel a pending PIX payment"""
-    result = await db.gestor_pix_payments.update_one(
-        {
-            "payment_id": payment_id,
-            "gestor_id": current_user.user_id,
-            "status": "pending"
-        },
-        {"$set": {"status": "cancelled"}}
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Pago pendiente no encontrado")
-    
-    return {"message": "Pago cancelado", "payment_id": payment_id}
+# NOTA — acá había un segundo `cancel_pix_payment` en la misma ruta.
+#
+# Dos `@router.post("/cancel/{payment_id}")` sobre el mismo router: FastAPI
+# resuelve por orden de registro, así que atendía SIEMPRE el de la línea 198 y
+# éste no corría nunca. No eran iguales — el muerto no guardaba `cancelled_at`
+# y devolvía otro cuerpo— así que quien leyera éste se llevaría una idea
+# equivocada de qué hace cancelar un PIX.
+#
+# Se borra el muerto. Queda el de arriba, que además es el que sí deja fecha
+# de cancelación.
 
 @router.get("/active")
 async def get_active_pix(current_user: User = Depends(require_authenticated_user)):

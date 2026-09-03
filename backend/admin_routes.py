@@ -734,24 +734,13 @@ async def get_all_transactions(
     
     return {"transactions": transactions, "total": total}
 
-@admin_router.get("/transactions/{transaction_id}")
-async def get_transaction_detail(transaction_id: str, admin_user: dict = Depends(get_admin_user)):
-    """Get transaction detail including proof image"""
-    if not has_permission(admin_user, "transactions.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    tx = await db.transactions.find_one({"transaction_id": transaction_id})
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacción no encontrada")
-    
-    tx['_id'] = str(tx['_id'])
-    
-    user = await db.users.find_one({"user_id": tx.get('user_id')}, {"name": 1, "email": 1})
-    tx['user_name'] = user.get('name', 'N/A') if user else 'N/A'
-    tx['user_email'] = user.get('email', 'N/A') if user else 'N/A'
-    
-    return tx
-
+# NOTA — el orden de estos dos importa y no es cosmético.
+#
+# `/transactions/export` tiene que ir ANTES que `/transactions/{transaction_id}`.
+# FastAPI resuelve por orden de registro, así que con el orden anterior un GET
+# a /api/admin/transactions/export lo atendía get_transaction_detail buscando
+# una transacción con id "export": el endpoint de exportar era inalcanzable.
+# Ver tests/test_rutas_alcanzables.py, que falla si vuelve a pasar.
 @admin_router.get("/transactions/export")
 async def export_transactions(admin_user: dict = Depends(get_admin_user)):
     """Export all transactions to Excel"""
@@ -798,6 +787,24 @@ async def export_transactions(admin_user: dict = Depends(get_admin_user)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=transactions.xlsx"}
     )
+
+@admin_router.get("/transactions/{transaction_id}")
+async def get_transaction_detail(transaction_id: str, admin_user: dict = Depends(get_admin_user)):
+    """Get transaction detail including proof image"""
+    if not has_permission(admin_user, "transactions.view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    tx = await db.transactions.find_one({"transaction_id": transaction_id})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    tx['_id'] = str(tx['_id'])
+    
+    user = await db.users.find_one({"user_id": tx.get('user_id')}, {"name": 1, "email": 1})
+    tx['user_name'] = user.get('name', 'N/A') if user else 'N/A'
+    tx['user_email'] = user.get('email', 'N/A') if user else 'N/A'
+    
+    return tx
 
 # =======================
 # PAYMENT RECORDS

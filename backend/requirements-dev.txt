@@ -1,0 +1,13 @@
+# Dependencias que sólo usan los tests. NO van al deploy.
+#
+# `pytest` ya está en requirements.txt, pero mongomock-motor no estaba en
+# ninguno de los dos. Eso hacía que la suite MINTIERA: veintiún archivos usan
+# `pytest.importorskip("mongomock_motor")`, así que sin la librería 551 tests
+# —justo los que prueban la plata— se saltaban en silencio y pytest terminaba
+# en verde. Medido: 1782 pasan con ella, 1231 pasan y 120 se saltan sin ella,
+# 0 fallos en los dos casos.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+mongomock-motor==0.0.36
+mongomock==4.3.0

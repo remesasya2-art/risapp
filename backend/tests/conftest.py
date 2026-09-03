@@ -56,12 +56,87 @@ def usar_base(base):
     return PROXY.usar(base)
 
 
+class _AdminDeMentira:
+    """El `admin` del cliente: solo responde el `hello` que se le pregunta."""
+
+    async def command(self, nombre, *a, **k):
+        if nombre == "hello":
+            # Sin "setName" = mongod suelto, no replica set. Es lo que hay
+            # acá: mongomock no tiene transacciones multi-documento, así que
+            # el motor contable tiene que tomar el camino sin transacción.
+            # Decir que sí las hay lo mandaría a `start_session()` y el test
+            # explotaría por una mentira nuestra, no por el código.
+            return {"ok": 1}
+        raise NotImplementedError(f"comando no simulado: {nombre}")
+
+
+class _ClienteDeMentira:
+    """Doble de `database.client` (el AsyncIOMotorClient real).
+
+    `services/accounting_engine.py` hace `from database import db, client`, y
+    el doble de `database` solo traía `db`. Sin esto el import falla con
+    "cannot import name 'client'", y como `routes/__init__` arrastra al motor
+    contable, se caían archivos de test que ni lo mencionan.
+    """
+
+    def __init__(self):
+        self.admin = _AdminDeMentira()
+
+    def __getitem__(self, nombre):
+        return PROXY[nombre]
+
+
+CLIENTE = _ClienteDeMentira()
+
+
+# ─── Los tests que necesitan un servidor de verdad ────────────────────────
+
+import os  # noqa: E402
+
+_VARIABLE = "RISAPP_TEST_BASE_URL"
+
+
+def servidor_de_integracion():
+    """La URL contra la que correr los tests HTTP, o None si no hay ninguna.
+
+    Siete archivos de este directorio no son tests unitarios: levantan
+    `requests` y hacen POST de verdad contra un backend corriendo. No pueden
+    pasar sin servidor, y no deberían fallar por eso: fallar es lo que dice
+    "hay un bug", y acá no hay ninguno, falta una máquina.
+
+    Se acepta también REACT_APP_BACKEND_URL, que es como estaban escritos,
+    aunque sea un nombre de variable del frontend para tests de backend.
+    """
+    for nombre in (_VARIABLE, "REACT_APP_BACKEND_URL", "EXPO_PUBLIC_BACKEND_URL"):
+        valor = (os.environ.get(nombre) or "").strip().rstrip("/")
+        if valor:
+            return valor
+    return None
+
+
+def saltar_sin_servidor():
+    """Marca de módulo para los archivos que necesitan servidor.
+
+    Se usa como `pytestmark = saltar_sin_servidor()` arriba del archivo.
+    """
+    import pytest
+    return pytest.mark.skipif(
+        servidor_de_integracion() is None,
+        reason=(f"necesita un backend corriendo: exportá {_VARIABLE} "
+                "apuntando a él (p.ej. http://localhost:8000)"),
+    )
+
+
 if "database" not in sys.modules:
     _modulo = types.ModuleType("database")
     _modulo.db = PROXY
+    _modulo.client = CLIENTE
     sys.modules["database"] = _modulo
-elif getattr(sys.modules["database"], "db", None) is None:  # pragma: no cover
-    sys.modules["database"].db = PROXY
+else:  # pragma: no cover
+    if getattr(sys.modules["database"], "db", None) is None:
+        sys.modules["database"].db = PROXY
+    if getattr(sys.modules["database"], "client", None) is None:
+        sys.modules["database"].client = CLIENTE
 
 
 # `services/notifications.create_notification` importa `push_notifications`, que

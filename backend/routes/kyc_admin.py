@@ -355,7 +355,7 @@ async def get_kyc_detail(verification_id: str, admin: User = Depends(get_crm_use
     v = await db.verifications.find_one({"verification_id": verification_id}, {"_id": 0})
     if not v:
         # fallback by user_id
-        v = await db.verifications.find_one({"user_id": verification_id}, {"_id": 0})
+        v = await db.verifications.find_one({"user_id": verification_id}, {"_id": 0}, sort=[("submitted_at", -1)])
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
 
@@ -376,7 +376,8 @@ async def get_kyc_history(verification_id: str, admin: User = Depends(get_crm_us
     # Resolve real id (allow user_id fallback)
     v = await db.verifications.find_one(
         {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
-        {"_id": 0, "verification_id": 1, "user_id": 1, "submitted_at": 1, "status": 1}
+        {"_id": 0, "verification_id": 1, "user_id": 1, "submitted_at": 1, "status": 1},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
@@ -408,7 +409,8 @@ async def get_kyc_history(verification_id: str, admin: User = Depends(get_crm_us
 async def approve_kyc(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_crm_user)):
     checklist = (payload or {}).get("checklist") or {}
     v = await db.verifications.find_one(
-        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]}
+        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
@@ -455,7 +457,8 @@ async def set_kyc_risk(verification_id: str, payload: dict = Body(default={}), a
     if level not in ("low", "medium", "high"):
         raise HTTPException(status_code=400, detail="Nivel de riesgo inválido")
     v = await db.verifications.find_one(
-        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]}
+        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
@@ -480,7 +483,8 @@ async def re_review_kyc(verification_id: str, admin: User = Depends(get_crm_user
     y aprobar de nuevo sin que el usuario tenga que reenviar nada.
     """
     v = await db.verifications.find_one(
-        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]}
+        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
@@ -539,7 +543,8 @@ async def reject_kyc(verification_id: str, payload: RejectRequest,
         final_reason = f"{reason_label}: {payload.reason_text.strip()}"
 
     v = await db.verifications.find_one(
-        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]}
+        {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
@@ -588,7 +593,8 @@ async def update_kyc_note(verification_id: str, payload: NoteRequest,
     """Update internal admin note (only visible to admins)."""
     v = await db.verifications.find_one(
         {"$or": [{"verification_id": verification_id}, {"user_id": verification_id}]},
-        {"_id": 0, "verification_id": 1, "user_id": 1, "admin_note": 1}
+        {"_id": 0, "verification_id": 1, "user_id": 1, "admin_note": 1},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
