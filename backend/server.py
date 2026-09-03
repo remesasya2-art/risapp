@@ -61,7 +61,12 @@ async def lifespan(app):
         await db.users.create_index("email", unique=True, sparse=True)
         await db.users.create_index("cpf_number", sparse=True)
         await db.user_sessions.create_index("session_token", unique=True)
-        await db.user_sessions.create_index("expires_at")
+        # El índice sobre `expires_at` lo crea ensure_security_indexes(), CON
+        # expireAfterSeconds. Crearlo acá sin TTL le ganaba de mano —esto corre
+        # antes— y dejaba al de allá fallando con IndexOptionsConflict en cada
+        # arranque. Resultado: las sesiones vencidas no se borraban nunca y
+        # user_sessions crecía sin techo. El vencimiento en sí se comprueba al
+        # leer (routes/dependencies.py), así que no era un problema de acceso.
         await db.transactions.create_index("user_id")
         await db.transactions.create_index("status")
         await db.notifications.create_index([("user_id", 1), ("created_at", -1)])

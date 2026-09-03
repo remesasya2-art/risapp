@@ -182,8 +182,10 @@ async def asegurar_indices(db) -> None:
     duplicó y hay que ir a mirarla. Queda en el log como ERROR, y la app
     arranca igual — no arrancar sería peor.
     """
+    puestos = []
     try:
         await db[COLECCION].create_index("bank_id", unique=True, name="ux_bank_id")
+        puestos.append("ux_bank_id")
     except Exception as e:
         logger.error("SIN INDICE UNICO en %s.bank_id (%s). Puede haber cuentas "
                      "duplicadas.", COLECCION, e)
@@ -194,10 +196,15 @@ async def asegurar_indices(db) -> None:
         await db[COLECCION].create_index(
             [("name", 1), ("currency", 1)], unique=True, name="ux_pasarela",
             partialFilterExpression={"is_gateway": True})
+        puestos.append("ux_pasarela")
     except Exception as e:
         logger.error("SIN INDICE UNICO de pasarela en %s (%s). Dos cobros "
                      "simultáneos pueden crear dos veces la misma cuenta.",
                      COLECCION, e)
+    if puestos:
+        # Igual que en pagos_una_sola_vez: el éxito se anuncia. No ver un error
+        # no puede ser la única señal de que esto corrió.
+        logger.info("Índices de %s verificados: %s", COLECCION, ", ".join(puestos))
 
 
 async def asegurar_cuenta(db, *, bank_id: str, name: str, currency: str,
