@@ -100,6 +100,14 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Indice de pagos unicos: {e}")
     try:
+        # Los índices que impiden tener dos veces la misma cuenta de banco. La
+        # de la pasarela la crea el código solo, desde dos caminos que corren a
+        # la vez cuando entra un pago.
+        from services.bancos import asegurar_indices
+        await asegurar_indices(db)
+    except Exception as e:
+        logger.error(f"Indices de cuentas bancarias: {e}")
+    try:
         # Estructura del módulo de envíos. Crea índices, nunca datos: los
         # transportistas, agencias y tarifas se cargan desde el panel.
         from services.envios_indices import ensure_envios_indexes

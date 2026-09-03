@@ -56,9 +56,14 @@ POR QUE IMPORTA PARA LA CUENTA OMNIBUS
     ocurrieron.
 """
 
+import logging
+import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from services.money import from_db, quantize_money, to_decimal, to_decimal128
+
+logger = logging.getLogger(__name__)
 
 # El nombre de la colección, en un solo lugar.
 COLECCION = "bank_accounts"
@@ -169,26 +174,86 @@ async def ajustar(db, bank_id: str, delta, *, session=None,
     }
 
 
+async def asegurar_indices(db) -> None:
+    """Los índices que hacen imposible tener dos veces la misma cuenta.
+
+    Se llaman al arrancar. Si alguno no se puede crear porque YA hay
+    duplicados, eso no es un problema de índices: es que la cuenta ya se
+    duplicó y hay que ir a mirarla. Queda en el log como ERROR, y la app
+    arranca igual — no arrancar sería peor.
+    """
+    try:
+        await db[COLECCION].create_index("bank_id", unique=True, name="ux_bank_id")
+    except Exception as e:
+        logger.error("SIN INDICE UNICO en %s.bank_id (%s). Puede haber cuentas "
+                     "duplicadas.", COLECCION, e)
+    try:
+        # Sólo para las cuentas de pasarela, que son las que el código crea
+        # solo. Las cuentas cargadas a mano pueden repetir nombre y moneda sin
+        # que eso sea un error: dos cuentas en el mismo banco es normal.
+        await db[COLECCION].create_index(
+            [("name", 1), ("currency", 1)], unique=True, name="ux_pasarela",
+            partialFilterExpression={"is_gateway": True})
+    except Exception as e:
+        logger.error("SIN INDICE UNICO de pasarela en %s (%s). Dos cobros "
+                     "simultáneos pueden crear dos veces la misma cuenta.",
+                     COLECCION, e)
+
+
 async def asegurar_cuenta(db, *, bank_id: str, name: str, currency: str,
                           saldo_inicial=0, **extra) -> dict:
-    """Devuelve la cuenta, creándola si no existe, con el saldo en Decimal128.
+    """Devuelve la cuenta con ese `bank_id`, creándola si no existe.
 
-    Las pasarelas (Mercado Pago, tarjeta) creaban su cuenta al vuelo con
-    `"balance": 0.0` —un float— y después le sumaban floats. Naciendo en
-    Decimal128 se evita que el tipo dependa de quién la tocó primero.
+    El saldo nace en Decimal128. Las pasarelas creaban su cuenta al vuelo con
+    `"balance": 0.0` —un float— y después le sumaban floats; naciendo en
+    Decimal128 el tipo no depende de quién la tocó primero.
+
+    Es un `upsert`, no un `find_one` seguido de un `insert_one`: entre esos dos
+    hay una ventana por la que dos pedidos simultáneos entran los dos y crean
+    la cuenta dos veces.
     """
-    cuenta = await db[COLECCION].find_one({"bank_id": bank_id})
-    if cuenta is not None:
-        return cuenta
-    cuenta = {
-        "bank_id": bank_id,
-        "name": name,
-        "currency": (currency or "").upper(),
-        "balance": to_decimal128(saldo_inicial),
-        **extra,
-    }
-    await db[COLECCION].insert_one(cuenta)
-    return cuenta
+    return await db[COLECCION].find_one_and_update(
+        {"bank_id": bank_id},
+        {"$setOnInsert": {
+            "bank_id": bank_id,
+            "name": name,
+            "currency": (currency or "").upper(),
+            "balance": to_decimal128(saldo_inicial),
+            **extra,
+        }},
+        upsert=True,
+        return_document=True,
+    )
+
+
+async def asegurar_pasarela(db, *, name: str, currency: str,
+                            prefijo_id: str, **extra) -> dict:
+    """La cuenta de una pasarela (Mercado Pago, tarjeta), creándola si falta.
+
+    Se busca por nombre y moneda, no por `bank_id`, porque el id se generaba
+    al azar en cada creación: buscar por id crearía una cuenta nueva cada vez
+    y dejaría el saldo viejo colgado en la anterior.
+
+    Antes esto estaba escrito dos veces, en gestor_pix y en payments_card, las
+    dos como `find_one` y después `insert_one`. Son justo los dos caminos que
+    corren a la vez cuando entra un pago, así que los dos podían leer que no
+    había cuenta y crear una cada uno: dos filas "Mercado Pago" en BRL, con el
+    saldo repartido entre las dos y sin forma de distinguirlas en el panel.
+
+    El `upsert` cierra casi toda la ventana; el índice único parcial de
+    `asegurar_indices` la cierra del todo.
+    """
+    return await db[COLECCION].find_one_and_update(
+        {"name": name, "currency": (currency or "").upper(), "is_gateway": True},
+        {"$setOnInsert": {
+            "bank_id": f"{prefijo_id}_{uuid.uuid4().hex[:8]}",
+            "balance": to_decimal128(0),
+            "created_at": datetime.now(timezone.utc),
+            **extra,
+        }},
+        upsert=True,
+        return_document=True,
+    )
 
 
 async def total_por_moneda(db) -> dict:
