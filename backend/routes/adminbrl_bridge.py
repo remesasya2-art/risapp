@@ -216,7 +216,6 @@ async def process_withdrawal(
             "status": "completed",
             "completed_at": datetime.now(timezone.utc),
             "bank_id": bank_id,
-            "whatsapp_active": False,
         }
         if request.proof_images:
             update_data["proof_images"] = request.proof_images
@@ -258,7 +257,6 @@ async def process_withdrawal(
                 "status": "rejected",
                 "rejected_at": datetime.now(timezone.utc),
                 "rejection_reason": rejection_reason,
-                "whatsapp_active": False,
             }}
         )
 

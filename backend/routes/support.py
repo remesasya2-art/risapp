@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from database import db
 from routes.dependencies import get_current_user, get_super_admin, get_crm_user
 from models.user import User
-from services.whatsapp import send_whatsapp_notification
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -69,17 +68,6 @@ async def send_support_message(msg: SupportMessage, current_user: User = Depends
     )
     
     # Send WhatsApp notification to admin
-    whatsapp_message = f"""💬 NUEVO MENSAJE DE SOPORTE
-
-👤 Usuario: {current_user.name or 'Usuario'}
-📧 Email: {current_user.email}
-
-📝 Mensaje:
-{msg.message[:200]}{'...' if len(msg.message) > 200 else ''}
-
-🔔 Responde desde el Panel de Admin"""
-    
-    await send_whatsapp_notification(whatsapp_message)
     
     # Create notification for all super admins
     admins = await db.users.find({"role": {"$in": ["super_admin", "admin"]}}).to_list(10)

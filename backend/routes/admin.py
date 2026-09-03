@@ -592,7 +592,6 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
             "client_name": tx.get("client_name"),
             "created_at": tx.get("created_at"),
             "pending_images": tx.get("pending_images", []),
-            "whatsapp_active": tx.get("whatsapp_active", False),
         })
     
     return withdrawals
@@ -662,7 +661,6 @@ async def process_withdrawal(
             "status": "completed",
             "completed_at": datetime.now(timezone.utc),
             "processed_by": admin.user_id,
-            "whatsapp_active": False,
         }
         if bank_id:
             update_data["paid_from_bank"] = bank_id
@@ -786,7 +784,6 @@ async def process_withdrawal(
             "status": "rejected",
             "completed_at": datetime.now(timezone.utc),
             "processed_by": admin.user_id,
-            "whatsapp_active": False,
             "refunded_to_balance": _refunded_amount > 0,
             "refunded_to_balance_field": (
                 _refund_field if _cur_in in ("USDT", "USDC") else "balance_ris"
@@ -1215,7 +1212,6 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
             "completed_at": ahora,
             "processed_by": admin.user_id,
             "rejected_reason": "pago_incompleto",
-            "whatsapp_active": False,
         }},
         return_document=True,
     )

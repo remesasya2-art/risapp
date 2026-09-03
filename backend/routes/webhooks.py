@@ -1,140 +1,67 @@
 """
-Webhooks routes - WhatsApp/Twilio integration for withdrawal processing
+routes/webhooks.py — El webhook entrante de WhatsApp, ya sin flujo detrás.
+
+QUE HABIA
+    Un número de WhatsApp autorizado cerraba órdenes sin pasar por el Panel:
+    «listo» marcaba el retiro como completado, «cancelar» lo cancelaba y
+    reembolsaba el saldo. Esa rama de reembolso acreditaba SIEMPRE `balance_ris`
+    sin mirar la moneda de origen, así que un envío pagado en USDT o USDC volvía
+    en RIS; y dejaba la orden en «cancelled», un estado que el Panel no produce.
+
+    La Fase 1 cortó la entrada dejando el resto del código en su lugar, detrás
+    de un `if`. Esto es la Fase 2: hoy las órdenes se procesan sólo desde el
+    Panel, así que ese código se fue —unas 180 líneas—, junto con el emisor de
+    salida, `whatsapp_service.py` y las dos rutas de retiros que `admin_routes.py`
+    duplicaba.
+
+POR QUE EL ENDPOINT SIGUE EXISTIENDO
+    Porque el número puede seguir apuntado acá. Sin la ruta, cada mensaje daría
+    404 y Twilio reintentaría; con ella, se valida la firma, queda constancia en
+    el log de que alguien escribió, y se contesta 200 sin hacer nada.
+
+    Sigue validando la firma a propósito, aunque no procese: un endpoint público
+    que ni siquiera comprueba quién lo llama es una invitación, y el día que se
+    conecte algo acá, la validación tiene que estar puesta de antes.
+
+ESTE MODULO NO TOCA LA BASE DE DATOS
+    Ni siquiera la importa. Es la propiedad más fuerte que puede tener un
+    receptor desactivado, y hay un test que la exige.
 """
 import logging
-import re
 import os
-import uuid
-import httpx
-from datetime import datetime, timezone
-from pathlib import Path
-from fastapi import APIRouter, Request, Response
-from twilio.rest import Client
-from twilio.request_validator import RequestValidator
 
-from database import db
-from services.money import to_decimal, to_decimal128
-from services.notifications import create_notification
+from fastapi import APIRouter, Request, Response
+from twilio.request_validator import RequestValidator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
-# Twilio config
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "")
 ADMIN_WHATSAPP_NUMBER = os.environ.get("ADMIN_WHATSAPP_NUMBER", "")
 
-# Directorio de comprobantes: relativo a este archivo (-> backend/static/comprobantes),
-# la misma ruta que ya calcula server.py con ROOT_DIR, y overrideable por entorno.
-# Antes estaba hardcodeado a la ruta del contenedor ("/app/...") y ademas hacia
-# makedirs al importar, asi que importar `routes` fuera del contenedor moria con
-# PermissionError sobre '/app'. Importar un modulo no debe tocar disco: el makedirs
-# se fue. No hace falta aca -- server.py crea el directorio al arrancar, y hoy nada
-# escribe en el (los comprobantes van como data URI base64 a Mongo). Si algun dia
-# se vuelve a escribir a disco, esa funcion debe asegurar el directorio ella misma.
-PROOF_IMAGES_DIR = os.environ.get(
-    "PROOF_IMAGES_DIR",
-    str(Path(__file__).resolve().parent.parent / "static" / "comprobantes"),
-)
-
-
-async def download_twilio_image(media_url: str, display_id: str, index: int) -> str:
-    """Download image from Twilio and return as base64 data URI for reliable storage"""
-    import base64
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                media_url,
-                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-                follow_redirects=True,
-                timeout=30.0
-            )
-            
-            if response.status_code == 200:
-                content_type = response.headers.get("content-type", "image/jpeg")
-                b64 = base64.b64encode(response.content).decode("utf-8")
-                data_uri = f"data:{content_type};base64,{b64}"
-                logger.info(f"Image downloaded as base64 for {display_id} ({len(response.content)} bytes)")
-                return data_uri
-            else:
-                logger.error(f"Failed to download image: {response.status_code}")
-                return media_url
-                
-    except Exception as e:
-        logger.error(f"Error downloading Twilio image: {e}")
-        return media_url
-
-
-def send_whatsapp_reply(to: str, message: str):
-    """Send a WhatsApp reply message"""
-    try:
-        if not all([TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM]):
-            logger.error("Twilio credentials not configured")
-            return False
-        
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        client.messages.create(
-            body=message,
-            from_=TWILIO_WHATSAPP_FROM,
-            to=to
-        )
-        logger.info(f"WhatsApp reply sent to {to}")
-        return True
-    except Exception as e:
-        logger.error(f"Error sending WhatsApp reply: {e}")
-        return False
-
-
-# ============================================================================
-# WHATSAPP ENTRANTE NEUTRALIZADO (Fase 1)
-# ============================================================================
-# Este webhook aceptaba comandos del numero admin que cerraban plata sin pasar
-# por el Panel: "listo" marcaba la orden completed, y "cancelar" la marcaba
-# cancelled y reembolsaba saldo. Esa rama de reembolso ademas acreditaba SIEMPRE
-# balance_ris sin mirar currency_input, asi que un envio pagado en USDT/USDC
-# terminaba devuelto en RIS, y dejaba la orden en "cancelled", un estado que el
-# Panel nunca produce.
-#
-# Agravaba el cuadro que la salida estaba muerta (falta TWILIO_WHATSAPP_FROM)
-# pero el emisor igual marcaba whatsapp_active=True antes de intentar enviar y no
-# lo revertia al fallar, asi que podia haber una orden marcada activa de la que
-# nadie recibio aviso. Ese emisor se elimino en la Fase 2.
-#
-# Se corta la ENTRADA, que es lo unico que puede mover dinero. El webhook sigue
-# respondiendo 200 y sigue validando la firma de Twilio, para poder ver en los
-# logs que se intenta mandar, pero no ejecuta ninguna escritura en Mongo bajo
-# ninguna condicion.
-#
-# A proposito NO se lee de una variable de entorno: es un cierre de exposicion,
-# no una feature con flag. Reactivarlo tiene que ser un cambio de codigo revisado.
-# El resto del desmantelamiento (salida, whatsapp_service.py, el endpoint
-# duplicado de admin_routes.py) es Fase 2.
+# No se lee de una variable de entorno a propósito: esto es un cierre de
+# exposición, no una función con interruptor. Volver a abrirlo tiene que ser un
+# cambio de código revisado, no una variable que alguien cambia de madrugada.
 WHATSAPP_INBOUND_DISABLED = True
 
 
 @router.post("/twilio/whatsapp")
 async def twilio_whatsapp_webhook(request: Request):
-    """
-    Handle incoming WhatsApp messages from Twilio
-    
-    Flow:
-    1. Admin receives withdrawal notification
-    2. Admin sends payment proof image(s)
-    3. System responds: "📷 X imagen(es) recibida(s) para ID: XXXXX ✅ Escribe 'listo' para procesar"
-    4. Admin writes "listo"
-    5. System marks withdrawal as completed and sends next in queue
+    """Recibe, valida, registra y descarta. No procesa nada.
+
+    Las órdenes se cierran únicamente desde el Panel.
     """
     try:
         form_data = await request.form()
 
-        # --- SECURITY: verify the request really comes from Twilio ---
+        # Sin token no se puede comprobar quién llama, así que no se contesta
+        # 200: se dice que el webhook no está configurado.
         if not TWILIO_AUTH_TOKEN:
             logger.error("TWILIO_AUTH_TOKEN not set - rejecting webhook")
             return Response(status_code=503, content="Webhook not configured")
 
-        # Reconstruct the public URL Twilio actually called (Railway sits behind a proxy,
-        # so request.url.scheme/host may be the internal http one).
+        # La URL pública que Twilio llamó de verdad. Railway está detrás de un
+        # proxy, así que `request.url` trae la interna y la firma no validaría.
         proto = request.headers.get("x-forwarded-proto", request.url.scheme)
         host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
         public_url = f"{proto}://{host}{request.url.path}"
@@ -148,195 +75,17 @@ async def twilio_whatsapp_webhook(request: Request):
             return Response(status_code=403, content="Invalid signature")
 
         from_number = form_data.get("From", "")
-
-        # --- SECURITY: only the authorized admin number can act on withdrawals ---
         if not ADMIN_WHATSAPP_NUMBER or from_number != ADMIN_WHATSAPP_NUMBER:
             logger.warning(f"Webhook from unauthorized number: {from_number}")
             return Response(content="", media_type="text/xml")
 
-        body = form_data.get("Body", "").strip().lower()
-        num_media = int(form_data.get("NumMedia", 0))
-        
-        logger.info(f"WhatsApp webhook: from={from_number}, body={body}, media={num_media}")
-
-        # --- CORTE: no se procesa ningun comando ni imagen. Ver la nota de
-        # WHATSAPP_INBOUND_DISABLED arriba. Nada debajo de esta linea corre. ---
-        if WHATSAPP_INBOUND_DISABLED:
-            logger.warning(
-                "WhatsApp entrante neutralizado: mensaje descartado sin efecto "
-                f"(from={from_number}, body={body!r}, media={num_media})"
-            )
-            return Response(content="", media_type="text/xml")
-
-        # Find the active withdrawal being processed
-        active_withdrawal = await db.transactions.find_one({
-            "type": {"$in": ["withdrawal", "send"]},
-            "status": "pending",
-            "whatsapp_active": True
-        }, sort=[("created_at", 1)])
-        
-        if not active_withdrawal:
-            logger.info("No active withdrawal found for WhatsApp response")
-            return Response(content="", media_type="text/xml")
-        
-        display_id = active_withdrawal.get("display_id", active_withdrawal.get("transaction_id", "")[:8])
-        tx_id = active_withdrawal.get("transaction_id")
-        user_id = active_withdrawal.get("user_id")
-        
-        # Handle image uploads
-        if num_media > 0:
-            # Download images from Twilio and save locally
-            image_urls = []
-            for i in range(num_media):
-                media_url = form_data.get(f"MediaUrl{i}")
-                if media_url:
-                    # Download and save the image
-                    local_url = await download_twilio_image(media_url, display_id, i)
-                    image_urls.append(local_url)
-            
-            # Store images in transaction
-            existing_images = active_withdrawal.get("proof_images", [])
-            all_images = existing_images + image_urls
-            
-            await db.transactions.update_one(
-                {"transaction_id": tx_id},
-                {"$set": {
-                    "proof_images": all_images,
-                    "last_image_at": datetime.now(timezone.utc)
-                }}
-            )
-            
-            # Send confirmation reply
-            reply_message = f"""📷 {len(image_urls)} imagen(es) recibida(s) para ID: {display_id}
-
-✅ Escribe "listo" para procesar
-📷 O envía más imágenes"""
-            
-            send_whatsapp_reply(from_number, reply_message)
-            logger.info(f"Images received for withdrawal {display_id}: {len(image_urls)} images")
-            
-            return Response(content="", media_type="text/xml")
-        
-        # Handle "listo" command to complete withdrawal
-        if body in ["listo", "lista", "hecho", "completado", "ok", "done"]:
-            # Mark withdrawal as completed
-            await db.transactions.update_one(
-                {"transaction_id": tx_id},
-                {"$set": {
-                    "status": "completed",
-                    "completed_at": datetime.now(timezone.utc),
-                    "whatsapp_active": False,
-                    "whatsapp_completed_by": from_number
-                }}
-            )
-            
-            # Get user info
-            user = await db.users.find_one({"user_id": user_id})
-            user_name = user.get("name", "Usuario") if user else "Usuario"
-            amount_ves = active_withdrawal.get("amount_output", 0)
-            
-            # Create notification for user
-            await create_notification(
-                user_id=user_id,
-                title="✅ Retiro Completado",
-                message=f"Tu retiro de {amount_ves:.2f} VES ha sido procesado exitosamente.",
-                notification_type="withdrawal_completed"
-            )
-            
-            # Send completion confirmation to admin
-            reply_message = f"""✅ RETIRO COMPLETADO
-
-🔢 ID: {display_id}
-👤 Usuario: {user_name}
-💰 Monto: {amount_ves:.2f} VES
-
-Procesando siguiente retiro..."""
-            
-            send_whatsapp_reply(from_number, reply_message)
-            logger.info(f"Withdrawal {display_id} completed via WhatsApp")
-            
-            return Response(content="", media_type="text/xml")
-        
-        # Handle "cancelar" command
-        if body in ["cancelar", "cancel", "rechazar"]:
-            await db.transactions.update_one(
-                {"transaction_id": tx_id},
-                {"$set": {
-                    "status": "cancelled",
-                    "cancelled_at": datetime.now(timezone.utc),
-                    "whatsapp_active": False,
-                    "cancel_reason": "Cancelado por admin via WhatsApp"
-                }}
-            )
-            
-            # Refund user balance
-            amount_ris = active_withdrawal.get("amount_input", 0)
-            await db.users.update_one(
-                {"user_id": user_id},
-                {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris))}}
-            )
-            
-            # Notify user
-            await create_notification(
-                user_id=user_id,
-                title="❌ Retiro Cancelado",
-                message=f"Tu retiro ha sido cancelado. El saldo ha sido devuelto a tu cuenta.",
-                notification_type="withdrawal_cancelled"
-            )
-            
-            reply_message = f"""❌ RETIRO CANCELADO
-
-🔢 ID: {display_id}
-💰 Saldo devuelto al usuario
-
-Procesando siguiente retiro..."""
-            
-            send_whatsapp_reply(from_number, reply_message)
-            logger.info(f"Withdrawal {display_id} cancelled via WhatsApp")
-            
-            return Response(content="", media_type="text/xml")
-        
-        # Handle "info" command - show current withdrawal details
-        if body in ["info", "datos", "detalles"]:
-            beneficiary = active_withdrawal.get("beneficiary_data", {})
-            payment_type = beneficiary.get("payment_type", "transferencia")
-            amount_ves = active_withdrawal.get("amount_output", 0)
-            
-            if payment_type == "pago_movil":
-                details = f"""📋 DETALLES RETIRO {display_id}
-
-👤 {beneficiary.get('full_name', 'N/A')}
-🏦 {beneficiary.get('bank_code', 'N/A')}
-📄 {beneficiary.get('id_document', 'N/A')}
-📱 {beneficiary.get('phone_number', 'N/A')}
-💰 {amount_ves:.2f} VES
-
-📱 PAGO MÓVIL"""
-            else:
-                details = f"""📋 DETALLES RETIRO {display_id}
-
-👤 {beneficiary.get('full_name', 'N/A')}
-🏦 {beneficiary.get('account_number', 'N/A')}
-📄 {beneficiary.get('id_document', 'N/A')}
-💰 {amount_ves:.2f} VES
-
-🏦 TRANSFERENCIA"""
-            
-            send_whatsapp_reply(from_number, details)
-            return Response(content="", media_type="text/xml")
-        
-        # Unknown command - show help
-        help_message = f"""🔔 Retiro activo: {display_id}
-
-📷 Envía comprobante de pago
-✅ Escribe "listo" para completar
-❌ Escribe "cancelar" para rechazar
-📋 Escribe "info" para ver detalles"""
-        
-        send_whatsapp_reply(from_number, help_message)
-        
+        logger.warning(
+            "WhatsApp entrante desactivado: mensaje descartado sin efecto "
+            f"(from={from_number}, body={form_data.get('Body', '')!r}, "
+            f"media={form_data.get('NumMedia', 0)})"
+        )
         return Response(content="", media_type="text/xml")
-        
+
     except Exception as e:
         logger.error(f"WhatsApp webhook error: {e}")
         return Response(content="", media_type="text/xml")
