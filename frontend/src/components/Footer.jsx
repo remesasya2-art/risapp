@@ -16,6 +16,7 @@ export default function Footer() {
         <div>
           <p style={colTitle}>Legal</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Link to="/como-funciona" style={linkStyle}>Cómo funciona</Link>
             <Link to="/legal#privacidad" style={linkStyle}>Política de Privacidad</Link>
             <Link to="/legal#terminos" style={linkStyle}>Términos y Condiciones</Link>
             <Link to="/legal#reembolsos" style={linkStyle}>Reembolsos y Devoluciones</Link>

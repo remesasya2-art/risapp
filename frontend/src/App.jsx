@@ -26,6 +26,7 @@ import BTCLightning from './pages/BTCLightning';
 import SendReais from './pages/SendReais';
 import SendCrypto from './pages/SendCrypto';
 import LegalPage from './pages/LegalPage';
+import ComoFunciona from './pages/ComoFunciona';
 import Landing from './pages/Landing';
 import EnviosMis from './pages/EnviosMis';
 import EnvioNuevo from './pages/EnvioNuevo';
@@ -116,6 +117,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/legal" element={<LegalPage />} />
+      <Route path="/como-funciona" element={<ComoFunciona />} />
       {/* Publica a proposito: es el link que el usuario le manda a quien espera
           la caja. No muestra ningun dato personal — ver Seguimiento.jsx. */}
       <Route path="/seguimiento/:token" element={<Seguimiento />} />
