@@ -122,6 +122,10 @@ PLAN_DE_CUENTAS = OrderedDict([
     ("2.1.02", {"nombre": "Saldo RIS de terceros", "tipo": PASIVO}),
     ("2.1.03", {"nombre": "Créditos USDT de usuarios", "tipo": PASIVO}),
     ("2.1.04", {"nombre": "Créditos USDC de usuarios", "tipo": PASIVO}),
+    # Contrapartida de los traspasos entre dos cuentas del MISMO usuario. Las
+    # dos patas del traspaso caen acá con signos opuestos, así que esta cuenta
+    # tiene que quedar SIEMPRE en cero: si no, hay un traspaso a medias.
+    ("2.1.99", {"nombre": "Traspasos internos entre saldos", "tipo": PASIVO}),
 
     ("3.1.01", {"nombre": "Saldos de apertura", "tipo": PATRIMONIO}),
 
@@ -160,6 +164,11 @@ ASIENTOS = {
     "recarga_ves": {
         "contra": "1.1.02",
         "glosa": "Recarga en bolívares (Venezuela)"},
+    # Recarga en reales aprobada a mano por un administrador (comprobante de
+    # transferencia). Va contra el mismo banco que el PIX: la plata entró igual.
+    "recarga_brl": {
+        "contra": "1.1.01",
+        "glosa": "Recarga en reales (aprobación manual)"},
     "pago_tarjeta": {
         "contra": "1.1.04",
         "glosa": "Recarga con tarjeta"},
@@ -197,6 +206,17 @@ ASIENTOS = {
     "ajuste_admin_cripto": {
         "contra": "5.1.02",
         "glosa": "Ajuste manual de créditos cripto"},
+    # El ajuste a mano del saldo RIS. No tiene una operación detrás que lo
+    # explique, así que va contra la cuenta de ajustes: si esta cuenta crece,
+    # es que se está corrigiendo mucho a mano y eso hay que mirarlo.
+    "ajuste_admin": {
+        "contra": "5.1.02",
+        "glosa": "Ajuste manual de saldo RIS"},
+    # El gestor pasando plata de su saldo personal al de terceros. No entra ni
+    # sale dinero de la empresa: las dos patas se anulan en 2.1.99.
+    "traspaso_interno": {
+        "contra": "2.1.99",
+        "glosa": "Traspaso entre saldos del mismo usuario"},
 }
 
 # La cuenta del usuario, segun donde vive el saldo.

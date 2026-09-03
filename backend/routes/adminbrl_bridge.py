@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from database import db
 from services.money import to_decimal, to_decimal128
+from services import saldos
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -244,9 +245,40 @@ async def process_withdrawal(
     elif action == "reject":
         transaction_id = request.transaction_id
 
-        await db.users.update_one(
-            {"user_id": transaction["user_id"]},
-            {"$inc": {"balance_ris": to_decimal128(to_decimal(transaction.get("amount_input", 0)))}}
+        # La devolución vuelve a la moneda de ORIGEN del envío. Este puente
+        # devolvía SIEMPRE a `balance_ris`, sin mirar `currency_input`: un envío
+        # pagado con USDT o USDC volvía convertido en RIS, que es plata que no
+        # es la suya. La lista de pendientes de acá arriba no filtra por moneda,
+        # así que el caso llega de verdad.
+        #
+        # El Panel (`routes/admin.py`) ya sabe devolver cripto a su billetera y
+        # asentarlo en el libro de créditos. Duplicar esas cuarenta y pico de
+        # líneas acá sería fabricar el próximo desvío, así que este puente —que
+        # es auxiliar— manda ese caso al Panel en vez de devolver mal.
+        _moneda_origen = str(transaction.get("currency_input") or "RIS").upper()
+        if _moneda_origen in ("USDT", "USDC"):
+            raise HTTPException(
+                status_code=400,
+                detail=(f"Este retiro se pagó en {_moneda_origen} y la devolución "
+                        f"tiene que volver a esa billetera. Rechazalo desde el "
+                        f"Panel, que sabe hacerlo; por acá se devolvería en RIS."))
+
+        # Y la devolución no dejaba ninguna línea en el libro: el saldo del
+        # usuario subía y el mayor no se enteraba.
+        await saldos.mover(
+            db, transaction["user_id"], transaction.get("amount_input", 0),
+            movimiento="refund_envio",
+            reference_kind="transaction",
+            reference_id=transaction_id,
+            transaction_id=transaction_id,
+            display_id=transaction.get("display_id"),
+            actor_type="admin",
+            actor_id="adminbrl_bridge",
+            counterparty=transaction.get("beneficiary_data"),
+            amount_output=transaction.get("amount_output"),
+            currency_output=transaction.get("currency_output"),
+            metadata={"via": "adminbrl_bridge"},
+            notes="Devolución por retiro rechazado desde el puente",
         )
 
         rejection_reason = request.rejection_reason or "Rechazado por el operador."

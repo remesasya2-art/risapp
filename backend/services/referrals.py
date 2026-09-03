@@ -45,24 +45,14 @@ async def process_referral_bonus(user_id: str, recharge_amount: float):
     total_bonus += commission
     
     if total_bonus > 0:
-        # Add bonus to partner balance
-        _partner_after_doc = await db.users.find_one_and_update(
-            {"user_id": partner["user_id"]},
-            {"$inc": {"balance_ris": total_bonus}},
-            return_document=True
-        )
-        # Libro mayor RIS (no interrumpe el abono del bono)
+        # Add bonus to partner balance, con su línea de libro en la misma
+        # operación. El bono no interrumpe el flujo del usuario referido, así
+        # que un socio que ya no existe se registra y se sigue.
+        from services import saldos
         try:
-            from services.ledger import record_ris_entry
-            _pb_after = (_partner_after_doc or {}).get("balance_ris")
-            await record_ris_entry(
-                user_id=partner["user_id"],
-                movement_type="bono_referido",
-                amount=total_bonus,
-                direction="credit",
-                account="balance_ris",
-                balance_before=(_pb_after - total_bonus) if _pb_after is not None else None,
-                balance_after=_pb_after,
+            await saldos.mover(
+                db, partner["user_id"], total_bonus,
+                movimiento="bono_referido",
                 reference_kind="referral",
                 reference_id=user_id,
                 actor_type="system",
@@ -70,8 +60,10 @@ async def process_referral_bonus(user_id: str, recharge_amount: float):
                 metadata={"referred_user_id": user_id, "first_recharge": first_recharge, "recharge_amount": recharge_amount},
                 notes="Bono/comisión de referido",
             )
-        except Exception as e:
-            logger.warning(f"Ledger bono_referido no registrado: {e}")
+        except saldos.UsuarioInexistente:
+            logger.error(
+                f"Bono de referido no abonado: el socio {partner['user_id']} "
+                f"ya no existe (referido {user_id}, {total_bonus} RIS)")
         
         # Record earning
         earning = {

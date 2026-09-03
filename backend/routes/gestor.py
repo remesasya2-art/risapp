@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from database import db
 from services.money import from_db, to_float, to_decimal, to_decimal128
+from services import saldos
 from models.user import User
 from models.requests import GestorBeneficiaryRequest, GestorTransactionRequest, GestorRechargeTercerosRequest
 from routes.dependencies import get_current_user
@@ -205,12 +206,33 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     
     await db.gestor_transactions.insert_one(gestor_transaction)
     
-    # Débito atómico con guardia (evita condición de carrera / saldo negativo)
-    debited = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, "balance_ris_terceros": {"$gte": to_decimal128(to_decimal(request.amount_ris))}},
-        {"$inc": {"balance_ris_terceros": to_decimal128(-to_decimal(request.amount_ris))}}
-    )
-    if not debited:
+    # Débito atómico con guardia (evita condición de carrera / saldo negativo),
+    # y la línea del libro en la misma operación: antes el gestor movía plata de
+    # terceros y el mayor no registraba nada.
+    try:
+        await saldos.mover(
+            db, current_user.user_id, -to_decimal(request.amount_ris),
+            movimiento="envio_ves",
+            cuenta="balance_ris_terceros",
+            exigir_saldo=True,
+            reference_kind="transaction",
+            reference_id=tx_id,
+            transaction_id=tx_id,
+            display_id=display_id,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            rate=ris_to_ves,
+            rate_kind="ris_to_ves",
+            amount_output=amount_ves,
+            currency_output="VES",
+            counterparty=gestor_transaction["beneficiary_data"],
+            metadata={"client_name": request.client_name,
+                      "payment_type": request.payment_type,
+                      "commission_amount": commission_amount,
+                      "is_gestor_transaction": True},
+            notes="Envío de un gestor con saldo de terceros",
+        )
+    except saldos.SaldoInsuficiente:
         # El saldo cambió entre la comprobación y el débito (carrera): deshacemos el registro.
         await db.gestor_transactions.delete_one({"transaction_id": tx_id})
         raise HTTPException(status_code=400, detail="Saldo de terceros insuficiente.")
@@ -301,27 +323,29 @@ async def gestor_recharge_terceros(request: GestorRechargeTercerosRequest, curre
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
     
-    balance_personal = to_float(from_db(user.get("balance_ris", 0)))
-    if balance_personal < request.amount:
-        raise HTTPException(status_code=400, detail=f"Saldo personal insuficiente. Disponible: {balance_personal:.2f} RIS")
-    
-    # Transfer
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {
-            "$inc": {
-                "balance_ris": to_decimal128(-to_decimal(request.amount)),
-                "balance_ris_terceros": to_decimal128(to_decimal(request.amount))
-            }
-        }
-    )
+    # El traspaso mueve los dos campos en una sola escritura, con la
+    # comprobación de saldo DENTRO del filtro. Antes se leía el saldo, se
+    # comparaba acá y después se escribía sin condición: dos traspasos
+    # simultáneos pasaban los dos la comprobación y el saldo personal quedaba en
+    # negativo. Y no dejaba ninguna línea en el libro.
+    try:
+        traspaso = await saldos.transferir(
+            db, current_user.user_id, request.amount,
+            de="balance_ris", a="balance_ris_terceros",
+            actor_type="user",
+            actor_id=current_user.user_id,
+            actor_email=user.get("email"),
+            notes="Traspaso de saldo personal a saldo de terceros",
+        )
+    except saldos.SaldoInsuficiente as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Saldo personal insuficiente. Disponible: {float(e.disponible):.2f} RIS")
     
     logger.info(f"Gestor {current_user.user_id} transferred {request.amount} RIS from personal to terceros")
     
-    updated_user = await db.users.find_one({"user_id": current_user.user_id})
-    
     return {
         "message": f"Transferido {request.amount:.2f} RIS a saldo de terceros",
-        "balance_ris": to_float(from_db(updated_user.get("balance_ris", 0))),
-        "balance_ris_terceros": to_float(from_db(updated_user.get("balance_ris_terceros", 0)))
+        "balance_ris": to_float(traspaso["saldo_origen"]),
+        "balance_ris_terceros": to_float(traspaso["saldo_destino"])
     }

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from database import db
 
 from services.money import from_db, to_float, to_decimal, to_decimal128
+from services import saldos
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
 from services.min_amount import effective_min_amount
@@ -400,14 +401,21 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     # Libro mayor RIS (append-only). Nunca interrumpe el envío.
     try:
         from services.ledger import record_ris_entry
-        balance_after_ris = user.get("balance_ris")
+        # `saldo_de` lee con `from_db`, así que da lo mismo si el campo quedó
+        # en `float` o en `Decimal128`. Antes se leía crudo y se le SUMABA el
+        # monto para sacar el saldo anterior: con el campo en Decimal128 eso es
+        # un TypeError, y como esto va dentro del `try`, la línea del libro se
+        # perdía en silencio mientras la plata sí se movía.
+        _saldo_despues = saldos.saldo_de(user)
+        balance_after_ris = to_float(_saldo_despues)
+        balance_before_ris = to_float(_saldo_despues + to_decimal(request.amount))
         await record_ris_entry(
             user_id=current_user.user_id,
             movement_type="envio_reais",
             amount=request.amount,
             direction="debit",
             account="balance_ris",
-            balance_before=(balance_after_ris + request.amount) if balance_after_ris is not None else None,
+            balance_before=balance_before_ris,
             balance_after=balance_after_ris,
             reference_kind="transaction",
             reference_id=tx_id,
@@ -522,14 +530,21 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     # Libro mayor RIS (append-only). Nunca interrumpe el envío.
     try:
         from services.ledger import record_ris_entry
-        balance_after_ris = user.get("balance_ris")
+        # `saldo_de` lee con `from_db`, así que da lo mismo si el campo quedó
+        # en `float` o en `Decimal128`. Antes se leía crudo y se le SUMABA el
+        # monto para sacar el saldo anterior: con el campo en Decimal128 eso es
+        # un TypeError, y como esto va dentro del `try`, la línea del libro se
+        # perdía en silencio mientras la plata sí se movía.
+        _saldo_despues = saldos.saldo_de(user)
+        balance_after_ris = to_float(_saldo_despues)
+        balance_before_ris = to_float(_saldo_despues + to_decimal(request.amount))
         await record_ris_entry(
             user_id=current_user.user_id,
             movement_type="envio_ves",
             amount=request.amount,
             direction="debit",
             account="balance_ris",
-            balance_before=(balance_after_ris + request.amount) if balance_after_ris is not None else None,
+            balance_before=balance_before_ris,
             balance_after=balance_after_ris,
             reference_kind="transaction",
             reference_id=tx_id,
