@@ -118,6 +118,14 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Indices del libro de auditoria: {e}")
     try:
+        # Las invitaciones de primer acceso del personal. El índice único
+        # sobre la huella del token es lo que impide que dos invitaciones
+        # distintas terminen compartiendo llave.
+        from services.invitaciones import asegurar_indices as indices_invitaciones
+        await indices_invitaciones(db)
+    except Exception as e:
+        logger.error(f"Indices de invitaciones del personal: {e}")
+    try:
         # Estructura del módulo de envíos. Crea índices, nunca datos: los
         # transportistas, agencias y tarifas se cargan desde el panel.
         from services.envios_indices import ensure_envios_indexes

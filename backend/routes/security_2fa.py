@@ -80,6 +80,50 @@ def get_real_client_ip(request: Request) -> str:
     return get_remote_address(request)
 
 limiter = Limiter(key_func=get_real_client_ip, default_limits=[])
+
+
+# ─── Cómo se pide el límite, y por qué no con el decorador ────────────────
+#
+# `@limiter.limit(...)` sobre una función definida ADENTRO de un handler se
+# aplica de nuevo en cada pedido, y cada aplicación agrega una entrada más a
+# `limiter._route_limits[nombre]`. La lista no se limpia nunca.
+#
+# El efecto no es cosmético: `_check_request_limit` recorre esa lista entera
+# y descuenta UNA unidad por cada entrada. Con veinte entradas acumuladas,
+# un solo pedido consume veinte del cupo, así que el login empezaba a
+# devolver 429 a CUALQUIERA —incluso desde una IP que nunca había entrado—
+# después de veinte ingresos, y sólo se recuperaba reiniciando el proceso.
+# Medido: el ingreso número 21 desde una IP nueva se rechazaba. Y la lista
+# crecía sin techo mientras el servidor vivía.
+#
+# `frenar()` hace lo mismo que el decorador —una consulta al mismo
+# contador, con la misma clave por IP— pero sin registrar nada. Se llama, no
+# se decora, así que no hay nada que se acumule.
+#
+# Para un handler de ruta común el decorador está bien: FastAPI lo aplica una
+# sola vez, al importar. Así se usa abajo en /verify.
+
+_REGLAS: dict = {}
+
+
+def frenar(request: Request, alcance: str, regla: str) -> None:
+    """Descuenta una unidad del cupo de esta IP. Levanta 429 si se pasó.
+
+    `alcance` separa los contadores entre endpoints: sin él, gastar el cupo
+    de "olvidé mi contraseña" dejaría a esa IP sin poder iniciar sesión.
+    """
+    from limits import parse
+
+    parsed = _REGLAS.get(regla)
+    if parsed is None:
+        parsed = _REGLAS[regla] = parse(regla)
+
+    clave = get_real_client_ip(request)
+    if not limiter.limiter.hit(parsed, clave, alcance):
+        logger.warning("Límite %s alcanzado por %s en %s", regla, clave, alcance)
+        raise HTTPException(
+            status_code=429,
+            detail="Demasiados intentos. Esperá unos minutos y volvé a probar.")
 # ============================================================
 # Router
 # ============================================================

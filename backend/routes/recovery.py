@@ -46,12 +46,12 @@ class SupportContactRequest(BaseModel):
 @router.post("/verify-identity")
 async def verify_identity(data: VerifyIdentityRequest, request: Request):
     """Step 1: Verify user identity with personal data"""
-    from routes.security_2fa import limiter
+    from routes.security_2fa import frenar
 
-    # 5/15min por IP: evita que se use este endpoint como oraculo para
-    # fuerza-brutear CPF/telefono/documento de una victima campo por campo.
-    @limiter.limit("5/15minutes")
     async def _do_verify(request: Request, data: VerifyIdentityRequest):
+        # 5/15min por IP: evita que se use este endpoint como oráculo para
+        # fuerza-brutear CPF/teléfono/documento de una víctima campo por campo.
+        frenar(request, "recovery.verify_identity", "5/15minutes")
         GENERIC_ERROR = "Los datos no coinciden con nuestros registros"
 
         # Find user by email

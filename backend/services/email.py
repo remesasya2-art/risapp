@@ -108,3 +108,51 @@ async def send_admin_password_reset_email(email: str, temp_password: str, admin_
     except Exception as e:
         logger.error(f"Error sending admin password reset email: {e}")
         return False
+
+
+async def send_staff_invitation_email(email: str, nombre: str, cargo: str,
+                                      token: str) -> bool:
+    """Invitación de primer acceso para el personal dado de alta en RRHH.
+
+    El token viaja SOLO acá: en la base queda su hash. Por eso este correo
+    no se loguea con el link adentro —el log lo lee mucha más gente que la
+    casilla del destinatario.
+    """
+    if not RESEND_API_KEY:
+        logger.warning("Email not configured - missing Resend API key")
+        return False
+
+    enlace = f"{FRONTEND_URL.rstrip('/')}/personal/activar?token={token}"
+
+    try:
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #6366f1;">Activa tu acceso</h2>
+            <p>Hola {nombre},</p>
+            <p>Se creó tu perfil de <strong>{cargo}</strong> en RIS App.
+               Para entrar por primera vez tenés que configurar tu contraseña
+               y activar la verificación en dos pasos.</p>
+            <div style="text-align: center; margin: 28px 0;">
+                <a href="{enlace}" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: bold; display: inline-block;">Configurar mi acceso</a>
+            </div>
+            <p>Si el botón no funciona, copiá este enlace en tu navegador:</p>
+            <p style="word-break: break-all; color: #6366f1; font-size: 12px;">{enlace}</p>
+            <p><strong>El enlace vence en 72 horas y se puede usar una sola vez.</strong>
+               Si vence, pedile a tu administrador que te lo reenvíe.</p>
+            <p style="color: #666; font-size: 12px;">Si no esperabas este correo,
+               no lo uses y avisá a tu administrador: alguien creó un perfil a tu nombre.</p>
+        </div>
+        """
+
+        resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": email,
+            "subject": "Activa tu acceso a RIS App",
+            "html": html_content
+        })
+
+        logger.info(f"Staff invitation email sent to {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Error sending staff invitation email: {e}")
+        return False
