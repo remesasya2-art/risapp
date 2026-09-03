@@ -56,12 +56,49 @@ def usar_base(base):
     return PROXY.usar(base)
 
 
+class _AdminDeMentira:
+    """El `admin` del cliente: solo responde el `hello` que se le pregunta."""
+
+    async def command(self, nombre, *a, **k):
+        if nombre == "hello":
+            # Sin "setName" = mongod suelto, no replica set. Es lo que hay
+            # acá: mongomock no tiene transacciones multi-documento, así que
+            # el motor contable tiene que tomar el camino sin transacción.
+            # Decir que sí las hay lo mandaría a `start_session()` y el test
+            # explotaría por una mentira nuestra, no por el código.
+            return {"ok": 1}
+        raise NotImplementedError(f"comando no simulado: {nombre}")
+
+
+class _ClienteDeMentira:
+    """Doble de `database.client` (el AsyncIOMotorClient real).
+
+    `services/accounting_engine.py` hace `from database import db, client`, y
+    el doble de `database` solo traía `db`. Sin esto el import falla con
+    "cannot import name 'client'", y como `routes/__init__` arrastra al motor
+    contable, se caían archivos de test que ni lo mencionan.
+    """
+
+    def __init__(self):
+        self.admin = _AdminDeMentira()
+
+    def __getitem__(self, nombre):
+        return PROXY[nombre]
+
+
+CLIENTE = _ClienteDeMentira()
+
+
 if "database" not in sys.modules:
     _modulo = types.ModuleType("database")
     _modulo.db = PROXY
+    _modulo.client = CLIENTE
     sys.modules["database"] = _modulo
-elif getattr(sys.modules["database"], "db", None) is None:  # pragma: no cover
-    sys.modules["database"].db = PROXY
+else:  # pragma: no cover
+    if getattr(sys.modules["database"], "db", None) is None:
+        sys.modules["database"].db = PROXY
+    if getattr(sys.modules["database"], "client", None) is None:
+        sys.modules["database"].client = CLIENTE
 
 
 # `services/notifications.create_notification` importa `push_notifications`, que
