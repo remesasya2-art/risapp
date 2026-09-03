@@ -518,7 +518,7 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     # Get KYC/verification data
-    kyc = await db.verifications.find_one({"user_id": user_id}, {"_id": 0})
+    kyc = await db.verifications.find_one({"user_id": user_id}, {"_id": 0}, sort=[("submitted_at", -1)])
     
     # Merge KYC images into user profile
     if kyc:
@@ -2270,7 +2270,8 @@ async def get_pending_verifications(admin: User = Depends(get_super_admin)):
     for user in users:
         verification = await db.verifications.find_one(
             {"user_id": user["user_id"]},
-            {"_id": 0}
+            {"_id": 0},
+            sort=[("submitted_at", -1)],
         )
         result.append({
             **user,
@@ -2294,7 +2295,7 @@ async def decide_verification(
     verification = await db.verifications.find_one({"verification_id": verification_id})
     if not verification:
         # Try finding by user_id
-        verification = await db.verifications.find_one({"user_id": verification_id})
+        verification = await db.verifications.find_one({"user_id": verification_id}, sort=[("submitted_at", -1)])
     
     if not verification:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")
@@ -2710,7 +2711,8 @@ async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_
     En ambos casos se bloquea la cuenta actual y se cierran sus sesiones.
     """
     v = await db.verifications.find_one(
-        {"$or": [{"verification_id": data.verification_id}, {"user_id": data.verification_id}]}
+        {"$or": [{"verification_id": data.verification_id}, {"user_id": data.verification_id}]},
+        sort=[("submitted_at", -1)],
     )
     if not v:
         raise HTTPException(status_code=404, detail="Verificación no encontrada")

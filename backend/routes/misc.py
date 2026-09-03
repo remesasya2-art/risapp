@@ -190,7 +190,8 @@ async def get_verification_status(current_user: User = Depends(get_current_user)
     """Get verification status"""
     verification = await db.verifications.find_one(
         {"user_id": current_user.user_id},
-        {"_id": 0}
+        {"_id": 0},
+        sort=[("submitted_at", -1)],
     )
     return verification or {"status": "none"}
 

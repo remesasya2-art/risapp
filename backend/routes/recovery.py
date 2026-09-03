@@ -64,7 +64,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
         user_cpf = (user.get("cpf_number") or "").replace(".", "").replace("-", "")
         input_cpf = data.cpf.replace(".", "").replace("-", "")
 
-        verification = await db.verifications.find_one({"user_id": user["user_id"]})
+        verification = await db.verifications.find_one({"user_id": user["user_id"]}, sort=[("submitted_at", -1)])
 
         matches = True
 
