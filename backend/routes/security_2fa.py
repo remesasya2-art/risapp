@@ -38,6 +38,7 @@ import pyotp
 import qrcode
 from bson.decimal128 import Decimal128
 from fastapi import APIRouter, Request, Depends, HTTPException, Response
+from pymongo.errors import OperationFailure
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -60,6 +61,13 @@ BACKUP_CODE_LENGTH = 10
 ISSUER_NAME = "RIS App"
 ADMIN_ROLES = {"admin", "super_admin"}
 SUPER_ADMIN_ROLE = "super_admin"
+
+# Cuánto se conserva una sesión DESPUÉS de vencida, antes de que Mongo la
+# borre sola. No es el control de acceso —eso lo hace routes/dependencies.py
+# comparando expires_at en cada request— sino la limpieza: sin esto la
+# colección crece para siempre.
+TTL_SESIONES_VENCIDAS = 60 * 60 * 24 * 30          # 30 días
+CONFLICTO_DE_OPCIONES_DE_INDICE = 85               # IndexOptionsConflict
 
 # ============================================================
 # Rate Limiter (per IP)
@@ -210,16 +218,44 @@ async def _consume_pending_token(token: str) -> Optional[dict]:
 # ============================================================
 # Index bootstrap
 # ============================================================
+async def _asegurar_ttl_de_sesiones():
+    """Deja `user_sessions.expires_at` con TTL, aunque ya exista sin él."""
+    opciones = {"expireAfterSeconds": TTL_SESIONES_VENCIDAS, "name": "expires_at_1"}
+    try:
+        await db.user_sessions.create_index("expires_at", **opciones)
+        logger.info("user_sessions: TTL de sesiones vencidas verificado")
+        return
+    except OperationFailure as e:
+        if e.code != CONFLICTO_DE_OPCIONES_DE_INDICE:
+            logger.warning(f"user_sessions TTL index: {e}")
+            return
+    # El índice está pero con otras opciones (sin TTL). Se rehace.
+    try:
+        await db.user_sessions.drop_index("expires_at_1")
+        await db.user_sessions.create_index("expires_at", **opciones)
+        logger.info("user_sessions: el índice de expires_at existía sin TTL; "
+                    "se rehízo con TTL. Las sesiones vencidas vuelven a "
+                    "borrarse solas.")
+    except Exception as e:
+        logger.warning(f"user_sessions TTL index: no se pudo rehacer: {e}")
+
+
 async def ensure_security_indexes():
     await db.twofa_pending.create_index("token", unique=True)
     await db.twofa_pending.create_index("expires_at", expireAfterSeconds=60 * 30)
     await db.admin_access_log.create_index([("user_id", 1), ("created_at", -1)])
     await db.admin_access_log.create_index([("created_at", -1)])
-    # Sessions cleanup TTL (optional, keep historic 30d after expiry)
-    try:
-        await db.user_sessions.create_index("expires_at", expireAfterSeconds=60 * 60 * 24 * 30)
-    except Exception as e:
-        logger.warning(f"user_sessions TTL index: {e}")
+    # Limpieza de sesiones: se borran 30 días después de haber vencido.
+    #
+    # En la base de producción este índice ya existe SIN TTL —lo creaba
+    # server.py con el mismo nombre y sin expireAfterSeconds, y como corre
+    # antes, ganaba— así que esta línea venía fallando en cada arranque con
+    # IndexOptionsConflict y las sesiones vencidas no se borraban nunca.
+    #
+    # Mongo no cambia las opciones de un índice existente: hay que tirarlo y
+    # rehacerlo. Es barato y no rompe nada mientras tanto: el vencimiento se
+    # comprueba al leer la sesión (routes/dependencies.py), no depende del TTL.
+    await _asegurar_ttl_de_sesiones()
     logger.info("2FA security indexes ensured")
 
 

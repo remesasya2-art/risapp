@@ -75,6 +75,12 @@ async def asegurar_indice(db) -> bool:
             "processed_at",
             expireAfterSeconds=60 * 60 * 24 * DIAS_DE_RETENCION,
             name="ttl_processed_at")
+        # Se anuncia el éxito, no sólo el fracaso. Sin esta línea, no ver un
+        # error en los logs no distingue "el índice está y no hubo cobros
+        # dobles" de "esta versión ni siquiera se desplegó" — y esa diferencia
+        # es justo la que hay que poder leer después de un deploy.
+        logger.info("Índice único de %s.%s verificado: un mismo aviso de pago "
+                    "no puede acreditarse dos veces.", COLECCION, CAMPO)
         return True
     except Exception as e:
         repetidos = await duplicados(db)

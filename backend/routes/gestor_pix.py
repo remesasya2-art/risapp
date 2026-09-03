@@ -15,11 +15,10 @@ from typing import Optional
 
 from database import db
 from services.limits import validate_pix_amount
-from services import kyc_quota, pagos_una_sola_vez, saldos
+from services import bancos, kyc_quota, pagos_una_sola_vez, saldos
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
-from services.money import to_decimal128
 from services.email_notifications import notify_pix_received, notify_recharge_success
 
 logger = logging.getLogger(__name__)
@@ -375,25 +374,18 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
 async def _credit_mercadopago_bank(payment: dict, amount_brl: float):
     """Ensure a 'Mercado Pago' BRL bank exists in accounting and credit it for this PIX payment."""
     from datetime import datetime, timezone
-    import uuid
 
-    bank = await db.bank_accounts.find_one({"name": "Mercado Pago", "currency": "BRL"})
-    if not bank:
-        bank = {
-            "bank_id": f"mp_{uuid.uuid4().hex[:8]}",
-            "name": "Mercado Pago",
-            "currency": "BRL",
-            "balance": to_decimal128(0),   # nace en Decimal128: el tipo no depende de quién la toque primero
-            "is_gateway": True,
-            "created_at": datetime.now(timezone.utc),
-        }
-        await db.bank_accounts.insert_one(bank)
+    # Un `upsert`, no un `find_one` seguido de un `insert_one`. Este camino y el
+    # de la tarjeta creaban la cuenta por su cuenta, cada uno con su propio
+    # `bank_id` al azar: entrando los dos a la vez quedaban DOS filas
+    # "Mercado Pago" en BRL con el saldo repartido. Ver services/bancos.py.
+    bank = await bancos.asegurar_pasarela(
+        db, name="Mercado Pago", currency="BRL", prefijo_id="mp")
 
     # `float(bank.get("balance", 0))` también revienta con Decimal128: `float()`
     # sobre ese tipo levanta TypeError igual que la suma.
-    from services import bancos as _bancos
     from services.money import to_float as _to_float
-    _mov = await _bancos.ajustar(db, bank["bank_id"], amount_brl)
+    _mov = await bancos.ajustar(db, bank["bank_id"], amount_brl)
     new_balance = _to_float(_mov["saldo_nuevo"])
 
     payment_id = payment.get("payment_id")

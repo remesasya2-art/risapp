@@ -30,8 +30,7 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
-from services.money import to_decimal128
-from services import pagos_una_sola_vez, saldos
+from services import bancos, pagos_una_sola_vez, saldos
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -84,22 +83,16 @@ def _calc_fee(amount_brl_net: float, payment_type_id: str, fees: dict) -> float:
 async def _credit_mp_bank_card(payment_id: str, client_name: str, amount_brl_net: float):
     """Same logic as gestor_pix._credit_mercadopago_bank but for cards.
     Imports kept local to avoid circular imports."""
-    bank = await db.bank_accounts.find_one({"name": "Mercado Pago", "currency": "BRL"})
-    if not bank:
-        bank = {
-            "bank_id": f"mp_{uuid.uuid4().hex[:8]}",
-            "name": "Mercado Pago",
-            "currency": "BRL",
-            "balance": to_decimal128(0),   # nace en Decimal128: el tipo no depende de quién la toque primero
-            "is_gateway": True,
-            "created_at": datetime.now(timezone.utc),
-        }
-        await db.bank_accounts.insert_one(bank)
+    # Un `upsert`, no un `find_one` seguido de un `insert_one`. Este camino y el
+    # de la tarjeta creaban la cuenta por su cuenta, cada uno con su propio
+    # `bank_id` al azar: entrando los dos a la vez quedaban DOS filas
+    # "Mercado Pago" en BRL con el saldo repartido. Ver services/bancos.py.
+    bank = await bancos.asegurar_pasarela(
+        db, name="Mercado Pago", currency="BRL", prefijo_id="mp")
 
     # Igual que en Mercado Pago: `float()` sobre un Decimal128 levanta TypeError.
-    from services import bancos as _bancos
     from services.money import to_float as _to_float
-    _mov = await _bancos.ajustar(db, bank["bank_id"], amount_brl_net)
+    _mov = await bancos.ajustar(db, bank["bank_id"], amount_brl_net)
     new_balance = _to_float(_mov["saldo_nuevo"])
     await db.bank_ledger.insert_one({
         "bank_id": bank["bank_id"],
