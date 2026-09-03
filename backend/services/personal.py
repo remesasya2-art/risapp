@@ -48,6 +48,37 @@ CAMPO = "es_personal"
 
 ROL_PERSONAL = "admin"       # el rol con el que entra al panel
 
+# Los roles que llegan a una superficie de administración. Es la lista que
+# decide quién NO puede operar con contraseña sola.
+#
+#   agent        59 rutas por `get_crm_user`: ve y toca datos de clientes.
+#   admin        el rol del personal dado de alta en RRHH. 37 rutas por
+#                `get_admin_user`, más las 20 que además miran permisos.
+#   super_admin  todo, incluida el alta de personal.
+#
+# `agent` está acá aunque no mueva plata: un colaborador que lee los datos
+# personales de todos los clientes es exactamente lo que no puede quedar
+# detrás de una sola contraseña.
+ROLES_CON_PANEL = frozenset({"agent", "admin", "super_admin"})
+
+
+def exige_dos_pasos(usuario) -> bool:
+    """¿Esta cuenta tiene prohibido operar sin verificación en dos pasos?
+
+    Se decide en UN solo lugar, y por dos motivos independientes: el rol
+    llega a una pantalla de administración, o Recursos Humanos la marcó como
+    personal. Con los dos, degradarle el rol a alguien no le saca la
+    obligación mientras siga siendo personal de la empresa.
+
+    Al usuario común NO lo alcanza: para él los dos pasos siguen siendo un
+    botón que activa si quiere, en su perfil.
+    """
+    if not usuario:
+        return False
+    leer = usuario.get if isinstance(usuario, dict) else \
+        (lambda k, d=None: getattr(usuario, k, d))
+    return (leer("role", "user") in ROLES_CON_PANEL) or es_personal(usuario)
+
 
 class TieneSaldo(Exception):
     """No se puede volver personal a alguien con plata en la cuenta."""

@@ -281,9 +281,16 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         if not verify_password(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
+        from services import personal as _personal
+
         role = user.get("role", "user")
         is_admin = role in ADMIN_ROLES
         twofa_enabled = bool(user.get("two_factor_enabled", False))
+        # Quién no puede operar con contraseña sola. La lista vive en
+        # services/personal.py para que sea UNA sola, y hoy incluye a los
+        # colaboradores de `agent` para arriba, más cualquiera que RRHH haya
+        # marcado como personal.
+        obliga_dos_pasos = _personal.exige_dos_pasos(user)
 
         # Personal sin 2FA → enrolamiento obligatorio antes de la sesión.
         #
@@ -292,7 +299,7 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         # aprobar recargas y mover saldos entraba con contraseña sola. El
         # enrolamiento pasa acá mismo, en el login, así que nadie queda
         # afuera: se sale con sesión, no con un rechazo.
-        if is_admin and not twofa_enabled:
+        if obliga_dos_pasos and not twofa_enabled:
             pending = await _create_pending_token(user["user_id"], purpose="2fa_enroll")
             return {
                 "message": "Configura 2FA para continuar",
@@ -302,8 +309,8 @@ async def login_with_password(request: Request, response: Response, body: LoginW
                 "user_id": user["user_id"],
             }
 
-        # Admin/super_admin with 2FA enabled → challenge
-        if is_admin and twofa_enabled:
+        # Ya lo tiene puesto → se le pide el código.
+        if (is_admin or obliga_dos_pasos) and twofa_enabled:
             pending = await _create_pending_token(user["user_id"], purpose="2fa_login")
             return {
                 "message": "Ingresa tu código 2FA para continuar",

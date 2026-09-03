@@ -534,6 +534,75 @@ def test_el_super_admin_sigue_obligado(base):
     assert r.get("two_factor_enrollment_required") is True
 
 
+def test_el_super_admin_que_YA_tiene_su_autenticador_entra_como_siempre(base):
+    """La cuenta del dueño de la aplicación, que ya tiene 2FA puesto.
+
+    Este es el test que existe para que endurecer el acceso del personal no
+    le toque el ingreso a quien ya lo tenía andando: sigue yendo al desafío
+    del código de siempre, NO a un enrolamiento nuevo, y NO se le pide volver
+    a configurar el autenticador.
+    """
+    _usuario(base, user_id="sa_9", email="jefe@risapp.com", role="super_admin",
+             two_factor_enabled=True, two_factor_secret="EL-SECRETO-DE-SIEMPRE")
+
+    r = corre(rutas_auth.login_with_password(
+        pedido(), _RespuestaDeMentira(),
+        LoginWithPasswordRequest(email="jefe@risapp.com", password=CLAVE_BUENA)))
+
+    assert r.get("two_factor_required") is True
+    assert not r.get("two_factor_enrollment_required"), \
+        "se le está pidiendo enrolar un autenticador que ya tiene"
+    # Y su secreto sigue siendo el mismo: nada lo tocó.
+    doc = corre(base.users.find_one({"user_id": "sa_9"}))
+    assert doc["two_factor_secret"] == "EL-SECRETO-DE-SIEMPRE"
+    assert doc["two_factor_enabled"] is True
+
+
+def test_un_agent_sin_2fa_tampoco_recibe_sesion(base):
+    """`agent` es colaborador: llega a 59 rutas con datos de clientes.
+
+    No mueve plata, pero lee los datos personales de todos los clientes. Eso
+    no puede quedar detrás de una sola contraseña.
+    """
+    _usuario(base, user_id="col_1", email="mesa@risapp.com", role="agent")
+
+    r = corre(rutas_auth.login_with_password(
+        pedido(), _RespuestaDeMentira(),
+        LoginWithPasswordRequest(email="mesa@risapp.com", password=CLAVE_BUENA)))
+
+    assert r.get("two_factor_enrollment_required") is True
+    assert "session_token" not in r
+
+
+def test_un_agent_con_2fa_recibe_el_desafio(base):
+    _usuario(base, user_id="col_1", email="mesa@risapp.com", role="agent",
+             two_factor_enabled=True)
+
+    r = corre(rutas_auth.login_with_password(
+        pedido(), _RespuestaDeMentira(),
+        LoginWithPasswordRequest(email="mesa@risapp.com", password=CLAVE_BUENA)))
+
+    assert r.get("two_factor_required") is True
+    assert "session_token" not in r
+
+
+def test_a_quien_RRHH_marco_como_personal_no_lo_salva_bajarle_el_rol(base):
+    """La obligación no se esquiva degradando el rol.
+
+    Si alguien le pone `role: user` a una cuenta de personal —a mano en la
+    base, o por un camino que todavía no revisamos— la marca de RRHH sigue
+    exigiendo los dos pasos.
+    """
+    _usuario(base, user_id="emp_x", email="ana@risapp.com", role="user",
+             es_personal=True)
+
+    r = corre(rutas_auth.login_with_password(
+        pedido(), _RespuestaDeMentira(),
+        LoginWithPasswordRequest(email="ana@risapp.com", password=CLAVE_BUENA)))
+
+    assert r.get("two_factor_enrollment_required") is True
+
+
 def test_al_usuario_comun_no_se_le_pide_2fa(base):
     """El endurecimiento no puede alcanzar a los clientes de la app."""
     _usuario(base, user_id="u_9", email="cliente@correo.com", role="user")
