@@ -89,6 +89,44 @@ class _ClienteDeMentira:
 CLIENTE = _ClienteDeMentira()
 
 
+# ─── Los tests que necesitan un servidor de verdad ────────────────────────
+
+import os  # noqa: E402
+
+_VARIABLE = "RISAPP_TEST_BASE_URL"
+
+
+def servidor_de_integracion():
+    """La URL contra la que correr los tests HTTP, o None si no hay ninguna.
+
+    Siete archivos de este directorio no son tests unitarios: levantan
+    `requests` y hacen POST de verdad contra un backend corriendo. No pueden
+    pasar sin servidor, y no deberían fallar por eso: fallar es lo que dice
+    "hay un bug", y acá no hay ninguno, falta una máquina.
+
+    Se acepta también REACT_APP_BACKEND_URL, que es como estaban escritos,
+    aunque sea un nombre de variable del frontend para tests de backend.
+    """
+    for nombre in (_VARIABLE, "REACT_APP_BACKEND_URL", "EXPO_PUBLIC_BACKEND_URL"):
+        valor = (os.environ.get(nombre) or "").strip().rstrip("/")
+        if valor:
+            return valor
+    return None
+
+
+def saltar_sin_servidor():
+    """Marca de módulo para los archivos que necesitan servidor.
+
+    Se usa como `pytestmark = saltar_sin_servidor()` arriba del archivo.
+    """
+    import pytest
+    return pytest.mark.skipif(
+        servidor_de_integracion() is None,
+        reason=(f"necesita un backend corriendo: exportá {_VARIABLE} "
+                "apuntando a él (p.ej. http://localhost:8000)"),
+    )
+
+
 if "database" not in sys.modules:
     _modulo = types.ModuleType("database")
     _modulo.db = PROXY

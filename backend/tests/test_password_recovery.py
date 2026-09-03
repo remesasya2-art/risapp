@@ -4,11 +4,17 @@ Tests for the 3-step password recovery flow and support contact form
 """
 import pytest
 import requests
-import os
 import random
 import string
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://agent-payment-hub-1.preview.emergentagent.com').rstrip('/')
+# El default apuntaba a https://agent-payment-hub-1.preview.emergentagent.com,
+# el preview de la herramienta con la que se armó el proyecto. Correr la
+# suite mandaba emails, CPFs y reseteos de contraseña por POST a un dominio
+# ajeno. Ahora: sin servidor declarado, estos tests se saltan.
+from conftest import saltar_sin_servidor, servidor_de_integracion
+
+pytestmark = saltar_sin_servidor()
+BASE_URL = (servidor_de_integracion() or "")
 
 # Test user credentials (must exist in database)
 TEST_USER = {

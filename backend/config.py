@@ -37,4 +37,10 @@ VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_CLAIMS_EMAIL", "admin@example.com")
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 
 # App URLs
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://agent-payment-hub-1.preview.emergentagent.com")
+# El default era https://agent-payment-hub-1.preview.emergentagent.com, el
+# preview de la herramienta con la que se armó el proyecto. `routes/partner.py`
+# arma con esto el link de referido que el socio copia y reparte: sin la
+# variable seteada, cada socio estaba repartiendo links a un dominio ajeno, con
+# su código de referido adentro. El resto del backend ya usaba www.risappbr.com
+# (ver PUBLIC_BASE_URL en routes/transactions.py y routes/credits.py).
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://www.risappbr.com")
