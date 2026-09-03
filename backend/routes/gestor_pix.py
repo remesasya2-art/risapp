@@ -17,7 +17,7 @@ from database import db
 from services.limits import validate_pix_amount
 from services import bancos, kyc_quota, pagos_una_sola_vez, saldos
 from models.user import User
-from routes.dependencies import get_current_user
+from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
 from services.email_notifications import notify_pix_received, notify_recharge_success
 
@@ -55,7 +55,7 @@ async def require_authenticated_user(current_user: User = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Usuario no encontrado")
     return current_user
 
-@router.post("/create")
+@router.post("/create", dependencies=[Depends(sin_transacciones_personales)])
 async def create_pix_payment(request: CreatePixRequest, current_user: User = Depends(require_authenticated_user)):
     """Create a PIX payment for third-party recharge via Mercado Pago"""
     # Limite de monto validado ANTES de crear el pago en Mercado Pago: si no,
@@ -405,7 +405,7 @@ async def _credit_mercadopago_bank(payment: dict, amount_brl: float):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-@router.post("/simulate-payment/{payment_id}")
+@router.post("/simulate-payment/{payment_id}", dependencies=[Depends(sin_transacciones_personales)])
 async def simulate_pix_payment(payment_id: str, current_user: User = Depends(require_authenticated_user)):
     """Simulate PIX payment confirmation (for testing when MP not available)"""
     # --- SECURITY: this endpoint credits real balance with no real payment.

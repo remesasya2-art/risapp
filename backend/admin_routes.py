@@ -10,6 +10,8 @@ from bson import ObjectId
 from openpyxl import Workbook
 from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
+from services.money import to_decimal128
+from services import auditoria
 import logging
 import uuid
 import os
@@ -297,7 +299,9 @@ async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = De
             "role": "admin",
             "permissions": request.permissions,
             "is_active": True,
-            "balance_ris": 0,
+            # En Decimal128, como el resto de la app. Naciendo en int, el
+            # tipo del saldo dependía de quién creó al usuario.
+            "balance_ris": to_decimal128(0),
             "verification_status": "verified",
             "created_by_admin": admin_user.get('user_id'),
             "created_at": datetime.now(timezone.utc)
@@ -406,7 +410,9 @@ async def get_user_detail(user_id: str, admin_user: dict = Depends(get_admin_use
     return user
 
 @admin_router.put("/users/{user_id}/balance")
-async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin_user: dict = Depends(get_admin_user)):
+async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
+                              peticion: Request,
+                              admin_user: dict = Depends(get_admin_user)):
     """Manually adjust user balance"""
     if not has_permission(admin_user, "users.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -442,6 +448,16 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest, admin
         "created_at": datetime.now(timezone.utc)
     }
     await db.admin_logs.insert_one(adjustment)
+    # También al libro único. `admin_logs` se conserva por ahora —hay datos
+    # viejos ahí— pero no tenía ningún endpoint que lo leyera: se escribía y
+    # moría. Lo que se consulta de acá en adelante es el libro.
+    await auditoria.registrar(
+        db, "dinero.ajuste_manual", quien=admin_user, request=peticion,
+        objetivo_tipo="usuario", objetivo_id=user_id,
+        antes={"saldo": float(movido["saldo_anterior"])},
+        despues={"saldo": float(movido["saldo_nuevo"])},
+        detalle={"monto": request.amount,
+                 "entrada_de_libro": movido["entry_id"]})
     
     return {"message": f"Balance ajustado en {request.amount} RIS",
             "balance_after": float(movido["saldo_nuevo"])}
@@ -587,7 +603,8 @@ async def get_recharge_proof(transaction_id: str, admin_user: dict = Depends(get
     }
 
 @admin_router.post("/recharges/approve")
-async def approve_recharge(request: ApproveRechargeRequest, admin_user: dict = Depends(get_admin_user)):
+async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
+                           admin_user: dict = Depends(get_admin_user)):
     """Approve or reject a recharge with uploaded proof"""
     if not has_permission(admin_user, "recharges.approve"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -671,6 +688,15 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user: dict = D
         )
         
         logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.get('email')}")
+        await auditoria.registrar(
+            db, "dinero.recarga_aprobada", quien=admin_user, request=peticion,
+            objetivo_tipo="transaccion", objetivo_id=request.transaction_id,
+            objetivo_desc=transaction.get("user_email"),
+            antes={"status": transaction.get("status")},
+            despues={"status": "completed"},
+            detalle={"user_id": transaction.get("user_id"),
+                     "monto": str(transaction.get("amount_input")),
+                     "moneda": transaction.get("currency_input")})
         return {"message": "Recarga aprobada y saldo acreditado", "status": "completed"}
     else:
         # Reject recharge
@@ -694,6 +720,15 @@ async def approve_recharge(request: ApproveRechargeRequest, admin_user: dict = D
         )
         
         logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.get('email')}")
+        await auditoria.registrar(
+            db, "dinero.recarga_rechazada", quien=admin_user, request=peticion,
+            objetivo_tipo="transaccion", objetivo_id=request.transaction_id,
+            objetivo_desc=transaction.get("user_email"),
+            antes={"status": transaction.get("status")},
+            despues={"status": "rejected"},
+            detalle={"user_id": transaction.get("user_id"),
+                     "monto": str(transaction.get("amount_input")),
+                     "motivo": getattr(request, "rejection_reason", None)})
         return {"message": "Recarga rechazada", "status": "rejected"}
 
 # =======================
@@ -1011,7 +1046,8 @@ async def get_exchange_rate(admin_user: dict = Depends(get_admin_user)):
     }
 
 @admin_router.post("/settings/rate")
-async def update_exchange_rate(request: UpdateRateRequest, admin_user: dict = Depends(get_admin_user)):
+async def update_exchange_rate(request: UpdateRateRequest, peticion: Request,
+                               admin_user: dict = Depends(get_admin_user)):
     """Update exchange rate"""
     if not has_permission(admin_user, "settings.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")

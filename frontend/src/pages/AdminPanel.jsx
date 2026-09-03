@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -13,12 +13,15 @@ import DiferenciasPago from '../components/admin/DiferenciasPago';
 import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import LibroMayor from '../components/admin/LibroMayor';
+import RecursosHumanos from '../components/admin/RecursosHumanos';
+import LibroAuditoria from '../components/admin/LibroAuditoria';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
 import { fmt } from '../utils/format';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 import { AutoRateCard } from '../components/common/AutoRateCard';
 import { BcvRatesCard } from '../components/common/BcvRatesCard';
 import KycPanel from '../components/admin/KycPanel';
@@ -90,6 +93,12 @@ const TABS = [
   // precios, la cuenta que recibe los fletes y a nombre de quien se rotulan las
   // cajas.
   { key: 'envios', label: 'Config. de envíos', icon: Package, superAdminOnly: true },
+  // Recursos Humanos y el libro de auditoría son SÓLO del super administrador,
+  // igual que en el backend (`get_super_admin`). Dar de alta a alguien con
+  // permisos, y leer quién hizo qué, no son cosas que se deleguen: si se
+  // pudieran delegar, quien las tuviera podría darse a sí mismo el resto.
+  { key: 'rrhh', label: 'Recursos Humanos', icon: UserCog, superAdminOnly: true },
+  { key: 'auditoria', label: 'Auditoría', icon: ScrollText, superAdminOnly: true },
 ];
 
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
@@ -762,6 +771,16 @@ const [searchParams, setSearchParams] = useSearchParams();
         )}
         {activeTab === 'ledger' && (
           <LibroMayor />
+        )}
+        {activeTab === 'rrhh' && (
+          <ErrorBoundary clave="rrhh" donde="Recursos Humanos">
+            <RecursosHumanos />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'auditoria' && (
+          <ErrorBoundary clave="auditoria" donde="Libro de auditoría">
+            <LibroAuditoria />
+          </ErrorBoundary>
         )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>

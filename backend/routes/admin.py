@@ -5,7 +5,7 @@ import os
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 
 from database import db
@@ -16,7 +16,7 @@ from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordA
 from pydantic import BaseModel
 from routes.dependencies import get_admin_user, get_super_admin, get_crm_user
 from services.notifications import create_notification
-from services import kyc_quota
+from services import auditoria, kyc_quota
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -2109,7 +2109,8 @@ async def get_rates(admin: User = Depends(get_super_admin)):
     return rate or {"ris_to_ves": 92.0, "ves_to_ris": 0.0109}
 
 @router.post("/rates")
-async def update_rates(request: UpdateRateRequest, admin: User = Depends(get_super_admin)):
+async def update_rates(request: UpdateRateRequest, peticion: Request,
+                       admin: User = Depends(get_super_admin)):
     """Update exchange rates - 3 independent rates"""
     update_fields = {"updated_at": datetime.now(timezone.utc), "updated_by": admin.user_id}
     
@@ -2131,6 +2132,12 @@ async def update_rates(request: UpdateRateRequest, admin: User = Depends(get_sup
     if len(update_fields) == 2:  # Only has updated_at and updated_by
         raise HTTPException(status_code=400, detail="Debes proporcionar al menos una tasa")
     
+    # Se lee ANTES de escribir: un registro que dice "se cambió la tasa" sin
+    # decir de cuánto a cuánto no sirve para investigar nada.
+    antes_de_la_tasa = await db.rates.find_one(
+        {}, {"_id": 0}, sort=[("updated_at", -1)]) or {}
+    antes_de_la_tasa = {k: antes_de_la_tasa.get(k) for k in update_fields}
+
     await db.rates.update_one(
         {},
         {"$set": update_fields},
@@ -2148,6 +2155,12 @@ async def update_rates(request: UpdateRateRequest, admin: User = Depends(get_sup
             await log_if_changed(db, "ves_brl", request.ves_to_ris_rate, "manual", admin_email=admin.email)
     except Exception as e:
         logger.warning(f"Rate history log failed: {e}")
+
+    await auditoria.registrar(
+        db, "config.tasa", quien=admin, request=peticion,
+        objetivo_tipo="tasas", objetivo_id="rates",
+        objetivo_desc="Tasas de cambio",
+        antes=antes_de_la_tasa, despues=update_fields)
 
     return {"message": "Tasa actualizada", **update_fields}
 
@@ -2284,6 +2297,7 @@ async def get_pending_verifications(admin: User = Depends(get_super_admin)):
 @router.post("/verifications/decide")
 async def decide_verification(
     request: dict,
+    peticion: Request,
     admin: User = Depends(get_super_admin)
 ):
     """Process KYC verification decision"""
@@ -2323,6 +2337,15 @@ async def decide_verification(
         )
         
         logger.info(f"Verification approved for {user_id} by {admin.user_id}")
+        await auditoria.registrar(
+            db, "kyc.aprobado", quien=admin, request=peticion,
+            objetivo_tipo="usuario", objetivo_id=user_id,
+            objetivo_desc=verification.get("full_name"),
+            antes={"verification_status": "pending"},
+            despues={"verification_status": "verified"},
+            detalle={"verification_id": verification.get("verification_id"),
+                     "documento": verification.get("document_number"),
+                     "cpf": verification.get("cpf_number")})
         return {"message": "Verificación aprobada"}
     else:
         # Update verification status
@@ -2345,6 +2368,14 @@ async def decide_verification(
         )
         
         logger.info(f"Verification rejected for {user_id} by {admin.user_id}: {rejection_reason}")
+        await auditoria.registrar(
+            db, "kyc.rechazado", quien=admin, request=peticion,
+            objetivo_tipo="usuario", objetivo_id=user_id,
+            objetivo_desc=verification.get("full_name"),
+            antes={"verification_status": "pending"},
+            despues={"verification_status": "rejected"},
+            detalle={"verification_id": verification.get("verification_id"),
+                     "motivo": rejection_reason})
         return {"message": "Verificación rechazada"}
 
 
@@ -2559,7 +2590,8 @@ async def get_agent_ratings(admin: User = Depends(get_super_admin)):
 
 
 @router.post("/users/{user_id}/suspend")
-async def suspend_user(user_id: str, data: dict, admin: User = Depends(get_super_admin)):
+async def suspend_user(user_id: str, data: dict, peticion: Request,
+                       admin: User = Depends(get_super_admin)):
     """Suspend or reactivate a user"""
     suspend = data.get("suspend", True)
     
@@ -2577,6 +2609,13 @@ async def suspend_user(user_id: str, data: dict, admin: User = Depends(get_super
     
     action = "suspendido" if suspend else "reactivado"
     logger.info(f"User {user_id} {action} by admin {admin.user_id}")
+    await auditoria.registrar(
+        db, "usuario.suspendido" if suspend else "usuario.reactivado",
+        quien=admin, request=peticion,
+        objetivo_tipo="usuario", objetivo_id=user_id,
+        objetivo_desc=user.get("email"),
+        antes={"status": user.get("status")}, despues={"status": new_status},
+        detalle={"motivo": data.get("motivo") or data.get("reason")})
     return {"message": f"Usuario {action} exitosamente"}
 
 

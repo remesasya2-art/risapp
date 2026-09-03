@@ -77,6 +77,14 @@ COLECCION = "users"
 # otros libros (cripto) y no se tocan desde acá.
 CUENTAS = frozenset({"balance_ris", "balance_ris_terceros"})
 
+# Lo único que puede tocar el saldo de una cuenta de personal. Son movimientos
+# DE la empresa sobre esa cuenta —corregir un error, cerrar el libro— y no del
+# empleado a título propio. Sin esta excepción, un saldo mal cargado en una
+# cuenta de personal no se podría arreglar ni con el panel.
+MOVIMIENTOS_PERMITIDOS_AL_PERSONAL = frozenset({
+    "ajuste_admin", "cierre_de_libro",
+})
+
 
 class CuentaDesconocida(ValueError):
     """Se pidió mover una cuenta que este módulo no administra."""
@@ -168,6 +176,21 @@ async def mover(db, user_id: str, monto, *, movimiento: str,
         saldo = saldo_de(actual, cuenta)
         return {"saldo_anterior": saldo, "saldo_nuevo": saldo,
                 "usuario": actual, "entry_id": None}
+
+    # El personal no mueve plata a título personal, y este es el candado que
+    # de verdad cierra la regla. El otro está en la puerta de las rutas de
+    # usuario, pero nueve de las diez formas de mover plata liquidan DESPUÉS,
+    # por un webhook que no pasa por ninguna puerta: un PIX confirmado, un
+    # pago con tarjeta, un invoice de Lightning. Acá sí pasan todas.
+    #
+    # Se excluye a propósito el ajuste manual del administrador y los cierres
+    # de libro: son movimientos DE la empresa sobre una cuenta, no del
+    # empleado a título propio, y bloquearlos dejaría un saldo imposible de
+    # corregir. Ver services/personal.py.
+    if movimiento not in MOVIMIENTOS_PERMITIDOS_AL_PERSONAL:
+        from services import personal
+        if await personal.es_personal_por_id(db, user_id):
+            raise personal.TransaccionPersonalProhibida(user_id)
 
     filtro = {"user_id": user_id}
     if exigir_saldo and monto < 0:

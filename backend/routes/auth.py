@@ -11,7 +11,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Header, Response
 from typing import Optional
 
 from database import db
-from services.money import from_db, to_float
+from services.money import from_db, to_float, to_decimal128
 from models.user import User, UserSession
 from models.requests import (
     SetPasswordRequest, LoginWithPasswordRequest, RegisterUserRequest,
@@ -162,8 +162,10 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response)
         "password_hash": pending["password_hash"],
         "password_set": True,
         "email_verified": True,
-        "balance_ris": 0.0,
-        "balance_ves": 0.0,
+        # En Decimal128, como el resto de la app. Naciendo en float, el
+        # tipo del saldo dependía de quién creó al usuario.
+        "balance_ris": to_decimal128(0),
+        "balance_ves": to_decimal128(0),
         "role": "user",
         "verification_status": "unverified",
         "referred_by": pending.get("referred_by"),
