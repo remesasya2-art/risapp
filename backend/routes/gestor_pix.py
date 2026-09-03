@@ -15,7 +15,7 @@ from typing import Optional
 
 from database import db
 from services.limits import validate_pix_amount
-from services import kyc_quota, saldos
+from services import kyc_quota, pagos_una_sola_vez, saldos
 from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
@@ -703,7 +703,11 @@ async def _handle_card_webhook(card_payment: dict, mp_payment_id: str) -> dict:
     """
     from datetime import datetime, timezone
     
-    # Idempotency guard — already credited during sync flow?
+    # Ojo: acá NO se reclama el evento. Todavía no sabemos si Mercado Pago lo
+    # da por aprobado, y dejar la marca de "ya procesado" sobre un pago que
+    # después no se acredita lo mataría para siempre. El reclamo va abajo,
+    # pegado a la acreditación. Esta lectura es sólo para cortar temprano los
+    # reintentos obvios y ahorrarse la llamada a la API de MP.
     existing = await db.processed_webhooks.find_one(
         {"webhook_event_id": f"card_{mp_payment_id}"}
     )
@@ -737,12 +741,14 @@ async def _handle_card_webhook(card_payment: dict, mp_payment_id: str) -> dict:
         from routes.payments_card import _credit_mp_bank_card, _register_card_fee
         from services.notifications import create_notification
         
-        # Mark as processed to ensure idempotency
-        await db.processed_webhooks.insert_one({
-            "webhook_event_id": f"card_{mp_payment_id}",
-            "provider": "mercadopago_card",
-            "processed_at": datetime.now(timezone.utc),
-        })
+        # Reclamar el evento ANTES de tocar el saldo. Si el flujo sincrónico
+        # de payments_card lo ganó primero, acá se sale sin acreditar.
+        if not await pagos_una_sola_vez.reclamar(
+                db, f"card_{mp_payment_id}", proveedor="mercadopago_card"):
+            logger.info(
+                f"Card webhook {mp_payment_id}: el evento ya estaba reclamado, "
+                "no se acredita de nuevo")
+            return {"received": True, "already_processed": True, "kind": "card"}
         
         user_id = card_payment.get("user_id")
         amount_ris = card_payment.get("amount_ris", 0)

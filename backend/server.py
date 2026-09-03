@@ -90,6 +90,16 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Security indexes warning: {e}")
     try:
+        # El índice único que impide acreditar dos veces el mismo pago. Existía
+        # en accounting_engine.ensure_indexes(), pero eso sólo corre si un super
+        # admin llama a mano a POST /admin/accounting/v2/bootstrap-indexes: en
+        # el arranque no se creaba nunca. Sin él, dos avisos simultáneos del
+        # mismo pago con tarjeta entran los dos y acreditan los dos.
+        from services.pagos_una_sola_vez import asegurar_indice
+        await asegurar_indice(db)
+    except Exception as e:
+        logger.error(f"Indice de pagos unicos: {e}")
+    try:
         # Estructura del módulo de envíos. Crea índices, nunca datos: los
         # transportistas, agencias y tarifas se cargan desde el panel.
         from services.envios_indices import ensure_envios_indexes

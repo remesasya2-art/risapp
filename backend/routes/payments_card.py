@@ -31,7 +31,7 @@ from models.user import User
 from routes.dependencies import get_current_user
 from services.notifications import create_notification
 from services.money import to_decimal128
-from services import saldos
+from services import pagos_una_sola_vez, saldos
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -286,16 +286,13 @@ async def process_card_payment(
 
     # ── Process side effects on approval ─────────────────────────────────
     if status_mp == "approved" and payment_id:
-        # Idempotency guard against double-credit (webhook + sync)
-        existing = await db.processed_webhooks.find_one(
-            {"webhook_event_id": f"card_{payment_id}"}
-        )
-        if not existing:
-            await db.processed_webhooks.insert_one({
-                "webhook_event_id": f"card_{payment_id}",
-                "provider": "mercadopago_card",
-                "processed_at": datetime.now(timezone.utc),
-            })
+        # Reclamar el evento ANTES de acreditar. Antes esto era un `find_one`
+        # y después un `insert_one`: entre los dos hay una ventana, y el
+        # webhook de Mercado Pago entra justo ahí —es el caso para el que este
+        # guard fue escrito—, con lo cual los dos leían que no había nada y los
+        # dos acreditaban. Ver services/pagos_una_sola_vez.py.
+        if await pagos_una_sola_vez.reclamar(
+                db, f"card_{payment_id}", proveedor="mercadopago_card"):
 
             # 1. Credit RIS to user, y asentar en la misma operación.
             _card_mov = await saldos.mover(
