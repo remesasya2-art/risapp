@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from services.money import from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
+from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
 from services import bancos
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -758,13 +758,19 @@ async def check_balance(
         {"_id": 0}
     ).to_list(100)
 
-    total_balance = sum(b.get("balance", 0) for b in banks)
-    sufficient = total_balance >= amount
+    # `sum(b.get("balance", 0) ...)` reventaba: `sum` arranca en el entero 0 y
+    # `0 + Decimal128` es un TypeError. `round(Decimal128, 2)` también, porque
+    # Decimal128 no define `__round__`. Desde que services/bancos.py escribe los
+    # saldos en Decimal128, esta ruta devolvía 500 sobre cualquier cuenta tocada.
+    pedido = quantize_money(to_decimal(amount))
+    total_balance = quantize_money(sum(
+        (bancos.saldo_de(b) for b in banks), ZERO))
 
     return {
         "currency": currency.upper(),
-        "total_balance": round(total_balance, 2),
-        "required": round(amount, 2),
-        "sufficient": sufficient,
-        "banks": [{"bank_id": b["bank_id"], "name": b["name"], "balance": round(b.get("balance", 0), 2)} for b in banks]
+        "total_balance": to_float(total_balance),
+        "required": to_float(pedido),
+        "sufficient": total_balance >= pedido,
+        "banks": [{"bank_id": b["bank_id"], "name": b["name"],
+                   "balance": to_float(bancos.saldo_de(b))} for b in banks]
     }
