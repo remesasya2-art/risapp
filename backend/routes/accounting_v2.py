@@ -213,9 +213,14 @@ async def get_audit_log(
 async def webhook_conciliate(
     data: WebhookConciliateInput, admin: User = Depends(get_super_admin)
 ):
-    """Manual trigger for webhook reconciliation. Used by integration tests
-    and admin-driven recovery. Production webhooks call the same engine
-    directly from /api/webhooks/* handlers."""
+    """Disparo manual de la conciliación, sólo para super admin.
+
+    El comentario anterior decía que los webhooks de producción llamaban a
+    este mismo motor desde /api/webhooks/*. No es así: hoy `process_incoming_
+    payment` no tiene otro punto de entrada que esta ruta, y el frontend no la
+    usa. Queda escrito porque esa frase hacía parecer en producción un camino
+    que sólo un super admin puede recorrer a mano.
+    """
     try:
         return await WebhookConciliationService.process_incoming_payment(
             webhook_event_id=data.webhook_event_id,
