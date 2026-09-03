@@ -13,7 +13,7 @@ from database import db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
 from pydantic import BaseModel
-from routes.dependencies import get_current_user
+from routes.dependencies import get_current_user, sin_transacciones_personales
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
@@ -114,7 +114,7 @@ async def get_precio_btc():
     return {"precio_btc": precio, "tasa_btc_ves": tasa_ves, "updated_at": _btc_price_cache.get("updated_at")}
 
 
-@router.post("/generar-invoice")
+@router.post("/generar-invoice", dependencies=[Depends(sin_transacciones_personales)])
 async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depends(get_current_user)):
     if current_user.verification_status != "verified":
         raise HTTPException(status_code=403, detail="Debes completar la verificacion KYC para realizar envios con BTC Lightning.")

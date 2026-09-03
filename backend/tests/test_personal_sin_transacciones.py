@@ -231,3 +231,75 @@ def test_LA_EXCEPCION_NO_SE_PUEDE_AGRANDAR_SIN_QUE_SE_NOTE():
         "cambió la lista de movimientos permitidos al personal. Si es a "
         "propósito, actualizá este test explicando por qué ese movimiento no "
         "es 'a título personal'.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La guarda: que no aparezca una ruta nueva sin puerta
+# ══════════════════════════════════════════════════════════════════════════
+
+# Las diez rutas por las que hoy un usuario mueve plata. Están escritas una
+# por una a propósito: agregar la once tiene que ser una decisión visible, con
+# alguien pensando si lleva puerta o no, y no un renglón que pasa en un diff.
+RUTAS_DE_PLATA = {
+    "/api/btc/generar-invoice",
+    "/api/credits/deposit",
+    "/api/gestor/pix/create",
+    "/api/gestor/pix/simulate-payment/{payment_id}",
+    "/api/payments/card/process",
+    "/api/payments/card/quote",
+    "/api/reais/send",
+    "/api/recharge/ves",
+    "/api/withdraw",
+    "/api/withdraw-crypto",
+}
+
+
+def _nombres_de_dependencias(dependant, visto=None):
+    visto = visto if visto is not None else set()
+    salida = []
+    for d in getattr(dependant, "dependencies", []) or []:
+        if id(d) in visto:
+            continue
+        visto.add(id(d))
+        if getattr(d, "call", None):
+            salida.append(d.call.__name__)
+        salida.extend(_nombres_de_dependencias(d, visto))
+    return salida
+
+
+@pytest.fixture(scope="module")
+def app_armada():
+    os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
+    os.environ.setdefault("DB_NAME", "ris_test")
+    try:
+        from server import app
+    except Exception as e:                                # pragma: no cover
+        pytest.skip(f"no se pudo armar la app: {type(e).__name__}: {e}")
+    return app
+
+
+def test_TODAS_LAS_RUTAS_DE_PLATA_TIENEN_LA_PUERTA(app_armada):
+    sin_puerta = []
+    vistas = set()
+    for ruta in app_armada.routes:
+        camino = getattr(ruta, "path", None)
+        if camino not in RUTAS_DE_PLATA:
+            continue
+        vistas.add(camino)
+        dependant = getattr(ruta, "dependant", None)
+        if dependant is None:                             # pragma: no cover
+            continue
+        if "sin_transacciones_personales" not in _nombres_de_dependencias(dependant):
+            sin_puerta.append(camino)
+
+    assert not sin_puerta, (
+        "Estas rutas mueven plata de un usuario y no tienen la puerta que "
+        "frena a las cuentas del personal:\n  " + "\n  ".join(sorted(sin_puerta)) +
+        "\n\nAgregá dependencies=[Depends(sin_transacciones_personales)] al "
+        "decorador.")
+
+    faltan = RUTAS_DE_PLATA - vistas
+    assert not faltan, (
+        "Estas rutas están en la lista y ya no existen en la app: "
+        f"{sorted(faltan)}. Si se renombraron, actualizá RUTAS_DE_PLATA; si "
+        "se borraron, sacalas.")

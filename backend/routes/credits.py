@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from database import db
-from routes.dependencies import get_current_user
+from routes.dependencies import get_current_user, sin_transacciones_personales
 from models.user import User
 from services.geo_restrictions import assert_payment_allowed
 from services import nowpayments
@@ -165,7 +165,7 @@ async def get_min_amount(
     }
 
 
-@router.post("/deposit")
+@router.post("/deposit", dependencies=[Depends(sin_transacciones_personales)])
 async def create_deposit(
     data: DepositRequest,
     request: Request,

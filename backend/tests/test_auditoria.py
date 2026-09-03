@@ -17,6 +17,7 @@ POR QUE ESTE ARCHIVO EXISTE
 import asyncio
 import os
 import sys
+import textwrap
 from datetime import datetime, timezone, timedelta
 
 import pytest
@@ -285,3 +286,160 @@ def test_LA_FECHA_QUE_SALE_DEL_LIBRO_NUNCA_ES_AMBIGUA(base):
         # Y la de Caracas sigue estando, para leer sin hacer la cuenta.
         assert r["lineas"][0]["cuando_caracas"].endswith("-04:00")
     corre(caso())
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4. Que las acciones sensibles estén REALMENTE enganchadas
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Los tests de arriba prueban que el libro funciona. Estos prueban que alguien
+# lo LLAMA — que es donde falla de verdad una auditoría: el módulo perfecto que
+# nadie invoca. Se mira el árbol de sintaxis de cada handler, porque ejercitar
+# los diez caminos por HTTP necesitaría media base de datos montada, y lo que
+# hay que garantizar es más simple: que la llamada esté ahí.
+
+import ast                                                          # noqa: E402
+import pathlib                                                      # noqa: E402
+
+# (archivo, función, acción que tiene que asentar)
+ENGANCHES = [
+    ("routes/admin.py", "decide_verification", "kyc.aprobado"),
+    ("routes/admin.py", "decide_verification", "kyc.rechazado"),
+    ("routes/admin.py", "suspend_user", "usuario.suspendido"),
+    ("routes/admin.py", "suspend_user", "usuario.reactivado"),
+    ("routes/admin.py", "update_rates", "config.tasa"),
+    ("admin_routes.py", "approve_recharge", "dinero.recarga_aprobada"),
+    ("admin_routes.py", "approve_recharge", "dinero.recarga_rechazada"),
+    ("admin_routes.py", "update_user_balance", "dinero.ajuste_manual"),
+]
+
+
+def _nodo(archivo, funcion):
+    src = pathlib.Path(_BACKEND, archivo).read_text()
+    for n in ast.parse(src).body:
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                and n.name == funcion:
+            return n
+    return None
+
+
+def _cuerpo(archivo, funcion):
+    n = _nodo(archivo, funcion)
+    return ast.unparse(n) if n is not None else None
+
+
+def _registros_vivos(fn):
+    """Las llamadas a `auditoria.registrar` que de verdad se pueden ejecutar.
+
+    Comprobar que el TEXTO de la llamada está no alcanza: envolverla en un
+    `if False:` la deja escrita y muerta, y el test seguiría en verde. Acá se
+    descarta toda llamada cuyo camino pase por una condición constante falsa.
+    """
+    padres = {}
+    for padre in ast.walk(fn):
+        for hijo in ast.iter_child_nodes(padre):
+            padres[hijo] = padre
+
+    def muerta(nodo):
+        while nodo in padres:
+            padre = padres[nodo]
+            if isinstance(padre, ast.If) and nodo in padre.body:
+                prueba = padre.test
+                if isinstance(prueba, ast.Constant) and not prueba.value:
+                    return True
+            nodo = padre
+        return False
+
+    vivas = []
+    for nodo in ast.walk(fn):
+        if not isinstance(nodo, ast.Call):
+            continue
+        f = nodo.func
+        if isinstance(f, ast.Attribute) and f.attr == "registrar" \
+                and isinstance(f.value, ast.Name) and f.value.id == "auditoria" \
+                and not muerta(nodo):
+            vivas.append(nodo)
+    return vivas
+
+
+@pytest.mark.parametrize("archivo, funcion, accion", ENGANCHES)
+def test_la_accion_sensible_deja_rastro(archivo, funcion, accion):
+    fn = _nodo(archivo, funcion)
+    assert fn is not None, f"no existe {archivo}:{funcion}"
+
+    vivas = _registros_vivos(fn)
+    assert vivas, (
+        f"{archivo}:{funcion} no asienta nada en el libro que se pueda "
+        f"ejecutar. Una acción sensible sin rastro es la razón por la que "
+        f"este libro existe.")
+
+    texto = "\n".join(ast.unparse(v) for v in vivas)
+    assert f"'{accion}'" in texto or f'"{accion}"' in texto, (
+        f"{archivo}:{funcion} no asienta la acción {accion!r} por ningún "
+        f"camino alcanzable.")
+
+
+@pytest.mark.parametrize("archivo, funcion, accion", ENGANCHES)
+def test_la_accion_enganchada_esta_declarada(archivo, funcion, accion):
+    """Un enganche a una acción que no existe reventaría recién en producción."""
+    assert accion in auditoria.ACCIONES, (
+        f"{archivo}:{funcion} asienta {accion!r}, que no está en ACCIONES. "
+        f"`registrar` levanta AccionDesconocida: esto explotaría en el "
+        f"momento de aprobar un KYC, no acá.")
+
+
+def test_EL_CAMBIO_DE_TASA_GUARDA_EL_VALOR_ANTERIOR():
+    """"Se cambió la tasa" sin decir de cuánto a cuánto no sirve de nada.
+
+    Y para tenerlo hay que LEER antes de escribir: después del update, el
+    valor viejo ya no está.
+    """
+    cuerpo = _cuerpo("routes/admin.py", "update_rates")
+    assert "antes_de_la_tasa" in cuerpo
+    posicion_lectura = cuerpo.index("antes_de_la_tasa")
+    posicion_escritura = cuerpo.index("rates.update_one")
+    assert posicion_lectura < posicion_escritura, (
+        "lee la tasa vieja DESPUÉS de pisarla: el 'antes' del libro sería "
+        "igual al 'después'")
+
+
+def test_LA_GUARDA_DE_ENGANCHES_DISTINGUE_UNA_LLAMADA_MUERTA():
+    """Y ésta es la prueba de que lo distingue.
+
+    La primera versión de esta guarda buscaba el texto `auditoria.registrar`
+    en el cuerpo de la función. Dos mutaciones sobrevivieron: envolver la
+    llamada en `if False:` la deja escrita y sin ejecutar, y el test seguía
+    en verde. Un test que no separa una llamada viva de una desactivada no
+    prueba nada.
+    """
+    viva = ast.parse(textwrap.dedent("""
+        async def f():
+            await auditoria.registrar(db, "kyc.aprobado")
+    """)).body[0]
+    assert len(_registros_vivos(viva)) == 1
+
+    muerta = ast.parse(textwrap.dedent("""
+        async def f():
+            if False:
+                await auditoria.registrar(db, "kyc.aprobado")
+    """)).body[0]
+    assert _registros_vivos(muerta) == []
+
+    # Una condición de verdad NO la mata: puede no ejecutarse en una corrida,
+    # pero el camino existe.
+    condicional = ast.parse(textwrap.dedent("""
+        async def f(aprobado):
+            if aprobado:
+                await auditoria.registrar(db, "kyc.aprobado")
+    """)).body[0]
+    assert len(_registros_vivos(condicional)) == 1
+
+    # Y el `else` de un `if False:` sí se ejecuta.
+    en_el_else = ast.parse(textwrap.dedent("""
+        async def f():
+            if False:
+                pass
+            else:
+                await auditoria.registrar(db, "kyc.aprobado")
+    """)).body[0]
+    assert len(_registros_vivos(en_el_else)) == 1

@@ -44,7 +44,7 @@ def _normalize_tx_money(tx):
     return tx
 from models.user import User
 from models.requests import WithdrawalRequest, BeneficiaryCreate
-from routes.dependencies import get_current_user, get_verified_user
+from routes.dependencies import get_current_user, get_verified_user, sin_transacciones_personales
 from services.idempotency import claim_idempotency, store_idempotency_result
 from services.notifications import create_notification
 from services.centro_gestion import registrar_evento
@@ -323,7 +323,7 @@ async def get_br_beneficiaries(current_user: User = Depends(get_current_user)):
         for b in rows
     ]
 
-@router.post("/reais/send")
+@router.post("/reais/send", dependencies=[Depends(sin_transacciones_personales)])
 async def create_reais_send(request: ReaisSendRequest, current_user: User = Depends(get_current_user)):
     """Crea una orden de envío RIS → Reais (1 RIS = 1 R$, sin comisión: ya viene
     incluida en la recarga). Queda pendiente para que el super_admin la pague
@@ -445,7 +445,7 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     await store_idempotency_result(current_user.user_id, "reais_send", request.idempotency_key, _resp_reais)
     return _resp_reais
 
-@router.post("/withdraw")
+@router.post("/withdraw", dependencies=[Depends(sin_transacciones_personales)])
 @router.post("/withdrawal/create")
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
     """Create a withdrawal request"""
@@ -619,7 +619,7 @@ class CryptoSendRequest(BaseModel):
     use_balance: bool = False   # True: descuenta de balance_usdt/usdc (saldo de reembolsos). False (default): pago directo nuevo via NOWPayments.
     idempotency_key: Optional[str] = None
 
-@router.post("/withdraw-crypto")
+@router.post("/withdraw-crypto", dependencies=[Depends(sin_transacciones_personales)])
 async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: User = Depends(get_current_user)):
     """Crea un envio de USDT/USDC a un beneficiario en VES.
 
@@ -1355,7 +1355,7 @@ async def bancos_ves_disponibles() -> list[str]:
         return []
 
 
-@router.post("/recharge/ves")
+@router.post("/recharge/ves", dependencies=[Depends(sin_transacciones_personales)])
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
     """Create a VES recharge request"""
     amount_ves = float(request.get("amount_ves", 0))

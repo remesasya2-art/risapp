@@ -28,7 +28,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from database import db
 from models.user import User
-from routes.dependencies import get_current_user
+from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
 from services import bancos, pagos_una_sola_vez, saldos
 
@@ -141,7 +141,7 @@ async def get_card_config(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.post("/quote")
+@router.post("/quote", dependencies=[Depends(sin_transacciones_personales)])
 async def quote_card_payment(
     amount_ris: float,
     payment_type_id: str = "credit_card",
@@ -166,7 +166,7 @@ async def quote_card_payment(
     }
 
 
-@router.post("/process")
+@router.post("/process", dependencies=[Depends(sin_transacciones_personales)])
 async def process_card_payment(
     body: CardPaymentInput,
     current_user: User = Depends(get_current_user),
