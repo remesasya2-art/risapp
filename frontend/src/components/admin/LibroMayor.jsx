@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import LibroBtc from './LibroBtc';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 const COLOR = {
   borde: '#e5e7eb', suave: '#6b7280', texto: '#111827',
@@ -74,10 +75,27 @@ export default function LibroMayor() {
   const [cargando, setCargando] = useState(false);
   const [bajando, setBajando] = useState('');
 
-  const vivo = useRef(true);
+  // Un contador de peticiones, NO una bandera de «montado».
+  //
+  // Lo que había era `const vivo = useRef(true)`, y el efecto lo ponía en
+  // `true` al entrar y en `false` al salir. Con eso, cambiar de vista mientras
+  // la anterior todavía estaba pidiendo dejaba pasar la respuesta VIEJA: la
+  // limpieza lo ponía en `false` y el efecto nuevo lo volvía a poner en `true`
+  // un instante después, así que cuando llegaba la respuesta de la vista
+  // anterior el chequeo `if (!vivo.current) return` la dejaba entrar.
+  //
+  // Resultado: se dibujaba, por ejemplo, «Integridad» con los datos de
+  // «Reconciliación». Y como esa vista lee `datos.hallazgos.length` —un campo
+  // que la reconciliación no trae— el render tiraba un TypeError y React
+  // desmontaba el árbol entero: PÁGINA EN BLANCO.
+  //
+  // Con un contador, cada carga se queda con su número y sólo escribe si sigue
+  // siendo la última. Una respuesta que llega tarde se descarta, siempre.
+  const peticion = useRef(0);
 
   const cargar = useCallback(async () => {
     if (vista === 'btc') return;
+    const mia = ++peticion.current;
     setCargando(true);
     setDatos(null);
     const rutas = {
@@ -94,19 +112,20 @@ export default function LibroMayor() {
           ? { desde, hasta, tz_min: tz, libro: libro || undefined, limite: 200 }
           : { libro: vista === 'reconciliacion' ? (libro || 'RIS') : (libro || undefined) },
       });
-      if (!vivo.current) return;
+      if (peticion.current !== mia) return;   // llegó tarde: ya se pidió otra cosa
       setDatos(data);
     } catch (e) {
+      if (peticion.current !== mia) return;
       toast.error(e?.response?.data?.detail || 'No se pudo leer el libro.');
     } finally {
-      if (vivo.current) setCargando(false);
+      if (peticion.current === mia) setCargando(false);
     }
   }, [vista, desde, hasta, tz, libro]);
 
   useEffect(() => {
-    vivo.current = true;
     (async () => { await cargar(); })();
-    return () => { vivo.current = false; };
+    // Al desmontar —o al cambiar de vista— se invalida lo que esté en vuelo.
+    return () => { peticion.current += 1; };
   }, [cargar]);
 
   const descargar = async (formato) => {
@@ -224,13 +243,17 @@ export default function LibroMayor() {
               Leyendo el libro…
             </div>
           ) : !datos ? null : (
-            <>
+            // Si una vista revienta al dibujarse, el error queda encerrado acá:
+            // el menú y las demás secciones siguen andando, y el que lo ve tiene
+            // un texto que puede pasar. Antes, cualquier excepción de render
+            // dejaba la pantalla en blanco.
+            <ErrorBoundary clave={vista} donde={`Libro mayor · ${vista}`}>
               {vista === 'balance' ? <Balance datos={datos} /> : null}
               {vista === 'diario' ? <Diario datos={datos} /> : null}
               {vista === 'mayor' ? <Mayor datos={datos} /> : null}
               {vista === 'reconciliacion' ? <Reconciliacion datos={datos} /> : null}
               {vista === 'integridad' ? <Integridad datos={datos} /> : null}
-            </>
+            </ErrorBoundary>
           )}
         </>
       )}
@@ -424,9 +447,12 @@ const TONO_GRAVEDAD = { alta: 'malo', media: 'alerta', baja: 'info' };
 function Integridad({ datos }) {
   return (
     <>
+      {/* `datos.hallazgos` va protegido como el resto del archivo. Era el único
+          acceso crudo que quedaba, y por eso una respuesta inesperada acá
+          rompía el render en vez de dibujar de menos. */}
       <Aviso tono={datos.sano ? 'bien' : 'malo'}
         titulo={datos.sano ? 'No se encontraron defectos'
-          : `${datos.hallazgos.length} tipos de defecto`}>
+          : `${(datos.hallazgos || []).length} tipos de defecto`}>
         Se revisaron {datos.lineas_revisadas} líneas. Nada se corrige
         automáticamente: <strong>un libro que se auto-corrige es un libro que
         nadie puede auditar</strong>.
