@@ -34,7 +34,7 @@ from typing import Optional, List, Dict, Any
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from database import db, client as mongo_client
-from services.money import from_db, to_float
+from services.money import ZERO, from_db, quantize_money, to_float
 from services import bancos
 
 logger = logging.getLogger(__name__)
@@ -655,12 +655,16 @@ class ExecutiveReportService:
         banks = await db.bank_accounts.find(
             {"hidden_from_admin": {"$ne": True}}, {"_id": 0}
         ).to_list(200)
-        total_ves_in_banks = sum(
-            b.get("balance", 0) for b in banks if b.get("currency") == "VES"
-        )
-        total_brl_in_banks = sum(
-            b.get("balance", 0) for b in banks if b.get("currency") == "BRL"
-        )
+        # Se suma con `bancos.saldo_de`, que lee el saldo venga como venga. El
+        # `sum(b.get("balance", 0) ...)` que había acá reventaba con TypeError
+        # desde que los saldos se escriben en Decimal128: `sum` arranca en el
+        # entero 0, y `0 + Decimal128` no existe. El reporte entero se caía.
+        total_ves_in_banks = to_float(quantize_money(sum(
+            (bancos.saldo_de(b) for b in banks if b.get("currency") == "VES"),
+            ZERO)))
+        total_brl_in_banks = to_float(quantize_money(sum(
+            (bancos.saldo_de(b) for b in banks if b.get("currency") == "BRL"),
+            ZERO)))
 
         # 4. P2P performance
         p2p_match = {
