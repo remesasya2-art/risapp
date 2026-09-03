@@ -42,6 +42,13 @@ from routes.envios_admin import router as envios_admin_router
 # Include sub-routers
 api_router.include_router(basic_router)
 api_router.include_router(auth_router)
+# `misc_router` va ANTES que `transactions_router` a propósito. Trae
+# GET /transactions/export, que es una ruta literal; `transactions_router`
+# trae GET /transactions/{transaction_id}, que la matchea. FastAPI resuelve
+# por orden de registro, así que con misc después el export era inalcanzable:
+# lo atendía get_transaction buscando una transacción con id "export".
+# Ver tests/test_rutas_alcanzables.py, que falla si vuelve a taparse.
+api_router.include_router(misc_router)
 api_router.include_router(transactions_router)
 api_router.include_router(admin_router)
 api_router.include_router(gestor_router)
@@ -51,7 +58,6 @@ api_router.include_router(webhook_router)
 api_router.include_router(notifications_router)
 api_router.include_router(support_router)
 api_router.include_router(push_router)
-api_router.include_router(misc_router)
 api_router.include_router(webhooks_router)
 api_router.include_router(recovery_router)
 api_router.include_router(media_router)
