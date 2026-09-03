@@ -729,3 +729,151 @@ async def integridad(*, libro: str = None, limite: int = 100, db=None) -> dict:
             "movimiento puede haber ocurrido sin que su línea exista.",
         ],
     }
+
+
+# ─── Control 3: la conciliación del pozo ──────────────────────────────────
+
+# Las dos cuentas donde vive el saldo que la empresa le debe a la gente, y la
+# moneda que lo respalda. RIS y BRL van uno a uno: `payments_card` lo dice
+# («1 BRL = 1 RIS»), `transactions.create_reais_send` paga la remesa a Brasil
+# «1 a 1», y `limits.py` lo documenta. Por eso el pasivo en RIS se compara
+# contra los reales sin pasar por ninguna tasa.
+CUENTAS_DEL_PASIVO = ("balance_ris", "balance_ris_terceros")
+MONEDA_QUE_RESPALDA = "BRL"
+
+
+async def conciliacion_pozo(*, db=None) -> dict:
+    """¿Por cada RIS que un usuario tiene, hay un real nuestro?
+
+    LA PREGUNTA QUE CONTESTA
+        Con una cuenta ómnibus en el proveedor, la plata de todos los usuarios
+        vive mezclada en un solo pozo. La única forma de saber que está toda es
+        comparar lo que la empresa DEBE contra lo que la empresa TIENE.
+
+            pasivo  = Σ (balance_ris + balance_ris_terceros) de los usuarios
+            activo  = Σ (saldo de las cuentas en BRL)
+
+        Las cuentas de las pasarelas cuentan como activo y no como «plata en
+        tránsito»: cuando entra un PIX o un pago con tarjeta, el mismo flujo que
+        acredita el RIS acredita la cuenta «Mercado Pago» en BRL. Si se contara
+        aparte, el control mostraría un hueco permanente que no existe.
+
+    POR QUE LOS BOLIVARES NO ENTRAN EN LA CUENTA
+        Los bancos en VES son capital de trabajo: pagan remesas cuyo RIS YA
+        salió del saldo del usuario. No respaldan un pasivo, así que sumarlos
+        taparía un faltante de reales con bolívares que ya tienen dueño. Se
+        informan aparte, porque saber si alcanzan para pagar lo pendiente es
+        otra pregunta —igual de importante, pero otra.
+
+        Y meterlos exigiría una tasa de cambio: el día que el bolívar se mueve,
+        el «descuadre» se mueve solo, y un control que cambia sin que nadie
+        toque la plata es un control que se deja de mirar.
+
+    LAS CUENTAS OCULTAS SI CUENTAN
+        `hidden_from_admin` esconde una cuenta de las pantallas, no le saca la
+        plata. Para una pregunta de solvencia, el dinero es dinero: se suman
+        todas y se informa cuántas estaban ocultas, para que el número se pueda
+        explicar.
+    """
+    base = await _db(db)
+
+    try:
+        cuentas = await base.bank_accounts.find(
+            {}, {"_id": 0, "bank_id": 1, "name": 1, "currency": 1, "balance": 1,
+                 "is_gateway": 1, "hidden_from_admin": 1},
+        ).to_list(TOPE_ESCANEO)
+    except Exception as e:
+        logger.error(f"contabilidad: no se pudieron leer las cuentas bancarias: {e}")
+        raise ContabilidadInvalida(
+            "No se pudieron leer las cuentas bancarias. Reintentá en un momento.",
+            http=503) from e
+
+    campos = {"_id": 0, "user_id": 1}
+    for campo in CUENTAS_DEL_PASIVO:
+        campos[campo] = 1
+    try:
+        usuarios = await base.users.find({}, campos).to_list(TOPE_ESCANEO + 1)
+    except Exception as e:
+        logger.error(f"contabilidad: no se pudieron leer los saldos: {e}")
+        raise ContabilidadInvalida(
+            "No se pudieron leer los saldos. Reintentá en un momento.",
+            http=503) from e
+
+    truncado = len(usuarios) > TOPE_ESCANEO
+    usuarios = usuarios[:TOPE_ESCANEO]
+
+    # ── El pasivo ────────────────────────────────────────────────────────
+    por_cuenta = {c: ZERO for c in CUENTAS_DEL_PASIVO}
+    con_saldo = 0
+    for u in usuarios:
+        suma_usuario = ZERO
+        for campo in CUENTAS_DEL_PASIVO:
+            monto = _monto(u.get(campo))
+            por_cuenta[campo] += monto
+            suma_usuario += monto
+        if suma_usuario != ZERO:
+            con_saldo += 1
+    pasivo = quantize_money(sum(por_cuenta.values(), ZERO))
+
+    # ── El activo, y el capital de trabajo ───────────────────────────────
+    def _saldo(cuenta):
+        return _monto(cuenta.get("balance"))
+
+    respaldo = [c for c in cuentas
+                if str(c.get("currency") or "").upper() == MONEDA_QUE_RESPALDA]
+    trabajo = [c for c in cuentas
+               if str(c.get("currency") or "").upper() not in ("", MONEDA_QUE_RESPALDA)]
+
+    activo = quantize_money(sum((_saldo(c) for c in respaldo), ZERO))
+    diferencia = quantize_money(activo - pasivo)
+
+    def _ficha(c):
+        return {"bank_id": c.get("bank_id"), "nombre": c.get("name") or "",
+                "moneda": str(c.get("currency") or "").upper(),
+                "saldo": str(quantize_money(_saldo(c))),
+                "es_pasarela": bool(c.get("is_gateway")),
+                "oculta": bool(c.get("hidden_from_admin"))}
+
+    por_moneda_trabajo = {}
+    for c in trabajo:
+        moneda = str(c.get("currency") or "").upper() or "SIN_MONEDA"
+        caja = por_moneda_trabajo.setdefault(
+            moneda, {"total": ZERO, "cuentas": 0})
+        caja["total"] += _saldo(c)
+        caja["cuentas"] += 1
+
+    return {
+        "moneda": MONEDA_QUE_RESPALDA,
+        "pasivo": {
+            "total": str(pasivo),
+            "por_cuenta": {c: str(quantize_money(v)) for c, v in por_cuenta.items()},
+            "usuarios_revisados": len(usuarios),
+            "usuarios_con_saldo": con_saldo,
+            "truncado": truncado,
+        },
+        "activo": {
+            "total": str(activo),
+            "cuentas": [_ficha(c) for c in
+                        sorted(respaldo, key=lambda c: _saldo(c), reverse=True)],
+            "cuentas_ocultas": sum(1 for c in respaldo if c.get("hidden_from_admin")),
+        },
+        # `cubre` es la respuesta, y es un sí o un no. La tolerancia es cero:
+        # un pozo que acepta un faltante «chico» es un pozo donde el faltante
+        # crece sin que nadie lo mire.
+        "cubre": diferencia >= ZERO,
+        "diferencia": str(diferencia),
+        "capital_de_trabajo": {
+            moneda: {"total": str(quantize_money(caja["total"])),
+                     "cuentas": caja["cuentas"]}
+            for moneda, caja in sorted(por_moneda_trabajo.items())
+        },
+        "no_incluido": [
+            "Los saldos en USDT y USDC de los usuarios, que tienen su propio "
+            "libro y su propio respaldo.",
+            "Los bancos que no son en BRL: son capital de trabajo y se informan "
+            "aparte.",
+            "Las obligaciones ya comprometidas y todavía no pagadas (retiros "
+            "pendientes): su RIS ya salió del saldo del usuario, así que no "
+            "están en el pasivo de acá.",
+        ],
+    }

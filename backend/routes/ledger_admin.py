@@ -3,6 +3,7 @@ Endpoints de administración del libro mayor RIS (solo super_admin).
 - POST /admin/ledger/opening   -> crea las líneas de apertura (una sola vez).
 - GET  /admin/ledger/reconcile -> compara balance_ris vs suma del ledger y lista descuadres.
 - GET  /admin/ledger/entries   -> lista las líneas del ledger de un usuario.
+- GET  /admin/ledger/pozo      -> solvencia: RIS que se debe vs reales que hay.
 """
 import logging
 
@@ -229,6 +230,25 @@ async def ver_reconciliacion(
     """
     try:
         return await contabilidad.reconciliacion(libro=libro, limite=limite)
+    except Exception as e:
+        raise _error(e)
+
+
+@router.get("/pozo")
+async def ver_conciliacion_del_pozo(admin: User = Depends(get_super_admin)):
+    """¿Por cada RIS que un usuario tiene, hay un real nuestro?
+
+    El control de solvencia de la cuenta ómnibus: lo que la empresa DEBE (la
+    suma de los saldos de los usuarios) contra lo que la empresa TIENE (los
+    reales en los bancos, incluidas las cuentas de las pasarelas).
+
+    Es distinto de `/reconciliacion`, y las dos hacen falta: aquella compara el
+    saldo de cada usuario contra SU libro —si no cuadra, la app perdió una
+    línea—; ésta compara la suma de todos los saldos contra el dinero real —si
+    no cuadra, falta plata—. Un libro perfecto sobre un pozo vacío cuadra igual.
+    """
+    try:
+        return await contabilidad.conciliacion_pozo()
     except Exception as e:
         raise _error(e)
 
