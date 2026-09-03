@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
 from database import db
-from services.money import from_db, to_float, to_decimal, to_decimal128
+from services.ledger import create_closing_entries
+from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
@@ -27,6 +28,15 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 # ============== DANGER ZONE: DATA WIPE ==============
 
+# Lo que el borrado total elimina. La lista dejaba afuera SIETE colecciones que
+# guardan plata o historia de plata: un «borrado total» que deja pagos con
+# tarjeta, depósitos cripto, comisiones de pasarela, remesas BTC y ganancias de
+# socios en la base no es un borrado total, es una base a medio limpiar donde
+# nadie sabe qué quedó vivo.
+#
+# `ledger` NO está acá y no va a estar: el libro se CIERRA con asientos (ver
+# `services.ledger.create_closing_entries`), no se borra. Un libro contable es
+# append-only justamente para que no se pueda borrar.
 _ALL_DATA_COLLECTIONS = [
     "transactions",
     "usdt_operations",
@@ -43,7 +53,21 @@ _ALL_DATA_COLLECTIONS = [
     "notifications",
     "support_messages",
     "counters",
+    # Las siete que faltaban.
+    "card_payments",
+    "crypto_deposits",
+    "gateway_fee_ledger",
+    "partner_earnings",
+    "btc_remesas",
+    "btc_ves_wallets",
+    "p2p_sales",
 ]
+
+# Los saldos que el borrado pone en cero. Estaban sólo los dos de RIS: las
+# billeteras cripto sobrevivían al «borrado total» con su plata intacta y sin
+# ninguna historia detrás.
+_SALDOS_A_RESETEAR = ("balance_ris", "balance_ris_terceros",
+                      "balance_usdt", "balance_usdc")
 
 _ACCOUNTING_COLLECTIONS = [
     "usdt_operations",
@@ -105,6 +129,67 @@ async def _record_audit(admin: User, action: str, deleted: dict, total: int, ext
         logger.error(f"Error recording audit log: {e}")
 
 
+@router.get("/wipe-all/preview")
+async def wipe_all_preview(admin: User = Depends(get_super_admin)):
+    """Qué haría el borrado total, SIN hacer nada.
+
+    Un botón que borra la base entera y sólo se explica con un texto escrito a
+    mano en el frontend es un botón que se aprieta sin saber. Acá el que va a
+    apretarlo ve los números reales de SU base: cuántos documentos se van, de
+    qué colecciones, cuántos saldos se ponen en cero y cuánta plata suman.
+
+    Es de sólo lectura. No borra, no cierra el libro, no toca un saldo.
+    """
+    existentes = set(await db.list_collection_names())
+
+    a_borrar, total = [], 0
+    for nombre in _ALL_DATA_COLLECTIONS:
+        if nombre not in existentes:
+            continue
+        cuantos = await db[nombre].count_documents({})
+        if cuantos:
+            a_borrar.append({"coleccion": nombre, "documentos": cuantos})
+            total += cuantos
+    a_borrar.sort(key=lambda c: c["documentos"], reverse=True)
+
+    # Cuánta plata se pone en cero, por cuenta. Es el número que de verdad
+    # importa antes de apretar: si no es el que se espera, hay que parar.
+    saldos = {campo: ZERO for campo in _SALDOS_A_RESETEAR}
+    con_saldo = 0
+    proyeccion = {"_id": 0}
+    proyeccion.update({campo: 1 for campo in _SALDOS_A_RESETEAR})
+    async for u in db.users.find({}, proyeccion):
+        tiene = False
+        for campo in _SALDOS_A_RESETEAR:
+            monto = from_db(u.get(campo), 8 if campo.endswith(("usdt", "usdc")) else 2)
+            saldos[campo] += monto
+            tiene = tiene or monto != ZERO
+        con_saldo += 1 if tiene else 0
+
+    lineas_libro = await db["ledger"].count_documents({})
+
+    return {
+        "es_una_simulacion": True,
+        "se_borrarian": a_borrar,
+        "documentos_a_borrar": total,
+        "saldos_que_se_ponen_en_cero": {
+            campo: str(monto) for campo, monto in saldos.items()},
+        "usuarios_con_saldo": con_saldo,
+        "libro": {
+            "lineas": lineas_libro,
+            "se_borra": False,
+            "que_pasa": ("Se cierra con asientos que lo llevan a cero. No se "
+                         "borra ni una línea: la historia queda entera y la "
+                         "reconciliación cuadra después del borrado."),
+        },
+        "no_se_toca": [
+            "Los usuarios, sus datos y su verificación.",
+            "Las tasas y la configuración de la app.",
+            "El libro mayor (`ledger`), que se cierra en vez de borrarse.",
+        ],
+    }
+
+
 @router.post("/wipe-all")
 async def wipe_all_data(
     request: WipeRequest,
@@ -118,23 +203,36 @@ async def wipe_all_data(
     if request.confirmation != "CONFIRMAR":
         raise HTTPException(status_code=400, detail="Confirmación requerida: envía 'CONFIRMAR'")
 
-    deleted = await _wipe_collections(_ALL_DATA_COLLECTIONS)
+    # 1. El libro se cierra ANTES de tocar nada. Va primero a propósito: si el
+    #    cierre falla, todavía no se borró ni se puso en cero nada, y el estado
+    #    sigue siendo el de antes. Al revés, un fallo dejaría los saldos en cero
+    #    con el libro lleno, que es exactamente el descuadre que hay que evitar.
+    cierre = await create_closing_entries(
+        actor_id=admin.user_id, actor_email=admin.email, motivo="wipe_all")
+
+    # 2. Los saldos, los CUATRO. Antes se ponían en cero sólo los dos de RIS y
+    #    las billeteras cripto sobrevivían con su plata.
     balance_reset = await db.users.update_many(
-        {},
-        {"$set": {"balance_ris": to_decimal128(0), "balance_ris_terceros": to_decimal128(0)}}
-    )
+        {}, {"$set": {campo: to_decimal128(0) for campo in _SALDOS_A_RESETEAR}})
 
-    # Soft-delete: hide user transactions from admin views (users still see their own)
-    hidden_tx = await _hide_from_admin("transactions")
-    hidden_pay = await _hide_from_admin("payment_transactions")
+    # 3. Y recién ahora se borra.
+    deleted = await _wipe_collections(_ALL_DATA_COLLECTIONS)
 
-    logger.warning(f"Super admin {admin.email} wiped ALL data: {deleted}, hidden transactions: {hidden_tx}")
+    # Lo que había acá era código muerto: `_hide_from_admin("transactions")`
+    # corría DESPUES de que `_wipe_collections` vaciara esa misma colección, así
+    # que marcaba cero documentos. Venía copiado del borrado de contabilidad
+    # —donde sí sirve, porque ese no borra las transacciones— y hacía creer que
+    # el usuario conservaba su historial. No lo conservaba: se borraba.
 
-    total = sum(v for v in deleted.values() if isinstance(v, int)) + hidden_tx + hidden_pay
+    logger.warning(
+        f"Super admin {admin.email} wiped ALL data: {deleted}; "
+        f"cierre del libro: {cierre}")
+
+    total = sum(v for v in deleted.values() if isinstance(v, int))
     await _record_audit(admin, "wipe_all", deleted, total, {
         "users_balance_reset": balance_reset.modified_count,
-        "hidden_transactions": hidden_tx,
-        "hidden_payment_transactions": hidden_pay,
+        "saldos_reseteados": list(_SALDOS_A_RESETEAR),
+        "cierre_del_libro": cierre,
     })
 
     return {
@@ -142,8 +240,9 @@ async def wipe_all_data(
         "message": "Datos operacionales eliminados completamente",
         "deleted": deleted,
         "total_deleted": total,
-        "hidden_transactions": hidden_tx,
-        "users_balance_reset": balance_reset.modified_count
+        "users_balance_reset": balance_reset.modified_count,
+        "cierre_del_libro": cierre,
+        "libro_conservado": True,
     }
 
 
