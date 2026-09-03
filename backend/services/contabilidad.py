@@ -14,9 +14,10 @@ QUE HABIA
        `balance_ris_terceros`. Eso no es un plan de cuentas: no distingue activo
        de pasivo, ni ingreso de egreso.
 
-    3. LOS MONTOS SON `float`. `ledger.py` hace `abs(float(amount or 0))` y
-       `sum_ris_balance` los suma con `$sum` de Mongo, mientras el resto de la
-       app cuida los saldos con `Decimal128`.
+    3. LOS MONTOS SON `float`. `ledger.py` hace `abs(float(amount or 0))`,
+       mientras el resto de la app cuida los saldos con `Decimal128`.
+       (`sum_ris_balance` sumaba además con `$sum` de Mongo; hoy suma en
+       Decimal, pero las líneas siguen guardándose en float.)
 
        HONESTIDAD SOBRE ESTE PUNTO: busqué un caso donde eso diera un total
        distinto y NO lo encontré. Redondeando a dos decimales, sumar cien mil
@@ -507,7 +508,8 @@ async def reconciliacion(*, libro: str = "RIS", limite: int = 200, db=None) -> d
 
         Y sumaba con `$sum` de Mongo sobre `signed_amount`, que es un float.
         Acá se suma con Decimal, que es la única forma de que «cuadra» signifique
-        cuadra.
+        cuadra. (`sum_ris_balance` también suma en Decimal desde entonces; lo
+        que queda de aquella versión es el viaje por usuario.)
 
     LA TOLERANCIA ES CERO, Y ES A PROPOSITO
         La versión anterior toleraba un centavo por usuario (`EPS = 0.01`). Un
