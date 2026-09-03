@@ -12,12 +12,17 @@ from database import db
 from models.user import User
 from routes.dependencies import get_super_admin
 from services.ledger import sum_ris_balance, create_opening_entries
+from services.money import from_db, quantize_money, to_float
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/ledger", tags=["ledger"])
 
-EPS = 0.01  # tolerancia de redondeo al comparar saldos
+# Tolerancia al comparar saldos. Se mantiene en un centavo porque estas dos
+# rutas viejas comparan contra una suma del libro cuyos montos son floats; la
+# reconciliación nueva (`/reconciliacion`, en services/contabilidad.py) suma en
+# Decimal y por eso puede exigir cero.
+EPS = quantize_money("0.01")
 
 
 @router.post("/opening")
@@ -43,18 +48,22 @@ async def reconcile(admin: User = Depends(get_super_admin)):
         if not uid:
             continue
         checked += 1
-        bal = float(u.get("balance_ris") or 0)
+        # `float(u.get("balance_ris") or 0)` reventaba con el saldo en
+        # Decimal128 —que es como lo escribe toda la app desde services/saldos—
+        # y el `or 0` no salvaba nada porque un Decimal128 es truthy. `from_db`
+        # lee las dos formas.
+        bal = from_db(u.get("balance_ris"))
         led = await sum_ris_balance(uid, "balance_ris")
-        diff = round(bal - led, 8)
+        diff = quantize_money(bal - led)
         if abs(diff) > EPS:
             mismatches.append({
                 "user_id": uid,
                 "email": u.get("email"),
                 "name": u.get("full_name") or u.get("name"),
                 "role": u.get("role", "user"),
-                "balance_ris": bal,
-                "ledger_sum": led,
-                "diff": diff,
+                "balance_ris": to_float(bal),
+                "ledger_sum": to_float(led),
+                "diff": to_float(diff),
             })
     mismatches.sort(key=lambda x: abs(x["diff"]), reverse=True)
     return {
@@ -79,12 +88,12 @@ async def list_entries(
         rows.append(r)
     bal_doc = await db.users.find_one({"user_id": user_id}, {"balance_ris": 1})
     led = await sum_ris_balance(user_id, "balance_ris")
-    bal = float((bal_doc or {}).get("balance_ris") or 0)
+    bal = from_db((bal_doc or {}).get("balance_ris"))
     return {
         "user_id": user_id,
-        "balance_ris": bal,
-        "ledger_sum": led,
-        "diff": round(bal - led, 8),
+        "balance_ris": to_float(bal),
+        "ledger_sum": to_float(led),
+        "diff": to_float(quantize_money(bal - led)),
         "count": len(rows),
         "entries": rows,
     }

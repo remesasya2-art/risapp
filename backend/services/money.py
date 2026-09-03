@@ -6,10 +6,16 @@ OBJETIVO
     decimal.Decimal (precisión exacta) y bson.Decimal128 (para guardar en Mongo),
     evitando los errores de redondeo del tipo float (ej. 0.1 + 0.2 = 0.30000000000000004).
 
-ESTADO (Fase 1)
-    Este módulo está AISLADO: define las funciones pero todavía NO se usa en
-    ninguna ruta ni servicio. No cambia el comportamiento de la aplicación.
-    Las siguientes fases lo irán conectando, un flujo de dinero a la vez.
+ESTADO
+    Ya NO está aislado: es la base sobre la que se apoyan los dos dueños del
+    dinero —`services/bancos.py` (el saldo de las cuentas bancarias) y
+    `services/saldos.py` (el saldo de los usuarios)— además del cobro de
+    envíos, el libro mayor y la contabilidad.
+
+    El docstring que había acá decía que el módulo «todavía NO se usa en
+    ninguna ruta ni servicio». Eso dejó de ser cierto hace varias fases, y un
+    comentario que miente sobre el alcance de un módulo de dinero es peor que
+    no tener comentario: invita a cambiarlo pensando que no rompe nada.
 
 NOTA SOBRE DECIMALES
     - Monedas fiat (RIS, VES, BRL, USD): por defecto 2 decimales.

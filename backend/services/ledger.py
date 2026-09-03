@@ -21,7 +21,10 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from decimal import Decimal
+
 from database import db
+from services.money import ZERO, from_db, quantize_money, to_decimal, to_float
 
 logger = logging.getLogger(__name__)
 
@@ -139,22 +142,31 @@ async def record_ris_entry(
         return None
 
 
-async def sum_ris_balance(user_id: str, account: str = "balance_ris") -> float:
-    """Suma todas las líneas del ledger de un usuario/cuenta.
+async def sum_ris_balance(user_id: str, account: str = "balance_ris") -> Decimal:
+    """Suma todas las líneas del libro de un usuario/cuenta, en Decimal.
 
-    Se usará en la fase de reconciliación para comparar contra balance_ris.
+    Se suma en Python y NO con el `$sum` de Mongo a propósito: `signed_amount`
+    se guarda como float, y sumar mil líneas con `$sum` arrastra el error
+    binario a un total que después se compara contra un saldo exacto. Un
+    "descuadre" de 0.00000001 que sólo existe porque el total se sumó en coma
+    flotante manda a revisar una cuenta que está bien.
+
+    Devuelve `Decimal`. Antes devolvía `float`; quien necesite un número suelto
+    lo convierte al mostrarlo, que es donde el redondeo no hace daño.
     """
     try:
-        cursor = db[LEDGER_COLLECTION].aggregate([
-            {"$match": {"user_id": user_id, "account": account}},
-            {"$group": {"_id": None, "total": {"$sum": "$signed_amount"}}},
-        ])
-        async for row in cursor:
-            return round(float(row.get("total", 0.0)), 8)
-        return 0.0
+        total = ZERO
+        cursor = db[LEDGER_COLLECTION].find(
+            {"user_id": user_id, "account": account},
+            {"_id": 0, "signed_amount": 1},
+        )
+        async for linea in cursor:
+            total += to_decimal(linea.get("signed_amount"))
+        return quantize_money(total)
     except Exception as e:
         logger.warning(f"sum_ris_balance fallo: {e}")
-        return 0.0
+        return ZERO
+
 
 async def create_opening_entries():
     """Crea, UNA sola vez por usuario y cuenta, una línea 'saldo_apertura' que
@@ -194,19 +206,22 @@ async def create_opening_entries():
                 )
                 if existing:
                     continue
-                current = float(u.get(field) or 0)
+                # `float(u.get(field) or 0)` reventaba: el saldo se guarda en
+                # `Decimal128` y `float(Decimal128)` es un TypeError. El `or 0`
+                # no salvaba nada, porque un Decimal128 es truthy.
+                current = from_db(u.get(field))
                 led = await sum_ris_balance(uid, account)
-                opening = round(current - led, 8)
-                if abs(opening) < 1e-9:
+                opening = quantize_money(current - led)
+                if opening == ZERO:
                     continue  # nada que abrir
                 await record_ris_entry(
                     user_id=uid,
                     movement_type="saldo_apertura",
-                    amount=abs(opening),
+                    amount=to_float(abs(opening)),
                     direction="credit" if opening > 0 else "debit",
                     account=account,
-                    balance_before=led,
-                    balance_after=current,
+                    balance_before=to_float(led),
+                    balance_after=to_float(current),
                     reference_kind="manual",
                     reference_id="opening_migration",
                     actor_type="system",

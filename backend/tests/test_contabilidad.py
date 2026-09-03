@@ -8,7 +8,7 @@ DE DONDE VIENE ESTE ARCHIVO
 
       1. No era partida doble: cada línea es de UN lado y no dice contra qué.
       2. No había plan de cuentas: `account` vale `balance_ris`, nada más.
-      3. Los montos son float, y `sum_ris_balance` los suma con `$sum`.
+      3. Los montos son float (y `sum_ris_balance` los sumaba con `$sum`).
       4. La reconciliación hacía UNA agregación POR USUARIO, secuencial.
       5. Toleraba un centavo de descuadre por cuenta.
       6. El libro no se podía leer: la única ruta exigía un `user_id` que la
