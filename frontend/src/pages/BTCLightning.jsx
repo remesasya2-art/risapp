@@ -302,6 +302,14 @@ export default function BTCLightning() {
         }
       } catch { /* consulta opcional, no rompe el flujo */ }
     })();
+    // Cada diez segundos, por decisión del operador. No hay caché del lado
+    // del servidor: cada consulta va en vivo a blockchain.info, así que el
+    // precio en pantalla nunca tiene más de diez segundos.
+    //
+    // Es también lo que hace que `EDAD_MAXIMA_DEL_PRECIO` —los treinta
+    // segundos que el servidor tolera si el proveedor no contesta— alcance
+    // para unos tres intentos. Si algún día se espacia este intervalo, hay que
+    // mirar aquel número.
     const interval = setInterval(fetchPrecioBTC, 10000);
     return () => clearInterval(interval);
   }, []);

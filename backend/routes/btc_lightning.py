@@ -30,11 +30,26 @@ BLINK_GRAPHQL_URL = "https://api.blink.sv/graphql"
 # 36 % de más en bitcoin sin que nada fallara ni nadie se enterara.
 _btc_price_cache = {"price": None, "updated_at": None}
 
-# Cuánto se acepta un precio guardado cuando el proveedor no contesta. Un
-# precio de hace cinco minutos sirve; uno de hace tres horas es otro precio.
-# El bitcoin se mueve; cobrar con una cifra vieja es cobrar mal, para un lado
-# o para el otro.
-EDAD_MAXIMA_DEL_PRECIO = timedelta(minutes=10)
+# Cuánto se acepta un precio guardado CUANDO EL PROVEEDOR NO CONTESTA.
+#
+#   No es un intervalo de actualización: no hay ninguno. Cada consulta va en
+#   vivo a blockchain.info y devuelve lo que contesta, y la pantalla del envío
+#   consulta cada diez segundos. Este número sólo entra en juego si el
+#   proveedor se cae.
+#
+#   Treinta segundos, por decisión del operador y por lo que es el bitcoin: es
+#   una moneda que se mueve, y cobrar con el precio de hace un minuto es cobrar
+#   mal, para un lado o para el otro.
+#
+#   Lo que cuesta: con la pantalla consultando cada diez segundos, esto tolera
+#   unos tres intentos fallidos seguidos. Un hipo del proveedor más largo que
+#   eso deja de cotizar. Es una falla suave y se cura sola —la pantalla dice
+#   que no hay cotización y sigue reintentando— pero va a pasar más seguido que
+#   con diez minutos.
+#
+#   Bajarlo de ~15 segundos no tendría sentido: sería menos que el intervalo
+#   con que se consulta, o sea no tolerar nada.
+EDAD_MAXIMA_DEL_PRECIO = timedelta(seconds=30)
 
 # Cuánto vale la tasa USDI → VES desde que se guardó.
 #

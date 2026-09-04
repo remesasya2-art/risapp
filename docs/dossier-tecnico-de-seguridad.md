@@ -375,8 +375,11 @@ ser lo más justo posible».
 
 Lo que se hace cumplir ahora:
 
-- **El caché del precio arranca vacío.** Si el proveedor no contesta, se acepta
-  el último precio conocido sólo si tiene menos de diez minutos.
+- **El caché del precio arranca vacío.** El precio se pide en vivo en cada
+  consulta —no hay intervalo de actualización— y la pantalla consulta cada
+  diez segundos. Si el proveedor no contesta, se acepta el último precio
+  conocido sólo **treinta segundos**: el bitcoin se mueve, y cobrar con el
+  precio de hace un minuto es cobrar mal, para un lado o para el otro.
 - **La tasa devuelve nada** si falta, si no es un número, o si es cero o
   negativa.
 - **`_cotizacion_o_error()` es el único camino** por el que el cobro obtiene

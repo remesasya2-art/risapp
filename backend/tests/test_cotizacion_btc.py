@@ -134,11 +134,19 @@ def test_sin_proveedor_y_sin_precio_guardado_no_hay_precio(monkeypatch):
     assert corre(btc._get_btc_price()) is None
 
 
-def test_un_precio_reciente_sirve_cuando_el_proveedor_no_contesta(monkeypatch):
-    """No se castiga un corte de un minuto: el precio de hace un rato sirve."""
+def test_un_precio_dentro_del_limite_sirve_cuando_el_proveedor_no_contesta(monkeypatch):
+    """No se castiga un tropiezo del proveedor: adentro del límite, sirve.
+
+    Las dos edades se calculan A PARTIR de `EDAD_MAXIMA_DEL_PRECIO` y no con
+    minutos escritos a mano. Ya pasó: el límite bajó de diez minutos a treinta
+    segundos y este test, que tenía «dos minutos» escrito, se puso rojo por el
+    cambio de política y no por un error. Un test que hay que editar cada vez
+    que se ajusta un número termina editado sin pensar.
+    """
     _proveedor_caido(monkeypatch)
     btc._btc_price_cache["price"] = 79679.78
-    btc._btc_price_cache["updated_at"] = datetime.now(timezone.utc) - timedelta(minutes=2)
+    btc._btc_price_cache["updated_at"] = (
+        datetime.now(timezone.utc) - btc.EDAD_MAXIMA_DEL_PRECIO / 2)
     assert corre(btc._get_btc_price()) == 79679.78
 
 
@@ -147,7 +155,7 @@ def test_un_precio_viejo_no_sirve_para_cobrar(monkeypatch):
     _proveedor_caido(monkeypatch)
     btc._btc_price_cache["price"] = 58500.0
     btc._btc_price_cache["updated_at"] = (
-        datetime.now(timezone.utc) - btc.EDAD_MAXIMA_DEL_PRECIO - timedelta(minutes=1))
+        datetime.now(timezone.utc) - btc.EDAD_MAXIMA_DEL_PRECIO - timedelta(seconds=1))
     assert corre(btc._get_btc_price()) is None
 
 
@@ -315,3 +323,20 @@ def test_el_endpoint_publico_muestra_desde_cuando_es_la_tasa(monkeypatch):
     r = corre(btc.get_precio_btc())
     assert r["tasa_actualizada_en"] == cuando
     assert r["disponible"] is True
+
+
+def test_el_limite_del_precio_es_de_segundos_y_no_de_minutos():
+    """La decisión del operador, escrita donde se rompe si alguien la afloja.
+
+    «El bitcoin es muy volátil»: el precio guardado vale medio minuto. El
+    número puede ajustarse —treinta segundos no es sagrado— pero volver a los
+    diez minutos sería deshacer la decisión, y eso tiene que costar cambiar un
+    test a propósito y no editar una constante de paso.
+    """
+    assert btc.EDAD_MAXIMA_DEL_PRECIO <= timedelta(minutes=1), (
+        f"El precio guardado vale {btc.EDAD_MAXIMA_DEL_PRECIO}. Se fijó en "
+        "medio minuto porque el bitcoin se mueve y cobrar con una cifra vieja "
+        "es cobrar mal, para un lado o para el otro.")
+    assert btc.EDAD_MAXIMA_DEL_PRECIO >= timedelta(seconds=15), (
+        "Menos de quince segundos es menos que el intervalo con que la "
+        "pantalla consulta: sería no tolerar ni un tropiezo del proveedor.")
