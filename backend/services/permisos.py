@@ -179,10 +179,8 @@ MAPA = {
     ("PUT",    "/api/admin/envios/envios/viajes/{lote_id}/costo"):    "envios.dinero",
 
     # ── Configuración ─────────────────────────────────────────────────────
-    ("GET",    "/api/admin/settings/rate"):                  "settings.view",
     ("GET",    "/api/admin/bcv-rates"):                      "settings.view",
     ("GET",    "/api/admin/bcv-rates/history"):              "settings.view",
-    ("POST",   "/api/admin/settings/rate"):                  "settings.edit",
     ("POST",   "/api/admin/bcv-rates/refresh"):              "settings.edit",
 
     # ── Administradores ───────────────────────────────────────────────────

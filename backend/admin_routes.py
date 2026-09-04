@@ -736,42 +736,23 @@ async def get_admin_payment_record_detail(record_id: str, admin_user: dict = Dep
 # SETTINGS
 # =======================
 
-@admin_router.get("/settings/rate")
-async def get_exchange_rate(admin_user: dict = Depends(get_admin_user)):
-    """Get current exchange rate"""
-    if not has_permission(admin_user, "settings.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    rate_doc = await db.exchange_rates.find_one({})
-    if not rate_doc:
-        return {"ris_to_ves": 78, "updated_at": None, "updated_by": None}
-    
-    return {
-        "ris_to_ves": rate_doc.get("ris_to_ves", 78),
-        "updated_at": rate_doc.get("updated_at"),
-        "updated_by": rate_doc.get("updated_by")
-    }
+# ─── LA TASA QUE NO CAMBIABA LA TASA ─────────────────────────────────────
+#
+# Acá vivían `GET` y `POST /admin/settings/rate`. Escribían y leían
+# `db.exchange_rates`, una colección que NADIE MAS del proyecto lee: la tasa
+# real vive en `db.rates`, y de ahí la sacan los envíos, el PIX del gestor,
+# el cotizador y `GET /api/rate`.
+#
+# O sea que un administrador entraba, cambiaba la tasa, recibía "Tasa
+# actualizada correctamente"... y no pasaba nada. Y como el GET leía la misma
+# colección, al recargar veía su número nuevo y quedaba convencido. Una
+# pantalla que confirma un cambio que no ocurrió es peor que una que falla.
+#
+# La ruta que SI funciona es `POST /admin/rates` (routes/admin.py): escribe
+# `db.rates`, deja historial en `rate_history` y asienta en el libro de
+# auditoría con el antes y el después. Es la que usa el panel —se comprobó
+# que el frontend no llamaba a ésta ni una vez— y es sólo del super
+# administrador, que para mover la tasa a todos los clientes es lo correcto.
+# ─────────────────────────────────────────────────────────────────────────
 
-@admin_router.post("/settings/rate")
-async def update_exchange_rate(request: UpdateRateRequest, peticion: Request,
-                               admin_user: dict = Depends(get_admin_user)):
-    """Update exchange rate"""
-    if not has_permission(admin_user, "settings.edit"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Build the rate update
-    new_rate = {
-        "ris_to_ves": request.ris_to_ves,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "updated_by": admin_user.get("username", "admin")
-    }
-    if request.usd_to_ves is not None:
-        new_rate["usd_to_ves"] = request.usd_to_ves
 
-    await db.exchange_rates.update_one(
-        {},
-        {"$set": new_rate},
-        upsert=True
-    )
-
-    return {"message": "Tasa actualizada correctamente", "rate": new_rate}
