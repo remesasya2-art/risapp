@@ -99,6 +99,26 @@ SIN_TOPE_A_PROPOSITO = {
 }
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Las que sólo existen a veces
+# ══════════════════════════════════════════════════════════════════════════
+#
+# `server.py` registra el atrapa-todo del frontend SOLO si `frontend/dist`
+# existe. En una máquina donde se compiló el frontend, la ruta está; en CI, que
+# no lo compila, no está.
+#
+# Sin esta lista, el test de más abajo fallaba en CI y pasaba en local. Ese es
+# el peor defecto posible en una suite: no enseña a desconfiar del código,
+# enseña a desconfiar de la suite — y una suite en la que no se confía deja de
+# frenar cosas mucho antes de que alguien la borre.
+#
+# Lo encontró CI, no yo: la corrida local tenía el frontend compilado porque lo
+# había construido para otra cosa.
+CONDICIONALES = {
+    ("GET", "/{full_path:path}"): "sólo existe si frontend/dist está compilado",
+}
+
+
 def _rutas_sin_sesion():
     """Cada ruta que no exige sesión, con si tiene tope o no."""
     try:
@@ -155,10 +175,34 @@ def test_LA_LISTA_DE_EXCEPCIONES_NO_JUNTA_POLVO():
     mirar. Y peor: si mañana vuelve una ruta con ese mismo camino, entra ya
     exceptuada sin que nadie lo haya decidido."""
     vivas = {(m, p) for m, p, _ in _rutas_sin_sesion()}
-    muertas = [f"{m} {p}" for (m, p) in SIN_TOPE_A_PROPOSITO if (m, p) not in vivas]
+    muertas = [f"{m} {p}" for (m, p) in SIN_TOPE_A_PROPOSITO
+               if (m, p) not in vivas and (m, p) not in CONDICIONALES]
     assert not muertas, (
         "hay excepciones declaradas para rutas que ya no existen:\n  "
         + "\n  ".join(sorted(muertas)))
+
+
+def test_UNA_CONDICIONAL_SIGUE_SIENDO_UNA_EXCEPCION_DECLARADA():
+    """Estar en `CONDICIONALES` exime de existir siempre, no de tener motivo.
+
+    Si no, la lista se volvería el lugar donde se esconde una excepción que
+    nadie quiere justificar: «ponela ahí y listo».
+    """
+    for clave in CONDICIONALES:
+        assert clave in SIN_TOPE_A_PROPOSITO, (
+            f"{clave} está declarada como condicional pero no como excepción "
+            "con su motivo")
+
+
+def test_la_condicional_del_frontend_aparece_cuando_el_frontend_esta():
+    """La otra mitad: cuando el frontend SI está compilado, la ruta tiene que
+    existir de verdad. Sin esto, `CONDICIONALES` podría tapar una ruta que se
+    borró y nadie se enteraría nunca."""
+    if not os.path.isdir(os.path.join(os.path.dirname(_BACKEND), "frontend", "dist")):
+        pytest.skip("el frontend no está compilado en esta máquina")
+    vivas = {(m, p) for m, p, _ in _rutas_sin_sesion()}
+    assert ("GET", "/{full_path:path}") in vivas, (
+        "el frontend está compilado y aun así no se registró el atrapa-todo")
 
 
 def test_una_excepcion_sin_motivo_no_vale():
