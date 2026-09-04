@@ -159,6 +159,24 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Envios indexes warning: {e}")
     try:
+        # El cofre de los documentos del KYC. Se revisa al arrancar para que una
+        # llave equivocada se vea en el primer segundo y no dentro de tres meses,
+        # cuando alguien necesite abrir un documento y no pueda.
+        #
+        # Un problema acá NO tumba la aplicación: las remesas siguen andando y
+        # lo único que falla es el KYC, con un error claro. Ver services/cofre.py.
+        from services import cofre
+        await cofre.sellar_testigo(db)
+        estado_cofre = await cofre.revisar(db)
+        if not estado_cofre["ok"]:
+            logger.error("COFRE: %s", estado_cofre["detalle"])
+        else:
+            logger.info("Cofre en modo «%s» (huella %s): %s",
+                        estado_cofre["modo"], estado_cofre["huella"],
+                        estado_cofre["detalle"])
+    except Exception as e:
+        logger.warning(f"Cofre: no se pudo revisar al arrancar: {e}")
+    try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
     except Exception as e:

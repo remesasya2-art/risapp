@@ -18,6 +18,7 @@ from googleapiclient.http import MediaFileUpload
 from routes.dependencies import get_admin_user, get_super_admin
 from models.user import User
 from database import db
+from services import cofre
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/oauth/drive", tags=["Google Drive"])
@@ -228,7 +229,9 @@ def generate_client_pdf(user_data: dict) -> str:
     
     tmp_files = []
     for field, label in image_fields.items():
-        data = user_data.get(field, "")
+        # Abrir es idempotente: sobre un valor ya en claro no hace nada. Va acá
+        # igual porque este archivo puede recibir el documento crudo de la base.
+        data = cofre.abrir(user_data.get(field, ""))
         if not data or not data.startswith("data:"):
             continue
         

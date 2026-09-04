@@ -16,6 +16,7 @@ from routes.dependencies import get_current_user, get_super_admin
 from services.limits import limits_payload
 from services.kyc_quota import quota_payload
 from models.user import User
+from services import cofre
 from services.imagen_recibida import (ImagenInvalida, limpiar_imagen,
                                       limpiar_imagen_opcional)
 
@@ -156,6 +157,18 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
         selfie = limpiar_imagen(data.selfie_image, campo="La selfie")
     except ImagenInvalida as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Al cofre. Con `COFRE_MODO=apagado` —el valor por omisión— esto devuelve
+    # los mismos valores y no cambia nada. Ver services/cofre.py.
+    try:
+        doc_frente = cofre.guardar(doc_frente)
+        doc_dorso = cofre.guardar(doc_dorso)
+        cpf_img = cofre.guardar(cpf_img)
+        selfie = cofre.guardar(selfie)
+    except cofre.CofreCerrado as e:
+        # Se corta ANTES de escribir. Guardar en claro creyendo que se cifró es
+        # la peor de las tres situaciones, porque no se nota nunca.
+        raise HTTPException(status_code=503, detail=str(e))
 
     verification = {
         "verification_id": f"ver_{uuid.uuid4().hex[:12]}",

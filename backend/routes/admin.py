@@ -11,6 +11,7 @@ from typing import Optional
 from database import db
 from services import sesiones
 from services import registro
+from services import cofre
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
 from models.user import User
@@ -526,6 +527,8 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
     
     # Merge KYC images into user profile
     if kyc:
+        # `abrir_varios` deja en claro lo que esté cifrado y no toca lo demás.
+        kyc = cofre.abrir_varios(kyc, cofre.CAMPOS_KYC)
         user["id_document_image"] = kyc.get("id_document_image")
         user["cpf_image"] = kyc.get("cpf_image")
         user["selfie_image"] = kyc.get("selfie_image")

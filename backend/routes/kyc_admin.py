@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel, Field
 
 from database import db
+from services import cofre
 from models.user import User
 from routes.dependencies import get_super_admin, get_crm_user
 from services.notifications import create_notification
@@ -71,7 +72,13 @@ class NoteRequest(BaseModel):
 # ============================================================================
 
 def _normalize_image(value):
-    """Return None for empty/placeholder/invalid image strings."""
+    """Return None for empty/placeholder/invalid image strings.
+
+    Acá también se abre el cofre: es el único punto por el que pasan las cuatro
+    imágenes de este archivo, así que es donde corresponde. Un valor guardado en
+    claro pasa igual — ver services/cofre.py.
+    """
+    value = cofre.abrir(value)
     if not value or not isinstance(value, str):
         return None
     v = value.strip()
