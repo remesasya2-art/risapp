@@ -446,6 +446,33 @@ def test_el_detalle_muestra_la_devolucion_cuando_la_hubo():
     assert "devolucion" in partidas
 
 
+def test_el_detalle_trae_la_version_de_terminos_para_poder_confirmar():
+    """Sin este campo, una cotización a medias no se puede confirmar bien.
+
+    `envios_crear` compara la versión de términos que la pantalla dice haber
+    mostrado contra la que el envío congeló al cotizar. Si el detalle no la
+    devuelve, la pantalla de detalle no tiene qué mandar, y la única forma de
+    confirmar desde ahí sería omitirla — que es saltearse la comprobación, no
+    cumplirla.
+    """
+    base = db_completa([envio(1, cotizacion={"terminos_version": "v3"})])
+
+    r = corre(con.detalle(_Usuario(), "env_001", db=base))
+
+    assert r["terminos_version"] == "v3"
+
+
+def test_la_version_de_terminos_no_se_cuela_en_la_lista():
+    """La lista no confirma nada, así que no la necesita. Un campo de más en
+    una lista es un campo que después alguien usa desde donde no debe."""
+    base = db_completa([envio(1, cotizacion={"terminos_version": "v3"})])
+
+    filas = corre(con.listar(_Usuario(), db=base))
+
+    plano = repr(filas)
+    assert "terminos_version" not in plano
+
+
 def test_el_detalle_no_muestra_el_margen_ni_el_desglose_del_calculo():
     """Al usuario le importa qué le cobraron y por qué en una línea. El margen y
     el multiplicador de temporada, sueltos, invitan a discutir el precio de una

@@ -24,7 +24,7 @@ import { fmt } from '../utils/format';
 import Chrome from '../components/envios/Chrome';
 import Etiqueta from '../components/envios/Etiqueta';
 import {
-  Area, Aviso, Boton, Campo, Cargando, Texto, Vacio,
+  Area, Aviso, Boton, Campo, Cargando, Interruptor, Texto, Vacio,
 } from '../components/envios/ui';
 import {
   COLOR, bajada, esFallaDeLectura, grilla, mensajeDeError, tarjeta, titulo,
@@ -142,17 +142,7 @@ export default function EnvioDetalle() {
       ) : null}
 
       {envio.estado === 'cotizado' ? (
-        <Aviso tono="alerta" titulo="Esta cotización todavía no está confirmada">
-          <strong>No despaches nada hasta confirmarla.</strong> Una cotización sin confirmar
-          se borra sola
-          {envio.vence_at ? ` el ${fecha(envio.vence_at)}` : ' a las 48 horas'}, y si la caja
-          ya salió no va a haber ningún envío que la reclame.
-          <div style={{ marginTop: '10px' }}>
-            <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
-              <Boton>Cotizar de nuevo</Boton>
-            </Link>
-          </div>
-        </Aviso>
+        <Confirmar envio={envio} onListo={refrescar} />
       ) : null}
 
       {envio.estado === 'esperando_postagem' ? (
@@ -306,6 +296,155 @@ function Cobros({ envio }) {
     </div>
   );
 }
+
+/**
+ * Confirmar una cotización que quedó a medias.
+ *
+ * EL AGUJERO QUE TAPA
+ *
+ *   Cotizar y confirmar vivían los dos en `EnvioNuevo`, en la misma pantalla.
+ *   Si el usuario cotizaba y se iba —cerraba la pestaña, lo llamaron, se quedó
+ *   sin señal—, el envío quedaba guardado en `cotizado` y VIGENTE por 48 horas,
+ *   pero esta pantalla no ofrecía ninguna forma de confirmarlo: sólo «Cotizar
+ *   de nuevo», que es empezar de cero y volver a tipear todo.
+ *
+ *   Y el botón «Actualizar» de arriba no arreglaba nada, porque no había nada
+ *   que actualizar: el envío seguía igual. Desde afuera se leía como que la
+ *   pantalla estaba rota.
+ *
+ * POR QUE LAS DOS ACEPTACIONES ESTAN ACA TAMBIEN
+ *
+ *   No se heredan de la pantalla anterior. `envios_crear` las exige en cada
+ *   confirmación y con razón: son el registro que se lee el día que haya que
+ *   defender un ajuste de precio. Reusarlas de una sesión que terminó hace dos
+ *   días sería anotar una aceptación que nadie dio en este momento.
+ *
+ *   Van sin tildar, separadas, y con el mismo texto que en `EnvioNuevo`: si las
+ *   dos pantallas dijeran cosas distintas, «aceptaste esto» dejaría de
+ *   sostenerse.
+ *
+ * LA VERSION DE LOS TERMINOS
+ *
+ *   Se manda la que trae el envío, que es la que se congeló al cotizar y la
+ *   que este bloque le está mostrando. Si el backend la ve distinta de la
+ *   congelada, frena — y eso está bien: significaría que las condiciones
+ *   cambiaron mientras el usuario no estaba.
+ */
+function Confirmar({ envio, onListo }) {
+  const [contenido, setContenido] = useState(false);
+  const [estimado, setEstimado] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Una sola clave por cotización, generada en un efecto y no en el render:
+  // `Date.now` y `Math.random` no son puras, y un render repetido no puede
+  // cambiar la clave con la que ya se mandó una petición. Mismo criterio que
+  // en EnvioNuevo.
+  const clave = useRef(null);
+  useEffect(() => {
+    if (!clave.current) {
+      clave.current = (globalThis.crypto?.randomUUID?.()
+        || `c_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    }
+  }, []);
+
+  // Se recalcula en cada render, así que basta con volver a pintar —lo que hace
+  // «Actualizar»— para que una cotización que venció mientras la pantalla
+  // estaba abierta deje de ofrecer el botón.
+  const vencida = !envio.vence_at || new Date(envio.vence_at) <= new Date();
+
+  const confirmar = async () => {
+    setConfirmando(true);
+    setError(null);
+    try {
+      await api.post('/envios/crear', {
+        envio_id: envio.envio_id,
+        declaracion: {
+          // Los valores reales, no dos literales: una aceptación es un hecho,
+          // no una interpretación.
+          contenido_aceptado: contenido,
+          estimado_aceptado: estimado,
+          terminos_version: envio.terminos_version,
+        },
+        idempotency_key: clave.current || undefined,
+      });
+      toast.success('Envío confirmado');
+      // Recargar y no navegar: la pantalla es la misma, y al volver ya está en
+      // `esperando_postagem`, con la etiqueta para rotular la caja.
+      onListo();
+    } catch (err) {
+      setError(mensajeDeError(err, 'No se pudo confirmar.'));
+    } finally {
+      setConfirmando(false);
+    }
+  };
+
+  if (vencida) {
+    return (
+      <Aviso tono="alerta" titulo="Esta cotización venció">
+        <strong>No despaches nada.</strong> Los precios y los límites pueden haber
+        cambiado desde que la pediste, así que hay que cotizar otra vez. Si la caja
+        ya salió, avisanos por el centro de ayuda antes de que llegue.
+        <div style={{ marginTop: '10px' }}>
+          <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
+            <Boton>Cotizar de nuevo</Boton>
+          </Link>
+        </div>
+      </Aviso>
+    );
+  }
+
+  return (
+    <div style={{ ...tarjeta, borderColor: '#f5d787', backgroundColor: '#fffdf5' }}>
+      <h3 style={titulo}><CheckCircle2 size={16} /> Falta confirmar este envío</h3>
+      <p style={bajada}>
+        <strong>No despaches nada hasta confirmarlo.</strong> Una cotización sin
+        confirmar se borra sola el {fecha(envio.vence_at)}, y si la caja ya salió no
+        va a haber ningún envío que la reclame.
+      </p>
+
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap',
+        margin: '4px 0 16px', paddingBottom: '14px', borderBottom: '1px solid #f1e9cf',
+      }}
+      >
+        <span style={{ fontSize: '13px', color: COLOR.suave }}>Precio estimado</span>
+        <strong style={{ fontSize: '24px', color: COLOR.texto, letterSpacing: '-0.02em' }}>
+          {num(envio.total_ris)} {envio.moneda}
+        </strong>
+      </div>
+
+      <p style={bajada}>
+        Confirmar <strong>no cobra nada</strong>. El primer cobro se emite cuando
+        nuestro operador verifique tu comprobante en Pacaraima, con el peso que midió
+        el transportista al despachar.
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
+        <Interruptor activo={contenido} onChange={setContenido}
+          etiqueta="Lo que mando no está en la lista de prohibidos"
+          ayuda="Una caja con contenido prohibido queda retenida en la frontera, y el costo es tuyo." />
+        <Interruptor activo={estimado} onChange={setEstimado}
+          etiqueta="Entiendo que el precio es un estimado y se cierra al pesar en Pacaraima"
+          ayuda="Si el peso real es mayor que el declarado, se cobra la diferencia; si es menor, se devuelve." />
+      </div>
+
+      {error ? <Aviso tono="error" style={{ marginTop: '14px' }}>{error}</Aviso> : null}
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
+        <Boton onClick={confirmar} cargando={confirmando}
+          disabled={!contenido || !estimado}
+          style={{ flex: 1, justifyContent: 'center', padding: '14px' }}>
+          Confirmar el envío
+        </Boton>
+        <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
+          <Boton variante="secundario">Cotizar de nuevo</Boton>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 
 function Pagar({ envio, partidas, onListo }) {
   const [pagando, setPagando] = useState(null);
