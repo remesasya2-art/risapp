@@ -39,10 +39,13 @@ _RAIZ = pathlib.Path(os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")))
 
 # Las pantallas que ve alguien sin cuenta, y lo que montan.
+#
+# `ComoFunciona.jsx` estuvo acá y ya no: se decidió no publicarla. El archivo
+# sigue existiendo sin ruta, y de que no vuelva a la web se ocupa
+# `test_lo_que_no_se_publica.py`.
 PUBLICAS = [
     "frontend/src/pages/Landing.jsx",
     "frontend/src/pages/LegalPage.jsx",
-    "frontend/src/pages/ComoFunciona.jsx",
     "frontend/src/pages/Seguimiento.jsx",
     "frontend/src/components/Footer.jsx",
 ]
@@ -121,29 +124,41 @@ def test_la_pagina_principal_nombra_las_soluciones_digitales():
         "la línea principal de servicio.")
 
 
-# La identificación del operador —razón social, CNPJ— va en UN solo lugar: la
-# ficha de empresa del documento legal. Repetirla en cada página pública tiene
-# dos costos: expone los datos del titular en pantallas que no los necesitan, y
-# obliga a acordarse de cambiarlos en todas cuando algo se actualiza.
+# ══════════════════════════════════════════════════════════════════════════
+# La identificación del titular no se publica
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Estuvo publicada en la ficha de empresa del documento legal: razón social,
+# CNPJ y domicilio. Se sacó por decisión del operador, y por ahora.
+#
+# Lo que hay que tener a la vista al leer este test:
+#
+#   - La razón social es el NOMBRE DE UNA PERSONA. No es una sociedad detrás de
+#     la cual el titular queda a cubierto: publicarla es publicar quién es.
+#   - El domicilio registrado es un domicilio PARTICULAR.
+#   - El Decreto 7.962/2013 art. 2 I pide que un sitio de comercio electrónico
+#     brasileño publique el nombre empresarial y el CNPJ. Mientras esto siga
+#     así, el sitio NO lo cumple. Es una decisión del operador tomada sabiendo
+#     el costo, y este comentario está para que nadie la revierta creyendo que
+#     arregla un olvido, ni la sostenga creyendo que no tiene costo.
+#
+# Los datos completos están en `docs/dossier-tecnico-de-seguridad.md` §1 y en
+# `docs/politica-pld-ft.md`, que son internos, y se entregan a quien los pida
+# por el canal de atención.
 LEGAL = "frontend/src/pages/LegalPage.jsx"
 IDENTIFICACION = [
     (re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}"), "el CNPJ"),
-    (re.compile(r"carmen\s+hernandez\s+barreto"), "la razón social del titular"),
+    (re.compile(r"carmen\s+hernandez\s+barreto"), "el nombre del titular"),
+    (re.compile(r"monte\s+roraima|69345-000"), "el domicilio particular"),
 ]
 
+# Donde SI tiene que estar, para que sacarlo de la web no sea perderlo.
+INTERNOS = ["docs/dossier-tecnico-de-seguridad.md", "docs/politica-pld-ft.md"]
 
-def test_la_identificacion_del_titular_vive_solo_en_el_documento_legal():
-    """En ninguna otra pantalla pública, y en el documento legal sí.
 
-    Las dos mitades importan. Sacarla de todas partes dejaría a la plataforma
-    sin identificar a su operador, que es lo que exige el Decreto 7.962/2013
-    para el comercio electrónico en Brasil y lo primero que revisa una debida
-    diligencia. Dejarla repetida en cada página la expone sin necesidad.
-    """
+def test_la_identificacion_del_titular_no_aparece_en_ninguna_pagina_publica():
     de_mas = []
     for ruta, texto in _archivos_publicos():
-        if ruta == LEGAL:
-            continue
         for n, linea in enumerate(texto.splitlines(), 1):
             plano = _plano(linea)
             if plano.lstrip().startswith(("*", "//", "/*", "{/*")):
@@ -153,17 +168,41 @@ def test_la_identificacion_del_titular_vive_solo_en_el_documento_legal():
                     de_mas.append(f"{ruta}:{n}  {que}")
 
     assert not de_mas, (
-        "La identificación del titular aparece fuera del documento legal:\n  "
+        "La identificación del titular volvió a una página pública:\n  "
         + "\n  ".join(de_mas)
-        + "\n\nVa en un solo lugar: la ficha de empresa de LegalPage.jsx. "
-          "Desde otras páginas, enlazá a /legal#empresa.")
+        + "\n\nLa razón social es el nombre de una persona y el domicilio "
+          "registrado es particular. Se sacaron por decisión del operador. "
+          "Volver a publicarlos es una decisión suya, no un arreglo: si la "
+          "tomó, cambiá este test a propósito.")
 
-    legal = _plano((_RAIZ / LEGAL).read_text(encoding="utf-8"))
-    faltan = [q for patron, q in IDENTIFICACION if not patron.search(legal)]
+
+def test_la_identificacion_sigue_escrita_donde_corresponde():
+    """La contracara. Sacarla de la web no puede ser perderla.
+
+    Sin este test, la forma más fácil de pasar el de arriba es borrar el dato
+    de todas partes — y entonces la plataforma no puede identificar a su
+    operador ni ante quien tenga derecho a preguntárselo.
+    """
+    faltan = []
+    for ruta in INTERNOS:
+        archivo = _RAIZ / ruta
+        if not archivo.exists():
+            faltan.append(f"{ruta}  (el documento entero)")
+            continue
+        plano = _plano(archivo.read_text(encoding="utf-8"))
+        for patron, que in IDENTIFICACION:
+            if not patron.search(plano):
+                # La política PLD no lleva el domicilio; el dossier sí.
+                if que == "el domicilio particular" and "pld" in ruta:
+                    continue
+                faltan.append(f"{ruta}  falta {que}")
+
     assert not faltan, (
-        "Falta en el documento legal: " + ", ".join(faltan)
-        + ". Ahí sí tiene que estar: es la identificación del operador, y sin "
-          "ella la plataforma no dice quién la opera.")
+        "La identificación del operador se está perdiendo:\n  "
+        + "\n  ".join(faltan)
+        + "\n\nDejó de publicarse en la web, y por eso los documentos "
+          "internos son ahora el único lugar donde está. Ahí tiene que estar "
+          "completa.")
 
 
 def test_las_paginas_publicas_no_publican_ninguna_direccion_de_correo():
@@ -341,26 +380,6 @@ def test_ninguna_pagina_publica_cuenta_como_se_protege_el_personal():
           "Contar qué exige la plataforma A SU PERSONAL le dice a quien "
           "prepara un engaño contra un empleado qué tiene que imitar la "
           "pantalla falsa. Eso va en el dossier interno.")
-
-
-def test_las_paginas_publicas_siguen_prometiendo_la_trazabilidad():
-    """La contracara, otra vez: que no se resuelva borrando la sección entera.
-
-    Sin este test, la forma más fácil de pasar los dos de arriba es dejar la
-    página sin decir nada sobre qué queda registrado — y eso es peor que el
-    problema que se estaba arreglando: quien evalúa la plataforma se va sin
-    saber si sus movimientos dejan rastro.
-    """
-    visible = _visible((_RAIZ / "frontend/src/pages/ComoFunciona.jsx")
-                       .read_text(encoding="utf-8"))
-
-    faltan = [f for f in ("asiento", "queda registrado") if f not in visible]
-    assert not faltan, (
-        "La página dejó de prometer la trazabilidad: falta "
-        + ", ".join(f"«{f}»" for f in faltan)
-        + ". Los controles no se publican, pero la promesa de que todo "
-          "movimiento deja rastro sí: es lo que necesita quien decide si "
-          "confía.")
 
 
 def test_la_portada_le_sigue_ofreciendo_el_segundo_factor_al_usuario():

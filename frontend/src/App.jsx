@@ -26,7 +26,6 @@ import BTCLightning from './pages/BTCLightning';
 import SendReais from './pages/SendReais';
 import SendCrypto from './pages/SendCrypto';
 import LegalPage from './pages/LegalPage';
-import ComoFunciona from './pages/ComoFunciona';
 import ActivarPersonal from './pages/ActivarPersonal';
 import Landing from './pages/Landing';
 import EnviosMis from './pages/EnviosMis';
@@ -118,7 +117,6 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/legal" element={<LegalPage />} />
-      <Route path="/como-funciona" element={<ComoFunciona />} />
       {/* Primer acceso del personal: llega por invitación, sin sesión previa. */}
       <Route path="/personal/activar" element={<ActivarPersonal />} />
       {/* Publica a proposito: es el link que el usuario le manda a quien espera

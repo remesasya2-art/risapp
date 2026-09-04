@@ -207,16 +207,6 @@ export default function Landing() {
 
           <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Link
-              to="/como-funciona"
-              className="ris-link"
-              style={{
-                padding: '9px 12px', fontSize: 14, fontWeight: 600,
-                color: SUAVE, textDecoration: 'none',
-              }}
-            >
-              Cómo funciona
-            </Link>
-            <Link
               to="/login"
               className="ris-link"
               style={{
@@ -454,18 +444,6 @@ export default function Landing() {
               cuenta. No hay letra chica: las reglas completas están publicadas.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <Link
-                to="/como-funciona"
-                className="ris-a ris-ghost"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7,
-                  padding: '11px 17px', borderRadius: 11, fontSize: 14,
-                  fontWeight: 600, color: MORADO, textDecoration: 'none',
-                  border: `1.5px solid ${BORDE}`,
-                }}
-              >
-                Cómo funciona <ArrowRight size={15} />
-              </Link>
               <Link
                 to="/legal"
                 className="ris-a ris-ghost"

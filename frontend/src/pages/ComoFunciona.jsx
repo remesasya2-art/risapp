@@ -1,57 +1,14 @@
 /**
- * ComoFunciona.jsx — Página pública de transparencia operativa.
+ * ComoFunciona.jsx — NO SE PUBLICA.
  *
- * POR QUE EXISTE
+ *   Esta página no tiene ruta y no se llega a ella desde ningún lado. Se armó
+ *   como material interno y se decidió que no salga a la web: describe con
+ *   detalle cómo opera la plataforma por dentro, y ese nivel de detalle no va
+ *   publicado.
  *
- *   Quien evalúa esta plataforma —un usuario que decide si confía, o una
- *   revisión de cumplimiento -- mira primero lo que está publicado: quién
- *   opera, con qué límites, qué verificación pide, y qué queda registrado.
- *   Eso estaba repartido entre la landing y la página legal, o directamente no
- *   estaba.
- *
- * LA REGLA QUE RESPETA
- *
- *   `Landing.jsx` deja escrita una regla de negocio explícita: las páginas
- *   públicas NO mencionan remesas ni transferencias internacionales; todo se
- *   describe como "operaciones digitales" de forma genérica. Esta página se
- *   escribió dentro de esa regla a propósito.
- *
- * LOS NUMEROS SON VIVOS, NO ESCRITOS A MANO
- *
- *   Los límites y el cupo salen de `GET /api/limits`, que es el MISMO módulo
- *   que el servidor usa para validar. Escribirlos acá a mano significaría que
- *   el día que alguien cambie una constante, esta página seguiría publicando
- *   el número viejo — y nadie se enteraría, porque no falla nada. Hay tests en
- *   el backend que comprueban que lo publicado y lo que se hace cumplir son el
- *   mismo valor.
- *
- *   Si la consulta falla, NO se inventa un número: se dice que no se pudieron
- *   cargar. Un límite equivocado en una página pública es una promesa que no
- *   se puede cumplir.
- *
- * LO QUE ESTA PAGINA NO DICE
- *
- *   Una página pública puede prometer un RESULTADO; no describe el MECANISMO
- *   que lo garantiza. La primera versión de "Qué queda registrado" enumeraba
- *   los controles internos: que el acceso administrativo pide un segundo
- *   factor, que la comprobación de saldos es periódica, y la lista completa de
- *   lo que un administrador puede hacer —aprobar una verificación, ajustar un
- *   saldo, cambiar una tasa, modificar permisos—.
- *
- *   Eso no le sirve a quien está decidiendo si confía, y sí le sirve a quien
- *   está mirando por dónde entrar: le dice qué cuenta vale la pena tomar, qué
- *   defensa va a encontrar y —lo peor— qué tiene que imitar una página de
- *   phishing para que el engaño funcione. "Periódica", además, es la palabra
- *   que dice que hay una ventana.
- *
- *   El detalle no se borró: vive en `docs/dossier-tecnico-de-seguridad.md`
- *   (§3.3 segundo factor, §4.3 el personal no opera a título personal, §5
- *   integridad del dinero, §6 trazabilidad), que es interno y se entrega bajo
- *   acuerdo a quien tenga que auditarlo. Acá quedan las promesas: que todo
- *   movimiento deja rastro, que toda intervención del equipo queda asentada, y
- *   que el usuario puede pedir ese rastro.
- *
- *   `test_lenguaje_de_las_paginas_publicas.py` sostiene la regla.
+ *   Se conserva el archivo por si algún día se sirve dentro de la aplicación,
+ *   con sesión iniciada. Volver a ponerle una ruta pública es una decisión del
+ *   operador, no un arreglo; `test_lo_que_no_se_publica.py` la frena.
  */
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
