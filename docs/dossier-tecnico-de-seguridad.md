@@ -302,6 +302,25 @@ verificada en el KYC la más fuerte.
 
 `backend/services/geo_restrictions.py`, `backend/routes/credits.py`
 
+### 5.6 Dónde se miran estos controles
+
+Un control que nadie puede mirar no es un control. Los cuatro de arriba
+—solvencia, reconciliación, integridad y quién tiene las llaves del dinero—
+tienen una pantalla propia en el panel, **Seguridad financiera**, reservada al
+super administrador y de sólo lectura: no cambia un saldo ni corrige un
+asiento.
+
+Cada pregunta se contesta con un veredicto y un número, y desde ahí se salta
+al detalle contable. La regla de diseño que la ordena es una sola:
+
+> **No saber no es estar bien.** Si una consulta falla, el veredicto es «no se
+> pudo comprobar» y nunca verde. Cada bloque se pide y falla por separado, así
+> que una consulta caída no deja la pantalla en blanco ni —peor— deja una
+> tarjeta en verde que nadie actualizó.
+
+`frontend/src/components/admin/SeguridadFinanciera.jsx`,
+`frontend/src/utils/seguridadFinanciera.js`
+
 ---
 
 ## 6. Trazabilidad
@@ -470,8 +489,8 @@ diferencia no es accidental.
 
 ## 10. Aseguramiento de calidad
 
-- **Suite automatizada:** 83 archivos de prueba sobre el backend. Última
-  ejecución completa: **2013 pruebas superadas, 99 omitidas, 0 fallidas**
+- **Suite automatizada:** 84 archivos de prueba sobre el backend. Última
+  ejecución completa: **2034 pruebas superadas, 99 omitidas, 0 fallidas**
   (las omitidas requieren credenciales de proveedores externos). Se corre en
   cada cambio.
 - **Pruebas de regresión por incidente:** cada defecto encontrado deja una
@@ -535,6 +554,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Idempotencia en creación de movimientos | `backend/services/idempotency.py` | `test_pago_una_sola_vez.py` |
 | Límites por operación aplicados en el servidor | `backend/services/limits.py` | `test_limites_monto.py`, `test_limites_publicados.py` |
 | Cupo de la cuenta sin verificar | `backend/services/kyc_quota.py` | `test_cupo_sin_kyc.py` |
+| Solvencia del pozo: lo que se debe contra lo que hay | `backend/services/contabilidad.py` | `test_conciliacion_pozo.py` |
+| Los controles del dinero son visibles para el operador, y un fallo nunca se lee como «todo bien» | `frontend/src/utils/seguridadFinanciera.js` | `test_seguridad_financiera.py` |
 | Libro de auditoría con estado antes/después | `backend/services/auditoria.py` | `test_auditoria.py` |
 | Tipo de archivo por bytes, EXIF removido, dedup por SHA-256 | `backend/services/envios_archivos.py` | `test_envios_almacen.py` |
 | TLS verificado, falla cerrado | `backend/services/bcv_scraper.py` | `test_tls_verificado.py` |

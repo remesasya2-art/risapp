@@ -65,8 +65,12 @@ const primeroDelMes = () => {
   return new Date(d.getFullYear(), d.getMonth(), 1, 12).toISOString().slice(0, 10);
 };
 
-export default function LibroMayor() {
-  const [vista, setVista] = useState('balance');
+export default function LibroMayor({ vistaInicial }) {
+  // `vistaInicial` la manda Seguridad financiera al saltar acá con una vista ya
+  // elegida. Se valida contra VISTAS: viene de la URL, y una vista inventada
+  // dejaría la pantalla pidiendo una ruta que no existe.
+  const valida = VISTAS.some((v) => v.clave === vistaInicial);
+  const [vista, setVista] = useState(valida ? vistaInicial : 'balance');
   const [desde, setDesde] = useState(primeroDelMes());
   const [hasta, setHasta] = useState(hoy());
   const [tz, setTz] = useState(-240);
