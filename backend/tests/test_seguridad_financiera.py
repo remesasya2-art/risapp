@@ -257,6 +257,104 @@ def test_las_llaves_nunca_dan_verde():
     assert [t for t in tarjetas if t["clave"] == "llaves"][0]["estado"] == "neutro"
 
 
+# ─── El dictamen general del encabezado ───────────────────────────────────
+
+def _tarjetas(*estados):
+    return json.dumps([{"clave": f"c{i}", "estado": e} for i, e in enumerate(estados)])
+
+
+def test_el_dictamen_nunca_dice_conforme_si_algo_quedo_sin_verificar():
+    """LA REGLA DE SIEMPRE, APLICADA AL LUGAR MAS VISIBLE.
+
+    El encabezado es lo primero que se lee y lo único que alguien recuerda. Si
+    dijera «conforme» con un control caído, la pantalla estaría afirmando
+    exactamente lo que no pudo comprobar. En un informe de control interno eso
+    tiene nombre: limitación al alcance.
+    """
+    assert js(f"m.dictamen({_tarjetas('bien', 'bien', 'bien', 'desconocido')}).estado") == "sin_verificar"
+    assert js(f"m.dictamen({_tarjetas('bien', 'neutro', 'desconocido')}).estado") == "sin_verificar"
+
+
+def test_una_excepcion_pesa_mas_que_todo_lo_demas():
+    assert js(f"m.dictamen({_tarjetas('mal', 'bien', 'bien', 'bien')}).estado") == "excepcion"
+    assert js(f"m.dictamen({_tarjetas('mal', 'desconocido')}).estado") == "excepcion"
+    assert js(f"m.dictamen({_tarjetas('mal', 'atencion')}).estado") == "excepcion"
+
+
+def test_no_verificado_pesa_mas_que_una_observacion():
+    """Una observación es algo que se sabe y se mira. Un control sin verificar
+    es algo de lo que no se sabe nada, y eso es peor."""
+    assert js(f"m.dictamen({_tarjetas('atencion', 'desconocido')}).estado") == "sin_verificar"
+
+
+def test_solo_es_conforme_cuando_todo_lo_es():
+    assert js(f"m.dictamen({_tarjetas('bien', 'bien', 'bien', 'neutro')}).estado") == "conforme"
+    assert js(f"m.dictamen({_tarjetas('bien', 'bien', 'atencion')}).estado") == "observaciones"
+
+
+def test_sin_tarjetas_no_hay_dictamen_favorable():
+    """Antes de la primera ejecución no hay nada comprobado. Un encabezado que
+    naciera en «conforme» sería la peor versión del error que este archivo
+    persigue."""
+    for entrada in ("[]", "null", "undefined"):
+        assert js(f"m.dictamen({entrada}).estado") == "sin_verificar"
+
+
+def test_el_dictamen_cuenta_cada_categoria():
+    d = js(f"m.dictamen({_tarjetas('mal', 'mal', 'desconocido', 'atencion', 'bien', 'neutro')})")
+    assert d["excepciones"] == 2
+    assert d["noVerificados"] == 1
+    assert d["observaciones"] == 1
+    assert d["conformes"] == 2
+    assert d["total"] == 6
+
+
+def test_el_dictamen_del_resumen_sin_datos_es_alcance_limitado():
+    """Encadenado con `resumen`: las cuatro preguntas sin responder tienen que
+    dar un dictamen que no afirme nada."""
+    assert js("m.dictamen(m.resumen(null)).estado") == "sin_verificar"
+    assert js("m.dictamen(m.resumen(null)).noVerificados") == 4
+
+
+def test_no_verificado_no_se_puede_etiquetar_como_aprobado():
+    """LA SIMPLIFICACION QUE ALGUIEN HARIA DE BUENA FE.
+
+    Cambiar «No verificado» por «Sin novedad» parece una mejora de redacción y
+    es un cambio de significado: convierte una limitación al alcance en un
+    visto bueno. Por eso las palabras viven en el módulo y no en la pantalla.
+    """
+    etiquetas = js("m.DICTAMEN_ETIQUETA")
+    sin_verificar = etiquetas["desconocido"].lower()
+
+    assert sin_verificar != etiquetas["bien"].lower()
+    assert sin_verificar != etiquetas["neutro"].lower()
+    for palabra in ("conforme", "novedad", "correcto", "ok", "bien"):
+        assert palabra not in sin_verificar, (
+            f"«{etiquetas['desconocido']}» se lee como aprobación")
+
+
+def test_cada_estado_tiene_su_propia_palabra():
+    """Dos estados con la misma etiqueta es un estado que desaparece."""
+    for mapa in ("m.DICTAMEN_ETIQUETA", "m.DICTAMEN_GENERAL_ETIQUETA"):
+        etiquetas = js(mapa)
+        assert len(set(etiquetas.values())) == len(etiquetas), (
+            f"{mapa} repite alguna etiqueta: {etiquetas}")
+
+
+def test_hay_una_palabra_para_cada_estado_que_el_resumen_puede_devolver():
+    """Si `resumen` devolviera un estado sin etiqueta, la pantalla caería al
+    genérico y mostraría «No verificado» sobre un control que sí se verificó."""
+    estados = set(js("m.resumen(null).map(t => t.estado)"))
+    estados |= {"bien", "mal", "atencion", "neutro", "desconocido"}
+    etiquetas = js("m.DICTAMEN_ETIQUETA")
+    faltan = sorted(estados - set(etiquetas))
+    assert not faltan, f"estados sin etiqueta: {faltan}"
+
+    generales = js("m.DICTAMEN_GENERAL_ETIQUETA")
+    posibles = {"conforme", "observaciones", "sin_verificar", "excepcion"}
+    assert posibles <= set(generales), sorted(posibles - set(generales))
+
+
 # ─── Grupo 2: la unión con el backend ─────────────────────────────────────
 
 @pytest.fixture(scope="module")

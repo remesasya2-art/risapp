@@ -196,6 +196,70 @@ function llavesVeredicto(bloque) {
 }
 
 /**
+ * El vocabulario del dictamen. Vive acá, y no en el componente, porque son
+ * PALABRAS y no estilo: son lo que alguien va a citar en un correo o leer en
+ * una homologación. Los colores y los íconos sí se quedan en la pantalla.
+ *
+ * Que estén acá permite probar la regla que de verdad importa: que el estado
+ * «no verificado» no se pueda etiquetar con algo que se lea como aprobado. El
+ * riesgo no es teórico —es la simplificación que cualquiera haría de buena fe,
+ * cambiando «No verificado» por «Sin novedad»— y convierte una limitación al
+ * alcance en un visto bueno.
+ */
+export const DICTAMEN_ETIQUETA = {
+  bien: 'Conforme',
+  mal: 'Excepción',
+  atencion: 'Con observaciones',
+  neutro: 'Sin observaciones',
+  desconocido: 'No verificado',
+};
+
+export const DICTAMEN_GENERAL_ETIQUETA = {
+  conforme: 'Conforme',
+  observaciones: 'Con observaciones',
+  sin_verificar: 'Alcance limitado',
+  excepcion: 'Con excepciones',
+};
+
+/**
+ * El dictamen general: una sola línea que resume los cuatro controles.
+ *
+ * EL ORDEN DE GRAVEDAD, Y POR QUE «NO VERIFICADO» PESA TANTO
+ *
+ *     excepción  >  no verificado  >  observación  >  conforme
+ *
+ *   Una excepción es un control que falló y se sabe. Un control que NO SE PUDO
+ *   COMPROBAR es una limitación al alcance, y en un informe de control interno
+ *   eso pesa casi lo mismo: no se puede afirmar nada sobre esa parte.
+ *
+ *   Por eso el dictamen general nunca dice «todo conforme» si quedó alguno sin
+ *   verificar. Es la misma regla de siempre, aplicada al resumen: si el
+ *   encabezado dijera «conforme» con un control caído, la pantalla estaría
+ *   afirmando exactamente lo que no pudo comprobar, y encima en el lugar más
+ *   visible.
+ */
+export function dictamen(tarjetas) {
+  const lista = Array.isArray(tarjetas) ? tarjetas : [];
+  const contar = (e) => lista.filter((t) => t?.estado === e).length;
+
+  const excepciones = contar('mal');
+  const noVerificados = contar('desconocido');
+  const observaciones = contar('atencion');
+  const conformes = contar('bien') + contar('neutro');
+
+  let estado = 'conforme';
+  if (excepciones > 0) estado = 'excepcion';
+  else if (noVerificados > 0) estado = 'sin_verificar';
+  else if (observaciones > 0) estado = 'observaciones';
+  else if (lista.length === 0) estado = 'sin_verificar';
+
+  return {
+    estado, excepciones, noVerificados, observaciones, conformes,
+    total: lista.length,
+  };
+}
+
+/**
  * Las consultas de la pantalla. Todas son de super administrador y todas son
  * de sólo lectura: esta pantalla no cambia nada, mira.
  */
