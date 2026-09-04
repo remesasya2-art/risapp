@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 
 from database import db
+from services import sesiones
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
 from models.user import User
@@ -664,12 +665,21 @@ async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User =
         }
     )
     
+    # Este es el camino que se usa cuando alguien avisa que le tomaron la
+    # cuenta. Sin cerrar las sesiones, el reseteo no echaba a nadie y la
+    # respuesta «ya está» era una certeza falsa. Se cierran TODAS: el
+    # administrador no es el dueño de ninguna de ellas.
+    cerradas = await sesiones.cerrar_todas(
+        db, request.user_id, motivo=f"reseteo hecho por el admin {admin.user_id}")
+
     admin_user = await db.users.find_one({"user_id": admin.user_id})
     await send_admin_password_reset_email(user["email"], temp_password, admin_user.get("name", "Admin"))
-    
-    logger.info(f"Password reset for {user['email']} by admin {admin.user_id}")
-    
-    return {"message": "Contraseña restablecida y email enviado"}
+
+    logger.info("Contraseña reseteada para %s por el admin %s; %d sesión(es) cerradas",
+                user.get("user_id"), admin.user_id, cerradas)
+
+    return {"message": "Contraseña restablecida y email enviado",
+            "sesiones_cerradas": cerradas}
 
 # ============== WITHDRAWALS ==============
 

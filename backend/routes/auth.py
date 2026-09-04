@@ -12,6 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from database import db
+from services import sesiones
 from services.money import from_db, to_float, to_decimal128
 from models.user import User, UserSession
 from models.requests import (
@@ -465,11 +466,17 @@ async def reset_password(request: ResetPasswordRequest, pedido: Request):
             }
         }
     )
-    
+
+    # A esta ruta se llega desde el correo, sin estar adentro: no hay sesión
+    # actual que conservar. Si alguien tenía la cuenta tomada, acá se lo saca.
+    await sesiones.cerrar_todas(db, user.get("user_id"),
+                                motivo="reseteo con contraseña temporal")
+
     return {"message": "Contraseña actualizada exitosamente"}
 
 @router.post("/change-password")
-async def change_password(request: ChangePasswordRequest, current_user: User = Depends(get_current_user)):
+async def change_password(request: ChangePasswordRequest, pedido: Request,
+                          current_user: User = Depends(get_current_user)):
     """Change password for logged in user"""
     user = await db.users.find_one({"user_id": current_user.user_id})
     
@@ -493,6 +500,15 @@ async def change_password(request: ChangePasswordRequest, current_user: User = D
         }
     )
     
+    # Cambiar la contraseña es lo que hace alguien que sospecha que le entraron
+    # a la cuenta. Si las demás sesiones sobreviven, ese gesto no sirve de nada.
+    # Se conserva la de esta pantalla —echarla de acá justo después de hacer las
+    # cosas bien se lee como un error— y se cierran todas las otras.
+    cerradas = await sesiones.cerrar_todas(
+        db, current_user.user_id,
+        excepto=sesiones.token_del_pedido(pedido),
+        motivo="cambio de contraseña propio")
+
     # Send password change notification
     try:
         await notify_password_change(
@@ -501,8 +517,9 @@ async def change_password(request: ChangePasswordRequest, current_user: User = D
         )
     except Exception as e:
         logger.warning(f"Failed to send password change notification: {e}")
-    
-    return {"message": "Contraseña cambiada exitosamente"}
+
+    return {"message": "Contraseña cambiada exitosamente",
+            "sesiones_cerradas": cerradas}
 
 @router.get("/password-status")
 async def get_password_status(current_user: User = Depends(get_current_user)):
@@ -676,6 +693,14 @@ async def activar_personal(request: Request, body: ActivarPersonalRequest):
                 "must_change_password": False,
                 "updated_at": datetime.now(timezone.utc),
             }})
+
+        # Lo normal es que no haya ninguna: la cuenta existía como invitación y
+        # sin contraseña no se podía entrar. Va igual por el caso que sí importa
+        # — que a alguien del personal le REINVITEN la cuenta porque se la
+        # tomaron. Estas son las sesiones con permisos de administración; dejar
+        # una viva acá es dejar la peor de todas.
+        await sesiones.cerrar_todas(db, user["user_id"],
+                                    motivo="activación del personal")
 
         await auditoria.registrar(
             db, "personal.activacion", quien=user, request=request,

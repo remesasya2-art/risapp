@@ -11,6 +11,7 @@ from pydantic import BaseModel, EmailStr
 from pymongo import ReturnDocument
 
 from database import db
+from services import sesiones
 from services.email_notifications import send_email
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,11 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
         }
     )
     
+    # Quien resetea desde el código del correo no está adentro: no hay sesión
+    # actual que conservar, y si la cuenta estaba tomada, acá se lo saca.
+    await sesiones.cerrar_todas(db, recovery["user_id"],
+                                motivo="reseteo por recuperación")
+
     # Delete recovery record
     await db.password_recovery.delete_one({"_id": recovery["_id"]})
     
