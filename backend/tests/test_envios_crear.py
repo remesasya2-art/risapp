@@ -494,6 +494,47 @@ def test_una_cotizacion_vencida_no_se_confirma():
     assert e.value.http == 409 and "venció" in e.value.mensaje
 
 
+def test_una_cotizacion_que_quedo_a_medias_se_confirma_despues():
+    """EL CASO REAL: el usuario cotizó, se fue, y volvió cinco minutos después.
+
+    Pasó de verdad. Cotizar y confirmar vivían los dos en la misma pantalla, y
+    si el usuario la cerraba antes de confirmar, el envío quedaba en `cotizado`
+    y VIGENTE por 48 horas, pero la pantalla de detalle no ofrecía ninguna
+    forma de confirmarlo: sólo «Cotizar de nuevo», que es volver a tipear todo.
+
+    Este test fija que confirmar más tarde funciona, con lo único que la
+    pantalla de detalle tiene a mano: el `envio_id` y las dos aceptaciones. Sin
+    nada de la sesión anterior, porque esa sesión ya no existe.
+    """
+    base, envio_id = cotizado()
+
+    r = corre(crear_mod.crear(_Usuario(), envio_id, ACEPTA_TODO, db=base,
+                              ahora=AHORA + timedelta(minutes=5)))
+
+    assert r.get("envio_id") == envio_id
+    doc = base.envios.filas[0]
+    assert doc["estado"] == "esperando_postagem"
+    assert doc.get("display_id"), "quedó confirmado sin número de envío"
+
+
+def test_confirmar_tarde_exige_las_aceptaciones_otra_vez():
+    """No se heredan de la sesión en que se cotizó.
+
+    Son el registro que se lee el día que haya que defender un ajuste de
+    precio. Darlas por hechas porque «ya las aceptó cuando cotizó» sería anotar
+    una aceptación que nadie dio en este momento — y la sesión donde
+    supuestamente la dio terminó hace dos días.
+    """
+    base, envio_id = cotizado()
+
+    with pytest.raises(crear_mod.NoSePuedeCrear) as e:
+        corre(crear_mod.crear(_Usuario(), envio_id, {}, db=base,
+                              ahora=AHORA + timedelta(minutes=5)))
+
+    assert "aceptar" in e.value.mensaje
+    assert base.envios.filas[0]["estado"] == "cotizado"
+
+
 def test_el_envio_de_otro_usuario_no_existe():
     """El mismo 404 para "no existe" y para "es de otro": distinguirlos convierte
     la ruta en un oráculo que confirma qué identificadores existen."""

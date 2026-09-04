@@ -195,6 +195,14 @@ async def _detalle(envio: dict, base) -> dict:
             "verificado_at": (origen.get("verificado") or {}).get("at"),
         } if origen.get("codigo_objeto") else None,
         "cobros": _cobros_visibles(envio),
+        # La versión de términos congelada al cotizar.
+        #
+        # La pantalla de detalle la necesita para poder CONFIRMAR una cotización
+        # que quedó a medias: `envios_crear` compara la versión que la pantalla
+        # dice haber mostrado contra ésta, y si no coinciden frena. Sin el campo
+        # acá, la única forma de confirmar desde el detalle sería no mandarla —
+        # que es saltearse la comprobación, no cumplirla.
+        "terminos_version": cot.get("terminos_version"),
         "tracking_token": envio.get("tracking_token"),
         "guia_transportista": (envio.get("entrega") or {}).get("guia"),
         "timeline": [
