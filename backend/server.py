@@ -173,8 +173,30 @@ async def lifespan(app):
     client.close()
 
 
-# Create FastAPI app
-app = FastAPI(title="RIS App API", version="2.1.0", lifespan=lifespan)
+# ============================================================================
+# LA DOCUMENTACION AUTOMATICA NO SE PUBLICA
+# ============================================================================
+#
+# FastAPI publica `/docs`, `/redoc` y `/openapi.json` sin pedir nada. Eso es el
+# mapa completo de la API: las 341 rutas, con sus parámetros, sus tipos y sus
+# nombres — incluidas las de administración, las del puente con adminbrl y las
+# de mantenimiento. Ninguna deja de estar protegida por eso, pero saber que
+# `/api/admin/fix-media-urls` existe y qué recibe es la mitad del trabajo de
+# quien está buscando por dónde entrar, y no hay una sola razón para regalarlo.
+#
+# En desarrollo hace falta, así que se puede prender con una variable de
+# entorno. El valor por defecto es apagado: lo que se olvida de configurar tiene
+# que quedar del lado seguro.
+_DOCS_ABIERTAS = os.getenv("EXPONER_DOCUMENTACION_API", "").strip().lower() in ("1", "true", "si", "yes")
+
+app = FastAPI(
+    title="RIS App API",
+    version="2.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ABIERTAS else None,
+    redoc_url="/redoc" if _DOCS_ABIERTAS else None,
+    openapi_url="/openapi.json" if _DOCS_ABIERTAS else None,
+)
 
 # Rate limiter wiring (from routes.security_2fa)
 from routes.security_2fa import limiter as security_limiter
@@ -190,12 +212,43 @@ async def security_headers_middleware(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Tres directivas de CSP que no dependen de qué scripts carga la aplicación,
+    # así que se pueden poner sin romper nada:
+    #
+    #   object-src 'none'      no hay <object> ni <embed> con plugins. Es un
+    #                          camino clásico para ejecutar código con un
+    #                          archivo que el usuario subió.
+    #   base-uri 'self'        un <base href> inyectado cambia a dónde apunta
+    #                          TODA ruta relativa de la página, scripts incluidos.
+    #   frame-ancestors 'none' lo mismo que X-Frame-Options, que los navegadores
+    #                          nuevos ya no miran.
+    #
+    # `script-src` NO está, y es a propósito: la aplicación carga el SDK de
+    # Mercado Pago y otros scripts de terceros, y una lista mal armada rompe los
+    # pagos en silencio. Ponerla requiere revisar qué carga cada pantalla, y eso
+    # es un trabajo aparte — queda anotado en el dossier como pendiente en vez
+    # de puesto a medias.
+    response.headers["Content-Security-Policy"] = (
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
     return response
 
 # CORS configuration
 raworigins = os.getenv("ALLOWED_ORIGINS", "https://risappbr.com,https://www.risappbr.com")
 ALLOWED_ORIGINS = [o.strip() for o in raworigins.split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# EL TOPE DEL CUERPO VA REGISTRADO ULTIMO, Y ESO ES LO QUE LO PONE PRIMERO.
+#
+# Starlette envuelve al revés: `add_middleware` inserta al principio de la
+# lista, así que el ULTIMO que se registra queda por fuera de todos y es el
+# primero que ve el pedido. Registrarlo arriba de este archivo —que es lo que
+# parece «primero»— lo dejaba pegado a la ruta, con CORS y el limitador de
+# intentos haciendo su trabajo sobre un pedido de varios gigabytes antes de que
+# nadie lo cortara.
+#
+# Ver services/limite_de_cuerpo.py.
+from services.limite_de_cuerpo import LimiteDeCuerpo
+app.add_middleware(LimiteDeCuerpo)
 security = HTTPBearer()
 
 # ============================================================================
