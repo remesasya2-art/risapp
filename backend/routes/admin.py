@@ -378,14 +378,32 @@ async def get_audit_log(
 
 @router.post("/fix-media-urls")
 async def fix_media_urls(admin: User = Depends(get_super_admin)):
-    """Download Twilio images and convert to base64, update in transactions"""
-    import re
-    import httpx
+    """Baja las fotos que están en Twilio y las guarda como base64.
+
+    ESTA RUTA HACIA UN PEDIDO A LA DIRECCION QUE DIJERA LA BASE
+
+        Decidía a dónde ir con `"api.twilio.com" in url`. Eso es una subcadena,
+        no un dominio: `https://cualquier-cosa.example/?x=api.twilio.com` la
+        pasa. Y con `follow_redirects=True`, ese pedido salía con nuestro
+        usuario y contraseña de Twilio adentro.
+
+        El valor venía de `proof_image`, que hasta ahora era texto libre elegido
+        por quien subía el comprobante. O sea: el usuario escribía la dirección
+        y un super administrador, al correr la migración, mandaba las
+        credenciales ahí.
+
+        Ahora la dirección la arma `routes/media.py`, con la forma exacta de un
+        medio y contra NUESTRA cuenta, y el salto al CDN se sigue sin
+        credenciales. Lo que no calza se deja como está y se anota en `errors`:
+        una migración que además borra lo que no entiende es peor que una que no
+        corre.
+    """
     import base64
-    
-    TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-    
+
+    import httpx
+
+    from routes.media import bajar_medio, url_de_medio
+
     # Find all transactions with non-base64 proof images (Twilio URLs or proxy URLs)
     transactions = await db.transactions.find({
         "$or": [
@@ -409,27 +427,18 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
             if proof_images:
                 new_images = []
                 for i, url in enumerate(proof_images):
-                    if url and not url.startswith("data:") and ("api.twilio.com" in url or "/api/media/twilio/" in url):
-                        # Extract Twilio URL
-                        twilio_url = url
-                        if "/api/media/twilio/" in url:
-                            twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{url.replace('/api/media/twilio/', '')}"
-                        
+                    twilio_url = url_de_medio(url)
+                    if twilio_url:
                         try:
-                            response = await client.get(
-                                twilio_url,
-                                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-                                follow_redirects=True,
-                                timeout=30.0
-                            )
-                            if response.status_code == 200:
-                                content_type = response.headers.get("content-type", "image/jpeg")
-                                b64 = base64.b64encode(response.content).decode("utf-8")
-                                new_images.append(f"data:{content_type};base64,{b64}")
+                            bajado = await bajar_medio(client, twilio_url)
+                            if bajado:
+                                contenido, tipo = bajado
+                                b64 = base64.b64encode(contenido).decode("utf-8")
+                                new_images.append(f"data:{tipo};base64,{b64}")
                                 needs_update = True
                             else:
                                 new_images.append(url)
-                                errors.append(f"{tx_id}[{i}]: HTTP {response.status_code}")
+                                errors.append(f"{tx_id}[{i}]: no se pudo bajar")
                         except Exception as e:
                             new_images.append(url)
                             errors.append(f"{tx_id}[{i}]: {str(e)[:50]}")
@@ -440,25 +449,17 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
                     update_data["proof_images"] = new_images
             
             # Handle single proof_image
-            if proof_image and not proof_image.startswith("data:") and ("api.twilio.com" in proof_image or "/api/media/twilio/" in proof_image):
-                twilio_url = proof_image
-                if "/api/media/twilio/" in proof_image:
-                    twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{proof_image.replace('/api/media/twilio/', '')}"
-                
+            twilio_url = url_de_medio(proof_image)
+            if twilio_url:
                 try:
-                    response = await client.get(
-                        twilio_url,
-                        auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-                        follow_redirects=True,
-                        timeout=30.0
-                    )
-                    if response.status_code == 200:
-                        content_type = response.headers.get("content-type", "image/jpeg")
-                        b64 = base64.b64encode(response.content).decode("utf-8")
-                        update_data["proof_image"] = f"data:{content_type};base64,{b64}"
+                    bajado = await bajar_medio(client, twilio_url)
+                    if bajado:
+                        contenido, tipo = bajado
+                        b64 = base64.b64encode(contenido).decode("utf-8")
+                        update_data["proof_image"] = f"data:{tipo};base64,{b64}"
                         needs_update = True
                     else:
-                        errors.append(f"{tx_id}_single: HTTP {response.status_code}")
+                        errors.append(f"{tx_id}_single: no se pudo bajar")
                 except Exception as e:
                     errors.append(f"{tx_id}_single: {str(e)[:50]}")
             
