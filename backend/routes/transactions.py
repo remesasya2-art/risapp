@@ -445,8 +445,24 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     await store_idempotency_result(current_user.user_id, "reais_send", request.idempotency_key, _resp_reais)
     return _resp_reais
 
+# EL CANDADO VA EN LAS DOS PUERTAS, Y ANTES NO ERA ASI.
+#
+#   Esta función estaba registrada dos veces —`/withdraw` y `/withdrawal/create`—
+#   y la dependencia `sin_transacciones_personales` colgaba SOLO del primer
+#   decorador. FastAPI registra una ruta por decorador, con las dependencias de
+#   ese decorador y nada más: `/withdrawal/create` quedaba abierta.
+#
+#   O sea que la regla «el personal no hace transacciones a título personal» se
+#   saltaba escribiendo otra URL. Y el segundo candado tampoco lo ataja: esta
+#   función debita con un `find_one_and_update` directo sobre `db.users`, no
+#   pasa por `services/saldos.mover`.
+#
+#   El alias no lo usa nadie —ni el frontend, ni el puente de adminbrl— pero se
+#   conserva por si algún cliente viejo lo llama, ahora con el mismo candado.
+#   Hay un test que recorre la aplicación armada y falla si una ruta de envío
+#   queda sin él.
 @router.post("/withdraw", dependencies=[Depends(sin_transacciones_personales)])
-@router.post("/withdrawal/create")
+@router.post("/withdrawal/create", dependencies=[Depends(sin_transacciones_personales)])
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
     """Create a withdrawal request"""
     if request.amount <= 0:

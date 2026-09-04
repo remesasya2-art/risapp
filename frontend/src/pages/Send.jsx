@@ -1,136 +1,513 @@
-import { useState, useEffect, useRef } from 'react';
+/**
+ * Send.jsx — Enviar a Venezuela.
+ *
+ * QUE SE CAMBIO Y POR QUE
+ *
+ *   El flujo funcionaba. Lo que se rehizo es cómo se ve y qué se le dice al
+ *   usuario mientras decide, más cuatro cosas que estaban mal:
+ *
+ *   1. LA TASA INVENTADA. `RateContext` arranca con `ris_to_ves: 110` como
+ *      valor por defecto para que ninguna pantalla se rompa mientras carga. Si
+ *      `/rate` fallaba, esta pantalla mostraba «1 RIS = 110,00 VES» y convertía
+ *      con eso. El servidor aplicaba la real. O sea que le decíamos a alguien
+ *      un número que no era, en la pantalla donde ese número es todo. Ahora,
+ *      sin tasa confirmada por el servidor, no se convierte y no se avanza.
+ *
+ *   2. EL CAMPO EN BOLIVARES QUE NO EXISTIA. El archivo ya tenía `vesInput` y
+ *      `lastEdited` —la maquinaria completa para escribir en bolívares— y el
+ *      campo nunca se dibujaba. Quien manda dinero a Venezuela piensa en
+ *      bolívares: «quiero que le lleguen 10.000», no «quiero mandar 60,61
+ *      RIS». Ahora se puede escribir en cualquiera de los dos.
+ *
+ *   3. LO QUE SE MUESTRA ES LO QUE VA A PASAR. Si se escribe en bolívares, el
+ *      RIS se redondea a dos decimales —es lo que el saldo admite— y los
+ *      bolívares que se muestran se recalculan A PARTIR DE ESE RIS. Escribir
+ *      10.000 y que diga «recibe 10.000,65» parece un detalle; decir «10.000»
+ *      cuando van a llegar 10.000,65 es contar mal a propósito.
+ *
+ *   4. LA TASA QUE SE MUEVE MIENTRAS SE DECIDE. Se refresca sola cada cinco
+ *      minutos. Entre mirar el monto y confirmar podían pasar más, y nadie
+ *      avisaba. Ahora al llegar a confirmar se vuelve a pedir, y si cambió se
+ *      dice con las dos cifras antes de que apriete el botón.
+ *
+ * EL CRITERIO VISUAL: PROFESIONAL PERO AMIGABLE
+ *
+ *   No es lo mismo que el panel de administración. Esto lo usa alguien desde
+ *   el teléfono, probablemente apurado, mandándole plata a su familia. Serio
+ *   quiere decir que se entienda de una y que no haya sorpresas; no quiere
+ *   decir austero.
+ *
+ *     · Los pasos tienen NOMBRE, no sólo número. «2 de 4» no informa nada;
+ *       «Método» sí. Y se puede volver tocando un paso ya hecho.
+ *     · El monto viaja arriba en los pasos siguientes. Antes, del paso 2 en
+ *       adelante, no se veía cuánto se estaba enviando.
+ *     · La tasa es una tira propia, con su antigüedad y su botón de refrescar.
+ *       Era un subtítulo diminuto y es el segundo dato más importante.
+ *     · Los blancos y grises hacen el trabajo; el color aparece sólo donde
+ *       significa algo: lo que recibe, un aviso, un error.
+ */
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { FormattedNumberInput } from '../components/common/FormattedNumberInput';
-import { 
-  ArrowLeft, Calculator, AlertCircle, CheckCircle, Plus, X, ArrowRight,
-  Smartphone, Building2, Search, User
+import {
+  ArrowLeft, ArrowRight, AlertCircle, AlertTriangle, Building2, Check,
+  CheckCircle2, Info, Plus, RefreshCw, Search, ShieldCheck, Smartphone, User, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
+import {
+  MENSAJE_DEL_MOTIVO, MOTIVO, PASOS, cuentaAbreviada, nombreDelBanco,
+  risAEnviar, tasaSeMovio, telefonoLegible, ultimoPasoAlcanzable, validarMonto,
+  vesARecibir,
+} from '../utils/envioAVenezuela';
 
-// Lista actualizada de bancos venezolanos
 const VENEZUELAN_BANKS = [
-  { code: '0001', name: 'BANCO CENTRAL DE VENEZUELA' },
-  { code: '0102', name: 'BANCO DE VENEZUELA' },
-  { code: '0104', name: 'BANCO VENEZOLANO DE CREDITO' },
-  { code: '0105', name: 'BANCO MERCANTIL' },
-  { code: '0108', name: 'BANCO PROVINCIAL' },
-  { code: '0114', name: 'BANCARIBE' },
-  { code: '0115', name: 'BANCO EXTERIOR' },
-  { code: '0128', name: 'BANCO CARONI' },
-  { code: '0134', name: 'BANESCO' },
-  { code: '0137', name: 'SOFITASA' },
-  { code: '0138', name: 'BANCO PLAZA' },
-  { code: '0145', name: 'BANCO DE COMERCIO EXTERIOR' },
-  { code: '0146', name: 'BANCO DE LA GENTE EMPRENDEDORA C.A' },
-  { code: '0151', name: 'FONDO COMUN BANCO UNIVERSAL' },
-  { code: '0152', name: 'BANDES' },
-  { code: '0156', name: '100% BANCO' },
-  { code: '0157', name: 'DELSUR BANCO UNIVERSAL' },
-  { code: '0163', name: 'BANCO DEL TESORO' },
-  { code: '0166', name: 'BANCO AGRICOLA' },
-  { code: '0168', name: 'BANCRECER' },
-  { code: '0169', name: 'R4, BANCO MICROFINANCIERO, C.A.' },
-  { code: '0171', name: 'BANCO ACTIVO' },
-  { code: '0172', name: 'BANCAMIGA BANCO UNIVERSAL, C.A.' },
-  { code: '0173', name: 'BANCO INTERNACIONAL DE DESARROLLO' },
-  { code: '0174', name: 'BANPLUS BANCO COMERCIAL' },
-  { code: '0175', name: 'BANCO DIGITAL DE LOS TRABAJADORES' },
-  { code: '0177', name: 'BANCO DE LAS FUERZAS ARMADAS BANFANB' },
-  { code: '0178', name: 'N58 BANCO DIGITAL' },
-  { code: '0191', name: 'BANCO NACIONAL DE CREDITO' },
+  { code: '0001', name: 'Banco Central de Venezuela' },
+  { code: '0102', name: 'Banco de Venezuela' },
+  { code: '0104', name: 'Banco Venezolano de Crédito' },
+  { code: '0105', name: 'Banco Mercantil' },
+  { code: '0108', name: 'Banco Provincial' },
+  { code: '0114', name: 'Bancaribe' },
+  { code: '0115', name: 'Banco Exterior' },
+  { code: '0128', name: 'Banco Caroní' },
+  { code: '0134', name: 'Banesco' },
+  { code: '0137', name: 'Sofitasa' },
+  { code: '0138', name: 'Banco Plaza' },
+  { code: '0145', name: 'Banco de Comercio Exterior' },
+  { code: '0146', name: 'Banco de la Gente Emprendedora' },
+  { code: '0151', name: 'Fondo Común' },
+  { code: '0152', name: 'Bandes' },
+  { code: '0156', name: '100% Banco' },
+  { code: '0157', name: 'DelSur Banco Universal' },
+  { code: '0163', name: 'Banco del Tesoro' },
+  { code: '0166', name: 'Banco Agrícola' },
+  { code: '0168', name: 'Bancrecer' },
+  { code: '0169', name: 'R4 Banco Microfinanciero' },
+  { code: '0171', name: 'Banco Activo' },
+  { code: '0172', name: 'Bancamiga' },
+  { code: '0173', name: 'Banco Internacional de Desarrollo' },
+  { code: '0174', name: 'Banplus' },
+  { code: '0175', name: 'Banco Digital de los Trabajadores' },
+  { code: '0177', name: 'Banco de las Fuerzas Armadas (BANFANB)' },
+  { code: '0178', name: 'N58 Banco Digital' },
+  { code: '0191', name: 'Banco Nacional de Crédito' },
   { code: '0601', name: 'I.M.C.P' },
-  { code: '0732', name: 'FONDEN' },
+  { code: '0732', name: 'Fonden' },
   { code: '2017', name: 'ONT' },
-  { code: '6000', name: 'BANAVIH' },
+  { code: '6000', name: 'Banavih' },
 ];
+
+/* ─── Sistema visual ───────────────────────────────────────────────────── */
+
+const C = {
+  tinta: '#101828', texto: '#344054', suave: '#667085', tenue: '#98A2B3',
+  linea: '#E4E7EC', lineaFuerte: '#D0D5DD',
+  lienzo: '#FFFFFF', fondo: '#F7F8FA',
+  marca: '#4F46E5', marcaSuave: '#EEF0FF', marcaBorde: '#C7CDFF',
+  exito: '#067647', exitoSuave: '#ECFDF3', exitoBorde: '#A9EFC5',
+  alerta: '#B54708', alertaSuave: '#FFFAEB', alertaBorde: '#FEDF89',
+  error: '#B42318', errorSuave: '#FEF3F2', errorBorde: '#FECDCA',
+};
+
+const HOJA = `
+.env { color: ${C.texto}; font-variant-numeric: tabular-nums lining-nums; }
+.env * { box-sizing: border-box; }
+.env button { font-family: inherit; }
+.env .env-tap { transition: border-color .13s ease, background-color .13s ease, box-shadow .13s ease; }
+.env .env-tap:hover:not(:disabled) { border-color: ${C.lineaFuerte}; }
+.env .env-op:hover:not([aria-checked="true"]) { border-color: ${C.marcaBorde}; background: ${C.marcaSuave}; }
+.env .env-pri:hover:not(:disabled) { background: #4338CA; }
+.env .env-campo:focus { border-color: ${C.marca}; box-shadow: 0 0 0 4px rgba(79,70,229,.12); }
+.env input:focus { outline: none; }
+.env :focus-visible { outline: 2px solid ${C.marca}; outline-offset: 2px; }
+.env .env-chip:hover { background: ${C.marcaSuave}; border-color: ${C.marcaBorde}; color: ${C.marca}; }
+.env .env-paso:disabled { cursor: default; }
+@media (max-width: 560px) {
+  .env .env-dos { grid-template-columns: 1fr !important; }
+  .env .env-nom-paso { font-size: 11.5px; letter-spacing: -.01em; }
+}
+@media (max-width: 359px) {
+  .env .env-nom-paso { display: none; }
+}
+`;
+
+const tarjeta = {
+  background: C.lienzo, borderRadius: '16px', border: `1px solid ${C.linea}`,
+  boxShadow: '0 1px 2px rgba(16,24,40,.04)',
+};
+
+const etiqueta = {
+  display: 'block', fontSize: '13.5px', fontWeight: 600,
+  color: C.texto, marginBottom: '7px',
+};
+
+const microEtiqueta = {
+  margin: 0, fontSize: '11px', fontWeight: 700, letterSpacing: '.06em',
+  textTransform: 'uppercase', color: C.tenue,
+};
+
+const campo = {
+  width: '100%', padding: '13px 15px', borderRadius: '12px',
+  border: `1px solid ${C.lineaFuerte}`, fontSize: '16px', color: C.tinta,
+  background: C.lienzo, outline: 'none',
+};
+
+const ayuda = { margin: '6px 0 0 0', fontSize: '12px', color: C.suave };
+
+/* ─── Piezas ───────────────────────────────────────────────────────────── */
+
+function Boton(props) {
+  const { children, onClick, tipo = 'secundario', disabled, ancho, testid, iconoDerecha } = props;
+  const Icono = props.Icono;
+  const paleta = {
+    primario: { background: C.marca, color: '#fff', border: `1px solid ${C.marca}` },
+    exito: { background: C.exito, color: '#fff', border: `1px solid ${C.exito}` },
+    secundario: { background: C.lienzo, color: C.texto, border: `1px solid ${C.lineaFuerte}` },
+  }[tipo];
+
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled} data-testid={testid}
+      className={`env-tap${tipo === 'primario' ? ' env-pri' : ''}`}
+      style={{
+        ...paleta, height: '52px', padding: '0 20px', borderRadius: '12px',
+        fontWeight: 600, fontSize: '15.5px', cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        gap: '9px', flex: ancho ? 1 : undefined, whiteSpace: 'nowrap',
+        opacity: disabled ? 0.5 : 1,
+      }}>
+      {Icono && !iconoDerecha ? <Icono size={18} /> : null}
+      {children}
+      {Icono && iconoDerecha ? <Icono size={18} /> : null}
+    </button>
+  );
+}
+
+function Aviso({ tono = 'info', titulo, children, testid }) {
+  const [fondo, borde, color, Icono] = {
+    info: [C.marcaSuave, C.marcaBorde, C.marca, Info],
+    exito: [C.exitoSuave, C.exitoBorde, C.exito, CheckCircle2],
+    alerta: [C.alertaSuave, C.alertaBorde, C.alerta, AlertTriangle],
+    error: [C.errorSuave, C.errorBorde, C.error, AlertCircle],
+  }[tono];
+  return (
+    <div data-testid={testid} style={{
+      display: 'flex', gap: '11px', alignItems: 'flex-start',
+      background: fondo, border: `1px solid ${borde}`,
+      borderRadius: '12px', padding: '13px 15px',
+    }}>
+      <Icono size={18} color={color} style={{ flexShrink: 0, marginTop: '1px' }} />
+      <div style={{ fontSize: '13.5px', lineHeight: 1.55, color: C.texto }}>
+        {titulo ? (
+          <strong style={{ display: 'block', color, marginBottom: '2px' }}>{titulo}</strong>
+        ) : null}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Progreso({ paso, alcanzable, irA }) {
+  return (
+    <ol style={{
+      display: 'grid', gridTemplateColumns: `repeat(${PASOS.length}, 1fr)`,
+      gap: '8px', listStyle: 'none', margin: '0 0 18px 0', padding: 0,
+    }}>
+      {PASOS.map((p) => {
+        const hecho = paso > p.numero;
+        const actual = paso === p.numero;
+        const puede = p.numero <= alcanzable;
+        return (
+          <li key={p.clave}>
+            <button
+              type="button" className="env-paso" disabled={!puede}
+              onClick={() => puede && irA(p.numero)}
+              aria-current={actual ? 'step' : undefined}
+              aria-label={`Paso ${p.numero}: ${p.titulo}`}
+              style={{
+                width: '100%', border: 'none', background: 'none', padding: 0,
+                textAlign: 'left', cursor: puede ? 'pointer' : 'default',
+              }}>
+              <span style={{
+                display: 'block', height: '4px', borderRadius: '2px',
+                background: actual || hecho ? C.marca : C.linea, marginBottom: '7px',
+              }} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{
+                  width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '10.5px', fontWeight: 700,
+                  background: hecho ? C.marca : (actual ? C.marcaSuave : C.linea),
+                  color: hecho ? '#fff' : (actual ? C.marca : C.tenue),
+                }}>
+                  {hecho ? <Check size={11} strokeWidth={3} /> : p.numero}
+                </span>
+                <span className="env-nom-paso" style={{
+                  fontSize: '12.5px', fontWeight: actual ? 700 : 500,
+                  color: actual ? C.tinta : C.tenue, whiteSpace: 'nowrap',
+                }}>{p.titulo}</span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function TiraDeTasa({ tasa, disponible, lastUpdated, ahora, onRefrescar, refrescando }) {
+  // `ahora` llega desde afuera y avanza con un temporizador. Calcularlo acá con
+  // `Date.now()` sería leer el reloj durante el render —impuro— y encima
+  // dejaría el texto congelado: diría «hace 2 min» hasta que otra cosa
+  // provocara un redibujo.
+  const minutos = (lastUpdated && ahora)
+    ? Math.floor((ahora - new Date(lastUpdated).getTime()) / 60000) : null;
+  const antiguedad = minutos === null ? ''
+    : (minutos < 1 ? 'recién actualizada' : `hace ${minutos} min`);
+
+  return (
+    <div style={{
+      ...tarjeta, padding: '12px 15px', display: 'flex', alignItems: 'center',
+      gap: '12px', flexWrap: 'wrap', marginBottom: '18px',
+      borderColor: disponible ? C.linea : C.alertaBorde,
+      background: disponible ? C.lienzo : C.alertaSuave,
+    }}>
+      <div style={{ flex: 1, minWidth: '190px' }}>
+        <p style={microEtiqueta}>Tasa de hoy</p>
+        {disponible ? (
+          <>
+            <p style={{ margin: '3px 0 0 0', fontSize: '16px', fontWeight: 700,
+              color: C.tinta, whiteSpace: 'nowrap' }}>
+              1 RIS = {fmt(tasa)} VES
+            </p>
+            {antiguedad ? (
+              <p style={{ margin: '1px 0 0 0', fontSize: '12px', color: C.tenue }}>
+                {antiguedad}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p style={{ margin: '3px 0 0 0', fontSize: '14px', fontWeight: 600, color: C.alerta }}>
+            No disponible por ahora
+          </p>
+        )}
+      </div>
+      <button
+        type="button" onClick={onRefrescar} disabled={refrescando}
+        className="env-tap" aria-label="Actualizar la tasa" data-testid="refrescar-tasa"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '7px',
+          padding: '9px 13px', borderRadius: '10px', background: C.lienzo,
+          border: `1px solid ${C.lineaFuerte}`, color: C.texto,
+          fontSize: '13px', fontWeight: 600,
+          cursor: refrescando ? 'default' : 'pointer', opacity: refrescando ? 0.6 : 1,
+        }}>
+        <RefreshCw size={14} /> {refrescando ? 'Actualizando…' : 'Actualizar'}
+      </button>
+    </div>
+  );
+}
+
+function ResumenDelMonto({ ris, ves, onCambiar }) {
+  return (
+    <div style={{
+      ...tarjeta, padding: '14px 16px', marginBottom: '16px', background: C.fondo,
+      display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap',
+    }}>
+      <div style={{ flex: 1, minWidth: '210px', display: 'flex',
+        alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+        <div>
+          <p style={microEtiqueta}>Envías</p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 700, color: C.tinta }}>
+            {fmt(ris)} <span style={{ fontSize: '12px', color: C.tenue }}>RIS</span>
+          </p>
+        </div>
+        <ArrowRight size={16} color={C.tenue} />
+        <div>
+          <p style={microEtiqueta}>Recibe</p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 700, color: C.exito }}>
+            {fmt(ves)} <span style={{ fontSize: '12px', color: C.tenue }}>VES</span>
+          </p>
+        </div>
+      </div>
+      <button type="button" onClick={onCambiar} className="env-chip"
+        style={{
+          padding: '8px 13px', borderRadius: '9px', background: C.lienzo,
+          border: `1px solid ${C.lineaFuerte}`, color: C.texto,
+          fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+        }}>
+        Cambiar
+      </button>
+    </div>
+  );
+}
+
+function Opcion(props) {
+  const { elegida, onClick, titulo, detalle, testid } = props;
+  const Icono = props.Icono;
+  return (
+    <button
+      type="button" role="radio" aria-checked={elegida} onClick={onClick}
+      data-testid={testid} className="env-op env-tap"
+      style={{
+        display: 'flex', alignItems: 'center', gap: '14px', width: '100%',
+        padding: '16px', borderRadius: '14px', textAlign: 'left', cursor: 'pointer',
+        border: `1px solid ${elegida ? C.marca : C.linea}`,
+        background: elegida ? C.marcaSuave : C.lienzo,
+        boxShadow: elegida ? '0 0 0 3px rgba(79,70,229,.10)' : 'none',
+      }}>
+      <span style={{
+        width: '44px', height: '44px', borderRadius: '12px', flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: elegida ? C.marca : C.fondo,
+      }}>
+        <Icono size={21} color={elegida ? '#fff' : C.suave} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: '15.5px', fontWeight: 700, color: C.tinta }}>
+          {titulo}
+        </span>
+        <span style={{ display: 'block', fontSize: '13px', color: C.suave, marginTop: '2px' }}>
+          {detalle}
+        </span>
+      </span>
+      <span style={{
+        width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+        border: `2px solid ${elegida ? C.marca : C.lineaFuerte}`,
+        background: elegida ? C.marca : 'transparent',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {elegida ? <Check size={12} color="#fff" strokeWidth={3} /> : null}
+      </span>
+    </button>
+  );
+}
+
+function iniciales(nombre) {
+  const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '?';
+  return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
+}
+
+/* ─── La pantalla ──────────────────────────────────────────────────────── */
 
 export default function Send() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
-  const { rates } = useRate();
+  const { rates, tasaDisponible, lastUpdated, refreshRates } = useRate();
+
   const [step, setStep] = useState(1);
-  const idemRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const idemRef = useRef(null);
+
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [showNewBeneficiary, setShowNewBeneficiary] = useState(false);
-  
-  // Step 1: Amount
-  const [amount, setAmount] = useState('');
-  const [vesInput, setVesInput] = useState('');
-  const [lastEdited, setLastEdited] = useState('ris'); // 'ris' or 'ves'
 
-  // Sync VES display when RIS changes (only if last edit was RIS)
-  useEffect(() => {
-    if (lastEdited === 'ris') {
-      setVesInput(amount ? (parseFloat(amount) * (rates.ris_to_ves || 0)).toFixed(2) : '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, rates.ris_to_ves]);
-  
-  // Step 2: Payment Type
-  const [paymentType, setPaymentType] = useState(''); // 'pago_movil' or 'transferencia'
-  
-  // Step 3: Beneficiary
+  // Se puede escribir en cualquiera de las dos monedas. `ultimoCampo` dice cuál
+  // manda: el otro se muestra calculado y no pisa lo que la persona escribió.
+  const [risEscrito, setRisEscrito] = useState('');
+  const [vesEscrito, setVesEscrito] = useState('');
+  const [ultimoCampo, setUltimoCampo] = useState('ris');
+
+  const [paymentType, setPaymentType] = useState('');
   const [selectedBeneficiary, setSelectedBeneficiary] = useState(null);
   const [bankSearch, setBankSearch] = useState('');
   const [showBankDropdown, setShowBankDropdown] = useState(false);
-  
-  // New Beneficiary Form - Pago Móvil
+  const [showPin, setShowPin] = useState(false);
+
+  // La tasa con la que se cotizó, para avisar si se movió antes de confirmar.
+  const [tasaAlCotizar, setTasaAlCotizar] = useState(null);
+
+  // El reloj que hace avanzar el «hace N min» de la tasa. Medio minuto es
+  // suficiente para un texto que se mide en minutos.
+  const [ahora, setAhora] = useState(0);
+
   const [newBeneficiaryPM, setNewBeneficiaryPM] = useState({
-    full_name: '',
-    cedula: '',
-    bank_code: '',
-    bank: '',
-    phone: '',
-  });
-  
-  // New Beneficiary Form - Transferencia
+    full_name: '', cedula: '', bank_code: '', bank: '', phone: '' });
   const [newBeneficiaryTR, setNewBeneficiaryTR] = useState({
-    full_name: '',
-    cedula: '',
-    bank_code: '',
-    bank: '',
-    account_number: '',
-  });
+    full_name: '', cedula: '', bank_code: '', bank: '', account_number: '' });
 
-  useEffect(() => { loadBeneficiaries(); }, []);
+  const tasa = rates?.ris_to_ves;
+  const saldo = user?.balance_ris || 0;
+  const esPagoMovil = paymentType === 'pago_movil';
 
-  const loadBeneficiaries = async () => {
+  const ris = useMemo(() => risAEnviar({
+    risEscrito: ultimoCampo === 'ris' ? risEscrito : '',
+    vesEscrito: ultimoCampo === 'ves' ? vesEscrito : '',
+    tasa, tasaDisponible,
+  }), [risEscrito, vesEscrito, ultimoCampo, tasa, tasaDisponible]);
+
+  const ves = useMemo(() => vesARecibir({ ris, tasa, tasaDisponible }),
+    [ris, tasa, tasaDisponible]);
+
+  const escribioAlgo = Boolean(ultimoCampo === 'ris' ? risEscrito : vesEscrito);
+  const validacion = validarMonto({ ris, saldo, tasaDisponible, escribioAlgo });
+
+  const alcanzable = ultimoPasoAlcanzable({
+    montoOk: validacion.ok, metodo: paymentType, beneficiario: selectedBeneficiary });
+
+  const movimiento = step === 4
+    ? tasaSeMovio({ tasaAlCotizar, tasaAhora: tasa }) : null;
+
+  const cargarBeneficiarios = async () => {
     try {
-      const response = await api.get('/beneficiaries');
-      setBeneficiaries(response.data || []);
-    } catch (error) {
-      console.error('Error loading beneficiaries:', error);
+      const r = await api.get('/beneficiaries');
+      setBeneficiaries(r.data || []);
+    } catch (e) {
+      console.error('Error loading beneficiaries:', e);
     }
   };
 
-  const amountVes = amount ? parseFloat(amount) * rates.ris_to_ves : 0;
-  const isValidAmount = amount && parseFloat(amount) > 0 && parseFloat(amount) <= (user?.balance_ris || 0);
+  useEffect(() => {
+    (async () => { await cargarBeneficiarios(); })();
+  }, []);
 
-  // Filter banks based on search (by code or name)
-  const filteredBanks = VENEZUELAN_BANKS.filter(bank => 
-    bank.code.includes(bankSearch) || 
-    bank.name.toLowerCase().includes(bankSearch.toLowerCase())
-  );
+  useEffect(() => {
+    // El primer valor se pone en un microtask y no en el cuerpo del efecto:
+    // así el setState no ocurre de forma sincrónica durante el montaje.
+    const t = setInterval(() => setAhora(Date.now()), 30000);
+    const inicial = setTimeout(() => setAhora(Date.now()), 0);
+    return () => { clearInterval(t); clearTimeout(inicial); };
+  }, []);
 
-  // Filter beneficiaries by payment type
-  const filteredBeneficiaries = beneficiaries.filter(b => b.payment_type === paymentType);
+  // Al llegar a confirmar se vuelve a pedir la tasa: es el instante anterior a
+  // que el dinero salga, el único momento en el que de verdad importa.
+  useEffect(() => {
+    if (step !== 4) return undefined;
+    let vivo = true;
+    (async () => {
+      setRefrescando(true);
+      try { await refreshRates(); } finally { if (vivo) setRefrescando(false); }
+    })();
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
-  // Validate only numbers
-  const onlyNumbers = (value) => value.replace(/[^0-9]/g, '');
+  const refrescarTasa = async () => {
+    setRefrescando(true);
+    try { await refreshRates(); } finally { setRefrescando(false); }
+  };
 
-  const handleSelectBank = (bank, type) => {
-    if (type === 'pago_movil') {
-      // Para Pago Móvil solo guardamos el código del banco
+  const filteredBanks = VENEZUELAN_BANKS.filter((b) =>
+    b.code.includes(bankSearch) || b.name.toLowerCase().includes(bankSearch.toLowerCase()));
+
+  const filteredBeneficiaries = beneficiaries.filter((b) => b.payment_type === paymentType);
+
+  const onlyNumbers = (v) => v.replace(/[^0-9]/g, '');
+
+  const handleSelectBank = (bank) => {
+    if (esPagoMovil) {
+      // Pago Móvil opera con el CODIGO: es lo que pide el banco al pagar. Se
+      // guarda el código, y la pantalla muestra el nombre al lado para que
+      // quien lo eligió reconozca el suyo.
       setNewBeneficiaryPM({ ...newBeneficiaryPM, bank_code: bank.code, bank: bank.code });
     } else {
-      // Para Transferencia guardamos código y nombre
       setNewBeneficiaryTR({ ...newBeneficiaryTR, bank_code: bank.code, bank: bank.name });
     }
     setBankSearch('');
@@ -138,603 +515,663 @@ export default function Send() {
   };
 
   const handleSaveBeneficiary = async () => {
-    let beneficiaryData;
-    
-    if (paymentType === 'pago_movil') {
+    let datos;
+    if (esPagoMovil) {
       const { full_name, cedula, bank, bank_code, phone } = newBeneficiaryPM;
-      if (!full_name || !cedula || !bank || !phone) {
-        toast.error('Completa todos los campos');
-        return;
-      }
-      if (!/^\d+$/.test(cedula)) {
-        toast.error('La cédula debe contener solo números');
-        return;
-      }
-      if (!/^\d{11}$/.test(phone)) {
-        toast.error('El teléfono debe tener 11 dígitos (ej: 04141234567)');
-        return;
-      }
-      beneficiaryData = {
-        full_name,
-        id_document: cedula,
-        bank,
-        bank_code,
-        phone_number: phone,
-        payment_type: 'pago_movil',
-      };
+      if (!full_name || !cedula || !bank || !phone) return toast.error('Completá todos los campos');
+      if (!/^\d+$/.test(cedula)) return toast.error('La cédula lleva sólo números');
+      if (!/^\d{11}$/.test(phone)) return toast.error('El teléfono tiene 11 dígitos (ej: 04141234567)');
+      datos = { full_name, id_document: cedula, bank, bank_code,
+        phone_number: phone, payment_type: 'pago_movil' };
     } else {
       const { full_name, cedula, bank, bank_code, account_number } = newBeneficiaryTR;
-      if (!full_name || !cedula || !bank || !account_number) {
-        toast.error('Completa todos los campos');
-        return;
-      }
-      if (!/^\d+$/.test(cedula)) {
-        toast.error('La cédula debe contener solo números');
-        return;
-      }
-      if (!/^\d{20}$/.test(account_number)) {
-        toast.error('El número de cuenta debe tener exactamente 20 dígitos');
-        return;
-      }
-      beneficiaryData = {
-        full_name,
-        id_document: cedula,
-        bank,
-        bank_code,
-        account_number,
-        payment_type: 'transferencia',
-      };
+      if (!full_name || !cedula || !bank || !account_number) return toast.error('Completá todos los campos');
+      if (!/^\d+$/.test(cedula)) return toast.error('La cédula lleva sólo números');
+      if (!/^\d{20}$/.test(account_number)) return toast.error('El número de cuenta tiene 20 dígitos');
+      datos = { full_name, id_document: cedula, bank, bank_code,
+        account_number, payment_type: 'transferencia' };
     }
 
     setLoading(true);
     try {
-      const response = await api.post('/beneficiaries', beneficiaryData);
+      const r = await api.post('/beneficiaries', datos);
       toast.success('Beneficiario guardado');
-      await loadBeneficiaries();
-      setSelectedBeneficiary(response.data);
+      await cargarBeneficiarios();
+      setSelectedBeneficiary(r.data);
       setShowNewBeneficiary(false);
       setNewBeneficiaryPM({ full_name: '', cedula: '', bank_code: '', bank: '', phone: '' });
       setNewBeneficiaryTR({ full_name: '', cedula: '', bank_code: '', bank: '', account_number: '' });
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al guardar beneficiario');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'No se pudo guardar el beneficiario');
     } finally {
       setLoading(false);
     }
+    return undefined;
   };
 
-  const [showPin, setShowPin] = useState(false);
   const pedirConfirmacion = () => {
-    if (!isValidAmount || !selectedBeneficiary || !paymentType) {
-      toast.error('Verifica los datos de envío');
-      return;
+    if (!validacion.ok || !selectedBeneficiary || !paymentType) {
+      return toast.error('Revisá los datos del envío');
     }
-    setShowPin(true);
+    return setShowPin(true);
   };
+
   const handleSend = async () => {
-    if (!isValidAmount || !selectedBeneficiary || !paymentType) {
-      toast.error('Verifica los datos de envío');
-      return;
+    if (!validacion.ok || !selectedBeneficiary || !paymentType) {
+      return toast.error('Revisá los datos del envío');
     }
-    if (!idemRef.current) idemRef.current = (window.crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2)));
+    if (!idemRef.current) {
+      idemRef.current = window.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
     setLoading(true);
     try {
-      await api.post('/withdraw', { 
-        amount: parseFloat(amount), 
+      await api.post('/withdraw', {
+        amount: ris,
         beneficiary_id: selectedBeneficiary.beneficiary_id,
-        idempotency_key: idemRef.current
+        idempotency_key: idemRef.current,
       });
       idemRef.current = null;
-      toast.success('¡Envío registrado! Será procesado pronto.');
+      toast.success('¡Envío registrado! Lo vas a ver en tu historial.');
       await refreshUser();
       try {
         const h = await api.post('/pin/hint-check');
-        if (h.data?.hint) toast(h.data.message || 'Configura tu PIN para mayor seguridad en tu perfil.', { icon: '🔒' });
-      } catch (_) { /* aviso opcional */ }
+        if (h.data?.hint) toast(h.data.message || 'Configurá tu PIN para más seguridad.', { icon: '🔒' });
+      } catch { /* aviso opcional */ }
       navigate('/history');
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al procesar envío');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'No se pudo procesar el envío');
     } finally {
       setLoading(false);
     }
+    return undefined;
   };
 
-  // Styles
-  const pageStyle = {
-    minHeight: '100vh',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
-    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
-  };
+  const irAPaso = (n) => { if (n <= alcanzable) setStep(n); };
+  const seguirDesdeMonto = () => { setTasaAlCotizar(tasa); setStep(2); };
 
-  const cardStyle = {
-    backgroundColor: '#ffffff',
-    borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08)',
-    padding: '32px'
-  };
+  const bancoElegido = esPagoMovil
+    ? VENEZUELAN_BANKS.find((b) => b.code === newBeneficiaryPM.bank_code)
+    : VENEZUELAN_BANKS.find((b) => b.code === newBeneficiaryTR.bank_code);
 
-  const inputStyle = {
-    width: '100%', padding: '14px 16px', borderRadius: '14px',
-    border: '1px solid #d1d5db', fontSize: '16px', outline: 'none',
-    boxSizing: 'border-box'
-  };
-
-  const buttonPrimaryStyle = {
-    backgroundColor: '#6366f1', color: 'white', borderRadius: '14px', height: '56px',
-    padding: '0 32px', fontWeight: '600', fontSize: '16px', border: 'none', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%'
-  };
-
-  const buttonSecondaryStyle = {
-    backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '14px', height: '56px',
-    padding: '0 32px', fontWeight: '600', fontSize: '16px', border: 'none', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%'
-  };
-
-  const paymentTypeCardStyle = (isSelected) => ({
-    padding: '24px',
-    borderRadius: '16px',
-    border: isSelected ? '2px solid #6366f1' : '2px solid #e5e7eb',
-    backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    textAlign: 'center'
-  });
-
-  // Render Bank Search Input inline
-  const renderBankSearch = (type) => {
-    // Para Pago Móvil solo mostrar código, para Transferencia mostrar código + nombre
-    const getDisplayValue = () => {
-      if (showBankDropdown) return bankSearch;
-      if (type === 'pago_movil') {
-        return newBeneficiaryPM.bank_code || '';  // Solo código (ej: 0134)
-      } else {
-        return newBeneficiaryTR.bank ? `${newBeneficiaryTR.bank_code} - ${newBeneficiaryTR.bank}` : '';
-      }
-    };
-    
-    return (
-    <div style={{ position: 'relative' }}>
-      <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-        {type === 'pago_movil' ? 'Código de Banco *' : 'Banco *'}
-      </label>
-      <div style={{ position: 'relative' }}>
-        <Search style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
-        <input
-          type="text"
-          value={getDisplayValue()}
-          onChange={(e) => setBankSearch(e.target.value)}
-          onFocus={() => setShowBankDropdown(true)}
-          placeholder="Buscar por código o nombre..."
-          style={{ ...inputStyle, paddingLeft: '44px' }}
-          data-testid="bank-search-input"
-        />
-      </div>
-      {showBankDropdown && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-          backgroundColor: '#ffffff', borderRadius: '12px', marginTop: '4px',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.15)', maxHeight: '250px', overflowY: 'auto',
-          border: '1px solid #e5e7eb'
-        }}>
-          {filteredBanks.length === 0 ? (
-            <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>
-              No se encontraron bancos
-            </div>
-          ) : (
-            filteredBanks.map(bank => (
-              <button
-                key={bank.code}
-                onClick={() => handleSelectBank(bank, type)}
-                style={{
-                  width: '100%', padding: '12px 16px', border: 'none', backgroundColor: 'transparent',
-                  textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
-                  borderBottom: '1px solid #f3f4f6'
-                }}
-                data-testid={`bank-option-${bank.code}`}
-              >
-                <span style={{ 
-                  fontSize: '13px', fontWeight: '600', color: '#6366f1', 
-                  backgroundColor: '#eff6ff', padding: '4px 8px', borderRadius: '6px',
-                  fontFamily: 'monospace'
-                }}>
-                  {bank.code}
-                </span>
-                <span style={{ fontSize: '14px', color: '#374151' }}>{bank.name}</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-  };
+  const detalleDe = (b) => (esPagoMovil
+    ? telefonoLegible(b?.phone_number) : cuentaAbreviada(b?.account_number));
 
   return (
-    <div style={pageStyle} data-testid="send-page" onClick={() => setShowBankDropdown(false)}>
-      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button 
-              onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)} 
-              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              data-testid="back-button"
-            >
-              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
-            </button>
-            <div>
-              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar a Venezuela</h1>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>1 RIS = {fmt(rates?.ris_to_ves) || '0.00'} VES</p>
-            </div>
+    <div className="env" data-testid="send-page"
+      style={{ minHeight: '100vh', background: C.fondo,
+        fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' }}
+      onClick={() => setShowBankDropdown(false)}>
+      <style>{HOJA}</style>
+
+      <div style={{ padding: '20px 16px 48px', maxWidth: '620px', margin: '0 auto' }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
+          <button
+            type="button" onClick={() => (step > 1 ? setStep(step - 1) : navigate(-1))}
+            aria-label="Volver" data-testid="back-button" className="env-tap"
+            style={{
+              width: '42px', height: '42px', borderRadius: '11px', flexShrink: 0,
+              border: `1px solid ${C.linea}`, background: C.lienzo, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+            <ArrowLeft size={19} color={C.texto} />
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ fontSize: '21px', fontWeight: 700, color: C.tinta, margin: 0,
+              letterSpacing: '-.01em' }}>Enviar a Venezuela</h1>
+            <p style={{ fontSize: '13px', color: C.suave, margin: '2px 0 0 0' }}>
+              Saldo disponible: <strong style={{ color: C.texto }}>{fmt(saldo)} RIS</strong>
+            </p>
           </div>
           <NotificationBell />
         </div>
 
-        {/* Progress Steps - 4 steps now */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
-          {[1, 2, 3, 4].map((s) => (
-            <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%', fontSize: '14px', fontWeight: '600',
-                backgroundColor: step >= s ? '#6366f1' : '#e5e7eb', color: step >= s ? '#ffffff' : '#6b7280',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>{s}</div>
-              {s < 4 && <div style={{ width: '32px', height: '4px', marginLeft: '4px', marginRight: '4px', borderRadius: '2px', backgroundColor: step > s ? '#6366f1' : '#e5e7eb' }} />}
-            </div>
-          ))}
-        </div>
+        <TiraDeTasa tasa={tasa} disponible={tasaDisponible} lastUpdated={lastUpdated}
+          ahora={ahora} onRefrescar={refrescarTasa} refrescando={refrescando} />
 
-        {/* Step 1: Amount */}
-        {step === 1 && (
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Calculator style={{ width: '28px', height: '28px', color: '#2563eb' }} />
-              </div>
+        <Progreso paso={step} alcanzable={alcanzable} irA={irAPaso} />
+
+        {step > 1 && ris !== null ? (
+          <ResumenDelMonto ris={ris} ves={ves} onCambiar={() => setStep(1)} />
+        ) : null}
+
+        {step === 1 ? (
+          <div style={{ ...tarjeta, padding: '22px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: '0 0 4px 0' }}>
+              ¿Cuánto querés enviar?
+            </h2>
+            <p style={{ fontSize: '13.5px', color: C.suave, margin: '0 0 20px 0', lineHeight: 1.55 }}>
+              Escribí el monto en la moneda que te resulte más cómoda. La otra se
+              calcula sola.
+            </p>
+
+            {!tasaDisponible ? (
+              <Aviso tono="alerta" titulo="No pudimos obtener la tasa" testid="sin-tasa">
+                Sin la tasa del día no podemos decirte cuánto va a recibir tu
+                beneficiario, y preferimos no mostrarte una cifra que después
+                cambie. Tocá <strong>Actualizar</strong> acá arriba.
+              </Aviso>
+            ) : (
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Monto a enviar</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Saldo: {fmt((user?.balance_ris || 0))} RIS</p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Envías (RIS)</label>
-                <FormattedNumberInput
-                  decimals={4}
-                  value={amount}
-                  onChange={(v) => { setLastEdited('ris'); setAmount(v); }}
-                  style={{ ...inputStyle, fontSize: '28px', fontWeight: '700' }} placeholder="0,00"
-                  data-testid="send-amount"
-                />
-              </div>
-
-              <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '16px' }}>
-                <p style={{ fontSize: '14px', color: '#111827', margin: '0 0 4px 0', fontWeight: '600' }}>Beneficiario recibe</p>
-                <p style={{ fontSize: '32px', fontWeight: '700', color: '#15803d', margin: 0 }}>
-                  {fmt(amountVes)} VES
-                  {rates?.bcv_usd_ves && amountVes > 0 && (
-                    <span> = $ {fmt(amountVes / rates.bcv_usd_ves, 2)} BCV</span>
-                  )}
-                </p>
-              </div>
-
-              {amount && parseFloat(amount) > (user?.balance_ris || 0) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', backgroundColor: '#fee2e2', borderRadius: '12px' }}>
-                  <AlertCircle style={{ width: '20px', height: '20px', color: '#dc2626' }} />
-                  <span style={{ color: '#dc2626', fontSize: '14px' }}>Saldo insuficiente</span>
+                <div className="env-dos" style={{ display: 'grid', gap: '14px',
+                  gridTemplateColumns: '1fr 1fr' }}>
+                  <div>
+                    <label style={etiqueta} htmlFor="monto-ris">Envías (RIS)</label>
+                    <FormattedNumberInput
+                      className="env-campo" id="monto-ris" decimals={2}
+                      value={ultimoCampo === 'ris' ? risEscrito : (ris === null ? '' : String(ris))}
+                      onChange={(v) => { setUltimoCampo('ris'); setRisEscrito(v); }}
+                      style={{ ...campo, fontSize: '22px', fontWeight: 700 }}
+                      placeholder="0,00" data-testid="send-amount"
+                    />
+                  </div>
+                  <div>
+                    <label style={etiqueta} htmlFor="monto-ves">Recibe (VES)</label>
+                    <FormattedNumberInput
+                      className="env-campo" id="monto-ves" decimals={2}
+                      value={ultimoCampo === 'ves' ? vesEscrito : (ves === null ? '' : String(ves))}
+                      onChange={(v) => { setUltimoCampo('ves'); setVesEscrito(v); }}
+                      style={{ ...campo, fontSize: '22px', fontWeight: 700 }}
+                      placeholder="0,00" data-testid="send-amount-ves"
+                    />
+                  </div>
                 </div>
-              )}
 
-              <button onClick={() => setStep(2)} disabled={!isValidAmount} style={{ ...buttonPrimaryStyle, opacity: isValidAmount ? 1 : 0.5 }} data-testid="continue-step1">
-                Continuar <ArrowRight style={{ width: '20px', height: '20px' }} />
-              </button>
+                {saldo > 0 ? (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                    {[['25 %', 0.25], ['50 %', 0.5], ['Todo mi saldo', 1]].map(([txt, f]) => (
+                      <button
+                        key={txt} type="button" className="env-chip"
+                        onClick={() => {
+                          setUltimoCampo('ris');
+                          setRisEscrito(String(Math.floor(saldo * f * 100) / 100));
+                        }}
+                        style={{
+                          padding: '7px 13px', borderRadius: '999px', cursor: 'pointer',
+                          border: `1px solid ${C.linea}`, background: C.lienzo,
+                          color: C.texto, fontSize: '13px', fontWeight: 600,
+                        }}>{txt}</button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div style={{
+                  marginTop: '18px', padding: '18px', borderRadius: '14px',
+                  background: C.exitoSuave, border: `1px solid ${C.exitoBorde}`,
+                }}>
+                  <p style={{ ...microEtiqueta, color: C.exito }}>Tu beneficiario recibe</p>
+                  <p style={{ margin: '5px 0 0 0', fontSize: '30px', fontWeight: 700,
+                    color: C.exito, lineHeight: 1.1 }}>
+                    {ves === null ? '—' : fmt(ves)}
+                    <span style={{ fontSize: '15px', fontWeight: 600, marginLeft: '7px' }}>VES</span>
+                  </p>
+                  {rates?.bcv_usd_ves && ves ? (
+                    <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: C.suave }}>
+                      Referencia BCV: US$ {fmt(ves / rates.bcv_usd_ves, 2)}
+                    </p>
+                  ) : null}
+                </div>
+
+                {ultimoCampo === 'ves' && ris !== null && ves !== null ? (
+                  <p style={{ margin: '10px 0 0 0', fontSize: '12.5px', color: C.suave,
+                    lineHeight: 1.55 }}>
+                    Para que lleguen esos bolívares se descuentan{' '}
+                    <strong>{fmt(ris)} RIS</strong> de tu saldo. Los bolívares se
+                    calculan sobre ese monto, así que lo que ves acá es
+                    exactamente lo que va a recibir.
+                  </p>
+                ) : null}
+
+                {!validacion.ok && validacion.motivo !== MOTIVO.VACIO ? (
+                  <div style={{ marginTop: '14px' }}>
+                    <Aviso testid="monto-invalido"
+                      tono={validacion.motivo === MOTIVO.SIN_SALDO ? 'info' : 'error'}>
+                      {MENSAJE_DEL_MOTIVO[validacion.motivo]}
+                      {validacion.motivo === MOTIVO.SIN_SALDO
+                        || validacion.motivo === MOTIVO.EXCEDE_SALDO ? (
+                          <button type="button" onClick={() => navigate('/recharge')}
+                            style={{ background: 'none', border: 'none', padding: '0 0 0 4px',
+                              color: C.marca, fontWeight: 700, cursor: 'pointer',
+                              fontSize: '13.5px', textDecoration: 'underline' }}>
+                            Recargar saldo
+                          </button>
+                        ) : null}
+                    </Aviso>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            <div style={{ marginTop: '20px' }}>
+              <Boton tipo="primario" ancho disabled={!validacion.ok} onClick={seguirDesdeMonto}
+                testid="continue-step1" Icono={ArrowRight} iconoDerecha>
+                Continuar
+              </Boton>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Step 2: Payment Type */}
-        {step === 2 && (
-          <div style={cardStyle}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>Tipo de pago</h2>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0' }}>Selecciona cómo deseas pagar</p>
+        {step === 2 ? (
+          <div style={{ ...tarjeta, padding: '22px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: '0 0 4px 0' }}>
+              ¿Cómo lo recibe?
+            </h2>
+            <p style={{ fontSize: '13.5px', color: C.suave, margin: '0 0 18px 0' }}>
+              Elegí el método con el que tu beneficiario va a cobrar.
+            </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-              {/* Pago Móvil Option */}
-              <button
-                onClick={() => setPaymentType('pago_movil')}
-                style={paymentTypeCardStyle(paymentType === 'pago_movil')}
-                data-testid="payment-type-pago-movil"
-              >
-                <div style={{ 
-                  width: '64px', height: '64px', borderRadius: '16px', 
-                  backgroundColor: paymentType === 'pago_movil' ? '#6366f1' : '#f3f4f6',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 12px'
-                }}>
-                  <Smartphone style={{ width: '32px', height: '32px', color: paymentType === 'pago_movil' ? '#ffffff' : '#6b7280' }} />
-                </div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>Pago Móvil</h3>
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Cédula, Banco y Teléfono</p>
-              </button>
-
-              {/* Transferencia Option */}
-              <button
+            <div role="radiogroup" aria-label="Método de pago"
+              style={{ display: 'grid', gap: '12px' }}>
+              <Opcion
+                elegida={esPagoMovil} onClick={() => setPaymentType('pago_movil')}
+                Icono={Smartphone} titulo="Pago Móvil"
+                detalle="Con cédula, código de banco y teléfono"
+                testid="payment-type-pago-movil"
+              />
+              <Opcion
+                elegida={paymentType === 'transferencia'}
                 onClick={() => setPaymentType('transferencia')}
-                style={paymentTypeCardStyle(paymentType === 'transferencia')}
-                data-testid="payment-type-transferencia"
-              >
-                <div style={{ 
-                  width: '64px', height: '64px', borderRadius: '16px', 
-                  backgroundColor: paymentType === 'transferencia' ? '#6366f1' : '#f3f4f6',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 12px'
-                }}>
-                  <Building2 style={{ width: '32px', height: '32px', color: paymentType === 'transferencia' ? '#ffffff' : '#6b7280' }} />
-                </div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>Transferencia</h3>
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Número de cuenta (20 dígitos)</p>
-              </button>
+                Icono={Building2} titulo="Transferencia bancaria"
+                detalle="A una cuenta de 20 dígitos"
+                testid="payment-type-transferencia"
+              />
             </div>
 
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => setStep(1)} style={buttonSecondaryStyle}>Atrás</button>
-              <button onClick={() => { setSelectedBeneficiary(null); setStep(3); }} disabled={!paymentType} style={{ ...buttonPrimaryStyle, opacity: paymentType ? 1 : 0.5 }} data-testid="continue-step2">
-                Continuar <ArrowRight style={{ width: '20px', height: '20px' }} />
-              </button>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <Boton onClick={() => setStep(1)} ancho>Atrás</Boton>
+              <Boton tipo="primario" ancho disabled={!paymentType} testid="continue-step2"
+                onClick={() => { setSelectedBeneficiary(null); setStep(3); }}
+                Icono={ArrowRight} iconoDerecha>
+                Continuar
+              </Boton>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Step 3: Beneficiary */}
-        {step === 3 && (
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Beneficiario</h2>
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>
-                  {paymentType === 'pago_movil' ? 'Pago Móvil' : 'Transferencia'}
+        {step === 3 ? (
+          <div style={{ ...tarjeta, padding: '22px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px',
+              flexWrap: 'wrap', marginBottom: '18px' }}>
+              <div style={{ flex: 1, minWidth: '180px' }}>
+                <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: 0 }}>
+                  ¿A quién le enviás?
+                </h2>
+                <p style={{ fontSize: '13px', color: C.suave, margin: '3px 0 0 0' }}>
+                  {esPagoMovil ? 'Pago Móvil' : 'Transferencia bancaria'}
                 </p>
               </div>
-              <button onClick={() => setShowNewBeneficiary(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#eff6ff', color: '#2563eb', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>
-                <Plus style={{ width: '16px', height: '16px' }} /> Nuevo
+              <button type="button" onClick={() => setShowNewBeneficiary(true)} className="env-chip"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '9px 13px', borderRadius: '10px', cursor: 'pointer',
+                  border: `1px solid ${C.lineaFuerte}`, background: C.lienzo,
+                  color: C.texto, fontSize: '13.5px', fontWeight: 600,
+                }}>
+                <Plus size={15} /> Nuevo
               </button>
             </div>
 
             {filteredBeneficiaries.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px' }}>
-                <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                  <User style={{ width: '40px', height: '40px', color: '#d1d5db' }} />
+              <div style={{ textAlign: 'center', padding: '30px 16px' }}>
+                <div style={{
+                  width: '58px', height: '58px', borderRadius: '50%', margin: '0 auto 14px',
+                  background: C.fondo, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', border: `1px solid ${C.linea}`,
+                }}>
+                  <User size={26} color={C.tenue} />
                 </div>
-                <p style={{ color: '#6b7280', margin: '0 0 16px 0' }}>
-                  No tienes beneficiarios de {paymentType === 'pago_movil' ? 'Pago Móvil' : 'Transferencia'}
+                <p style={{ color: C.tinta, margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600 }}>
+                  Todavía no tenés beneficiarios de {esPagoMovil ? 'Pago Móvil' : 'transferencia'}
                 </p>
-                <button onClick={() => setShowNewBeneficiary(true)} style={{ color: '#6366f1', fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer' }}>
+                <p style={{ color: C.suave, margin: '0 0 16px 0', fontSize: '13.5px' }}>
+                  Cargá los datos una vez y quedan guardados para la próxima.
+                </p>
+                <Boton tipo="primario" Icono={Plus} onClick={() => setShowNewBeneficiary(true)}>
                   Agregar beneficiario
-                </button>
+                </Boton>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {filteredBeneficiaries.map((b) => (
-                  <button
-                    key={b.beneficiary_id} onClick={() => setSelectedBeneficiary(b)}
-                    style={{
-                      width: '100%', padding: '16px', borderRadius: '16px', cursor: 'pointer', textAlign: 'left',
-                      border: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '2px solid #6366f1' : '2px solid #e5e7eb',
-                      backgroundColor: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '#eff6ff' : '#ffffff'
-                    }}
-                    data-testid={`beneficiary-${b.beneficiary_id}`}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {paymentType === 'pago_movil' ? 
-                          <Smartphone style={{ width: '24px', height: '24px', color: '#6b7280' }} /> :
-                          <Building2 style={{ width: '24px', height: '24px', color: '#6b7280' }} />
-                        }
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{b.full_name}</p>
-                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>
-                          {b.bank} {paymentType === 'pago_movil' ? `• ${b.phone_number}` : `• ****${b.account_number?.slice(-4)}`}
-                        </p>
-                      </div>
-                      {selectedBeneficiary?.beneficiary_id === b.beneficiary_id && <CheckCircle style={{ width: '24px', height: '24px', color: '#6366f1' }} />}
-                    </div>
-                  </button>
-                ))}
+              <div role="radiogroup" aria-label="Beneficiario"
+                style={{ display: 'grid', gap: '10px' }}>
+                {filteredBeneficiaries.map((b) => {
+                  const elegido = selectedBeneficiary?.beneficiary_id === b.beneficiary_id;
+                  return (
+                    <button
+                      key={b.beneficiary_id} type="button" role="radio" aria-checked={elegido}
+                      onClick={() => setSelectedBeneficiary(b)}
+                      data-testid={`beneficiary-${b.beneficiary_id}`}
+                      className="env-op env-tap"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '13px', width: '100%',
+                        padding: '14px', borderRadius: '14px', textAlign: 'left',
+                        cursor: 'pointer',
+                        border: `1px solid ${elegido ? C.marca : C.linea}`,
+                        background: elegido ? C.marcaSuave : C.lienzo,
+                      }}>
+                      <span style={{
+                        width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        background: elegido ? C.marca : C.fondo,
+                        color: elegido ? '#fff' : C.suave, fontWeight: 700, fontSize: '14px',
+                      }}>{iniciales(b.full_name)}</span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: '15px', fontWeight: 700,
+                          color: C.tinta, overflow: 'hidden', textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap' }}>{b.full_name}</span>
+                        <span style={{ display: 'block', fontSize: '12.5px', color: C.suave,
+                          marginTop: '2px' }}>{nombreDelBanco(b, VENEZUELAN_BANKS)}</span>
+                        <span style={{ display: 'block', fontSize: '12.5px', color: C.suave }}>
+                          {detalleDe(b)}
+                        </span>
+                      </span>
+                      {elegido ? <CheckCircle2 size={21} color={C.marca} /> : null}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-              <button onClick={() => setStep(2)} style={buttonSecondaryStyle}>Atrás</button>
-              <button onClick={() => setStep(4)} disabled={!selectedBeneficiary} style={{ ...buttonPrimaryStyle, opacity: selectedBeneficiary ? 1 : 0.5 }} data-testid="continue-step3">
-                Continuar <ArrowRight style={{ width: '20px', height: '20px' }} />
-              </button>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <Boton onClick={() => setStep(2)} ancho>Atrás</Boton>
+              <Boton tipo="primario" ancho disabled={!selectedBeneficiary}
+                onClick={() => setStep(4)} testid="continue-step3"
+                Icono={ArrowRight} iconoDerecha>
+                Continuar
+              </Boton>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Step 4: Confirm */}
-        {step === 4 && (
-          <div style={cardStyle}>
-            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 24px 0', textAlign: 'center' }}>Confirmar envío</h2>
+        {step === 4 ? (
+          <div style={{ ...tarjeta, padding: '22px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: '0 0 4px 0' }}>
+              Revisá antes de enviar
+            </h2>
+            <p style={{ fontSize: '13.5px', color: C.suave, margin: '0 0 18px 0', lineHeight: 1.55 }}>
+              Comprobá el nombre y los datos del beneficiario. Una vez enviado no
+              se puede cambiar el destino.
+            </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ padding: '20px', backgroundColor: '#f3f4f6', borderRadius: '14px' }}>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>Envías</p>
-                <p style={{ fontSize: '28px', fontWeight: '700', color: '#111827', margin: 0 }}>{fmt(parseFloat(amount))} RIS</p>
+            {movimiento ? (
+              <div style={{ marginBottom: '16px' }}>
+                <Aviso tono="alerta" titulo="La tasa cambió mientras completabas"
+                  testid="tasa-cambio">
+                  Cotizaste con <strong>{fmt(movimiento.antes)}</strong> y ahora
+                  está en <strong>{fmt(movimiento.ahora)}</strong>.
+                  {movimiento.mejora
+                    ? ' Tu beneficiario recibe un poco más de lo que viste.'
+                    : ' Tu beneficiario recibe un poco menos de lo que viste.'}
+                  {' '}El monto de abajo ya está actualizado.
+                </Aviso>
               </div>
-              <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '14px' }}>
-                <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Beneficiario recibe</p>
-                <p style={{ fontSize: '28px', fontWeight: '700', color: '#15803d', margin: 0 }}>{fmt(amountVes)} VES</p>
-              </div>
-              
-              {/* Payment Type Badge */}
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: '20px',
-                  backgroundColor: paymentType === 'pago_movil' ? '#dbeafe' : '#fef3c7',
-                  color: paymentType === 'pago_movil' ? '#2563eb' : '#d97706',
-                  fontSize: '14px', fontWeight: '500'
-                }}>
-                  {paymentType === 'pago_movil' ? <Smartphone style={{ width: '16px', height: '16px' }} /> : <Building2 style={{ width: '16px', height: '16px' }} />}
-                  {paymentType === 'pago_movil' ? 'Pago Móvil' : 'Transferencia'}
-                </span>
-              </div>
+            ) : null}
 
-              <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px' }}>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 12px 0' }}>Beneficiario</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {paymentType === 'pago_movil' ? 
-                      <Smartphone style={{ width: '24px', height: '24px', color: '#2563eb' }} /> :
-                      <Building2 style={{ width: '24px', height: '24px', color: '#2563eb' }} />
-                    }
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{selectedBeneficiary?.full_name}</p>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>
-                      {paymentType === 'pago_movil' ? `Banco: ${selectedBeneficiary?.bank}` : selectedBeneficiary?.bank}
-                    </p>
-                    {paymentType === 'pago_movil' ? (
-                      <>
-                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>CI: {selectedBeneficiary?.id_document}</p>
-                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>Tel: {selectedBeneficiary?.phone_number}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>CI: {selectedBeneficiary?.id_document}</p>
-                        <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>Cuenta: {selectedBeneficiary?.account_number}</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => setStep(3)} style={buttonSecondaryStyle}>Atrás</button>
-              <button onClick={pedirConfirmacion} disabled={loading} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', opacity: loading ? 0.5 : 1 }} data-testid="confirm-send">
-                {loading ? 'Procesando...' : 'Confirmar envío'}
-              </button>
-            </div>
-            <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={handleSend} />
-          </div>
-        )}
-
-        {/* New Beneficiary Modal */}
-        {showNewBeneficiary && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }} onClick={(e) => { if (e.target === e.currentTarget) setShowNewBeneficiary(false); }}>
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '450px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <div style={{
+              padding: '20px', borderRadius: '14px', background: C.fondo,
+              border: `1px solid ${C.linea}`, marginBottom: '14px',
+            }}>
+              <div className="env-dos" style={{ display: 'grid', gap: '16px',
+                gridTemplateColumns: '1fr 1fr' }}>
                 <div>
-                  <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Nuevo beneficiario</h3>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>
-                    {paymentType === 'pago_movil' ? 'Pago Móvil' : 'Transferencia'}
+                  <p style={microEtiqueta}>Se descuenta de tu saldo</p>
+                  <p style={{ margin: '5px 0 0 0', fontSize: '24px', fontWeight: 700,
+                    color: C.tinta }}>
+                    {fmt(ris)} <span style={{ fontSize: '13px', color: C.tenue }}>RIS</span>
                   </p>
                 </div>
-                <button onClick={() => setShowNewBeneficiary(false)} style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                <div>
+                  <p style={{ ...microEtiqueta, color: C.exito }}>Recibe</p>
+                  <p style={{ margin: '5px 0 0 0', fontSize: '24px', fontWeight: 700,
+                    color: C.exito }}>
+                    {fmt(ves)} <span style={{ fontSize: '13px', color: C.tenue }}>VES</span>
+                  </p>
+                </div>
+              </div>
+              <p style={{ margin: '14px 0 0 0', paddingTop: '13px',
+                borderTop: `1px solid ${C.linea}`, fontSize: '12.5px', color: C.suave }}>
+                Tasa aplicada: 1 RIS = {fmt(tasa)} VES
+              </p>
+            </div>
+
+            <div style={{
+              padding: '18px', borderRadius: '14px', border: `1px solid ${C.linea}`,
+              marginBottom: '18px',
+            }}>
+              <p style={{ ...microEtiqueta, marginBottom: '12px' }}>Beneficiario</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '13px',
+                marginBottom: '14px' }}>
+                <span style={{
+                  width: '44px', height: '44px', borderRadius: '50%', flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: C.marcaSuave, color: C.marca, fontWeight: 700, fontSize: '15px',
+                }}>{iniciales(selectedBeneficiary?.full_name)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: C.tinta }}>
+                    {selectedBeneficiary?.full_name}
+                  </p>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: C.suave }}>
+                    {esPagoMovil ? 'Pago Móvil' : 'Transferencia bancaria'}
+                  </p>
+                </div>
+              </div>
+
+              <dl style={{ margin: 0, display: 'grid', gap: '9px' }}>
+                {[
+                  ['Banco', nombreDelBanco(selectedBeneficiary, VENEZUELAN_BANKS)],
+                  ['Cédula', selectedBeneficiary?.id_document || '—'],
+                  esPagoMovil
+                    ? ['Teléfono', telefonoLegible(selectedBeneficiary?.phone_number)]
+                    // La cuenta va COMPLETA acá y abreviada en la lista: éste es
+                    // el momento de comprobarla dígito por dígito.
+                    : ['Cuenta', selectedBeneficiary?.account_number || '—'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', gap: '12px',
+                    justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <dt style={{ fontSize: '13px', color: C.suave, flexShrink: 0 }}>{k}</dt>
+                    <dd style={{ margin: 0, fontSize: '13.5px', fontWeight: 600,
+                      color: C.tinta, textAlign: 'right', wordBreak: 'break-all' }}>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div style={{ marginBottom: '18px' }}>
+              <Aviso>
+                El envío queda registrado al confirmar y se procesa en breve. Vas
+                a poder seguirlo desde tu historial.
+              </Aviso>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Boton onClick={() => setStep(3)}>Atrás</Boton>
+              <Boton tipo="exito" ancho onClick={pedirConfirmacion}
+                disabled={loading || !validacion.ok} testid="confirm-send" Icono={ShieldCheck}>
+                {loading ? 'Procesando…' : 'Confirmar envío'}
+              </Boton>
+            </div>
+
+            <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={handleSend} />
+          </div>
+        ) : null}
+
+        {showNewBeneficiary ? (
+          <div
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(16,24,40,.55)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '16px', zIndex: 50,
+            }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowNewBeneficiary(false); }}>
+            <div
+              role="dialog" aria-modal="true" aria-label="Nuevo beneficiario"
+              style={{
+                background: C.lienzo, borderRadius: '18px', padding: '22px',
+                width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto',
+              }}
+              onClick={(e) => { e.stopPropagation(); setShowBankDropdown(false); }}>
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px',
+                marginBottom: '20px' }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700, color: C.tinta, margin: 0 }}>
+                    Nuevo beneficiario
+                  </h3>
+                  <p style={{ fontSize: '13px', color: C.suave, margin: '3px 0 0 0' }}>
+                    {esPagoMovil ? 'Pago Móvil' : 'Transferencia bancaria'}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setShowNewBeneficiary(false)}
+                  aria-label="Cerrar" className="env-tap"
+                  style={{
+                    width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
+                    background: C.lienzo, border: `1px solid ${C.linea}`, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                  <X size={18} color={C.suave} />
                 </button>
               </div>
 
-              {/* Pago Móvil Form */}
-              {paymentType === 'pago_movil' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Nombre completo *</label>
-                    <input 
-                      type="text" 
-                      value={newBeneficiaryPM.full_name} 
-                      onChange={(e) => setNewBeneficiaryPM({...newBeneficiaryPM, full_name: e.target.value})} 
-                      style={inputStyle} 
-                      placeholder="Nombre del beneficiario" 
-                      data-testid="pm-fullname"
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div>
+                  <label style={etiqueta} htmlFor="ben-nombre">Nombre completo</label>
+                  <input
+                    className="env-campo" id="ben-nombre" type="text" style={campo}
+                    placeholder="Como figura en su cédula"
+                    value={esPagoMovil ? newBeneficiaryPM.full_name : newBeneficiaryTR.full_name}
+                    onChange={(e) => (esPagoMovil
+                      ? setNewBeneficiaryPM({ ...newBeneficiaryPM, full_name: e.target.value })
+                      : setNewBeneficiaryTR({ ...newBeneficiaryTR, full_name: e.target.value }))}
+                    data-testid={esPagoMovil ? 'pm-fullname' : 'tr-fullname'}
+                  />
+                </div>
+
+                <div>
+                  <label style={etiqueta} htmlFor="ben-cedula">Cédula</label>
+                  <input
+                    className="env-campo" id="ben-cedula" type="text" inputMode="numeric"
+                    style={campo} placeholder="12345678"
+                    value={esPagoMovil ? newBeneficiaryPM.cedula : newBeneficiaryTR.cedula}
+                    onChange={(e) => {
+                      const v = onlyNumbers(e.target.value);
+                      return esPagoMovil
+                        ? setNewBeneficiaryPM({ ...newBeneficiaryPM, cedula: v })
+                        : setNewBeneficiaryTR({ ...newBeneficiaryTR, cedula: v });
+                    }}
+                    data-testid={esPagoMovil ? 'pm-cedula' : 'tr-cedula'}
+                  />
+                  <p style={ayuda}>Sólo los números, sin la V ni puntos.</p>
+                </div>
+
+                <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                  <label style={etiqueta} htmlFor="banco-buscar">Banco</label>
+
+                  {/* Lo elegido se muestra COMO DATO, no dentro del buscador.
+                      Antes el input mostraba el banco elegido y al enfocarlo se
+                      vaciaba: parecía que se había perdido la elección. */}
+                  {bancoElegido ? (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '8px',
+                      padding: '10px 12px', borderRadius: '10px',
+                      background: C.marcaSuave, border: `1px solid ${C.marcaBorde}`,
+                    }}>
+                      <Building2 size={16} color={C.marca} />
+                      <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: C.tinta }}>
+                        {bancoElegido.name}
+                      </span>
+                      <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '12.5px',
+                        fontWeight: 700, color: C.marca }}>{bancoElegido.code}</span>
+                    </div>
+                  ) : null}
+
+                  <div style={{ position: 'relative' }}>
+                    <Search size={17} color={C.tenue} style={{
+                      position: 'absolute', left: '14px', top: '50%',
+                      transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 1 }} />
+                    <input
+                      className="env-campo" id="banco-buscar" type="text" value={bankSearch}
+                      onChange={(e) => { setBankSearch(e.target.value); setShowBankDropdown(true); }}
+                      onFocus={() => setShowBankDropdown(true)}
+                      placeholder={bancoElegido ? 'Buscar otro banco…' : 'Buscá por nombre o código…'}
+                      style={{ ...campo, paddingLeft: '42px' }}
+                      data-testid="bank-search-input"
                     />
                   </div>
+
+                  {showBankDropdown ? (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60,
+                      background: C.lienzo, borderRadius: '12px', marginTop: '6px',
+                      boxShadow: '0 12px 32px rgba(16,24,40,.14)', maxHeight: '240px',
+                      overflowY: 'auto', border: `1px solid ${C.linea}`,
+                    }}>
+                      {filteredBanks.length === 0 ? (
+                        <p style={{ padding: '16px', textAlign: 'center', color: C.suave,
+                          fontSize: '13.5px', margin: 0 }}>No encontramos ese banco.</p>
+                      ) : filteredBanks.map((bank) => (
+                        <button
+                          key={bank.code} type="button" onClick={() => handleSelectBank(bank)}
+                          data-testid={`bank-option-${bank.code}`}
+                          style={{
+                            width: '100%', padding: '11px 14px', border: 'none',
+                            background: 'transparent', textAlign: 'left', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '11px',
+                            borderBottom: `1px solid ${C.fondo}`,
+                          }}>
+                          <span style={{
+                            fontSize: '12px', fontWeight: 700, color: C.marca,
+                            background: C.marcaSuave, padding: '4px 7px', borderRadius: '6px',
+                            fontFamily: 'ui-monospace, monospace', flexShrink: 0,
+                          }}>{bank.code}</span>
+                          <span style={{ fontSize: '14px', color: C.texto }}>{bank.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                {esPagoMovil ? (
                   <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Cédula * (solo números)</label>
-                    <input 
-                      type="text" 
-                      value={newBeneficiaryPM.cedula} 
-                      onChange={(e) => setNewBeneficiaryPM({...newBeneficiaryPM, cedula: onlyNumbers(e.target.value)})} 
-                      style={inputStyle} 
-                      placeholder="12345678" 
-                      inputMode="numeric"
-                      data-testid="pm-cedula"
-                    />
-                  </div>
-                  {renderBankSearch('pago_movil')}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Teléfono * (11 dígitos)</label>
-                    <input 
-                      type="text" 
-                      value={newBeneficiaryPM.phone} 
-                      onChange={(e) => setNewBeneficiaryPM({...newBeneficiaryPM, phone: onlyNumbers(e.target.value).slice(0, 11)})} 
-                      style={inputStyle} 
-                      placeholder="04141234567" 
-                      inputMode="numeric"
-                      maxLength={11}
+                    <label style={etiqueta} htmlFor="ben-telefono">Teléfono</label>
+                    <input
+                      className="env-campo" id="ben-telefono" type="text" inputMode="numeric"
+                      maxLength={11} style={campo} placeholder="04141234567"
+                      value={newBeneficiaryPM.phone}
+                      onChange={(e) => setNewBeneficiaryPM({
+                        ...newBeneficiaryPM, phone: onlyNumbers(e.target.value).slice(0, 11) })}
                       data-testid="pm-phone"
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Ejemplo: 04141234567</p>
+                    <p style={ayuda}>11 dígitos, empezando por 04. Ejemplo: 04141234567.</p>
                   </div>
-                  <button onClick={handleSaveBeneficiary} disabled={loading} style={{ ...buttonPrimaryStyle, marginTop: '8px', opacity: loading ? 0.5 : 1 }} data-testid="save-beneficiary-pm">
-                    {loading ? 'Guardando...' : 'Guardar beneficiario'}
-                  </button>
-                </div>
-              )}
-
-              {/* Transferencia Form */}
-              {paymentType === 'transferencia' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                ) : (
                   <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Nombre completo *</label>
-                    <input 
-                      type="text" 
-                      value={newBeneficiaryTR.full_name} 
-                      onChange={(e) => setNewBeneficiaryTR({...newBeneficiaryTR, full_name: e.target.value})} 
-                      style={inputStyle} 
-                      placeholder="Nombre del beneficiario" 
-                      data-testid="tr-fullname"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Cédula * (solo números)</label>
-                    <input 
-                      type="text" 
-                      value={newBeneficiaryTR.cedula} 
-                      onChange={(e) => setNewBeneficiaryTR({...newBeneficiaryTR, cedula: onlyNumbers(e.target.value)})} 
-                      style={inputStyle} 
-                      placeholder="12345678" 
-                      inputMode="numeric"
-                      data-testid="tr-cedula"
-                    />
-                  </div>
-                  {renderBankSearch('transferencia')}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Número de cuenta * (20 dígitos)</label>
-                    <input 
-                      type="text" 
-                      value={newBeneficiaryTR.account_number} 
-                      onChange={(e) => setNewBeneficiaryTR({...newBeneficiaryTR, account_number: onlyNumbers(e.target.value).slice(0, 20)})} 
-                      style={inputStyle} 
-                      placeholder="01340123456789012345" 
-                      inputMode="numeric"
-                      maxLength={20}
+                    <label style={etiqueta} htmlFor="ben-cuenta">Número de cuenta</label>
+                    <input
+                      className="env-campo" id="ben-cuenta" type="text" inputMode="numeric"
+                      maxLength={20} placeholder="01340123456789012345"
+                      style={{ ...campo, fontFamily: 'ui-monospace, monospace' }}
+                      value={newBeneficiaryTR.account_number}
+                      onChange={(e) => setNewBeneficiaryTR({
+                        ...newBeneficiaryTR,
+                        account_number: onlyNumbers(e.target.value).slice(0, 20) })}
                       data-testid="tr-account"
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>20 dígitos sin espacios ni guiones</p>
+                    <p style={ayuda}>
+                      20 dígitos, sin espacios ni guiones.
+                      {newBeneficiaryTR.account_number.length > 0
+                        ? ` Llevás ${newBeneficiaryTR.account_number.length} de 20.` : ''}
+                    </p>
                   </div>
-                  <button onClick={handleSaveBeneficiary} disabled={loading} style={{ ...buttonPrimaryStyle, marginTop: '8px', opacity: loading ? 0.5 : 1 }} data-testid="save-beneficiary-tr">
-                    {loading ? 'Guardando...' : 'Guardar beneficiario'}
-                  </button>
-                </div>
-              )}
+                )}
+
+                <Boton tipo="primario" ancho onClick={handleSaveBeneficiary} disabled={loading}
+                  testid={esPagoMovil ? 'save-beneficiary-pm' : 'save-beneficiary-tr'}>
+                  {loading ? 'Guardando…' : 'Guardar beneficiario'}
+                </Boton>
+              </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
