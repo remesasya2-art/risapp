@@ -55,3 +55,37 @@ jobs:
         # Sin variable de servidor: los tests de integración HTTP se saltan
         # solos en vez de salir a la red. Ver tests/conftest.py.
         run: python -m pytest tests/ -q --no-header
+
+  # Hasta ahora CI no miraba el frontend en absoluto: ni que compilara. El bug
+  # que motivó esto —un `useEffect` adentro de un manejador de eventos, en el
+  # panel de administración— pasó por acá sin que nada se quejara.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # `npm install` y no `npm ci` porque no hay package-lock.json en el
+      # repositorio. Eso significa que CI puede instalar versiones distintas de
+      # las que se probaron. Es una deuda anotada, no un descuido: generar el
+      # candado fija lo que resuelva hoy, y es una decisión del operador.
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: "[BLOQUEANTE] Que compile"
+        working-directory: frontend
+        run: npm run build
+
+      - name: "[BLOQUEANTE] Reglas que ya rompieron la aplicación"
+        working-directory: frontend
+        run: node scripts/lint-bloqueante.mjs
+
+      - name: "[INFO] Lint completo (no bloquea)"
+        working-directory: frontend
+        run: npm run lint
+        continue-on-error: true

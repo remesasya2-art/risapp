@@ -678,6 +678,30 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   };
 
+  // Las órdenes BTC se cargan al abrir la pestaña.
+  //
+  // Este efecto estaba escrito DENTRO de `handleMarcarBtcEnviado`, después de
+  // su propio `finally`, por una llave mal puesta. Dos consecuencias, las dos
+  // en producción:
+  //
+  //   1. Al abrir la pestaña BTC no se registraba ningún efecto, así que la
+  //      lista salía vacía. La única forma de ver las órdenes era el botón de
+  //      refrescar. Una orden pendiente que nadie ve es una persona esperando.
+  //   2. Marcar una orden como enviada llamaba a `useEffect` dentro de una
+  //      función async: «Invalid hook call», y la pantalla se caía justo
+  //      después de haber mandado la plata.
+  //
+  // Nada fallaba al compilar y el linter lo marcaba entre otros 150 avisos.
+  useEffect(() => {
+    if (activeTab === 'btc') {
+      fetchBtcOrdenesPendientes();
+    }
+    // `fetchBtcOrdenesPendientes` se redefine en cada render y ponerla en las
+    // dependencias volvería a pedir las órdenes todo el tiempo. Lo que tiene
+    // que disparar la carga es cambiar de pestaña, y eso es `activeTab`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   const handleComprobanteSelect = (remesa_id, file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -698,14 +722,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     } finally {
       setMarcandoBtc(null);
     }
-
-  // Load BTC orders when BTC tab is active
-  useEffect(() => {
-    if (activeTab === 'btc') {
-      fetchBtcOrdenesPendientes();
-    }
-  }, [activeTab]);
-
   };
 
   return (

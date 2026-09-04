@@ -28,7 +28,19 @@ export default function Recharge() {
   const [proofImage, setProofImage] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, completed, expired, cancelled
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutos en segundos
-  const [checkingPayment, setCheckingPayment] = useState(false);
+  // «Hay un pedido en vuelo» se guarda en una ref y no en el estado.
+  //
+  // Estaba en `useState`, y ahí la guarda no frenaba nada: el `setInterval`
+  // que consulta el pago cada 5 s captura la función del render en que se
+  // armó, y esa función ve para siempre el `checkingPayment` de ESE render
+  // —falso—. Se comprobó simulando el ciclo: con la guarda por estado, 8 de
+  // 9 consultas se solapaban; con la ref, ninguna.
+  //
+  // Lo que costaba: si la respuesta tardaba más que los 5 s del poll, dos
+  // consultas volvían juntas con «pagado», y el usuario veía el aviso de
+  // pago confirmado dos veces. Una ref no vive en el render, así que la
+  // función vieja y la nueva miran el mismo valor.
+  const consultaEnVuelo = useRef(false);
   const [loadingPending, setLoadingPending] = useState(true);
   const timerRef = useRef(null);
   const pollRef = useRef(null);
@@ -112,9 +124,9 @@ export default function Recharge() {
   }, [step, pixData, paymentStatus]);
 
   const checkPaymentStatus = async () => {
-    if (!pixData?.payment_id || checkingPayment) return;
-    
-    setCheckingPayment(true);
+    if (!pixData?.payment_id || consultaEnVuelo.current) return;
+
+    consultaEnVuelo.current = true;
     try {
       const response = await api.get(`/gestor/pix/status/${pixData.payment_id}`);
       const status = response.data.status;
@@ -139,7 +151,7 @@ export default function Recharge() {
     } catch (error) {
       console.error('Error checking payment status:', error);
     } finally {
-      setCheckingPayment(false);
+      consultaEnVuelo.current = false;
     }
   };
 
