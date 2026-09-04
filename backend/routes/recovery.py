@@ -11,6 +11,8 @@ from pydantic import BaseModel, EmailStr
 from pymongo import ReturnDocument
 
 from database import db
+from services import registro
+from services import sesiones
 from services.email_notifications import send_email
 
 logger = logging.getLogger(__name__)
@@ -127,7 +129,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
                 </div>
                 """
             )
-            logger.info(f"Recovery code sent to {data.email}")
+            logger.info("Código de recuperación enviado a %s", registro.correo(data.email))
         except Exception as e:
             logger.error(f"Failed to send recovery email: {e}")
             raise HTTPException(status_code=500, detail="Error al enviar el código. Intenta nuevamente.")
@@ -141,8 +143,14 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
 
 
 @router.post("/verify-code")
-async def verify_code(data: VerifyCodeRequest):
+async def verify_code(data: VerifyCodeRequest, request: Request):
     """Step 2: Verify the code sent to email"""
+    from routes.security_2fa import frenar
+
+    # 20/15min. Adentro hay un contador de intentos por solicitud, pero se lleva
+    # en el documento: pedir una solicitud nueva lo reinicia. El tope por IP es
+    # el que cuenta las pruebas sin importar cuántas solicitudes se abran.
+    frenar(request, "recovery.verify_code", "20/15minutes")
     
     # Find recovery attempt
     recovery = await db.password_recovery.find_one({
@@ -197,9 +205,14 @@ async def verify_code(data: VerifyCodeRequest):
 
 
 @router.post("/reset-password")
-async def reset_password(data: ResetPasswordRequest):
+async def reset_password(data: ResetPasswordRequest, request: Request):
     """Step 3: Set new password"""
-    
+    from routes.security_2fa import frenar
+
+    # 10/15min. El `recovery_token` son 128 bits al azar y no se adivina; lo que
+    # se frena es el costo de hashear una contraseña nueva en cada llamada.
+    frenar(request, "recovery.reset_password", "10/15minutes")
+
     # Validate password strength
     password = data.new_password
     errors = []
@@ -250,6 +263,11 @@ async def reset_password(data: ResetPasswordRequest):
         }
     )
     
+    # Quien resetea desde el código del correo no está adentro: no hay sesión
+    # actual que conservar, y si la cuenta estaba tomada, acá se lo saca.
+    await sesiones.cerrar_todas(db, recovery["user_id"],
+                                motivo="reseteo por recuperación")
+
     # Delete recovery record
     await db.password_recovery.delete_one({"_id": recovery["_id"]})
     
@@ -271,7 +289,7 @@ async def reset_password(data: ResetPasswordRequest):
     except Exception as e:
         logger.error(f"Failed to send confirmation email: {e}")
     
-    logger.info(f"Password reset successful for {data.email}")
+    logger.info("Contraseña restablecida para %s", registro.correo(data.email))
     
     return {
         "success": True,
@@ -280,9 +298,15 @@ async def reset_password(data: ResetPasswordRequest):
 
 
 @router.post("/support-contact")
-async def support_contact(data: SupportContactRequest):
+async def support_contact(data: SupportContactRequest, request: Request):
     """Send support contact request"""
-    
+    from routes.security_2fa import frenar
+
+    # 5/hora. Cada llamada manda un mensaje a soporte con texto que escribe
+    # quien llama. Sin tope, es una vía para llenar la bandeja de soporte y
+    # tapar los pedidos reales, que es donde termina doliendo.
+    frenar(request, "recovery.support_contact", "5/hour")
+
     # Validate message length
     if len(data.message) > 200:
         raise HTTPException(status_code=400, detail="El mensaje no puede exceder 200 caracteres")
@@ -314,7 +338,7 @@ async def support_contact(data: SupportContactRequest):
     })
     
     # Send notification to admin (optional - could be configured)
-    logger.info(f"Support request received: {support_id} from {data.email}")
+    logger.info("Pedido a soporte %s de %s", support_id, registro.correo(data.email))
     
     # Send confirmation to user
     try:

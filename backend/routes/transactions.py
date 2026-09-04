@@ -49,6 +49,7 @@ from services.idempotency import claim_idempotency, store_idempotency_result
 from services.notifications import create_notification
 from services.centro_gestion import registrar_evento
 from utils.helpers import get_next_withdrawal_id
+from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["transactions"])
@@ -1397,6 +1398,12 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     banco_elegido = (request.get("destination_bank") or request.get("bank") or "")
     banco_elegido = str(banco_elegido).strip()
     comprobante = request.get("proof_image") or request.get("voucher_image")
+    # El comprobante lo abre después un administrador desde el panel. Sin
+    # mirarlo acá, el campo es texto libre elegido por quien recarga.
+    try:
+        comprobante = limpiar_imagen_opcional(comprobante, campo="El comprobante")
+    except ImagenInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # SE RECHAZA ACA, NO EN LA APROBACION. Antes el servidor aceptaba una
     # solicitud que el mismo sabia que no iba a poder procesar, y el usuario se

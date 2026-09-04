@@ -104,27 +104,22 @@ async def obtener_catalogo(current_user: User = Depends(get_current_user)):
 
 
 def _ip_real(request) -> str | None:
-    """La IP del usuario, no la del proxy.
+    """La IP en la que se puede confiar, para dejarla asentada en el envío.
 
-    Detrás del edge de Railway, `request.client.host` es la misma para todos, y
-    este dato existe únicamente para el argumento legal que motiva la doble
-    aceptación: una IP idéntica para todo el mundo no distingue a nadie. El
-    proyecto ya resolvió esto en `routes/security_2fa.get_real_client_ip`, que
-    además es el `key_func` del rate limiter. Acá se repite el criterio en vez de
-    importarlo: importar un módulo de rutas desde otro, en tiempo de petición,
-    arrastra slowapi y media aplicación, y el `except` que eso obliga a poner
-    degradaba en silencio justo a la IP del proxy que se quería evitar. Hay un
-    test que compara las dos implementaciones para que no se separen.
+    ANTES TOMABA EL PRIMER VALOR DE X-FORWARDED-FOR, QUE LO ESCRIBE EL CLIENTE
+
+        Esa cabecera se arma por acumulación: cada proxy le agrega al final la
+        IP de quien le habló. El primero de la cadena no es «el cliente»: es lo
+        que el cliente quiso escribir. Guardarlo como la IP del envío llena el
+        registro de valores inventados justo cuando hace falta mirarlo.
+
+        La resolución correcta —de derecha a izquierda, y prefiriendo la
+        cabecera que escribe Cloudflare, que sí pisa lo que manda el cliente—
+        vive en `services/ip_cliente.py`, con sus pruebas, y la comparte con el
+        limitador de intentos.
     """
-    encabezado = ""
-    try:
-        encabezado = (request.headers.get("x-forwarded-for") or "").strip()
-    except Exception:                                         # pragma: no cover
-        encabezado = ""
-    if encabezado:
-        # El primero de la cadena es el cliente; los demás son proxies.
-        return encabezado.split(",")[0].strip() or None
-    return getattr(getattr(request, "client", None), "host", None)
+    from services.ip_cliente import ip_del_cliente
+    return ip_del_cliente(request) or None
 
 
 @router.post("/cotizar")
@@ -265,7 +260,7 @@ async def ver_foto(envio_id: str, asset_id: str,
 
 
 @router.get("/seguimiento/{token}")
-async def seguimiento(token: str):
+async def seguimiento(token: str, request: Request):
     """El seguimiento público. **Sin un solo dato personal.**
 
     El link se comparte por WhatsApp —al destinatario, a la familia, al grupo— y
@@ -276,7 +271,15 @@ async def seguimiento(token: str):
 
     Un token que no existe y uno mal formado dan la misma respuesta:
     distinguirlos convierte la ruta en un oráculo para adivinar tokens.
+
+    Y como las dos respuestas son iguales, lo único que le queda a quien quiere
+    adivinar es la cantidad de intentos. Por eso hay un tope: 60 cada 15 minutos,
+    holgado para un link que se comparte por WhatsApp y se recarga varias veces,
+    y muy corto para recorrer un espacio de tokens.
     """
+    from routes.security_2fa import frenar
+    frenar(request, "envios.seguimiento", "60/15minutes")
+
     datos = await envios_seguimiento.seguir(token)
     if not datos:
         raise HTTPException(404, "No encontramos ese envío.")

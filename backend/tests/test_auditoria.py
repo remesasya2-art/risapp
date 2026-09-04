@@ -46,11 +46,31 @@ def base():
 
 
 class _Pedido:
-    """Un request de mentira, con las cabeceras que pone el proxy de Railway."""
-    def __init__(self, ip="200.1.2.3", pais="VE", detras_de_proxy=True):
+    """Un request de mentira, con las cabeceras que pone el proxy de Railway.
+
+    LA CADENA VA AL REVES DE LO QUE PARECE
+
+        `X-Forwarded-For` se arma por acumulación: cada proxy le agrega AL FINAL
+        la IP de quien le habló. Detrás de un solo proxy la cabecera que llega
+        trae un valor, y lo escribió el proxy. Si trae dos, el primero lo puso
+        el cliente — y es justamente el que no hay que creerle.
+
+        Esta clase armaba antes `f"{ip}, 10.0.0.1"` y el test esperaba que se
+        guardara `ip`, o sea el valor del cliente. Con eso, cualquiera que
+        mandara `X-Forwarded-For: 200.1.2.3` a mano ensuciaba el libro de
+        auditoría con una IP inventada, que es el único dato del libro que se
+        mira cuando hace falta encontrar a alguien.
+
+        Ahora `ip` es lo que agrega el proxy —el último valor, el confiable— y
+        `dice_venir_de` es lo que el cliente escribió adelante para hacerse
+        pasar por otro.
+    """
+    def __init__(self, ip="200.1.2.3", pais="VE", detras_de_proxy=True,
+                 dice_venir_de=None):
         self.headers = {"user-agent": "Mozilla/5.0 prueba"}
         if detras_de_proxy:
-            self.headers["x-forwarded-for"] = f"{ip}, 10.0.0.1"
+            self.headers["x-forwarded-for"] = (
+                f"{dice_venir_de}, {ip}" if dice_venir_de else ip)
         self.headers["cf-ipcountry"] = pais
         self.client = type("C", (), {"host": "10.0.0.9"})()
 
@@ -90,7 +110,7 @@ def test_la_linea_guarda_todo_lo_que_hace_falta_para_investigar(base):
         assert linea["despues"] == {"permisos": ["users.view", "users.edit"]}
         # Desde dónde
         assert linea["origen"]["ip"] == "200.1.2.3", \
-            "tomó la IP del proxy en vez de la del cliente"
+            "no tomó la IP que escribió el proxy"
         assert linea["origen"]["pais"] == "VE"
         assert "Mozilla" in linea["origen"]["navegador"]
         # Cuándo, en las dos horas
@@ -121,6 +141,39 @@ def test_sin_request_el_origen_queda_en_nulo_no_inventado(base):
         await auditoria.registrar(base, "personal.alta", quien=ADMIN)
         linea = await base.auditoria.find_one({})
         assert linea["origen"] == {"ip": None, "pais": None, "navegador": None}
+    corre(caso())
+
+
+def test_UNA_IP_ESCRITA_A_MANO_NO_ENTRA_EN_EL_LIBRO(base):
+    """El libro de auditoría es el lugar donde MENOS puede entrar un dato que
+    eligió quien está siendo auditado.
+
+    El pedido llega con `X-Forwarded-For: 1.2.3.4, 200.1.2.3`. El «1.2.3.4» lo
+    escribió el cliente para hacerse pasar por otro; el «200.1.2.3» se lo agregó
+    el proxy y es el único de los dos que no se puede falsear desde afuera.
+    """
+    async def caso():
+        await auditoria.registrar(
+            base, "personal.alta", quien=ADMIN,
+            request=_Pedido(ip="200.1.2.3", dice_venir_de="1.2.3.4"),
+            objetivo_tipo="usuario", objetivo_id="x")
+        linea = await base.auditoria.find_one({})
+        assert linea["origen"]["ip"] == "200.1.2.3", \
+            "guardó la IP que eligió quien hizo el pedido"
+    corre(caso())
+
+
+def test_lo_que_escribe_cloudflare_le_gana_a_lo_que_diga_el_cliente(base):
+    """`CF-Connecting-IP` la pone Cloudflare PISANDO cualquier valor que venga
+    del cliente. Es la más confiable de las tres, así que va primero."""
+    async def caso():
+        pedido = _Pedido(ip="200.1.2.3", dice_venir_de="1.2.3.4")
+        pedido.headers["cf-connecting-ip"] = "190.8.8.8"
+        await auditoria.registrar(base, "personal.alta", quien=ADMIN,
+                                  request=pedido,
+                                  objetivo_tipo="usuario", objetivo_id="x")
+        linea = await base.auditoria.find_one({})
+        assert linea["origen"]["ip"] == "190.8.8.8"
     corre(caso())
 
 

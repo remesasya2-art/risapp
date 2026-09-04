@@ -113,6 +113,7 @@ const CODIGO = {
   integridad: 'C-03',
   llaves: 'C-04',
   movimientos: 'C-05',
+  cofre: 'C-06',
 };
 
 const HOJA = `
@@ -755,7 +756,9 @@ function Tablero({ tarjetas }) {
             <Sello estado={t.estado} tamano="chico" />
             {t.cifra !== null && t.cifra !== undefined ? (
               <span className="sf-num" style={{ fontSize: '13px', color: C.segundo }}>
-                {t.clave === 'pozo' ? monto(t.cifra) : entero(t.cifra)}{' '}
+                {t.clave === 'pozo' ? monto(t.cifra)
+                  : t.clave === 'cofre' ? t.cifra          /* la huella es texto */
+                    : entero(t.cifra)}{' '}
                 <span style={{ color: C.tenue, fontSize: '11px' }}>{t.unidad}</span>
               </span>
             ) : null}

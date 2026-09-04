@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCw, Download, RefreshCw } from 'lucide-react';
+import { bajarArchivo, rutaDeArchivo } from '../../utils/urlDeArchivo';
 
 /**
  * Fullscreen image lightbox with zoom in/out, rotation 90°, ESC to close.
@@ -67,16 +68,12 @@ export default function ImageLightbox({ images = [], index = 0, onClose }) {
   };
   const handleMouseUp = () => setDragging(false);
 
+  // Le ponía `href` al valor crudo y le hacía click. Un <a href="javascript:...">
+  // ejecuta ese código igual cuando el click lo da la página, así que el
+  // documento que subió un usuario podía correr JavaScript en la pantalla del
+  // administrador que lo estaba revisando.
   const download = () => {
-    if (!current?.url) return;
-    const a = document.createElement('a');
-    a.href = current.url;
-    a.download = (current.label || 'imagen').replace(/\s+/g, '_') + '.jpg';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    bajarArchivo(current?.url, (current?.label || 'imagen').replace(/\s+/g, '_') + '.jpg');
   };
 
   if (!current) return null;
@@ -150,7 +147,7 @@ export default function ImageLightbox({ images = [], index = 0, onClose }) {
         onMouseDown={handleMouseDown}
       >
         <img
-          src={current.url}
+          src={rutaDeArchivo(current.url)}
           alt={current.label || 'imagen'}
           draggable={false}
           style={{
@@ -180,7 +177,7 @@ export default function ImageLightbox({ images = [], index = 0, onClose }) {
                 opacity: i === currentIndex ? 1 : 0.6, background: '#000',
               }}
             >
-              <img src={img.url} alt={img.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={rutaDeArchivo(img.url)} alt={img.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </button>
           ))}
         </div>

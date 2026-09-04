@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { fmt, formatAccountNumber } from '../../utils/format';
+import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 
 const COLOR = {
   borde: '#e5e7eb', bordeFuerte: '#d1d5db',
@@ -841,8 +842,8 @@ function Detalle(props) {
                 position: 'relative', borderRadius: '9px', overflow: 'hidden',
                 border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
               }}>
-                <a href={img} target="_blank" rel="noreferrer" title="Abrir">
-                  <img src={img} alt={`Comprobante ${i + 1}`}
+                <a href={rutaDeArchivo(img)} target="_blank" rel="noreferrer" title="Abrir">
+                  <img src={rutaDeArchivo(img)} alt={`Comprobante ${i + 1}`}
                     style={{ width: '100%', height: '94px', objectFit: 'cover', display: 'block' }} />
                 </a>
                 {pendiente ? (

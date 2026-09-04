@@ -110,15 +110,21 @@ def _cuenta(base, *, rol="user", es_personal=False, uv_registrada=True, **extra)
     return doc
 
 
-def _entrar(base):
+def _pedido(ip="1.2.3.4"):
+    """Un request de mentira. Las dos rutas de huella cuentan intentos por IP,
+    así que cada test que llame varias veces necesita una IP distinta para no
+    chocar contra el tope de otro test."""
     class Req:
-        class client:
-            host = "1.2.3.4"
+        client = type("C", (), {"host": ip})()
         headers = {}
+    return Req()
+
+
+def _entrar(base, ip="1.2.3.4"):
     return corre(wa.login_verify(
         wa.LoginVerifyBody(email="quien@risapp.com",
                            credential={"id": "cred-1"}),
-        Req()))
+        _pedido(ip)))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -198,7 +204,8 @@ def test_el_reto_ya_pide_la_verificacion_y_no_recien_la_respuesta(base, libreria
     después, que se lee como 'no funciona' en vez de 'poné tu huella'."""
     _cuenta(base, rol="admin")
 
-    opciones = corre(wa.login_options(wa.LoginOptionsBody(email="quien@risapp.com")))
+    opciones = corre(wa.login_options(wa.LoginOptionsBody(email="quien@risapp.com"),
+                                      _pedido()))
 
     assert opciones["userVerification"] == UserVerificationRequirement.REQUIRED.value
 
@@ -206,7 +213,8 @@ def test_el_reto_ya_pide_la_verificacion_y_no_recien_la_respuesta(base, libreria
 def test_al_usuario_comun_con_huella_vieja_el_reto_no_se_la_exige(base, libreria):
     _cuenta(base, rol="user", uv_registrada=False)
 
-    opciones = corre(wa.login_options(wa.LoginOptionsBody(email="quien@risapp.com")))
+    opciones = corre(wa.login_options(wa.LoginOptionsBody(email="quien@risapp.com"),
+                                      _pedido()))
 
     assert opciones["userVerification"] == UserVerificationRequirement.PREFERRED.value
 

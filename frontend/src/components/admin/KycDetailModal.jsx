@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import ImageLightbox from '../common/ImageLightbox';
 import KycRejectModal from './KycRejectModal';
 import { formatRelativeTime, formatAbsoluteTime } from '../../utils/dates';
+import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 
 const STATUS_BADGE = {
   pending:  { bg: '#fef3c7', fg: '#92400e', label: 'Pendiente' },
@@ -68,7 +69,7 @@ function DocTile({ label, url, onOpen, autoRotate = 0 }) {
           }}
         >
           <img
-            src={url}
+            src={rutaDeArchivo(url)}
             alt={label}
             style={{
               width: '100%', height: '100%', objectFit: 'contain',
@@ -310,11 +311,11 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px', backgroundColor: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '14px' }}>
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Selfie</p>
-                  <img src={v.selfie_image} alt="Selfie" onClick={() => openLightbox('Selfie')} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
+                  <img src={rutaDeArchivo(v.selfie_image)} alt="Selfie" onClick={() => openLightbox('Selfie')} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Documento (frente)</p>
-                  <img src={v.id_document_image} alt="Documento" onClick={() => openLightbox(`${v.document_type_label || 'Documento'} (frente)`)} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
+                  <img src={rutaDeArchivo(v.id_document_image)} alt="Documento" onClick={() => openLightbox(`${v.document_type_label || 'Documento'} (frente)`)} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
                 </div>
               </div>
             )}

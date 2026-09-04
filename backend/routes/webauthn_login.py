@@ -245,7 +245,15 @@ async def delete_credential(credential_id: str, current_user: User = Depends(get
 # LOGIN con huella — público (el usuario aún no tiene sesión)
 # ---------------------------------------------------------------------------
 @router.post("/login/options")
-async def login_options(body: LoginOptionsBody):
+async def login_options(body: LoginOptionsBody, request: Request):
+    from routes.security_2fa import frenar
+
+    # 20/15min. La respuesta distingue entre «esta cuenta tiene huella» y «no»,
+    # así que sin tope es una lista de correos: se prueban de a miles y quedan
+    # los que existen. El mensaje genérico no alcanza cuando el 404 y el 200 ya
+    # dicen cosas distintas.
+    frenar(request, "webauthn.login_options", "20/15minutes")
+
     email = (body.email or "").lower().strip()
     user = await db.users.find_one({"email": email})
     creds = (user or {}).get("webauthn_credentials", []) or []
@@ -276,6 +284,12 @@ async def login_options(body: LoginOptionsBody):
 
 @router.post("/login/verify")
 async def login_verify(body: LoginVerifyBody, request: Request):
+    from routes.security_2fa import frenar
+
+    # 20/15min, el mismo tope que el ingreso con contraseña: es la otra puerta
+    # de la misma casa y no tiene por qué ser más floja.
+    frenar(request, "webauthn.login_verify", "20/15minutes")
+
     email = (body.email or "").lower().strip()
     user = await db.users.find_one({"email": email})
     if not user:

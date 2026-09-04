@@ -35,6 +35,7 @@ from services import nowpayments
 from services.credits import normalize_currency, CREDIT_LABELS, credit_user
 from services.min_amount import effective_min_amount
 from services.notifications import create_notification
+from services import registro
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +295,11 @@ async def nowpayments_webhook(request: Request):
         payload = json.loads(raw_body or b"{}")
     except Exception:
         payload = {}
-    logger.info(f"NOWPayments webhook recibido: {payload}")
+    # Sólo las claves elegidas: el cuerpo entero de un tercero no tiene por
+    # qué quedar en un registro que sale de nuestro perímetro.
+    logger.info("NOWPayments webhook: %s",
+                registro.resumen(payload, ["payment_status", "order_id",
+                                           "pay_currency", "price_currency"]))
     order_id = payload.get("order_id")
     payment_status = payload.get("payment_status")
     payment_id = payload.get("payment_id")

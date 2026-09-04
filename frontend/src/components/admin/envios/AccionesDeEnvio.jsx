@@ -24,6 +24,7 @@ import { Aviso, Boton, Campo, Cargando, Interruptor, Texto, Area } from '../../e
 import { COLOR, bajada, grilla, mensajeDeError, titulo } from '../../envios/estilos';
 import { DESVIOS, DESVIOS_LEGALES, claveDe, olvidarClave } from './operacion';
 import { imprimirTicket } from './ticket';
+import { rutaDeArchivo } from '../../../utils/urlDeArchivo';
 
 const MEDIDAS = [['peso_kg', 'Peso (kg)'], ['largo_cm', 'Largo (cm)'],
   ['ancho_cm', 'Ancho (cm)'], ['alto_cm', 'Alto (cm)']];
@@ -177,17 +178,17 @@ function Comprobante({ envio }) {
         </Aviso>
       ) : esPdf ? (
         <div>
-          <embed src={estado.url} type="application/pdf"
+          <embed src={rutaDeArchivo(estado.url)} type="application/pdf"
             style={{ width: '100%', height: '380px', borderRadius: '12px',
               border: `1px solid ${COLOR.borde}` }} />
-          <a href={estado.url} target="_blank" rel="noreferrer"
+          <a href={rutaDeArchivo(estado.url)} target="_blank" rel="noreferrer"
             style={{ fontSize: '13px', color: COLOR.primarioOscuro }}>
             Abrir el PDF en otra pestaña
           </a>
         </div>
       ) : (
-        <a href={estado.url} target="_blank" rel="noreferrer">
-          <img src={estado.url} alt="Comprobante de despacho"
+        <a href={rutaDeArchivo(estado.url)} target="_blank" rel="noreferrer">
+          <img src={rutaDeArchivo(estado.url)} alt="Comprobante de despacho"
             style={{ maxWidth: '100%', maxHeight: '380px', borderRadius: '12px',
               border: `1px solid ${COLOR.borde}`, display: 'block' }} />
         </a>

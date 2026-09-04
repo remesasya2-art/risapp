@@ -46,6 +46,8 @@ LO QUE ESTE MODULO TODAVIA NO CUBRE
 
 import logging
 
+from services import registro
+
 logger = logging.getLogger(__name__)
 
 # ─── La regla, en numeros ─────────────────────────────────────────────────
@@ -210,6 +212,7 @@ async def notify_if_exhausted(user_doc_despues: dict | None) -> bool:
             )
             await send_email(email, titulo, html)
         except Exception as e:
-            logger.warning(f"kyc_quota: no se pudo enviar el mail a {email}: {e}")
+            logger.warning("kyc_quota: no se pudo enviar el mail a %s: %s",
+                           registro.correo(email), e)
 
     return True

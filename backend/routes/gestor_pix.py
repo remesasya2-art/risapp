@@ -7,6 +7,8 @@ import json
 import logging
 import os
 import hmac
+
+from services import registro
 import hashlib
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,6 +24,12 @@ from services.notifications import create_notification
 from services.email_notifications import notify_pix_received, notify_recharge_success
 
 logger = logging.getLogger(__name__)
+# Cuánto vale una notificación firmada antes de considerarla vieja. El mismo
+# número que usa el webhook de Blink en `routes/btc_lightning.py`: dos webhooks
+# del mismo servidor no tienen por qué tener criterios distintos.
+VENTANA_WEBHOOK_SEGUNDOS = 300
+
+
 router = APIRouter(prefix="/gestor/pix", tags=["gestor-pix"])
 
 # Import Mercado Pago service
@@ -538,7 +546,10 @@ async def mercadopago_webhook(request: Request):
     4. Idempotency via processed_webhooks (TTL).
     5. Log all webhook activity for audit.
     """
-    import os, hmac, hashlib
+    import hashlib
+    import hmac
+    import os
+    import time
     
     try:
         # ── 1. Signature verification ────────────────────────────────────
@@ -570,6 +581,32 @@ async def mercadopago_webhook(request: Request):
                     f"ts={bool(ts)} v1={bool(v1)} data_id={bool(data_id)} req_id={bool(x_request_id)}"
                 )
                 raise HTTPException(status_code=401, detail="missing_signature")
+
+            # ── Frescura ──────────────────────────────────────────────────
+            #
+            # El `ts` va adentro del manifiesto firmado, así que no se puede
+            # cambiar sin romper la firma. Pero si no se MIRA, una notificación
+            # capturada una vez sigue siendo válida para siempre: se reenvía
+            # cuando se quiera y el servidor la vuelve a atender.
+            #
+            # Acreditar dos veces no puede: más abajo se exige que el pago
+            # siga en "pending" y se le vuelve a preguntar a Mercado Pago. Lo
+            # que se evita es lo otro — que cada reenvío gaste una consulta a
+            # la API de MP, que está limitada, y que el registro se llene de
+            # eventos viejos que no distinguen un reintento legítimo de uno
+            # fabricado.
+            #
+            # Cinco minutos, la misma ventana que ya usa el webhook de Blink.
+            # No hay razón para que dos webhooks del mismo servidor tengan
+            # criterios distintos.
+            try:
+                if abs(time.time() - int(ts)) > VENTANA_WEBHOOK_SEGUNDOS:
+                    logger.warning(
+                        f"MP webhook con ts fuera de ventana (data_id={data_id})")
+                    raise HTTPException(status_code=401, detail="stale_signature")
+            except (TypeError, ValueError):
+                logger.warning(f"MP webhook con ts ilegible (data_id={data_id})")
+                raise HTTPException(status_code=401, detail="invalid_timestamp")
             
             manifest = f"id:{data_id};request-id:{x_request_id};ts:{ts};"
             expected = hmac.new(
@@ -597,7 +634,12 @@ async def mercadopago_webhook(request: Request):
         except Exception:
             payload = {}
         
-        logger.info(f"Mercado Pago webhook received: {payload}")
+        # Antes: `{payload}`, o sea lo que el proveedor mande, hoy y siempre.
+        # Hoy son campos inocuos; el día que agreguen el nombre del pagador
+        # entra al registro sin que nadie lo haya decidido. Ahora las claves se
+        # piden a mano y lo nuevo no entra solo.
+        logger.info("Mercado Pago webhook: %s",
+                    registro.resumen(payload, ["type", "action", "live_mode"]))
         
         # Get the event type and payment ID
         event_type = payload.get("type") or payload.get("action")

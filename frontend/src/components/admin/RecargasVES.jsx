@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { fmt } from '../../utils/format';
+import { rutaDeArchivo, sePuedeAbrir } from '../../utils/urlDeArchivo';
 
 const COLOR = {
   fondo: '#f7f8fa',
@@ -714,14 +715,14 @@ function Detalle(props) {
     <div style={{ padding: '14px 16px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
 
       {/* El comprobante, grande: es lo único que hay que MIRAR. */}
-      {r.proof_image ? (
-        <a href={r.proof_image} target="_blank" rel="noreferrer" title="Abrir el comprobante"
+      {sePuedeAbrir(r.proof_image) ? (
+        <a href={rutaDeArchivo(r.proof_image)} target="_blank" rel="noreferrer" title="Abrir el comprobante"
           style={{
             flexShrink: 0, display: 'block', width: '150px', height: '150px',
             borderRadius: '10px', overflow: 'hidden', cursor: 'zoom-in',
             border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
           }}>
-          <img src={r.proof_image} alt="Comprobante"
+          <img src={rutaDeArchivo(r.proof_image)} alt="Comprobante"
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </a>
       ) : (

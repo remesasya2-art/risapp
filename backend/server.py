@@ -159,6 +159,24 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Envios indexes warning: {e}")
     try:
+        # El cofre de los documentos del KYC. Se revisa al arrancar para que una
+        # llave equivocada se vea en el primer segundo y no dentro de tres meses,
+        # cuando alguien necesite abrir un documento y no pueda.
+        #
+        # Un problema acá NO tumba la aplicación: las remesas siguen andando y
+        # lo único que falla es el KYC, con un error claro. Ver services/cofre.py.
+        from services import cofre
+        await cofre.sellar_testigo(db)
+        estado_cofre = await cofre.revisar(db)
+        if not estado_cofre["ok"]:
+            logger.error("COFRE: %s", estado_cofre["detalle"])
+        else:
+            logger.info("Cofre en modo «%s» (huella %s): %s",
+                        estado_cofre["modo"], estado_cofre["huella"],
+                        estado_cofre["detalle"])
+    except Exception as e:
+        logger.warning(f"Cofre: no se pudo revisar al arrancar: {e}")
+    try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
     except Exception as e:
@@ -173,10 +191,33 @@ async def lifespan(app):
     client.close()
 
 
-# Create FastAPI app
-app = FastAPI(title="RIS App API", version="2.1.0", lifespan=lifespan)
+# ============================================================================
+# LA DOCUMENTACION AUTOMATICA NO SE PUBLICA
+# ============================================================================
+#
+# FastAPI publica `/docs`, `/redoc` y `/openapi.json` sin pedir nada. Eso es el
+# mapa completo de la API: las 337 rutas, con sus parámetros, sus tipos y sus
+# nombres — incluidas las de administración, las del puente con adminbrl y las
+# de mantenimiento. Ninguna deja de estar protegida por eso, pero saber que
+# `/api/admin/fix-media-urls` existe y qué recibe es la mitad del trabajo de
+# quien está buscando por dónde entrar, y no hay una sola razón para regalarlo.
+#
+# En desarrollo hace falta, así que se puede prender con una variable de
+# entorno. El valor por defecto es apagado: lo que se olvida de configurar tiene
+# que quedar del lado seguro.
+_DOCS_ABIERTAS = os.getenv("EXPONER_DOCUMENTACION_API", "").strip().lower() in ("1", "true", "si", "yes")
+
+app = FastAPI(
+    title="RIS App API",
+    version="2.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ABIERTAS else None,
+    redoc_url="/redoc" if _DOCS_ABIERTAS else None,
+    openapi_url="/openapi.json" if _DOCS_ABIERTAS else None,
+)
 
 # Rate limiter wiring (from routes.security_2fa)
+from services import csp
 from routes.security_2fa import limiter as security_limiter
 app.state.limiter = security_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -190,12 +231,35 @@ async def security_headers_middleware(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # La política de contenido, incluida `script-src`, sale de services/csp.py.
+    # Arranca en modo REPORTE: el navegador no bloquea nada y avisa lo que
+    # habría bloqueado, para poder completarla con tráfico real antes de que
+    # corte un pago. `CSP_MODO=exigir` la pasa a bloquear.
+    cabecera_csp = csp.cabecera()
+    if cabecera_csp:
+        nombre, valor = cabecera_csp
+        response.headers[nombre] = valor
+        # Le dice al navegador dónde mandar los avisos de `report-to`.
+        response.headers["Reporting-Endpoints"] = f'csp="{csp.RUTA_DE_REPORTE}"'
     return response
 
 # CORS configuration
 raworigins = os.getenv("ALLOWED_ORIGINS", "https://risappbr.com,https://www.risappbr.com")
 ALLOWED_ORIGINS = [o.strip() for o in raworigins.split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# EL TOPE DEL CUERPO VA REGISTRADO ULTIMO, Y ESO ES LO QUE LO PONE PRIMERO.
+#
+# Starlette envuelve al revés: `add_middleware` inserta al principio de la
+# lista, así que el ULTIMO que se registra queda por fuera de todos y es el
+# primero que ve el pedido. Registrarlo arriba de este archivo —que es lo que
+# parece «primero»— lo dejaba pegado a la ruta, con CORS y el limitador de
+# intentos haciendo su trabajo sobre un pedido de varios gigabytes antes de que
+# nadie lo cortara.
+#
+# Ver services/limite_de_cuerpo.py.
+from services.limite_de_cuerpo import LimiteDeCuerpo
+app.add_middleware(LimiteDeCuerpo)
 security = HTTPBearer()
 
 # ============================================================================

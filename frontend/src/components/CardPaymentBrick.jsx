@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CardPayment } from '@mercadopago/sdk-react';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
+import { urlDeArchivoSegura } from '../utils/urlDeArchivo';
 import toast from 'react-hot-toast';
 import {
   CreditCard, Loader2, CheckCircle, XCircle, AlertTriangle, Info, ExternalLink,
@@ -343,7 +344,7 @@ function InternationalTips() {
         {tips.map((t) => (
           <a
             key={t.title}
-            href={t.url}
+            href={urlDeArchivoSegura(t.url)}
             target="_blank"
             rel="noopener noreferrer"
             style={{

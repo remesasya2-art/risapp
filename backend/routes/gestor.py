@@ -277,7 +277,7 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
         data={"transaction_id": tx_id, "amount_ves": amount_ves}
     )
     
-    logger.info(f"Gestor transaction {tx_id} created by {current_user.user_id} for client {request.client_name}")
+    logger.info(f"Gestor transaction {tx_id} created by {current_user.user_id} for a client")
     
     return {
         "message": "Transacción registrada exitosamente",

@@ -12,6 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from database import db
+from services import sesiones
 from services.money import from_db, to_float, to_decimal128
 from models.user import User, UserSession
 from models.requests import (
@@ -59,8 +60,16 @@ async def logout(request: Request, response: Response, current_user: User = Depe
     return {"message": "Sesión cerrada exitosamente"}
 
 @router.post("/register")
-async def register_user(request: RegisterUserRequest):
+async def register_user(request: RegisterUserRequest, pedido: Request):
     """Register new user with email verification"""
+    from routes.security_2fa import frenar
+
+    # 10/hora. Cada llamada crea una cuenta pendiente y manda un correo desde
+    # NUESTRO dominio: sin tope, una IP puede fabricar cuentas en volumen y, de
+    # paso, usar el servidor para bombardear una casilla ajena. Diez por hora es
+    # holgado para una persona y cierra las dos cosas.
+    frenar(pedido, "auth.register", "10/hour")
+
     # Validate email
     email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
     if not re.match(email_regex, request.email):
@@ -120,8 +129,17 @@ async def register_user(request: RegisterUserRequest):
     }
 
 @router.post("/verify-email")
-async def verify_email_code(request: VerifyEmailCodeRequest, response: Response):
+async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
+                            pedido: Request):
     """Verify email code and complete registration"""
+    from routes.security_2fa import frenar
+
+    # 20/15min. Adentro hay un contador de cinco intentos por solicitud, pero
+    # `resend-verification-code` lo devuelve a cero. Ese reenvío ya está frenado
+    # a 5/15min, así que el techo era 25 pruebas cada 15 minutos contra un código
+    # de seis dígitos; ahora hay además un tope que no depende de esa cadena.
+    frenar(pedido, "auth.verify_email", "20/15minutes")
+
     email_lower = request.email.lower().strip()
     
     pending = await db.pending_verifications.find_one({"email": email_lower})
@@ -394,8 +412,16 @@ async def request_password_reset(request: Request, body: RequestPasswordResetReq
     return await _do_request_reset(request, body)
 
 @router.post("/reset-password")
-async def reset_password(request: ResetPasswordRequest):
+async def reset_password(request: ResetPasswordRequest, pedido: Request):
     """Reset password with temp password"""
+    from routes.security_2fa import frenar
+
+    # 10/15min. La contraseña temporal son 12 caracteres al azar, así que
+    # adivinarla no es el riesgo. El riesgo es el COSTO: cada llamada corre
+    # bcrypt, que gasta CPU a propósito. Sin tope, un pedido por segundo desde
+    # una sola IP ocupa el servidor sin necesitar ninguna credencial.
+    frenar(pedido, "auth.reset_password", "10/15minutes")
+
     email_lower = request.email.lower().strip()
     
     user = await db.users.find_one({"email": email_lower})
@@ -440,11 +466,17 @@ async def reset_password(request: ResetPasswordRequest):
             }
         }
     )
-    
+
+    # A esta ruta se llega desde el correo, sin estar adentro: no hay sesión
+    # actual que conservar. Si alguien tenía la cuenta tomada, acá se lo saca.
+    await sesiones.cerrar_todas(db, user.get("user_id"),
+                                motivo="reseteo con contraseña temporal")
+
     return {"message": "Contraseña actualizada exitosamente"}
 
 @router.post("/change-password")
-async def change_password(request: ChangePasswordRequest, current_user: User = Depends(get_current_user)):
+async def change_password(request: ChangePasswordRequest, pedido: Request,
+                          current_user: User = Depends(get_current_user)):
     """Change password for logged in user"""
     user = await db.users.find_one({"user_id": current_user.user_id})
     
@@ -468,6 +500,15 @@ async def change_password(request: ChangePasswordRequest, current_user: User = D
         }
     )
     
+    # Cambiar la contraseña es lo que hace alguien que sospecha que le entraron
+    # a la cuenta. Si las demás sesiones sobreviven, ese gesto no sirve de nada.
+    # Se conserva la de esta pantalla —echarla de acá justo después de hacer las
+    # cosas bien se lee como un error— y se cierran todas las otras.
+    cerradas = await sesiones.cerrar_todas(
+        db, current_user.user_id,
+        excepto=sesiones.token_del_pedido(pedido),
+        motivo="cambio de contraseña propio")
+
     # Send password change notification
     try:
         await notify_password_change(
@@ -476,8 +517,9 @@ async def change_password(request: ChangePasswordRequest, current_user: User = D
         )
     except Exception as e:
         logger.warning(f"Failed to send password change notification: {e}")
-    
-    return {"message": "Contraseña cambiada exitosamente"}
+
+    return {"message": "Contraseña cambiada exitosamente",
+            "sesiones_cerradas": cerradas}
 
 @router.get("/password-status")
 async def get_password_status(current_user: User = Depends(get_current_user)):
@@ -651,6 +693,14 @@ async def activar_personal(request: Request, body: ActivarPersonalRequest):
                 "must_change_password": False,
                 "updated_at": datetime.now(timezone.utc),
             }})
+
+        # Lo normal es que no haya ninguna: la cuenta existía como invitación y
+        # sin contraseña no se podía entrar. Va igual por el caso que sí importa
+        # — que a alguien del personal le REINVITEN la cuenta porque se la
+        # tomaron. Estas son las sesiones con permisos de administración; dejar
+        # una viva acá es dejar la peor de todas.
+        await sesiones.cerrar_todas(db, user["user_id"],
+                                    motivo="activación del personal")
 
         await auditoria.registrar(
             db, "personal.activacion", quien=user, request=request,

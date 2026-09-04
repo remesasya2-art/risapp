@@ -9,6 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 
 from database import db
+from services import sesiones
+from services import registro
+from services import cofre
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
 from models.user import User
@@ -20,6 +23,7 @@ from services import auditoria, kyc_quota
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
+from services.imagen_recibida import ImagenInvalida, limpiar_lista
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -225,7 +229,7 @@ async def wipe_all_data(
     # el usuario conservaba su historial. No lo conservaba: se borraba.
 
     logger.warning(
-        f"Super admin {admin.email} wiped ALL data: {deleted}; "
+        f"Super admin {admin.user_id} wiped ALL data: {deleted}; "
         f"cierre del libro: {cierre}")
 
     total = sum(v for v in deleted.values() if isinstance(v, int))
@@ -264,7 +268,7 @@ async def wipe_accounting_data(
     # Also hide transactions from the accounting report
     hidden_tx = await _hide_from_admin("transactions")
 
-    logger.warning(f"Super admin {admin.email} wiped accounting data: {deleted}, hidden transactions: {hidden_tx}")
+    logger.warning(f"Super admin {admin.user_id} wiped accounting data: {deleted}, hidden transactions: {hidden_tx}")
 
     total = sum(v for v in deleted.values() if isinstance(v, int)) + hidden_tx
     await _record_audit(admin, "wipe_accounting", deleted, total, {
@@ -340,7 +344,7 @@ async def restore_transactions(
     else:
         raise HTTPException(status_code=400, detail="Debes pasar transaction_ids o restore_all=true")
 
-    logger.warning(f"Super admin {admin.email} restored {restored} transactions (restore_all={request.restore_all})")
+    logger.warning(f"Super admin {admin.user_id} restored {restored} transactions (restore_all={request.restore_all})")
 
     await _record_audit(admin, "restore_transactions", {}, restored, {
         "restore_all": request.restore_all,
@@ -377,14 +381,32 @@ async def get_audit_log(
 
 @router.post("/fix-media-urls")
 async def fix_media_urls(admin: User = Depends(get_super_admin)):
-    """Download Twilio images and convert to base64, update in transactions"""
-    import re
-    import httpx
+    """Baja las fotos que están en Twilio y las guarda como base64.
+
+    ESTA RUTA HACIA UN PEDIDO A LA DIRECCION QUE DIJERA LA BASE
+
+        Decidía a dónde ir con `"api.twilio.com" in url`. Eso es una subcadena,
+        no un dominio: `https://cualquier-cosa.example/?x=api.twilio.com` la
+        pasa. Y con `follow_redirects=True`, ese pedido salía con nuestro
+        usuario y contraseña de Twilio adentro.
+
+        El valor venía de `proof_image`, que hasta ahora era texto libre elegido
+        por quien subía el comprobante. O sea: el usuario escribía la dirección
+        y un super administrador, al correr la migración, mandaba las
+        credenciales ahí.
+
+        Ahora la dirección la arma `routes/media.py`, con la forma exacta de un
+        medio y contra NUESTRA cuenta, y el salto al CDN se sigue sin
+        credenciales. Lo que no calza se deja como está y se anota en `errors`:
+        una migración que además borra lo que no entiende es peor que una que no
+        corre.
+    """
     import base64
-    
-    TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-    
+
+    import httpx
+
+    from routes.media import bajar_medio, url_de_medio
+
     # Find all transactions with non-base64 proof images (Twilio URLs or proxy URLs)
     transactions = await db.transactions.find({
         "$or": [
@@ -408,27 +430,18 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
             if proof_images:
                 new_images = []
                 for i, url in enumerate(proof_images):
-                    if url and not url.startswith("data:") and ("api.twilio.com" in url or "/api/media/twilio/" in url):
-                        # Extract Twilio URL
-                        twilio_url = url
-                        if "/api/media/twilio/" in url:
-                            twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{url.replace('/api/media/twilio/', '')}"
-                        
+                    twilio_url = url_de_medio(url)
+                    if twilio_url:
                         try:
-                            response = await client.get(
-                                twilio_url,
-                                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-                                follow_redirects=True,
-                                timeout=30.0
-                            )
-                            if response.status_code == 200:
-                                content_type = response.headers.get("content-type", "image/jpeg")
-                                b64 = base64.b64encode(response.content).decode("utf-8")
-                                new_images.append(f"data:{content_type};base64,{b64}")
+                            bajado = await bajar_medio(client, twilio_url)
+                            if bajado:
+                                contenido, tipo = bajado
+                                b64 = base64.b64encode(contenido).decode("utf-8")
+                                new_images.append(f"data:{tipo};base64,{b64}")
                                 needs_update = True
                             else:
                                 new_images.append(url)
-                                errors.append(f"{tx_id}[{i}]: HTTP {response.status_code}")
+                                errors.append(f"{tx_id}[{i}]: no se pudo bajar")
                         except Exception as e:
                             new_images.append(url)
                             errors.append(f"{tx_id}[{i}]: {str(e)[:50]}")
@@ -439,25 +452,17 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
                     update_data["proof_images"] = new_images
             
             # Handle single proof_image
-            if proof_image and not proof_image.startswith("data:") and ("api.twilio.com" in proof_image or "/api/media/twilio/" in proof_image):
-                twilio_url = proof_image
-                if "/api/media/twilio/" in proof_image:
-                    twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{proof_image.replace('/api/media/twilio/', '')}"
-                
+            twilio_url = url_de_medio(proof_image)
+            if twilio_url:
                 try:
-                    response = await client.get(
-                        twilio_url,
-                        auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-                        follow_redirects=True,
-                        timeout=30.0
-                    )
-                    if response.status_code == 200:
-                        content_type = response.headers.get("content-type", "image/jpeg")
-                        b64 = base64.b64encode(response.content).decode("utf-8")
-                        update_data["proof_image"] = f"data:{content_type};base64,{b64}"
+                    bajado = await bajar_medio(client, twilio_url)
+                    if bajado:
+                        contenido, tipo = bajado
+                        b64 = base64.b64encode(contenido).decode("utf-8")
+                        update_data["proof_image"] = f"data:{tipo};base64,{b64}"
                         needs_update = True
                     else:
-                        errors.append(f"{tx_id}_single: HTTP {response.status_code}")
+                        errors.append(f"{tx_id}_single: no se pudo bajar")
                 except Exception as e:
                     errors.append(f"{tx_id}_single: {str(e)[:50]}")
             
@@ -522,6 +527,8 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
     
     # Merge KYC images into user profile
     if kyc:
+        # `abrir_varios` deja en claro lo que esté cifrado y no toca lo demás.
+        kyc = cofre.abrir_varios(kyc, cofre.CAMPOS_KYC)
         user["id_document_image"] = kyc.get("id_document_image")
         user["cpf_image"] = kyc.get("cpf_image")
         user["selfie_image"] = kyc.get("selfie_image")
@@ -662,12 +669,21 @@ async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User =
         }
     )
     
+    # Este es el camino que se usa cuando alguien avisa que le tomaron la
+    # cuenta. Sin cerrar las sesiones, el reseteo no echaba a nadie y la
+    # respuesta «ya está» era una certeza falsa. Se cierran TODAS: el
+    # administrador no es el dueño de ninguna de ellas.
+    cerradas = await sesiones.cerrar_todas(
+        db, request.user_id, motivo=f"reseteo hecho por el admin {admin.user_id}")
+
     admin_user = await db.users.find_one({"user_id": admin.user_id})
     await send_admin_password_reset_email(user["email"], temp_password, admin_user.get("name", "Admin"))
-    
-    logger.info(f"Password reset for {user['email']} by admin {admin.user_id}")
-    
-    return {"message": "Contraseña restablecida y email enviado"}
+
+    logger.info("Contraseña reseteada para %s por el admin %s; %d sesión(es) cerradas",
+                user.get("user_id"), admin.user_id, cerradas)
+
+    return {"message": "Contraseña restablecida y email enviado",
+            "sesiones_cerradas": cerradas}
 
 # ============== WITHDRAWALS ==============
 
@@ -742,6 +758,10 @@ async def process_withdrawal(
     transaction_id = request.get("transaction_id")
     action = request.get("action")
     proof_images = request.get("proof_images")
+    try:
+        proof_images = limpiar_lista(proof_images, campo="Los comprobantes")
+    except ImagenInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
     bank_id = request.get("bank_id")
     
     force = bool(request.get("force"))
@@ -2271,7 +2291,7 @@ async def update_auto_rate_config(
         upsert=True
     )
 
-    logger.info(f"Auto-rate config updated by {admin.email}: {update_fields}")
+    logger.info(f"Auto-rate config updated by {admin.user_id}: {update_fields}")
     return {"success": True, "message": "Configuración actualizada", **update_fields}
 
 # ============== KYC ==============
@@ -2661,7 +2681,8 @@ async def delete_user(user_id: str, admin: User = Depends(get_super_admin)):
     # Cerrar sus sesiones activas (el resto del historial se conserva)
     await db.user_sessions.delete_many({"user_id": user_id})
 
-    logger.info(f"User {user_id} ({original_email}) soft-deleted by admin {admin.user_id}; email released")
+    logger.info("Usuario %s soft-deleted por el admin %s; correo %s liberado",
+                user_id, admin.user_id, registro.correo(original_email))
     return {"message": "Usuario eliminado (historial conservado, correo liberado)"}
 
 # ============================================================================

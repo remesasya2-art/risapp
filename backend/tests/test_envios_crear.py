@@ -918,6 +918,17 @@ def test_la_ip_que_se_guarda_es_la_del_usuario_y_no_la_del_proxy():
     existe únicamente para el argumento legal que motiva la doble aceptación: una
     IP idéntica para todo el mundo no distingue a nadie.
 
+    ESTE TEST PEDIA EL PRIMER VALOR DE X-FORWARDED-FOR, Y ESO ERA EL BUG
+
+        Con la cabecera «200.1.2.3, 10.0.0.1» esperaba «200.1.2.3». Pero esa
+        cabecera se arma por acumulación: cada proxy le AGREGA al final la IP de
+        quien le habló. El primer valor no es el cliente, es lo que el cliente
+        escribió. Cuando la cadena trae dos valores y adelante hay un solo proxy,
+        el primero lo puso el cliente a mano.
+
+        Ahora se lee de derecha a izquierda y el bueno es «10.0.0.1», que lo
+        escribió el proxy y no se puede falsear desde afuera.
+
     Se prueba la FUNCIÓN, no el texto del archivo: un grep del nombre del helper
     pasa igual si adentro se sigue leyendo `request.client`."""
     ip_real = _funcion_de_ruta("_ip_real")
@@ -928,7 +939,7 @@ def test_la_ip_que_se_guarda_es_la_del_usuario_y_no_la_del_proxy():
         class client:
             host = "10.0.0.7"          # el edge
 
-    assert ip_real(_Pedido()) == "200.1.2.3"
+    assert ip_real(_Pedido()) == "10.0.0.1"
 
     class _Directo:
         headers = {}
@@ -939,25 +950,78 @@ def test_la_ip_que_se_guarda_es_la_del_usuario_y_no_la_del_proxy():
     assert ip_real(_Directo()) == "190.9.9.9"
 
 
-def test_el_criterio_de_ip_es_el_mismo_que_el_del_resto_de_la_app():
-    """Se repite el criterio en vez de importar el helper —importar un módulo de
-    rutas desde otro arrastra media aplicación— así que un test lo ata a la
-    implementación original para que no se separen."""
-    fuente = open(os.path.join(_BACKEND, "routes", "security_2fa.py"),
-                  encoding="utf-8").read()
-    original = fuente.split("def get_real_client_ip")[1].split("\n\n")[0]
-    assert "x-forwarded-for" in original and 'split(",")[0]' in original
+def test_UNA_IP_ESCRITA_A_MANO_NO_QUEDA_ASENTADA_EN_EL_ENVIO():
+    """El caso del atacante, escrito tal cual llega al servidor.
 
+    Quien manda `X-Forwarded-For: 1.2.3.4` no borra nada: el proxy le agrega su
+    IP real AL FINAL. Lo que la aplicación ve es «1.2.3.4, 200.5.5.5» y lo que
+    tiene que dejar asentado es 200.5.5.5. Guardar la otra convierte el único
+    dato con el que se puede rastrear un envío en un campo de texto libre.
+    """
     ip_real = _funcion_de_ruta("_ip_real")
-    for cadena, esperado in [("200.1.2.3, 10.0.0.1", "200.1.2.3"),
-                             ("  8.8.8.8  ", "8.8.8.8"),
-                             ("1.1.1.1,2.2.2.2,3.3.3.3", "1.1.1.1")]:
+
+    class _Falseado:
+        headers = {"x-forwarded-for": "1.2.3.4, 200.5.5.5"}
+
+        class client:
+            host = "10.0.0.7"
+
+    assert ip_real(_Falseado()) == "200.5.5.5", \
+        "asentó la IP que eligió quien hizo el pedido"
+
+
+def test_lo_que_escribe_cloudflare_le_gana_a_lo_que_diga_el_cliente():
+    """`CF-Connecting-IP` la pone Cloudflare PISANDO lo que venga del cliente:
+    es la única de las tres que no se puede tocar desde afuera, así que gana."""
+    ip_real = _funcion_de_ruta("_ip_real")
+
+    class _ConCF:
+        headers = {"cf-connecting-ip": "200.7.7.7",
+                   "x-forwarded-for": "1.2.3.4, 10.0.0.1"}
+
+        class client:
+            host = "10.0.0.7"
+
+    assert ip_real(_ConCF()) == "200.7.7.7"
+
+
+def test_el_criterio_de_ip_es_el_mismo_que_el_del_resto_de_la_app():
+    """ESTE TEST DEFENDIA EL BUG, Y VALE LA PENA DEJARLO ESCRITO
+
+        Ataba `_ip_real` al TEXTO de `get_real_client_ip`: leía el archivo de
+        `security_2fa.py` y exigía que ahí adentro apareciera `split(",")[0]`.
+        La intención era buena —que los dos criterios no se separaran— pero el
+        efecto fue que arreglar la resolución de IP ponía el test en rojo. Un
+        test que se pone en rojo cuando se cierra un agujero es un test que
+        empuja a no cerrarlo.
+
+        Se compara por COMPORTAMIENTO, sobre los mismos pedidos. Es lo que
+        importaba desde el principio: que la IP con la que se frena a alguien y
+        la que se asienta en el envío sean la misma, sin importar cómo esté
+        escrita cada una.
+    """
+    ip_real = _funcion_de_ruta("_ip_real")
+    from services.ip_cliente import ip_del_cliente
+
+    casos = ["200.1.2.3, 10.0.0.1", "  8.8.8.8  ", "1.1.1.1,2.2.2.2,3.3.3.3",
+             "", "1.2.3.4, , 10.0.0.1"]
+    for cadena in casos:
         class _P:
             headers = {"x-forwarded-for": cadena}
 
             class client:
                 host = "10.0.0.7"
-        assert ip_real(_P()) == esperado
+        assert ip_real(_P()) == ip_del_cliente(_P()), cadena
+
+    # Y el criterio explícito, para que este test diga CUAL es y no sólo que los
+    # dos coinciden: con un proxy de confianza adelante, el último de la cadena.
+    class _Cadena:
+        headers = {"x-forwarded-for": "1.1.1.1,2.2.2.2,3.3.3.3"}
+
+        class client:
+            host = "10.0.0.7"
+
+    assert ip_real(_Cadena()) == "3.3.3.3"
 
 
 def _funcion_de_ruta(nombre):

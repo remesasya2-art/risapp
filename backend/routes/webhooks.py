@@ -28,6 +28,7 @@ ESTE MODULO NO TOCA LA BASE DE DATOS
     receptor desactivado, y hay un test que la exige.
 """
 import logging
+
 import os
 
 from fastapi import APIRouter, Request, Response
@@ -76,12 +77,13 @@ async def twilio_whatsapp_webhook(request: Request):
 
         from_number = form_data.get("From", "")
         if not ADMIN_WHATSAPP_NUMBER or from_number != ADMIN_WHATSAPP_NUMBER:
-            logger.warning(f"Webhook from unauthorized number: {from_number}")
+            logger.warning("Webhook desde un número no autorizado: ...%s",
+                           str(from_number)[-4:])
             return Response(content="", media_type="text/xml")
 
         logger.warning(
             "WhatsApp entrante desactivado: mensaje descartado sin efecto "
-            f"(from={from_number}, body={form_data.get('Body', '')!r}, "
+            f"(from=...{str(from_number)[-4:]}, "
             f"media={form_data.get('NumMedia', 0)})"
         )
         return Response(content="", media_type="text/xml")

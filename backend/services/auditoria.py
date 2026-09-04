@@ -42,6 +42,8 @@ LO QUE NO HACE
     ESTADO: quién decidió, sobre quién, y qué había antes.
 """
 import logging
+
+from services import registro
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
@@ -132,9 +134,12 @@ def _origen(request) -> dict:
     if request is None:
         return {"ip": None, "pais": None, "navegador": None}
     cabeceras = getattr(request, "headers", {}) or {}
-    reenviada = cabeceras.get("x-forwarded-for")
-    ip = (reenviada.split(",")[0].strip() if reenviada
-          else (getattr(getattr(request, "client", None), "host", None)))
+    # La IP en la que se puede confiar, no la que el cliente dice tener. El
+    # primer valor de `X-Forwarded-For` lo escribe quien hace el pedido: un
+    # libro de auditoría que lo guarda como «la IP» se llena de valores
+    # inventados, y es justo el libro que se mira cuando algo pasó.
+    from services.ip_cliente import ip_del_cliente
+    ip = ip_del_cliente(request) or None
     return {
         "ip": ip,
         "pais": cabeceras.get("cf-ipcountry"),
@@ -196,11 +201,15 @@ async def registrar(
         await db[COLECCION].insert_one(linea)
         return linea["_id"]
     except Exception as e:
+        # La línea va TAPADA. Se conserva la forma —que es lo que sirve para
+        # entender por qué falló— y se tapan los valores. Antes se escribía
+        # entera: el documento más sensible del sistema, incluidos el antes y
+        # el después de un cambio, copiado al lugar que menos controlamos.
         logger.error(
             "AUDITORIA PERDIDA: no se pudo asentar %s por %s sobre %s/%s: %s. "
-            "Línea completa: %s",
-            accion, linea["actor"].get("email"), objetivo_tipo, objetivo_id, e,
-            linea)
+            "Forma de la línea: %s",
+            accion, linea["actor"].get("user_id"), objetivo_tipo, objetivo_id, e,
+            registro.sin_datos(linea))
         return None
 
 

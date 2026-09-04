@@ -80,5 +80,9 @@ api_router.include_router(credits_admin_router)
 api_router.include_router(envios_router)
 api_router.include_router(envios_admin_router)
 api_router.include_router(rrhh_router)
+# El buzón donde el navegador avisa lo que la política de contenido habría
+# bloqueado. Ver services/csp.py.
+from routes.csp_reporte import router as csp_reporte_router  # noqa: E402
+api_router.include_router(csp_reporte_router)
 
 __all__ = ["api_router"]
