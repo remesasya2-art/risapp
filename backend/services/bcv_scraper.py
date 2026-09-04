@@ -5,6 +5,7 @@ Stores snapshots in `bcv_rates` collection for history.
 """
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 
 import httpx
@@ -15,6 +16,37 @@ logger = logging.getLogger(__name__)
 BCV_URL = "https://www.bcv.org.ve/"
 CURRENCY_IDS = ["dolar", "euro", "yuan", "lira", "rublo"]
 CARACAS_TZ = timezone(timedelta(hours=-4))
+
+# ─── Por qué esto no es `verify=False` ────────────────────────────────────
+#
+# Esta consulta traía `verify=False`, que apaga la verificación del
+# certificado TLS. Con eso, cualquiera que pueda interponerse en la conexión
+# —una red comprometida, un DNS envenenado— sirve su propia página y la
+# aplicación se cree la tasa que le manden.
+#
+# El valor raspado no es la tasa que se le cobra al cliente: eso vive en
+# `db.rates`, y acá se escribe en `db.bcv_rates`. Pero
+# `services/accounting_engine.py` lo lee como referencia BCV, así que una
+# tasa falsa distorsiona la contabilidad. Y apagar la verificación del
+# certificado es, además, lo primero que marca cualquier revisión de
+# seguridad de un proveedor de pagos.
+#
+# El motivo original era casi con seguridad práctico: el sitio del BCV ha
+# tenido la cadena de certificados incompleta. La respuesta correcta a eso es
+# aportar el certificado que falta, no dejar de mirar.
+#
+# LA ESCOTILLA, Y POR QUE EXISTE
+#
+#   Si mañana la cadena del BCV se rompe otra vez, esto deja de traer la
+#   tasa. Eso es lo correcto —mejor sin dato que con un dato inventado por un
+#   tercero— pero puede dejar la referencia contable congelada sin que nadie
+#   lo note. Por eso el ERROR es explícito y nombra la variable.
+#
+#   `BCV_TLS_INSEGURO=1` reactiva el comportamiento viejo. No es un
+#   equivalente: avisa en CADA consulta, con nivel WARNING y diciendo que el
+#   dato no es confiable. Un agujero ruidoso y deliberado no es lo mismo que
+#   uno silencioso y permanente.
+BCV_TLS_INSEGURO = os.environ.get("BCV_TLS_INSEGURO", "").strip() in ("1", "true", "True")
 
 
 def _parse_value(text: str) -> float | None:
@@ -31,10 +63,37 @@ def _parse_value(text: str) -> float | None:
 
 
 async def fetch_bcv_rates() -> dict:
-    """Fetch current BCV rates. Returns dict with rates, value_date, fetched_at."""
-    async with httpx.AsyncClient(verify=False, timeout=30, follow_redirects=True) as client:
-        r = await client.get(BCV_URL)
-        r.raise_for_status()
+    """Fetch current BCV rates. Returns dict with rates, value_date, fetched_at.
+
+    Verifica el certificado del servidor. Si no valida, NO cae a una conexión
+    sin verificar: levanta, y el llamador registra el fallo. Un dato que pudo
+    haber puesto un tercero es peor que no tener dato.
+    """
+    if BCV_TLS_INSEGURO:
+        logger.warning(
+            "BCV: consultando SIN verificar el certificado TLS porque "
+            "BCV_TLS_INSEGURO está activada. La tasa que se guarde puede "
+            "haberla puesto un tercero. Sacá la variable en cuanto se pueda.")
+
+    try:
+        async with httpx.AsyncClient(verify=not BCV_TLS_INSEGURO, timeout=30,
+                                     follow_redirects=True) as client:
+            r = await client.get(BCV_URL)
+            r.raise_for_status()
+    except httpx.ConnectError as e:
+        # Se distingue del resto a propósito: un fallo de TLS pide una acción
+        # concreta —conseguir el certificado intermedio del BCV— y perderlo
+        # entre los timeouts de red es cómo se termina con la referencia
+        # contable congelada sin que nadie sepa por qué.
+        if "certificate" in str(e).lower() or "ssl" in str(e).lower():
+            logger.error(
+                "BCV: el certificado TLS del sitio no valida (%s). NO se "
+                "guarda ninguna tasa: un dato servido por un tercero sería "
+                "peor que ninguno. Si el sitio tiene la cadena incompleta, "
+                "hay que aportar el certificado intermedio; como último "
+                "recurso existe BCV_TLS_INSEGURO=1, que avisa en cada "
+                "consulta.", e)
+        raise
 
     soup = BeautifulSoup(r.text, "lxml")
     rates = {}
