@@ -280,7 +280,7 @@ async def manual_credit(data: ManualCreditRequest, admin: User = Depends(get_sup
 
     logger.info(
         f"Admin {admin.user_id} acredito manualmente {data.amount} {currency} "
-        f"a {user['email']} (order {order_id})"
+        f"a {user.get('user_id')} (order {order_id})"
     )
 
     return {

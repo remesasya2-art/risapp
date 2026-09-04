@@ -11,6 +11,7 @@ from pydantic import BaseModel, EmailStr
 from pymongo import ReturnDocument
 
 from database import db
+from services import registro
 from services import sesiones
 from services.email_notifications import send_email
 
@@ -128,7 +129,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
                 </div>
                 """
             )
-            logger.info(f"Recovery code sent to {data.email}")
+            logger.info("Código de recuperación enviado a %s", registro.correo(data.email))
         except Exception as e:
             logger.error(f"Failed to send recovery email: {e}")
             raise HTTPException(status_code=500, detail="Error al enviar el código. Intenta nuevamente.")
@@ -288,7 +289,7 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
     except Exception as e:
         logger.error(f"Failed to send confirmation email: {e}")
     
-    logger.info(f"Password reset successful for {data.email}")
+    logger.info("Contraseña restablecida para %s", registro.correo(data.email))
     
     return {
         "success": True,
@@ -337,7 +338,7 @@ async def support_contact(data: SupportContactRequest, request: Request):
     })
     
     # Send notification to admin (optional - could be configured)
-    logger.info(f"Support request received: {support_id} from {data.email}")
+    logger.info("Pedido a soporte %s de %s", support_id, registro.correo(data.email))
     
     # Send confirmation to user
     try:

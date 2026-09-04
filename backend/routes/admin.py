@@ -10,6 +10,7 @@ from typing import Optional
 
 from database import db
 from services import sesiones
+from services import registro
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
 from models.user import User
@@ -227,7 +228,7 @@ async def wipe_all_data(
     # el usuario conservaba su historial. No lo conservaba: se borraba.
 
     logger.warning(
-        f"Super admin {admin.email} wiped ALL data: {deleted}; "
+        f"Super admin {admin.user_id} wiped ALL data: {deleted}; "
         f"cierre del libro: {cierre}")
 
     total = sum(v for v in deleted.values() if isinstance(v, int))
@@ -266,7 +267,7 @@ async def wipe_accounting_data(
     # Also hide transactions from the accounting report
     hidden_tx = await _hide_from_admin("transactions")
 
-    logger.warning(f"Super admin {admin.email} wiped accounting data: {deleted}, hidden transactions: {hidden_tx}")
+    logger.warning(f"Super admin {admin.user_id} wiped accounting data: {deleted}, hidden transactions: {hidden_tx}")
 
     total = sum(v for v in deleted.values() if isinstance(v, int)) + hidden_tx
     await _record_audit(admin, "wipe_accounting", deleted, total, {
@@ -342,7 +343,7 @@ async def restore_transactions(
     else:
         raise HTTPException(status_code=400, detail="Debes pasar transaction_ids o restore_all=true")
 
-    logger.warning(f"Super admin {admin.email} restored {restored} transactions (restore_all={request.restore_all})")
+    logger.warning(f"Super admin {admin.user_id} restored {restored} transactions (restore_all={request.restore_all})")
 
     await _record_audit(admin, "restore_transactions", {}, restored, {
         "restore_all": request.restore_all,
@@ -2287,7 +2288,7 @@ async def update_auto_rate_config(
         upsert=True
     )
 
-    logger.info(f"Auto-rate config updated by {admin.email}: {update_fields}")
+    logger.info(f"Auto-rate config updated by {admin.user_id}: {update_fields}")
     return {"success": True, "message": "Configuración actualizada", **update_fields}
 
 # ============== KYC ==============
@@ -2677,7 +2678,8 @@ async def delete_user(user_id: str, admin: User = Depends(get_super_admin)):
     # Cerrar sus sesiones activas (el resto del historial se conserva)
     await db.user_sessions.delete_many({"user_id": user_id})
 
-    logger.info(f"User {user_id} ({original_email}) soft-deleted by admin {admin.user_id}; email released")
+    logger.info("Usuario %s soft-deleted por el admin %s; correo %s liberado",
+                user_id, admin.user_id, registro.correo(original_email))
     return {"message": "Usuario eliminado (historial conservado, correo liberado)"}
 
 # ============================================================================

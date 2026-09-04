@@ -7,6 +7,8 @@ import json
 import logging
 import os
 import hmac
+
+from services import registro
 import hashlib
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -632,7 +634,12 @@ async def mercadopago_webhook(request: Request):
         except Exception:
             payload = {}
         
-        logger.info(f"Mercado Pago webhook received: {payload}")
+        # Antes: `{payload}`, o sea lo que el proveedor mande, hoy y siempre.
+        # Hoy son campos inocuos; el día que agreguen el nombre del pagador
+        # entra al registro sin que nadie lo haya decidido. Ahora las claves se
+        # piden a mano y lo nuevo no entra solo.
+        logger.info("Mercado Pago webhook: %s",
+                    registro.resumen(payload, ["type", "action", "live_mode"]))
         
         # Get the event type and payment ID
         event_type = payload.get("type") or payload.get("action")

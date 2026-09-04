@@ -2,6 +2,8 @@
 Email notification service via Resend
 """
 import logging
+
+from services import registro
 import resend
 from config import RESEND_API_KEY, FROM_EMAIL, FRONTEND_URL
 
@@ -36,7 +38,7 @@ async def send_verification_email(email: str, code: str, name: str) -> bool:
             "html": html_content
         })
         
-        logger.info(f"Verification email sent to {email}")
+        logger.info("Correo de verificación enviado a %s", registro.correo(email))
         return True
     except Exception as e:
         logger.error(f"Error sending verification email: {e}")
@@ -70,7 +72,7 @@ async def send_password_reset_email(email: str, temp_password: str) -> bool:
             "html": html_content
         })
         
-        logger.info(f"Password reset email sent to {email}")
+        logger.info("Correo de reseteo enviado a %s", registro.correo(email))
         return True
     except Exception as e:
         logger.error(f"Error sending password reset email: {e}")
@@ -103,7 +105,7 @@ async def send_admin_password_reset_email(email: str, temp_password: str, admin_
             "html": html_content
         })
         
-        logger.info(f"Admin password reset email sent to {email}")
+        logger.info("Correo de reseteo (admin) enviado a %s", registro.correo(email))
         return True
     except Exception as e:
         logger.error(f"Error sending admin password reset email: {e}")
@@ -151,7 +153,7 @@ async def send_staff_invitation_email(email: str, nombre: str, cargo: str,
             "html": html_content
         })
 
-        logger.info(f"Staff invitation email sent to {email}")
+        logger.info("Invitación de personal enviada a %s", registro.correo(email))
         return True
     except Exception as e:
         logger.error(f"Error sending staff invitation email: {e}")

@@ -30,6 +30,8 @@ LAS REGLAS
        quién, y qué había antes.
 """
 import logging
+
+from services import registro
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -165,7 +167,8 @@ async def _invitar(doc: dict, admin: User, request: Request,
     if not enviado:
         logger.error(
             "INVITACION SIN ENVIAR: %s quedó dada de alta pero el correo de "
-            "activación no salió. Reenviala desde RRHH.", doc["email"])
+            "activación no salió. Reenviala desde RRHH.",
+            registro.correo(doc["email"]))
 
     return {"emitida": True, "correo_enviado": enviado,
             "vence_en_horas": invitaciones.HORAS_DE_VIDA}

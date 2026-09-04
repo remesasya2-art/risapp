@@ -279,7 +279,7 @@ def exigir(usuario, request) -> None:
         logger.error(
             "RUTA DE ADMIN SIN PERMISO DECLARADO: %s %s. Se negó el acceso a "
             "%s. Agregala a MAPA en services/permisos.py.",
-            metodo, camino, _leer(usuario, "email", "?"))
+            metodo, camino, _leer(usuario, "user_id", "?"))
         raise RutaSinMapear(metodo, camino or "?")
 
     if not tiene(usuario, permiso):
