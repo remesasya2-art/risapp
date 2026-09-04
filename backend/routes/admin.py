@@ -585,8 +585,14 @@ async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
-    # Protect the original super admin from being modified by others
-    if user.get("email") == "marshalljulio46@gmail.com" and admin.user_id != request.user_id:
+    # A un super administrador sólo lo puede tocar él mismo.
+    #
+    # Antes esto comparaba contra una dirección de correo escrita en el
+    # código: una cuenta concreta protegida por su nombre. Mirar el ROL dice
+    # lo mismo sin publicar a nadie, y además cubre a cualquier otro super
+    # administrador que exista mañana, que con el correo a mano quedaba
+    # desprotegido.
+    if user.get("role") == "super_admin" and admin.user_id != request.user_id:
         raise HTTPException(status_code=403, detail="No puedes modificar al administrador principal")
     
     valid_roles = ["user", "socio", "socio_gestor", "super_admin"]
@@ -626,10 +632,11 @@ async def set_user_agent(user_id: str, data: SetAgentRequest, admin: User = Depe
     target = await db.users.find_one({"user_id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    # La comprobación por correo que estaba acá abajo sobraba: sólo podía
+    # dispararse para una cuenta con ese correo que NO fuera super
+    # administrador, y la línea de arriba ya frena a los que sí lo son.
     if target.get("role") == "super_admin":
         raise HTTPException(status_code=400, detail="No se puede cambiar el rol de un super administrador")
-    if target.get("email") == "marshalljulio46@gmail.com":
-        raise HTTPException(status_code=403, detail="No puedes modificar al administrador principal")
     new_role = "agent" if data.is_agent else "user"
     await db.users.update_one({"user_id": user_id}, {"$set": {"role": new_role}})
     logger.info(f"User {user_id} agent role set to {data.is_agent} by {admin.user_id}")

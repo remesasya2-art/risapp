@@ -21,10 +21,15 @@ const maskCPF = (cpf) => {
   return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
 };
 
-// Verificar si es SuperAdmin Diamante
-const isSuperAdminDiamond = (email) => {
-  return email === 'marshalljulio46@gmail.com';
-};
+// Verificar si es SuperAdmin Diamante.
+//
+// Antes esto comparaba contra una dirección de correo escrita acá adentro. El
+// frontend se compila y se sirve al navegador, así que ese correo viajaba —y
+// se podía leer— en el bundle de CADA visitante del sitio: le decía a
+// cualquiera exactamente qué cuenta atacar para quedarse con la aplicación.
+//
+// El rol ya viene en el usuario de la sesión y significa lo mismo, sin
+// publicar a nadie.
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -335,7 +340,7 @@ export default function Profile() {
         {/* Ingreso con huella */}
         <WebAuthnSettings />
         {/* Gestionar 2FA (solo super_admin) */}
-        {isSuperAdminDiamond(user?.email) && (
+        {user?.role === 'super_admin' && (
           <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -474,7 +479,7 @@ export default function Profile() {
 
         {/* Role Badge */}
         {(user?.role === 'admin' || user?.role === 'super_admin') && (
-          isSuperAdminDiamond(user?.email) ? (
+          user?.role === 'super_admin' ? (
             // SuperAdministrador Diamante - Diseño Premium
             <div style={{ 
               marginTop: '16px', 

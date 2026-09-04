@@ -239,6 +239,32 @@ async def dar_de_alta(datos: AltaDePersonal, request: Request,
         raise HTTPException(status_code=409,
                             detail=f"{email} ya es personal de la empresa")
 
+    # Las dos puertas que impiden que el alta te saque a vos.
+    #
+    # El alta CONVIERTE la cuenta existente: le pone `role: "admin"`. Hecho
+    # sobre un super administrador, eso lo degrada. Y si es el único —que es
+    # el caso— no queda nadie que pueda devolverle el rol, porque la pantalla
+    # que lo haría es justamente la que acaba de perder. Se arregla editando
+    # Mongo a mano.
+    #
+    # `dar_de_baja` ya frenaba esto; el alta no, y es el mismo daño por el
+    # otro lado. El aviso de saldo lo tapaba de casualidad: con la cuenta en
+    # cero, el alta seguía derecho.
+    if existente and existente.get("role") == "super_admin":
+        raise HTTPException(
+            status_code=409,
+            detail=("No se puede dar de alta al super administrador como "
+                    "personal: el alta le cambia el rol a `admin` y perdería "
+                    "el acceso a esta sección, sin forma de recuperarlo desde "
+                    "la aplicación. Usá otro correo para el colaborador."))
+
+    if existente and existente["user_id"] == admin.user_id:
+        raise HTTPException(
+            status_code=409,
+            detail=("No te podés dar de alta a vos mismo. El alta convierte la "
+                    "cuenta en personal, y el personal no puede hacer "
+                    "transacciones ni conserva el rol que tenía."))
+
     if existente:
         atascado = await personal.saldo_en_cero(db, existente["user_id"])
         if atascado:
