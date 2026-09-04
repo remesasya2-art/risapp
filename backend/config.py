@@ -56,3 +56,14 @@ STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 # su código de referido adentro. El resto del backend ya usaba www.risappbr.com
 # (ver PUBLIC_BASE_URL en routes/transactions.py y routes/credits.py).
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://www.risappbr.com")
+
+# El canal de contacto que se publica en el pie de página y en la página
+# legal. Vive en el entorno y NO en el código: una dirección escrita acá se
+# compila dentro del bundle del frontend y queda a la vista de cualquiera que
+# abra el sitio, para siempre y sin poder cambiarla sin un despliegue.
+#
+# Vacío = no se publica ninguna dirección, y las páginas mandan al soporte de
+# la aplicación. Ojo con eso: la página legal declara este canal como la vía
+# para ejercer derechos LGPD, para disputar una operación y para dar de baja
+# la cuenta. Dejarlo vacío deja esas tres sin destinatario externo.
+CONTACTO_PUBLICO = os.environ.get("CONTACTO_PUBLICO", "")

@@ -58,17 +58,17 @@ PERMITIDOS = (
 PERSONALES = ("@gmail.", "@hotmail.", "@outlook.", "@yahoo.", "@icloud.",
               "@live.", "@protonmail.", "@proton.me")
 
-# Direcciones que están en el código A PROPOSITO porque se publican: el
-# contacto de la empresa en el pie de página y en la página legal. Publicar el
-# correo de contacto es lo correcto —una plataforma que maneja plata ajena
-# tiene que decir cómo se la contacta— y es lo contrario de proteger una
-# cuenta por su nombre.
+# Vacío, y así tiene que quedarse.
 #
-# La lista es explícita para que agregar una sea una decisión visible en la
-# revisión, y no algo que entra sin que nadie lo mire.
-PUBLICADOS_A_PROPOSITO = {
-    "saipha.servicios.digitais@gmail.com",   # contacto de SAIPHA SERVICIOS DIGITAIS
-}
+# Acá estuvo el contacto de la empresa mientras estaba escrito a mano en el
+# pie de página y en cinco párrafos de la página legal. Ahora sale de
+# `GET /api/contacto`, que lo lee de la configuración del servidor: se cambia
+# en un lugar y se actualizan los seis, y no queda dentro del bundle que se le
+# sirve a cada visitante.
+#
+# Si alguien necesita agregar una entrada acá, la pregunta correcta es por qué
+# esa dirección tiene que estar en el código en vez de en la configuración.
+PUBLICADOS_A_PROPOSITO = set()
 
 
 def _archivos():

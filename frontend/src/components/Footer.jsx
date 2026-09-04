@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import useContacto from '../utils/contacto';
 
 export default function Footer() {
+  const correo = useContacto();
   const linkStyle = { color: '#6b7280', textDecoration: 'none', fontSize: '13px' };
   const colTitle = { color: '#374151', fontSize: '13px', fontWeight: 700, marginBottom: '10px' };
 
@@ -26,7 +28,11 @@ export default function Footer() {
         </div>
         <div>
           <p style={colTitle}>Contacto</p>
-          <a href="mailto:saipha.servicios.digitais@gmail.com" style={linkStyle}>saipha.servicios.digitais@gmail.com</a>
+          {correo ? (
+            <a href={`mailto:${correo}`} style={linkStyle}>{correo}</a>
+          ) : (
+            <Link to="/support" style={linkStyle}>Centro de ayuda</Link>
+          )}
         </div>
       </div>
       <div style={{ maxWidth: '1100px', margin: '24px auto 0', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>

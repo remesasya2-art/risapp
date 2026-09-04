@@ -1,7 +1,31 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import useContacto from '../utils/contacto';
+
+// La vía de contacto, sin escribir ninguna dirección en este archivo.
+//
+// Las cinco menciones de abajo son las que declaran CÓMO se ejerce un derecho:
+// los de la LGPD, la disputa de una operación y la baja de la cuenta. Si no
+// hay dirección configurada no pueden quedar vacías, así que mandan al centro
+// de ayuda de la aplicación.
+//
+// Va fuera del componente: definida adentro, React la trata como un tipo
+// nuevo en cada render y remonta el enlace cada vez.
+function Via({ correo }) {
+  if (correo) {
+    return <a href={`mailto:${correo}`} style={{ color: '#5B4FE9' }}>{correo}</a>;
+  }
+  return (
+    <Link to="/support" style={{ color: '#5B4FE9' }}>
+      el centro de ayuda de la aplicación
+    </Link>
+  );
+}
 
 // Página única con las 5 políticas. El Footer enlaza a /legal#privacidad, etc.
 export default function LegalPage() {
+  const correo = useContacto();
+
   // Al cargar, si hay un #ancla en la URL, desplaza hasta esa sección
   useEffect(() => {
     const id = window.location.hash.replace('#', '');
@@ -46,7 +70,7 @@ export default function LegalPage() {
         <h2 style={h2}>1.3. Compartición de datos</h2>
         <p style={p}>No vendemos datos personales. Podemos compartirlos únicamente con proveedores de procesamiento de pagos externos, proveedores tecnológicos que nos prestan servicios (alojamiento, envío de correos) y autoridades competentes cuando la ley lo exija.</p>
         <h2 style={h2}>1.4. Derechos del titular</h2>
-        <p style={p}>Conforme a la LGPD, el usuario puede solicitar el acceso, la corrección, la portabilidad o la eliminación de sus datos escribiendo a saipha.servicios.digitais@gmail.com.</p>
+        <p style={p}>Conforme a la LGPD, el usuario puede solicitar el acceso, la corrección, la portabilidad o la eliminación de sus datos a través de <Via correo={correo} />.</p>
         <h2 style={h2}>1.5. Conservación y seguridad</h2>
         <p style={p}>Conservamos los datos durante el tiempo necesario para prestar el servicio y cumplir obligaciones legales y fiscales. Aplicamos medidas técnicas y organizativas razonables para proteger la información.</p>
 
@@ -91,7 +115,7 @@ export default function LegalPage() {
           <li style={li}>Cuentas suspendidas o canceladas por incumplimiento de los Términos.</li>
         </ul>
         <h2 style={h2}>3.4. Cómo solicitar un reembolso</h2>
-        <p style={p}>Escriba a saipha.servicios.digitais@gmail.com indicando su nombre, el comprobante de la operación y el motivo, preferentemente dentro de los 7 días posteriores a la operación.</p>
+        <p style={p}>Comuníquese por <Via correo={correo} /> indicando su nombre, el comprobante de la operación y el motivo, preferentemente dentro de los 7 días posteriores a la operación.</p>
         <h2 style={h2}>3.5. Plazos</h2>
         <p style={p}>Una vez aprobada la solicitud, el reembolso se procesa a través del mismo proveedor de pago utilizado. El tiempo de acreditación depende de dicho proveedor y de la entidad financiera del usuario, y puede demorar varios días hábiles.</p>
 
@@ -99,7 +123,7 @@ export default function LegalPage() {
         <h1 id="cancelacion" style={h1}>4. Política de Cancelación de Cuenta</h1>
         <p style={p}>El usuario puede solicitar la cancelación de su cuenta en cualquier momento.</p>
         <h2 style={h2}>4.1. Cómo cancelar</h2>
-        <p style={p}>Escriba a saipha.servicios.digitais@gmail.com desde el correo registrado solicitando la baja. Verificaremos la identidad antes de proceder.</p>
+        <p style={p}>Solicite la baja por <Via correo={correo} />, desde la cuenta registrada. Verificaremos la identidad antes de proceder.</p>
         <h2 style={h2}>4.2. Saldo pendiente</h2>
         <p style={p}>Antes de cancelar, el usuario debe considerar el saldo disponible. Indicaremos el procedimiento aplicable para el saldo no consumido, conforme a la Política de Reembolsos.</p>
         <h2 style={h2}>4.3. Conservación de información</h2>
@@ -115,10 +139,10 @@ export default function LegalPage() {
           <li style={li}>Nombre fantasía: SAIPHA SERVICIOS DIGITAIS</li>
           <li style={li}>CNPJ: 66.994.057/0001-61</li>
           <li style={li}>Dirección: Rua Monte Roraima, S/N, Bairro Vila Nova, Pacaraima – RR, CEP 69345-000, Brasil</li>
-          <li style={li}>Correo de contacto: saipha.servicios.digitais@gmail.com</li>
+          <li style={li}>Contacto: <Via correo={correo} /></li>
           <li style={li}>Sitio web: risappbr.com</li>
         </ul>
-        <p style={muted}>Para consultas administrativas, fiscales o de facturación, contacte a saipha.servicios.digitais@gmail.com.</p>
+        <p style={muted}>Para consultas administrativas, fiscales o de facturación, comuníquese por <Via correo={correo} />.</p>
       </div>
     </div>
   );
