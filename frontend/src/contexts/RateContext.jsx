@@ -12,6 +12,22 @@ export function RateProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
 
+  // ¿La tasa que hay en `rates` vino del servidor, o son los valores por
+  // defecto de arriba?
+  //
+  // POR QUE HACE FALTA SABERLO
+  //   Los defaults existen para que ninguna pantalla se rompa mientras carga.
+  //   Pero si `/rate` falla, `rates.ris_to_ves` se queda en 110 —un número
+  //   inventado— y quien lo lea va a mostrarlo como si fuera la tasa. En una
+  //   pantalla que convierte lo que el usuario va a enviar, eso es decirle una
+  //   cifra que no es.
+  //
+  //   Este indicador no cambia nada de lo que ya funcionaba: las pantallas que
+  //   no lo miran se comportan igual que siempre. La que convierte dinero sí
+  //   lo mira, y con la tasa no disponible prefiere no mostrar ninguna cuenta
+  //   antes que mostrar una equivocada.
+  const [tasaDisponible, setTasaDisponible] = useState(false);
+
   const loadRates = useCallback(async () => {
     try {
       const response = await api.get('/rate');
@@ -32,7 +48,11 @@ export function RateProvider({ children }) {
       };
       setRates(newRates);
       setLastUpdated(new Date());
+      setTasaDisponible(Boolean(response.data?.ris_to_ves));
     } catch (error) {
+      // No se toca `tasaDisponible`: si antes había una tasa buena sigue
+      // habiéndola, y si nunca la hubo sigue sin haberla. Ponerla en `false`
+      // acá borraría una tasa válida por un fallo pasajero de red.
       console.error('Error loading rates:', error);
     } finally {
       setLoading(false);
@@ -60,6 +80,7 @@ export function RateProvider({ children }) {
       rates, 
       loading, 
       lastUpdated,
+      tasaDisponible,
       refreshRates 
     }}>
       {children}

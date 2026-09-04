@@ -303,3 +303,53 @@ def test_TODAS_LAS_RUTAS_DE_PLATA_TIENEN_LA_PUERTA(app_armada):
         "Estas rutas están en la lista y ya no existen en la app: "
         f"{sorted(faltan)}. Si se renombraron, actualizá RUTAS_DE_PLATA; si "
         "se borraron, sacalas.")
+
+
+def test_UNA_MISMA_FUNCION_NO_PUEDE_TENER_DOS_PUERTAS_DISTINTAS(app_armada):
+    """EL AGUJERO QUE ESTA PRUEBA ATAJA, Y QUE LA DE ARRIBA NO ATAJABA.
+
+    `create_withdrawal` estaba registrada con DOS decoradores:
+
+        @router.post("/withdraw", dependencies=[Depends(sin_transacciones_personales)])
+        @router.post("/withdrawal/create")
+        async def create_withdrawal(...):
+
+    FastAPI crea una ruta por decorador, con las dependencias de ESE decorador
+    y nada más. `/withdrawal/create` quedaba sin candado: la regla «el personal
+    no transacciona a título personal» se saltaba escribiendo otra URL. Y el
+    segundo candado tampoco lo ataja, porque esa función debita con un
+    `find_one_and_update` directo sobre `db.users` y no pasa por
+    `services/saldos.mover`.
+
+    La prueba de arriba no lo veía porque recorre una LISTA ESCRITA A MANO, y
+    `/withdrawal/create` nunca estuvo en ella. Una lista sólo protege de lo que
+    alguien se acordó de anotar, y un alias es justo lo que no se anota.
+
+    Esta no necesita lista: agrupa las rutas por la función que las atiende y
+    exige que, si una de ellas tiene el candado, lo tengan TODAS. Un alias
+    nuevo hereda la exigencia por el solo hecho de apuntar a la misma función.
+    """
+    por_funcion = {}
+    for ruta in app_armada.routes:
+        endpoint = getattr(ruta, "endpoint", None)
+        dependant = getattr(ruta, "dependant", None)
+        if endpoint is None or dependant is None:
+            continue
+        tiene = "sin_transacciones_personales" in _nombres_de_dependencias(dependant)
+        por_funcion.setdefault(endpoint, []).append((getattr(ruta, "path", "?"), tiene))
+
+    desparejas = []
+    for endpoint, rutas in por_funcion.items():
+        con = [p for p, t in rutas if t]
+        sin = [p for p, t in rutas if not t]
+        if con and sin:
+            desparejas.append(
+                f"{endpoint.__module__}.{endpoint.__name__}: "
+                f"con candado {sorted(con)}, SIN candado {sorted(sin)}")
+
+    assert not desparejas, (
+        "Una misma función atiende rutas con candado y rutas sin candado. La "
+        "que no lo tiene es una puerta de atrás a la que sí lo tiene:\n  "
+        + "\n  ".join(sorted(desparejas))
+        + "\n\nPoné dependencies=[Depends(sin_transacciones_personales)] en "
+          "TODOS los decoradores de esa función, no sólo en el primero.")
