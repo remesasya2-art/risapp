@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -12,6 +12,7 @@ import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import DiferenciasPago from '../components/admin/DiferenciasPago';
 import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
+import SeguridadFinanciera from '../components/admin/SeguridadFinanciera';
 import LibroMayor from '../components/admin/LibroMayor';
 import RecursosHumanos from '../components/admin/RecursosHumanos';
 import LibroAuditoria from '../components/admin/LibroAuditoria';
@@ -75,6 +76,10 @@ const TABS = [
   { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
   { key: 'diferencias', label: 'Diferencias de pago', icon: AlertCircle, superAdminOnly: true },
   { key: 'reportes', label: 'Reportes', icon: Download },
+  // Antes del Libro mayor a propósito: acá están las cuatro respuestas, allá
+  // el detalle contable de cada una. Sólo del super administrador, igual que
+  // las rutas que consulta (`get_super_admin` en el backend).
+  { key: 'seguridad', label: 'Seguridad financiera', icon: ShieldCheck, superAdminOnly: true },
   { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
@@ -122,6 +127,19 @@ const [searchParams, setSearchParams] = useSearchParams();
       next.set('tab', key);
       return next;
     }, { replace: true });
+  };
+
+  // Salta al Libro mayor con una vista ya abierta. La pantalla de Seguridad
+  // financiera da el veredicto; el detalle contable vive allá, y sin esto
+  // habría que volver a buscarlo a mano.
+  const irAlLibro = (vista) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', 'ledger');
+      next.set('vista', vista);
+      return next;
+    }, { replace: true });
+    setActiveTabState('ledger');
   };
 
   const isAgent = user?.role === 'agent';
@@ -769,8 +787,12 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'reportes' && (
           <Reportes />
         )}
+        {activeTab === 'seguridad' && user?.role === 'super_admin' && (
+          <SeguridadFinanciera irAlLibro={irAlLibro} />
+        )}
+
         {activeTab === 'ledger' && (
-          <LibroMayor />
+          <LibroMayor vistaInicial={searchParams.get('vista')} />
         )}
         {activeTab === 'rrhh' && (
           <ErrorBoundary clave="rrhh" donde="Recursos Humanos">
