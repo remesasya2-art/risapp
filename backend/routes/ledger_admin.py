@@ -267,3 +267,28 @@ async def ver_integridad(
         return await contabilidad.integridad(libro=libro)
     except Exception as e:
         raise _error(e)
+
+
+@router.get("/cofre")
+async def estado_del_cofre(admin: User = Depends(get_super_admin)):
+    """El estado del cofre de los documentos, para la pantalla de seguridad.
+
+    POR QUE ESTA RUTA EXISTE
+
+        `services/cofre.py` promete que la huella de la llave «se puede mirar en
+        el panel». Sin esta ruta esa frase era mentira, y el procedimiento de
+        `docs/la-llave-del-cofre.md` —cotejar la llave que está corriendo contra
+        la que está anotada en papel— no se podía completar sin entrar al
+        servidor por consola.
+
+        Esa comprobación es la que convierte «respaldá la llave» en algo que se
+        puede verificar de un vistazo, así que tiene que estar donde se mira.
+
+    QUE DEVUELVE Y QUE NO
+
+        La HUELLA, que son ocho caracteres derivados de la llave y no permiten
+        reconstruirla. Nunca la llave. Es la misma distinción que hace el módulo:
+        la huella es pública a propósito.
+    """
+    from services import cofre
+    return await cofre.revisar(db)

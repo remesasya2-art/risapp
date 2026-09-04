@@ -186,7 +186,66 @@ export function resumen(datos) {
         ? String(llaverosDelDinero(d.personal.valor?.personal).length) : null,
       unidad: 'personas',
     },
+    {
+      clave: 'cofre',
+      pregunta: '¿Están protegidos los documentos?',
+      detalle: detalleDelCofre(d.cofre),
+      estado: cofreVeredicto(d.cofre),
+      // La huella de la llave, que es para lo que existe esta tarjeta: se
+      // coteja de un vistazo contra la que está anotada en papel, sin entrar
+      // al servidor y sin sacar la llave de ningún lado.
+      cifra: d.cofre?.estado === 'ok' ? (d.cofre.valor?.huella || null) : null,
+      unidad: 'huella de la llave',
+    },
   ];
+}
+
+/**
+ * El veredicto del cofre. Los cuatro estados que puede tener, y por qué.
+ *
+ * APAGADO NO ES «MAL», Y ESA ES LA DECISION MAS DISCUTIBLE DE ESTE ARCHIVO
+ *
+ *   Guardar los documentos en claro es una postura declarada, no un control
+ *   que falló. Pintarla de ámbar dejaría el dictamen general en «con
+ *   observaciones» para siempre, y un ámbar permanente enseña a ignorar el
+ *   ámbar — que es justo lo que no se quiere el día que aparezca uno de
+ *   verdad.
+ *
+ *   Así que va en neutro, con el texto diciéndolo sin vueltas. Lo que SI es
+ *   rojo es el cofre prendido y sin poder abrirse: eso significa que hay
+ *   documentos que no se van a poder leer, y es urgente.
+ */
+function cofreVeredicto(bloque) {
+  if (!bloque || bloque.estado !== 'ok') return 'desconocido';
+  const v = bloque.valor;
+  // Una respuesta que dice «ok» pero llega sin datos, o con un modo que esta
+  // pantalla no conoce, NO es neutro: es una respuesta que no se pudo leer, y
+  // la regla de este archivo es que eso se dice. Sin esta línea, un cambio en
+  // el servidor dejaría la tarjeta en gris tranquilo afirmando que los
+  // documentos están como corresponde, sin haber mirado nada.
+  if (!v || (v.modo !== 'cifrando' && v.modo !== 'apagado')) return 'desconocido';
+  if (v.modo === 'apagado') return 'neutro';
+  return v.ok === true ? 'bien' : 'mal';
+}
+
+function detalleDelCofre(bloque) {
+  if (!bloque || bloque.estado !== 'ok') {
+    return 'No se pudo consultar el estado del cofre.';
+  }
+  const v = bloque.valor;
+  if (!v || (v.modo !== 'cifrando' && v.modo !== 'apagado')) {
+    return 'El servidor contestó algo que esta pantalla no sabe leer.';
+  }
+  if (v.modo === 'apagado') {
+    return 'Los documentos de identidad se guardan sin cifrar. Ver docs/la-llave-del-cofre.md.';
+  }
+  if (v.ok === true) {
+    return 'Cifrados y comprobados: la llave que está corriendo es la que los abre.';
+  }
+  // El texto del servidor distingue «no llego a la base» de «la llave está
+  // mal», y esa diferencia importa mucho más que el color: una manda a no
+  // tocar nada, la otra a cambiar la llave.
+  return v.detalle || 'El cofre está prendido pero no se pudo comprobar.';
 }
 
 function llavesVeredicto(bloque) {
@@ -269,4 +328,5 @@ export const CONSULTAS = [
   { clave: 'integridad', ruta: '/admin/ledger/integridad' },
   { clave: 'personal', ruta: '/admin/rrhh' },
   { clave: 'movimientos', ruta: '/admin/rrhh/auditoria/libro', params: { categoria: 'dinero', limite: 25 } },
+  { clave: 'cofre', ruta: '/admin/ledger/cofre' },
 ];

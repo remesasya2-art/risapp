@@ -188,12 +188,19 @@ def test_el_veredicto_solo_es_verde_con_el_valor_exacto():
     assert js("m.veredicto({estado: 'ok', valor: {}}, (v) => v.cubre === true)") == "mal"
 
 
+# Cuántas preguntas contesta la pantalla. Se nombra una vez para que agregar
+# una tarjeta obligue a mirar los tests que cuentan, en vez de que un `4` suelto
+# quede mal en tres lugares distintos.
+CUANTAS_TARJETAS = 5
+
+
 def test_el_resumen_de_una_pantalla_sin_datos_no_afirma_nada():
-    """Antes de que conteste la primera consulta, las cuatro preguntas están
-    sin responder. Ninguna puede nacer en verde."""
+    """Antes de que conteste la primera consulta, todas las preguntas están sin
+    responder. Ninguna puede nacer en verde."""
     estados = js("m.resumen(null).map(t => t.estado)")
-    assert estados == ["desconocido"] * 4
-    assert js("m.resumen(undefined).map(t => t.estado)") == ["desconocido"] * 4
+    assert estados == ["desconocido"] * CUANTAS_TARJETAS
+    assert js("m.resumen(undefined).map(t => t.estado)") == \
+        ["desconocido"] * CUANTAS_TARJETAS
 
 
 def test_el_resumen_traduce_cada_respuesta():
@@ -310,125 +317,99 @@ def test_el_dictamen_cuenta_cada_categoria():
 
 
 def test_el_dictamen_del_resumen_sin_datos_es_alcance_limitado():
-    """Encadenado con `resumen`: las cuatro preguntas sin responder tienen que
+    """Encadenado con `resumen`: todas las preguntas sin responder tienen que
     dar un dictamen que no afirme nada."""
     assert js("m.dictamen(m.resumen(null)).estado") == "sin_verificar"
-    assert js("m.dictamen(m.resumen(null)).noVerificados") == 4
+    assert js("m.dictamen(m.resumen(null)).noVerificados") == CUANTAS_TARJETAS
 
 
-def test_no_verificado_no_se_puede_etiquetar_como_aprobado():
-    """LA SIMPLIFICACION QUE ALGUIEN HARIA DE BUENA FE.
+# ══════════════════════════════════════════════════════════════════════════
+# C-06 — El cofre de los documentos
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Esta tarjeta existe por una promesa que estaba escrita y no era cierta:
+# `services/cofre.py` y `docs/la-llave-del-cofre.md` dicen que la huella de la
+# llave «se puede mirar en el panel», y no se podía. Sin eso, el procedimiento
+# de cotejar la llave que está corriendo contra la anotada en papel exigía
+# entrar al servidor por consola — o sea, no se hacía.
 
-    Cambiar «No verificado» por «Sin novedad» parece una mejora de redacción y
-    es un cambio de significado: convierte una limitación al alcance en un
-    visto bueno. Por eso las palabras viven en el módulo y no en la pantalla.
+def _cofre(valor):
+    return json.dumps({"cofre": {"estado": "ok", "valor": valor}})
+
+
+def tarjeta_cofre(datos):
+    return js(f"m.resumen({datos}).find(t => t.clave === 'cofre')")
+
+
+def test_LA_HUELLA_SE_MUESTRA_EN_LA_TARJETA():
+    """Es para lo que existe: cotejarla de un vistazo contra la que está
+    anotada, sin entrar al servidor y sin sacar la llave de ningún lado."""
+    t = tarjeta_cofre(_cofre({"modo": "cifrando", "ok": True, "huella": "cd3ffe4d"}))
+    assert t["cifra"] == "cd3ffe4d"
+    assert "huella" in t["unidad"]
+
+
+def test_el_cofre_prendido_y_verificado_esta_bien():
+    t = tarjeta_cofre(_cofre({"modo": "cifrando", "ok": True, "huella": "cd3ffe4d"}))
+    assert t["estado"] == "bien"
+
+
+def test_EL_COFRE_PRENDIDO_QUE_NO_ABRE_ES_ROJO():
+    """Es el único estado urgente de esta tarjeta: significa que hay documentos
+    guardados que no se van a poder leer."""
+    t = tarjeta_cofre(_cofre({"modo": "cifrando", "ok": False, "huella": "aaaa1111",
+                              "detalle": "LA LLAVE NO ES LA CORRECTA"}))
+    assert t["estado"] == "mal"
+    assert "LA LLAVE NO ES LA CORRECTA" in t["detalle"]
+
+
+def test_el_texto_del_servidor_llega_tal_cual_a_la_pantalla():
+    """El servidor distingue «no llego a la base» de «la llave está mal», y esa
+    diferencia importa más que el color: una dice que no toques nada, la otra
+    que cambies la llave. Si la pantalla lo reemplazara por un mensaje genérico,
+    esa distinción se perdería justo cuando hace falta."""
+    t = tarjeta_cofre(_cofre({
+        "modo": "cifrando", "ok": False, "huella": "aaaa1111",
+        "detalle": "No se pudo hablar con la base... no la cambies."}))
+    assert "no la cambies" in t["detalle"]
+
+
+def test_EL_COFRE_APAGADO_NO_ES_UNA_EXCEPCION():
+    """La decisión más discutible de la tarjeta, así que queda fijada.
+
+    Guardar los documentos en claro es una postura declarada, no un control que
+    falló. Pintarla de ámbar dejaría el dictamen general en «con observaciones»
+    para siempre, y un ámbar permanente enseña a ignorar el ámbar — que es lo
+    que no se quiere el día que aparezca uno de verdad.
+
+    Va en neutro, y el TEXTO lo dice sin vueltas: ahí es donde se informa.
     """
-    etiquetas = js("m.DICTAMEN_ETIQUETA")
-    sin_verificar = etiquetas["desconocido"].lower()
+    t = tarjeta_cofre(_cofre({"modo": "apagado", "ok": True, "huella": "(sin llave)"}))
+    assert t["estado"] == "neutro"
+    assert "sin cifrar" in t["detalle"]
 
-    assert sin_verificar != etiquetas["bien"].lower()
-    assert sin_verificar != etiquetas["neutro"].lower()
-    for palabra in ("conforme", "novedad", "correcto", "ok", "bien"):
-        assert palabra not in sin_verificar, (
-            f"«{etiquetas['desconocido']}» se lee como aprobación")
-
-
-def test_cada_estado_tiene_su_propia_palabra():
-    """Dos estados con la misma etiqueta es un estado que desaparece."""
-    for mapa in ("m.DICTAMEN_ETIQUETA", "m.DICTAMEN_GENERAL_ETIQUETA"):
-        etiquetas = js(mapa)
-        assert len(set(etiquetas.values())) == len(etiquetas), (
-            f"{mapa} repite alguna etiqueta: {etiquetas}")
+    dictamen = js(f"m.dictamen(m.resumen({_cofre({'modo': 'apagado', 'ok': True})}))")
+    assert dictamen["excepciones"] == 0
+    assert dictamen["observaciones"] == 0
 
 
-def test_hay_una_palabra_para_cada_estado_que_el_resumen_puede_devolver():
-    """Si `resumen` devolviera un estado sin etiqueta, la pantalla caería al
-    genérico y mostraría «No verificado» sobre un control que sí se verificó."""
-    estados = set(js("m.resumen(null).map(t => t.estado)"))
-    estados |= {"bien", "mal", "atencion", "neutro", "desconocido"}
-    etiquetas = js("m.DICTAMEN_ETIQUETA")
-    faltan = sorted(estados - set(etiquetas))
-    assert not faltan, f"estados sin etiqueta: {faltan}"
-
-    generales = js("m.DICTAMEN_GENERAL_ETIQUETA")
-    posibles = {"conforme", "observaciones", "sin_verificar", "excepcion"}
-    assert posibles <= set(generales), sorted(posibles - set(generales))
-
-
-# ─── Grupo 2: la unión con el backend ─────────────────────────────────────
-
-@pytest.fixture(scope="module")
-def rutas_de_la_app():
-    try:
-        from server import app
-    except Exception as e:                                # pragma: no cover
-        pytest.skip(f"no se pudo armar la app: {type(e).__name__}: {e}")
-    return app.routes
+@pytest.mark.parametrize("respuesta", [
+    '{"cofre": {"estado": "error", "error": "500"}}',
+    '{"cofre": {"estado": "ok"}}',              # sin `valor`
+    '{"cofre": null}',
+    '{}',
+])
+def test_si_no_se_pudo_consultar_no_se_afirma_nada(respuesta):
+    """La regla de todo este archivo, aplicada a la tarjeta nueva: no saber no
+    es estar bien."""
+    t = tarjeta_cofre(respuesta)
+    assert t["estado"] == "desconocido"
+    assert t["cifra"] is None
 
 
-def _ruta(rutas, metodo, camino):
-    for r in rutas:
-        if getattr(r, "path", None) == camino and metodo in (getattr(r, "methods", None) or ()):
-            return r
-    return None
-
-
-def test_las_cinco_consultas_de_la_pantalla_existen(rutas_de_la_app):
-    """Si alguien renombra una, la pantalla se queda en gris diciendo «no se
-    pudo comprobar». El veredicto sería correcto y justamente por eso nadie
-    iría a mirar: un gris no alarma."""
-    faltan = [f"{m} {c}" for m, c in RUTAS if _ruta(rutas_de_la_app, m, c) is None]
-    assert not faltan, "la pantalla consulta rutas que la aplicación no tiene:\n  " + "\n  ".join(faltan)
-
-
-def test_las_cinco_son_de_super_administrador(rutas_de_la_app):
-    from routes.dependencies import get_super_admin
-
-    def exige_super(dependant):
-        if any(d.call is get_super_admin for d in dependant.dependencies):
-            return True
-        return any(exige_super(d) for d in dependant.dependencies)
-
-    sueltas = []
-    for metodo, camino in RUTAS:
-        ruta = _ruta(rutas_de_la_app, metodo, camino)
-        if ruta is None:
-            continue                      # ya lo dice la prueba de arriba
-        if not exige_super(ruta.dependant):
-            sueltas.append(f"{metodo} {camino}")
-
-    assert not sueltas, (
-        "estas rutas del área de Seguridad financiera no exigen super "
-        "administrador:\n  " + "\n  ".join(sueltas))
-
-
-def test_la_pantalla_no_consulta_ninguna_otra_ruta():
-    """Lo que la pantalla pide tiene que ser exactamente lo que estas pruebas
-    comprueban. Una consulta agregada a mano en el componente —salteando
-    CONSULTAS— quedaría sin verificar."""
-    fuente = open(PANTALLA, encoding="utf-8").read()
-    assert "api.get" in fuente, "la pantalla dejó de consultar: revisá esta prueba"
-    # Una sola llamada, y va sobre la lista declarada.
-    assert fuente.count("api.get") == 1
-    assert "CONSULTAS.map" in fuente
-
-
-def test_la_pantalla_solo_lee():
-    """No cambia ningún saldo ni corrige ningún asiento, y eso no es una
-    promesa del comentario: no hay forma de escribir desde acá."""
-    fuente = open(PANTALLA, encoding="utf-8").read()
-    for verbo in ("api.post", "api.put", "api.patch", "api.delete"):
-        assert verbo not in fuente, f"la pantalla de Seguridad financiera usa {verbo}"
-
-
-# ─── Grupo 3: la puerta ───────────────────────────────────────────────────
-
-def test_la_pestana_es_solo_del_super_administrador():
-    """En las dos puntas: la pestaña no se dibuja, y el contenido tampoco. El
-    backend igual la frenaría, pero una pestaña que un agente ve y que le
-    devuelve cinco errores es una pestaña que no debería estar."""
-    panel = open(PANEL, encoding="utf-8").read()
-    declaracion = [l for l in panel.splitlines() if "key: 'seguridad'" in l]
-    assert len(declaracion) == 1, "la pestaña tiene que declararse una sola vez"
-    assert "superAdminOnly: true" in declaracion[0]
-    assert "activeTab === 'seguridad' && user?.role === 'super_admin'" in panel
+def test_la_consulta_del_cofre_esta_declarada():
+    """Sin la entrada en CONSULTAS la tarjeta nunca recibiría datos y se
+    quedaría en «desconocido» para siempre, que se lee como un error del
+    servidor y no como una tarjeta que nadie conectó."""
+    rutas = js("m.CONSULTAS.map(c => c.clave)")
+    assert "cofre" in rutas

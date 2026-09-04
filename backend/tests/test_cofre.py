@@ -494,3 +494,70 @@ def test_NINGUNA_RUTA_LEE_UN_DOCUMENTO_SIN_ABRIR_EL_COFRE():
 def test_el_barrido_conoce_los_campos():
     """Si `CAMPOS_KYC` quedara vacía, el barrido pasaría sin mirar nada."""
     assert len(cofre.CAMPOS_KYC) == 4
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. Lo que sale al panel: la huella, nunca la llave
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_LO_QUE_SE_PUBLICA_AL_PANEL_NO_CONTIENE_LA_LLAVE(base, cerrado):
+    """`/admin/ledger/cofre` alimenta la tarjeta C-06, que existe para que la
+    huella se pueda cotejar de un vistazo contra la anotada en papel.
+
+    Esa comodidad no puede convertirse en «y de paso copiá la llave del panel»:
+    la huella se comparte a propósito, la llave no sale nunca. Se comprueba
+    sobre lo que la función DEVUELVE y no sobre el texto del archivo, porque un
+    grep de la palabra «llave» encuentra los comentarios.
+    """
+    corre(cofre.sellar_testigo(base))
+    llave = os.environ[cofre.VARIABLE_LLAVE]
+    estado = corre(cofre.revisar(base))
+
+    entero = repr(estado)
+    assert llave not in entero
+    assert llave.rstrip("=") not in entero
+    # Ni siquiera un pedazo suficiente para adivinar el resto.
+    assert llave[:12] not in entero
+
+    # Y lo que sí tiene que estar, está.
+    assert estado["huella"] == cofre.huella()
+
+
+def test_el_panel_recibe_los_campos_que_dibuja(base, cerrado):
+    """La tarjeta lee `modo`, `ok`, `huella` y `detalle`. Si el servidor deja de
+    mandar alguno, la tarjeta cae en «no se pudo comprobar» — que es seguro,
+    pero se lee como un error del servidor y nadie sabría que faltó un campo."""
+    corre(cofre.sellar_testigo(base))
+    estado = corre(cofre.revisar(base))
+    for campo in ("modo", "ok", "huella", "detalle", "motivo"):
+        assert campo in estado, f"falta «{campo}», que la pantalla usa"
+
+
+def test_el_modo_que_sale_al_panel_es_uno_de_los_dos_que_conoce(base, apagado):
+    """La pantalla trata cualquier otro valor como «no se pudo leer». Si el
+    servidor inventara un tercer modo, la tarjeta se quedaría en gris sin que
+    nadie entienda por qué."""
+    estado = corre(cofre.revisar(base))
+    assert estado["modo"] in ("apagado", "cifrando")
+
+
+def test_LA_RUTA_DEL_PANEL_ES_SOLO_PARA_EL_SUPER_ADMINISTRADOR():
+    """La huella no revela la llave, pero decir «los documentos están sin
+    cifrar» ya es información útil para quien esté mirando por dónde entrar."""
+    import ast
+    fuente = open(os.path.join(_BACKEND, "routes", "ledger_admin.py"),
+                  encoding="utf-8").read()
+    arbol = ast.parse(fuente)
+    for fn in ast.walk(arbol):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if fn.name != "estado_del_cofre":
+            continue
+        # Se recorren los ARGUMENTOS del árbol y no su texto:
+        # `get_source_segment` sobre un nodo de argumentos devuelve vacío, y un
+        # test que compara contra vacío pasa o falla por el motivo equivocado.
+        guardias = {n.id for n in ast.walk(fn.args) if isinstance(n, ast.Name)}
+        assert "get_super_admin" in guardias, \
+            f"la ruta del cofre no exige super administrador (tiene: {guardias})"
+        return
+    raise AssertionError("no se encontró la ruta del cofre")
