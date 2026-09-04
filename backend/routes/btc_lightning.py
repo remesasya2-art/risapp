@@ -23,7 +23,30 @@ BLINK_WEBHOOK_SECRET = os.getenv("BLINK_WEBHOOK_SECRET" , "" )
 BLINK_WALLET_ID = os.getenv("BLINK_WALLET_ID", "81812448-e78e-47fb-b6cd-d827fc952536")
 BLINK_GRAPHQL_URL = "https://api.blink.sv/graphql"
 
-_btc_price_cache = {"price": 58500.0, "updated_at": None}
+# El caché arranca VACIO. Antes arrancaba en 58 500 USD escritos a mano: si el
+# primer pedido al proveedor de precio fallaba, esa cifra se usaba para cobrar
+# una remesa real. Con el bitcoin cerca de 79 000, el cliente habría pagado un
+# 36 % de más en bitcoin sin que nada fallara ni nadie se enterara.
+_btc_price_cache = {"price": None, "updated_at": None}
+
+# Cuánto se acepta un precio guardado cuando el proveedor no contesta. Un
+# precio de hace cinco minutos sirve; uno de hace tres horas es otro precio.
+# El bitcoin se mueve; cobrar con una cifra vieja es cobrar mal, para un lado
+# o para el otro.
+EDAD_MAXIMA_DEL_PRECIO = timedelta(minutes=10)
+
+# Cuánto vale la tasa USDI → VES desde que se guardó.
+#
+#   El precio de Bitcoin se pide en vivo en cada consulta, así que no envejece.
+#   La tasa NO: se escribe a mano desde el panel (`btc_admin.py`), y el
+#   raspador del BCV escribe otra colección —`bcv_rates`— que nadie conecta con
+#   esta clave. Si nadie la toca, el valor de hace un mes sigue ahí y el
+#   sistema sigue prometiendo bolívares con él.
+#
+#   Un día es una elección conservadora para una tasa que se mueve todos los
+#   días. Es UN número y está acá para cambiarlo: si el operador la fija una
+#   vez por semana, subilo; si la mueve dos veces por día, bajalo.
+EDAD_MAXIMA_DE_LA_TASA = timedelta(hours=24)
 
 MARGEN = 0.99
 COMISION = 1.02
@@ -51,8 +74,48 @@ async def _get_comision_dinamica():
 
 
 async def _get_tasa_ves():
+    """La tasa USDI → VES, o None si no está configurada.
+
+    Antes devolvía 680.0 cuando faltaba. Eso no dejaba el sistema roto: lo
+    dejaba emitiendo remesas a una tasa que nadie fijó. Si la real fuera 270,
+    a cada beneficiario se le prometían dos veces y media los bolívares que
+    corresponden, y la diferencia la pone el operador.
+
+    Devolver None obliga a decidir en cada lugar que la use. Los dos lugares
+    están decididos: la pantalla no convierte, y el cobro no se emite.
+    """
     config = await db.config.find_one({"clave": "tasa_usd_ves_btc"})
-    return float(config["valor"]) if config and config.get("valor") else 680.0
+    if not config or not config.get("valor"):
+        return None
+    try:
+        tasa = float(config["valor"])
+    except (TypeError, ValueError):
+        logger.error("tasa_usd_ves_btc guardada con un valor que no es un número")
+        return None
+    if tasa <= 0:
+        return None
+
+    cuando = config.get("updated_at")
+    if cuando is None:
+        # Concesión, y con fecha de vencimiento: las tasas guardadas antes de
+        # que `_write_config_value` sellara la hora no la tienen. Cortar acá
+        # dejaría los envíos parados en el momento de desplegar esto, por un
+        # dato viejo y no por una tasa mala. Se acepta una vez y se grita: con
+        # que el operador vuelva a guardar la tasa desde el panel, queda
+        # sellada y este camino no se usa nunca más.
+        logger.error("La tasa USDI→VES no tiene fecha de actualización: "
+                     "volvé a guardarla desde el panel para poder controlar "
+                     "su antigüedad.")
+        return tasa
+
+    if cuando.tzinfo is None:
+        cuando = cuando.replace(tzinfo=timezone.utc)
+    edad = datetime.now(timezone.utc) - cuando
+    if edad > EDAD_MAXIMA_DE_LA_TASA:
+        logger.error(f"La tasa USDI→VES tiene {edad.days} día(s) y "
+                     f"{edad.seconds // 3600} hora(s): no se cotiza con ella.")
+        return None
+    return tasa
 
 
 async def _get_btc_price():
@@ -66,7 +129,40 @@ async def _get_btc_price():
             return price
     except Exception as e:
         logger.warning(f"Error precio BTC: {e}")
-        return _btc_price_cache["price"]
+        # Se acepta el último precio conocido sólo si es reciente. Si no hay
+        # ninguno, o el que hay ya envejeció, se devuelve None: es preferible
+        # no poder cotizar a cotizar con un número de hace horas.
+        guardado = _btc_price_cache.get("price")
+        cuando = _btc_price_cache.get("updated_at")
+        if guardado is None or cuando is None:
+            return None
+        if datetime.now(timezone.utc) - cuando > EDAD_MAXIMA_DEL_PRECIO:
+            logger.error("El precio BTC guardado quedó viejo y el proveedor no contesta")
+            return None
+        return guardado
+
+
+async def _cotizacion_o_error():
+    """Las dos cifras con las que se cobra, o un error que se entiende.
+
+    Existe para que ningún camino que mueve dinero pueda seguir sin ellas por
+    olvido. Devuelve una tupla; si falta cualquiera de las dos, corta.
+    """
+    precio = await _get_btc_price()
+    tasa = await _get_tasa_ves()
+    if precio is None or tasa is None:
+        falta = "el precio de Bitcoin" if precio is None else "la tasa del día"
+        if precio is None and tasa is None:
+            falta = "el precio de Bitcoin ni la tasa del día"
+        logger.error(f"No se emite el cobro: no se pudo obtener {falta}")
+        raise HTTPException(
+            status_code=503,
+            detail=("En este momento no podemos calcular la cotización. No "
+                    "emitimos el cobro con una tasa estimada: el monto que "
+                    "recibe el beneficiario tiene que ser exacto. Probá de "
+                    "nuevo en unos minutos."),
+        )
+    return precio, tasa
 
 
 async def _get_total_enviado_hoy(user_id):
@@ -111,7 +207,19 @@ class MarcarEnviadoRequest(BaseModel):
 async def get_precio_btc():
     precio = await _get_btc_price()
     tasa_ves = await _get_tasa_ves()
-    return {"precio_btc": precio, "tasa_btc_ves": tasa_ves, "updated_at": _btc_price_cache.get("updated_at")}
+    # Puede devolver nulos, y es a propósito. La pantalla sabe qué hacer con
+    # eso: no convierte, no promete y no deja avanzar. Un número inventado acá
+    # se vería bien y sería mentira.
+    # La fecha de la tasa viaja para que el panel pueda mostrarla. Un control
+    # que corta sin decir desde cuándo obliga a adivinar qué pasó.
+    doc = await db.config.find_one({"clave": "tasa_usd_ves_btc"})
+    return {
+        "precio_btc": precio,
+        "tasa_btc_ves": tasa_ves,
+        "disponible": precio is not None and tasa_ves is not None,
+        "updated_at": _btc_price_cache.get("updated_at"),
+        "tasa_actualizada_en": (doc or {}).get("updated_at"),
+    }
 
 
 @router.post("/generar-invoice", dependencies=[Depends(sin_transacciones_personales)])
@@ -140,8 +248,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
     if not beneficiario:
         raise HTTPException(status_code=404, detail="Beneficiario no encontrado.")
         
-    precio_btc = await _get_btc_price()
-    tasa_ves = await _get_tasa_ves()
+    precio_btc, tasa_ves = await _cotizacion_o_error()
     margen_dinamico = await _get_margen_dinamico()
     comision_dinamica = await _get_comision_dinamica()
     precio_con_margen = precio_btc * margen_dinamico
