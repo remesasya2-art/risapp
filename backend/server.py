@@ -199,6 +199,7 @@ app = FastAPI(
 )
 
 # Rate limiter wiring (from routes.security_2fa)
+from services import csp
 from routes.security_2fa import limiter as security_limiter
 app.state.limiter = security_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -212,24 +213,16 @@ async def security_headers_middleware(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    # Tres directivas de CSP que no dependen de qué scripts carga la aplicación,
-    # así que se pueden poner sin romper nada:
-    #
-    #   object-src 'none'      no hay <object> ni <embed> con plugins. Es un
-    #                          camino clásico para ejecutar código con un
-    #                          archivo que el usuario subió.
-    #   base-uri 'self'        un <base href> inyectado cambia a dónde apunta
-    #                          TODA ruta relativa de la página, scripts incluidos.
-    #   frame-ancestors 'none' lo mismo que X-Frame-Options, que los navegadores
-    #                          nuevos ya no miran.
-    #
-    # `script-src` NO está, y es a propósito: la aplicación carga el SDK de
-    # Mercado Pago y otros scripts de terceros, y una lista mal armada rompe los
-    # pagos en silencio. Ponerla requiere revisar qué carga cada pantalla, y eso
-    # es un trabajo aparte — queda anotado en el dossier como pendiente en vez
-    # de puesto a medias.
-    response.headers["Content-Security-Policy"] = (
-        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+    # La política de contenido, incluida `script-src`, sale de services/csp.py.
+    # Arranca en modo REPORTE: el navegador no bloquea nada y avisa lo que
+    # habría bloqueado, para poder completarla con tráfico real antes de que
+    # corte un pago. `CSP_MODO=exigir` la pasa a bloquear.
+    cabecera_csp = csp.cabecera()
+    if cabecera_csp:
+        nombre, valor = cabecera_csp
+        response.headers[nombre] = valor
+        # Le dice al navegador dónde mandar los avisos de `report-to`.
+        response.headers["Reporting-Endpoints"] = f'csp="{csp.RUTA_DE_REPORTE}"'
     return response
 
 # CORS configuration

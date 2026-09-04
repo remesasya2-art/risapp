@@ -193,26 +193,26 @@ def test_EL_TOPE_ES_EL_PRIMERO_QUE_VE_EL_PEDIDO():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 3. Las directivas de CSP que no dependen de qué scripts carga la app
+# 3. La política de contenido
 # ══════════════════════════════════════════════════════════════════════════
-
-def test_las_tres_directivas_de_csp_estan(cliente):
-    """`object-src 'none'` corta la ejecución por plugin con un archivo subido;
-    `base-uri 'self'` impide que un `<base>` inyectado cambie a dónde apuntan
-    TODAS las rutas relativas, scripts incluidos; `frame-ancestors` es lo mismo
-    que X-Frame-Options para los navegadores que ya no lo miran."""
-    csp = cliente.get("/api/limits").headers.get("content-security-policy", "")
-    assert "object-src 'none'" in csp
-    assert "base-uri 'self'" in csp
-    assert "frame-ancestors 'none'" in csp
+#
+# Las directivas y el modo se prueban en `test_politica_de_contenido.py`, que es
+# un tema por sí solo. Acá queda sólo lo que este archivo tiene que garantizar:
+# que la cabecera efectivamente SALE en una respuesta real, que es la parte que
+# se pierde si alguien toca el middleware.
 
 
-def test_script_src_NO_esta_y_es_a_proposito():
-    """Queda escrito para que no se lea como un olvido. La aplicación carga el
-    SDK de Mercado Pago y otros scripts de terceros: una lista mal armada rompe
-    los pagos en silencio. Ponerla requiere revisar qué carga cada pantalla."""
-    fuente = open(os.path.join(_BACKEND, "server.py"), encoding="utf-8").read()
-    bloque = fuente[fuente.index("Content-Security-Policy") - 1600:
-                    fuente.index("Content-Security-Policy") + 300]
-    assert "script-src" in bloque, "falta la explicación de por qué no está"
-    assert "Mercado Pago" in bloque
+def test_la_politica_de_contenido_sale_en_la_respuesta(cliente):
+    r = cliente.get("/api/limits")
+    tiene = ("content-security-policy" in r.headers
+             or "content-security-policy-report-only" in r.headers)
+    assert tiene, "no salió ninguna cabecera de política de contenido"
+
+
+def test_tambien_sale_cuando_la_respuesta_es_un_error(cliente):
+    """Es el caso que se olvida: una página de error también se renderiza, y
+    también puede tener un script inyectado adentro."""
+    r = cliente.get("/api/auth/me")
+    assert r.status_code == 401
+    assert ("content-security-policy" in r.headers
+            or "content-security-policy-report-only" in r.headers)
