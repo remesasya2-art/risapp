@@ -132,9 +132,12 @@ def _origen(request) -> dict:
     if request is None:
         return {"ip": None, "pais": None, "navegador": None}
     cabeceras = getattr(request, "headers", {}) or {}
-    reenviada = cabeceras.get("x-forwarded-for")
-    ip = (reenviada.split(",")[0].strip() if reenviada
-          else (getattr(getattr(request, "client", None), "host", None)))
+    # La IP en la que se puede confiar, no la que el cliente dice tener. El
+    # primer valor de `X-Forwarded-For` lo escribe quien hace el pedido: un
+    # libro de auditoría que lo guarda como «la IP» se llena de valores
+    # inventados, y es justo el libro que se mira cuando algo pasó.
+    from services.ip_cliente import ip_del_cliente
+    ip = ip_del_cliente(request) or None
     return {
         "ip": ip,
         "pais": cabeceras.get("cf-ipcountry"),

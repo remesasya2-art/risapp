@@ -43,6 +43,8 @@ from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from services.ip_cliente import ip_del_cliente
+
 from database import db
 from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
@@ -73,11 +75,28 @@ CONFLICTO_DE_OPCIONES_DE_INDICE = 85               # IndexOptionsConflict
 # Rate Limiter (per IP)
 # ============================================================
 def get_real_client_ip(request: Request) -> str:
-    """Usa X-Forwarded-For (IP real del cliente detras del proxy de Railway); si no existe, cae de vuelta a get_remote_address."""
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return get_remote_address(request)
+    """La IP en la que se puede confiar para contar intentos.
+
+    ANTES ESTO SE PODIA FALSEAR, Y CON ELLO TODOS LOS LIMITES
+
+        La versión anterior tomaba el PRIMER valor de `X-Forwarded-For`, que es
+        una cabecera que manda el cliente. Un proxy no la reemplaza: le agrega
+        la IP real AL FINAL. Así que un pedido enviado con
+
+            X-Forwarded-For: 1.2.3.4
+
+        llegaba como «1.2.3.4, <ip real>» y el primer valor era el que había
+        elegido quien atacaba. Cambiándolo en cada intento, cada uno caía en un
+        contador distinto: el ingreso, el reseteo de contraseña, la invitación
+        del personal y el segundo factor quedaban sin límite efectivo.
+
+        La lógica correcta —leer de derecha a izquierda, y preferir la cabecera
+        que escribe Cloudflare— vive en `services/ip_cliente.py`, con sus
+        pruebas. Esta función queda como el nombre por el que la conoce el
+        resto del archivo.
+    """
+    ip = ip_del_cliente(request)
+    return ip or get_remote_address(request)
 
 limiter = Limiter(key_func=get_real_client_ip, default_limits=[])
 

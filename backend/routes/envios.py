@@ -104,27 +104,22 @@ async def obtener_catalogo(current_user: User = Depends(get_current_user)):
 
 
 def _ip_real(request) -> str | None:
-    """La IP del usuario, no la del proxy.
+    """La IP en la que se puede confiar, para dejarla asentada en el envío.
 
-    Detrás del edge de Railway, `request.client.host` es la misma para todos, y
-    este dato existe únicamente para el argumento legal que motiva la doble
-    aceptación: una IP idéntica para todo el mundo no distingue a nadie. El
-    proyecto ya resolvió esto en `routes/security_2fa.get_real_client_ip`, que
-    además es el `key_func` del rate limiter. Acá se repite el criterio en vez de
-    importarlo: importar un módulo de rutas desde otro, en tiempo de petición,
-    arrastra slowapi y media aplicación, y el `except` que eso obliga a poner
-    degradaba en silencio justo a la IP del proxy que se quería evitar. Hay un
-    test que compara las dos implementaciones para que no se separen.
+    ANTES TOMABA EL PRIMER VALOR DE X-FORWARDED-FOR, QUE LO ESCRIBE EL CLIENTE
+
+        Esa cabecera se arma por acumulación: cada proxy le agrega al final la
+        IP de quien le habló. El primero de la cadena no es «el cliente»: es lo
+        que el cliente quiso escribir. Guardarlo como la IP del envío llena el
+        registro de valores inventados justo cuando hace falta mirarlo.
+
+        La resolución correcta —de derecha a izquierda, y prefiriendo la
+        cabecera que escribe Cloudflare, que sí pisa lo que manda el cliente—
+        vive en `services/ip_cliente.py`, con sus pruebas, y la comparte con el
+        limitador de intentos.
     """
-    encabezado = ""
-    try:
-        encabezado = (request.headers.get("x-forwarded-for") or "").strip()
-    except Exception:                                         # pragma: no cover
-        encabezado = ""
-    if encabezado:
-        # El primero de la cadena es el cliente; los demás son proxies.
-        return encabezado.split(",")[0].strip() or None
-    return getattr(getattr(request, "client", None), "host", None)
+    from services.ip_cliente import ip_del_cliente
+    return ip_del_cliente(request) or None
 
 
 @router.post("/cotizar")
