@@ -93,12 +93,28 @@ superficie queda reservado a él o a puentes autenticados con clave de API.
   para usuarios comunes.
 - Al cerrar sesión se borran **todas** las sesiones del usuario, no sólo la
   actual.
+- **Cambiar la contraseña cierra las sesiones abiertas.** Esta línea es nueva, y
+  la anterior situación merece contarse: hasta septiembre de 2026, las **cinco**
+  formas de cambiar una contraseña —el cambio propio, los dos reseteos por
+  correo, el reseteo que hace un administrador y el alta del personal— escribían
+  la contraseña nueva y no tocaban las sesiones.
+
+  Eso rompía la única defensa que una persona sabe usar sola. Alguien entra a
+  una cuenta ajena, la dueña lo sospecha y hace lo que todo el mundo sabe hacer:
+  cambia la contraseña. Y el intruso seguía adentro, con la sesión que ya tenía.
+  El caso del administrador era peor: nos avisan que una cuenta está tomada, la
+  reseteamos y contestamos «listo» — una certeza falsa, que es peor que ninguna.
+
+  El cambio propio conserva la sesión desde la que se hace y cierra las demás;
+  los otros cuatro caminos cierran todas, porque quien dispara el cambio no es
+  quien tiene las sesiones abiertas.
 - El repositorio **no contiene ninguna clave de firma de sesión**. Las
   constantes `SECRET_KEY` / `ALGORITHM` fueron eliminadas de `config.py`
   precisamente porque un placeholder en el historial de un repositorio es una
   trampa para quien mañana agregue firma.
 
-`backend/config.py`, `backend/routes/dependencies.py`, `backend/routes/auth.py`
+`backend/config.py`, `backend/routes/dependencies.py`, `backend/routes/auth.py`,
+`backend/services/sesiones.py`, `backend/tests/test_sesiones_al_cambiar_clave.py`
 
 ### 3.3 Segundo factor obligatorio para el personal
 
@@ -452,6 +468,41 @@ planilla.
 
 `backend/services/reportes.py`
 
+### 7.3 Qué queda escrito en los registros
+
+Un registro no es un archivo privado. Los de esta plataforma los ve cualquiera
+con acceso al panel del proveedor de alojamiento, se copian a servicios de
+terceros para poder buscarlos, se guardan más tiempo que los datos que
+describen, y sobreviven a cualquier borrado que se haga en la base. Todo lo que
+se escribe ahí sale del perímetro que la plataforma controla.
+
+Y esto importa especialmente acá: un volcado de registros con correos,
+teléfonos y documentos de esta operación no es «una filtración de datos», es
+una lista de personas de una comunidad concreta con cuánto envía cada una y a
+quién.
+
+La revisión de septiembre de 2026 encontró **35 puntos** que escribían datos
+personales o cuerpos ajenos completos. Los dos peores:
+
+- El cuerpo **entero** que manda el proveedor de pagos en cada notificación. Hoy
+  son campos inocuos; el día que el proveedor agregue el nombre del pagador,
+  entra al registro sin que nadie lo haya decidido.
+- Cuando el libro de auditoría fallaba al escribir, se registraba **la línea
+  completa**, con el antes y el después del cambio: el documento más sensible
+  del sistema, copiado al lugar menos protegido, justo cuando algo ya había
+  salido mal.
+
+El criterio que se aplicó: donde se puede se registra el identificador interno
+—que no dice nada fuera de la base—; donde el correo hace falta de verdad se
+enmascara conservando el dominio; y de un cuerpo ajeno se copian **sólo las
+claves elegidas a mano**, de modo que lo que el proveedor agregue mañana no
+entra solo.
+
+Una prueba recorre **todos** los registros de la aplicación: uno nuevo con un
+dato personal adentro pone la suite en rojo el día que se escribe.
+
+`backend/services/registro.py`, `backend/tests/test_registros_sin_datos.py`
+
 ---
 
 ## 8. Comunicaciones
@@ -486,17 +537,46 @@ Toda respuesta —incluidas las de error— lleva:
 | `X-Content-Type-Options` | `nosniff` | Que el navegador adivine el tipo de un archivo subido por un usuario |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Que una dirección con identificadores se filtre al salir del sitio |
 
-Desde septiembre de 2026 se agregan tres directivas de `Content-Security-Policy`:
-`object-src 'none'` (corta la ejecución por plugin con un archivo subido),
-`base-uri 'self'` (impide que un `<base>` inyectado cambie a dónde apuntan todas
-las rutas relativas, scripts incluidos) y `frame-ancestors 'none'` (lo mismo que
-`X-Frame-Options`, para los navegadores que ya no lo miran).
+**Política de contenido (CSP), incluida `script-src`.** Un XSS es código ajeno
+corriendo en el origen de la aplicación con la sesión de quien mira; las
+validaciones de entrada y de salida cierran los caminos conocidos, y la política
+de contenido cierra el resto.
 
-`script-src` **no** está, y es una decisión declarada: la aplicación carga el
-SDK del proveedor de pagos y otros scripts de terceros, y una lista mal armada
-rompe los pagos en silencio. Ponerla requiere una pasada sobre qué carga cada
-pantalla. Queda en la sección 11 como pendiente explícito, con una prueba que
-exige que la explicación siga escrita en el código.
+La versión anterior de este documento decía que `script-src` no estaba porque la
+aplicación carga el SDK del proveedor de pagos y una lista mal armada rompería
+los cobros. Era cierto y también una excusa cómoda: lo que faltaba era el
+inventario. Hecho el inventario —el `index.html` construido tiene un solo
+script, el propio; no hay ningún script en línea en el build; no hay `eval` en
+el paquete; el único origen externo es el SDK de pagos— la directiva se pudo
+escribir **sin `'unsafe-inline'` y sin `'unsafe-eval'`**, que es la diferencia
+entre una política que protege y una decorativa: con cualquiera de las dos, un
+XSS inyectado corre igual.
+
+| Directiva | Valor | Por qué |
+|---|---|---|
+| `script-src` | propio + SDK de pagos | Sin `'unsafe-inline'` ni `'unsafe-eval'` |
+| `style-src` | propio + `'unsafe-inline'` | Más de 4500 estilos en línea de React; un estilo no ejecuta código |
+| `img-src` | propio, `data:`, `blob:`, `https:` | Hay comprobantes viejos en dominios que la plataforma no eligió |
+| `object-src` | `'none'` | Plugins: camino clásico de ejecución con un archivo subido |
+| `base-uri` | propio | Un `<base>` inyectado mueve **toda** ruta relativa, scripts incluidos |
+| `form-action` | propio | Un formulario inyectado que postea las credenciales a otro sitio |
+| `frame-ancestors` | `'none'` | Clickjacking, para los navegadores que ya no miran `X-Frame-Options` |
+
+**Sale en modo reporte y no bloqueando.** El inventario describe lo que carga el
+build; lo que un SDK ajeno pide en tiempo de ejecución no se ve leyendo el
+código. Así que el navegador avisa lo que habría bloqueado, sin bloquear, y esos
+avisos se recogen en un endpoint propio. Con tráfico real se completa la lista y
+recién ahí se pasa a bloquear, cambiando una variable de entorno —sin desplegar
+código, y con un tercer valor que la apaga del todo como salida de emergencia.
+
+Publicar una política que bloquea sin haberla mirado con tráfico real es
+exactamente la forma de romper los cobros en silencio que motivó no ponerla.
+
+El endpoint que recoge los avisos es público por necesidad —el navegador los
+manda sin sesión— y está tratado como tal: tope de intentos, tope de tamaño, y
+**no registra el cuerpo que llega**; lee dos campos conocidos y los recorta.
+Tampoco anota la dirección de la página, que diría qué pantalla estaba mirando
+una persona concreta.
 
 **CORS con lista blanca explícita** de orígenes propios, todos `https`. No hay
 comodín: `allow_origins=["*"]` junto a `allow_credentials=True` es la
@@ -517,8 +597,9 @@ corre después de que el cuerpo ya se armó. Se rechaza temprano al que declara 
 más y se **cuenta** lo que llega, porque el `Content-Length` lo manda el cliente
 y el que miente lo declara chico.
 
-`backend/server.py`, `backend/services/limite_de_cuerpo.py`,
-`backend/tests/test_cabeceras_de_seguridad.py`, `backend/tests/test_superficie_de_la_api.py`
+`backend/server.py`, `backend/services/csp.py`, `backend/routes/csp_reporte.py`,
+`backend/services/limite_de_cuerpo.py`, `backend/tests/test_cabeceras_de_seguridad.py`,
+`backend/tests/test_superficie_de_la_api.py`, `backend/tests/test_politica_de_contenido.py`
 
 ### 8.3 Autenticación con terceros: capa OAuth 2.0
 
@@ -634,8 +715,8 @@ diferencia no es accidental.
 
 ## 10. Aseguramiento de calidad
 
-- **Suite automatizada:** 91 archivos de prueba sobre el backend. Última
-  ejecución completa: **2300 pruebas superadas, 102 omitidas, 0 fallidas**
+- **Suite automatizada:** 94 archivos de prueba sobre el backend. Última
+  ejecución completa: **2381 pruebas superadas, 102 omitidas, 0 fallidas**
   (las omitidas requieren credenciales de proveedores externos). Se corre en
   cada cambio.
 - **Revisión de seguridad completa del repositorio, septiembre de 2026.** Se
@@ -651,6 +732,13 @@ diferencia no es accidental.
   contraseñas con `bcrypt` y sal, los identificadores de sesión de
   `secrets.token_urlsafe(32)`, y los dos puentes con clave de API completos —
   ninguna ruta suya quedó sin control.
+- **Segunda tanda de la revisión, septiembre de 2026.** Enfocada en lectura no
+  autorizada de datos. Se recorrieron TODAS las consultas a colecciones de
+  datos personales verificando que cada una esté atada a su dueño —el resultado
+  fue limpio: no hay ninguna ruta por la que un usuario lea los datos de otro—,
+  se barrieron los registros, y se revisó qué pasa con las sesiones al cambiar
+  una contraseña. De ahí salieron los tres hallazgos de las secciones 3.2, 7.3
+  y 8.2.
 - **Dependencias:** `pip-audit` sobre las versiones fijadas. Se pasó de 124
   advertencias en 22 paquetes a 22 en 4, subiendo diecinueve dentro de la misma
   versión mayor y verificando la suite completa después. Las cuatro que quedan
@@ -707,7 +795,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **mTLS con certificado ICP-Brasil A1** | No implementado | Confirmar si el producto contratado lo exige. La emisión del certificado tiene plazo real; conviene resolverlo antes de la homologación. |
 | **Receptor de webhook del proveedor de pagos** | Deliberadamente no escrito | Que el proveedor publique su esquema de firma. Ver 8.4. |
 | **Política PLD/FT formal** | Borrador redactado, sin aprobar | Cinco decisiones de negocio del operador, marcadas `[PROPUESTO]` en el borrador: umbral por operación, umbral acumulado, qué se considera sospechoso en esta operación, a quién y en qué plazo se reporta, y quién es el responsable designado. Requiere revisión de abogado brasileño. Ver `docs/politica-pld-ft.md`. |
-| **`script-src` en la política de contenido** | No implementado | Una pasada sobre qué scripts de terceros carga cada pantalla. Las otras tres directivas ya están (ver 8.2); `script-src` es la que de verdad frena un XSS, y una lista mal armada rompe los pagos en silencio. |
+| **Pasar la política de contenido a bloquear** | Implementada, en modo reporte | Unos días de tráfico real y mirar los avisos que recoge `/api/csp-reporte`. Si no hay ninguno, `CSP_MODO=exigir` la pasa a bloquear sin desplegar código. Si los hay, dicen exactamente qué falta agregar. Ver 8.2. |
+| **Cifrado de los documentos del KYC con clave propia** | No implementado | Una decisión del operador, no técnica: hoy los documentos de identidad viven como texto en la base y quien llegue a la base los ve. Cifrarlos con clave propia lo cierra, y crea un riesgo nuevo — **perder la clave es perder todos los documentos, sin recuperación**. Requiere decidir dónde vive la clave y cómo se respalda antes de escribir una línea. |
 | **`cryptography` con vulnerabilidades publicadas** | 46.0.7; el arreglo está en 49.0.0 | Un salto de tres versiones mayores. Media aplicación depende de ella y la suite no ejerce los caminos de red reales, así que no hay forma de comprobar acá que no rompa nada. Requiere una prueba en un entorno de ensayo. Junto con `black` (herramienta de desarrollo), `ecdsa` (sin versión arreglada publicada) y `litellm` (no se importa en el código propio) son las 22 advertencias que quedan de las 124 originales. |
 | **Cada medio atado a su dueño** | No implementado | El proxy de medios deja que cualquiera con sesión pida el comprobante de cualquier otro **si conoce los tres identificadores**, que son 34 caracteres cada uno y no se adivinan. El secreto es hoy el identificador mismo. Atarlo al dueño requiere guardar esa relación, que no existe. Decisión consciente, anotada en `backend/routes/media.py`. |
 | **Cifrado de documentos en reposo** | Parcial | Los objetos se apoyan en el cifrado del proveedor de almacenamiento. El cifrado a nivel de aplicación, con claves propias, no está implementado. |
@@ -756,6 +845,10 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Toda ruta de los puentes exige la clave, y la exige primero | `backend/routes/adminbrl_bridge.py`, `backend/routes/centro_gestion.py` | `test_puente_con_llave.py` |
 | Los webhooks verifican firma y frescura | `backend/routes/gestor_pix.py`, `backend/routes/btc_lightning.py` | `test_webhooks_firmados.py` |
 | La documentación de la API no se publica, y el cuerpo tiene tope | `backend/server.py`, `backend/services/limite_de_cuerpo.py` | `test_superficie_de_la_api.py` |
+| Cambiar la contraseña cierra las sesiones abiertas | `backend/services/sesiones.py` | `test_sesiones_al_cambiar_clave.py` |
+| Ningún registro escribe un dato personal en claro | `backend/services/registro.py` | `test_registros_sin_datos.py` |
+| `script-src` sin `unsafe-inline` ni `unsafe-eval` | `backend/services/csp.py` | `test_politica_de_contenido.py` |
+| Cada consulta de usuario está atada a su dueño | `backend/routes/`, `backend/services/` | revisión de septiembre de 2026 (ver 10) |
 
 ---
 
