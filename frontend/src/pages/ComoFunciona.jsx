@@ -220,9 +220,8 @@ export default function ComoFunciona() {
           </Tarjeta>
           <Tarjeta icono={<ShieldCheck size={18} color={MORADO} />} titulo="Qué se pide">
             Documento de identidad con su reverso cuando el tipo de documento lo
-            tiene, comprobante de CPF y una selfie. Cada envío se revisa uno por
-            uno. Si algo no se lee bien, se rechaza indicando el motivo y se
-            puede volver a enviar.
+            tiene, comprobante de CPF y una selfie. Si algo no se lee bien, se
+            rechaza indicando el motivo y se puede volver a enviar.
           </Tarjeta>
         </div>
 

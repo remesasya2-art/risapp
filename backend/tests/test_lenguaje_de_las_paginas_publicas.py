@@ -259,7 +259,10 @@ CONTROLES = [
     ("comprobacion periodica", "que el control no es continuo: anuncia la ventana"),
     ("revision periodica", "que el control no es continuo: anuncia la ventana"),
     ("conciliacion periodica", "que el control no es continuo: anuncia la ventana"),
-    ("se revisa a mano", "que no hay verificación automática que sortear"),
+    ("se revisa a mano", "cómo se hace la revisión, y que no hay nada automático"),
+    ("se revisa uno por uno", "cómo se hace la revisión, y que no hay nada automático"),
+    ("se revisa una por una", "cómo se hace la revisión, y que no hay nada automático"),
+    ("revisa a mano", "cómo se hace la revisión, y que no hay nada automático"),
     ("altas y bajas de personal", "el tamaño y la rotación del equipo interno"),
 ]
 
