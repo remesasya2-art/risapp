@@ -9,6 +9,7 @@ import httpx
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Request, Depends, HTTPException, Header, Response
 from typing import Optional
+from pydantic import BaseModel, Field
 
 from database import db
 from services.money import from_db, to_float, to_decimal128
@@ -208,12 +209,13 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response)
 @router.post("/resend-verification-code")
 async def resend_verification_code(request: Request, body: ResendVerificationCodeRequest):
     """Resend verification code"""
-    from routes.security_2fa import limiter
+    from routes.security_2fa import frenar
 
-    # 5/15min: sin esto, resend resetea el contador de intentos de /verify-email
-    # a 0 cada vez, permitiendo fuerza bruta indefinida del codigo de 6 digitos.
-    @limiter.limit("5/15minutes")
     async def _do_resend(request: Request, body: ResendVerificationCodeRequest):
+        # 5/15min: sin esto, resend resetea el contador de intentos de
+        # /verify-email a 0 cada vez, permitiendo fuerza bruta indefinida del
+        # código de 6 dígitos.
+        frenar(request, "auth.resend_verification", "5/15minutes")
         email_lower = body.email.lower().strip()
 
         pending = await db.pending_verifications.find_one({"email": email_lower})
@@ -253,15 +255,14 @@ async def login_with_password(request: Request, response: Response, body: LoginW
     """
     # Rate limit imported lazily to avoid circular imports
     from routes.security_2fa import (
-        limiter, issue_session_token, _create_pending_token,
-        ADMIN_ROLES, SUPER_ADMIN_ROLE,
+        frenar, issue_session_token, _create_pending_token, ADMIN_ROLES,
     )
 
-    # 20/15min per IP — bloquea brute-force pero NO penaliza usuarios reales
-    # detrás de NAT/oficina/wifi compartido. La defensa fuerte contra ataques
-    # a cuentas privilegiadas es el 2FA obligatorio en super_admin.
-    @limiter.limit("20/15minutes")
     async def _do_login(request: Request, body):
+        # 20/15min por IP — bloquea fuerza bruta pero NO penaliza a usuarios
+        # reales detrás de NAT/oficina/wifi compartido. La defensa fuerte
+        # contra ataques a cuentas privilegiadas es el 2FA obligatorio.
+        frenar(request, "auth.login", "20/15minutes")
         email_lower = body.email.lower().strip()
 
         user = await db.users.find_one({"email": email_lower})
@@ -280,12 +281,25 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         if not verify_password(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
+        from services import personal as _personal
+
         role = user.get("role", "user")
         is_admin = role in ADMIN_ROLES
         twofa_enabled = bool(user.get("two_factor_enabled", False))
+        # Quién no puede operar con contraseña sola. La lista vive en
+        # services/personal.py para que sea UNA sola, y hoy incluye a los
+        # colaboradores de `agent` para arriba, más cualquiera que RRHH haya
+        # marcado como personal.
+        obliga_dos_pasos = _personal.exige_dos_pasos(user)
 
-        # Super admin without 2FA → force enrollment
-        if role == SUPER_ADMIN_ROLE and not twofa_enabled:
+        # Personal sin 2FA → enrolamiento obligatorio antes de la sesión.
+        #
+        # Antes esto era sólo para `super_admin`, y el personal de RRHH se da
+        # de alta con rol `admin`: una cuenta con permisos para aprobar KYC,
+        # aprobar recargas y mover saldos entraba con contraseña sola. El
+        # enrolamiento pasa acá mismo, en el login, así que nadie queda
+        # afuera: se sale con sesión, no con un rechazo.
+        if obliga_dos_pasos and not twofa_enabled:
             pending = await _create_pending_token(user["user_id"], purpose="2fa_enroll")
             return {
                 "message": "Configura 2FA para continuar",
@@ -295,8 +309,8 @@ async def login_with_password(request: Request, response: Response, body: LoginW
                 "user_id": user["user_id"],
             }
 
-        # Admin/super_admin with 2FA enabled → challenge
-        if is_admin and twofa_enabled:
+        # Ya lo tiene puesto → se le pide el código.
+        if (is_admin or obliga_dos_pasos) and twofa_enabled:
             pending = await _create_pending_token(user["user_id"], purpose="2fa_login")
             return {
                 "message": "Ingresa tu código 2FA para continuar",
@@ -305,7 +319,7 @@ async def login_with_password(request: Request, response: Response, body: LoginW
                 "email": user["email"],
             }
 
-        # Normal user (or admin without 2FA — admin role NOT required to have 2FA, only super_admin)
+        # Usuario común. Un admin no llega acá sin 2FA: lo frenó el bloque de arriba.
         token = await issue_session_token(user, request=request, two_factor_used=False)
 
         await db.users.update_one(
@@ -348,11 +362,11 @@ async def login_with_password(request: Request, response: Response, body: LoginW
 @router.post("/request-password-reset")
 async def request_password_reset(request: Request, body: RequestPasswordResetRequest):
     """Request password reset"""
-    from routes.security_2fa import limiter
+    from routes.security_2fa import frenar
 
-    # 5/15min: evita bombardeo de emails de reseteo a una victima.
-    @limiter.limit("5/15minutes")
     async def _do_request_reset(request: Request, body: RequestPasswordResetRequest):
+        # 5/15min: evita el bombardeo de correos de reseteo a una víctima.
+        frenar(request, "auth.password_reset", "5/15minutes")
         email_lower = body.email.lower().strip()
 
         user = await db.users.find_one({"email": email_lower})
@@ -507,6 +521,155 @@ async def mark_offline(current_user: User = Depends(get_current_user)):
         {"$set": {"is_online": False, "last_seen": datetime.now(timezone.utc)}}
     )
     return {"status": "ok"}
+
+# ============================================================
+# Primer acceso del personal
+#
+# El alta de Recursos Humanos crea la cuenta con rol y permisos, pero sin
+# contraseña y sin el correo verificado. Sin esta puerta esa persona no puede
+# entrar por ninguna otra: `login-password` la frena en `email_verified`,
+# `resend-verification-code` lee una colección donde el alta no escribe, y el
+# "olvidé mi contraseña" le manda una clave temporal que tampoco pasa el
+# mismo control.
+#
+# Acá configura su clave con el token que le llegó por correo y sale
+# directo al enrolamiento de dos pasos, que para el personal es obligatorio.
+# ============================================================
+
+class VerificarInvitacionRequest(BaseModel):
+    token: str = Field(..., min_length=16, max_length=200)
+
+
+class ActivarPersonalRequest(BaseModel):
+    token: str = Field(..., min_length=16, max_length=200)
+    password: str
+    confirm_password: str
+
+
+async def _persona_invitada(user_id: str) -> dict:
+    """El usuario detrás de una invitación, si todavía corresponde.
+
+    Una invitación emitida no alcanza: entre el correo y el click pudieron
+    darla de baja. Se vuelve a mirar el estado en el momento de usarla.
+    """
+    from services import personal as _personal
+
+    user = await db.users.find_one({"user_id": user_id})
+    if not user or not _personal.es_personal(user):
+        raise HTTPException(status_code=400,
+                            detail="Esta invitación ya no es válida.")
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=403,
+            detail="Esta cuenta está dada de baja. Contactá a tu administrador.")
+    return user
+
+
+@router.post("/personal/invitacion")
+async def verificar_invitacion(request: Request, body: VerificarInvitacionRequest):
+    """Mira si el token sirve, SIN gastarlo, para que la pantalla salude.
+
+    El token va en el cuerpo y no en la URL a propósito: una URL queda en el
+    log de accesos del servidor, en el historial del navegador y en la
+    cabecera Referer de cualquier recurso que cargue la página.
+    """
+    from routes.security_2fa import frenar
+    from services import invitaciones
+
+    async def _verificar(request: Request, body: VerificarInvitacionRequest):
+        # 10/15min: es un token de 32 bytes, no se adivina a fuerza bruta,
+        # pero tampoco hace falta dejar que alguien pruebe sin límite.
+        frenar(request, "auth.invitacion_verificar", "10/15minutes")
+        try:
+            inv = await invitaciones.mirar(db, body.token)
+        except invitaciones.InvitacionInvalida:
+            raise HTTPException(
+                status_code=400,
+                detail="Esta invitación no es válida o ya venció. "
+                       "Pedile a tu administrador que te la reenvíe.")
+
+        user = await _persona_invitada(inv["user_id"])
+        return {
+            "valido": True,
+            "email": user.get("email"),
+            "nombre": user.get("name"),
+            "cargo": (user.get("legajo") or {}).get("cargo"),
+        }
+
+    return await _verificar(request, body)
+
+
+@router.post("/personal/activar")
+async def activar_personal(request: Request, body: ActivarPersonalRequest):
+    """Configura la contraseña del personal y lo manda a activar el 2FA.
+
+    No devuelve sesión: devuelve un `pending_token` de enrolamiento. Una
+    cuenta con permisos de administración no queda usable con contraseña
+    sola ni por un rato.
+    """
+    from routes.security_2fa import frenar, _create_pending_token
+    from services import auditoria, invitaciones
+
+    async def _activar(request: Request, body: ActivarPersonalRequest):
+        frenar(request, "auth.personal_activar", "10/15minutes")
+        # La contraseña se valida ANTES de tocar el token. Al revés, un error
+        # de tipeo quemaría la invitación y habría que pedir otra.
+        if body.password != body.confirm_password:
+            raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+        ok, mensaje = validate_password(body.password)
+        if not ok:
+            raise HTTPException(status_code=400, detail=mensaje)
+
+        try:
+            inv = await invitaciones.mirar(db, body.token)
+        except invitaciones.InvitacionInvalida:
+            raise HTTPException(
+                status_code=400,
+                detail="Esta invitación no es válida o ya venció. "
+                       "Pedile a tu administrador que te la reenvíe.")
+
+        await _persona_invitada(inv["user_id"])
+
+        # Recién acá se gasta. `consumir` es atómico: si dos pedidos llegan
+        # con el mismo token, uno solo lo consigue.
+        try:
+            inv = await invitaciones.consumir(db, body.token)
+        except invitaciones.InvitacionInvalida:
+            raise HTTPException(status_code=400,
+                                detail="Esta invitación ya fue usada.")
+
+        user = await _persona_invitada(inv["user_id"])
+
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {
+                "password_hash": hash_password(body.password),
+                "password_set": True,
+                # El token viajó por correo a esta casilla y sólo su dueño
+                # pudo traerlo de vuelta: eso ES la verificación del correo.
+                "email_verified": True,
+                "must_change_password": False,
+                "updated_at": datetime.now(timezone.utc),
+            }})
+
+        await auditoria.registrar(
+            db, "personal.activacion", quien=user, request=request,
+            objetivo_tipo="usuario", objetivo_id=user["user_id"],
+            objetivo_desc=user.get("email"),
+            despues={"clave_configurada": True, "correo_verificado": True},
+            detalle={"invitacion_emitida_por": inv.get("emitida_por")})
+
+        pending = await _create_pending_token(user["user_id"], purpose="2fa_enroll")
+        return {
+            "message": "Contraseña configurada. Ahora activá la verificación en dos pasos.",
+            "two_factor_enrollment_required": True,
+            "pending_token": pending,
+            "email": user["email"],
+            "user_id": user["user_id"],
+        }
+
+    return await _activar(request, body)
+
 
 # NOTA — acá abajo estaba TODO este archivo otra vez, y no se podía borrar
 # desde cualquiera de las dos puntas.

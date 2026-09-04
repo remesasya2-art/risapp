@@ -5,6 +5,30 @@ Login con huella (WebAuthn / passkey).
 NO reemplaza el login con contraseña: es un desbloqueo rápido opcional que el
 usuario (o super_admin) activa desde su perfil. La app nunca ve la huella; solo
 guarda una llave pública por dispositivo.
+
+POR QUE ESTE CAMINO EXIGE VERIFICACION DE USUARIO
+
+    Esta ruta emite una sesión marcada `two_factor_used=True` SIN pedir
+    contraseña ni código. Con `require_user_verification=False` —como estaba—
+    el dispositivo podía responder sin pedir nada: bastaba con tenerlo en la
+    mano. Para una cuenta con permisos de administración eso convertía el 2FA
+    obligatorio en decorativo, porque acá se entraba de largo.
+
+    Ahora la credencial tiene que verificar a su dueño. Con eso sí son dos
+    factores de verdad: el dispositivo (algo que tenés) y la huella o el PIN
+    con que lo desbloqueás.
+
+LO QUE EL ESTANDAR NO PERMITE PEDIR
+
+    WebAuthn informa SI el autenticador verificó al usuario, pero NO CON QUE.
+    Una huella y un PIN llegan igual: `user_verified = True`. No hay forma, en
+    el protocolo, de exigir biometría y rechazar el PIN.
+
+    Lo más cerca que se llega es pedir un autenticador de plataforma —el
+    integrado al equipo: Touch ID, Face ID, Windows Hello, el lector del
+    teléfono— en vez de una llave USB. En esos, la biometría es el camino
+    normal y el PIN es el respaldo cuando el dedo no lee. Es lo que se pide
+    al registrar.
 """
 import json
 import logging
@@ -23,6 +47,7 @@ from webauthn import (
 from webauthn.helpers.structs import (
     PublicKeyCredentialDescriptor,
     AuthenticatorSelectionCriteria,
+    AuthenticatorAttachment,
     UserVerificationRequirement,
     ResidentKeyRequirement,
 )
@@ -31,6 +56,7 @@ from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from database import db
 from models.user import User
 from routes.dependencies import get_current_user
+from services import personal
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webauthn", tags=["webauthn"])
@@ -52,6 +78,34 @@ def _challenge_valido(doc: dict, campo_ts: str) -> bool:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     return (_now() - ts).total_seconds() <= CHALLENGE_TTL_SECONDS
+
+
+def _exige_verificacion(user: dict, cred: Optional[dict] = None) -> bool:
+    """¿Esta credencial tiene que verificar a su dueño para abrir sesión?
+
+    Dos motivos, cualquiera alcanza:
+
+      - La cuenta llega a una pantalla de administración o RRHH la marcó como
+        personal. Ahí no se negocia: esta ruta emite sesión sin contraseña ni
+        código, así que sin verificación sería un factor solo.
+      - La credencial se registró exigiéndola. Si nació verificando, tiene que
+        seguir verificando; aflojarlo después sería una degradación silenciosa.
+
+    Para el usuario común con una credencial vieja se devuelve False, y entra
+    como siempre. No se le rompe el acceso por un cambio que no pidió: la
+    próxima que registre ya nace con verificación.
+    """
+    if personal.exige_dos_pasos(user):
+        return True
+    return bool((cred or {}).get("user_verified"))
+
+
+def _verificacion_exigida(user: dict, creds: list) -> UserVerificationRequirement:
+    """Lo mismo, para el reto: se exige si CUALQUIERA de las credenciales de
+    la cuenta la va a necesitar. Cuál se usa se sabe recién al responder."""
+    if any(_exige_verificacion(user, c) for c in creds):
+        return UserVerificationRequirement.REQUIRED
+    return UserVerificationRequirement.PREFERRED
 
 
 class RegisterVerifyBody(BaseModel):
@@ -88,7 +142,16 @@ async def register_options(current_user: User = Depends(get_current_user)):
         user_name=doc.get("email", current_user.user_id),
         user_display_name=doc.get("name", "Usuario"),
         authenticator_selection=AuthenticatorSelectionCriteria(
-            user_verification=UserVerificationRequirement.PREFERRED,
+            # REQUIRED, no PREFERRED: con PREFERRED el navegador lo pide "si
+            # puede", y una credencial que nace sin verificación después no
+            # sirve para entrar. Mejor que falle al registrar, con sesión
+            # abierta y el usuario mirando, que en el login.
+            user_verification=UserVerificationRequirement.REQUIRED,
+            # El autenticador integrado al equipo —Touch ID, Face ID, Windows
+            # Hello, el lector del teléfono— en vez de una llave USB. Es lo
+            # más cerca que deja el estándar de pedir biometría: en estos, el
+            # dedo o la cara es el camino normal y el PIN el respaldo.
+            authenticator_attachment=AuthenticatorAttachment.PLATFORM,
             resident_key=ResidentKeyRequirement.PREFERRED,
         ),
         exclude_credentials=exclude,
@@ -117,11 +180,15 @@ async def register_verify(body: RegisterVerifyBody, current_user: User = Depends
             expected_challenge=base64url_to_bytes(challenge),
             expected_rp_id=RP_ID,
             expected_origin=ALLOWED_ORIGINS,
-            require_user_verification=False,
+            require_user_verification=True,
         )
     except Exception as e:
         logger.warning(f"WebAuthn registro fallido: {e}")
-        raise HTTPException(status_code=400, detail="No se pudo registrar la huella")
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo registrar la huella. El dispositivo tiene que "
+                   "pedir tu huella, tu cara o tu PIN al usarla: revisá que "
+                   "el desbloqueo esté configurado y volvé a intentar.")
     cred_id = bytes_to_base64url(verification.credential_id)
     nueva = {
         "credential_id": cred_id,
@@ -129,6 +196,10 @@ async def register_verify(body: RegisterVerifyBody, current_user: User = Depends
         "sign_count": verification.sign_count,
         "label": (body.label or "Mi dispositivo")[:60],
         "created_at": _now(),
+        # Queda anotado si esta credencial verifica a su dueño. Las de antes
+        # de este cambio no lo tienen, y esa ausencia es la que hace que el
+        # login las trate como lo que son: un solo factor.
+        "user_verified": bool(getattr(verification, "user_verified", False)),
     }
     # Evita duplicar la misma credencial
     existing = doc.get("webauthn_credentials", []) or []
@@ -188,7 +259,10 @@ async def login_options(body: LoginOptionsBody):
     options = generate_authentication_options(
         rp_id=RP_ID,
         allow_credentials=allow,
-        user_verification=UserVerificationRequirement.PREFERRED,
+        # Se pide desde el reto, no sólo al verificar: así el navegador le
+        # muestra el pedido de huella a la persona en vez de dejarla entrar
+        # y recibir un rechazo después, que se lee como "no funciona".
+        user_verification=_verificacion_exigida(user, creds),
     )
     await db.users.update_one(
         {"user_id": user["user_id"]},
@@ -214,6 +288,19 @@ async def login_verify(body: LoginVerifyBody, request: Request):
     cred = next((c for c in creds if c.get("credential_id") == cred_id), None)
     if not cred:
         raise HTTPException(status_code=401, detail="Dispositivo no reconocido")
+
+    # Las mismas puertas que el login con contraseña. Esta ruta no las tenía:
+    # una cuenta suspendida seguía entrando con la huella, porque el control de
+    # suspensión estaba sólo en /auth/login-password y `get_current_user` mira
+    # `is_banned`, no `status`.
+    if user.get("is_deleted"):
+        raise HTTPException(status_code=401, detail="No se pudo verificar la huella")
+    if user.get("is_banned") or user.get("status") == "suspended":
+        raise HTTPException(
+            status_code=403,
+            detail="Tu cuenta ha sido suspendida. Contacta al administrador.")
+
+    exige = _exige_verificacion(user, cred)
     try:
         verification = verify_authentication_response(
             credential=json.dumps(body.credential),
@@ -222,13 +309,25 @@ async def login_verify(body: LoginVerifyBody, request: Request):
             expected_origin=ALLOWED_ORIGINS,
             credential_public_key=base64url_to_bytes(cred["public_key"]),
             credential_current_sign_count=cred.get("sign_count", 0),
-            require_user_verification=False,
+            require_user_verification=exige,
         )
     except Exception as e:
         logger.warning(f"WebAuthn login fallido: {e}")
+        if exige:
+            # El caso concreto: una credencial registrada antes de este cambio,
+            # en una cuenta de personal. No es un fallo raro y tiene salida, así
+            # que se dice cuál en vez de "no se pudo".
+            raise HTTPException(
+                status_code=401,
+                detail="Este dispositivo tiene que pedirte tu huella, tu cara o "
+                       "tu PIN para entrar. Si lo registraste antes, entrá con "
+                       "tu contraseña y volvé a registrarlo desde tu perfil.")
         raise HTTPException(status_code=401, detail="No se pudo verificar la huella")
-    # Actualiza el contador anti-clonación y limpia el reto
+
+    # Actualiza el contador anti-clonación, anota si verificó, y limpia el reto
     cred["sign_count"] = verification.new_sign_count
+    cred["user_verified"] = bool(getattr(verification, "user_verified", False))
+    cred["last_used_at"] = _now()
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {"webauthn_credentials": creds},
@@ -236,7 +335,11 @@ async def login_verify(body: LoginVerifyBody, request: Request):
     )
     # Emite la sesión igual que el login normal (import diferido evita ciclos)
     from routes.security_2fa import issue_session_token
-    token = await issue_session_token(user, request=request, two_factor_used=True)
+    # La marca dice lo que de verdad pasó. Antes era True fija, incluso cuando
+    # el dispositivo no había verificado a nadie: el registro de accesos de
+    # administración quedaba diciendo que hubo dos factores donde hubo uno.
+    token = await issue_session_token(
+        user, request=request, two_factor_used=cred["user_verified"])
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {"last_login": _now()}},

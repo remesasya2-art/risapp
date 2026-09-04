@@ -83,7 +83,17 @@ def limits_payload() -> dict:
     La pantalla arma sus textos y sus validaciones con esto, para que el cartel
     que ve el usuario y el 400 que devuelve el servidor no puedan discrepar.
     """
+    from services.kyc_quota import UNVERIFIED_MAX_OPS, UNVERIFIED_MAX_RIS
     return {
         "pix": {"min_brl": PIX_MIN_BRL, "max_brl": PIX_MAX_BRL},
         "ves": {"min_ves": VES_MIN, "max_ves": VES_MAX},
+        # El cupo de quien todavía no verificó su identidad. Es una REGLA
+        # pública, no un dato de nadie: sale acá para que la página que la
+        # publica lea el mismo número que el servidor hace cumplir. Un texto
+        # aparte se desactualiza el día que alguien cambie la constante y se
+        # olvide de la página.
+        "sin_verificar": {
+            "max_ris": UNVERIFIED_MAX_RIS,
+            "max_operaciones": UNVERIFIED_MAX_OPS,
+        },
     }

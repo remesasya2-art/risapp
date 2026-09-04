@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import {
   RefreshCw, UserPlus, Users, ShieldCheck, X, Trash2, History, Save,
+  Mail, AlertTriangle,
 } from 'lucide-react';
 
 function fmtFecha(d) {
@@ -136,6 +137,28 @@ export default function RecursosHumanos() {
     }
   };
 
+  const reenviar = async (ficha) => {
+    // Se avisa qué implica antes de hacerlo: emitir una invitación nueva
+    // ANULA la anterior, así que si la persona todavía tiene el correo viejo
+    // a mano, ese enlace deja de servir.
+    if (!window.confirm(
+      `Reenviar la invitación de acceso a ${ficha.email}.\n\n`
+      + 'El enlace anterior deja de funcionar en el momento en que se envía '
+      + 'el nuevo. El nuevo vence en 72 horas.',
+    )) return;
+    try {
+      const { data } = await api.post(`/admin/rrhh/${ficha.user_id}/reenviar-invitacion`);
+      if (data?.acceso?.correo_enviado) {
+        toast.success(data.mensaje);
+      } else {
+        toast.error('La invitación se emitió pero el correo no salió. Revisá la configuración de correo.');
+      }
+      await cargar();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'No se pudo reenviar la invitación');
+    }
+  };
+
   const darDeBaja = async (ficha) => {
     const motivo = window.prompt(
       `Baja de ${ficha.email}.\n\nSe le quitan los permisos, se desactiva la ` +
@@ -157,19 +180,42 @@ export default function RecursosHumanos() {
       gap: 8, maxHeight: 260, overflowY: 'auto', border: '1px solid #e5e7eb',
       borderRadius: 8, padding: 12, background: '#fafafa',
     }}>
-      {Object.entries(permisos).map(([clave, etiqueta]) => (
-        <label key={clave} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={seleccion.includes(clave)}
-            onChange={() => alTocar(seleccion.includes(clave)
-              ? seleccion.filter((p) => p !== clave)
-              : [...seleccion, clave])}
-          />
-          <span>{etiqueta}</span>
-          <code style={{ fontSize: 11, color: '#9ca3af' }}>{clave}</code>
-        </label>
-      ))}
+      {Object.entries(permisos).map(([clave, etiqueta]) => {
+        // El catálogo del backend marca con "(MUEVE DINERO)" los tres
+        // permisos que dejan tocar plata: ajustar saldos, aprobar recargas y
+        // cargar fletes. Se destacan para que otorgarlos sea una decisión y
+        // no un tilde más en una grilla de dieciocho casillas iguales.
+        const mueveDinero = etiqueta.includes('MUEVE DINERO');
+        const texto = etiqueta.replace(' (MUEVE DINERO)', '');
+        return (
+          <label
+            key={clave}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+              cursor: 'pointer', borderRadius: 6, padding: '4px 6px',
+              background: mueveDinero ? '#fff7ed' : 'transparent',
+              border: mueveDinero ? '1px solid #fed7aa' : '1px solid transparent',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={seleccion.includes(clave)}
+              onChange={() => alTocar(seleccion.includes(clave)
+                ? seleccion.filter((p) => p !== clave)
+                : [...seleccion, clave])}
+            />
+            <span style={{ color: mueveDinero ? '#9a3412' : undefined }}>
+              {texto}
+              {mueveDinero && (
+                <strong style={{ display: 'block', fontSize: 10.5, fontWeight: 700 }}>
+                  MUEVE DINERO
+                </strong>
+              )}
+            </span>
+            <code style={{ fontSize: 11, color: '#9ca3af' }}>{clave}</code>
+          </label>
+        );
+      })}
     </div>
   );
 
@@ -216,7 +262,7 @@ export default function RecursosHumanos() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f9fafb', textAlign: 'left' }}>
-                {['Persona', 'Cargo', 'Área', 'Permisos', 'Alta', 'Estado', ''].map((h) => (
+                {['Persona', 'Cargo', 'Área', 'Permisos', 'Acceso', 'Alta', 'Estado', ''].map((h) => (
                   <th key={h} style={celdaCabecera}>{h}</th>
                 ))}
               </tr>
@@ -239,6 +285,7 @@ export default function RecursosHumanos() {
                       {p.permisos.length}
                     </span>
                   </td>
+                  <td style={celda}><Acceso acceso={p.acceso} /></td>
                   <td style={celda}>{fmtFecha(p.alta)}</td>
                   <td style={celda}>
                     {p.activo ? (
@@ -261,6 +308,11 @@ export default function RecursosHumanos() {
                           style={btnChico}>
                           <ShieldCheck size={13} /> Permisos
                         </button>
+                        {!p.acceso?.clave_configurada && (
+                          <button onClick={() => reenviar(p)} style={btnChico}>
+                            <Mail size={13} /> Reenviar
+                          </button>
+                        )}
                         <button onClick={() => darDeBaja(p)}
                                 style={{ ...btnChico, color: '#b91c1c' }}>
                           <Trash2 size={13} /> Baja
@@ -395,6 +447,35 @@ export default function RecursosHumanos() {
           )}
         </Modal>
       )}
+    </div>
+  );
+}
+
+// Un solo vistazo para saber si alguien con permisos de administración
+// todavía no terminó de asegurar su cuenta. Una persona con permisos y sin
+// dos pasos es exactamente lo que hay que poder ver desde acá.
+function Acceso({ acceso }) {
+  if (!acceso) return <span style={{ color: '#6b7280' }}>—</span>;
+
+  const estado = acceso.invitacion?.estado;
+  let texto;
+  let color;
+  if (!acceso.clave_configurada) {
+    if (estado === 'pendiente') { texto = 'Invitación enviada'; color = '#b45309'; }
+    else if (estado === 'vencida') { texto = 'Invitación vencida'; color = '#b91c1c'; }
+    else { texto = 'Sin invitación'; color = '#b91c1c'; }
+  } else if (!acceso.dos_pasos) {
+    texto = 'Sin 2FA';
+    color = '#b45309';
+  } else {
+    texto = 'Activo con 2FA';
+    color = '#15803d';
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, color }}>
+      {acceso.dos_pasos ? <ShieldCheck size={13} /> : <AlertTriangle size={13} />}
+      <span style={{ fontSize: 12 }}>{texto}</span>
     </div>
   );
 }

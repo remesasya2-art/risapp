@@ -39,7 +39,8 @@ from pydantic import BaseModel, EmailStr, Field
 from database import db
 from models.user import User
 from routes.dependencies import get_super_admin
-from services import auditoria, personal
+from services import auditoria, invitaciones, personal
+from services.email import send_staff_invitation_email
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +90,8 @@ def _permisos_validos(pedidos: List[str]) -> List[str]:
     """Sólo los permisos del catálogo. Uno inventado se rechaza en vez de
     guardarse: un permiso que no existe nunca se cumple, y quien lo cargó
     cree que sí."""
-    from admin_routes import ADMIN_PERMISSIONS
-    desconocidos = [p for p in pedidos if p not in ADMIN_PERMISSIONS]
+    from services.permisos import CATALOGO
+    desconocidos = [p for p in pedidos if p not in CATALOGO]
     if desconocidos:
         raise HTTPException(
             status_code=400,
@@ -102,6 +103,21 @@ def _permisos_validos(pedidos: List[str]) -> List[str]:
 
 def _legajo_de(doc: dict) -> dict:
     return {c: (doc.get("legajo") or {}).get(c) for c in CAMPOS_DEL_LEGAJO}
+
+
+def _acceso(doc: dict, invitacion: Optional[dict]) -> dict:
+    """Cómo está el acceso de esta persona: clave, dos pasos, invitación.
+
+    Es lo que hay que poder mirar de un vistazo para saber si alguien con
+    permisos de administración todavía no terminó de asegurar su cuenta.
+    """
+    return {
+        "clave_configurada": bool(doc.get("password_set") and doc.get("password_hash")),
+        "correo_verificado": bool(doc.get("email_verified")),
+        "dos_pasos": bool(doc.get("two_factor_enabled")),
+        "invitacion": invitacion or {"estado": invitaciones.SIN_INVITACION,
+                                     "expira_en": None, "usada_en": None},
+    }
 
 
 def _ficha(doc: dict) -> dict:
@@ -119,13 +135,61 @@ def _ficha(doc: dict) -> dict:
     }
 
 
+async def _invitar(doc: dict, admin: User, request: Request,
+                   motivo: str) -> dict:
+    """Emite la invitación de primer acceso y la manda por correo.
+
+    Devuelve qué pasó, para que la respuesta del alta le diga al super
+    administrador si el correo salió o no. Si Resend está caído, el alta NO
+    se cae: la persona queda creada y la invitación se reenvía después.
+    """
+    token = await invitaciones.emitir(
+        db, user_id=doc["user_id"], email=doc["email"],
+        emitida_por=admin.user_id)
+
+    enviado = await send_staff_invitation_email(
+        doc["email"], doc.get("name") or doc["email"],
+        (doc.get("legajo") or {}).get("cargo") or "colaborador", token)
+
+    # El token no entra al libro. Una línea de auditoría con la llave adentro
+    # convierte al libro —que mucha gente puede leer— en la propia llave.
+    await auditoria.registrar(
+        db, "personal.invitacion", quien=admin, request=request,
+        objetivo_tipo="usuario", objetivo_id=doc["user_id"],
+        objetivo_desc=doc["email"],
+        despues={"invitacion": "emitida",
+                 "vence_en_horas": invitaciones.HORAS_DE_VIDA},
+        detalle={"motivo": motivo, "correo_enviado": enviado},
+        exito=enviado)
+
+    if not enviado:
+        logger.error(
+            "INVITACION SIN ENVIAR: %s quedó dada de alta pero el correo de "
+            "activación no salió. Reenviala desde RRHH.", doc["email"])
+
+    return {"emitida": True, "correo_enviado": enviado,
+            "vence_en_horas": invitaciones.HORAS_DE_VIDA}
+
+
+def _puede_entrar_ya(doc: dict) -> bool:
+    """Si esta cuenta ya tiene con qué entrar por su cuenta.
+
+    Un usuario que existía y se convirtió en personal ya tiene contraseña y
+    correo verificado: no necesita invitación, y mandarle una sería darle una
+    segunda llave por correo sin motivo. Una cuenta nueva no tiene ninguna de
+    las dos cosas.
+    """
+    return bool(doc.get("password_set") and doc.get("password_hash")
+                and doc.get("email_verified"))
+
+
 # ─── Catálogo ─────────────────────────────────────────────────────────────
 
 @router.get("/permisos")
 async def catalogo_de_permisos(admin: User = Depends(get_super_admin)):
     """Los permisos que se pueden otorgar, con su nombre legible."""
-    from admin_routes import ADMIN_PERMISSIONS
-    return {"permisos": ADMIN_PERMISSIONS}
+    from services.permisos import CATALOGO
+    return {"permisos": CATALOGO}
 
 
 # ─── Legajos ──────────────────────────────────────────────────────────────
@@ -136,19 +200,24 @@ async def listar_personal(incluir_bajas: bool = False,
     filtro = {personal.CAMPO: True}
     if not incluir_bajas:
         filtro["is_active"] = {"$ne": False}
-    cursor = db.users.find(filtro, {"_id": 0}).sort("email", 1)
-    fichas = [_ficha(d) async for d in cursor]
+    cursor = db.users.find(filtro).sort("email", 1)
+    docs = [d async for d in cursor]
+    estados = await invitaciones.estado_de_varios(
+        db, [d.get("user_id") for d in docs if d.get("user_id")])
+    fichas = [{**_ficha(d), "acceso": _acceso(d, estados.get(d.get("user_id")))}
+              for d in docs]
     return {"personal": fichas, "total": len(fichas)}
 
 
 @router.get("/{user_id}")
 async def ver_legajo(user_id: str, admin: User = Depends(get_super_admin)):
-    doc = await db.users.find_one({"user_id": user_id, personal.CAMPO: True},
-                                  {"_id": 0})
+    doc = await db.users.find_one({"user_id": user_id, personal.CAMPO: True})
     if not doc:
         raise HTTPException(status_code=404, detail="No es personal de la empresa")
+    acceso = _acceso(doc, await invitaciones.estado(db, user_id))
     historial = await auditoria.buscar(db, objetivo_id=user_id, limite=100)
-    return {"ficha": _ficha(doc), "historial": historial["lineas"]}
+    return {"ficha": {**_ficha(doc), "acceso": acceso},
+            "historial": historial["lineas"]}
 
 
 @router.post("")
@@ -234,8 +303,46 @@ async def dar_de_alta(datos: AltaDePersonal, request: Request,
         detalle={"convertido_desde_usuario": convertido,
                  "cargo": datos.cargo, "area": datos.area})
 
+    # La llave. Sin esto la cuenta nueva nace sin contraseña y sin correo
+    # verificado, o sea que su dueño no puede entrar por ninguna puerta: el
+    # login frena en `email_verified`, y el "olvidé mi contraseña" también.
+    recien = await db.users.find_one({"user_id": user_id})
+    if _puede_entrar_ya(recien or {}):
+        acceso = {"emitida": False, "correo_enviado": False,
+                  "motivo": "ya tenía contraseña y correo verificado"}
+    else:
+        acceso = await _invitar(recien or {}, admin, request, motivo="alta")
+
     return {"mensaje": f"{email} dado de alta como personal",
-            "user_id": user_id, "convertido_desde_usuario": convertido}
+            "user_id": user_id, "convertido_desde_usuario": convertido,
+            "acceso": acceso}
+
+
+@router.post("/{user_id}/reenviar-invitacion")
+async def reenviar_invitacion(user_id: str, request: Request,
+                              admin: User = Depends(get_super_admin)):
+    """Vuelve a mandar el correo de primer acceso.
+
+    Emitir una invitación nueva ANULA la anterior, así que reenviar por un
+    correo perdido no deja dos links vivos. Se niega si la persona ya
+    configuró su clave: ahí el camino es "olvidé mi contraseña", que exige
+    conocer la cuenta y no crea una llave nueva desde el panel.
+    """
+    doc = await db.users.find_one({"user_id": user_id, personal.CAMPO: True})
+    if not doc:
+        raise HTTPException(status_code=404, detail="No es personal de la empresa")
+    if not doc.get("is_active", True):
+        raise HTTPException(
+            status_code=409,
+            detail="Esta persona está dada de baja. Reactivala antes de invitarla.")
+    if _puede_entrar_ya(doc):
+        raise HTTPException(
+            status_code=409,
+            detail=("Esta persona ya tiene su acceso configurado. Si lo perdió, "
+                    "que use 'olvidé mi contraseña' desde el login."))
+
+    acceso = await _invitar(doc, admin, request, motivo="reenvío")
+    return {"mensaje": f"Invitación reenviada a {doc['email']}", "acceso": acceso}
 
 
 @router.put("/{user_id}/permisos")

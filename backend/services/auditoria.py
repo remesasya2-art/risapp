@@ -79,6 +79,8 @@ ACCIONES = {
     "personal.permisos":        (Cat.PERSONAL, "Cambio de permisos"),
     "personal.reactivacion":    (Cat.PERSONAL, "Reactivación de personal"),
     "personal.datos":           (Cat.PERSONAL, "Cambio de datos del legajo"),
+    "personal.invitacion":      (Cat.PERSONAL, "Invitación de acceso enviada"),
+    "personal.activacion":      (Cat.PERSONAL, "Personal activó su acceso"),
     # KYC
     "kyc.aprobado":             (Cat.KYC, "Verificación aprobada"),
     "kyc.rechazado":            (Cat.KYC, "Verificación rechazada"),

@@ -118,6 +118,40 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Indices del libro de auditoria: {e}")
     try:
+        # Las invitaciones de primer acceso del personal. El índice único
+        # sobre la huella del token es lo que impide que dos invitaciones
+        # distintas terminen compartiendo llave.
+        from services.invitaciones import asegurar_indices as indices_invitaciones
+        await indices_invitaciones(db)
+    except Exception as e:
+        logger.error(f"Indices de invitaciones del personal: {e}")
+    try:
+        # Lo que el alta de personal necesita para funcionar de punta a punta.
+        # Sin esto, el alta "funciona" —la cuenta queda creada— pero el correo
+        # con la llave no sale, y quien la dio de alta se entera cuando el
+        # colaborador avisa que nunca le llegó nada. Mejor gritarlo acá.
+        from config import RESEND_API_KEY, FRONTEND_URL, FROM_EMAIL
+        if not RESEND_API_KEY:
+            logger.error(
+                "ALTA DE PERSONAL A MEDIAS: falta RESEND_API_KEY. Las cuentas "
+                "se van a crear, pero el correo con el enlace de activación NO "
+                "va a salir y el colaborador no va a poder entrar.")
+        if "example.com" in (FROM_EMAIL or ""):
+            logger.error(
+                "ALTA DE PERSONAL A MEDIAS: FROM_EMAIL sigue en el valor de "
+                "ejemplo (%s). Los correos de activación se van a rechazar.",
+                FROM_EMAIL)
+        if not (FRONTEND_URL or "").startswith("https://"):
+            logger.error(
+                "FRONTEND_URL = %r. Con esto se arma el enlace de activación "
+                "del personal; si no es la URL pública real, el correo sale "
+                "con un link roto.", FRONTEND_URL)
+        else:
+            logger.info("Alta de personal: los enlaces se arman sobre %s",
+                        FRONTEND_URL)
+    except Exception as e:
+        logger.error(f"No se pudo revisar la configuracion de correo: {e}")
+    try:
         # Estructura del módulo de envíos. Crea índices, nunca datos: los
         # transportistas, agencias y tarifas se cargan desde el panel.
         from services.envios_indices import ensure_envios_indexes
