@@ -239,10 +239,20 @@ export default function ComoFunciona() {
           padding: 22, background: '#fafafe',
         }}>
           <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700 }}>Quién opera la plataforma</h3>
+          {/*
+            La identificación completa del operador —razón social, CNPJ y
+            domicilio— vive en la ficha de empresa del documento legal, y no
+            repetida en cada página pública. Repetirla en varios lugares tiene
+            dos costos: expone los datos del titular en pantallas que no los
+            necesitan, y obliga a acordarse de cambiarlos en todas cuando algo
+            se actualiza. Acá se enlaza.
+          */}
           <p style={{ margin: '0 0 14px', fontSize: 14, color: '#4b5563', lineHeight: 1.65 }}>
-            SAIPHA SERVICIOS DIGITAIS (J. DEL CARMEN HERNANDEZ BARRETO),
-            CNPJ 66.994.057/0001-61. El tratamiento de datos personales se rige
-            por la Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
+            La plataforma es operada por SAIPHA Servicios Digitais, empresa
+            registrada en Brasil. Los datos completos del operador están en la{' '}
+            <Link to="/legal#empresa" style={{ color: MORADO }}>información de la empresa</Link>.
+            El tratamiento de datos personales se rige por la <i>Lei Geral de
+            Proteção de Dados</i> (Lei n.º 13.709/2018).
           </p>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 14 }}>
             <Link to="/legal#privacidad" style={{ color: MORADO, display: 'inline-flex', alignItems: 'center', gap: 4 }}>

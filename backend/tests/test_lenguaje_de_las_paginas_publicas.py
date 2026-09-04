@@ -121,22 +121,49 @@ def test_la_pagina_principal_nombra_las_soluciones_digitales():
         "la línea principal de servicio.")
 
 
-def test_la_portada_no_muestra_el_cnpj():
-    """El CNPJ sale del pie de página —que es lo que se ve en la portada— y
-    se conserva en la ficha de la empresa del documento legal.
+# La identificación del operador —razón social, CNPJ— va en UN solo lugar: la
+# ficha de empresa del documento legal. Repetirla en cada página pública tiene
+# dos costos: expone los datos del titular en pantallas que no los necesitan, y
+# obliga a acordarse de cambiarlos en todas cuando algo se actualiza.
+LEGAL = "frontend/src/pages/LegalPage.jsx"
+IDENTIFICACION = [
+    (re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}"), "el CNPJ"),
+    (re.compile(r"carmen\s+hernandez\s+barreto"), "la razón social del titular"),
+]
 
-    Las dos mitades importan: sacarlo de todas partes dejaría a la plataforma
+
+def test_la_identificacion_del_titular_vive_solo_en_el_documento_legal():
+    """En ninguna otra pantalla pública, y en el documento legal sí.
+
+    Las dos mitades importan. Sacarla de todas partes dejaría a la plataforma
     sin identificar a su operador, que es lo que exige el Decreto 7.962/2013
-    para el comercio electrónico en Brasil y lo primero que revisa una
-    debida diligencia.
+    para el comercio electrónico en Brasil y lo primero que revisa una debida
+    diligencia. Dejarla repetida en cada página la expone sin necesidad.
     """
-    pie = (_RAIZ / "frontend/src/components/Footer.jsx").read_text(encoding="utf-8")
-    legal = (_RAIZ / "frontend/src/pages/LegalPage.jsx").read_text(encoding="utf-8")
+    de_mas = []
+    for ruta, texto in _archivos_publicos():
+        if ruta == LEGAL:
+            continue
+        for n, linea in enumerate(texto.splitlines(), 1):
+            plano = _plano(linea)
+            if plano.lstrip().startswith(("*", "//", "/*", "{/*")):
+                continue
+            for patron, que in IDENTIFICACION:
+                if patron.search(plano):
+                    de_mas.append(f"{ruta}:{n}  {que}")
 
-    assert "CNPJ" not in pie, "el CNPJ volvió al pie de página"
-    assert re.search(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", legal), (
-        "el CNPJ desapareció también del documento legal: ahí sí tiene que "
-        "estar, es la identificación del operador")
+    assert not de_mas, (
+        "La identificación del titular aparece fuera del documento legal:\n  "
+        + "\n  ".join(de_mas)
+        + "\n\nVa en un solo lugar: la ficha de empresa de LegalPage.jsx. "
+          "Desde otras páginas, enlazá a /legal#empresa.")
+
+    legal = _plano((_RAIZ / LEGAL).read_text(encoding="utf-8"))
+    faltan = [q for patron, q in IDENTIFICACION if not patron.search(legal)]
+    assert not faltan, (
+        "Falta en el documento legal: " + ", ".join(faltan)
+        + ". Ahí sí tiene que estar: es la identificación del operador, y sin "
+          "ella la plataforma no dice quién la opera.")
 
 
 def test_las_paginas_publicas_no_publican_ninguna_direccion_de_correo():

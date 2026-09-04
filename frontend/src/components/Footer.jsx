@@ -10,8 +10,6 @@ export default function Footer() {
         <div style={{ maxWidth: '320px' }}>
           <p style={{ fontWeight: 800, fontSize: '16px', color: '#1f2937', margin: '0 0 6px 0' }}>RIS App</p>
           <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>SAIPHA SERVICIOS DIGITAIS</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>J. DEL CARMEN HERNANDEZ BARRETO</p>
-
         </div>
         <div>
           <p style={colTitle}>Legal</p>
