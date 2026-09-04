@@ -59,8 +59,16 @@ async def logout(request: Request, response: Response, current_user: User = Depe
     return {"message": "Sesión cerrada exitosamente"}
 
 @router.post("/register")
-async def register_user(request: RegisterUserRequest):
+async def register_user(request: RegisterUserRequest, pedido: Request):
     """Register new user with email verification"""
+    from routes.security_2fa import frenar
+
+    # 10/hora. Cada llamada crea una cuenta pendiente y manda un correo desde
+    # NUESTRO dominio: sin tope, una IP puede fabricar cuentas en volumen y, de
+    # paso, usar el servidor para bombardear una casilla ajena. Diez por hora es
+    # holgado para una persona y cierra las dos cosas.
+    frenar(pedido, "auth.register", "10/hour")
+
     # Validate email
     email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
     if not re.match(email_regex, request.email):
@@ -120,8 +128,17 @@ async def register_user(request: RegisterUserRequest):
     }
 
 @router.post("/verify-email")
-async def verify_email_code(request: VerifyEmailCodeRequest, response: Response):
+async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
+                            pedido: Request):
     """Verify email code and complete registration"""
+    from routes.security_2fa import frenar
+
+    # 20/15min. Adentro hay un contador de cinco intentos por solicitud, pero
+    # `resend-verification-code` lo devuelve a cero. Ese reenvío ya está frenado
+    # a 5/15min, así que el techo era 25 pruebas cada 15 minutos contra un código
+    # de seis dígitos; ahora hay además un tope que no depende de esa cadena.
+    frenar(pedido, "auth.verify_email", "20/15minutes")
+
     email_lower = request.email.lower().strip()
     
     pending = await db.pending_verifications.find_one({"email": email_lower})
@@ -394,8 +411,16 @@ async def request_password_reset(request: Request, body: RequestPasswordResetReq
     return await _do_request_reset(request, body)
 
 @router.post("/reset-password")
-async def reset_password(request: ResetPasswordRequest):
+async def reset_password(request: ResetPasswordRequest, pedido: Request):
     """Reset password with temp password"""
+    from routes.security_2fa import frenar
+
+    # 10/15min. La contraseña temporal son 12 caracteres al azar, así que
+    # adivinarla no es el riesgo. El riesgo es el COSTO: cada llamada corre
+    # bcrypt, que gasta CPU a propósito. Sin tope, un pedido por segundo desde
+    # una sola IP ocupa el servidor sin necesitar ninguna credencial.
+    frenar(pedido, "auth.reset_password", "10/15minutes")
+
     email_lower = request.email.lower().strip()
     
     user = await db.users.find_one({"email": email_lower})
