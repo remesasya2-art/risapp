@@ -357,7 +357,55 @@ verificada en el KYC la más fuerte.
 
 `backend/services/geo_restrictions.py`, `backend/routes/credits.py`
 
-### 5.6 Dónde se miran estos controles
+### 5.6 Sin cotización no se cobra
+
+Los envíos con Bitcoin se cobran con dos números: el precio de Bitcoin en
+dólares y la tasa USDI → VES. Los dos estaban escritos a mano como valor por
+defecto, y los dos fallaban en silencio hacia lados opuestos.
+
+| | Valor por defecto | Qué pasaba si se usaba |
+|---|---|---|
+| Precio de Bitcoin | 58 500 USD en el caché inicial | Con el bitcoin cerca de 79 000, el cliente pagaba ~36 % de más en bitcoin |
+| Tasa USDI → VES | 680,0 al faltar la configuración | Con la real en 270, al beneficiario se le prometían 2,5 veces los bolívares; la diferencia la pone el operador |
+
+Ninguno hacía ruido: la remesa se emitía, el cliente pagaba, el número estaba
+mal. Es la decisión que tomó el operador con sus palabras: «mejor que falle por
+error de cálculo en la tasa; asumir representa perder o ganar dinero y quiero
+ser lo más justo posible».
+
+Lo que se hace cumplir ahora:
+
+- **El caché del precio arranca vacío.** Si el proveedor no contesta, se acepta
+  el último precio conocido sólo si tiene menos de diez minutos.
+- **La tasa devuelve nada** si falta, si no es un número, o si es cero o
+  negativa.
+- **`_cotizacion_o_error()` es el único camino** por el que el cobro obtiene
+  esas dos cifras, y corta con 503 y un mensaje que una persona entiende.
+- **`GET /btc/precio` devuelve nulos** en vez de inventar. La pantalla no
+  convierte, no promete y no deja avanzar.
+
+**La antigüedad de la tasa, que es el modo de fallar más probable.** El precio
+de Bitcoin se pide en vivo, así que no envejece. La tasa USDI → VES es la
+paralela y se fija **a mano**: el raspador que corre solo trae el dólar del BCV
+—otro número, otra colección— y nadie lo conecta con esta clave. O sea que el
+riesgo real no es que la tasa falte, sino que nadie la toque durante semanas y
+se sigan prometiendo bolívares con la de hace un mes.
+
+Por eso se controla contra `EDAD_MAXIMA_DE_LA_TASA` (24 h, un solo número
+puesto para ajustarlo a la cadencia con que se fije). Al vencerse, los envíos
+con Bitcoin se cortan **y se avisa al super administrador** —una vez por
+vencimiento, no una por consulta: la pantalla consulta cada diez segundos y un
+aviso que llega cien veces deja de ser un aviso—. El panel muestra desde cuándo
+rige la tasa y cuántas horas le quedan, para no enterarse por la notificación,
+que es enterarse tarde.
+
+`backend/routes/btc_lightning.py`, `backend/services/aviso_de_tasa.py`,
+`backend/tests/test_cotizacion_btc.py`,
+`backend/tests/test_aviso_de_tasa_vencida.py`
+
+---
+
+### 5.7 Dónde se miran estos controles
 
 Un control que nadie puede mirar no es un control. Los cuatro de arriba
 —solvencia, reconciliación, integridad y quién tiene las llaves del dinero—

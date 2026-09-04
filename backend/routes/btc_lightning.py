@@ -13,6 +13,7 @@ from database import db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
 from pydantic import BaseModel
+from services.aviso_de_tasa import avisar_si_hace_falta
 from routes.dependencies import get_current_user, sin_transacciones_personales
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,11 @@ async def _get_tasa_ves():
     if edad > EDAD_MAXIMA_DE_LA_TASA:
         logger.error(f"La tasa USDI→VES tiene {edad.days} día(s) y "
                      f"{edad.seconds // 3600} hora(s): no se cotiza con ella.")
+        # El corte ya está decidido arriba: se devuelve None pase lo que pase
+        # con el aviso. Avisar es lo que evita que el operador se entere por un
+        # cliente que no pudo enviar, y el propio servicio se ocupa de que sea
+        # UN aviso por vencimiento y no uno por consulta.
+        await avisar_si_hace_falta(db, cuando, edad)
         return None
     return tasa
 

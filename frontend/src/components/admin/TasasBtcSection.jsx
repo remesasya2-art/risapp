@@ -4,6 +4,81 @@ import api from '../../utils/api';
 import { BcvRatesCard } from '../common/BcvRatesCard';
 import { Bitcoin, RefreshCw, Info } from 'lucide-react';
 
+/**
+ * La vigencia de la tasa paralela.
+ *
+ *   El precio de Bitcoin se pide en vivo y el dólar del BCV lo trae un
+ *   raspador. Esta tasa no: la escribe una persona acá. Pasado el límite, los
+ *   envíos con Bitcoin se cortan —mejor cortar que cobrar con una tasa que ya
+ *   no es— y se avisa al super administrador.
+ *
+ *   Pero enterarse por una notificación es enterarse tarde: para entonces ya
+ *   hubo alguien que no pudo enviar. Este bloque lo dice antes, en la pantalla
+ *   donde se cambia, y con horas y no con un color.
+ */
+function VigenciaDeLaTasa({ cfg }) {
+  if (!cfg) return null;
+
+  const restantes = cfg.tasa_horas_restantes;
+  const limite = cfg.tasa_limite_horas;
+
+  // Sin fecha: es una tasa guardada antes de que se sellara la hora. El
+  // backend la acepta una vez y lo registra; acá se dice qué hacer, que es
+  // volver a guardarla para que quede sellada.
+  if (restantes === null || restantes === undefined) {
+    return (
+      <Franja tono="aviso" titulo="Esta tasa no tiene fecha de actualización">
+        Guardala de nuevo —aunque no le cambies el valor— para que quede
+        registrada la hora. Hasta entonces no se puede controlar su antigüedad.
+      </Franja>
+    );
+  }
+
+  if (cfg.tasa_vencida) {
+    return (
+      <Franja tono="error" titulo="La tasa venció: los envíos con Bitcoin están cortados">
+        Se fijó hace más de {limite} horas. El resto de la aplicación sigue
+        funcionando. Actualizá el valor acá abajo y los envíos se reanudan solos.
+      </Franja>
+    );
+  }
+
+  if (restantes <= 4) {
+    return (
+      <Franja tono="aviso" titulo={`La tasa vence en ${restantes} horas`}>
+        Cuando venza, los envíos con Bitcoin se cortan hasta que la actualices.
+      </Franja>
+    );
+  }
+
+  return (
+    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 16px 0' }}>
+      Tasa vigente por {restantes} horas más. Después de {limite} horas sin
+      actualizarse, los envíos con Bitcoin se cortan en vez de usarla.
+    </p>
+  );
+}
+
+function Franja({ tono, titulo, children }) {
+  const [fondo, borde, color] = tono === 'error'
+    ? ['#FEF2F2', '#FECACA', '#B42318']
+    : ['#FFFBEB', '#FDE68A', '#B54708'];
+  return (
+    <div style={{
+      display: 'flex', gap: '10px', alignItems: 'flex-start',
+      background: fondo, border: `1px solid ${borde}`,
+      borderRadius: '12px', padding: '13px 15px', marginBottom: '16px',
+    }}>
+      <Info size={17} color={color} style={{ flexShrink: 0, marginTop: '1px' }} />
+      <div style={{ fontSize: '13px', lineHeight: 1.55, color: '#374151' }}>
+        <strong style={{ display: 'block', color, marginBottom: '2px' }}>{titulo}</strong>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
 // Sección unificada de la ruta BTC → USDI → VES (editable) + referencias
 // informativas (BCV y precio BTC). Respeta margen y comisión existentes.
 export default function TasasBtcSection() {
@@ -72,6 +147,8 @@ export default function TasasBtcSection() {
       <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 16px 0' }}>
         Estos valores se aplican a cada nueva transacción BTC. La BCV y el precio BTC son solo de referencia.
       </p>
+
+      <VigenciaDeLaTasa cfg={cfg} />
 
       {/* Referencias informativas (solo lectura) */}
       <div style={{ marginBottom: '16px' }}>
