@@ -468,7 +468,50 @@ planilla.
 
 `backend/services/reportes.py`
 
-### 7.3 Qué queda escrito en los registros
+### 7.3 Los documentos, cifrados en la base
+
+Los documentos de identidad se pueden guardar **cifrados con clave propia**
+(AES-256-GCM), de modo que quien llegue a la base sin permiso —una cadena de
+conexión filtrada, un respaldo copiado a otro lado, el proveedor de
+alojamiento— vea texto cifrado y no pueda abrirlo. No protege del
+administrador que entra a revisar un KYC: para eso está su trabajo, y contra
+eso protegen la contraseña, el segundo factor y el libro de auditoría.
+
+**Está apagado por omisión, y eso es parte del diseño.** Cifrar crea un riesgo
+nuevo y peor que el que resuelve: perder la llave es perder todos los
+documentos, sin recuperación. Para una operación que arranca, quedarse sin
+poder probar a quién verificó puede ser peor que una filtración. Así que:
+
+- nada se prende solo, ni con un valor raro en la variable de entorno;
+- leer funciona con las dos formas, así que la migración es gradual y volver
+  atrás es posible;
+- la llave anterior se sigue probando al leer: una rotación a medio camino no
+  destruye nada;
+- hay cómo comprobar que la llave respaldada es la correcta **sin restaurar
+  nada** —una huella de ocho caracteres que no la revela, y un testigo en la
+  base— porque «respaldá la llave» sin forma de verificarlo no es un control;
+- si falta la llave, falla el KYC con un error claro y **las remesas siguen
+  andando**;
+- y si el modo dice cifrar pero la llave no sirve, **se corta antes de
+  escribir**: guardar en claro creyendo que se cifró es la peor de las tres
+  situaciones, porque no se nota nunca.
+
+El tamaño no crece: se cifran los bytes de la imagen y no su representación en
+base64, de modo que el documento ocupa lo mismo más 40 bytes. Importa porque un
+documento de Mongo no puede pasar de 16 MB y una verificación con cuatro fotos
+ya se acerca.
+
+Se cifran las cuatro imágenes. `cpf_number` no: está indexado y cifrarlo
+rompería las búsquedas.
+
+El procedimiento para prenderlo —incluido qué hacer si algo sale mal— está en
+`docs/la-llave-del-cofre.md`, escrito para que lo siga alguien sin
+conocimientos de criptografía.
+
+`backend/services/cofre.py`, `backend/scripts/cofre.py`,
+`backend/tests/test_cofre.py`
+
+### 7.4 Qué queda escrito en los registros
 
 Un registro no es un archivo privado. Los de esta plataforma los ve cualquiera
 con acceso al panel del proveedor de alojamiento, se copian a servicios de
@@ -796,10 +839,9 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **Receptor de webhook del proveedor de pagos** | Deliberadamente no escrito | Que el proveedor publique su esquema de firma. Ver 8.4. |
 | **Política PLD/FT formal** | Borrador redactado, sin aprobar | Cinco decisiones de negocio del operador, marcadas `[PROPUESTO]` en el borrador: umbral por operación, umbral acumulado, qué se considera sospechoso en esta operación, a quién y en qué plazo se reporta, y quién es el responsable designado. Requiere revisión de abogado brasileño. Ver `docs/politica-pld-ft.md`. |
 | **Pasar la política de contenido a bloquear** | Implementada, en modo reporte | Unos días de tráfico real y mirar los avisos que recoge `/api/csp-reporte`. Si no hay ninguno, `CSP_MODO=exigir` la pasa a bloquear sin desplegar código. Si los hay, dicen exactamente qué falta agregar. Ver 8.2. |
-| **Cifrado de los documentos del KYC con clave propia** | No implementado | Una decisión del operador, no técnica: hoy los documentos de identidad viven como texto en la base y quien llegue a la base los ve. Cifrarlos con clave propia lo cierra, y crea un riesgo nuevo — **perder la clave es perder todos los documentos, sin recuperación**. Requiere decidir dónde vive la clave y cómo se respalda antes de escribir una línea. |
 | **`cryptography` con vulnerabilidades publicadas** | 46.0.7; el arreglo está en 49.0.0 | Un salto de tres versiones mayores. Media aplicación depende de ella y la suite no ejerce los caminos de red reales, así que no hay forma de comprobar acá que no rompa nada. Requiere una prueba en un entorno de ensayo. Junto con `black` (herramienta de desarrollo), `ecdsa` (sin versión arreglada publicada) y `litellm` (no se importa en el código propio) son las 22 advertencias que quedan de las 124 originales. |
 | **Cada medio atado a su dueño** | No implementado | El proxy de medios deja que cualquiera con sesión pida el comprobante de cualquier otro **si conoce los tres identificadores**, que son 34 caracteres cada uno y no se adivinan. El secreto es hoy el identificador mismo. Atarlo al dueño requiere guardar esa relación, que no existe. Decisión consciente, anotada en `backend/routes/media.py`. |
-| **Cifrado de documentos en reposo** | Parcial | Los objetos se apoyan en el cifrado del proveedor de almacenamiento. El cifrado a nivel de aplicación, con claves propias, no está implementado. |
+| **Cifrado de documentos en reposo** | Implementado, apagado por omisión | Es una decisión del operador, no técnica. El mecanismo está y probado (ver 7.4); prenderlo requiere generar la llave, respaldarla en tres lugares y comprobar cada copia con `verificar`. El procedimiento está en `docs/la-llave-del-cofre.md`. |
 | **Prueba de intrusión externa** | No realizada | Contratación. Las revisiones hechas hasta hoy son internas. |
 | **Encargado de datos / LGPD** | No designado formalmente | Decisión del operador. |
 | **Sesión corta para el rol `agent`** | Hoy dura 7 días | Decisión del operador. El agente entra al panel y se le exige segundo factor, pero su sesión dura como la de un cliente. Acortarla es un cambio de una línea; el costo es que el agente vuelva a autenticarse durante la jornada. Está fijado en `test_duracion_de_la_sesion.py` para que sea una decisión y no un olvido. |
@@ -845,6 +887,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Toda ruta de los puentes exige la clave, y la exige primero | `backend/routes/adminbrl_bridge.py`, `backend/routes/centro_gestion.py` | `test_puente_con_llave.py` |
 | Los webhooks verifican firma y frescura | `backend/routes/gestor_pix.py`, `backend/routes/btc_lightning.py` | `test_webhooks_firmados.py` |
 | La documentación de la API no se publica, y el cuerpo tiene tope | `backend/server.py`, `backend/services/limite_de_cuerpo.py` | `test_superficie_de_la_api.py` |
+| Un documento cifrado vuelve idéntico, y el tamaño no crece | `backend/services/cofre.py` | `test_cofre.py` |
+| El cifrado no se prende solo ni guarda en claro creyendo que cifra | `backend/services/cofre.py` | `test_cofre.py` |
 | Cambiar la contraseña cierra las sesiones abiertas | `backend/services/sesiones.py` | `test_sesiones_al_cambiar_clave.py` |
 | Ningún registro escribe un dato personal en claro | `backend/services/registro.py` | `test_registros_sin_datos.py` |
 | `script-src` sin `unsafe-inline` ni `unsafe-eval` | `backend/services/csp.py` | `test_politica_de_contenido.py` |
