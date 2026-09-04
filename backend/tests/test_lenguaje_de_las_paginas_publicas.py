@@ -185,3 +185,38 @@ def test_las_paginas_publicas_no_publican_ninguna_direccion_de_correo():
         + "\n  ".join(hallazgos)
         + "\n\nEl único canal de atención es el centro de ayuda: enlazá a "
           "/support.")
+
+
+def test_todo_enlace_a_una_seccion_legal_apunta_a_una_que_existe():
+    """Un ancla rota no rompe nada: la página abre igual, arriba de todo.
+
+    Por eso hace falta un test. Pasó de verdad: al reescribir la página legal
+    se renombró la sección `datos-fiscales` a `empresa`, y el enlace del pie
+    de página quedó apuntando al nombre viejo. Nada falló, nada avisó, y el
+    visitante que buscaba los datos del operador aterrizaba en el encabezado.
+
+    Se revisa todo el frontend, no sólo las páginas públicas: los enlaces al
+    marco legal también salen de pantallas con sesión iniciada.
+    """
+    legal = (_RAIZ / LEGAL).read_text(encoding="utf-8")
+    existentes = set(re.findall(r"id:\s*'([a-z0-9-]+)'", legal))
+    assert existentes, "no se encontraron las secciones declaradas en LegalPage"
+
+    rotos = []
+    frontend = _RAIZ / "frontend" / "src"
+    for archivo in frontend.rglob("*"):
+        if not archivo.is_file() or archivo.suffix not in {".js", ".jsx", ".ts", ".tsx"}:
+            continue
+        if any(parte in ("node_modules", "dist", "build") for parte in archivo.parts):
+            continue
+        for n, linea in enumerate(archivo.read_text(encoding="utf-8",
+                                                    errors="ignore").splitlines(), 1):
+            for ancla in re.findall(r"/legal#([a-z0-9-]+)", linea):
+                if ancla not in existentes:
+                    rotos.append(
+                        f"{archivo.relative_to(_RAIZ)}:{n}  #{ancla}")
+
+    assert not rotos, (
+        "Enlaces a secciones del marco legal que no existen:\n  "
+        + "\n  ".join(rotos)
+        + f"\n\nLas secciones declaradas son: {', '.join(sorted(existentes))}.")
