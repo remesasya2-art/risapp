@@ -406,6 +406,43 @@ dinero se anotaba, pero entregarle a una persona *el poder* de mover dinero no.
 
 `backend/services/auditoria.py`, `backend/tests/test_auditoria.py`
 
+### 6.1 Lo que se publica de todo esto, y lo que no
+
+Las páginas públicas prometen el **resultado**; no describen el **mecanismo**.
+
+Durante un tiempo lo describieron. La página «Cómo funciona» enumeraba, para
+mostrar seriedad, que el acceso administrativo exige un segundo factor, que la
+comprobación de saldos es periódica, y la lista completa de lo que puede hacer
+una cuenta interna: aprobar una verificación, aprobar una recarga, **ajustar un
+saldo**, cambiar una tasa, modificar permisos. La portada y la política de
+privacidad decían además que el segundo factor es obligatorio para el personal.
+
+Nada de eso ayuda a quien está decidiendo si confía, y todo eso ayuda a quien
+está mirando por dónde entrar: le nombra la operación que vale la pena tomar
+—ajustar un saldo—, le dice qué defensa va a encontrar del otro lado, y le
+dice qué tiene que imitar una pantalla falsa dirigida a un empleado para que el
+empleado no sospeche. «Periódica», además, es la palabra que anuncia que hay
+una ventana.
+
+Lo que quedó publicado: que todo movimiento de saldo deja un asiento, que un
+asiento no se reescribe, que toda intervención del equipo queda asentada, y que
+el usuario puede pedir ese detalle. Todas son promesas comprobables y ninguna
+es un plano.
+
+Dos distinciones que costaron una corrección y conviene no perder:
+
+- **Ofrecerle el segundo factor al usuario se sigue diciendo.** Es una función
+  que él puede prender; contarla lo protege y no le sirve a nadie más. Lo que
+  no se publica es qué se le exige al **personal**. La regla no está en la
+  palabra sino en de quién se habla, y por eso el test busca las dos cosas en
+  la misma oración y no una lista de palabras prohibidas.
+- **La política de privacidad sigue declarando que hay medidas técnicas y
+  organizativas**, que es lo que pide la LGPD (art. 46). Lo que dejó de hacer
+  es enumerarlas: el detalle se documenta acá y se pone a disposición de la
+  autoridad de control o de una auditoría que lo pida.
+
+`backend/tests/test_lenguaje_de_las_paginas_publicas.py`
+
 ---
 
 ## 7. Datos personales y documentos

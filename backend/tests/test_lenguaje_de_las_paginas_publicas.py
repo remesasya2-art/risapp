@@ -220,3 +220,157 @@ def test_todo_enlace_a_una_seccion_legal_apunta_a_una_que_existe():
         "Enlaces a secciones del marco legal que no existen:\n  "
         + "\n  ".join(rotos)
         + f"\n\nLas secciones declaradas son: {', '.join(sorted(existentes))}.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Los controles internos no se publican
+# ══════════════════════════════════════════════════════════════════════════
+#
+# La distinción es entre PROMESA y MECANISMO.
+#
+#   Promesa  : «toda entrada y salida de saldo deja un asiento».
+#   Mecanismo: «hay una comprobación periódica de los saldos», «un
+#              administrador puede ajustar un saldo o cambiar una tasa», «el
+#              personal con acceso administrativo tiene el segundo factor
+#              obligatorio».
+#
+# La promesa es lo que necesita quien decide si confía. El mecanismo es lo que
+# necesita quien está buscando por dónde entrar: le dice qué cuenta vale la
+# pena tomar, qué defensa va a encontrar del otro lado, y qué tiene que imitar
+# una página de phishing para que el engaño funcione. «Periódica» es, además,
+# la palabra que anuncia que existe una ventana.
+#
+# Nada de esto se borró del proyecto: está en
+# `docs/dossier-tecnico-de-seguridad.md`, que es interno y se entrega bajo
+# acuerdo a quien tenga que auditarlo. Lo que cambia es quién puede leerlo sin
+# pedirlo.
+#
+# El riesgo que justifica un test y no un comentario es el mismo de siempre: el
+# texto de estas páginas se reescribe para «mostrar que somos serios», y
+# enumerar controles es exactamente lo que parece serio.
+
+CONTROLES = [
+    ("acceso administrativo", "que hay una superficie de administración, y cuál"),
+    ("panel de administracion", "que hay una superficie de administración, y cuál"),
+    ("ajustar un saldo", "que un saldo se puede crear a mano"),
+    ("ajuste de saldo", "que un saldo se puede crear a mano"),
+    ("modificar permisos", "el inventario de lo que puede hacer una cuenta interna"),
+    ("cambiar una tasa", "el inventario de lo que puede hacer una cuenta interna"),
+    ("comprobacion periodica", "que el control no es continuo: anuncia la ventana"),
+    ("revision periodica", "que el control no es continuo: anuncia la ventana"),
+    ("conciliacion periodica", "que el control no es continuo: anuncia la ventana"),
+    ("se revisa a mano", "que no hay verificación automática que sortear"),
+    ("altas y bajas de personal", "el tamaño y la rotación del equipo interno"),
+]
+
+# El segundo factor es el caso que no se puede resolver con una lista de
+# palabras, y el primer intento de este test se equivocó justamente ahí.
+#
+# «Tu cuenta puede protegerse con verificación en dos pasos» es una función
+# que se le OFRECE al usuario: decirlo lo ayuda a protegerse y no le sirve de
+# nada a un atacante, que ya lo va a descubrir al primer intento de entrar.
+#
+# «El personal con acceso administrativo la tiene obligatoria» es otra cosa:
+# habla de una puerta que el visitante no usa, y le dice a quien prepara un
+# engaño contra un empleado que la pantalla falsa tiene que pedir el código —
+# si no, el empleado sospecha.
+#
+# La diferencia no está en la palabra sino en de quién se habla. Por eso se
+# busca la coincidencia de las dos cosas en la MISMA oración.
+FACTOR = ("dos pasos", "segundo factor", "doble factor", "dos factores",
+          "dos etapas", "2fa", "mfa")
+PERSONAL = ("personal", "administrador", "administradores", "administrativo",
+            "administrativa", "colaborador", "colaboradores",
+            "equipo interno", "nuestro equipo")
+
+
+def _visible(texto: str) -> str:
+    """El fuente sin los comentarios, en una sola tira y sin tildes.
+
+    Las cabeceras de estos archivos NOMBRAN las frases prohibidas para
+    explicar por qué lo están. Contarlas sería castigar la documentación de la
+    regla, y además haría imposible dejarla escrita donde se lee.
+    """
+    return _plano(" ".join(
+        l.strip() for l in texto.splitlines()
+        if not _plano(l).lstrip().startswith(("*", "//", "/*", "{/*"))))
+
+
+def test_ninguna_pagina_publica_describe_los_controles_internos():
+    """Se busca sobre el texto ARMADO, no línea por línea.
+
+    Esto lo encontró una mutación: «comprobación periódica» escrito con el
+    salto de línea en el medio —que es como queda cuando el editor acomoda el
+    párrafo— no lo veía ninguna búsqueda por línea, y el test daba verde con la
+    frase publicada. La versión por líneas de los tests de más arriba tiene el
+    mismo agujero; se arregló acá primero porque acá la frase que importa son
+    tres palabras y se parte sola.
+    """
+    hallazgos = []
+    for ruta, texto in _archivos_publicos():
+        armado = _visible(texto)
+        for frase, porque in CONTROLES:
+            donde = armado.find(frase)
+            if donde >= 0:
+                hallazgos.append(
+                    f"{ruta}  «{frase}»  →  le dice a un desconocido {porque}"
+                    f"\n      …{armado[max(0, donde - 40):donde + 70].strip()}…")
+
+    assert not hallazgos, (
+        "Una página pública está describiendo un control interno:\n  "
+        + "\n  ".join(hallazgos)
+        + "\n\nUna página pública promete un RESULTADO; no describe el "
+          "MECANISMO que lo garantiza. El detalle va en "
+          "docs/dossier-tecnico-de-seguridad.md, que es interno.")
+
+
+def test_ninguna_pagina_publica_cuenta_como_se_protege_el_personal():
+    hallazgos = []
+    for ruta, texto in _archivos_publicos():
+        for oracion in _visible(texto).split("."):
+            if any(f in oracion for f in FACTOR) and any(p in oracion for p in PERSONAL):
+                hallazgos.append(f"{ruta}  →  {oracion.strip()[:120]}")
+
+    assert not hallazgos, (
+        "Una página pública cuenta cómo se protegen las cuentas internas:\n  "
+        + "\n  ".join(hallazgos)
+        + "\n\nOfrecerle el segundo factor AL USUARIO está bien y ayuda. "
+          "Contar qué exige la plataforma A SU PERSONAL le dice a quien "
+          "prepara un engaño contra un empleado qué tiene que imitar la "
+          "pantalla falsa. Eso va en el dossier interno.")
+
+
+def test_las_paginas_publicas_siguen_prometiendo_la_trazabilidad():
+    """La contracara, otra vez: que no se resuelva borrando la sección entera.
+
+    Sin este test, la forma más fácil de pasar los dos de arriba es dejar la
+    página sin decir nada sobre qué queda registrado — y eso es peor que el
+    problema que se estaba arreglando: quien evalúa la plataforma se va sin
+    saber si sus movimientos dejan rastro.
+    """
+    visible = _visible((_RAIZ / "frontend/src/pages/ComoFunciona.jsx")
+                       .read_text(encoding="utf-8"))
+
+    faltan = [f for f in ("asiento", "queda registrado") if f not in visible]
+    assert not faltan, (
+        "La página dejó de prometer la trazabilidad: falta "
+        + ", ".join(f"«{f}»" for f in faltan)
+        + ". Los controles no se publican, pero la promesa de que todo "
+          "movimiento deja rastro sí: es lo que necesita quien decide si "
+          "confía.")
+
+
+def test_la_portada_le_sigue_ofreciendo_el_segundo_factor_al_usuario():
+    """Y la otra contracara: que el test de arriba no borre la oferta.
+
+    La forma más fácil de dejar de hablar del segundo factor del personal es
+    dejar de hablar del segundo factor. Sería un retroceso: la función existe,
+    es opcional, y el usuario que no sabe que está no la va a prender.
+    """
+    visible = _visible((_RAIZ / "frontend/src/pages/Landing.jsx")
+                       .read_text(encoding="utf-8"))
+
+    assert any(f in visible for f in FACTOR), (
+        "La portada dejó de ofrecerle la verificación en dos pasos al usuario. "
+        "Lo que no se publica es cómo se protege el PERSONAL; la función que "
+        "el usuario puede prender en su cuenta sí se cuenta.")

@@ -306,9 +306,12 @@ export default function LegalPage() {
           <p style={p}>
             Los datos se conservan durante el tiempo necesario para prestar el
             servicio y cumplir obligaciones legales y fiscales. Se aplican
-            medidas técnicas y organizativas para proteger la información,
-            entre ellas el cifrado de las credenciales y la verificación en dos
-            pasos obligatoria para todo el personal con acceso administrativo.
+            medidas técnicas y organizativas para proteger la información, entre
+            ellas el cifrado de las credenciales y el control de quién accede a
+            cada dato. El detalle de esas medidas se documenta internamente y se
+            pone a disposición de la autoridad de control o de una auditoría que
+            lo requiera; publicarlo en detalle debilitaría la protección que
+            describe.
           </p>
         </Seccion>
 

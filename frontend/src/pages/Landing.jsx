@@ -544,8 +544,8 @@ export default function Landing() {
               Seguridad en cada operación
             </h3>
             <p style={{ fontSize: 15.5, color: TEXTO, lineHeight: 1.7, margin: 0 }}>
-              Tu cuenta está protegida por verificación en dos pasos, y el
-              personal con acceso administrativo la tiene obligatoria. Los
+              Tu cuenta puede protegerse con verificación en dos pasos, y la
+              identidad se verifica antes de operar montos mayores. Los
               distintos tipos de créditos se gestionan de forma independiente
               dentro de la plataforma.
             </p>
