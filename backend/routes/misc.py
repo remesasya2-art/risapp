@@ -16,6 +16,8 @@ from routes.dependencies import get_current_user, get_super_admin
 from services.limits import limits_payload
 from services.kyc_quota import quota_payload
 from models.user import User
+from services.imagen_recibida import (ImagenInvalida, limpiar_imagen,
+                                      limpiar_imagen_opcional)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["misc"])
@@ -142,6 +144,19 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
             detail=f"Para {doc_type.upper()} es obligatorio adjuntar también el reverso del documento."
         )
 
+    # Estos cuatro campos son texto que elige quien sube la foto, y el que los
+    # abre después es un administrador. Sin esto, un `javascript:` guardado acá
+    # se ejecutaba en la sesión del que estaba revisando el KYC. Ver
+    # `services/imagen_recibida.py`.
+    try:
+        doc_frente = limpiar_imagen(data.id_document_image, campo="El documento")
+        doc_dorso = limpiar_imagen_opcional(data.id_document_image_back,
+                                            campo="El dorso del documento")
+        cpf_img = limpiar_imagen(data.cpf_image, campo="La foto del CPF")
+        selfie = limpiar_imagen(data.selfie_image, campo="La selfie")
+    except ImagenInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     verification = {
         "verification_id": f"ver_{uuid.uuid4().hex[:12]}",
         "user_id": current_user.user_id,
@@ -150,10 +165,10 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
         "cpf_number": data.cpf_number,
         "phone_number": data.phone_number,
         "document_type": doc_type,
-        "id_document_image": data.id_document_image,
-        "id_document_image_back": data.id_document_image_back if doc_type in DOC_TYPES_REQUIRING_BACK else None,
-        "cpf_image": data.cpf_image,
-        "selfie_image": data.selfie_image,
+        "id_document_image": doc_frente,
+        "id_document_image_back": doc_dorso if doc_type in DOC_TYPES_REQUIRING_BACK else None,
+        "cpf_image": cpf_img,
+        "selfie_image": selfie,
         "status": "pending",
         "submitted_at": datetime.now(timezone.utc)
     }

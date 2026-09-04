@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, ChevronDown } from 'lucide-react';
 import api from '../utils/api';
+import { abrirArchivo, rutaDeArchivo } from '../utils/urlDeArchivo';
 import toast from 'react-hot-toast';
 
 export default function SupportChat() {
@@ -240,7 +241,7 @@ export default function SupportChat() {
                       </p>
                     )}
                     {msg.image && (
-                      <img src={msg.image} alt="adjunto" onClick={() => window.open(msg.image, '_blank')} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '200px', maxHeight: '200px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
+                      <img src={rutaDeArchivo(msg.image)} alt="adjunto" onClick={() => abrirArchivo(msg.image)} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '200px', maxHeight: '200px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
                     )}
                   </div>
                   <p style={{

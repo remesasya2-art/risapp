@@ -25,6 +25,7 @@ from database import db
 from services.money import to_decimal, to_decimal128
 from services import saldos
 from services.notifications import create_notification
+from services.imagen_recibida import limpiar_lista
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/adminbrl", tags=["adminbrl-bridge"])
@@ -219,7 +220,8 @@ async def process_withdrawal(
             "bank_id": bank_id,
         }
         if request.proof_images:
-            update_data["proof_images"] = request.proof_images
+            update_data["proof_images"] = limpiar_lista(
+                request.proof_images, campo="Los comprobantes")
 
         await db.transactions.update_one(
             {"transaction_id": transaction_id},
@@ -359,7 +361,8 @@ async def process_btc(
         "enviado_en": datetime.now(timezone.utc),
     }
     if request.proof_images:
-        update_data["proof_images"] = request.proof_images
+        update_data["proof_images"] = limpiar_lista(
+            request.proof_images, campo="Los comprobantes")
 
     await db.btc_remesas.update_one(
         {"remesa_id": request.remesa_id},

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { fmt } from '../../utils/format';
+import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
 import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock } from 'lucide-react';
 
@@ -306,7 +307,7 @@ export default function OrdenesPorProcesar() {
       return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {o.comprobante_usuario && (
-            <img src={o.comprobante_usuario} alt="comp" onClick={() => setVerImg(o.comprobante_usuario)}
+            <img src={rutaDeArchivo(o.comprobante_usuario)} alt="comp" onClick={() => setVerImg(o.comprobante_usuario)}
               style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid ' + C.border }} />
           )}
           <button disabled={busy === o.orden_id} onClick={() => resolverRecarga(o, 'approve')}
@@ -330,7 +331,7 @@ export default function OrdenesPorProcesar() {
             onChange={(e) => onSelectComprobante(o.orden_id, e.target.files?.[0])} />
         </label>
         {tiene && (
-          <img src={comprobantes[o.orden_id]} alt="comp" onClick={() => setVerImg(comprobantes[o.orden_id])}
+          <img src={rutaDeArchivo(comprobantes[o.orden_id])} alt="comp" onClick={() => setVerImg(comprobantes[o.orden_id])}
             style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid ' + C.border }} />
         )}
         <button disabled={busy === o.orden_id || !tiene} onClick={() => procesarPago(o)} style={btnPrimary(tiene && busy !== o.orden_id)}>
@@ -458,7 +459,7 @@ export default function OrdenesPorProcesar() {
           position: 'fixed', inset: 0, backgroundColor: 'rgba(17,24,39,0.75)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px',
         }}>
-          <img src={verImg} alt="comprobante" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '10px' }} />
+          <img src={rutaDeArchivo(verImg)} alt="comprobante" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '10px' }} />
         </div>
       )}
     </div>

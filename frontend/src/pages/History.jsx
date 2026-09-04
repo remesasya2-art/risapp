@@ -10,21 +10,8 @@ import NotificationBell from '../components/NotificationBell';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import CryptoHistoryItem from '../components/dashboard/CryptoHistoryItem';
 import { fmt } from '../utils/format';
+import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo';
 
-// Convertir URL de imagen a ruta accesible
-const convertTwilioUrl = (url) => {
-  if (!url) return url;
-  // URLs locales ya funcionan via proxy Kubernetes
-  if (url.startsWith('/api/static/') || url.startsWith('/api/media/')) return url;
-  // Base64 inline
-  if (url.startsWith('data:')) return url;
-  // URLs directas de Twilio -> pasar por proxy backend
-  if (url.includes('api.twilio.com')) {
-    const match = url.match(/\/Accounts\/(AC[^/]+\/.*)/);
-    if (match) return `/api/media/twilio/${match[1]}`;
-  }
-  return url;
-};
 
 export default function History() {
   const navigate = useNavigate();
@@ -50,22 +37,17 @@ export default function History() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
-  // Función para descargar una imagen
-  const downloadImage = (base64Data, fileName) => {
-    const link = document.createElement('a');
-    link.href = base64Data;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Función para descargar todas las imágenes
+  // Bajar todos los comprobantes, uno cada 300ms para que el navegador no los
+  // tome por una descarga automática y los bloquee.
+  //
+  // `bajarArchivo` arma el <a> y lo clickea, igual que antes, pero mirando el
+  // valor primero: el que estaba acá le ponía `href` a lo que viniera, y un <a>
+  // con `javascript:` ejecuta ese código aunque el click lo demos nosotros.
   const downloadAllImages = (images, txId) => {
     images.forEach((img, index) => {
       setTimeout(() => {
-        downloadImage(img, `comprobante_${txId}_${index + 1}.png`);
-      }, index * 300); // Pequeño delay entre descargas
+        bajarArchivo(img, `comprobante_${txId}_${index + 1}.png`);
+      }, index * 300);
     });
   };
 
@@ -387,8 +369,8 @@ const normalized = { ...tx };
                   <button
                     onClick={() => {
                       const images = selectedVoucher.proof_images?.length > 0 
-                        ? selectedVoucher.proof_images.map(convertTwilioUrl)
-                        : [convertTwilioUrl(selectedVoucher.proof_image)];
+                        ? selectedVoucher.proof_images
+                        : [selectedVoucher.proof_image];
                       const txId = selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8);
                       downloadAllImages(images, txId);
                     }}
@@ -416,7 +398,7 @@ const normalized = { ...tx };
                   {(selectedVoucher.proof_images?.length > 0 ? selectedVoucher.proof_images : [selectedVoucher.proof_image]).map((img, idx) => (
                     <div key={idx} style={{ position: 'relative' }}>
                       <img 
-                        src={convertTwilioUrl(img)} 
+                        src={rutaDeArchivo(img)} 
                         alt={`Comprobante ${idx + 1}`}
                         style={{ 
                           width: '100%', 
@@ -427,7 +409,7 @@ const normalized = { ...tx };
                           backgroundColor: '#f9fafb',
                           cursor: 'pointer'
                         }}
-                        onClick={() => window.open(convertTwilioUrl(img), '_blank')}
+                        onClick={() => abrirArchivo(img)}
                         title="Click para ver en tamaño completo"
                       />
                       {/* Botón de descarga individual */}
@@ -435,7 +417,7 @@ const normalized = { ...tx };
                         onClick={(e) => {
                           e.stopPropagation();
                           const txId = selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8);
-                          downloadImage(convertTwilioUrl(img), `comprobante_${txId}_${idx + 1}.png`);
+                          bajarArchivo(img, `comprobante_${txId}_${idx + 1}.png`);
                         }}
                         style={{
                           position: 'absolute', top: '8px', right: '8px',
@@ -464,14 +446,14 @@ const normalized = { ...tx };
                 </div>
               ) : selectedVoucher.voucher_url ? (
                 <img 
-                  src={selectedVoucher.voucher_url} 
+                  src={rutaDeArchivo(selectedVoucher.voucher_url)} 
                   alt="Comprobante"
                   style={{ 
                     width: '100%', borderRadius: '12px', border: '1px solid #e5e7eb',
                     maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f9fafb',
                     cursor: 'pointer'
                   }}
-                  onClick={() => window.open(selectedVoucher.voucher_url, '_blank')}
+                  onClick={() => abrirArchivo(selectedVoucher.voucher_url)}
                   title="Click para ver en tamaño completo"
                 />
               ) : (

@@ -20,6 +20,7 @@ from services import auditoria, kyc_quota
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
+from services.imagen_recibida import ImagenInvalida, limpiar_lista
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -742,6 +743,10 @@ async def process_withdrawal(
     transaction_id = request.get("transaction_id")
     action = request.get("action")
     proof_images = request.get("proof_images")
+    try:
+        proof_images = limpiar_lista(proof_images, campo="Los comprobantes")
+    except ImagenInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
     bank_id = request.get("bank_id")
     
     force = bool(request.get("force"))

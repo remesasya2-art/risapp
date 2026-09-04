@@ -34,21 +34,8 @@ import TasasCriptoSection from '../components/admin/TasasCriptoSection';
 import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
 import EnviosPanel from '../components/admin/envios/EnviosPanel';
 import OperacionPanel from '../components/admin/envios/OperacionPanel';
+import { abrirArchivo, bajarArchivo, rutaDeArchivo, sePuedeAbrir } from '../utils/urlDeArchivo';
 
-// Convertir URL de imagen a ruta accesible
-const convertTwilioUrl = (url) => {
-  if (!url) return url;
-  // URLs locales ya funcionan via proxy Kubernetes
-  if (url.startsWith('/api/static/') || url.startsWith('/api/media/')) return url;
-  // Base64 inline
-  if (url.startsWith('data:')) return url;
-  // URLs directas de Twilio -> pasar por proxy backend
-  if (url.includes('api.twilio.com')) {
-    const match = url.match(/\/Accounts\/(AC[^/]+\/.*)/);
-    if (match) return `/api/media/twilio/${match[1]}`;
-  }
-  return url;
-};
 
 // Función para enmascarar el CPF (solo muestra últimos 3 dígitos)
 const maskCPF = (cpf) => {
@@ -1455,7 +1442,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                         }}>
                           {msg.message && <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{msg.message}</p>}
                           {msg.image && (
-                            <img src={msg.image} alt="adjunto" onClick={() => window.open(msg.image, '_blank')} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '220px', maxHeight: '220px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
+                            <img src={rutaDeArchivo(msg.image)} alt="adjunto" onClick={() => abrirArchivo(msg.image)} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '220px', maxHeight: '220px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
                           )}
                         </div>
                         <p style={{ fontSize: '10px', color: '#9ca3af', margin: '4px 8px 0', textAlign: msg.sender === 'admin' ? 'right' : 'left' }}>
@@ -1490,7 +1477,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                     )}
                     {chatImage && (
                       <div style={{ padding: '8px 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <img src={chatImage} alt="adjunto" style={{ width: '46px', height: '46px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                        <img src={rutaDeArchivo(chatImage)} alt="adjunto" style={{ width: '46px', height: '46px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
                         <span style={{ fontSize: '12px', color: '#6b7280' }}>Imagen lista para enviar</span>
                         <button onClick={() => setChatImage(null)} title="Quitar imagen" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <X style={{ width: '16px', height: '16px' }} />
@@ -1879,7 +1866,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                         onChange={(e) => handleComprobanteSelect(orden.remesa_id, e.target.files?.[0])} />
                     </label>
                     {comprobanteByOrden[orden.remesa_id] && (
-                      <img src={comprobanteByOrden[orden.remesa_id]} alt="comprobante" style={{ display: 'block', marginTop: '8px', maxWidth: '160px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                      <img src={rutaDeArchivo(comprobanteByOrden[orden.remesa_id])} alt="comprobante" style={{ display: 'block', marginTop: '8px', maxWidth: '160px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2117,14 +2104,17 @@ const [searchParams, setSearchParams] = useSearchParams();
                             if (userHistory.user?.cpf_image) docs.push({ name: 'cpf', url: userHistory.user.cpf_image });
                             if (userHistory.user?.selfie_image) docs.push({ name: 'selfie', url: userHistory.user.selfie_image });
                             
-                            docs.forEach(doc => {
-                              const link = document.createElement('a');
-                              link.href = doc.url;
-                              link.download = `${userHistory.user?.name || 'usuario'}_${doc.name}.jpg`;
-                              link.target = '_blank';
-                              link.click();
-                            });
-                            toast.success(`${docs.length} documentos descargados`);
+                            // `bajarArchivo` mira el valor antes de ponerlo en el
+                            // href: estos cuatro campos los llena el usuario que
+                            // se verifica, y un `javascript:` acá corría en la
+                            // pantalla del que lo está aprobando.
+                            const bajados = docs.filter((doc) => bajarArchivo(
+                              doc.url,
+                              `${userHistory.user?.name || 'usuario'}_${doc.name}.jpg`));
+                            if (bajados.length < docs.length) {
+                              toast.error(`${docs.length - bajados.length} documento(s) con una dirección que no se puede abrir. Avisale a soporte.`);
+                            }
+                            toast.success(`${bajados.length} documentos descargados`);
                           }}
                           style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: '#f59e0b', color: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                           data-testid="download-all-docs-btn"
@@ -2162,11 +2152,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                         </button>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                        {userHistory.user?.profile_picture && (
+                        {sePuedeAbrir(userHistory.user?.profile_picture) && (
                           <div style={{ textAlign: 'center' }}>
-                            <a href={userHistory.user.profile_picture} target="_blank" rel="noopener noreferrer">
+                            <a href={rutaDeArchivo(userHistory.user.profile_picture)} target="_blank" rel="noopener noreferrer">
                               <img 
-                                src={userHistory.user.profile_picture} 
+                                src={rutaDeArchivo(userHistory.user.profile_picture)} 
                                 alt="Foto de Perfil" 
                                 style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
                               />
@@ -2174,11 +2164,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                             <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>Perfil</p>
                           </div>
                         )}
-                        {userHistory.user?.id_document_image && (
+                        {sePuedeAbrir(userHistory.user?.id_document_image) && (
                           <div style={{ textAlign: 'center' }}>
-                            <a href={userHistory.user.id_document_image} target="_blank" rel="noopener noreferrer">
+                            <a href={rutaDeArchivo(userHistory.user.id_document_image)} target="_blank" rel="noopener noreferrer">
                               <img 
-                                src={userHistory.user.id_document_image} 
+                                src={rutaDeArchivo(userHistory.user.id_document_image)} 
                                 alt="Documento" 
                                 style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
                               />
@@ -2186,11 +2176,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                             <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>Documento</p>
                           </div>
                         )}
-                        {userHistory.user?.cpf_image && (
+                        {sePuedeAbrir(userHistory.user?.cpf_image) && (
                           <div style={{ textAlign: 'center' }}>
-                            <a href={userHistory.user.cpf_image} target="_blank" rel="noopener noreferrer">
+                            <a href={rutaDeArchivo(userHistory.user.cpf_image)} target="_blank" rel="noopener noreferrer">
                               <img 
-                                src={userHistory.user.cpf_image} 
+                                src={rutaDeArchivo(userHistory.user.cpf_image)} 
                                 alt="CPF" 
                                 style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
                               />
@@ -2198,11 +2188,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                             <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>CPF</p>
                           </div>
                         )}
-                        {userHistory.user?.selfie_image && (
+                        {sePuedeAbrir(userHistory.user?.selfie_image) && (
                           <div style={{ textAlign: 'center' }}>
-                            <a href={userHistory.user.selfie_image} target="_blank" rel="noopener noreferrer">
+                            <a href={rutaDeArchivo(userHistory.user.selfie_image)} target="_blank" rel="noopener noreferrer">
                               <img 
-                                src={userHistory.user.selfie_image} 
+                                src={rutaDeArchivo(userHistory.user.selfie_image)} 
                                 alt="Selfie" 
                                 style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
                               />
@@ -2291,11 +2281,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                               </div>
                               
                               {/* Voucher/Comprobante */}
-                              {(tx.proof_image || tx.voucher_url) && (
+                              {sePuedeAbrir(tx.proof_image || tx.voucher_url) && (
                                 <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #e5e7eb' }}>
                                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 6px 0' }}>Comprobante:</p>
                                   <img 
-                                    src={convertTwilioUrl(tx.proof_image || tx.voucher_url)} 
+                                    src={rutaDeArchivo(tx.proof_image || tx.voucher_url)} 
                                     alt="Comprobante" 
                                     style={{ 
                                       maxWidth: '200px', 
@@ -2304,7 +2294,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                       border: '1px solid #e5e7eb',
                                       cursor: 'pointer'
                                     }}
-                                    onClick={() => window.open(convertTwilioUrl(tx.proof_image || tx.voucher_url), '_blank')}
+                                    onClick={() => abrirArchivo(tx.proof_image || tx.voucher_url)}
                                   />
                                 </div>
                               )}

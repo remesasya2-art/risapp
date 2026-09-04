@@ -16,6 +16,7 @@ import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
+import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -94,19 +95,13 @@ const normalized = { ...tx };
     setShowVoucherModal(true);
   };
 
-  const downloadImage = (base64Data, fileName) => {
-    const link = document.createElement('a');
-    link.href = base64Data;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+  // `bajarArchivo` arma el <a> y lo clickea, igual que el `downloadImage` que
+  // había acá, pero mirando el valor antes: un <a href="javascript:..."> ejecuta
+  // ese código aunque el click lo demos nosotros.
   const downloadAllImages = (images, txId) => {
     images.forEach((img, index) => {
       setTimeout(() => {
-        downloadImage(img, `comprobante_${txId}_${index + 1}.png`);
+        bajarArchivo(img, `comprobante_${txId}_${index + 1}.png`);
       }, index * 300);
     });
   };
@@ -652,26 +647,26 @@ const normalized = { ...tx };
                   selectedVoucher.proof_images.map((img, index) => (
                     <div key={index} style={{ position: 'relative' }}>
                       <img 
-                        src={img} 
+                        src={rutaDeArchivo(img)} 
                         alt={`Comprobante ${index + 1}`}
                         style={{ 
                           width: '100%', borderRadius: '12px', 
                           border: '1px solid #e5e7eb', cursor: 'pointer' 
                         }}
-                        onClick={() => window.open(img, '_blank')}
+                        onClick={() => abrirArchivo(img)}
                       />
                     </div>
                   ))
                 ) : selectedVoucher.proof_image ? (
                   <div style={{ position: 'relative' }}>
                     <img 
-                      src={selectedVoucher.proof_image} 
+                      src={rutaDeArchivo(selectedVoucher.proof_image)} 
                       alt="Comprobante"
                       style={{ 
                         width: '100%', borderRadius: '12px', 
                         border: '1px solid #e5e7eb', cursor: 'pointer' 
                       }}
-                      onClick={() => window.open(selectedVoucher.proof_image, '_blank')}
+                      onClick={() => abrirArchivo(selectedVoucher.proof_image)}
                     />
                   </div>
                 ) : (
