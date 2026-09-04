@@ -56,3 +56,4 @@ STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 # su código de referido adentro. El resto del backend ya usaba www.risappbr.com
 # (ver PUBLIC_BASE_URL en routes/transactions.py y routes/credits.py).
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://www.risappbr.com")
+

@@ -715,3 +715,77 @@ def test_la_lista_no_filtra_el_hash_de_la_contrasena(base, correos):
     # Y que el hash tampoco viaje como valor bajo otro nombre.
     assert corre(base.users.find_one({"user_id": user_id}))["password_hash"] \
         not in repr(salida)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El alta no puede sacarte a vos
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_no_se_da_de_alta_al_super_administrador(base, correos):
+    """El alta CONVIERTE la cuenta: le pone `role: "admin"`.
+
+    Hecho sobre el super administrador, lo degrada. Y si es el único —que es
+    el caso de esta aplicación— no queda nadie que pueda devolverle el rol,
+    porque la pantalla que lo haría es la que acaba de perder. Se arregla
+    editando Mongo a mano.
+
+    `dar_de_baja` ya frenaba esto. El alta no, y es el mismo daño por el otro
+    lado: el aviso de saldo lo tapaba de casualidad, porque con la cuenta en
+    cero seguía derecho.
+    """
+    # Un super administrador DISTINTO del que hace el alta. Con el mismo, el
+    # freno de "no a vos mismo" lo atajaría igual y este quedaría sin probar:
+    # así fue como sobrevivió a la primera ronda de mutación.
+    corre(base.users.insert_one({
+        "user_id": "sa_2", "email": "socia@risapp.com", "name": "Socia",
+        "role": "super_admin", "email_verified": True, "password_set": True,
+        "password_hash": hash_password(CLAVE_OTRA), "is_active": True,
+        # En cero a propósito: sin plata que encerrar, el único freno posible
+        # es este.
+        "balance_ris": 0, "balance_ris_terceros": 0,
+    }))
+
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as e:
+        corre(rrhh.dar_de_alta(alta(email="socia@risapp.com"), pedido(), EL_SUPER))
+
+    assert e.value.status_code == 409
+    doc = corre(base.users.find_one({"user_id": "sa_2"}))
+    assert doc["role"] == "super_admin", "se degradó al super administrador"
+    assert not doc.get("es_personal")
+    assert correos == [], "se mandó una invitación a un alta que se rechazó"
+
+
+def test_nadie_se_da_de_alta_a_si_mismo(base, correos):
+    """Convertir la cuenta propia es sacarse el acceso uno mismo."""
+    corre(base.users.insert_one({
+        "user_id": EL_SUPER.user_id, "email": EL_SUPER.email, "name": "Jefe",
+        "role": "admin", "email_verified": True, "password_set": True,
+        "password_hash": hash_password(CLAVE_OTRA), "is_active": True,
+        "balance_ris": 0, "balance_ris_terceros": 0,
+    }))
+
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as e:
+        corre(rrhh.dar_de_alta(alta(email=EL_SUPER.email), pedido(), EL_SUPER))
+
+    assert e.value.status_code == 409
+    doc = corre(base.users.find_one({"user_id": EL_SUPER.user_id}))
+    assert not doc.get("es_personal")
+
+
+def test_a_otra_persona_sin_saldo_si_se_le_da_de_alta(base, correos):
+    """La contracara: los frenos nuevos no pueden trabar el caso normal."""
+    corre(base.users.insert_one({
+        "user_id": "u_9", "email": "ana@risapp.com", "name": "Ana",
+        "role": "user", "email_verified": True, "password_set": True,
+        "password_hash": hash_password(CLAVE_OTRA), "is_active": True,
+        "balance_ris": 0, "balance_ris_terceros": 0,
+    }))
+
+    r = corre(rrhh.dar_de_alta(alta(), pedido(), EL_SUPER))
+
+    assert r["convertido_desde_usuario"] is True
+    doc = corre(base.users.find_one({"user_id": "u_9"}))
+    assert doc["es_personal"] is True
+    assert doc["role"] == "admin"

@@ -16,7 +16,7 @@ pytestmark = saltar_sin_servidor()
 BASE_URL = (servidor_de_integracion() or "") + "/api"
 
 # Test credentials
-ADMIN_EMAIL = "marshalljulio46@gmail.com"
+ADMIN_EMAIL = "jefe@risappbr.com"
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 
 

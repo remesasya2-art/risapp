@@ -22,7 +22,7 @@ BASE_URL = (servidor_de_integracion() or "")
 # Test credentials from the review request
 TEST_USER_EMAIL = "test@ris.app"
 TEST_USER_PASSWORD = os.environ.get("TEST_USER_PASSWORD")
-SUPER_ADMIN_EMAIL = "marshalljulio46@gmail.com"
+SUPER_ADMIN_EMAIL = "jefe@risappbr.com"
 SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 
 class TestPixPendingEndpoint:

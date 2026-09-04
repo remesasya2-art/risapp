@@ -26,7 +26,7 @@ BASE_URL = (servidor_de_integracion() or "")
 # Test credentials
 GESTOR_EMAIL = "testgestor@test.com"
 GESTOR_PASSWORD = os.environ.get("TEST_GESTOR_PASSWORD")
-ADMIN_EMAIL = "marshalljulio46@gmail.com"
+ADMIN_EMAIL = "jefe@risappbr.com"
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD")
 
 class TestGestorAuthentication:
