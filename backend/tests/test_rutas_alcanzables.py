@@ -89,21 +89,17 @@ def test_ninguna_ruta_se_registra_dos_veces(rutas):
         quienes[(m, p)].append(_nombre(f))
 
     repetidas = sorted(k for k, n in veces.items() if n > 1)
-    # Las nueve del panel de admin son deuda conocida: `admin_routes` repite
-    # handlers que ya viven en `routes/`, y los suyos quedan muertos. Se
-    # anotan una por una para que este test siga sirviendo, y para que cuando
-    # se limpien haya que venir acá a sacarlas de la lista.
-    CONOCIDAS = {
-        ("GET", "/api/admin/dashboard"),
-        ("GET", "/api/admin/support/chat/{user_id}"),
-        ("GET", "/api/admin/support/chats"),
-        ("GET", "/api/admin/users"),
-        ("GET", "/api/admin/users/{user_id}"),
-        ("GET", "/api/admin/verifications/pending"),
-        ("POST", "/api/admin/support/close"),
-        ("POST", "/api/admin/support/respond"),
-        ("POST", "/api/admin/verifications/decide"),
-    }
+    # Vacía, y así tiene que quedarse. Acá estuvieron las nueve del panel de
+    # admin: `admin_routes` repetía handlers que ya vivían en `routes/`, y los
+    # suyos no atendían nada. Se borraron, entre otras cosas porque NUEVE de
+    # las veinte verificaciones de permiso del proyecto estaban ahí adentro,
+    # sin ejecutarse nunca.
+    #
+    # Si alguien vuelve a duplicar una ruta, el assert de abajo lo frena. La
+    # tentación va a ser agregarla acá; la respuesta correcta es borrar la que
+    # sobra, porque una ruta duplicada no es una ruta de más: es una ruta que
+    # alguien va a editar creyendo que corre.
+    CONOCIDAS = set()
     nuevas = [k for k in repetidas if k not in CONOCIDAS]
     assert not nuevas, (
         "Rutas registradas más de una vez; sólo atiende la primera:\n  " +

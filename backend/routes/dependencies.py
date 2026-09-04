@@ -89,16 +89,41 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
             user[_k] = float(_v.to_decimal())
     return User(**user)
 
-async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    """Require admin or super_admin role"""
+def _exigir_permiso(request: Request, current_user: User) -> None:
+    """Aplica la tabla de `services/permisos.py` a esta ruta.
+
+    Está acá y no adentro de cada handler a propósito: por estas dos
+    dependencias pasan las 67 rutas de administración que no son exclusivas
+    del super administrador. Sesenta y siete comprobaciones sueltas serían
+    sesenta y siete lugares donde olvidarse de una, y la que falta no avisa:
+    deja pasar. Una ruta nueva hereda la comprobación por usar el guard.
+    """
+    from services import permisos
+
+    try:
+        permisos.exigir(current_user, request)
+    except permisos.SinPermiso as e:
+        # El mensaje nombra el permiso que falta: sin eso, el colaborador ve
+        # un 403 pelado y el administrador no sabe qué tildar en RRHH.
+        raise HTTPException(status_code=403, detail=str(e))
+    except permisos.RutaSinMapear as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+async def get_admin_user(request: Request,
+                         current_user: User = Depends(get_current_user)) -> User:
+    """Require admin or super_admin role, y el permiso que pida la ruta."""
     if current_user.role not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")
+    _exigir_permiso(request, current_user)
     return current_user
 
-async def get_crm_user(current_user: User = Depends(get_current_user)) -> User:
-    """Require CRM access: agent, admin or super_admin"""
+async def get_crm_user(request: Request,
+                       current_user: User = Depends(get_current_user)) -> User:
+    """Require CRM access: agent, admin o super_admin, y el permiso de la ruta."""
     if current_user.role not in ["agent", "admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="CRM access required")
+    _exigir_permiso(request, current_user)
     return current_user
 
 async def get_super_admin(current_user: User = Depends(get_current_user)) -> User:

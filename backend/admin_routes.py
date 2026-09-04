@@ -33,27 +33,10 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Available permissions for sub-admins
-ADMIN_PERMISSIONS = {
-    "withdrawals.view": "Ver retiros",
-    "withdrawals.process": "Procesar retiros",
-    "recharges.view": "Ver recargas",
-    "recharges.approve": "Aprobar recargas",
-    "support.view": "Ver chats de soporte",
-    "support.respond": "Responder chats",
-    "support.close": "Cerrar chats",
-    "users.view": "Ver usuarios",
-    "users.edit": "Editar usuarios",
-    "kyc.view": "Ver KYC",
-    "kyc.approve": "Aprobar/Rechazar KYC",
-    "transactions.view": "Ver transacciones",
-    "transactions.export": "Exportar transacciones",
-    "settings.view": "Ver configuración",
-    "settings.edit": "Editar configuración",
-    "admins.view": "Ver administradores",
-    "admins.create": "Crear sub-administradores",
-    "admins.edit": "Editar sub-administradores",
-    "dashboard.view": "Ver dashboard",
-}
+# El catálogo vive en services/permisos.py, junto a la tabla que dice qué
+# permiso pide cada ruta. Tenerlo acá y la tabla allá garantizaba que se
+# separaran: se ofrecían permisos que no gobernaban ninguna ruta.
+from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 
 # =======================
 # AUTH DEPENDENCIES
@@ -118,14 +101,24 @@ async def get_super_admin(request: Request, authorization: Optional[str] = Heade
     return user_doc
 
 def has_permission(user: dict, permission: str) -> bool:
-    """Check if user has specific permission"""
-    role = user.get('role', 'user')
-    if role == 'super_admin':
-        return True
-    if role == 'admin':
-        admin_only = ['admins.create', 'admins.edit']
-        return permission not in admin_only
-    return permission in user.get('permissions', [])
+    """¿Tiene este permiso? Delega en services/permisos.py.
+
+    LO QUE DECIA ANTES, Y POR QUE IMPORTA
+
+        if role == 'admin':
+            admin_only = ['admins.create', 'admins.edit']
+            return permission not in admin_only
+
+    O sea: a un `admin` se le daba por concedido CUALQUIER permiso menos dos,
+    sin mirar su lista. Esa lista es la que Recursos Humanos deja marcar por
+    persona. No se consultaba nunca para el rol `admin`, que es justamente el
+    rol con el que se da de alta al personal.
+
+    Marcar permisos era decorativo por partida doble: en las 67 rutas que no
+    los verificaban, y también acá, donde se verificaban contra un `True`.
+    """
+    from services.permisos import tiene
+    return tiene(user, permission)
 
 async def create_notification(user_id: str, title: str, message: str, notification_type: str, data: dict = None):
     """Helper function to create a notification"""
@@ -190,60 +183,34 @@ class AdjustBalanceRequest(BaseModel):
 # DASHBOARD
 # =======================
 
-@admin_router.get("/dashboard")
-async def get_admin_dashboard(admin_user: dict = Depends(get_admin_user)):
-    """Get dashboard statistics"""
-    if not has_permission(admin_user, "dashboard.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Get statistics
-    total_users = await db.users.count_documents({"role": {"$nin": ["admin", "super_admin"]}})
-    verified_users = await db.users.count_documents({"verification_status": "verified"})
-    pending_kyc = await db.users.count_documents({
-        "verification_status": "pending", 
-        "id_document_image": {"$ne": None}
-    })
-    
-    total_transactions = await db.transactions.count_documents({})
-    pending_withdrawals = await db.transactions.count_documents({"type": "withdrawal", "status": "pending"})
-    pending_recharges = await db.transactions.count_documents({"type": "recharge", "status": "pending_review"})
-    completed_transactions = await db.transactions.count_documents({"status": "completed"})
-    
-    open_support = await db.support_messages.count_documents({"status": {"$ne": "closed"}})
-    
-    # Volume calculations
-    pipeline = [
-        {"$match": {"status": "completed"}},
-        {"$group": {"_id": "$type", "total": {"$sum": "$amount_input"}}}
-    ]
-    volumes = await db.transactions.aggregate(pipeline).to_list(10)
-    volume_by_type = {v["_id"]: v["total"] for v in volumes}
-    
-    # Get exchange rate
-    rate_doc = await db.exchange_rates.find_one({})
-    current_rate = rate_doc.get("ris_to_ves", 78) if rate_doc else 78
-    
-    return {
-        "users": {
-            "total": total_users,
-            "verified": verified_users,
-            "pending_kyc": pending_kyc
-        },
-        "transactions": {
-            "total": total_transactions,
-            "completed": completed_transactions,
-            "pending_withdrawals": pending_withdrawals,
-            "pending_recharges": pending_recharges
-        },
-        "support": {
-            "open_chats": open_support
-        },
-        "volume": {
-            "withdrawals": volume_by_type.get("withdrawal", 0),
-            "recharges": volume_by_type.get("recharge", 0)
-        },
-        "current_rate": current_rate
-    }
+# ─── LAS NUEVE RUTAS MUERTAS QUE VIVIAN ACA ──────────────────────────────
+#
+# Este archivo repetía nueve handlers que ya existen en `routes/`:
+#
+#     GET  /admin/dashboard                 -> routes.misc.get_admin_dashboard
+#     GET  /admin/users                     -> routes.admin.get_all_users
+#     GET  /admin/users/{user_id}           -> routes.admin.get_user_detail
+#     GET  /admin/verifications/pending     -> routes.admin.get_pending_verifications
+#     POST /admin/verifications/decide      -> routes.admin.decide_verification
+#     GET  /admin/support/chats             -> routes.support.get_admin_support_chats
+#     GET  /admin/support/chat/{user_id}    -> routes.support.get_admin_chat_messages
+#     POST /admin/support/respond           -> routes.support.admin_respond
+#     POST /admin/support/close             -> routes.support.close_chat
+#
+# FastAPI resuelve por ORDEN DE REGISTRO, y `routes/` se incluye antes, así
+# que las nueve de acá no atendían un solo pedido. Nunca.
+#
+# No era deuda cosmética. Este archivo es el ÚNICO del proyecto que verifica
+# permisos, y NUEVE de sus veinte verificaciones estaban en estas rutas
+# muertas: `dashboard.view`, `users.view` (dos veces), `kyc.view`,
+# `kyc.approve`, `support.view` (dos veces), `support.respond` y
+# `support.close` no se ejecutaban jamás. Quien leyera este archivo iba a
+# concluir que el KYC estaba protegido por `kyc.approve`, y no lo estaba: lo
+# atendía `routes.admin`, que no mira permisos.
+#
+# Se borran. Las que quedan en este archivo SÍ atienden.
+# ─────────────────────────────────────────────────────────────────────────
+
 
 # =======================
 # PERMISSIONS
@@ -352,62 +319,7 @@ async def delete_sub_admin(user_id: str, admin_user: dict = Depends(get_super_ad
 # USER MANAGEMENT
 # =======================
 
-@admin_router.get("/users")
-async def get_all_users(
-    admin_user: dict = Depends(get_admin_user),
-    skip: int = 0,
-    limit: int = 50,
-    search: Optional[str] = None,
-    status: Optional[str] = None
-):
-    """Get all users with pagination"""
-    if not has_permission(admin_user, "users.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    query = {"role": {"$nin": ["admin", "super_admin"]}}
-    if search:
-        query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}}
-        ]
-    if status:
-        query["verification_status"] = status
-    
-    users = await db.users.find(
-        query,
-        {"id_document_image": 0, "cpf_image": 0, "selfie_image": 0}
-    ).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
-    
-    total = await db.users.count_documents(query)
-    
-    for u in users:
-        u['_id'] = str(u['_id'])
-    
-    return {"users": users, "total": total}
 
-@admin_router.get("/users/{user_id}")
-async def get_user_detail(user_id: str, admin_user: dict = Depends(get_admin_user)):
-    """Get detailed user info including KYC documents"""
-    if not has_permission(admin_user, "users.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    user = await db.users.find_one({"user_id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    
-    user['_id'] = str(user['_id'])
-    
-    # Get user's transaction history summary
-    tx_count = await db.transactions.count_documents({"user_id": user_id})
-    tx_volume = await db.transactions.aggregate([
-        {"$match": {"user_id": user_id, "status": "completed"}},
-        {"$group": {"_id": None, "total": {"$sum": "$amount_input"}}}
-    ]).to_list(1)
-    
-    user['transaction_count'] = tx_count
-    user['transaction_volume'] = tx_volume[0]['total'] if tx_volume else 0
-    
-    return user
 
 @admin_router.put("/users/{user_id}/balance")
 async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
@@ -466,70 +378,7 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
 # KYC/VERIFICATION MANAGEMENT
 # =======================
 
-@admin_router.get("/verifications/pending")
-async def get_pending_verifications(admin_user: dict = Depends(get_admin_user)):
-    """Get all pending verifications"""
-    if not has_permission(admin_user, "kyc.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    users = await db.users.find(
-        {"verification_status": "pending", "id_document_image": {"$ne": None}},
-        {
-            "_id": 0,
-            "user_id": 1,
-            "name": 1,
-            "email": 1,
-            "full_name": 1,
-            "document_number": 1,
-            "cpf_number": 1,
-            "id_document_image": 1,
-            "cpf_image": 1,
-            "selfie_image": 1,
-            "created_at": 1
-        }
-    ).to_list(1000)
-    return users
 
-@admin_router.post("/verifications/decide")
-async def decide_verification(decision: VerificationDecision, admin_user: dict = Depends(get_admin_user)):
-    """Approve or reject verification"""
-    if not has_permission(admin_user, "kyc.approve"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    update_data = {
-        "verification_status": "verified" if decision.approved else "rejected",
-        "verified_at": datetime.now(timezone.utc) if decision.approved else None,
-        "verified_by": admin_user.get('user_id') if decision.approved else None,
-        "rejection_reason": decision.rejection_reason if not decision.approved else None
-    }
-    
-    result = await db.users.update_one(
-        {"user_id": decision.user_id},
-        {"$set": update_data}
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Notify user
-    if decision.approved:
-        await create_notification(
-            user_id=decision.user_id,
-            title="✅ Cuenta Verificada",
-            message="Tu verificación KYC ha sido aprobada. Ya puedes realizar transacciones.",
-            notification_type="kyc_approved",
-            data={}
-        )
-    else:
-        await create_notification(
-            user_id=decision.user_id,
-            title="❌ Verificación Rechazada",
-            message=f"Tu verificación fue rechazada. Razón: {decision.rejection_reason or 'Documentos inválidos'}",
-            notification_type="kyc_rejected",
-            data={"reason": decision.rejection_reason}
-        )
-    
-    return {"message": f"Usuario {'aprobado' if decision.approved else 'rechazado'} exitosamente"}
 
 # =======================
 # WITHDRAWALS MANAGEMENT
@@ -879,151 +728,9 @@ async def get_admin_payment_record_detail(record_id: str, admin_user: dict = Dep
 # SUPPORT CHAT MANAGEMENT
 # =======================
 
-@admin_router.get("/support/chats")
-async def get_support_chats(admin_user: dict = Depends(get_admin_user), status: Optional[str] = None):
-    """Get all support chats"""
-    if not has_permission(admin_user, "support.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Get unique users with support messages
-    pipeline = [
-        {"$group": {
-            "_id": "$user_id",
-            "last_message": {"$last": "$message"},
-            "last_date": {"$max": "$created_at"},
-            "message_count": {"$sum": 1},
-            "status": {"$last": "$status"}
-        }},
-        {"$sort": {"last_date": -1}}
-    ]
-    
-    if status:
-        pipeline.insert(0, {"$match": {"status": status}})
-    
-    chats = await db.support_messages.aggregate(pipeline).to_list(100)
-    
-    # Get user info for each chat
-    result = []
-    for chat in chats:
-        user = await db.users.find_one({"user_id": chat['_id']}, {"name": 1, "email": 1})
-        result.append({
-            "user_id": chat['_id'],
-            "user_name": user.get('name', 'N/A') if user else 'N/A',
-            "user_email": user.get('email', 'N/A') if user else 'N/A',
-            "last_message": chat['last_message'][:100] + "..." if len(chat.get('last_message', '')) > 100 else chat.get('last_message', ''),
-            "last_date": chat['last_date'],
-            "message_count": chat['message_count'],
-            "status": chat.get('status', 'open')
-        })
-    
-    return result
 
-@admin_router.get("/support/chat/{user_id}")
-async def get_support_chat_detail(user_id: str, admin_user: dict = Depends(get_admin_user)):
-    """Get full chat history with a user"""
-    if not has_permission(admin_user, "support.view"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Get user messages
-    user_messages = await db.support_messages.find({"user_id": user_id}).to_list(100)
-    
-    # Get admin responses
-    admin_responses = await db.support_responses.find({"user_id": user_id}).to_list(100)
-    
-    # Combine and sort
-    conversation = []
-    for msg in user_messages:
-        conversation.append({
-            "id": str(msg['_id']),
-            "text": msg.get('message', ''),
-            "image": msg.get('image'),
-            "sender": "user",
-            "timestamp": msg.get('created_at').isoformat() if msg.get('created_at') else None
-        })
-    
-    for resp in admin_responses:
-        conversation.append({
-            "id": str(resp['_id']),
-            "text": resp.get('message', ''),
-            "sender": "admin",
-            "timestamp": resp.get('created_at').isoformat() if resp.get('created_at') else None
-        })
-    
-    conversation.sort(key=lambda x: x['timestamp'] if x['timestamp'] else '')
-    
-    # Get user info
-    user = await db.users.find_one({"user_id": user_id}, {"name": 1, "email": 1})
-    
-    return {
-        "user_id": user_id,
-        "user_name": user.get('name', 'N/A') if user else 'N/A',
-        "user_email": user.get('email', 'N/A') if user else 'N/A',
-        "messages": conversation
-    }
 
-@admin_router.post("/support/respond")
-async def admin_respond_support(request: AdminSupportResponse, admin_user: dict = Depends(get_admin_user)):
-    """Send a response to user from admin panel"""
-    if not has_permission(admin_user, "support.respond"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Save response
-    admin_response = {
-        "user_id": request.user_id,
-        "message": request.message,
-        "sender": "admin",
-        "admin_id": admin_user.get('user_id'),
-        "admin_name": admin_user.get('name'),
-        "created_at": datetime.now(timezone.utc)
-    }
-    await db.support_responses.insert_one(admin_response)
-    
-    # Create notification
-    await create_notification(
-        user_id=request.user_id,
-        title="💬 Respuesta de Soporte",
-        message=request.message[:200] + ("..." if len(request.message) > 200 else ""),
-        notification_type="support_response",
-        data={"full_message": request.message}
-    )
-    
-    return {"message": "Respuesta enviada"}
 
-@admin_router.post("/support/close")
-async def admin_close_support(request: CloseSupportRequest, admin_user: dict = Depends(get_admin_user)):
-    """Close a support chat from admin panel"""
-    if not has_permission(admin_user, "support.close"):
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    closing_msg = request.closing_message or "Tu caso de soporte ha sido resuelto. ¡Gracias por contactarnos!"
-    
-    # Mark as closed
-    await db.support_messages.update_many(
-        {"user_id": request.user_id},
-        {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc), "closed_by": admin_user.get('user_id')}}
-    )
-    
-    # Save closing message
-    admin_response = {
-        "user_id": request.user_id,
-        "message": f"🔒 Chat cerrado: {closing_msg}",
-        "sender": "admin",
-        "type": "close",
-        "admin_id": admin_user.get('user_id'),
-        "created_at": datetime.now(timezone.utc)
-    }
-    await db.support_responses.insert_one(admin_response)
-    
-    # Notify user
-    await create_notification(
-        user_id=request.user_id,
-        title="✅ Caso de Soporte Resuelto",
-        message=closing_msg,
-        notification_type="support_closed",
-        data={"closing_message": closing_msg}
-    )
-    
-    return {"message": "Chat cerrado"}
 
 # =======================
 # SETTINGS

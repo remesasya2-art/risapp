@@ -180,19 +180,42 @@ export default function RecursosHumanos() {
       gap: 8, maxHeight: 260, overflowY: 'auto', border: '1px solid #e5e7eb',
       borderRadius: 8, padding: 12, background: '#fafafa',
     }}>
-      {Object.entries(permisos).map(([clave, etiqueta]) => (
-        <label key={clave} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={seleccion.includes(clave)}
-            onChange={() => alTocar(seleccion.includes(clave)
-              ? seleccion.filter((p) => p !== clave)
-              : [...seleccion, clave])}
-          />
-          <span>{etiqueta}</span>
-          <code style={{ fontSize: 11, color: '#9ca3af' }}>{clave}</code>
-        </label>
-      ))}
+      {Object.entries(permisos).map(([clave, etiqueta]) => {
+        // El catálogo del backend marca con "(MUEVE DINERO)" los tres
+        // permisos que dejan tocar plata: ajustar saldos, aprobar recargas y
+        // cargar fletes. Se destacan para que otorgarlos sea una decisión y
+        // no un tilde más en una grilla de dieciocho casillas iguales.
+        const mueveDinero = etiqueta.includes('MUEVE DINERO');
+        const texto = etiqueta.replace(' (MUEVE DINERO)', '');
+        return (
+          <label
+            key={clave}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+              cursor: 'pointer', borderRadius: 6, padding: '4px 6px',
+              background: mueveDinero ? '#fff7ed' : 'transparent',
+              border: mueveDinero ? '1px solid #fed7aa' : '1px solid transparent',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={seleccion.includes(clave)}
+              onChange={() => alTocar(seleccion.includes(clave)
+                ? seleccion.filter((p) => p !== clave)
+                : [...seleccion, clave])}
+            />
+            <span style={{ color: mueveDinero ? '#9a3412' : undefined }}>
+              {texto}
+              {mueveDinero && (
+                <strong style={{ display: 'block', fontSize: 10.5, fontWeight: 700 }}>
+                  MUEVE DINERO
+                </strong>
+              )}
+            </span>
+            <code style={{ fontSize: 11, color: '#9ca3af' }}>{clave}</code>
+          </label>
+        );
+      })}
     </div>
   );
 

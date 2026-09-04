@@ -90,8 +90,8 @@ def _permisos_validos(pedidos: List[str]) -> List[str]:
     """Sólo los permisos del catálogo. Uno inventado se rechaza en vez de
     guardarse: un permiso que no existe nunca se cumple, y quien lo cargó
     cree que sí."""
-    from admin_routes import ADMIN_PERMISSIONS
-    desconocidos = [p for p in pedidos if p not in ADMIN_PERMISSIONS]
+    from services.permisos import CATALOGO
+    desconocidos = [p for p in pedidos if p not in CATALOGO]
     if desconocidos:
         raise HTTPException(
             status_code=400,
@@ -188,8 +188,8 @@ def _puede_entrar_ya(doc: dict) -> bool:
 @router.get("/permisos")
 async def catalogo_de_permisos(admin: User = Depends(get_super_admin)):
     """Los permisos que se pueden otorgar, con su nombre legible."""
-    from admin_routes import ADMIN_PERMISSIONS
-    return {"permisos": ADMIN_PERMISSIONS}
+    from services.permisos import CATALOGO
+    return {"permisos": CATALOGO}
 
 
 # ─── Legajos ──────────────────────────────────────────────────────────────

@@ -328,18 +328,27 @@ def _apuntar_la_base_a_la_mia():
         os.environ.update(guardadas)
 
 
-def como(rol: str, user_id: str = None, verificacion: str = "verified"):
+def como(rol: str, user_id: str = None, verificacion: str = "verified",
+         permisos=None):
     """Quién manda la petición. El rol importa: cuatro rutas lo miran.
 
     `verificacion` importa en otras cinco: las del usuario cuelgan de
     `get_verified_user`, no de `get_current_user`, y sin KYC el formulario de
     envío es carga de datos de terceros abierta a cualquiera.
+
+    `permisos` llega con TODO el catálogo por defecto. Este archivo prueba la
+    operación de envíos y la separación de ROLES, no el reparto de permisos
+    —eso tiene su propio archivo—, así que darle la lista completa deja los
+    treinta y cuatro casos midiendo lo que vinieron a medir. Pasar una lista
+    corta acá alcanza para probar lo contrario.
     """
+    from services.permisos import CATALOGO
     ACTUAL["user"] = User(
         user_id=user_id or f"usr_{rol}",
         email=f"{rol}@risappbr.com",
         name="Persona De Prueba",
         role=rol,
+        permissions=sorted(CATALOGO) if permisos is None else list(permisos),
         verification_status=verificacion,
     )
     return ACTUAL["user"]
