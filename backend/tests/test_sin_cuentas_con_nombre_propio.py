@@ -33,6 +33,8 @@ import os
 import pathlib
 import re
 
+import pytest
+
 _RAIZ = pathlib.Path(os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")))
 
@@ -42,6 +44,14 @@ _RAIZ = pathlib.Path(os.path.abspath(
 CARPETAS = ["backend", "frontend/src"]
 EXTENSIONES = {".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".yml", ".yaml"}
 SALTEAR = {"node_modules", ".git", "__pycache__", "dist", "build", ".venv", "venv"}
+
+# Dominios que sólo aparecen como ejemplo en un formulario: dicen la FORMA del
+# dato que se pide, no una dirección a la que escribirle. Los dos primeros son
+# los reservados por la RFC 2606; los otros son los que ya usa esta aplicación
+# en sus campos.
+DOMINIOS_DE_EJEMPLO = ("@example.com", "@example.org",
+                       "@ejemplo.com", "@dominio.com", "@empresa.com",
+                       "@correo.com")
 
 CORREO = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
@@ -146,3 +156,57 @@ def test_ninguna_autorizacion_decide_por_correo():
         "Hay decisiones tomadas comparando contra un correo escrito en el "
         "código:\n  " + "\n  ".join(hallazgos)
         + "\n\nDecidí por rol o por permiso, no por identidad.")
+
+
+def test_ninguna_direccion_escrita_a_mano_en_el_frontend():
+    """En el frontend no va NINGUNA dirección literal, sea del dominio o no.
+
+    POR QUE ES MAS ESTRICTO QUE EL DE ARRIBA
+
+        El de arriba busca casillas personales en todo el proyecto. Éste no
+        mira de quién es la dirección: en el frontend no puede haber ninguna,
+        ni siquiera una del dominio propio.
+
+        El motivo es el medio, no el dueño. Este código se compila y se le
+        sirve al navegador de cada visitante: cualquier dirección que se
+        escriba acá queda publicada para siempre, y cambiarla exige un
+        despliegue. Ya existe `GET /api/contacto`, que la sirve desde la
+        configuración: si hay que publicar una, va por ahí.
+
+    LO UNICO QUE SE PERMITE
+
+        Los textos de ejemplo de los formularios: "tu@correo.com" en el campo
+        de recuperar la contraseña no es un canal de contacto, es la forma del
+        dato que se pide.
+
+        Se los reconoce por el DOMINIO y no por la palabra `placeholder` en la
+        línea. Buscar la palabra fallaba con los que se declaran aparte —en
+        RecursosHumanos.jsx los campos son tuplas `[nombre, etiqueta,
+        ejemplo]` y el `placeholder` se arma después—, y una exención que
+        depende de cómo se escribió la línea deja pasar la que se escribió
+        distinto.
+    """
+    frontend = _RAIZ / "frontend" / "src"
+    if not frontend.exists():                            # pragma: no cover
+        pytest.skip("no está el frontend en este árbol")
+
+    hallazgos = []
+    for archivo in frontend.rglob("*"):
+        if not archivo.is_file() or archivo.suffix not in {".js", ".jsx", ".ts", ".tsx"}:
+            continue
+        if any(parte in SALTEAR for parte in archivo.parts):
+            continue
+        for n, linea in enumerate(archivo.read_text(encoding="utf-8",
+                                                    errors="ignore").splitlines(), 1):
+            for correo in CORREO.findall(linea):
+                if any(correo.lower().endswith(d) for d in DOMINIOS_DE_EJEMPLO):
+                    continue
+                hallazgos.append(f"{archivo.relative_to(_RAIZ)}:{n}  {correo}")
+
+    assert not hallazgos, (
+        "Hay direcciones de correo escritas a mano en el frontend:\n  "
+        + "\n  ".join(hallazgos)
+        + "\n\nEste código se le sirve al navegador de cada visitante: lo que "
+          "se escriba acá queda publicado y sólo se cambia desplegando. Si hay "
+          "que publicar una dirección, va en `CONTACTO_PUBLICO` y sale por "
+          "`GET /api/contacto`.")

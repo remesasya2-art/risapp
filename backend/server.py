@@ -149,6 +149,19 @@ async def lifespan(app):
         else:
             logger.info("Alta de personal: los enlaces se arman sobre %s",
                         FRONTEND_URL)
+
+        # Qué se publica en el pie de página y en la página legal. Se dice en
+        # el arranque para que se pueda verificar desde el log, sin abrir el
+        # sitio: si dice "ninguna", no hay ninguna dirección a la vista de los
+        # visitantes, y eso es una afirmación que se puede comprobar.
+        from config import CONTACTO_PUBLICO
+        publicado = (CONTACTO_PUBLICO or "").strip()
+        if publicado:
+            logger.info("Contacto público: se publica %s en el pie de página "
+                        "y en la página legal.", publicado)
+        else:
+            logger.info("Contacto público: ninguna dirección a la vista. Las "
+                        "páginas mandan al centro de ayuda.")
     except Exception as e:
         logger.error(f"No se pudo revisar la configuracion de correo: {e}")
     try:
