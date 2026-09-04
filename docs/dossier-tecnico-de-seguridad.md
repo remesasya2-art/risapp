@@ -167,9 +167,22 @@ Como factor adicional, la plataforma admite WebAuthn/FIDO2:
 
 ### 3.6 Límite de intentos
 
-Todos los puntos de entrada sensibles —inicio de sesión, verificación de
-segundo factor, activación de invitación, recuperación— tienen límite por IP
-real del cliente (`20/15minutes` en el inicio de sesión).
+Todas las rutas que se pueden llamar **sin sesión** tienen límite por IP real
+del cliente, o están declaradas como excepción con el motivo escrito.
+
+Esa frase es nueva. Hasta la revisión de septiembre de 2026 este documento
+decía «todos los puntos de entrada sensibles», y no era cierto: **nueve rutas
+públicas no tenían ningún tope**. Entre ellas el registro de cuentas —que
+además manda correos desde nuestro dominio—, el reseteo de contraseña con
+contraseña temporal —cada llamada corre `bcrypt`, que gasta CPU a propósito—,
+el reto de WebAuthn —que contesta distinto según si la cuenta existe, o sea que
+era una lista de correos— y el seguimiento público de envíos.
+
+Se corrigió el hecho y se corrigió el documento. Y para que la frase deje de
+depender de que alguien la mantenga, hay una prueba que **recorre todas las
+rutas sin sesión** y exige que cada una tenga tope o esté declarada con su
+motivo: una ruta pública nueva sin tope pone la suite en rojo el día que se
+escribe.
 
 Detalle no menor: el límite se aplica con una función explícita
 (`frenar(request, alcance, regla)`) y **no** con un decorador sobre funciones
@@ -178,7 +191,33 @@ petición, y el consumo acumulado terminaba bloqueando el inicio de sesión de
 **todos** los usuarios tras unas decenas de accesos, sin recuperación posible
 salvo reinicio. Está medido y corregido, con prueba de regresión.
 
-`backend/routes/security_2fa.py`, `backend/tests/test_limite_por_ip.py`
+**Y la IP con la que se cuenta ya no la elige quien hace el pedido.** Este es
+el hallazgo que vuelve condicional a todo lo demás de esta sección, así que
+conviene decirlo entero. La IP se resolvía tomando el **primer** valor de
+`X-Forwarded-For`, que es una cabecera que manda el cliente. Un proxy no la
+reemplaza: le agrega la IP real **al final**. Así que un pedido enviado con
+
+    X-Forwarded-For: 1.2.3.4
+
+llegaba como «1.2.3.4, ‹ip real›», y esa lectura devolvía el valor elegido por
+quien atacaba. Cambiándolo en cada intento, cada uno caía en un contador
+distinto: **ningún** límite de la aplicación frenaba a nadie. No es que fueran
+flojos — no existían.
+
+La cadena se lee ahora de **derecha a izquierda**: el último valor lo escribió
+el proxy que tenemos adelante, el único que no se puede falsear desde afuera. Y
+antes que eso se prefiere `CF-Connecting-IP`, que la red de distribución escribe
+pisando lo que venga.
+
+La misma IP falseable se asentaba en cada envío y en cada línea del libro de
+auditoría, o sea en los dos únicos lugares donde después se busca a alguien.
+Hay una segunda función, `desde_donde_dice_venir()`, que sí devuelve el primer
+valor de la cadena: existe aparte y con ese nombre para registrar e investigar,
+nunca para decidir a quién frenar. El nombre es la advertencia.
+
+`backend/services/ip_cliente.py`, `backend/routes/security_2fa.py`,
+`backend/tests/test_limite_por_ip.py`, `backend/tests/test_ip_cliente.py`,
+`backend/tests/test_puertas_sin_llave.py`
 
 ---
 
@@ -376,6 +415,35 @@ ficha después: al revés, un fallo deja una ficha apuntando a nada.
 
 `backend/services/envios_archivos.py`, `backend/services/envios_almacen.py`
 
+**El camino viejo, y por qué necesitaba su propia validación.** Lo de arriba
+vale para las fotos de envíos. Los documentos del KYC, los comprobantes de
+recarga y los adjuntos del chat son anteriores y viajan de otra forma: como
+**texto** adentro del JSON, normalmente un `data:image/jpeg;base64,…`. Ese
+texto se guardaba sin mirarlo.
+
+O sea que el campo era, en la práctica, texto libre elegido por quien sube el
+archivo — y quien lo abría después, desde el panel, era un administrador. Un
+`javascript:…` guardado ahí y abierto con `window.open` no abre nada: ejecuta
+ese código en la sesión de quien hizo click. La cookie es `httpOnly` y no se
+puede robar, pero no hace falta robarla: el código ya está corriendo adentro.
+
+Se cerró en las dos puntas, con una **lista de lo permitido** y no de lo
+prohibido — los navegadores ignoran espacios y caracteres de control adentro
+del esquema, así que un filtro que busca la palabra «javascript» no la
+encuentra en `java<TAB>script:`:
+
+- Al **entrar**: `data:image/` salvo SVG, ruta propia o `https://`, con tope de
+  8 MB. Nada más.
+- Al **abrir**: el mismo criterio en el navegador, porque es lo único que
+  protege de lo que ya estaba guardado antes de que existiera la validación.
+
+Y tres barridos automáticos exigen que ningún `href={…}`, ningún
+`window.open(…)` y ninguna ruta que guarde un campo de imagen se salteen el
+filtro. El agujero no vuelve porque alguien lo deshaga: vuelve porque la
+próxima pantalla no lo llama.
+
+`backend/services/imagen_recibida.py`, `frontend/src/utils/urlDeArchivo.js`
+
 ### 7.2 Minimización en reportes
 
 Los reportes y exportaciones **omiten las imágenes**; se transportan
@@ -418,12 +486,39 @@ Toda respuesta —incluidas las de error— lleva:
 | `X-Content-Type-Options` | `nosniff` | Que el navegador adivine el tipo de un archivo subido por un usuario |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Que una dirección con identificadores se filtre al salir del sitio |
 
+Desde septiembre de 2026 se agregan tres directivas de `Content-Security-Policy`:
+`object-src 'none'` (corta la ejecución por plugin con un archivo subido),
+`base-uri 'self'` (impide que un `<base>` inyectado cambie a dónde apuntan todas
+las rutas relativas, scripts incluidos) y `frame-ancestors 'none'` (lo mismo que
+`X-Frame-Options`, para los navegadores que ya no lo miran).
+
+`script-src` **no** está, y es una decisión declarada: la aplicación carga el
+SDK del proveedor de pagos y otros scripts de terceros, y una lista mal armada
+rompe los pagos en silencio. Ponerla requiere una pasada sobre qué carga cada
+pantalla. Queda en la sección 11 como pendiente explícito, con una prueba que
+exige que la explicación siga escrita en el código.
+
 **CORS con lista blanca explícita** de orígenes propios, todos `https`. No hay
 comodín: `allow_origins=["*"]` junto a `allow_credentials=True` es la
 combinación que permite a cualquier sitio hacer peticiones con la cookie de
 sesión de la víctima.
 
-`backend/server.py`, `backend/tests/test_cabeceras_de_seguridad.py`
+**La documentación automática de la API no se publica.** El marco de trabajo
+sirve `/docs`, `/redoc` y `/openapi.json` sin pedir nada: el mapa completo de
+las 337 rutas con sus parámetros y sus tipos, incluidas las de administración y
+las de mantenimiento. Ninguna deja de estar protegida por eso, pero es la mitad
+del trabajo de quien busca por dónde entrar. Salen apagadas; una variable de
+entorno las prende en desarrollo, y el valor por omisión es apagado.
+
+**Tope al tamaño del cuerpo de un pedido: 40 MB.** Antes no había ninguno, y un
+cuerpo de varios gigabytes se leía entero en memoria antes de que ninguna ruta
+lo mirara — sin necesitar credencial alguna, porque la validación de la ruta
+corre después de que el cuerpo ya se armó. Se rechaza temprano al que declara de
+más y se **cuenta** lo que llega, porque el `Content-Length` lo manda el cliente
+y el que miente lo declara chico.
+
+`backend/server.py`, `backend/services/limite_de_cuerpo.py`,
+`backend/tests/test_cabeceras_de_seguridad.py`, `backend/tests/test_superficie_de_la_api.py`
 
 ### 8.3 Autenticación con terceros: capa OAuth 2.0
 
@@ -456,15 +551,65 @@ nada:
   verificada **sobre el cuerpo crudo** de la petición y antes de intentar
   interpretarlo. Firma inválida o ausente → `401`, sin efecto alguno.
 - Mensajería: `X-Twilio-Signature` validada contra la URL pública y el cuerpo.
+- Proveedor de pagos: HMAC sobre el manifiesto firmado, y **la marca de tiempo
+  se verifica** contra una ventana de cinco minutos. Sin esa verificación —que
+  faltaba hasta septiembre de 2026— una notificación firmada capturada una vez
+  seguía siendo válida para siempre. Acreditar dos veces no podía (el pago tiene
+  que seguir pendiente y se le vuelve a preguntar al proveedor), pero cada
+  reenvío gastaba una consulta a una API limitada y llenaba el registro de
+  eventos indistinguibles de los legítimos.
 - Puentes internos con clave de API: comparación con `hmac.compare_digest`
-  (tiempo constante) y **falla cerrado** si la clave no está configurada.
+  (tiempo constante) y **falla cerrado** si la clave no está configurada. Una
+  prueba recorre **todas** las rutas de los dos puentes y exige que cada una
+  reciba la cabecera, la mire, y la mire *primero*: así es como se rompió una
+  vez `/withdrawal/create`, donde nadie sacó el control — alguien agregó la ruta
+  siguiente y se olvidó.
 
 **Postura declarada:** no escribimos un receptor de webhook para un proveedor
 cuyo esquema de firma no conocemos. Un endpoint público que acredita saldo sin
 verificar quién llama es lo peor que se puede dejar «preparado». Cuando el
 proveedor publique su esquema, se implementa y se prueba contra él.
 
-`backend/routes/credits.py`, `backend/routes/transactions.py`, `backend/routes/webhooks.py`, `backend/routes/adminbrl_bridge.py`, `backend/routes/centro_gestion.py`
+`backend/routes/credits.py`, `backend/routes/transactions.py`, `backend/routes/webhooks.py`, `backend/routes/gestor_pix.py`, `backend/routes/btc_lightning.py`, `backend/routes/adminbrl_bridge.py`, `backend/routes/centro_gestion.py`, `backend/tests/test_webhooks_firmados.py`, `backend/tests/test_puente_con_llave.py`
+
+### 8.5 Pedidos salientes con credenciales nuestras
+
+Hay un solo lugar donde el servidor sale a internet **con nuestro usuario y
+contraseña de un proveedor** hacia una dirección que arma con lo que le
+mandaron: el proxy que trae las fotos que llegan por mensajería. El navegador no
+puede pedirlas —las credenciales no salen del servidor—, así que la pantalla
+pide una ruta nuestra y el servidor va a buscarlas.
+
+Esa ruta pegaba el camino recibido a la URL del proveedor sin mirarlo. Como el
+marco de trabajo deja que ese parámetro se trague las barras, el pedido lo
+escribía entero quien llamaba: cualquiera con sesión podía pedir
+`…/Messages.json` y recibir **los cuerpos de todos los SMS de la cuenta** — que
+es por donde viajan los códigos de verificación que la plataforma le manda a la
+gente. También las grabaciones, las llamadas y los números.
+
+Cuatro cosas lo cierran:
+
+1. **El camino tiene una sola forma posible y se exige entera**, anclada en las
+   dos puntas. Sin el ancla del final, `…/Media/ME…/../../Messages.json` empieza
+   igual que un pedido válido.
+2. **La cuenta tiene que ser la nuestra.** Aunque el formato calce.
+3. **Los redireccionamientos no se siguen con las credenciales puestas.** El
+   proveedor contesta con un salto a su red de distribución; ese salto se sigue
+   a mano, una vez, sin autenticación y sólo hacia sus dominios. Seguirlo con la
+   cabecera puesta es entregar el usuario y la contraseña a donde apunte el
+   `Location`.
+4. **Tope de bytes, y el tipo de contenido se acota a imágenes.** Un `text/html`
+   servido desde una ruta nuestra es una página que corre en nuestro origen.
+
+El mismo pedido estaba escrito una segunda vez, en una rutina de mantenimiento,
+y ahí decidía a dónde ir con `"api.twilio.com" in url`: una subcadena, no un
+dominio — `https://cualquier-cosa.example/?x=api.twilio.com` la pasaba, y ese
+pedido salía con las credenciales adentro. Peor: el valor venía de un campo que
+hasta esta revisión nadie validaba al guardar. Las dos entradas usan ahora la
+misma función, porque tener el mismo pedido escrito dos veces **era** el
+problema.
+
+`backend/routes/media.py`, `backend/tests/test_media_twilio.py`
 
 ---
 
@@ -489,10 +634,27 @@ diferencia no es accidental.
 
 ## 10. Aseguramiento de calidad
 
-- **Suite automatizada:** 84 archivos de prueba sobre el backend. Última
-  ejecución completa: **2034 pruebas superadas, 99 omitidas, 0 fallidas**
+- **Suite automatizada:** 91 archivos de prueba sobre el backend. Última
+  ejecución completa: **2300 pruebas superadas, 102 omitidas, 0 fallidas**
   (las omitidas requieren credenciales de proveedores externos). Se corre en
   cada cambio.
+- **Revisión de seguridad completa del repositorio, septiembre de 2026.** Se
+  recorrieron las 337 rutas con sus guardias, se buscaron secretos incrustados,
+  inyección en las consultas, referencias directas a objetos ajenos y
+  dependencias con vulnerabilidades publicadas. Encontró ocho defectos —dos
+  críticos— y todos están corregidos con prueba de regresión. Están descritos en
+  las secciones 3.6, 7.1, 8.2, 8.4 y 8.5 de este mismo documento, cada uno
+  diciendo qué estaba mal y no sólo qué hay ahora.
+
+  Lo que **no** encontró, y también es un resultado: ningún secreto incrustado
+  en el código, ninguna consulta armada con un diccionario del usuario, las
+  contraseñas con `bcrypt` y sal, los identificadores de sesión de
+  `secrets.token_urlsafe(32)`, y los dos puentes con clave de API completos —
+  ninguna ruta suya quedó sin control.
+- **Dependencias:** `pip-audit` sobre las versiones fijadas. Se pasó de 124
+  advertencias en 22 paquetes a 22 en 4, subiendo diecinueve dentro de la misma
+  versión mayor y verificando la suite completa después. Las cuatro que quedan
+  están en la sección 11, con el motivo de cada una.
 - **Pruebas de regresión por incidente:** cada defecto encontrado deja una
   prueba que falla si vuelve. Los casos de esta clase incluyen el agotamiento
   del límite por IP, la ruta de administración sin permiso, la cotización
@@ -511,6 +673,24 @@ diferencia no es accidental.
   marcada por omisión, correr el guardia de jurisdicción después de validar la
   moneda, quitar `X-Frame-Options`, abrir el CORS con comodín y acortar el
   HSTS— y los ocho pusieron en rojo alguna prueba.
+
+  La revisión de septiembre de 2026 sumó **46 mutantes** sobre los módulos que
+  tocó. Murieron 44. Los dos que sobrevivieron dicen más que los otros
+  cuarenta y cuatro:
+
+  - Uno mostró que la limpieza de caracteres de control del filtro de
+    direcciones **no es lo que protege**: con una lista de lo permitido,
+    `java<TAB>script:` cae por no estar en la lista, no por la limpieza.
+    Quedó escrito en el módulo, porque el comentario anterior daba a entender
+    lo contrario.
+  - El otro descubrió una **prueba que faltaba**: nadie cubría qué pasa cuando
+    el secreto del webhook de pagos no está configurado. O sea que la conducta
+    más peligrosa de todas —una variable de entorno olvidada convirtiendo en
+    abierto el receptor que acredita saldo— no estaba respaldada por nada. Se
+    escribió la prueba y el mutante murió.
+
+  Un mutante que sobrevive es una prueba débil o una creencia equivocada. Las
+  dos veces fue eso, y las dos veces valió más que un barrido limpio.
 - **Prueba de alcanzabilidad de rutas:** detecta rutas duplicadas que el
   enrutador nunca atiende. Ese defecto ya había convertido en decorativas nueve
   comprobaciones de permiso: quien leía el código concluía que el KYC estaba
@@ -526,7 +706,10 @@ Esta sección existe porque un dossier sin ella no es creíble.
 |---|---|---|
 | **mTLS con certificado ICP-Brasil A1** | No implementado | Confirmar si el producto contratado lo exige. La emisión del certificado tiene plazo real; conviene resolverlo antes de la homologación. |
 | **Receptor de webhook del proveedor de pagos** | Deliberadamente no escrito | Que el proveedor publique su esquema de firma. Ver 8.4. |
-| **Política PLD/AML formal** | No redactada | Cinco decisiones de negocio del operador: umbral por operación, umbral acumulado, qué se considera sospechoso en esta operación, a quién y en qué plazo se reporta, y quién es el responsable designado. La plataforma ya tiene los controles técnicos (cupos, KYC, trazabilidad); falta el documento que los ordena. |
+| **Política PLD/FT formal** | Borrador redactado, sin aprobar | Cinco decisiones de negocio del operador, marcadas `[PROPUESTO]` en el borrador: umbral por operación, umbral acumulado, qué se considera sospechoso en esta operación, a quién y en qué plazo se reporta, y quién es el responsable designado. Requiere revisión de abogado brasileño. Ver `docs/politica-pld-ft.md`. |
+| **`script-src` en la política de contenido** | No implementado | Una pasada sobre qué scripts de terceros carga cada pantalla. Las otras tres directivas ya están (ver 8.2); `script-src` es la que de verdad frena un XSS, y una lista mal armada rompe los pagos en silencio. |
+| **`cryptography` con vulnerabilidades publicadas** | 46.0.7; el arreglo está en 49.0.0 | Un salto de tres versiones mayores. Media aplicación depende de ella y la suite no ejerce los caminos de red reales, así que no hay forma de comprobar acá que no rompa nada. Requiere una prueba en un entorno de ensayo. Junto con `black` (herramienta de desarrollo), `ecdsa` (sin versión arreglada publicada) y `litellm` (no se importa en el código propio) son las 22 advertencias que quedan de las 124 originales. |
+| **Cada medio atado a su dueño** | No implementado | El proxy de medios deja que cualquiera con sesión pida el comprobante de cualquier otro **si conoce los tres identificadores**, que son 34 caracteres cada uno y no se adivinan. El secreto es hoy el identificador mismo. Atarlo al dueño requiere guardar esa relación, que no existe. Decisión consciente, anotada en `backend/routes/media.py`. |
 | **Cifrado de documentos en reposo** | Parcial | Los objetos se apoyan en el cifrado del proveedor de almacenamiento. El cifrado a nivel de aplicación, con claves propias, no está implementado. |
 | **Prueba de intrusión externa** | No realizada | Contratación. Las revisiones hechas hasta hoy son internas. |
 | **Encargado de datos / LGPD** | No designado formalmente | Decisión del operador. |
@@ -565,6 +748,14 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Webhooks con firma verificada | `backend/routes/credits.py`, `backend/routes/transactions.py` | `test_merma_nowpayments.py`, `test_underpaid_tiers.py`, `test_puente_adminbrl.py` |
 | Bloqueo de jurisdicciones antes de crear el cobro | `backend/services/geo_restrictions.py`, `backend/routes/credits.py` | `test_jurisdicciones_bloqueadas.py` |
 | Sin identidades personales incrustadas en el código | todo el repositorio | `test_sin_cuentas_con_nombre_propio.py` |
+| La IP de un pedido no la elige quien lo hace | `backend/services/ip_cliente.py` | `test_ip_cliente.py`, `test_envios_crear.py`, `test_auditoria.py` |
+| Un comprobante no puede ejecutar código al abrirlo | `frontend/src/utils/urlDeArchivo.js` | `test_url_de_archivo.py` |
+| Un comprobante peligroso no se llega a guardar | `backend/services/imagen_recibida.py` | `test_imagen_recibida.py` |
+| El proxy de medios sólo va a donde tiene que ir | `backend/routes/media.py` | `test_media_twilio.py` |
+| Toda ruta pública tiene tope de intentos o motivo escrito | `backend/routes/` | `test_puertas_sin_llave.py` |
+| Toda ruta de los puentes exige la clave, y la exige primero | `backend/routes/adminbrl_bridge.py`, `backend/routes/centro_gestion.py` | `test_puente_con_llave.py` |
+| Los webhooks verifican firma y frescura | `backend/routes/gestor_pix.py`, `backend/routes/btc_lightning.py` | `test_webhooks_firmados.py` |
+| La documentación de la API no se publica, y el cuerpo tiene tope | `backend/server.py`, `backend/services/limite_de_cuerpo.py` | `test_superficie_de_la_api.py` |
 
 ---
 

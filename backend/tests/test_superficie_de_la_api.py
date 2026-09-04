@@ -5,7 +5,7 @@ DOS COSAS QUE NO SE VEN AL USAR LA APLICACION
 
     1. LA DOCUMENTACION AUTOMATICA. FastAPI publica `/docs`, `/redoc` y
        `/openapi.json` sin pedir nada. Eso es el mapa completo de la API: las
-       341 rutas con sus parámetros y sus tipos, incluidas las de
+       337 rutas con sus parámetros y sus tipos, incluidas las de
        administración, las del puente con adminbrl y las de mantenimiento.
 
        Ninguna deja de estar protegida por eso. Pero saber que

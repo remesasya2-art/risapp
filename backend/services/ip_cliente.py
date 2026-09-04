@@ -63,6 +63,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 # Cuántos proxies de confianza hay entre el cliente e esta aplicación. Con uno
 # —lo normal: Railway, o un balanceador— el último valor de X-Forwarded-For es
 # la IP real. Con Cloudflare por delante de Railway serían dos, pero en ese

@@ -3,7 +3,7 @@ tests/test_puertas_sin_llave.py — Las rutas que cualquiera puede golpear.
 
 DE QUE SE TRATA
 
-    De las 341 rutas de la aplicación, la enorme mayoría exige sesión. Las que
+    De las 337 rutas de la aplicación, la enorme mayoría exige sesión. Las que
     no —el ingreso, el registro, el reseteo, el seguimiento público, los
     webhooks— son las únicas que alguien sin cuenta puede llamar, y por eso son
     las únicas que se pueden llamar un millón de veces.
