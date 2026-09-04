@@ -27,32 +27,6 @@ class AcceptPolicy(BaseModel):
     policy_type: str
 
 
-@router.get("/contacto")
-async def canal_de_contacto():
-    """El canal público de contacto, para el pie de página y la página legal.
-
-    POR QUE SALE DE ACA Y NO ESTA ESCRITO EN EL FRONTEND
-
-        Estaba escrito a mano en seis lugares del frontend. El frontend se
-        compila y se le sirve al navegador de cada visitante, así que esa
-        dirección quedaba dentro del bundle: pública, rastreable por
-        cualquier robot que lea el JS, y sin forma de cambiarla que no fuera
-        un despliegue nuevo.
-
-        Sirviéndola desde el entorno se cambia en Railway y se actualizan los
-        seis lugares a la vez. Y si se deja vacía, no se publica ninguna.
-
-    NO ES UN SECRETO
-
-        Un canal de contacto está para que lo lean: si se configura, se ve.
-        Lo que cambia es que la decisión de cuál publicar —o de no publicar
-        ninguna— deja de estar congelada en el código.
-    """
-    from config import CONTACTO_PUBLICO
-    correo = (CONTACTO_PUBLICO or "").strip()
-    return {"correo": correo or None, "hay_correo": bool(correo)}
-
-
 @router.get("/policies")
 async def get_policies():
     """Get all policies"""

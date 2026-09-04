@@ -70,14 +70,14 @@ PERSONALES = ("@gmail.", "@hotmail.", "@outlook.", "@yahoo.", "@icloud.",
 
 # Vacío, y así tiene que quedarse.
 #
-# Acá estuvo el contacto de la empresa mientras estaba escrito a mano en el
-# pie de página y en cinco párrafos de la página legal. Ahora sale de
-# `GET /api/contacto`, que lo lee de la configuración del servidor: se cambia
-# en un lugar y se actualizan los seis, y no queda dentro del bundle que se le
-# sirve a cada visitante.
+# Acá estuvo el contacto de la empresa mientras estaba escrito a mano en el pie
+# de página y en cinco párrafos de la página legal. Ya no hay ninguno: el único
+# canal de atención es el centro de ayuda de la aplicación, y no existe forma
+# de publicar una dirección — no quedó ni una constante ni una variable de
+# entorno que lo permita.
 #
 # Si alguien necesita agregar una entrada acá, la pregunta correcta es por qué
-# esa dirección tiene que estar en el código en vez de en la configuración.
+# la plataforma volvería a publicar una dirección de correo.
 PUBLICADOS_A_PROPOSITO = set()
 
 
@@ -170,8 +170,8 @@ def test_ninguna_direccion_escrita_a_mano_en_el_frontend():
         El motivo es el medio, no el dueño. Este código se compila y se le
         sirve al navegador de cada visitante: cualquier dirección que se
         escriba acá queda publicada para siempre, y cambiarla exige un
-        despliegue. Ya existe `GET /api/contacto`, que la sirve desde la
-        configuración: si hay que publicar una, va por ahí.
+        despliegue. La política vigente es que el único canal de atención es
+        el centro de ayuda de la aplicación: no va ninguna.
 
     LO UNICO QUE SE PERMITE
 
@@ -207,6 +207,5 @@ def test_ninguna_direccion_escrita_a_mano_en_el_frontend():
         "Hay direcciones de correo escritas a mano en el frontend:\n  "
         + "\n  ".join(hallazgos)
         + "\n\nEste código se le sirve al navegador de cada visitante: lo que "
-          "se escriba acá queda publicado y sólo se cambia desplegando. Si hay "
-          "que publicar una dirección, va en `CONTACTO_PUBLICO` y sale por "
-          "`GET /api/contacto`.")
+          "se escriba acá queda publicado y sólo se cambia desplegando. El "
+          "único canal de atención es el centro de ayuda: enlazá a /support.")

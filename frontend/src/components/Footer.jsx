@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom';
-import useContacto from '../utils/contacto';
 
 export default function Footer() {
-  const correo = useContacto();
   const linkStyle = { color: '#6b7280', textDecoration: 'none', fontSize: '13px' };
   const colTitle = { color: '#374151', fontSize: '13px', fontWeight: 700, marginBottom: '10px' };
 
@@ -13,7 +11,7 @@ export default function Footer() {
           <p style={{ fontWeight: 800, fontSize: '16px', color: '#1f2937', margin: '0 0 6px 0' }}>RIS App</p>
           <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>SAIPHA SERVICIOS DIGITAIS</p>
           <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px 0' }}>J. DEL CARMEN HERNANDEZ BARRETO</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>CNPJ: 66.994.057/0001-61</p>
+
         </div>
         <div>
           <p style={colTitle}>Legal</p>
@@ -28,16 +26,12 @@ export default function Footer() {
         </div>
         <div>
           <p style={colTitle}>Contacto</p>
-          {correo ? (
-            <a href={`mailto:${correo}`} style={linkStyle}>{correo}</a>
-          ) : (
-            <Link to="/support" style={linkStyle}>Centro de ayuda</Link>
-          )}
+          <Link to="/support" style={linkStyle}>Centro de ayuda</Link>
         </div>
       </div>
       <div style={{ maxWidth: '1100px', margin: '24px auto 0', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
         <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, textAlign: 'center' }}>
-                    © {new Date().getFullYear()} SAIPHA SERVICIOS DIGITAIS · CNPJ 66.994.057/0001-61 · Todos los derechos reservados.
+                    © {new Date().getFullYear()} SAIPHA Servicios Digitais · Todos los derechos reservados.
         </p>
       </div>
     </footer>
