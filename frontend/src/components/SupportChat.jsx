@@ -8,7 +8,6 @@ export default function SupportChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const [unreadCount, setUnreadCount] = useState(0);

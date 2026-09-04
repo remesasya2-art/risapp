@@ -206,7 +206,12 @@ export default function SendCrypto() {
         setPaid(true);
         toast.success('¡Pago recibido! Tu envío está en cola de procesamiento.');
         refreshUser();
-      } catch (e) {
+      } catch {
+        // A propósito, y por ser un poll: esto corre cada 5 s mientras el
+        // usuario mira la pantalla. Un aviso por cada corte de red le llenaría
+        // el visor de errores por algo que se arregla solo en el siguiente
+        // intento. El caso que importa —el pago llegó— se ve igual apenas la
+        // red vuelve.
       }
     };
     checkStatus();

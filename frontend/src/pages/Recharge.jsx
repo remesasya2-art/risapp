@@ -41,7 +41,6 @@ export default function Recharge() {
   // pago confirmado dos veces. Una ref no vive en el render, así que la
   // función vieja y la nueva miran el mismo valor.
   const consultaEnVuelo = useRef(false);
-  const [loadingPending, setLoadingPending] = useState(true);
   const timerRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -85,8 +84,6 @@ export default function Recharge() {
         }
       } catch (error) {
         console.error('Error checking pending payment:', error);
-      } finally {
-        setLoadingPending(false);
       }
     };
     
@@ -281,28 +278,18 @@ export default function Recharge() {
     }
   };
 
-  const handleUploadProof = async () => {
-    if (!proofImage) {
-      toast.error('Debes adjuntar el comprobante de pago');
-      return;
-    }
-    if (!pixData?.payment_id) return;
-
-    setLoading(true);
-    try {
-      await api.post('/gestor/pix/upload-proof', {
-        payment_id: pixData.payment_id,
-        proof_image: proofImage
-      });
-      toast.success('Comprobante enviado. Verificando pago...');
-      // Check payment status immediately
-      await checkPaymentStatus();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al enviar comprobante');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Acá vivía `handleUploadProof`, que subía un comprobante del pago PIX a
+  // `/gestor/pix/upload-proof`. Se sacó porque ese endpoint NO EXISTE en el
+  // backend —el router `/gestor/pix` expone create, pending, cancel, status,
+  // simulate-payment, active e history, y ninguno más— así que la función
+  // habría dado 404 el día que alguien la enganchara a un botón.
+  //
+  // Tampoco la llamaba nadie: estaba escrita y suelta. El pago PIX se
+  // confirma solo, por la consulta de estado cada 5 s. El comprobante a mano
+  // es del flujo de bolívares, que sí tiene su endpoint y su botón.
+  //
+  // Si algún día hace falta un comprobante para PIX —cuando la confirmación
+  // automática no llega— hay que escribir el endpoint primero.
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
