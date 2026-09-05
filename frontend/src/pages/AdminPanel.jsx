@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -21,6 +21,7 @@ import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
 import { fmt } from '../utils/format';
+import MesaDeAyuda from '../components/admin/MesaDeAyuda';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
 import ErrorBoundary from '../components/common/ErrorBoundary';
@@ -173,138 +174,11 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [supportReplyText, setSupportReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
   // Chat state
-  const [supportChats, setSupportChats] = useState([]);
   const [agentRatings, setAgentRatings] = useState(null);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatReply, setChatReply] = useState('');
-  const [quickReplies, setQuickReplies] = useState([]);
-  const [showQrManager, setShowQrManager] = useState(false);
-  const [newQr, setNewQr] = useState('');
-  const [chatImage, setChatImage] = useState(null);
-  const [chatSearch, setChatSearch] = useState('');
-  const chatMessagesRef = useRef(null);
-  const chatPollRef = useRef(null);
-  const prevMsgCount = useRef(0);
-  const loadChatMessages = async (userId) => {
-    if (!userId) return;
-    try {
-      const res = await api.get(`/admin/support/chat/${userId}`);
-      setChatMessages(res.data || []);
-    } catch (e) { /* silencioso */ }
-  };
-
-  const loadSupportChats = async () => {
-    try {
-      const res = await api.get('/admin/support/chats');
-      const list = res.data || [];
-      setSupportChats(list);
-      setSelectedChat((prev) => (prev ? (list.find((c) => c.user_id === prev.user_id) || prev) : prev));
-    } catch (e) { /* silencioso */ }
-  };
-
-  const claimChat = async (chat) => {
-    try {
-      const res = await api.post('/admin/support/claim', { user_id: chat.user_id });
-      if (res.data?.success) {
-        toast.success(res.data?.already_mine ? 'Ya atendías este caso' : 'Tomaste este caso');
-      } else {
-        toast.error(`Ya lo atiende ${res.data?.assigned_to_name || 'otro operador'}`);
-      }
-      await loadSupportChats();
-    } catch (e) {
-      toast.error('No se pudo tomar el caso');
-    }
-  };
-
-  const releaseChat = async (chat) => {
-    try {
-      await api.post('/admin/support/release', { user_id: chat.user_id });
-      toast.success('Caso liberado');
-      await loadSupportChats();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || 'No se pudo liberar');
-    }
-  };
-  // Auto-refresco en vivo de la conversación abierta (cada 4s).
-  useEffect(() => {
-    if (!selectedChat?.user_id) return;
-    const id = selectedChat.user_id;
-    prevMsgCount.current = 0;
-    loadChatMessages(id);
-    chatPollRef.current = setInterval(() => { loadChatMessages(id); loadSupportChats(); }, 4000);
-    return () => { if (chatPollRef.current) clearInterval(chatPollRef.current); };
-  }, [selectedChat?.user_id]);
-  // Bajar al último mensaje solo cuando llegan mensajes nuevos (no en cada poll).
-  useEffect(() => {
-    const el = chatMessagesRef.current;
-    if (el && chatMessages.length > prevMsgCount.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-    prevMsgCount.current = chatMessages.length;
-  }, [chatMessages]);
-  // Cargar respuestas rápidas compartidas (backend).
-  useEffect(() => { loadQuickReplies(); }, []);
-  const filteredChats = supportChats.filter((c) => {
-    const q = chatSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (c.user_name || '').toLowerCase().includes(q) || (c.user_email || '').toLowerCase().includes(q);
-  });
-  const loadQuickReplies = async () => {
-    try {
-      const res = await api.get('/admin/quick-replies');
-      setQuickReplies(res.data || []);
-    } catch (e) { /* silencioso */ }
-  };
-  const addQuickReply = async () => {
-    const t = newQr.trim();
-    if (!t) return;
-    try {
-      await api.post('/admin/quick-replies', { text: t });
-      setNewQr('');
-      loadQuickReplies();
-    } catch (e) {
-      toast.error('No se pudo guardar la respuesta');
-    }
-  };
-  const removeQuickReply = async (qrId) => {
-    try {
-      await api.delete(`/admin/quick-replies/${qrId}`);
-      setQuickReplies((prev) => prev.filter((q) => q.qr_id !== qrId));
-    } catch (e) {
-      toast.error('No se pudo eliminar');
-    }
-  };
-  const chatFirstName = (selectedChat?.user_name || '').trim().split(' ')[0] || 'cliente';
-  const insertQuickReply = (text) => {
-    const filled = text.replace(/\{nombre\}/g, chatFirstName);
-    setChatReply((prev) => (prev ? prev.replace(/\s*$/, '') + ' ' + filled : filled));
-  };
-  const handleChatImage = (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('Solo se permiten imágenes'); return; }
-    if (file.size > 1.5 * 1024 * 1024) { toast.error('La imagen no debe superar 1.5 MB'); return; }
-    const reader = new FileReader();
-    reader.onload = () => setChatImage(reader.result);
-    reader.onerror = () => toast.error('No se pudo leer la imagen');
-    reader.readAsDataURL(file);
-  };
-  const sendChatReply = async () => {
-    const text = chatReply.trim();
-    if ((!text && !chatImage) || !selectedChat?.user_id) return;
-    try {
-      await api.post('/admin/support/respond', { user_id: selectedChat.user_id, message: text, image: chatImage || null });
-      setChatReply('');
-      setChatImage(null);
-      const res = await api.get(`/admin/support/chat/${selectedChat.user_id}`);
-      setChatMessages(res.data || []);
-      toast.success('Respuesta enviada');
-    } catch (e) {
-      toast.error('Error al enviar');
-    }
-  };
+  /* El chat de soporte vivía acá: veinte piezas de estado, las cargas, el
+     claim/release y las respuestas rápidas, todo mezclado con el resto
+     del panel. Se fue entero a `components/admin/MesaDeAyuda.jsx`. Lo
+     que queda abajo es lo que TAMBIEN usan otras pestañas. */
   const [accountingBanks, setAccountingBanks] = useState([]);
   // Modal para rechazar recarga VES
 
@@ -368,10 +242,6 @@ const [searchParams, setSearchParams] = useSearchParams();
         case 'ratings':
           const ratingsRes = await api.get('/admin/agent-ratings');
           setAgentRatings(ratingsRes.data?.agents || []);
-          break;
-        case 'chat':
-          const chatsRes = await api.get('/admin/support/chats');
-          setSupportChats(chatsRes.data || []);
           break;
       }
     } catch (error) {
@@ -1353,209 +1223,12 @@ const [searchParams, setSearchParams] = useSearchParams();
         )}
 
         {/* Chat Tab */}
-        {activeTab === 'chat' && (
-          <div style={{ padding: '0', display: 'flex', gap: '24px', height: 'calc(100vh - 200px)', minHeight: '500px' }}>
-            {/* Chat List */}
-            <div style={{ width: '320px', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>Conversaciones</h3>
-                <input value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} placeholder="Buscar por nombre o correo…" style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
-                {filteredChats.length === 0 ? (
-                  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#9ca3af' }}>
-                    <MessageSquare style={{ width: '48px', height: '48px', margin: '0 auto 12px', opacity: 0.5 }} />
-                    <p style={{ fontSize: '14px' }}>No hay conversaciones</p>
-                  </div>
-                ) : (
-                  filteredChats.map(chat => (
-                    <div
-                      key={chat.user_id}
-                      onClick={() => setSelectedChat(chat)}
-                      style={{
-                        padding: '16px 20px',
-                        borderBottom: '1px solid #f3f4f6',
-                        cursor: 'pointer',
-                        backgroundColor: selectedChat?.user_id === chat.user_id ? '#f0f9ff' : 'transparent',
-                        borderLeft: selectedChat?.user_id === chat.user_id ? '3px solid #6366f1' : '3px solid transparent'
-                      }}
-                      data-testid={`chat-item-${chat.user_id}`}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>{chat.user_name || 'Usuario'}</span>
-                        {chat.unread_count > 0 && (
-                          <span style={{ backgroundColor: '#ef4444', color: 'white', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '700' }}>
-                            {chat.unread_count}
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>{chat.user_email}</p>
-                      {chat.assigned_to_name && (
-                        <p style={{ fontSize: '11px', color: '#15803d', margin: '0 0 4px 0', fontWeight: 600 }}>● Atendido por {chat.assigned_to_name}</p>
-                      )}
-                      <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {chat.last_message ? (chat.last_message.length > 40 ? chat.last_message.substring(0, 40) + '…' : chat.last_message) : ''}
-                      </p>
-                      <p style={{ fontSize: '11px', color: '#9ca3af', margin: '4px 0 0 0' }}>
-                        {chat.last_message_at ? new Date(chat.last_message_at).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Caracas' }) : ''}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Chat Messages */}
-            <div style={{ flex: 1, backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              {!selectedChat ? (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <MessageSquare style={{ width: '64px', height: '64px', margin: '0 auto 16px', opacity: 0.3 }} />
-                    <p style={{ fontSize: '16px' }}>Selecciona una conversación</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Chat Header */}
-                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>{selectedChat.user_name}</h3>
-                      <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#6b7280' }}>{selectedChat.user_email}</p>
-                    </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {selectedChat.assigned_to ? (
-                        <>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#15803d', backgroundColor: '#dcfce7', padding: '6px 10px', borderRadius: '999px' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
-                            Atendido por {selectedChat.assigned_to_name || 'Operador'}
-                          </span>
-                          {(selectedChat.assigned_to === user?.user_id || user?.role === 'super_admin') && (
-                            <button onClick={() => releaseChat(selectedChat)} style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', backgroundColor: '#fff', color: '#6b7280', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                              Soltar
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <button onClick={() => claimChat(selectedChat)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                          Atender este caso
-                        </button>
-                      )}
-                    <button
-                      onClick={async () => {
-                        try {
-                          await api.post('/admin/support/close', { user_id: selectedChat.user_id });
-                          toast.success('Chat cerrado');
-                          loadData();
-                          setSelectedChat(null);
-                        } catch (e) {
-                          toast.error('Error al cerrar chat');
-                        }
-                      }}
-                      style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
-                    >
-                      Cerrar Chat
-                    </button>
-                    </div>
-                  </div>
-
-                  {/* Messages */}
-                  <div ref={chatMessagesRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#f9fafb' }}>
-                    {chatMessages.map(msg => (
-                      <div
-                        key={msg.message_id}
-                        style={{
-                          alignSelf: msg.sender === 'admin' ? 'flex-end' : 'flex-start',
-                          maxWidth: '70%'
-                        }}
-                      >
-                        <div style={{
-                          padding: '12px 16px',
-                          borderRadius: msg.sender === 'admin' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                          backgroundColor: msg.sender === 'admin' ? '#6366f1' : 'white',
-                          color: msg.sender === 'admin' ? 'white' : '#1f2937',
-                          boxShadow: msg.sender === 'user' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
-                        }}>
-                          {msg.message && <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{msg.message}</p>}
-                          {msg.image && (
-                            <img src={rutaDeArchivo(msg.image)} alt="adjunto" onClick={() => abrirArchivo(msg.image)} style={{ marginTop: msg.message ? '8px' : 0, maxWidth: '220px', maxHeight: '220px', borderRadius: '10px', display: 'block', cursor: 'pointer' }} />
-                          )}
-                        </div>
-                        <p style={{ fontSize: '10px', color: '#9ca3af', margin: '4px 8px 0', textAlign: msg.sender === 'admin' ? 'right' : 'left' }}>
-                          {new Date(msg.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Reply Input + respuestas rápidas */}
-                  <div style={{ borderTop: '1px solid #e5e7eb' }}>
-                    <div style={{ padding: '10px 16px 0', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                      {quickReplies.map((qr) => (
-                        <span key={qr.qr_id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#eef2ff', color: '#4f46e5', borderRadius: '999px', padding: '5px 10px', fontSize: '12px', maxWidth: '280px' }}>
-                          <button onClick={() => insertQuickReply(qr.text)} title="Insertar" style={{ background: 'none', border: 'none', color: '#4f46e5', cursor: 'pointer', fontSize: '12px', padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
-                            {qr.text}
-                          </button>
-                          {showQrManager && (
-                            <button onClick={() => removeQuickReply(qr.qr_id)} title="Eliminar" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 700, padding: 0, lineHeight: 1 }}>×</button>
-                          )}
-                        </span>
-                      ))}
-                      <button onClick={() => setShowQrManager((v) => !v)} style={{ background: 'none', border: '1px dashed #c7d2fe', color: '#6366f1', borderRadius: '999px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}>
-                        {showQrManager ? 'Listo' : 'Editar respuestas'}
-                      </button>
-                    </div>
-                    {showQrManager && (
-                      <div style={{ padding: '8px 16px 0', display: 'flex', gap: '8px' }}>
-                        <input value={newQr} onChange={(e) => setNewQr(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addQuickReply(); }} placeholder="Nueva respuesta rápida (usa {nombre} para el nombre del cliente)" style={{ flex: 1, padding: '8px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none' }} />
-                        <button onClick={addQuickReply} style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Añadir</button>
-                      </div>
-                    )}
-                    {chatImage && (
-                      <div style={{ padding: '8px 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <img src={rutaDeArchivo(chatImage)} alt="adjunto" style={{ width: '46px', height: '46px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
-                        <span style={{ fontSize: '12px', color: '#6b7280' }}>Imagen lista para enviar</span>
-                        <button onClick={() => setChatImage(null)} title="Quitar imagen" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                          <X style={{ width: '16px', height: '16px' }} />
-                        </button>
-                      </div>
-                    )}
-                    <div style={{ padding: '12px 16px 16px', display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-                      <input type="file" accept="image/*" id="admin-chat-image-input" onChange={handleChatImage} style={{ display: 'none' }} />
-                      <button
-                        onClick={() => document.getElementById('admin-chat-image-input').click()}
-                        title="Adjuntar imagen"
-                        style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb', color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                      >
-                        <Image style={{ width: '20px', height: '20px' }} />
-                      </button>
-                      <textarea
-                        value={chatReply}
-                        onChange={(e) => setChatReply(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            sendChatReply();
-                          }
-                        }}
-                        rows={1}
-                        placeholder="Escribe tu respuesta…  (Enter envía · Shift+Enter salto de línea)"
-                        style={{ flex: 1, padding: '14px 18px', borderRadius: '20px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', resize: 'none', maxHeight: '120px', fontFamily: 'inherit' }}
-                        data-testid="admin-chat-reply-input"
-                      />
-                      <button
-                        onClick={sendChatReply}
-                        style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#6366f1', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                        data-testid="admin-chat-send-btn"
-                      >
-                        <Send style={{ width: '20px', height: '20px' }} />
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        {/* La mesa de ayuda. Lo que había acá era una lista de personas y
+            una caja de texto: el asesor tenía dos botones y respondía a
+            ciegas. Ahora es un componente aparte —tres columnas, con la
+            ficha del cliente y las herramientas— y esta pantalla vuelve a
+            ser sólo el marco de pestañas. */}
+        {activeTab === 'chat' && <MesaDeAyuda usuario={user} />}
 
         {/* Support Requests Tab */}
         {activeTab === 'ratings' && (

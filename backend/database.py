@@ -64,6 +64,26 @@ async def create_indexes():
         await db.crypto_deposits.create_index("user_id")
         await db.crypto_deposits.create_index([("credited", 1), ("status", 1)])
 
+        # Mesa de ayuda (casos). Las tres consultas que se hacen todo el
+        # dia: «mis casos» del cliente, la bandeja del asesor filtrada por
+        # estado o area, y la conversacion de un caso. Sin estos indices cada
+        # vuelta del reloj de la pantalla recorre la coleccion entera, y la
+        # bandeja se consulta cada pocos segundos por cada asesor conectado.
+        await db.soporte_casos.create_index("caso_id", unique=True)
+        await db.soporte_casos.create_index([("user_id", 1), ("actualizado_en", -1)])
+        await db.soporte_casos.create_index([("estado", 1), ("actualizado_en", -1)])
+        await db.soporte_casos.create_index([("area", 1), ("estado", 1)])
+        await db.soporte_casos.create_index([("asignado_a", 1), ("estado", 1)])
+        # El numero NO es unico a proposito: si un caso viejo de la migracion
+        # trajera uno repetido, un indice unico haria fallar la creacion y se
+        # perderian todos los indices que vienen despues, dentro del mismo try.
+        await db.soporte_casos.create_index("numero")
+        await db.soporte_mensajes.create_index("mensaje_id", unique=True)
+        await db.soporte_mensajes.create_index([("caso_id", 1), ("creado_en", 1)])
+        await db.soporte_pedidos.create_index("pedido_id", unique=True)
+        await db.soporte_pedidos.create_index([("area", 1), ("estado", 1)])
+        await db.soporte_pedidos.create_index([("caso_id", 1), ("creado_en", 1)])
+
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.error(f"Error creating indexes: {e}")

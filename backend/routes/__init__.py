@@ -16,6 +16,7 @@ from routes.partner import router as partner_router
 from routes.gestor_pix import router as gestor_pix_router, webhook_router
 from routes.notifications import router as notifications_router
 from routes.support import router as support_router
+from routes.soporte import router as soporte_router
 from routes.push import router as push_router
 from routes.misc import router as misc_router
 from routes.webhooks import router as webhooks_router
@@ -58,6 +59,9 @@ api_router.include_router(gestor_pix_router)
 api_router.include_router(webhook_router)
 api_router.include_router(notifications_router)
 api_router.include_router(support_router)
+# La mesa de ayuda por casos. Convive con `support_router`, que sigue
+# atendiendo el chat viejo mientras el historial termina de migrar.
+api_router.include_router(soporte_router)
 api_router.include_router(push_router)
 api_router.include_router(webhooks_router)
 api_router.include_router(recovery_router)
