@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -175,8 +175,6 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [sendingReply, setSendingReply] = useState(false);
   // Chat state
   const [agentRatings, setAgentRatings] = useState(null);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [chatMessages, setChatMessages] = useState([]);
   /* El chat de soporte vivía acá: veinte piezas de estado, las cargas, el
      claim/release y las respuestas rápidas, todo mezclado con el resto
      del panel. Se fue entero a `components/admin/MesaDeAyuda.jsx`. Lo
