@@ -64,6 +64,20 @@ EDAD_MAXIMA_DEL_PRECIO = timedelta(seconds=30)
 #   vez por semana, subilo; si la mueve dos veces por día, bajalo.
 EDAD_MAXIMA_DE_LA_TASA = timedelta(hours=24)
 
+# Cuánto dura el cobro, desde que se genera hasta que vence.
+#
+#   Es LA ventana de exposición a la volatilidad del bitcoin: en ese rato el
+#   precio queda clavado —los sats que paga el cliente y los bolívares que
+#   recibe el beneficiario ya están fijos— y el movimiento lo absorbe el
+#   operador, con el colchón del margen y la comisión (~3 %).
+#
+#   Diez minutos, por decisión del operador: menos ventana y más apuro en
+#   pagar. Antes eran treinta.
+#
+#   Escrito UNA vez. Estaba en cuatro lugares —dos en el servidor y dos en la
+#   pantalla— y cambiarlo era acordarse de los cuatro.
+DURACION_DEL_COBRO = timedelta(minutes=10)
+
 MARGEN = 0.99
 COMISION = 1.02
 LIMITE_DIARIO_USD = 500.0
@@ -243,6 +257,22 @@ async def get_precio_btc():
     }
 
 
+def _blink_rechazo_el_vencimiento(respuesta):
+    """¿El proveedor rechazó la petición por no conocer `expiresIn`?
+
+    Se mira sólo el error de GraphQL de nivel superior —el que se devuelve
+    cuando la consulta no valida contra el esquema— y no los errores de
+    negocio, que vienen adentro de `lnInvoiceCreate.errors`. Confundirlos haría
+    reintentar un cobro que el proveedor rechazó por un motivo real, como un
+    monto fuera de rango.
+    """
+    for e in (respuesta or {}).get("errors") or []:
+        mensaje = str(e.get("message", "")).lower()
+        if "expiresin" in mensaje:
+            return True
+    return False
+
+
 @router.post("/generar-invoice", dependencies=[Depends(sin_transacciones_personales)])
 async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depends(get_current_user)):
     if current_user.verification_status != "verified":
@@ -304,21 +334,42 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
             "Content-Type": "application/json"
         }
             
-        payload = {
-            "query": mutation,
-            "variables": {
-                "input": {
-                    "amount": sats,
-                    "memo": memo,
-                    "walletId": BLINK_WALLET_ID
-                }
-            }
-        }
-            
+        # EL INVOICE VENCE CUANDO VENCE NUESTRA VENTANA, no después.
+        #
+        #   Hasta acá el invoice se pedía sin vencimiento y quedaba con el que
+        #   pone el proveedor por omisión, que es mucho más largo. O sea que la
+        #   ventana de diez minutos era sólo del lado nuestro: un cliente podía
+        #   pagar a los cuarenta y la red aceptaba el pago igual.
+        #
+        #   Dos formas de terminar mal, y las dos con plata de por medio:
+        #   procesar el envío a un precio de hace cuarenta minutos, o —si el
+        #   cliente había cancelado— cobrarle sin que el envío exista.
+        #
+        #   Acortar la ventana sin esto habría hecho las dos más probables.
+        entrada = {"amount": sats, "memo": memo, "walletId": BLINK_WALLET_ID}
+        minutos = max(1, int(DURACION_DEL_COBRO.total_seconds() // 60))
+
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, headers=headers, json=payload)
+            resp = await client.post(
+                BLINK_GRAPHQL_URL, headers=headers,
+                json={"query": mutation,
+                      "variables": {"input": {**entrada, "expiresIn": minutos}}})
             result = resp.json()
             logger.debug(f"Blink lnInvoiceCreate status: {resp.status_code}")
+
+            # Si el proveedor no conoce ese campo, se reintenta sin él en vez
+            # de dejar al cliente sin poder pagar. Adivinar el nombre de un
+            # campo y equivocarse no puede costar que no se emita ningún
+            # cobro; queda registrado para que se note y se corrija.
+            if _blink_rechazo_el_vencimiento(result):
+                logger.error(
+                    "El proveedor no aceptó `expiresIn`: el invoice queda con "
+                    "su vencimiento por omisión, más largo que nuestra "
+                    "ventana. Revisar el nombre del campo en su API.")
+                resp = await client.post(
+                    BLINK_GRAPHQL_URL, headers=headers,
+                    json={"query": mutation, "variables": {"input": entrada}})
+                result = resp.json()
             
     except Exception as e:
         logger.error(f"Blink except: {type(e).__name__}: {e}")
@@ -356,7 +407,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         "estado": "pendiente", 
         "no_reembolsable": True, 
         "creado_en": datetime.now(timezone.utc), 
-        "expira_en": datetime.now(timezone.utc) + timedelta(minutes=30)
+        "expira_en": datetime.now(timezone.utc) + DURACION_DEL_COBRO
     })
     
     return {
@@ -369,7 +420,16 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         "ves_recibe": ves_recibe, 
         "precio_btc_usado": precio_btc, 
         "tasa_ves": tasa_ves, 
-        "expira_en": 1800, 
+        # `expira_en_segundos` y no `expira_en`.
+        #
+        #   Acá se devolvían segundos y en `/mi-remesa-activa` una fecha ISO,
+        #   las dos con el MISMO nombre. La pantalla lo resolvía sin querer:
+        #   hacía `new Date(600)`, le daba 1970, lo descartaba por estar en el
+        #   pasado y caía en un 1800 escrito a mano que resultaba ser el valor
+        #   correcto. Funcionaba de casualidad, y dejó de funcionar en cuanto
+        #   la duración cambió.
+        "expira_en_segundos": int(DURACION_DEL_COBRO.total_seconds()),
+        "expira_en": (datetime.now(timezone.utc) + DURACION_DEL_COBRO).isoformat(),
         "aviso": "Los pagos en BTC no son reembolsables bajo ningun motivo."
     }
 
@@ -399,9 +459,57 @@ async def webhook_blink(request: Request):
     status = str(transaction.get("status", payload.get("status", ""))).upper()
     if status not in ("PAID", "SUCCESS"):
         return {"ok": True, "msg": "Evento ignorado"}
-    remesa = await db.btc_remesas.find_one({"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}], "estado": "pendiente"})
+    # Se busca sin filtrar por estado a propósito. Filtrar por «pendiente»
+    # hacía que un pago de una orden cancelada no encontrara nada y el webhook
+    # contestara «ya procesada»: el cliente pagaba y no quedaba rastro de que
+    # su plata había llegado.
+    remesa = await db.btc_remesas.find_one(
+        {"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}]})
     if not remesa:
-        return {"ok": True, "msg": "Orden no encontrada o ya procesada"}
+        logger.error(f"Pago recibido sin orden que lo explique: {payment_hash}")
+        return {"ok": True, "msg": "Orden no encontrada"}
+    if remesa.get("estado") == "pagado":
+        return {"ok": True, "msg": "Ya procesada"}
+
+    # UN PAGO QUE LLEGA TARDE NO SE ACREDITA SOLO.
+    #
+    #   El precio quedó fijo al generar el cobro. Acreditarlo después de que
+    #   venció es enviar bolívares calculados con un bitcoin de otro momento, y
+    #   la diferencia la pone alguien sin haberlo decidido.
+    #
+    #   Tampoco se ignora: la plata llegó. Queda marcado para que una persona
+    #   lo mire, que es la única forma de resolverlo bien —devolver o completar
+    #   a la cotización de hoy— y es una decisión de negocio, no de código.
+    vencida = remesa.get("expira_en") and remesa["expira_en"].replace(
+        tzinfo=remesa["expira_en"].tzinfo or timezone.utc) < datetime.now(timezone.utc)
+    if vencida or remesa.get("estado") == "cancelado":
+        motivo = "vencida" if vencida else "cancelada"
+        logger.error(f"Pago de una orden {motivo}: {remesa['remesa_id']}. "
+                     "Queda para revisión manual.")
+        await db.btc_remesas.update_one(
+            {"remesa_id": remesa["remesa_id"]},
+            {"$set": {"estado": "revision_manual",
+                      "motivo_revision": f"pago recibido con la orden {motivo}",
+                      "pagado_en": datetime.now(timezone.utc)}})
+        try:
+            from services.notifications import create_notification
+            async for admin in db.users.find({"role": "super_admin"}):
+                await create_notification(
+                    user_id=admin["user_id"],
+                    title="Un pago con Bitcoin llegó tarde",
+                    message=(f"Llegó el pago de una orden {motivo}. No se "
+                             "acreditó solo, porque el precio con el que se "
+                             "calculó ya no es el de ahora. Hay que revisarla "
+                             "en el panel."),
+                    notification_type="warning",
+                    data={"remesa_id": remesa["remesa_id"], "motivo": motivo})
+        except Exception as e:
+            logger.error(f"No se pudo avisar del pago tardío: {type(e).__name__}")
+        return {"ok": True, "msg": "Orden vencida: queda para revisión"}
+
+    if remesa.get("estado") != "pendiente":
+        return {"ok": True, "msg": "Orden en un estado que no admite el pago"}
+
     ves_recibe = remesa["ves_recibe"]
     user_id = remesa["user_id"]
     await db.btc_ves_wallets.update_one({"user_id": user_id}, {"$inc": {"saldo": ves_recibe}, "$set": {"moneda": "BTC-VES", "user_id": user_id}, "$setOnInsert": {"creado_en": datetime.now(timezone.utc)}}, upsert=True)

@@ -230,7 +230,10 @@ export default function BTCLightning() {
   const [newBenef, setNewBenef] = useState({ full_name: '', cedula: '', bank_code: '', bank: '', phone: '', account_number: '' });
   const [usd, setUsd] = useState('');
   const [invoiceData, setInvoiceData] = useState(null);
-  const [countdown, setCountdown] = useState(1800);
+  // Arranca en cero y lo fija el servidor con `expira_en`, que viene en el
+  // cobro. Antes había un 1800 escrito acá y otro más abajo: dos copias de una
+  // duración que decide el servidor, y que quedaban viejas en cuanto cambiaba.
+  const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef(null);
   const [loadingWallet, setLoadingWallet] = useState(false);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
@@ -322,7 +325,7 @@ export default function BTCLightning() {
 
   useEffect(() => {
     if (step === 3 && invoiceData) {
-      let _secs = 1800;
+      let _secs = invoiceData.expira_en_segundos || 0;
       if (invoiceData.expira_en) {
         const _exp = new Date(invoiceData.expira_en);
         if (!isNaN(_exp.getTime()) && _exp.getTime() > Date.now()) {

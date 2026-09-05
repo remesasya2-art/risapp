@@ -402,9 +402,33 @@ aviso que llega cien veces deja de ser un aviso—. El panel muestra desde cuán
 rige la tasa y cuántas horas le quedan, para no enterarse por la notificación,
 que es enterarse tarde.
 
+**La ventana del cobro: diez minutos.** Es LA exposición a la volatilidad del
+bitcoin. Al generar el cobro quedan fijos los sats que paga el cliente y los
+bolívares que recibe el beneficiario; si el precio se mueve en ese rato, la
+diferencia la absorbe el operador, con el colchón del margen y la comisión
+(~3 %). Eran treinta minutos.
+
+Acortarla obligó a cerrar dos huecos que ya existían y que la ventana más corta
+volvía **más** probables, porque más órdenes vencen:
+
+- **El invoice se pedía sin vencimiento propio** y quedaba con el del
+  proveedor, mucho más largo. La ventana era sólo del lado nuestro: se podía
+  pagar a los cuarenta minutos y la red aceptaba. Ahora se le pide al proveedor
+  el mismo vencimiento, con reintento sin ese campo si no lo conoce —adivinar
+  el nombre de un campo y errarle no puede costar que no se emita ningún cobro.
+- **El webhook acreditaba sin mirar la fecha.** Un pago tardío enviaba
+  bolívares calculados con un bitcoin de otro momento; y si la orden estaba
+  cancelada, la búsqueda filtraba por «pendiente», no encontraba nada y el
+  webhook contestaba «ya procesada»: el cliente pagaba y no quedaba rastro.
+  Ahora la orden se busca sin filtrar por estado, un pago fuera de ventana
+  queda en `revision_manual` y se avisa al super administrador. No se acredita
+  solo y no se ignora: la plata llegó, y qué hacer con ella —devolver o
+  completar a la cotización de hoy— es una decisión de negocio.
+
 `backend/routes/btc_lightning.py`, `backend/services/aviso_de_tasa.py`,
 `backend/tests/test_cotizacion_btc.py`,
-`backend/tests/test_aviso_de_tasa_vencida.py`
+`backend/tests/test_aviso_de_tasa_vencida.py`,
+`backend/tests/test_ventana_del_cobro.py`
 
 ---
 
