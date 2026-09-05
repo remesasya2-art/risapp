@@ -51,6 +51,13 @@ router = APIRouter(tags=["soporte"])
 
 _AHORA = lambda: datetime.now(timezone.utc)  # noqa: E731
 
+# Cuántos mensajes de un caso viajan a la pantalla, y cuántos casos entran en la
+# bandeja. Son topes de cordura —que un caso patológico no se lleve puesta la
+# memoria del proceso—, no paginación: en los dos lugares se traen los más
+# recientes, que es lo que se está mirando.
+_TOPE_MENSAJES = 500
+_TOPE_BANDEJA = 300
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Helpers
@@ -174,6 +181,28 @@ async def _avisar_a_varios(destinos, **aviso):
     await asyncio.gather(*[_avisar(user_id=uid, **aviso) for uid in ids])
 
 
+async def _conversacion(caso_id, con_notas_internas):
+    """Los mensajes del caso, los ULTIMOS, en orden de lectura.
+
+    El tope hay que aplicarlo por el lado del final. Pidiéndolos del más viejo
+    al más nuevo y cortando en 500, un caso largo guardaba los 500 PRIMEROS y
+    perdía los últimos, que son justo los que hay que leer: el asesor abría el
+    caso y no veía lo que el cliente acababa de escribir. Se piden al revés, se
+    corta, y se dan vuelta para mostrarlos.
+    """
+    consulta = {"caso_id": caso_id}
+    if not con_notas_internas:
+        consulta["interno"] = {"$ne": True}
+    # `.limit()` y no `to_list(n)`: el tope tiene que estar en la CONSULTA. Con
+    # `to_list(n)` el servidor manda igual todo lo que encontró y el corte pasa
+    # en el cliente —y el doble de Mongo que usan los tests ni siquiera lo hace,
+    # así que un tope escrito así no se prueba nunca—.
+    ultimos = await db.soporte_mensajes.find(consulta, {"_id": 0}).sort(
+        "creado_en", -1).limit(_TOPE_MENSAJES).to_list(_TOPE_MENSAJES)
+    ultimos.reverse()
+    return ultimos
+
+
 async def _staff_con(permiso):
     """El personal que puede resolver algo de esa área.
 
@@ -189,7 +218,7 @@ async def _staff_con(permiso):
         ]}]}
     return await db.users.find(consulta, {
         "_id": 0, "user_id": 1, "name": 1, "email": 1, "role": 1, "legajo": 1,
-    }).to_list(200)
+    }).limit(200).to_list(200)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -223,7 +252,7 @@ async def mis_casos(current_user: User = Depends(get_current_user)):
     """Mis casos, el más reciente primero."""
     casos = await db.soporte_casos.find(
         {"user_id": current_user.user_id}, {"_id": 0},
-    ).sort("actualizado_en", -1).to_list(100)
+    ).sort("actualizado_en", -1).limit(100).to_list(100)
     return {"casos": [_publico(c) for c in casos]}
 
 
@@ -233,9 +262,7 @@ async def mi_caso(caso_id: str, current_user: User = Depends(get_current_user)):
     caso = await _mio(caso_id, current_user.user_id)
     if not caso:
         raise HTTPException(status_code=404, detail="Ese caso no existe")
-    mensajes = await db.soporte_mensajes.find(
-        {"caso_id": caso_id, "interno": {"$ne": True}}, {"_id": 0},
-    ).sort("creado_en", 1).to_list(500)
+    mensajes = await _conversacion(caso_id, con_notas_internas=False)
     # Al abrirlo, deja de haber nada sin leer para el cliente. La condición no
     # es un adorno: esta pantalla vuelve a preguntar cada ocho segundos, y sin
     # ella cada consulta sería una escritura para poner en cero algo que ya
@@ -543,7 +570,13 @@ async def bandeja(estado: Optional[str] = None, area: Optional[str] = None,
         consulta["$or"] = [{"user_name": aguja}, {"user_email": aguja},
                            {"numero": aguja}, {"asunto": aguja}]
 
-    casos = await db.soporte_casos.find(consulta, {"_id": 0}).to_list(300)
+    # Ordenado en la base ANTES de cortar. Sin el `sort`, Mongo devolvía 300
+    # cualesquiera de los que había y recién después se ordenaba por prioridad:
+    # con historia, el asesor veía un puñado arbitrario de casos viejos y no
+    # los de hoy. El orden fino —escalados primero, después el semáforo— se
+    # hace acá abajo, sobre los que efectivamente entraron.
+    casos = await db.soporte_casos.find(consulta, {"_id": 0}).sort(
+        "actualizado_en", -1).limit(_TOPE_BANDEJA).to_list(_TOPE_BANDEJA)
     ahora = _AHORA()
     casos.sort(key=lambda c: soporte.clave_de_orden(c, ahora))
     for c in casos:
@@ -564,10 +597,9 @@ async def ver_caso(caso_id: str, current_user: User = Depends(get_crm_user)):
     if not caso:
         raise HTTPException(status_code=404, detail="Ese caso no existe")
 
-    mensajes = await db.soporte_mensajes.find(
-        {"caso_id": caso_id}, {"_id": 0}).sort("creado_en", 1).to_list(500)
+    mensajes = await _conversacion(caso_id, con_notas_internas=True)
     pedidos = await db.soporte_pedidos.find(
-        {"caso_id": caso_id}, {"_id": 0}).sort("creado_en", 1).to_list(50)
+        {"caso_id": caso_id}, {"_id": 0}).sort("creado_en", 1).limit(50).to_list(50)
 
     cliente = await db.users.find_one(
         {"user_id": caso.get("user_id")},
@@ -579,7 +611,7 @@ async def ver_caso(caso_id: str, current_user: User = Depends(get_crm_user)):
         {"user_id": caso.get("user_id"), "hidden_from_admin": {"$ne": True}},
         {"_id": 0, "transaction_id": 1, "type": 1, "amount": 1, "status": 1,
          "created_at": 1, "currency": 1},
-    ).sort("created_at", -1).to_list(8)
+    ).sort("created_at", -1).limit(8).to_list(8)
     otros = await db.soporte_casos.count_documents({
         "user_id": caso.get("user_id"), "caso_id": {"$ne": caso_id}})
 
@@ -849,14 +881,13 @@ async def escalar(caso_id: str, datos: Escalamiento,
                      f"{current_user.name or 'Un asesor'} escaló el caso: {datos.motivo.strip()}",
                      current_user.user_id, current_user.name)
 
-    for jefe in await db.users.find({"role": "super_admin"},
-                                    {"_id": 0, "user_id": 1}).to_list(20):
-        await _avisar(
-            user_id=jefe.get("user_id"),
-            title=f"Caso escalado {caso.get('numero')}",
-            message=datos.motivo.strip()[:100],
-            notification_type="soporte_escalado",
-        )
+    await _avisar_a_varios(
+        await db.users.find({"role": "super_admin"},
+                            {"_id": 0, "user_id": 1}).limit(20).to_list(20),
+        title=f"Caso escalado {caso.get('numero')}",
+        message=datos.motivo.strip()[:100],
+        notification_type="soporte_escalado",
+    )
     return {"success": True}
 
 
@@ -915,7 +946,7 @@ async def pedidos_de_mi_area(pendientes: bool = True,
     if pendientes:
         consulta["estado"] = soporte.PEDIDO_PENDIENTE
     lista = await db.soporte_pedidos.find(consulta, {"_id": 0}).sort(
-        "creado_en", 1).to_list(200)
+        "creado_en", 1).limit(200).to_list(200)
     return {"pedidos": lista, "areas": mias}
 
 

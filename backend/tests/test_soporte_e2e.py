@@ -644,3 +644,83 @@ def test_se_califica_un_caso_resuelto_sin_esperar_a_que_lo_cierren():
     mio = CLIENTE.get(f"/api/soporte/casos/{caso_id}").json()["caso"]
     assert mio["estado"] != "resuelto"
     assert mio["calificacion"]["estrellas"] == 4
+
+
+def test_una_conversacion_larga_muestra_LO_ULTIMO_y_no_el_principio():
+    """El tope de mensajes cortaba por el lado equivocado.
+
+    Se pedían ordenados del más viejo al más nuevo y se cortaba en 500: o sea
+    que en un caso largo se guardaban los 500 PRIMEROS y se perdían los
+    últimos, que son justo los que hay que leer. El asesor abría el caso y no
+    veía lo que el cliente acababa de escribir.
+    """
+    caso = _abrir_caso(mensaje="El primero de todos")
+    caso_id = caso["caso_id"]
+
+    # Se escriben directo en la base: mandar 520 mensajes por HTTP tarda una
+    # eternidad y lo que se prueba es el corte, no el camino del mensaje.
+    from datetime import timedelta
+    base = datetime(2026, 3, 1, tzinfo=timezone.utc)
+
+    async def sembrar():
+        await DB.soporte_mensajes.insert_many([{
+            "mensaje_id": f"m_{i}",
+            "caso_id": caso_id,
+            "autor": "cliente",
+            "autor_id": "u_ana",
+            "autor_nombre": "Ana",
+            "interno": False,
+            "texto": f"mensaje {i}",
+            "adjunto": None,
+            "creado_en": base + timedelta(minutes=i),
+        } for i in range(520)])
+
+    asyncio.run(sembrar())
+
+    _como(CLIENTA)
+    mensajes = CLIENTE.get(f"/api/soporte/casos/{caso_id}").json()["mensajes"]
+    textos = [m.get("texto") for m in mensajes]
+    assert "mensaje 519" in textos, "se perdió lo último, que es lo que hay que leer"
+    # Y llegan en orden de lectura, del más viejo al más nuevo.
+    numerados = [int(t.split()[-1]) for t in textos if t.startswith("mensaje ")]
+    assert numerados == sorted(numerados)
+    # El corte se lleva los del principio, no los del final.
+    assert min(numerados) > 0 and max(numerados) == 519
+
+    _como(ASESOR)
+    del_asesor = CLIENTE.get(f"/api/admin/soporte/casos/{caso_id}").json()["mensajes"]
+    assert "mensaje 519" in [m.get("texto") for m in del_asesor]
+
+
+def test_la_bandeja_llena_trae_los_casos_MAS_RECIENTES():
+    """El tope de 300 se aplicaba sin ordenar antes.
+
+    Mongo devolvía 300 cualesquiera de los que había y recién ahí se ordenaba
+    por prioridad: con historia, el asesor veía un puñado arbitrario de casos
+    viejos y no los de hoy.
+    """
+    from datetime import timedelta
+    base = datetime(2026, 3, 1, tzinfo=timezone.utc)
+
+    async def sembrar():
+        await DB.soporte_casos.insert_many([{
+            "caso_id": f"c_{i}", "numero": f"S-{i:06d}",
+            "user_id": "u_ana", "user_name": "Ana", "user_email": "ana@test.com",
+            "motivo": "otro", "asunto": f"consulta {i}",
+            "estado": "cerrado", "prioridad": "normal", "area": "soporte",
+            "asignado_a": None, "asignado_a_nombre": None, "escalado": False,
+            "creado_en": base + timedelta(minutes=i),
+            "actualizado_en": base + timedelta(minutes=i),
+            "ultimo_mensaje_en": base + timedelta(minutes=i),
+            "primera_respuesta_en": base + timedelta(minutes=i),
+            "sin_leer_asesor": 0, "sin_leer_cliente": 0, "calificacion": None,
+        } for i in range(320)])
+
+    asyncio.run(sembrar())
+
+    _como(ASESOR)
+    casos = CLIENTE.get("/api/admin/soporte/casos",
+                        params={"estado": "cerrado"}).json()["casos"]
+    numeros = {c["caso_id"] for c in casos}
+    assert "c_319" in numeros, "el más reciente no entró en la bandeja"
+    assert "c_0" not in numeros, "entró el más viejo en vez del más nuevo"
