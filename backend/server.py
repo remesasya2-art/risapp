@@ -81,6 +81,16 @@ async def lifespan(app):
         await db.support_messages.create_index([("user_id", 1), ("read", 1)])
         await db.support_chats.create_index("user_id")
         await db.support_chats.create_index([("last_message_at", -1)])
+        # La mesa de ayuda por casos. La bandeja del asesor filtra por estado y
+        # área, y el cliente pide los suyos: sin estos índices, cada apertura
+        # del panel recorre la colección entera.
+        await db.soporte_casos.create_index("caso_id", unique=True)
+        await db.soporte_casos.create_index([("user_id", 1), ("actualizado_en", -1)])
+        await db.soporte_casos.create_index([("estado", 1), ("area", 1)])
+        await db.soporte_casos.create_index([("asignado_a", 1), ("estado", 1)])
+        await db.soporte_mensajes.create_index([("caso_id", 1), ("creado_en", 1)])
+        await db.soporte_pedidos.create_index([("area", 1), ("estado", 1)])
+        await db.soporte_pedidos.create_index("caso_id")
         await db.quick_replies.create_index([("created_at", 1)])
         await db.blacklist.create_index([("type", 1), ("value", 1)])
         await db.blacklist.create_index("value")

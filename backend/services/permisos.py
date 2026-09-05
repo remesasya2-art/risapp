@@ -82,6 +82,12 @@ CATALOGO = {
     "support.view":          "Ver chats y pedidos de soporte",
     "support.respond":       "Responder y tomar soporte",
     "support.close":         "Cerrar chats de soporte",
+    # Los pedidos internos los CONTESTA otra área —Verificaciones, Finanzas,
+    # Envíos—, no soporte. Si la ruta pidiera `support.respond`, quedaría
+    # cerrada justo para la gente que tiene que responderla. Este permiso dice
+    # «participás del circuito»; cuál pedido te toca lo decide después el
+    # permiso del área, en services/soporte.py.
+    "support.pedidos":       "Responder pedidos internos de soporte de tu área",
 
     "envios.view":           "Ver envíos y transportistas",
     "envios.operar":         "Operar envíos (despachar, entregar, pesar)",
@@ -130,6 +136,24 @@ MAPA = {
     ("GET",    "/api/admin/recharges/pending"):              "recharges.view",
     ("GET",    "/api/admin/recharges/{transaction_id}/proof"): "recharges.view",
     ("POST",   "/api/admin/recharges/approve"):              "recharges.approve",
+
+    # ── Mesa de ayuda (casos) ─────────────────────────────────────────────
+    ("GET",    "/api/admin/soporte/areas"):                  "support.view",
+    ("GET",    "/api/admin/soporte/asesores"):               "support.view",
+    ("GET",    "/api/admin/soporte/casos"):                  "support.view",
+    ("GET",    "/api/admin/soporte/casos/{caso_id}"):        "support.view",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/tomar"):      "support.respond",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/soltar"):     "support.respond",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/mensajes"):   "support.respond",
+    # Cerrar pide además `support.close`, y eso se comprueba adentro: esta
+    # ruta también mueve el caso a estados que no cierran nada.
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/estado"):     "support.respond",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/prioridad"):  "support.respond",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/transferir"): "support.respond",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/escalar"):    "support.respond",
+    ("POST",   "/api/admin/soporte/casos/{caso_id}/pedidos"):    "support.respond",
+    ("GET",    "/api/admin/soporte/pedidos"):                    "support.pedidos",
+    ("POST",   "/api/admin/soporte/pedidos/{pedido_id}/responder"): "support.pedidos",
 
     # ── Transacciones ─────────────────────────────────────────────────────
     ("GET",    "/api/admin/transactions"):                   "transactions.view",
