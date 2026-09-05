@@ -226,3 +226,25 @@ def test_en_un_caso_cerrado_el_cliente_no_escribe_pero_califica():
 def test_no_se_califica_dos_veces_el_mismo_caso():
     ya = json.dumps({"estado": "cerrado", "calificacion": {"estrellas": 4}})
     assert _js(f"m.sePuedeCalificar({ya})") is False
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Los pedidos que llegan a mi área
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_un_pedido_no_se_contesta_con_un_visto():
+    """La respuesta vuelve al caso como nota interna y alguien la va a leer.
+
+    Un «ok» no le sirve al asesor que está con el cliente: después tiene que
+    traducirle esa respuesta, y para eso necesita saber QUE pasó.
+    """
+    assert _js("m.problemaDeLaRespuestaAlPedido('')")
+    assert _js("m.problemaDeLaRespuestaAlPedido('   ')")
+    assert _js("m.problemaDeLaRespuestaAlPedido('ok')")
+    assert _js("m.problemaDeLaRespuestaAlPedido('Le devolvimos el saldo, ya está acreditado')") is None
+
+
+def test_una_respuesta_larguisima_se_frena_de_este_lado():
+    """El servidor la corta en 2000; enterarse recién ahí es perder lo escrito."""
+    assert _js("m.problemaDeLaRespuestaAlPedido('x'.repeat(2001))")
+    assert _js("m.problemaDeLaRespuestaAlPedido('x'.repeat(2000))") is None

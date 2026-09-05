@@ -227,3 +227,19 @@ export function sePuedeEscribir(caso) {
 export function sePuedeCalificar(caso) {
   return Boolean(caso) && caso.estado === CERRADO && !caso.calificacion;
 }
+
+/**
+ * La respuesta a un pedido de otra área.
+ *
+ * Vuelve al caso como nota interna y la lee el asesor que está con el cliente:
+ * un «ok» no le sirve para nada, porque después tiene que traducírselo al
+ * cliente. Por eso se pide algo escrito, no un visto.
+ */
+export function problemaDeLaRespuestaAlPedido(respuesta) {
+  const texto = (respuesta || '').trim();
+  if (texto.length < 3) {
+    return 'Escribí la respuesta. El asesor que atiende al cliente la va a leer para contestarle.';
+  }
+  if (texto.length > 2000) return 'La respuesta es demasiado larga.';
+  return null;
+}

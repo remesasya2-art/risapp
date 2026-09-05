@@ -1,7 +1,8 @@
 """
-tests/test_soporte_pulso.py — Las pantallas de soporte preguntan bien.
+tests/test_soporte_pulso.py — Lo que las pantallas de soporte hacen y no se
+puede probar con node: cómo preguntan y qué llegan a mostrar.
 
-LOS DOS DEFECTOS QUE ESTE ARCHIVO SOSTIENE CERRADOS
+LOS DEFECTOS QUE ESTE ARCHIVO SOSTIENE CERRADOS
 
     1. La bandeja del asesor no se refrescaba sola. El reloj que la volvía a
        pedir vivía DENTRO del efecto del caso elegido, así que el asesor que
@@ -95,3 +96,20 @@ def test_cada_pantalla_descarta_las_respuestas_viejas():
                          codigo), (
             f"{ruta.name} numera los pedidos pero guarda la respuesta igual: "
             "el número tiene que decidir si se guarda o se tira")
+
+
+def test_los_pedidos_a_mi_area_tienen_donde_contestarse():
+    """El circuito del pedido tiene dos puntas y las dos tienen que existir.
+
+    El asesor puede pedirle algo a Finanzas o a Verificaciones sin soltar el
+    caso. Del otro lado, el pedido llegaba como un aviso y nada más: quien
+    tenía que contestarlo no tenía dónde. La ruta estaba, la pantalla no, y
+    eso no se ve mirando el backend: los tests del circuito pasaban enteros
+    mientras el encargado del área no podía hacer nada.
+    """
+    codigo = _sin_comentarios(_PANTALLAS[0])
+    assert "/admin/soporte/pedidos" in codigo, (
+        "la consola no pide los pedidos de su área: el encargado no se entera")
+    assert re.search(r"/admin/soporte/pedidos/\$\{[^}]+\}/responder", codigo), (
+        "la consola muestra los pedidos pero no los contesta: el circuito "
+        "queda abierto y el cliente esperando algo que nadie puede cerrar")

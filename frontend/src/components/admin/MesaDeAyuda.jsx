@@ -36,7 +36,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import usePulso from '../../hooks/usePulso';
 import {
   MessageSquare, Send, Lock, ArrowRightLeft, AlertTriangle, HelpCircle,
-  Paperclip, X, Search, User, Wallet, ShieldCheck, Clock, Hash,
+  Paperclip, X, Search, User, Wallet, ShieldCheck, Clock, Hash, Inbox,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -48,7 +48,7 @@ import { confirmar } from '../flujo/confirmar.js';
 import {
   accionesDelAsesor, estadosPosibles, haceCuanto, nombreDeEstado, PRIORIDADES,
   problemaDelEscalamiento, problemaDelPedido, problemaDeLaTransferencia,
-  semaforo, tonoDeEstado,
+  problemaDeLaRespuestaAlPedido, semaforo, tonoDeEstado,
 } from '../../utils/soporte';
 
 /* ─── Piezas ───────────────────────────────────────────────────────────── */
@@ -291,6 +291,109 @@ function VentanaDeAccion({ accion, areas, asesores, onCerrar, onConfirmar, ocupa
   );
 }
 
+/**
+ * Los pedidos que le hicieron a MI área.
+ *
+ * POR QUE ESTA PANTALLA EXISTE
+ *
+ *   Un asesor de soporte puede pedirle algo a Finanzas o a Verificaciones sin
+ *   soltar el caso: sigue con el cliente y en paralelo pregunta a quien puede
+ *   resolver. Eso está bien de este lado. Del otro lado, el pedido llegaba
+ *   como un aviso y nada más: quien tenía que contestarlo no tenía dónde. El
+ *   circuito quedaba abierto y el cliente esperando algo que nadie podía
+ *   cerrar.
+ *
+ *   Acá se contesta. La respuesta vuelve al caso como nota interna —no como
+ *   mensaje al cliente— porque traducir lo que dice Finanzas es trabajo del
+ *   asesor que lo está atendiendo, que sabe qué le preguntaron.
+ */
+function Pedidos({ pedidos, areas, onResponder, ocupado }) {
+  const [respuestas, setRespuestas] = useState({});
+
+  const escribir = (id, texto) => setRespuestas((r) => ({ ...r, [id]: texto }));
+
+  if (areas.length === 0) {
+    return (
+      <div style={{ ...tarjeta, padding: '40px 20px', textAlign: 'center' }}>
+        <Inbox size={44} color={C.tenue} style={{ opacity: 0.4 }} />
+        <p style={{ ...ayuda, marginTop: '10px' }}>
+          Los pedidos los contesta el área que puede resolverlos. No tenés
+          ninguna a cargo, así que acá no te va a llegar nada.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...tarjeta, padding: '16px', overflowY: 'auto', height: '100%' }}>
+      <p style={{ ...ayuda, margin: '0 0 14px 0' }}>
+        Te llegan los pedidos de {areas.length === 1 ? 'tu área' : 'tus áreas'}.
+        Lo que contestes vuelve al caso como nota interna y lo lee el asesor que
+        está con el cliente.
+      </p>
+
+      {pedidos.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '34px 16px' }}>
+          <Inbox size={44} color={C.tenue} style={{ opacity: 0.4 }} />
+          <p style={{ ...ayuda, marginTop: '10px' }}>No hay pedidos pendientes.</p>
+        </div>
+      ) : pedidos.map((p) => {
+        const texto = respuestas[p.pedido_id] || '';
+        const problema = problemaDeLaRespuestaAlPedido(texto);
+        return (
+          <div key={p.pedido_id} style={{
+            border: `1px solid ${C.linea}`, borderRadius: '12px',
+            padding: '14px', marginBottom: '11px', background: C.lienzo,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                padding: '3px 9px', borderRadius: '999px',
+                background: C.marcaSuave, color: C.marca,
+                fontSize: '11.5px', fontWeight: 700,
+              }}>
+                <Hash size={12} />{(p.caso_numero || '').replace(/^S-/, '')}
+              </span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: C.tinta }}>
+                {p.pedido_por_nombre}
+              </span>
+              <span style={{ ...ayuda, margin: 0 }}>· {haceCuanto(p.creado_en)}</span>
+            </div>
+
+            <p style={{ margin: '0 0 11px 0', fontSize: '13.5px', color: C.texto, whiteSpace: 'pre-wrap' }}>
+              {p.detalle}
+            </p>
+
+            <textarea className="env-campo" rows={2} value={texto}
+              placeholder="Qué encontraste, qué se hizo, qué falta"
+              onChange={(e) => escribir(p.pedido_id, e.target.value)}
+              style={{ ...campo, fontSize: '13.5px', resize: 'vertical', marginBottom: '9px' }} />
+
+            <div style={{
+              display: 'flex', justifyContent: 'flex-end',
+              alignItems: 'center', gap: '11px',
+            }}>
+              {/* Lo apagado dice por qué: un botón gris sin explicación deja a
+                  quien lo mira probando cosas hasta que se enciende. */}
+              {problema && texto ? (
+                <span style={{ ...ayuda, margin: 0, textAlign: 'right' }}>{problema}</span>
+              ) : null}
+              <Boton tipo="primario" Icono={Send} testid={`responder-${p.pedido_id}`}
+                disabled={Boolean(problema) || ocupado}
+                onClick={async () => {
+                  const ok = await onResponder(p.pedido_id, texto.trim());
+                  if (ok) escribir(p.pedido_id, '');
+                }}>
+                {ocupado ? 'Enviando…' : 'Responder'}
+              </Boton>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ─── La consola ───────────────────────────────────────────────────────── */
 
 export default function MesaDeAyuda({ usuario }) {
@@ -314,6 +417,9 @@ export default function MesaDeAyuda({ usuario }) {
   const [asesores, setAsesores] = useState([]);
   const [rapidas, setRapidas] = useState([]);
   const [ahora, setAhora] = useState(() => Date.now());
+  const [vista, setVista] = useState('casos');       // 'casos' | 'pedidos'
+  const [pedidos, setPedidos] = useState([]);
+  const [misAreas, setMisAreas] = useState([]);
   const hiloRef = useRef(null);
   const cantidadPrevia = useRef(0);
 
@@ -330,6 +436,17 @@ export default function MesaDeAyuda({ usuario }) {
       setCasos(res.data?.casos || []);
     } catch { /* la lista se reintenta sola en el próximo ciclo */ }
   }, [filtro, soloMios, busqueda]);
+
+  // Los pedidos de MI área. Se traen siempre, no sólo con la pestaña abierta:
+  // el número en la solapa es lo único que le avisa al encargado que alguien
+  // está esperando una respuesta suya.
+  const traerPedidos = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/soporte/pedidos', { params: { pendientes: true } });
+      setPedidos(res.data?.pedidos || []);
+      setMisAreas(res.data?.areas || []);
+    } catch { /* se reintenta en el próximo ciclo */ }
+  }, []);
 
   // Medio segundo de pausa antes de buscar: el tiempo que tarda alguien en
   // dejar de tipear, y el que hace que la lista no salte mientras escribe.
@@ -360,6 +477,7 @@ export default function MesaDeAyuda({ usuario }) {
   // caso elegido: el asesor que miraba la lista sin abrir nada no veía entrar
   // un caso nuevo hasta que abría alguno o recargaba la pantalla.
   usePulso(traerCasos, 12000, `${filtro}|${soloMios}|${busqueda}`);
+  usePulso(traerPedidos, 20000);
 
   // El reloj de la pantalla. Sin esto el semáforo se quedaría en el color que
   // tenía al cargar, y un caso que entra en rojo mientras el asesor mira la
@@ -454,13 +572,73 @@ export default function MesaDeAyuda({ usuario }) {
     if (ok) setVentana(null);
   };
 
+  const responderPedido = async (pedidoId, texto) => {
+    setOcupado(true);
+    try {
+      await api.post(`/admin/soporte/pedidos/${pedidoId}/responder`, { respuesta: texto });
+      toast.success('Respuesta enviada al caso');
+      await traerPedidos();
+      // El caso quedó tocado: si es el que está abierto, la nota tiene que
+      // aparecer en el hilo sin esperar la próxima vuelta del reloj.
+      if (elegido) await traerDetalle(elegido);
+      return true;
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo responder');
+      return false;
+    } finally {
+      setOcupado(false);
+    }
+  };
+
   const caso = detalle?.caso;
   const cliente = detalle?.cliente || {};
 
   return (
     <div className="env" style={{ fontFamily: 'Inter, -apple-system, Segoe UI, Roboto, sans-serif' }}>
       <style>{HOJA}</style>
-      <div style={{ display: 'flex', gap: '14px', height: 'calc(100vh - 190px)', minHeight: '520px' }}>
+
+      {/* ── Las dos bandejas ────────────────────────────────────────────
+          Casos es lo que el asesor atiende; Pedidos es lo que le pidieron a
+          su área desde el caso de otro. Son dos colas distintas y con dos
+          responsables distintos: mezclarlas hacía que la segunda no existiera
+          para nadie. El número al lado es lo único que avisa. */}
+      <div style={{ display: 'flex', gap: '7px', marginBottom: '12px' }}>
+        {[
+          { clave: 'casos', texto: 'Casos', cuenta: 0 },
+          { clave: 'pedidos', texto: 'Pedidos a mi área', cuenta: pedidos.length },
+        ].map((t) => (
+          <button key={t.clave} type="button" onClick={() => setVista(t.clave)}
+            className="env-chip" data-testid={`vista-${t.clave}`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '7px',
+              padding: '8px 15px', borderRadius: '10px', cursor: 'pointer',
+              border: `1px solid ${vista === t.clave ? C.marca : C.lineaFuerte}`,
+              background: vista === t.clave ? C.marcaSuave : C.lienzo,
+              color: vista === t.clave ? C.marca : C.suave,
+              fontSize: '13.5px', fontWeight: 600,
+            }}>
+            {t.texto}
+            {t.cuenta > 0 ? (
+              <span style={{
+                minWidth: '19px', height: '19px', padding: '0 5px',
+                borderRadius: '999px', background: C.error, color: '#fff',
+                fontSize: '11px', fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {t.cuenta}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {vista === 'pedidos' ? (
+        <div style={{ height: 'calc(100vh - 232px)', minHeight: '480px' }}>
+          <Pedidos pedidos={pedidos} areas={misAreas}
+            onResponder={responderPedido} ocupado={ocupado} />
+        </div>
+      ) : (
+      <div style={{ display: 'flex', gap: '14px', height: 'calc(100vh - 232px)', minHeight: '520px' }}>
 
         {/* ── La bandeja ────────────────────────────────────────────── */}
         <div style={{ ...tarjeta, width: '310px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -757,6 +935,7 @@ export default function MesaDeAyuda({ usuario }) {
           </div>
         ) : null}
       </div>
+      )}
 
       {ventana ? (
         <VentanaDeAccion accion={ventana} areas={areas} asesores={asesores}
