@@ -38,10 +38,17 @@
  *      nada: el navegador ya no vuelve a preguntar. Ahora lo dice y dice dónde
  *      se arregla.
  *
+ *   7. «CERRAR SESION» SALIA AL PRIMER TOQUE. Es la única acción de la
+ *      pantalla que deshace algo, y estaba a la misma distancia que abrir un
+ *      formulario: un toque mal apuntado en la fila de arriba y te vas.
+ *      Pregunta en la fila misma —no con `window.confirm`, que se puede
+ *      bloquear y devuelve `false` sin que nadie se entere—.
+ *
  * QUE NO SE TOCO
  *
  *   Los códigos de respaldo 2FA: misma llamada, mismas validaciones, mismo
- *   flujo. Sólo cambió cómo se ve.
+ *   flujo. Sólo cambió cómo se ve. Y `logout()` sigue siendo el mismo: lo que
+ *   se agregó es la pregunta de antes, no otra forma de salir.
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -228,6 +235,8 @@ export default function Profile() {
   const [pushActivo, setPushActivo] = useState(false);
   const [pushOcupado, setPushOcupado] = useState(false);
   const [pushSoporte, setPushSoporte] = useState(null);
+
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
 
   const [ver2FA, setVer2FA] = useState(false);
   const [codigo2FA, setCodigo2FA] = useState('');
@@ -563,8 +572,39 @@ export default function Profile() {
           <Fila Icono={Lock} texto="Cambiar contraseña"
             detalle="Se cierran las demás sesiones"
             onClick={() => setCambiandoClave(true)} testid="change-password-btn" />
-          <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima flecha={false}
-            onClick={cerrarSesion} testid="logout-btn" />
+          {cerrandoSesion ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+              padding: '14px 16px', background: C.errorSuave,
+            }}>
+              <span style={{
+                width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
+                background: C.lienzo, display: 'inline-flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <LogOut size={18} color={C.error} />
+              </span>
+              <span style={{ flex: 1, minWidth: '150px' }}>
+                <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.error }}>
+                  ¿Cerrás la sesión?
+                </span>
+                <span style={{ display: 'block', fontSize: '12.5px', color: C.texto, marginTop: '1px' }}>
+                  Vas a tener que volver a entrar.
+                </span>
+              </span>
+              <span style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                <Boton onClick={() => setCerrandoSesion(false)} testid="logout-cancel">
+                  No
+                </Boton>
+                <Boton tipo="primario" onClick={cerrarSesion} testid="logout-confirm">
+                  Cerrar sesión
+                </Boton>
+              </span>
+            </div>
+          ) : (
+            <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima flecha={false}
+              onClick={() => setCerrandoSesion(true)} testid="logout-btn" />
+          )}
         </section>
       </div>
 
