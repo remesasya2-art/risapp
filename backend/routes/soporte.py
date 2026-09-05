@@ -29,6 +29,7 @@ QUE NO SE TOCO
     migración pasa los chats existentes a casos cerrados, así que el historial
     no se pierde ni se duplica.
 """
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -119,6 +120,35 @@ def _publico(caso):
     if not caso:
         return None
     return {k: caso[k] for k in _DEL_CLIENTE if k in caso}
+
+
+async def _avisar(**aviso):
+    """Manda un aviso sin que su caída se lleve puesta la operación.
+
+    El aviso es una cortesía: el caso, la respuesta y el cambio de estado ya
+    están guardados cuando se llega acá. Si se cae la base de notificaciones o
+    el servicio de push, antes la petición devolvía 500 sobre un trabajo YA
+    hecho, y la pantalla lo reintentaba: dos casos iguales, dos mensajes
+    repetidos. Se anota en el registro y se sigue.
+    """
+    try:
+        await create_notification(**aviso)
+    except Exception as e:                                    # pragma: no cover
+        logger.warning("no se pudo avisar a %s: %s", aviso.get("user_id"), e)
+
+
+async def _avisar_a_varios(destinos, **aviso):
+    """El mismo aviso a varias personas, todos a la vez.
+
+    De a uno, avisarle a doce asesores son doce viajes al servicio de push
+    encadenados: el cliente que abrió el caso mira la ruedita hasta que
+    termina el último. Como `_avisar` ya se traga sus propias caídas, mandarlos
+    juntos no puede romper nada que de a uno no rompiera.
+    """
+    ids = [d.get("user_id") for d in destinos if d.get("user_id")]
+    if not ids:
+        return
+    await asyncio.gather(*[_avisar(user_id=uid, **aviso) for uid in ids])
 
 
 async def _staff_con(permiso):
@@ -254,13 +284,12 @@ async def abrir_caso(datos: AbrirCaso, current_user: User = Depends(get_current_
         "creado_en": ahora,
     })
 
-    for quien in await _staff_con(soporte.permiso_de_area(caso["area"])):
-        await create_notification(
-            user_id=quien.get("user_id"),
-            title=f"Caso nuevo {caso['numero']}",
-            message=f"{caso['user_name']}: {caso['asunto']}",
-            notification_type="soporte_caso",
-        )
+    await _avisar_a_varios(
+        await _staff_con(soporte.permiso_de_area(caso["area"])),
+        title=f"Caso nuevo {caso['numero']}",
+        message=f"{caso['user_name']}: {caso['asunto']}",
+        notification_type="soporte_caso",
+    )
     return {"caso": _publico(caso)}
 
 
@@ -315,14 +344,13 @@ async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
         await _registrar(caso_id, "El cliente volvió a escribir: el caso se reabrió.")
 
     destino = caso.get("asignado_a")
-    for quien in ([{"user_id": destino}] if destino
-                  else await _staff_con(soporte.permiso_de_area(caso.get("area")))):
-        await create_notification(
-            user_id=quien.get("user_id"),
-            title=f"Mensaje en {caso.get('numero')}",
-            message=f"{caso.get('user_name')}: {soporte.asunto_desde(texto, 60)}",
-            notification_type="soporte_caso",
-        )
+    await _avisar_a_varios(
+        [{"user_id": destino}] if destino
+        else await _staff_con(soporte.permiso_de_area(caso.get("area"))),
+        title=f"Mensaje en {caso.get('numero')}",
+        message=f"{caso.get('user_name')}: {soporte.asunto_desde(texto, 60)}",
+        notification_type="soporte_caso",
+    )
     return {"success": True, "reabierto": reabierto}
 
 
@@ -597,7 +625,7 @@ async def responder_asesor(caso_id: str, datos: RespuestaDelAsesor,
     await db.soporte_casos.update_one(
         {"caso_id": caso_id}, {"$set": cambios, "$inc": {"sin_leer_cliente": 1}})
 
-    await create_notification(
+    await _avisar(
         user_id=caso.get("user_id"),
         title=f"Respuesta en tu caso {caso.get('numero')}",
         message=soporte.asunto_desde(texto or "Te enviamos una imagen", 80),
@@ -643,7 +671,7 @@ async def cambiar_estado(caso_id: str, datos: CambioDeEstado,
                      current_user.user_id, current_user.name)
 
     if datos.estado in (soporte.RESUELTO, soporte.CERRADO):
-        await create_notification(
+        await _avisar(
             user_id=caso.get("user_id"),
             title=f"Tu caso {caso.get('numero')} quedó {datos.estado}",
             message=("Si algo quedó sin resolver, escribinos y lo retomamos."
@@ -713,13 +741,12 @@ async def transferir(caso_id: str, datos: Transferencia,
 
     receptores = ([{"user_id": datos.asesor_id}] if datos.asesor_id
                   else await _staff_con(soporte.permiso_de_area(datos.area)))
-    for quien in receptores:
-        await create_notification(
-            user_id=quien.get("user_id"),
-            title=f"Te transfirieron el caso {caso.get('numero')}",
-            message=f"{current_user.name or 'Un asesor'}: {datos.nota.strip()[:80]}",
-            notification_type="soporte_transferencia",
-        )
+    await _avisar_a_varios(
+        receptores,
+        title=f"Te transfirieron el caso {caso.get('numero')}",
+        message=f"{current_user.name or 'Un asesor'}: {datos.nota.strip()[:80]}",
+        notification_type="soporte_transferencia",
+    )
     return {"success": True, "area": datos.area, "asignado_a": datos.asesor_id}
 
 
@@ -748,7 +775,7 @@ async def escalar(caso_id: str, datos: Escalamiento,
 
     for jefe in await db.users.find({"role": "super_admin"},
                                     {"_id": 0, "user_id": 1}).to_list(20):
-        await create_notification(
+        await _avisar(
             user_id=jefe.get("user_id"),
             title=f"Caso escalado {caso.get('numero')}",
             message=datos.motivo.strip()[:100],
@@ -791,13 +818,12 @@ async def pedir_a_area(caso_id: str, datos: PedidoAArea,
         f"{current_user.name or 'Un asesor'} le pidió a {soporte.nombre_de_area(datos.area)}: {datos.detalle.strip()}",
         current_user.user_id, current_user.name)
 
-    for quien in await _staff_con(soporte.permiso_de_area(datos.area)):
-        await create_notification(
-            user_id=quien.get("user_id"),
-            title=f"Pedido de soporte · {soporte.nombre_de_area(datos.area)}",
-            message=f"{pedido['pedido_por_nombre']} ({caso.get('numero')}): {datos.detalle.strip()[:80]}",
-            notification_type="soporte_pedido",
-        )
+    await _avisar_a_varios(
+        await _staff_con(soporte.permiso_de_area(datos.area)),
+        title=f"Pedido de soporte · {soporte.nombre_de_area(datos.area)}",
+        message=f"{pedido['pedido_por_nombre']} ({caso.get('numero')}): {datos.detalle.strip()[:80]}",
+        notification_type="soporte_pedido",
+    )
     return {"success": True, "pedido": pedido}
 
 
@@ -848,7 +874,7 @@ async def responder_pedido(pedido_id: str, datos: RespuestaAlPedido,
     await db.soporte_casos.update_one(
         {"caso_id": pedido["caso_id"]}, {"$set": {"actualizado_en": ahora}})
 
-    await create_notification(
+    await _avisar(
         user_id=pedido.get("pedido_por"),
         title=f"Respondieron tu pedido · {pedido.get('caso_numero')}",
         message=datos.respuesta.strip()[:100],

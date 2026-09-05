@@ -479,3 +479,38 @@ def test_al_cliente_no_le_viaja_nada_de_la_cocina():
     # Y lo que sí necesita, sigue estando.
     for necesario in ("numero", "asunto", "estado", "asignado_a_nombre"):
         assert necesario in caso, f"Al cliente le falta «{necesario}»."
+
+
+def test_si_falla_el_aviso_el_caso_igual_queda(monkeypatch):
+    """El aviso es una cortesía; el caso es el trabajo.
+
+    Al abrir un caso se le avisa a todo el personal del área, de a uno. Si el
+    aviso número tres se cae —la base de notificaciones, el servicio de push—,
+    la petición devolvía 500 con el caso YA guardado. Y la pantalla, al ver el
+    error, lo vuelve a mandar: el cliente termina con dos casos iguales y el
+    asesor sin saber cuál contestar.
+    """
+    import routes.soporte as rs
+
+    async def _se_cae(*a, **k):
+        raise RuntimeError("se cayó el servicio de avisos")
+
+    monkeypatch.setattr(rs, "create_notification", _se_cae)
+
+    _como(CLIENTA)
+    r = CLIENTE.post("/api/soporte/casos",
+                     json={"motivo": "envio", "mensaje": "No me llegó el envío"})
+    assert r.status_code == 200, r.text
+    caso_id = r.json()["caso"]["caso_id"]
+
+    # Y el resto del circuito tampoco se cae por el aviso.
+    _como(ASESOR)
+    assert CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/tomar").status_code == 200
+    assert CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/mensajes",
+                        json={"mensaje": "Lo veo ahora"}).status_code == 200
+    assert CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/estado",
+                        json={"estado": "resuelto"}).status_code == 200
+
+    _como(CLIENTA)
+    casos = CLIENTE.get("/api/soporte/casos").json()["casos"]
+    assert len([c for c in casos if c["caso_id"] == caso_id]) == 1

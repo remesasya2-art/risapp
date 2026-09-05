@@ -20,6 +20,7 @@
  *     calificaba una vez en la vida.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
+import usePulso from '../../hooks/usePulso';
 import { Plus, Send, ArrowLeft, Paperclip, X, Check, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -104,6 +105,7 @@ export default function CasosDelCliente({ onSinLeer }) {
   const [comentario, setComentario] = useState('');
   const hiloRef = useRef(null);
   const previos = useRef(0);
+  const turno = useRef(0);
 
   const traerCasos = useCallback(async () => {
     try {
@@ -114,11 +116,15 @@ export default function CasosDelCliente({ onSinLeer }) {
     } catch { /* se reintenta en el próximo ciclo */ }
   }, [onSinLeer]);
 
+  // Cada pedido lleva su turno. Si el cliente salta de un caso a otro, la
+  // respuesta del primero puede llegar después de la del segundo: sin esto,
+  // quedaría leyendo la conversación de un caso bajo el título de otro.
   const traerDetalle = useCallback(async (casoId) => {
     if (!casoId) return;
+    const mio = (turno.current += 1);
     try {
       const res = await api.get(`/soporte/casos/${casoId}`);
-      setDetalle(res.data || null);
+      if (turno.current === mio) setDetalle(res.data || null);
     } catch { /* silencioso */ }
   }, []);
 
@@ -126,20 +132,8 @@ export default function CasosDelCliente({ onSinLeer }) {
     api.get('/soporte/motivos').then((r) => setMotivos(r.data?.motivos || [])).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let vigente = true;
-    (async () => { if (vigente) await traerCasos(); })();
-    const id = setInterval(traerCasos, 15000);
-    return () => { vigente = false; clearInterval(id); };
-  }, [traerCasos]);
-
-  useEffect(() => {
-    if (!abierto) return undefined;
-    let vigente = true;
-    (async () => { if (vigente) await traerDetalle(abierto); })();
-    const id = setInterval(() => traerDetalle(abierto), 8000);
-    return () => { vigente = false; clearInterval(id); };
-  }, [abierto, traerDetalle]);
+  usePulso(traerCasos, 15000);
+  usePulso(() => traerDetalle(abierto), 8000, abierto);
 
   // Baja al último mensaje sólo cuando llegan nuevos, para no robarle el
   // scroll a quien está releyendo algo de más arriba.

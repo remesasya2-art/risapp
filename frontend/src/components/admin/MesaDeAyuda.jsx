@@ -33,6 +33,7 @@
  *   ofrece, el servidor lo va a aceptar.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
+import usePulso from '../../hooks/usePulso';
 import {
   MessageSquare, Send, Lock, ArrowRightLeft, AlertTriangle, HelpCircle,
   Paperclip, X, Search, User, Wallet, ShieldCheck, Clock, Hash,
@@ -296,6 +297,7 @@ export default function MesaDeAyuda({ usuario }) {
   const [casos, setCasos] = useState([]);
   const [elegido, setElegido] = useState(null);
   const [detalle, setDetalle] = useState(null);
+  const turno = useRef(0);
   const [filtro, setFiltro] = useState('abiertos');
   const [soloMios, setSoloMios] = useState(false);
   const [buscar, setBuscar] = useState('');
@@ -336,11 +338,16 @@ export default function MesaDeAyuda({ usuario }) {
     return () => clearTimeout(id);
   }, [buscar]);
 
+  // Cada pedido lleva su turno, y sólo el último manda. Sin esto, saltar de un
+  // caso a otro mientras el primero todavía viaja deja al asesor leyendo la
+  // conversación de un cliente bajo el nombre de otro: el peor error posible
+  // en esta pantalla, porque no se nota.
   const traerDetalle = useCallback(async (casoId) => {
     if (!casoId) return;
+    const mio = (turno.current += 1);
     try {
       const res = await api.get(`/admin/soporte/casos/${casoId}`);
-      setDetalle(res.data || null);
+      if (turno.current === mio) setDetalle(res.data || null);
     } catch { /* silencioso: el caso pudo haberse cerrado en otra pestaña */ }
   }, []);
 
@@ -349,27 +356,18 @@ export default function MesaDeAyuda({ usuario }) {
     api.get('/admin/quick-replies').then((r) => setRapidas(r.data || [])).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let vigente = true;
-    (async () => { if (vigente) await traerCasos(); })();
-    return () => { vigente = false; };
-  }, [traerCasos]);
+  // La bandeja se refresca sola. Antes el reloj vivía dentro del efecto del
+  // caso elegido: el asesor que miraba la lista sin abrir nada no veía entrar
+  // un caso nuevo hasta que abría alguno o recargaba la pantalla.
+  usePulso(traerCasos, 12000, `${filtro}|${soloMios}|${busqueda}`);
 
   // El reloj de la pantalla. Sin esto el semáforo se quedaría en el color que
   // tenía al cargar, y un caso que entra en rojo mientras el asesor mira la
-  // lista no se pondría en rojo hasta el próximo refresco.
-  useEffect(() => {
-    const id = setInterval(() => setAhora(Date.now()), 30000);
-    return () => clearInterval(id);
-  }, []);
+  // lista no se pondría en rojo hasta el próximo refresco. Va por `usePulso`
+  // para que además se ponga en hora ni bien el asesor vuelve a la pestaña.
+  usePulso(() => setAhora(Date.now()), 30000);
 
-  useEffect(() => {
-    if (!elegido) return undefined;
-    let vigente = true;
-    (async () => { if (vigente) await traerDetalle(elegido); })();
-    const id = setInterval(() => { traerDetalle(elegido); traerCasos(); }, 6000);
-    return () => { vigente = false; clearInterval(id); };
-  }, [elegido, traerDetalle, traerCasos]);
+  usePulso(() => traerDetalle(elegido), 6000, elegido);
 
   // Bajar al último mensaje SOLO cuando llegan nuevos: en cada refresco robaría
   // el scroll al asesor que está releyendo algo de más arriba.
@@ -504,7 +502,7 @@ export default function MesaDeAyuda({ usuario }) {
               </p>
             ) : casos.map((c) => (
               <FilaDeCaso key={c.caso_id} caso={c} ahora={ahora}
-                elegido={elegido === c.caso_id} onClick={() => setElegido(c.caso_id)} />
+                elegido={elegido === c.caso_id} onClick={() => { setDetalle(null); setElegido(c.caso_id); }} />
             ))}
           </div>
         </div>
