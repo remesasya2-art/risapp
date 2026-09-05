@@ -24,6 +24,7 @@ Uso:
     cd /app/backend && python3 -m migrations.002_chats_a_casos
 """
 import asyncio
+import hashlib
 from datetime import datetime, timezone
 
 from database import db
@@ -68,7 +69,47 @@ async def run() -> dict:
                         if m.get("sender") == "admin"), None)
 
         siguiente += 1
-        caso_id = soporte.nuevo_id()
+        # El identificador del caso sale del chat y no de un sorteo: si una
+        # corrida se corta después de mover los mensajes y antes de crear el
+        # caso, la siguiente tiene que reusar EL MISMO, o los mensajes ya
+        # movidos quedan colgando de un caso que no existe y el caso nuevo
+        # nace vacío —los reinsertos se descartan por repetidos—.
+        caso_id = "caso_" + hashlib.sha1(user_id.encode("utf-8")).hexdigest()[:12]
+        # Los mensajes ANTES que el caso, y no al revés. Si algo falla en el
+        # medio, un caso sin su conversación es peor que unos mensajes
+        # huérfanos: la idempotencia va por `origen_chat`, así que el caso ya
+        # creado hace que la re-corrida SALTEE el chat y su historia se pierde
+        # para siempre. Al revés, la re-corrida lo termina.
+        if mensajes:
+            # El identificador viejo si lo tiene; si no, uno derivado del chat
+            # y la posición. `msg_{i}` a secas se repetía entre chats
+            # distintos —el primer mensaje de todos era `msg_0`— y el índice
+            # único de `soporte_mensajes` frenaba la inserción entera del
+            # segundo chat en adelante.
+            candidatos = [{
+                "mensaje_id": m.get("message_id") or f"msg_{user_id}_{i}",
+                "caso_id": caso_id,
+                "autor": (soporte.ASESOR if m.get("sender") == "admin"
+                          else soporte.CLIENTE),
+                "autor_id": m.get("admin_id") or m.get("user_id"),
+                "autor_nombre": m.get("admin_name") or m.get("user_name"),
+                "interno": False,
+                "texto": m.get("message") or "",
+                "adjunto": m.get("image"),
+                "creado_en": m.get("created_at") or creado,
+            } for i, m in enumerate(mensajes)]
+
+            # Se saltean los que ya están de una corrida anterior que se cortó.
+            # Se mira acá y no se confía en el índice único: la migración tiene
+            # que ser idempotente por sí misma, porque puede correrse en una
+            # base donde los índices todavía no se crearon.
+            ya_movidos = set(await db.soporte_mensajes.distinct(
+                "mensaje_id", {"caso_id": caso_id}))
+            faltan = [d for d in candidatos if d["mensaje_id"] not in ya_movidos]
+            if faltan:
+                await db.soporte_mensajes.insert_many(faltan, ordered=False)
+            resultado["mensajes_movidos"] += len(faltan)
+
         await db.soporte_casos.insert_one({
             "caso_id": caso_id,
             "numero": await _numero(siguiente),
@@ -102,21 +143,6 @@ async def run() -> dict:
                              if chat.get("rated") else None),
         })
         resultado["casos_creados"] += 1
-
-        if mensajes:
-            await db.soporte_mensajes.insert_many([{
-                "mensaje_id": m.get("message_id") or f"msg_{i}",
-                "caso_id": caso_id,
-                "autor": (soporte.ASESOR if m.get("sender") == "admin"
-                          else soporte.CLIENTE),
-                "autor_id": m.get("admin_id") or m.get("user_id"),
-                "autor_nombre": m.get("admin_name") or m.get("user_name"),
-                "interno": False,
-                "texto": m.get("message") or "",
-                "adjunto": m.get("image"),
-                "creado_en": m.get("created_at") or creado,
-            } for i, m in enumerate(mensajes)])
-            resultado["mensajes_movidos"] += len(mensajes)
 
     if resultado["casos_creados"]:
         await db.contadores.update_one(
