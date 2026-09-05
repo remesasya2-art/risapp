@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar } from '../flujo/confirmar.js';
 import { Shield, Trash2, Plus, RefreshCw, Mail, CreditCard, FileText } from 'lucide-react';
 
 const TYPE_META = {
@@ -57,7 +58,12 @@ export default function ListaNegra() {
   };
 
   const remove = async (id, val) => {
-    if (!window.confirm(`¿Quitar "${val}" de la lista negra? Esto permitirá su uso de nuevo.`)) return;
+    if (!await confirmar({
+      titulo: `¿Sacar «${val}» de la lista negra?`,
+      detalle: 'Vuelve a poder usarse para registrarse y operar.',
+      accion: 'Sacar de la lista',
+      tono: 'peligro',
+    })) return;
     try {
       await api.delete(`/admin/blacklist/${id}`);
       toast.success('Eliminado de la lista negra');

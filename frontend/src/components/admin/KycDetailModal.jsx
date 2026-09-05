@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, CheckCircle2, XCircle, AlertCircle, Loader, Eye, Image as ImageIcon, Phone, Mail, User as UserIcon, FileText, Calendar, Save, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import ImageLightbox from '../common/ImageLightbox';
 import KycRejectModal from './KycRejectModal';
 import { formatRelativeTime, formatAbsoluteTime } from '../../utils/dates';
@@ -178,7 +179,11 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
   const reReview = async () => {
     if (!v.verification_id) return;
-    if (!window.confirm('¿Enviar a este usuario a re-verificación? Volverá a la cola de pendientes.')) return;
+    if (!await confirmar({
+      titulo: '¿Mandar a este usuario a re-verificación?',
+      detalle: 'Vuelve a la cola de pendientes y hay que revisarlo de nuevo.',
+      accion: 'Mandar a re-verificar',
+    })) return;
     setWorking(true);
     try {
       await api.post(`/admin/kyc/${v.verification_id}/re-review`);
@@ -194,9 +199,27 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
   const banUser = async (scope) => {
     if (!v.verification_id) return;
-    const label = scope === 'email' ? 'el CORREO de este usuario' : 'al usuario COMPLETO (correo + CPF + documento)';
-    if (!window.confirm(`¿Banear ${label}? Esta acción bloquea la cuenta.`)) return;
-    const reason = window.prompt('Motivo del baneo (opcional):', '') || '';
+    const alcance = scope === 'email'
+      ? 'Se bloquea el CORREO de este usuario.'
+      : 'Se bloquea al usuario COMPLETO: correo, CPF y documento.';
+
+    // Antes eran DOS cuadros del navegador, uno atrás del otro: primero
+    // «¿banear?» y después «motivo (opcional)». Y el segundo tenía un bug de
+    // verdad: `window.prompt(...) || ''` convierte el `null` de cancelar en
+    // cadena vacía, así que quien apretaba Escape en el motivo —creyendo que
+    // se estaba echando atrás— baneaba igual. Ahora es UNA pregunta, y
+    // cancelar cancela.
+    const motivo = await pedirTexto({
+      titulo: '¿Banear a este usuario?',
+      detalle: `${alcance} La cuenta queda bloqueada.`,
+      etiqueta: 'Motivo del baneo',
+      placeholder: 'Queda asentado en el libro de auditoría',
+      opcional: true,
+      accion: 'Banear',
+      tono: 'peligro',
+    });
+    if (motivo === null) return;
+    const reason = motivo;
     setWorking(true);
     try {
       await api.post('/admin/ban', { verification_id: v.verification_id, scope, reason });

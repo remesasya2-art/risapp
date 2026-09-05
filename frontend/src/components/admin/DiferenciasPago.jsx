@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
 
@@ -77,11 +78,13 @@ export default function DiferenciasPago() {
   };
 
   const aprobar = async (orden) => {
-    if (!window.confirm(
-      `Aprobar la orden ${orden.display_id || orden.orden_id} con la diferencia a favor del usuario?\n\n` +
-      `Pedido: ${orden.pay_amount} ${orden.moneda} · Recibido: ${orden.recibido_total} ${orden.moneda}\n` +
-      `Pasa a la cola de pagos como cualquier orden pagada.`
-    )) return;
+    if (!await confirmar({
+      titulo: `¿Aprobar la orden ${orden.display_id || orden.orden_id} con la diferencia a favor del usuario?`,
+      detalle: `Pedido: ${orden.pay_amount} ${orden.moneda} · Recibido: `
+        + `${orden.recibido_total} ${orden.moneda}. Pasa a la cola de pagos como `
+        + 'cualquier orden pagada.',
+      accion: 'Aprobar',
+    })) return;
     setBusyId(orden.orden_id);
     try {
       const { data } = await api.post(`/admin/ordenes/${orden.orden_id}/aprobar-con-diferencia`);
@@ -95,10 +98,14 @@ export default function DiferenciasPago() {
   };
 
   const rechazar = async (orden) => {
-    if (!window.confirm(
-      `Cancelar la orden ${orden.display_id || orden.orden_id} y devolver ${orden.recibido_total} ${orden.moneda} como saldo al usuario?\n\n` +
-      `Esta acción no se puede deshacer desde el panel.`
-    )) return;
+    if (!await confirmar({
+      titulo: `¿Cancelar la orden ${orden.display_id || orden.orden_id}?`,
+      detalle: `Se le devuelven ${orden.recibido_total} ${orden.moneda} como saldo `
+        + 'al usuario. Desde el panel esto no se puede deshacer.',
+      accion: 'Cancelar y devolver',
+      cancelar: 'Dejarla como está',
+      tono: 'peligro',
+    })) return;
     setBusyId(orden.orden_id);
     try {
       const { data } = await api.post(`/admin/ordenes/${orden.orden_id}/rechazar-y-reembolsar-saldo`);

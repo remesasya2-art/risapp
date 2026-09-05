@@ -292,53 +292,9 @@ def test_no_se_manda_una_selfie_que_el_endpoint_no_recibe():
     assert "selfie" not in cuerpo.lower()
 
 
-@pytest.mark.parametrize("cuadro", ["window.prompt", "window.confirm"])
-def test_nada_se_pregunta_con_un_cuadro_nativo(cuadro):
-    """Los dos fallan callados, y uno además deja la contraseña a la vista.
-
-    `window.prompt` no enmascara lo que se escribe: la contraseña de la cuenta
-    quedaba a la vista de cualquiera que mirara la pantalla. Y los dos cuadros
-    se pueden bloquear —pasa en la aplicación instalada—: `prompt` devuelve
-    null y `confirm` devuelve false, así que el botón no hace absolutamente
-    nada, sin error. Un botón que a veces no hace nada es peor que uno que
-    falla.
-    """
-    for pantalla in PANTALLAS:
-        visible = "\n".join(l for l in pantalla.read_text(encoding="utf-8").splitlines()
-                            if not l.strip().startswith(("*", "//", "/*")))
-        assert cuadro not in visible, (
-            f"{pantalla.name} volvió a preguntar con {cuadro}.")
-
-
-def _elemento_con(fuente, testid):
-    """El elemento JSX entero que lleva ese `testid`: del `<` de apertura al `>`."""
-    fin = fuente.index(f'testid="{testid}"')
-    ini = fuente.rindex("<", 0, fin)
-    return fuente[ini:fuente.index(">", fin) + 1]
-
-
-def test_cerrar_sesion_pregunta_antes_de_cerrar():
-    """Es la única acción de la pantalla que deshace algo.
-
-    Estaba a un toque, a la misma distancia que abrir un formulario: un dedo
-    mal apuntado en la fila de arriba y te ibas. Y la pregunta va en la fila,
-    no en un `window.confirm` —eso ya lo cubre
-    `test_nada_se_pregunta_con_un_cuadro_nativo`—: el cuadro nativo se puede
-    bloquear, devuelve `false`, y el botón no hace nada sin que nadie se entere.
-    """
-    fuente = PANTALLAS[0].read_text(encoding="utf-8")
-    for testid in ("logout-btn", "logout-confirm", "logout-cancel"):
-        assert f'testid="{testid}"' in fuente, f"Falta el botón «{testid}»."
-
-    fila = _elemento_con(fuente, "logout-btn")
-    assert "cerrarSesion" not in fila, (
-        f"La fila de «Cerrar sesión» vuelve a cerrar de un toque: {fila}")
-    assert "setCerrandoSesion(true)" in fila, (
-        f"La fila de «Cerrar sesión» ya no abre la pregunta: {fila}")
-
-    confirmar = _elemento_con(fuente, "logout-confirm")
-    assert "onClick={cerrarSesion}" in confirmar, (
-        f"El botón de confirmar no es el que cierra la sesión: {confirmar}")
+# El barrido de `window.confirm`/`window.prompt` se mudó a
+# `test_cuadros_nativos.py`, que lo hace sobre TODO el frontend en vez de sobre
+# estas tres pantallas. Acá quedaría repetido y con menos alcance.
 
 
 def test_el_boton_apagado_dice_por_que_esta_apagado():

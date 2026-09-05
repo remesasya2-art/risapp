@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
@@ -148,11 +149,29 @@ export default function OrdenesPorProcesar() {
     }
   };
 
+  /**
+   * El 409 de «otro operador está en esta orden», que aparece igual en los tres
+   * caminos. Devuelve si hay que reintentar pisando el candado.
+   *
+   * El texto sale del servidor: se muestra como texto, nunca como marcado.
+   */
+  const pisarElCandado = async (e) => confirmar({
+    titulo: 'Otro operador está trabajando en esta orden',
+    detalle: `${e?.response?.data?.detail || 'Está tomada por otra sesión.'} Si seguís, pisás lo que esté haciendo.`,
+    accion: 'Seguir igual',
+    cancelar: 'Dejarla',
+    tono: 'peligro',
+  });
+
   // ---- Procesar pago (retiros RIS→VES/Reais y BTC→VES) ----
   const procesarPago = async (orden, force = false) => {
     const comprobante = comprobantes[orden.orden_id];
     if (!comprobante) { toast.error('Adjunta el comprobante (JPG)'); return; }
-    if (!force && !window.confirm('¿Confirmas que ya pagaste a este beneficiario?')) return;
+    if (!force && !await confirmar({
+      titulo: '¿Ya le pagaste al beneficiario?',
+      detalle: 'Al confirmar, la orden queda como pagada y el usuario recibe el aviso.',
+      accion: 'Sí, ya pagué',
+    })) return;
     try {
       setBusy(orden.orden_id);
       if (orden.flujo === 'btc_ves') {
@@ -167,8 +186,7 @@ export default function OrdenesPorProcesar() {
       await cargar({ fromAction: true });
     } catch (e) {
       if (e?.response?.status === 409) {
-        const msg = e.response.data?.detail || 'Esta orden está siendo procesada por otro operador';
-        if (window.confirm(`${msg}. ¿Continuar de todas formas?`)) { await procesarPago(orden, true); return; }
+        if (await pisarElCandado(e)) { await procesarPago(orden, true); }
         return;
       }
       toast.error(e?.response?.data?.detail || 'Error al procesar la orden');
@@ -180,7 +198,15 @@ export default function OrdenesPorProcesar() {
   // ---- Aprobar / rechazar recargas VES→RIS ----
   const resolverRecarga = async (orden, accion, force = false) => {
     if (accion === 'reject') {
-      const motivo = window.prompt('Motivo del rechazo (opcional):', '');
+      const motivo = await pedirTexto({
+        titulo: '¿Rechazar esta recarga?',
+        detalle: 'El usuario ve el motivo, y queda asentado en el libro de auditoría.',
+        etiqueta: 'Motivo del rechazo',
+        placeholder: 'Ej.: el comprobante no coincide con el monto',
+        opcional: true,
+        accion: 'Rechazar',
+        tono: 'peligro',
+      });
       if (motivo === null) return;
       try {
         setBusy(orden.orden_id);
@@ -189,15 +215,18 @@ export default function OrdenesPorProcesar() {
         await cargar({ fromAction: true });
       } catch (e) {
         if (e?.response?.status === 409) {
-          const msg = e.response.data?.detail || 'Esta orden está siendo procesada por otro operador';
-          if (window.confirm(`${msg}. ¿Continuar de todas formas?`)) { await resolverRecarga(orden, accion, true); return; }
+          if (await pisarElCandado(e)) { await resolverRecarga(orden, accion, true); }
           return;
         }
         toast.error(e?.response?.data?.detail || 'Error al rechazar');
       } finally { setBusy(null); }
       return;
     }
-    if (!force && !window.confirm('¿Aprobar esta recarga y acreditar el saldo al usuario?')) return;
+    if (!force && !await confirmar({
+      titulo: '¿Aprobar esta recarga?',
+      detalle: 'Se le acredita el saldo al usuario en el momento.',
+      accion: 'Aprobar y acreditar',
+    })) return;
     try {
       setBusy(orden.orden_id);
       await api.post(`/admin/recharges/ves/process/${orden.orden_id}`, { action: 'approve', force });
@@ -205,8 +234,7 @@ export default function OrdenesPorProcesar() {
       await cargar({ fromAction: true });
     } catch (e) {
       if (e?.response?.status === 409) {
-        const msg = e.response.data?.detail || 'Esta orden está siendo procesada por otro operador';
-        if (window.confirm(`${msg}. ¿Continuar de todas formas?`)) { await resolverRecarga(orden, accion, true); return; }
+        if (await pisarElCandado(e)) { await resolverRecarga(orden, accion, true); }
         return;
       }
       toast.error(e?.response?.data?.detail || 'Error al aprobar');

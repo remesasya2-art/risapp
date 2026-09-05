@@ -54,6 +54,10 @@ function Boton(props) {
   const paleta = {
     primario: { background: C.marca, color: '#fff', border: `1px solid ${C.marca}` },
     exito: { background: C.exito, color: '#fff', border: `1px solid ${C.exito}` },
+    // Para lo que no se puede deshacer: un baneo, una baja, un borrado. Verde
+    // en un botón que destruye algo es decirle «adelante» a quien tendría que
+    // mirar dos veces.
+    peligro: { background: C.error, color: '#fff', border: `1px solid ${C.error}` },
     secundario: { background: C.lienzo, color: C.texto, border: `1px solid ${C.lineaFuerte}` },
   }[tipo];
 
