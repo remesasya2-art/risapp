@@ -217,6 +217,73 @@ def test_en_iphone_sin_instalar_se_dice_como_instalar():
     assert "inicio" in aviso.lower()
 
 
+# ── El interruptor, que se apagaba solo ───────────────────────────────────
+
+def _interruptor(servidor, endpointLocal=None, permiso="granted"):
+    args = json.dumps({"servidor": servidor, "endpointLocal": endpointLocal,
+                       "permiso": permiso})
+    return _js(f"m.estadoDeNotificaciones({args})")
+
+
+def test_el_interruptor_queda_encendido_despues_de_recargar():
+    """La regresión exacta que se reportó.
+
+    La pantalla leía `estado.enabled && estado.subscribed`, y `enabled` no
+    existe en NINGUNA respuesta del servidor: se lo inventaba el `catch` de
+    `getStatus()`. `undefined && true` es `undefined`, y `Boolean(undefined)`
+    es `false`, así que el interruptor volvía a apagarse en cada recarga
+    aunque las notificaciones estuvieran activadas y funcionando —el botón
+    «Probar» sonaba—.
+    """
+    servidor = {"subscribed": True, "endpoint": "https://fcm.example/abc"}
+    estado = _interruptor(servidor, endpointLocal="https://fcm.example/abc")
+    assert estado["activas"] is True, (
+        "El interruptor vuelve a apagarse solo al recargar.")
+    assert estado["aviso"] is None
+
+
+def test_una_respuesta_con_el_campo_inventado_no_cambia_nada():
+    """Y si alguien vuelve a mandar `enabled`, se ignora.
+
+    Es el campo fantasma que causó el bug. Que aparezca o no en la respuesta no
+    puede volver a decidir si el interruptor se enciende.
+    """
+    servidor = {"subscribed": True, "endpoint": "e1", "enabled": False}
+    assert _interruptor(servidor, endpointLocal="e1")["activas"] is True
+
+
+def test_sin_suscripcion_en_el_servidor_esta_apagado():
+    assert _interruptor({"subscribed": False, "endpoint": None})["activas"] is False
+
+
+def test_activadas_en_otro_dispositivo_no_se_muestran_como_activas_aca():
+    """El servidor guarda UNA suscripción por usuario.
+
+    Activarlas en el teléfono pisa la de la computadora, pero la computadora
+    conserva la suya local. Con sólo `subscribed` esa pantalla mostraría el
+    interruptor encendido y no recibiría nada.
+    """
+    servidor = {"subscribed": True, "endpoint": "https://fcm.example/telefono"}
+    estado = _interruptor(servidor, endpointLocal="https://fcm.example/compu")
+    assert estado["activas"] is False
+    assert "otro dispositivo" in estado["aviso"].lower(), (
+        f"El aviso ({estado['aviso']}) no explica que están en otro aparato.")
+
+
+def test_sin_suscripcion_local_tampoco_se_muestra_encendido():
+    """El servidor puede tener una guardada de un navegador que ya no existe."""
+    servidor = {"subscribed": True, "endpoint": "https://fcm.example/vieja"}
+    assert _interruptor(servidor, endpointLocal=None)["activas"] is False
+
+
+def test_el_permiso_revocado_manda_sobre_todo_lo_demas():
+    """Con el permiso denegado no llega nada, digan lo que digan las dos puntas."""
+    servidor = {"subscribed": True, "endpoint": "e1"}
+    estado = _interruptor(servidor, endpointLocal="e1", permiso="denied")
+    assert estado["activas"] is False
+    assert "barra de direcciones" in estado["aviso"].lower()
+
+
 def test_cuando_se_puede_no_se_muestra_ningun_aviso():
     info = json.dumps({"serviceWorker": True, "pushManager": True,
                        "notification": True, "isIOS": False, "isPWA": False,
