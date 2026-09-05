@@ -582,6 +582,10 @@ async def bandeja(estado: Optional[str] = None, area: Optional[str] = None,
     for c in casos:
         c["semaforo"] = soporte.semaforo(c, ahora)
         c["minutos_esperando"] = soporte.minutos_esperando(c, ahora)
+        # Cuánto hace que el cliente escribió sin que nadie le conteste. Es lo
+        # que decide el orden de la bandeja, así que también se muestra: un
+        # orden que el asesor no puede explicar le parece arbitrario.
+        c["minutos_sin_respuesta"] = soporte.minutos_sin_respuesta(c, ahora)
     return {"casos": casos}
 
 

@@ -19,6 +19,7 @@ QUE SOSTIENEN
 """
 import json
 import os
+from datetime import datetime, timezone
 import pathlib
 import subprocess
 
@@ -74,6 +75,51 @@ def test_cuando_se_da_por_terminado_es_lo_mismo_de_los_dos_lados():
     """
     from services import soporte
     assert set(_js("m.TERMINADOS")) == set(soporte.TERMINADOS)
+
+
+def test_la_espera_del_cliente_se_calcula_igual_de_los_dos_lados():
+    """Es el dato que decide el orden de la bandeja y el que se muestra.
+
+    Si la pantalla lo calculara distinto, el asesor vería una fila con «espera
+    hace 5 min» arriba de otra con «espera hace 3 h» y el orden parecería
+    arbitrario, que es peor que no mostrar nada.
+    """
+    from services import soporte
+    ahora = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+    milis = int(ahora.timestamp() * 1000)
+
+    def _cuando(hora, minuto=0):
+        return datetime(2026, 3, 1, hora, minuto, tzinfo=timezone.utc)
+
+    casos = [
+        # La pelota la tiene la casa: el cliente escribió hace 90 minutos.
+        {"estado": "en_curso", "ultimo_mensaje_de": "cliente",
+         "ultimo_mensaje_en": _cuando(10, 30)},
+        # Ya contestamos: no hay espera que contar.
+        {"estado": "en_curso", "ultimo_mensaje_de": "asesor",
+         "ultimo_mensaje_en": _cuando(4)},
+        # Cerrado: tampoco.
+        {"estado": "cerrado", "ultimo_mensaje_de": "cliente",
+         "ultimo_mensaje_en": _cuando(4)},
+        # Sin fecha de último mensaje, se cuenta desde que se abrió.
+        {"estado": "abierto", "ultimo_mensaje_de": "cliente",
+         "ultimo_mensaje_en": None, "creado_en": _cuando(11, 45)},
+        # Una fecha que no se entiende no puede romper la lista.
+        {"estado": "abierto", "ultimo_mensaje_de": "cliente",
+         "ultimo_mensaje_en": "no es una fecha"},
+    ]
+
+    def _para_js(caso):
+        return {k: (v.isoformat() if isinstance(v, datetime) else v)
+                for k, v in caso.items()}
+
+    for caso in casos:
+        de_la_pantalla = _js(f"m.minutosSinRespuesta({json.dumps(_para_js(caso))}, {milis})")
+        del_servidor = soporte.minutos_sin_respuesta(dict(caso), ahora)
+        assert de_la_pantalla == del_servidor, caso
+
+    # Y el primero da lo que tiene que dar, no sólo «lo mismo de los dos lados».
+    assert soporte.minutos_sin_respuesta(dict(casos[0]), ahora) == 90
 
 
 def test_los_compromisos_de_tiempo_son_los_mismos():

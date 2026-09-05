@@ -296,3 +296,63 @@ def test_un_mensaje_vacio_no_deja_el_asunto_vacio():
 def test_el_numero_se_puede_dictar_por_telefono():
     assert soporte.numero_legible(123) == "S-000123"
     assert soporte.numero_legible(1) == "S-000001"
+
+
+def test_el_desempate_de_la_bandeja_no_es_siempre_cero():
+    """El cuarto criterio del orden estaba muerto para casi todos los casos.
+
+    Era `minutos_esperando`, que devuelve `None` en cuanto el caso tuvo su
+    primera respuesta —y está bien que lo haga: mide el tiempo hasta la primera
+    respuesta, no lo que tarda en resolverse—. Pero como desempate, eso lo
+    dejaba en cero para TODO caso ya contestado, o sea la mayoría: dos casos
+    con el mismo estado y la misma prioridad quedaban en el orden en que Mongo
+    los hubiera devuelto.
+
+    Lo que ordena de verdad es cuánto hace que el cliente escribió y nadie le
+    contestó. Ese dato ya estaba en el caso y no se estaba usando.
+    """
+    ahora = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+
+    def _esperando(minutos):
+        return _caso(
+            estado=soporte.EN_CURSO,
+            primera_respuesta_en=ahora - timedelta(hours=5),
+            ultimo_mensaje_de=soporte.CLIENTE,
+            ultimo_mensaje_en=ahora - timedelta(minutes=minutos),
+        )
+
+    viejo = _esperando(180)
+    nuevo = _esperando(5)
+    assert soporte.clave_de_orden(viejo, ahora) < soporte.clave_de_orden(nuevo, ahora), (
+        "el que hace tres horas que espera tiene que ir arriba del de recién")
+
+
+def test_un_caso_donde_la_pelota_la_tiene_la_casa_va_antes_que_uno_contestado():
+    """Con la respuesta ya dada, el asesor no tiene nada que hacer ahí."""
+    ahora = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+    sin_contestar = _caso(
+        estado=soporte.EN_CURSO,
+        primera_respuesta_en=ahora - timedelta(hours=5),
+        ultimo_mensaje_de=soporte.CLIENTE,
+        ultimo_mensaje_en=ahora - timedelta(minutes=30),
+    )
+    ya_contestado = _caso(
+        estado=soporte.EN_CURSO,
+        primera_respuesta_en=ahora - timedelta(hours=5),
+        ultimo_mensaje_de=soporte.ASESOR,
+        ultimo_mensaje_en=ahora - timedelta(hours=8),
+    )
+    assert (soporte.clave_de_orden(sin_contestar, ahora)
+            < soporte.clave_de_orden(ya_contestado, ahora))
+
+
+def test_el_que_nunca_recibio_respuesta_sigue_mandando():
+    """El caso sin primera respuesta es el más urgente de todos los de su fila."""
+    ahora = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+    nunca = _caso(estado=soporte.ABIERTO, creado_en=ahora - timedelta(minutes=20),
+                  ultimo_mensaje_de=soporte.CLIENTE,
+                  ultimo_mensaje_en=ahora - timedelta(minutes=20))
+    otro = _caso(estado=soporte.ABIERTO, creado_en=ahora - timedelta(minutes=3),
+                 ultimo_mensaje_de=soporte.CLIENTE,
+                 ultimo_mensaje_en=ahora - timedelta(minutes=3))
+    assert soporte.clave_de_orden(nunca, ahora) < soporte.clave_de_orden(otro, ahora)

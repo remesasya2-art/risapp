@@ -288,9 +288,15 @@ def problema_para_calificar(caso):
 # ─── El tiempo ────────────────────────────────────────────────────────────
 
 def _aware(valor):
-    """Mongo devuelve fechas sin zona. Compararlas con una que sí la tiene
-    lanza TypeError, y eso rompería la lista entera por un documento viejo."""
-    if valor is None:
+    """Una fecha comparable, o `None`.
+
+    Mongo devuelve fechas sin zona y compararlas con una que sí la tiene lanza
+    TypeError, que rompería la lista entera por un documento viejo. Lo mismo
+    vale para cualquier otra cosa que haya quedado en ese campo —una cadena de
+    una migración de hace años, un `0`—: no se adivina, se devuelve `None` y el
+    caso queda sin semáforo en vez de tumbar la bandeja para todos.
+    """
+    if not isinstance(valor, datetime):
         return None
     if valor.tzinfo is None:
         return valor.replace(tzinfo=timezone.utc)
@@ -339,19 +345,54 @@ _PESO_ESTADO = {ABIERTO: 0, EN_CURSO: 1, ESPERANDO_CLIENTE: 2, RESUELTO: 3, CERR
 _PESO_PRIORIDAD = {"urgente": 0, "alta": 1, "normal": 2, "baja": 3}
 
 
+def minutos_sin_respuesta(caso, ahora=None):
+    """Cuánto hace que el cliente escribió y nadie le contestó.
+
+    `None` si la pelota no la tiene la casa: el último que habló fuimos
+    nosotros, o el caso está cerrado. Es distinto de `minutos_esperando`, que
+    mide sólo hasta la PRIMERA respuesta y se apaga para siempre después: una
+    conversación de ida y vuelta puede tener al cliente esperando la quinta
+    respuesta hace tres horas y ese dato no aparecía en ningún lado.
+    """
+    if caso.get("estado") == CERRADO:
+        return None
+    if caso.get("ultimo_mensaje_de") != CLIENTE:
+        return None
+    cuando = _aware(caso.get("ultimo_mensaje_en")) or _aware(caso.get("creado_en"))
+    if not cuando:
+        return None
+    ahora = ahora or datetime.now(timezone.utc)
+    return max(0, int((ahora - cuando).total_seconds() // 60))
+
+
 def clave_de_orden(caso, ahora=None):
     """Con qué criterio se ordena la bandeja. Menor va primero.
 
     El orden ES la herramienta: un asesor que entra a trabajar tiene que ver
     arriba lo que hay que hacer ahora, no lo más reciente. Por eso manda el
     escalamiento, después lo que nadie tomó, después la prioridad, y recién al
-    final la antigüedad.
+    final el tiempo.
+
+    EL TIEMPO QUE CUENTA ES EL QUE EL CLIENTE LLEVA ESPERANDO AHORA
+
+        Acá estaba `minutos_esperando`, que devuelve `None` en cuanto el caso
+        tuvo su primera respuesta —y está bien que lo haga, mide otra cosa—.
+        Como desempate eso valía cero para TODO caso ya contestado, o sea la
+        mayoría: dos casos con el mismo estado y la misma prioridad quedaban en
+        el orden en que la base los hubiera devuelto, que no es ninguno.
+
+        Primero va el que nunca recibió respuesta, y entre los demás el que
+        hace más rato que escribió sin que nadie le conteste. Un caso donde ya
+        contestamos no tiene nada pendiente del lado de la casa y baja.
     """
+    nunca = minutos_esperando(caso, ahora)
+    espera = minutos_sin_respuesta(caso, ahora)
     return (
         0 if caso.get("escalado") else 1,
         _PESO_ESTADO.get(caso.get("estado"), 9),
         _PESO_PRIORIDAD.get(caso.get("prioridad") or "normal", 2),
-        -(minutos_esperando(caso, ahora) or 0),
+        0 if nunca is not None else 1,
+        -(nunca if nunca is not None else (espera or 0)),
     )
 
 

@@ -48,7 +48,7 @@ import { confirmar } from '../flujo/confirmar.js';
 import {
   accionesDelAsesor, estadosPosibles, haceCuanto, nombreDeEstado, PRIORIDADES,
   problemaDelEscalamiento, problemaDelPedido, problemaDeLaTransferencia,
-  problemaDeLaRespuestaAlPedido, semaforo, tonoDeEstado,
+  problemaDeLaRespuestaAlPedido, minutosSinRespuesta, duracion, semaforo, tonoDeEstado,
 } from '../../utils/soporte';
 
 /* ─── Piezas ───────────────────────────────────────────────────────────── */
@@ -79,6 +79,7 @@ function Etiqueta({ tono = 'neutro', children }) {
 /** Una fila de la bandeja. */
 function FilaDeCaso({ caso, elegido, onClick, ahora }) {
   const luz = COLOR_SEMAFORO[semaforo(caso, ahora)];
+  const esperando = minutosSinRespuesta(caso, ahora);
   return (
     <button type="button" onClick={onClick} className="env-tap"
       data-testid={`caso-${caso.caso_id}`}
@@ -128,9 +129,19 @@ function FilaDeCaso({ caso, elegido, onClick, ahora }) {
             {caso.prioridad}
           </Etiqueta>
         ) : null}
-        <span style={{ fontSize: '11px', color: C.tenue }}>
-          {haceCuanto(caso.ultimo_mensaje_en || caso.creado_en, ahora)}
-        </span>
+        {/* Cuando la pelota la tiene la casa se dice así, y no «hace 3 h» a
+            secas: es la diferencia entre un caso que está esperando y uno
+            donde ya contestamos. Y es lo que decide el orden de esta lista,
+            así que el asesor puede explicarse por qué está donde está. */}
+        {esperando !== null ? (
+          <span style={{ fontSize: '11px', color: C.error, fontWeight: 600 }}>
+            Espera hace {duracion(esperando)}
+          </span>
+        ) : (
+          <span style={{ fontSize: '11px', color: C.tenue }}>
+            {haceCuanto(caso.ultimo_mensaje_en || caso.creado_en, ahora)}
+          </span>
+        )}
       </span>
       {caso.asignado_a_nombre ? (
         <span style={{ display: 'block', fontSize: '11px', color: C.exito, marginTop: '4px', fontWeight: 600 }}>

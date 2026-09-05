@@ -90,6 +90,21 @@ export function minutosEsperando(caso, ahora = Date.now()) {
   return Math.max(0, Math.floor((ahora - creado) / 60000));
 }
 
+/**
+ * Cuánto hace que el cliente escribió y nadie le contestó.
+ *
+ * `null` si la pelota no la tiene la casa. Espeja a `minutos_sin_respuesta`
+ * del backend, que es lo que decide el orden de la bandeja: se muestra para
+ * que ese orden se pueda explicar mirando la fila.
+ */
+export function minutosSinRespuesta(caso, ahora = Date.now()) {
+  if (!caso || caso.estado === CERRADO) return null;
+  if (caso.ultimo_mensaje_de !== 'cliente') return null;
+  const cuando = Date.parse(caso.ultimo_mensaje_en || caso.creado_en);
+  if (Number.isNaN(cuando)) return null;
+  return Math.max(0, Math.floor((ahora - cuando) / 60000));
+}
+
 /** `verde` | `amarillo` | `rojo` | null. Amarillo a la mitad, para llegar. */
 export function semaforo(caso, ahora = Date.now()) {
   const minutos = minutosEsperando(caso, ahora);
@@ -106,11 +121,27 @@ export function haceCuanto(fecha, ahora = Date.now()) {
   if (Number.isNaN(t)) return '';
   const minutos = Math.max(0, Math.floor((ahora - t) / 60000));
   if (minutos < 1) return 'recién';
-  if (minutos < 60) return `hace ${minutos} min`;
   const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `hace ${horas} h`;
+  if (horas >= 24) {
+    const dias = Math.floor(horas / 24);
+    return dias === 1 ? 'ayer' : `hace ${dias} días`;
+  }
+  return `hace ${duracion(minutos)}`;
+}
+
+/**
+ * Un rato, en palabras: «40 min», «3 h», «2 días».
+ *
+ * Sin el «hace» adelante, para poder decir «Espera hace 3 h» sin que quede
+ * «Espera hace hace 3 h».
+ */
+export function duracion(minutos) {
+  const m = Math.max(0, Math.round(minutos || 0));
+  if (m < 60) return `${m} min`;
+  const horas = Math.floor(m / 60);
+  if (horas < 24) return `${horas} h`;
   const dias = Math.floor(horas / 24);
-  return dias === 1 ? 'ayer' : `hace ${dias} días`;
+  return dias === 1 ? '1 día' : `${dias} días`;
 }
 
 /* ─── Qué puede hacer el asesor ────────────────────────────────────────── */
