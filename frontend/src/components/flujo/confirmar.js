@@ -98,3 +98,23 @@ export function pedirTexto(opciones) {
   if (!pedirAlHost) return Promise.resolve(sinHost(opciones));
   return pedirAlHost({ ...opciones, clase: 'texto' });
 }
+
+/* ─── Preguntas que se repiten ─────────────────────────────────────────── */
+
+/**
+ * «¿Cerrás la sesión?», que está en TRES lugares: el perfil, el menú lateral y
+ * la pantalla que obliga a cambiar la contraseña.
+ *
+ * Vive acá y no copiado en cada uno porque tres textos iguales duran hasta que
+ * alguien retoca uno solo. El usuario no ve «tres pantallas parecidas»: ve una
+ * aplicación que a veces le avisa de una forma y a veces de otra.
+ */
+export function confirmarCierreDeSesion() {
+  return confirmar({
+    titulo: '¿Cerrás la sesión?',
+    detalle: 'Vas a tener que volver a entrar.',
+    accion: 'Cerrar sesión',
+    cancelar: 'Seguir acá',
+    tono: 'peligro',
+  });
+}

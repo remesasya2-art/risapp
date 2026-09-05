@@ -22,9 +22,9 @@
  *   4. BORRAR SE CONFIRMABA CON `window.confirm`, Y NO AVISABA CUANDO ERA EL
  *      ULTIMO. El cuadro nativo falla igual de callado que el `window.prompt`
  *      del PIN: si el navegador lo bloquea devuelve `false`, y el botón de la
- *      papelera no hace nada, sin error ni aviso. Ahora la pregunta aparece en
- *      la fila misma, y dice cuándo el dispositivo que estás sacando es el
- *      único que te queda.
+ *      papelera no hace nada, sin error ni aviso. Ahora pregunta la ventana
+ *      del centro —la misma que usa toda la aplicación—, y dice cuándo el
+ *      dispositivo que estás sacando es el único que te queda.
  *
  * QUE NO SE TOCO
  *
@@ -36,6 +36,7 @@ import { Fingerprint, Trash2, Plus } from 'lucide-react';
 import api from '../utils/api';
 import { activarHuella, webauthnSupported } from '../utils/webauthn';
 import { Boton, Aviso } from './flujo';
+import { confirmar } from './flujo/confirmar.js';
 import { C, tarjeta, etiqueta, campo, ayuda } from './flujo/estilos';
 
 /* A nivel de módulo: un componente declarado durante el render se desmonta y
@@ -96,7 +97,6 @@ export default function WebAuthnSettings() {
   const [ocupado, setOcupado] = useState(false);
   const [nombrando, setNombrando] = useState(false);
   const [nombre, setNombre] = useState('');
-  const [porBorrar, setPorBorrar] = useState(null);
 
   useEffect(() => {
     let vigente = true;
@@ -136,11 +136,20 @@ export default function WebAuthnSettings() {
   };
 
   const eliminar = async (cred) => {
+    const nombreDe = cred.label || 'Dispositivo';
+    const ultimo = creds.length === 1;
+    if (!await confirmar({
+      titulo: `¿Sacar «${nombreDe}» de la lista?`,
+      detalle: ultimo
+        ? 'Es el único que te queda: vas a entrar sólo con tu contraseña.'
+        : 'Ese dispositivo deja de poder entrar con huella.',
+      accion: 'Sacarlo',
+      tono: 'peligro',
+    })) return;
     try {
       setOcupado(true);
       await api.delete(`/webauthn/credentials/${encodeURIComponent(cred.credential_id)}`);
       toast.success('Dispositivo eliminado');
-      setPorBorrar(null);
       await releer();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo eliminar el dispositivo');
@@ -175,55 +184,35 @@ export default function WebAuthnSettings() {
               {creds.map((c) => {
                 const nombreDe = c.label || 'Dispositivo';
                 const fecha = agregadoEl(c.created_at);
-                const confirmando = porBorrar === c.credential_id;
                 return (
                   <div key={c.credential_id} style={{
                     display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '11px 13px', borderRadius: '11px',
-                    background: confirmando ? C.errorSuave : C.fondo,
-                    border: `1px solid ${confirmando ? C.errorBorde : C.linea}`,
-                    flexWrap: 'wrap',
+                    background: C.fondo, border: `1px solid ${C.linea}`,
                   }}>
                     <Fingerprint size={16} color={C.marca} style={{ flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: '140px' }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         display: 'block', fontSize: '13.5px', fontWeight: 600, color: C.texto,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {nombreDe}
                       </span>
-                      <span style={{
-                        display: 'block', fontSize: '11.5px', marginTop: '1px',
-                        color: confirmando ? C.error : C.tenue,
-                      }}>
-                        {confirmando
-                          ? (creds.length === 1
-                            ? 'Es el único que te queda: vas a entrar sólo con tu contraseña.'
-                            : '¿Lo sacamos de la lista?')
-                          : fecha}
-                      </span>
+                      {fecha ? (
+                        <span style={{ display: 'block', fontSize: '11.5px', color: C.tenue, marginTop: '1px' }}>
+                          {fecha}
+                        </span>
+                      ) : null}
                     </span>
-                    {confirmando ? (
-                      <span style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                        <Boton onClick={() => setPorBorrar(null)} testid="webauthn-borrar-no">
-                          No
-                        </Boton>
-                        <Boton tipo="primario" onClick={() => eliminar(c)} disabled={ocupado}
-                          testid="webauthn-borrar-si">
-                          {ocupado ? 'Sacando…' : 'Sacar'}
-                        </Boton>
-                      </span>
-                    ) : (
-                      <button type="button" onClick={() => setPorBorrar(c.credential_id)}
-                        disabled={ocupado} aria-label={`Eliminar ${nombreDe}`}
-                        style={{
-                          border: 'none', background: 'none', padding: '5px', flexShrink: 0,
-                          color: C.error, cursor: ocupado ? 'not-allowed' : 'pointer',
-                          display: 'inline-flex',
-                        }}>
-                        <Trash2 size={16} />
-                      </button>
-                    )}
+                    <button type="button" onClick={() => eliminar(c)} disabled={ocupado}
+                      aria-label={`Eliminar ${nombreDe}`} data-testid="webauthn-borrar"
+                      style={{
+                        border: 'none', background: 'none', padding: '5px', flexShrink: 0,
+                        color: C.error, cursor: ocupado ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                      }}>
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 );
               })}

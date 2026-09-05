@@ -94,6 +94,79 @@ def test_el_host_se_monta_una_sola_vez_en_la_raiz():
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# Las preguntas que se repiten
+# ══════════════════════════════════════════════════════════════════════════
+
+_CIERRES = [
+    (_FUENTE / "pages" / "Profile.jsx", "el perfil"),
+    (_FUENTE / "pages" / "Dashboard.jsx", "el menú lateral"),
+    (_FUENTE / "pages" / "ForceChangePassword.jsx", "el cambio obligado"),
+]
+
+
+def _cuerpo_de(fuente, nombre):
+    """El cuerpo de una función declarada como `const nombre = async () => {`."""
+    ini = fuente.index(f"const {nombre} =")
+    return fuente[ini:fuente.index("\n  };", ini)]
+
+
+@pytest.mark.parametrize("ruta, donde", _CIERRES, ids=lambda v: getattr(v, "name", v))
+def test_cerrar_sesion_pregunta_antes_de_cerrar(ruta, donde):
+    """Es la acción más fácil de tocar sin querer, y deshace algo.
+
+    Este test EXISTIA y lo borré yo sin querer al reordenar `test_perfil.py`:
+    el guardián se fue y el comportamiento quedó sin red. Vuelve acá, donde
+    corresponde, y cubriendo los tres botones en vez de uno.
+
+    En el menú lateral el botón está al pie, debajo de la ficha del usuario y
+    pegado a los enlaces de navegación: el dedo que apunta a «Soporte» cae ahí.
+    """
+    fuente = ruta.read_text(encoding="utf-8")
+    assert "confirmarCierreDeSesion" in fuente, (
+        f"El botón de cerrar sesión de {donde} ya no pregunta antes.")
+
+    # El orden es la garantía entera: preguntar DESPUES de cerrar no sirve.
+    nombre = "cerrarSesion" if "const cerrarSesion" in fuente else "handleLogout"
+    cuerpo = _cuerpo_de(fuente, nombre)
+    assert "confirmarCierreDeSesion" in cuerpo and "logout()" in cuerpo, (
+        f"En {donde}, `{nombre}` ya no tiene la pregunta y el cierre juntos:\n{cuerpo}")
+    assert cuerpo.index("confirmarCierreDeSesion") < cuerpo.index("logout()"), (
+        f"En {donde} se cierra la sesión y RECIEN DESPUES se pregunta.")
+
+
+def test_la_pregunta_de_cerrar_sesion_sale_de_un_solo_lugar():
+    """Tres textos iguales duran hasta que alguien retoca uno solo.
+
+    El usuario no ve «tres pantallas parecidas»: ve una aplicación que a veces
+    le avisa de una forma y a veces de otra.
+    """
+    modulo = _MODULO.read_text(encoding="utf-8")
+    assert "export function confirmarCierreDeSesion" in modulo
+
+    for ruta, donde in _CIERRES:
+        codigo = _sin_comentarios(ruta.read_text(encoding="utf-8"))
+        assert "¿Cerrás la sesión?" not in codigo, (
+            f"{donde} volvió a escribir la pregunta a mano en vez de usar "
+            "`confirmarCierreDeSesion`.")
+
+
+def test_ninguna_confirmacion_quedo_metida_en_una_fila():
+    """Todas preguntan en la ventana del centro, no dentro de la lista.
+
+    Dos habían quedado embutidas en su fila —el cierre de sesión del perfil y
+    el borrado de un dispositivo con huella—: la misma pregunta se veía de dos
+    formas distintas según dónde cayeras.
+    """
+    for nombre in ("Profile.jsx", "WebAuthnSettings.jsx"):
+        ruta = next(_FUENTE.rglob(nombre))
+        codigo = _sin_comentarios(ruta.read_text(encoding="utf-8"))
+        for resto in ("setCerrandoSesion", "setPorBorrar"):
+            assert resto not in codigo, (
+                f"{nombre} volvió a preguntar dentro de la fila ({resto}). La "
+                "pregunta va en la ventana del centro, como todas.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # Las reglas del módulo
 # ══════════════════════════════════════════════════════════════════════════
 
