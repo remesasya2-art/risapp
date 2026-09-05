@@ -31,6 +31,7 @@ QUE NO SE TOCO
 """
 import asyncio
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -42,6 +43,7 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user, get_crm_user
 from services import soporte
+from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -120,6 +122,27 @@ def _publico(caso):
     if not caso:
         return None
     return {k: caso[k] for k in _DEL_CLIENTE if k in caso}
+
+
+def _adjunto(valor):
+    """El adjunto, mirado antes de guardarlo.
+
+    El campo es texto elegido por quien manda el mensaje, y lo abre el otro:
+    la foto del cliente la abre un asesor en su sesión de administrador, y la
+    del asesor la abre el cliente. Un `javascript:…` guardado ahí se ejecuta
+    al abrir «la imagen». El filtro del navegador
+    (`frontend/src/utils/urlDeArchivo.js`) ya no lo deja abrir; esto es la otra
+    mitad, que no se guarde.
+
+    De paso pone el tope de tamaño. Un `data:` de base64 viaja adentro del
+    documento de Mongo, y sin tope una foto grande entra hasta chocar contra
+    el límite de 16 MB: lo que se rompe entonces no es la subida, es la lectura
+    de la conversación, para todos, desde ese momento.
+    """
+    try:
+        return limpiar_imagen_opcional(valor, campo="La imagen")
+    except ImagenInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 async def _avisar(**aviso):
@@ -232,6 +255,9 @@ async def abrir_caso(datos: AbrirCaso, current_user: User = Depends(get_current_
     texto = datos.mensaje.strip()
     if not texto:
         raise HTTPException(status_code=400, detail="Escribí tu consulta")
+    # Antes de tocar la base: un adjunto rechazado a mitad de camino dejaría un
+    # caso creado, con su número gastado y sin el mensaje que lo explica.
+    adjunto = _adjunto(datos.adjunto)
 
     # Un cliente con muchos casos abiertos casi siempre es la misma consulta
     # escrita de nuevo porque no encontró la anterior. Se le devuelve la que ya
@@ -280,7 +306,7 @@ async def abrir_caso(datos: AbrirCaso, current_user: User = Depends(get_current_
         "autor_nombre": current_user.name or "Usuario",
         "interno": False,
         "texto": texto,
-        "adjunto": datos.adjunto,
+        "adjunto": adjunto,
         "creado_en": ahora,
     })
 
@@ -311,7 +337,8 @@ async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
             detail="Este caso está cerrado. Abrí uno nuevo y lo vemos.")
 
     texto = (datos.mensaje or "").strip()
-    if not texto and not datos.adjunto:
+    adjunto = _adjunto(datos.adjunto)
+    if not texto and not adjunto:
         raise HTTPException(status_code=400, detail="Escribí algo o adjuntá una imagen")
 
     ahora = _AHORA()
@@ -323,7 +350,7 @@ async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
         "autor_nombre": current_user.name or "Usuario",
         "interno": False,
         "texto": texto,
-        "adjunto": datos.adjunto,
+        "adjunto": adjunto,
         "creado_en": ahora,
     })
 
@@ -464,7 +491,12 @@ async def bandeja(estado: Optional[str] = None, area: Optional[str] = None,
     if mios:
         consulta["asignado_a"] = current_user.user_id
     if buscar:
-        aguja = {"$regex": buscar.strip()[:60], "$options": "i"}
+        # `re.escape` y no el texto pelado: lo que el asesor escribe es texto,
+        # no una expresión. Un paréntesis suelto reventaba la consulta y la
+        # bandeja volvía vacía; el punto de un correo buscaba «cualquier
+        # carácter» y traía casos que no eran; y `(a+)+$` deja a la base
+        # masticando un rato largo.
+        aguja = {"$regex": re.escape(buscar.strip()[:60]), "$options": "i"}
         consulta["$or"] = [{"user_name": aguja}, {"user_email": aguja},
                            {"numero": aguja}, {"asunto": aguja}]
 
@@ -583,7 +615,8 @@ async def responder_asesor(caso_id: str, datos: RespuestaDelAsesor,
     es_super = current_user.role == "super_admin"
 
     texto = (datos.mensaje or "").strip()
-    if not texto and not datos.adjunto:
+    adjunto = _adjunto(datos.adjunto)
+    if not texto and not adjunto:
         raise HTTPException(status_code=400, detail="Escribí algo o adjuntá una imagen")
 
     # Una nota interna se puede dejar aunque el caso no sea tuyo: es contexto
@@ -605,7 +638,7 @@ async def responder_asesor(caso_id: str, datos: RespuestaDelAsesor,
         "autor_nombre": current_user.name or "Soporte",
         "interno": bool(datos.interno),
         "texto": texto,
-        "adjunto": datos.adjunto,
+        "adjunto": adjunto,
         "creado_en": ahora,
     })
 

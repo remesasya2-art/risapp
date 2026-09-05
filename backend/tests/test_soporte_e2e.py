@@ -514,3 +514,73 @@ def test_si_falla_el_aviso_el_caso_igual_queda(monkeypatch):
     _como(CLIENTA)
     casos = CLIENTE.get("/api/soporte/casos").json()["casos"]
     assert len([c for c in casos if c["caso_id"] == caso_id]) == 1
+
+
+def test_buscar_un_parentesis_no_rompe_la_bandeja():
+    """Lo que el asesor escribe en el buscador es texto, no una expresión.
+
+    Iba derecho al `$regex`: un paréntesis suelto —o el `+` de un teléfono, o
+    el punto de un correo, que además hacía que buscara de más— reventaba la
+    consulta y la bandeja volvía vacía con un error del servidor. Y un patrón
+    del tipo `(a+)+$` deja a la base masticando.
+    """
+    _abrir_caso(mensaje="Consulta de Ana (la del envío)")
+    _como(ASESOR)
+
+    for aguja in ["(", "[", "*", "a(", "(a+)+$", "\\\\", "?"]:
+        r = CLIENTE.get("/api/admin/soporte/casos",
+                        params={"estado": "todos", "buscar": aguja})
+        assert r.status_code == 200, f"«{aguja}» rompió la bandeja: {r.text}"
+
+    # Y el punto tiene que buscar UN PUNTO, no «cualquier carácter».
+    r = CLIENTE.get("/api/admin/soporte/casos",
+                    params={"estado": "todos", "buscar": "ana.test"})
+    assert r.status_code == 200
+    assert r.json()["casos"] == []
+
+    r = CLIENTE.get("/api/admin/soporte/casos",
+                    params={"estado": "todos", "buscar": "ana@test"})
+    assert len(r.json()["casos"]) == 1
+
+
+def test_un_adjunto_que_no_es_una_imagen_no_entra():
+    """El adjunto del caso lo abre un asesor, en su sesión de administrador.
+
+    El campo es texto elegido por quien lo manda. Sin mirarlo, un
+    `javascript:fetch('/api/admin/…')` guardado ahí se ejecuta cuando el asesor
+    abre «la foto» del caso. El filtro del navegador ya no lo deja abrir; esto
+    es la otra mitad, que no se guarde. Las dos hacen falta: la primera protege
+    lo que ya está guardado, la segunda evita que entre más.
+    """
+    _como(CLIENTA)
+    r = CLIENTE.post("/api/soporte/casos", json={
+        "motivo": "envio", "mensaje": "Adjunto el comprobante",
+        "adjunto": "javascript:fetch('/api/admin/users')",
+    })
+    assert r.status_code == 400, r.text
+
+    # Y no quedó un caso a medio hacer con su número quemado.
+    assert CLIENTE.get("/api/soporte/casos").json()["casos"] == []
+
+    # Una foto de verdad sí entra.
+    r = CLIENTE.post("/api/soporte/casos", json={
+        "motivo": "envio", "mensaje": "Adjunto el comprobante",
+        "adjunto": "data:image/png;base64,iVBORw0KGgo=",
+    })
+    assert r.status_code == 200, r.text
+    caso_id = r.json()["caso"]["caso_id"]
+
+    # Lo mismo al responder dentro del caso.
+    r = CLIENTE.post(f"/api/soporte/casos/{caso_id}/mensajes",
+                     json={"mensaje": "otra", "adjunto": "vbscript:msgbox(1)"})
+    assert r.status_code == 400, r.text
+
+
+def test_el_asesor_tampoco_manda_cualquier_cosa_como_imagen():
+    """La imagen del asesor la abre el CLIENTE. El filtro corre para los dos."""
+    caso = _abrir_caso()
+    _como(ASESOR)
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso['caso_id']}/tomar")
+    r = CLIENTE.post(f"/api/admin/soporte/casos/{caso['caso_id']}/mensajes",
+                     json={"mensaje": "mirá esto", "adjunto": "javascript:alert(1)"})
+    assert r.status_code == 400, r.text
