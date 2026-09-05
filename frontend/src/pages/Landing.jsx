@@ -207,16 +207,6 @@ export default function Landing() {
 
           <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Link
-              to="/como-funciona"
-              className="ris-link"
-              style={{
-                padding: '9px 12px', fontSize: 14, fontWeight: 600,
-                color: SUAVE, textDecoration: 'none',
-              }}
-            >
-              Cómo funciona
-            </Link>
-            <Link
               to="/login"
               className="ris-link"
               style={{
@@ -455,18 +445,6 @@ export default function Landing() {
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Link
-                to="/como-funciona"
-                className="ris-a ris-ghost"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7,
-                  padding: '11px 17px', borderRadius: 11, fontSize: 14,
-                  fontWeight: 600, color: MORADO, textDecoration: 'none',
-                  border: `1.5px solid ${BORDE}`,
-                }}
-              >
-                Cómo funciona <ArrowRight size={15} />
-              </Link>
-              <Link
                 to="/legal"
                 className="ris-a ris-ghost"
                 style={{
@@ -544,8 +522,8 @@ export default function Landing() {
               Seguridad en cada operación
             </h3>
             <p style={{ fontSize: 15.5, color: TEXTO, lineHeight: 1.7, margin: 0 }}>
-              Tu cuenta está protegida por verificación en dos pasos, y el
-              personal con acceso administrativo la tiene obligatoria. Los
+              Tu cuenta puede protegerse con verificación en dos pasos, y la
+              identidad se verifica antes de operar montos mayores. Los
               distintos tipos de créditos se gestionan de forma independiente
               dentro de la plataforma.
             </p>

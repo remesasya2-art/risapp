@@ -18,7 +18,12 @@ export function AuthProvider({ children }) {
     setMustChangePassword(false);
     try {
       await api.post('/auth/logout');
-    } catch (e) {}
+    } catch {
+      // A propósito. La sesión local ya se borró arriba, así que el usuario
+      // quedó afuera pase lo que pase acá. Si el servidor no contesta —o
+      // contesta 401 porque la sesión ya había vencido— avisarlo sólo lo
+      // asustaría con un error sobre algo que salió bien.
+    }
   }, []);
 
   const resetTimer = useCallback(() => {

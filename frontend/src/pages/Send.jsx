@@ -60,6 +60,10 @@ import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
+import { Boton, Aviso, Progreso, Opcion } from '../components/flujo';
+import {
+  C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
+} from '../components/flujo/estilos';
 import {
   MENSAJE_DEL_MOTIVO, MOTIVO, PASOS, cuentaAbreviada, nombreDelBanco,
   risAEnviar, tasaSeMovio, telefonoLegible, ultimoPasoAlcanzable, validarMonto,
@@ -102,163 +106,16 @@ const VENEZUELAN_BANKS = [
   { code: '6000', name: 'Banavih' },
 ];
 
-/* ─── Sistema visual ───────────────────────────────────────────────────── */
+/* ─── Sistema visual ───────────────────────────────────────────────────────
+   Vive en `components/flujo`, compartido con el flujo de BTC Lightning. Estaba
+   escrito acá y se movió tal cual: dos pantallas que hacen lo mismo tienen que
+   verse iguales, y con estilos copiados eso dura hasta el primer retoque en
+   una sola de las dos.
 
-const C = {
-  tinta: '#101828', texto: '#344054', suave: '#667085', tenue: '#98A2B3',
-  linea: '#E4E7EC', lineaFuerte: '#D0D5DD',
-  lienzo: '#FFFFFF', fondo: '#F7F8FA',
-  marca: '#4F46E5', marcaSuave: '#EEF0FF', marcaBorde: '#C7CDFF',
-  exito: '#067647', exitoSuave: '#ECFDF3', exitoBorde: '#A9EFC5',
-  alerta: '#B54708', alertaSuave: '#FFFAEB', alertaBorde: '#FEDF89',
-  error: '#B42318', errorSuave: '#FEF3F2', errorBorde: '#FECDCA',
-};
+   Lo que sigue abajo —la tira de tasa y el resumen del monto— se queda: es de
+   esta pantalla y de ningún otro lugar.                                     */
 
-const HOJA = `
-.env { color: ${C.texto}; font-variant-numeric: tabular-nums lining-nums; }
-.env * { box-sizing: border-box; }
-.env button { font-family: inherit; }
-.env .env-tap { transition: border-color .13s ease, background-color .13s ease, box-shadow .13s ease; }
-.env .env-tap:hover:not(:disabled) { border-color: ${C.lineaFuerte}; }
-.env .env-op:hover:not([aria-checked="true"]) { border-color: ${C.marcaBorde}; background: ${C.marcaSuave}; }
-.env .env-pri:hover:not(:disabled) { background: #4338CA; }
-.env .env-campo:focus { border-color: ${C.marca}; box-shadow: 0 0 0 4px rgba(79,70,229,.12); }
-.env input:focus { outline: none; }
-.env :focus-visible { outline: 2px solid ${C.marca}; outline-offset: 2px; }
-.env .env-chip:hover { background: ${C.marcaSuave}; border-color: ${C.marcaBorde}; color: ${C.marca}; }
-.env .env-paso:disabled { cursor: default; }
-@media (max-width: 560px) {
-  .env .env-dos { grid-template-columns: 1fr !important; }
-  .env .env-nom-paso { font-size: 11.5px; letter-spacing: -.01em; }
-}
-@media (max-width: 359px) {
-  .env .env-nom-paso { display: none; }
-}
-`;
-
-const tarjeta = {
-  background: C.lienzo, borderRadius: '16px', border: `1px solid ${C.linea}`,
-  boxShadow: '0 1px 2px rgba(16,24,40,.04)',
-};
-
-const etiqueta = {
-  display: 'block', fontSize: '13.5px', fontWeight: 600,
-  color: C.texto, marginBottom: '7px',
-};
-
-const microEtiqueta = {
-  margin: 0, fontSize: '11px', fontWeight: 700, letterSpacing: '.06em',
-  textTransform: 'uppercase', color: C.tenue,
-};
-
-const campo = {
-  width: '100%', padding: '13px 15px', borderRadius: '12px',
-  border: `1px solid ${C.lineaFuerte}`, fontSize: '16px', color: C.tinta,
-  background: C.lienzo, outline: 'none',
-};
-
-const ayuda = { margin: '6px 0 0 0', fontSize: '12px', color: C.suave };
-
-/* ─── Piezas ───────────────────────────────────────────────────────────── */
-
-function Boton(props) {
-  const { children, onClick, tipo = 'secundario', disabled, ancho, testid, iconoDerecha } = props;
-  const Icono = props.Icono;
-  const paleta = {
-    primario: { background: C.marca, color: '#fff', border: `1px solid ${C.marca}` },
-    exito: { background: C.exito, color: '#fff', border: `1px solid ${C.exito}` },
-    secundario: { background: C.lienzo, color: C.texto, border: `1px solid ${C.lineaFuerte}` },
-  }[tipo];
-
-  return (
-    <button
-      type="button" onClick={onClick} disabled={disabled} data-testid={testid}
-      className={`env-tap${tipo === 'primario' ? ' env-pri' : ''}`}
-      style={{
-        ...paleta, height: '52px', padding: '0 20px', borderRadius: '12px',
-        fontWeight: 600, fontSize: '15.5px', cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        gap: '9px', flex: ancho ? 1 : undefined, whiteSpace: 'nowrap',
-        opacity: disabled ? 0.5 : 1,
-      }}>
-      {Icono && !iconoDerecha ? <Icono size={18} /> : null}
-      {children}
-      {Icono && iconoDerecha ? <Icono size={18} /> : null}
-    </button>
-  );
-}
-
-function Aviso({ tono = 'info', titulo, children, testid }) {
-  const [fondo, borde, color, Icono] = {
-    info: [C.marcaSuave, C.marcaBorde, C.marca, Info],
-    exito: [C.exitoSuave, C.exitoBorde, C.exito, CheckCircle2],
-    alerta: [C.alertaSuave, C.alertaBorde, C.alerta, AlertTriangle],
-    error: [C.errorSuave, C.errorBorde, C.error, AlertCircle],
-  }[tono];
-  return (
-    <div data-testid={testid} style={{
-      display: 'flex', gap: '11px', alignItems: 'flex-start',
-      background: fondo, border: `1px solid ${borde}`,
-      borderRadius: '12px', padding: '13px 15px',
-    }}>
-      <Icono size={18} color={color} style={{ flexShrink: 0, marginTop: '1px' }} />
-      <div style={{ fontSize: '13.5px', lineHeight: 1.55, color: C.texto }}>
-        {titulo ? (
-          <strong style={{ display: 'block', color, marginBottom: '2px' }}>{titulo}</strong>
-        ) : null}
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Progreso({ paso, alcanzable, irA }) {
-  return (
-    <ol style={{
-      display: 'grid', gridTemplateColumns: `repeat(${PASOS.length}, 1fr)`,
-      gap: '8px', listStyle: 'none', margin: '0 0 18px 0', padding: 0,
-    }}>
-      {PASOS.map((p) => {
-        const hecho = paso > p.numero;
-        const actual = paso === p.numero;
-        const puede = p.numero <= alcanzable;
-        return (
-          <li key={p.clave}>
-            <button
-              type="button" className="env-paso" disabled={!puede}
-              onClick={() => puede && irA(p.numero)}
-              aria-current={actual ? 'step' : undefined}
-              aria-label={`Paso ${p.numero}: ${p.titulo}`}
-              style={{
-                width: '100%', border: 'none', background: 'none', padding: 0,
-                textAlign: 'left', cursor: puede ? 'pointer' : 'default',
-              }}>
-              <span style={{
-                display: 'block', height: '4px', borderRadius: '2px',
-                background: actual || hecho ? C.marca : C.linea, marginBottom: '7px',
-              }} />
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{
-                  width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '10.5px', fontWeight: 700,
-                  background: hecho ? C.marca : (actual ? C.marcaSuave : C.linea),
-                  color: hecho ? '#fff' : (actual ? C.marca : C.tenue),
-                }}>
-                  {hecho ? <Check size={11} strokeWidth={3} /> : p.numero}
-                </span>
-                <span className="env-nom-paso" style={{
-                  fontSize: '12.5px', fontWeight: actual ? 700 : 500,
-                  color: actual ? C.tinta : C.tenue, whiteSpace: 'nowrap',
-                }}>{p.titulo}</span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
+/* ─── Piezas propias ───────────────────────────────────────────────────── */
 
 function TiraDeTasa({ tasa, disponible, lastUpdated, ahora, onRefrescar, refrescando }) {
   // `ahora` llega desde afuera y avanza con un temporizador. Calcularlo acá con
@@ -345,53 +202,6 @@ function ResumenDelMonto({ ris, ves, onCambiar }) {
       </button>
     </div>
   );
-}
-
-function Opcion(props) {
-  const { elegida, onClick, titulo, detalle, testid } = props;
-  const Icono = props.Icono;
-  return (
-    <button
-      type="button" role="radio" aria-checked={elegida} onClick={onClick}
-      data-testid={testid} className="env-op env-tap"
-      style={{
-        display: 'flex', alignItems: 'center', gap: '14px', width: '100%',
-        padding: '16px', borderRadius: '14px', textAlign: 'left', cursor: 'pointer',
-        border: `1px solid ${elegida ? C.marca : C.linea}`,
-        background: elegida ? C.marcaSuave : C.lienzo,
-        boxShadow: elegida ? '0 0 0 3px rgba(79,70,229,.10)' : 'none',
-      }}>
-      <span style={{
-        width: '44px', height: '44px', borderRadius: '12px', flexShrink: 0,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        background: elegida ? C.marca : C.fondo,
-      }}>
-        <Icono size={21} color={elegida ? '#fff' : C.suave} />
-      </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: '15.5px', fontWeight: 700, color: C.tinta }}>
-          {titulo}
-        </span>
-        <span style={{ display: 'block', fontSize: '13px', color: C.suave, marginTop: '2px' }}>
-          {detalle}
-        </span>
-      </span>
-      <span style={{
-        width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
-        border: `2px solid ${elegida ? C.marca : C.lineaFuerte}`,
-        background: elegida ? C.marca : 'transparent',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {elegida ? <Check size={12} color="#fff" strokeWidth={3} /> : null}
-      </span>
-    </button>
-  );
-}
-
-function iniciales(nombre) {
-  const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
-  if (!partes.length) return '?';
-  return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
 }
 
 /* ─── La pantalla ──────────────────────────────────────────────────────── */
@@ -630,7 +440,7 @@ export default function Send() {
         <TiraDeTasa tasa={tasa} disponible={tasaDisponible} lastUpdated={lastUpdated}
           ahora={ahora} onRefrescar={refrescarTasa} refrescando={refrescando} />
 
-        <Progreso paso={step} alcanzable={alcanzable} irA={irAPaso} />
+        <Progreso pasos={PASOS} paso={step} alcanzable={alcanzable} irA={irAPaso} />
 
         {step > 1 && ris !== null ? (
           <ResumenDelMonto ris={ris} ves={ves} onCambiar={() => setStep(1)} />

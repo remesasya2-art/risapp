@@ -306,9 +306,12 @@ export default function LegalPage() {
           <p style={p}>
             Los datos se conservan durante el tiempo necesario para prestar el
             servicio y cumplir obligaciones legales y fiscales. Se aplican
-            medidas técnicas y organizativas para proteger la información,
-            entre ellas el cifrado de las credenciales y la verificación en dos
-            pasos obligatoria para todo el personal con acceso administrativo.
+            medidas técnicas y organizativas para proteger la información, entre
+            ellas el cifrado de las credenciales y el control de quién accede a
+            cada dato. El detalle de esas medidas se documenta internamente y se
+            pone a disposición de la autoridad de control o de una auditoría que
+            lo requiera; publicarlo en detalle debilitaría la protección que
+            describe.
           </p>
         </Seccion>
 
@@ -473,10 +476,8 @@ export default function LegalPage() {
           }}
           >
             {[
-              ['Razón social', 'J. del Carmen Hernandez Barreto'],
               ['Nombre comercial', 'SAIPHA Servicios Digitais'],
-              ['CNPJ', '66.994.057/0001-61'],
-              ['Domicilio', 'Rua Monte Roraima, s/n, Bairro Vila Nova, Pacaraima – RR, CEP 69345-000, Brasil'],
+              ['País de operación', 'Brasil'],
               ['Sitio web', 'risappbr.com'],
             ].map(([k, v], i) => (
               <div
@@ -492,6 +493,22 @@ export default function LegalPage() {
               </div>
             ))}
           </div>
+
+          {/*
+            La razón social, el CNPJ y el domicilio se sacaron por decisión del
+            operador, y por ahora. El domicilio, además, es un domicilio
+            particular.
+
+            Hay que decirlo derecho: el Decreto 7.962/2013 art. 2 I pide que un
+            sitio de comercio electrónico publique el nombre empresarial y el
+            CNPJ, así que mientras esto siga así el sitio no lo cumple. Los
+            datos están completos en el dossier interno §1 y se entregan a quien
+            los pida por el canal de atención.
+          */}
+          <p style={{ ...p, fontSize: 13.5, color: '#6b7280' }}>
+            Los datos registrales completos del operador se entregan a quien los
+            solicite por <Soporte />, y a cualquier autoridad que los requiera.
+          </p>
 
           <h3 style={h3}>5.1. Canal de atención</h3>
           <p style={p}>
@@ -514,17 +531,6 @@ export default function LegalPage() {
             Este documento se revisa periódicamente. La fecha del encabezado
             indica la última versión vigente.
           </p>
-          <Link
-            to="/como-funciona"
-            style={{
-              fontSize: 14, color: MORADO, fontWeight: 600, textDecoration: 'none',
-              display: 'inline-flex', alignItems: 'center', gap: 7,
-              border: `1px solid ${MORADO}`, borderRadius: 9, padding: '9px 16px',
-            }}
-          >
-            <ScrollText size={15} />
-            Cómo funciona la plataforma
-          </Link>
         </div>
       </div>
     </div>

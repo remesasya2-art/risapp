@@ -28,8 +28,19 @@ export default function Recharge() {
   const [proofImage, setProofImage] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, completed, expired, cancelled
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutos en segundos
-  const [checkingPayment, setCheckingPayment] = useState(false);
-  const [loadingPending, setLoadingPending] = useState(true);
+  // «Hay un pedido en vuelo» se guarda en una ref y no en el estado.
+  //
+  // Estaba en `useState`, y ahí la guarda no frenaba nada: el `setInterval`
+  // que consulta el pago cada 5 s captura la función del render en que se
+  // armó, y esa función ve para siempre el `checkingPayment` de ESE render
+  // —falso—. Se comprobó simulando el ciclo: con la guarda por estado, 8 de
+  // 9 consultas se solapaban; con la ref, ninguna.
+  //
+  // Lo que costaba: si la respuesta tardaba más que los 5 s del poll, dos
+  // consultas volvían juntas con «pagado», y el usuario veía el aviso de
+  // pago confirmado dos veces. Una ref no vive en el render, así que la
+  // función vieja y la nueva miran el mismo valor.
+  const consultaEnVuelo = useRef(false);
   const timerRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -73,8 +84,6 @@ export default function Recharge() {
         }
       } catch (error) {
         console.error('Error checking pending payment:', error);
-      } finally {
-        setLoadingPending(false);
       }
     };
     
@@ -112,9 +121,9 @@ export default function Recharge() {
   }, [step, pixData, paymentStatus]);
 
   const checkPaymentStatus = async () => {
-    if (!pixData?.payment_id || checkingPayment) return;
-    
-    setCheckingPayment(true);
+    if (!pixData?.payment_id || consultaEnVuelo.current) return;
+
+    consultaEnVuelo.current = true;
     try {
       const response = await api.get(`/gestor/pix/status/${pixData.payment_id}`);
       const status = response.data.status;
@@ -139,7 +148,7 @@ export default function Recharge() {
     } catch (error) {
       console.error('Error checking payment status:', error);
     } finally {
-      setCheckingPayment(false);
+      consultaEnVuelo.current = false;
     }
   };
 
@@ -269,28 +278,18 @@ export default function Recharge() {
     }
   };
 
-  const handleUploadProof = async () => {
-    if (!proofImage) {
-      toast.error('Debes adjuntar el comprobante de pago');
-      return;
-    }
-    if (!pixData?.payment_id) return;
-
-    setLoading(true);
-    try {
-      await api.post('/gestor/pix/upload-proof', {
-        payment_id: pixData.payment_id,
-        proof_image: proofImage
-      });
-      toast.success('Comprobante enviado. Verificando pago...');
-      // Check payment status immediately
-      await checkPaymentStatus();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al enviar comprobante');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Acá vivía `handleUploadProof`, que subía un comprobante del pago PIX a
+  // `/gestor/pix/upload-proof`. Se sacó porque ese endpoint NO EXISTE en el
+  // backend —el router `/gestor/pix` expone create, pending, cancel, status,
+  // simulate-payment, active e history, y ninguno más— así que la función
+  // habría dado 404 el día que alguien la enganchara a un botón.
+  //
+  // Tampoco la llamaba nadie: estaba escrita y suelta. El pago PIX se
+  // confirma solo, por la consulta de estado cada 5 s. El comprobante a mano
+  // es del flujo de bolívares, que sí tiene su endpoint y su botón.
+  //
+  // Si algún día hace falta un comprobante para PIX —cuando la confirmación
+  // automática no llega— hay que escribir el endpoint primero.
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];

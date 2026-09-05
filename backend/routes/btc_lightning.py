@@ -13,6 +13,7 @@ from database import db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
 from pydantic import BaseModel
+from services.aviso_de_tasa import avisar_si_hace_falta
 from routes.dependencies import get_current_user, sin_transacciones_personales
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,59 @@ BLINK_WEBHOOK_SECRET = os.getenv("BLINK_WEBHOOK_SECRET" , "" )
 BLINK_WALLET_ID = os.getenv("BLINK_WALLET_ID", "81812448-e78e-47fb-b6cd-d827fc952536")
 BLINK_GRAPHQL_URL = "https://api.blink.sv/graphql"
 
-_btc_price_cache = {"price": 58500.0, "updated_at": None}
+# El caché arranca VACIO. Antes arrancaba en 58 500 USD escritos a mano: si el
+# primer pedido al proveedor de precio fallaba, esa cifra se usaba para cobrar
+# una remesa real. Con el bitcoin cerca de 79 000, el cliente habría pagado un
+# 36 % de más en bitcoin sin que nada fallara ni nadie se enterara.
+_btc_price_cache = {"price": None, "updated_at": None}
+
+# Cuánto se acepta un precio guardado CUANDO EL PROVEEDOR NO CONTESTA.
+#
+#   No es un intervalo de actualización: no hay ninguno. Cada consulta va en
+#   vivo a blockchain.info y devuelve lo que contesta, y la pantalla del envío
+#   consulta cada diez segundos. Este número sólo entra en juego si el
+#   proveedor se cae.
+#
+#   Treinta segundos, por decisión del operador y por lo que es el bitcoin: es
+#   una moneda que se mueve, y cobrar con el precio de hace un minuto es cobrar
+#   mal, para un lado o para el otro.
+#
+#   Lo que cuesta: con la pantalla consultando cada diez segundos, esto tolera
+#   unos tres intentos fallidos seguidos. Un hipo del proveedor más largo que
+#   eso deja de cotizar. Es una falla suave y se cura sola —la pantalla dice
+#   que no hay cotización y sigue reintentando— pero va a pasar más seguido que
+#   con diez minutos.
+#
+#   Bajarlo de ~15 segundos no tendría sentido: sería menos que el intervalo
+#   con que se consulta, o sea no tolerar nada.
+EDAD_MAXIMA_DEL_PRECIO = timedelta(seconds=30)
+
+# Cuánto vale la tasa USDI → VES desde que se guardó.
+#
+#   El precio de Bitcoin se pide en vivo en cada consulta, así que no envejece.
+#   La tasa NO: se escribe a mano desde el panel (`btc_admin.py`), y el
+#   raspador del BCV escribe otra colección —`bcv_rates`— que nadie conecta con
+#   esta clave. Si nadie la toca, el valor de hace un mes sigue ahí y el
+#   sistema sigue prometiendo bolívares con él.
+#
+#   Un día es una elección conservadora para una tasa que se mueve todos los
+#   días. Es UN número y está acá para cambiarlo: si el operador la fija una
+#   vez por semana, subilo; si la mueve dos veces por día, bajalo.
+EDAD_MAXIMA_DE_LA_TASA = timedelta(hours=24)
+
+# Cuánto dura el cobro, desde que se genera hasta que vence.
+#
+#   Es LA ventana de exposición a la volatilidad del bitcoin: en ese rato el
+#   precio queda clavado —los sats que paga el cliente y los bolívares que
+#   recibe el beneficiario ya están fijos— y el movimiento lo absorbe el
+#   operador, con el colchón del margen y la comisión (~3 %).
+#
+#   Diez minutos, por decisión del operador: menos ventana y más apuro en
+#   pagar. Antes eran treinta.
+#
+#   Escrito UNA vez. Estaba en cuatro lugares —dos en el servidor y dos en la
+#   pantalla— y cambiarlo era acordarse de los cuatro.
+DURACION_DEL_COBRO = timedelta(minutes=10)
 
 MARGEN = 0.99
 COMISION = 1.02
@@ -51,8 +104,53 @@ async def _get_comision_dinamica():
 
 
 async def _get_tasa_ves():
+    """La tasa USDI → VES, o None si no está configurada.
+
+    Antes devolvía 680.0 cuando faltaba. Eso no dejaba el sistema roto: lo
+    dejaba emitiendo remesas a una tasa que nadie fijó. Si la real fuera 270,
+    a cada beneficiario se le prometían dos veces y media los bolívares que
+    corresponden, y la diferencia la pone el operador.
+
+    Devolver None obliga a decidir en cada lugar que la use. Los dos lugares
+    están decididos: la pantalla no convierte, y el cobro no se emite.
+    """
     config = await db.config.find_one({"clave": "tasa_usd_ves_btc"})
-    return float(config["valor"]) if config and config.get("valor") else 680.0
+    if not config or not config.get("valor"):
+        return None
+    try:
+        tasa = float(config["valor"])
+    except (TypeError, ValueError):
+        logger.error("tasa_usd_ves_btc guardada con un valor que no es un número")
+        return None
+    if tasa <= 0:
+        return None
+
+    cuando = config.get("updated_at")
+    if cuando is None:
+        # Concesión, y con fecha de vencimiento: las tasas guardadas antes de
+        # que `_write_config_value` sellara la hora no la tienen. Cortar acá
+        # dejaría los envíos parados en el momento de desplegar esto, por un
+        # dato viejo y no por una tasa mala. Se acepta una vez y se grita: con
+        # que el operador vuelva a guardar la tasa desde el panel, queda
+        # sellada y este camino no se usa nunca más.
+        logger.error("La tasa USDI→VES no tiene fecha de actualización: "
+                     "volvé a guardarla desde el panel para poder controlar "
+                     "su antigüedad.")
+        return tasa
+
+    if cuando.tzinfo is None:
+        cuando = cuando.replace(tzinfo=timezone.utc)
+    edad = datetime.now(timezone.utc) - cuando
+    if edad > EDAD_MAXIMA_DE_LA_TASA:
+        logger.error(f"La tasa USDI→VES tiene {edad.days} día(s) y "
+                     f"{edad.seconds // 3600} hora(s): no se cotiza con ella.")
+        # El corte ya está decidido arriba: se devuelve None pase lo que pase
+        # con el aviso. Avisar es lo que evita que el operador se entere por un
+        # cliente que no pudo enviar, y el propio servicio se ocupa de que sea
+        # UN aviso por vencimiento y no uno por consulta.
+        await avisar_si_hace_falta(db, cuando, edad)
+        return None
+    return tasa
 
 
 async def _get_btc_price():
@@ -66,7 +164,40 @@ async def _get_btc_price():
             return price
     except Exception as e:
         logger.warning(f"Error precio BTC: {e}")
-        return _btc_price_cache["price"]
+        # Se acepta el último precio conocido sólo si es reciente. Si no hay
+        # ninguno, o el que hay ya envejeció, se devuelve None: es preferible
+        # no poder cotizar a cotizar con un número de hace horas.
+        guardado = _btc_price_cache.get("price")
+        cuando = _btc_price_cache.get("updated_at")
+        if guardado is None or cuando is None:
+            return None
+        if datetime.now(timezone.utc) - cuando > EDAD_MAXIMA_DEL_PRECIO:
+            logger.error("El precio BTC guardado quedó viejo y el proveedor no contesta")
+            return None
+        return guardado
+
+
+async def _cotizacion_o_error():
+    """Las dos cifras con las que se cobra, o un error que se entiende.
+
+    Existe para que ningún camino que mueve dinero pueda seguir sin ellas por
+    olvido. Devuelve una tupla; si falta cualquiera de las dos, corta.
+    """
+    precio = await _get_btc_price()
+    tasa = await _get_tasa_ves()
+    if precio is None or tasa is None:
+        falta = "el precio de Bitcoin" if precio is None else "la tasa del día"
+        if precio is None and tasa is None:
+            falta = "el precio de Bitcoin ni la tasa del día"
+        logger.error(f"No se emite el cobro: no se pudo obtener {falta}")
+        raise HTTPException(
+            status_code=503,
+            detail=("En este momento no podemos calcular la cotización. No "
+                    "emitimos el cobro con una tasa estimada: el monto que "
+                    "recibe el beneficiario tiene que ser exacto. Probá de "
+                    "nuevo en unos minutos."),
+        )
+    return precio, tasa
 
 
 async def _get_total_enviado_hoy(user_id):
@@ -111,7 +242,35 @@ class MarcarEnviadoRequest(BaseModel):
 async def get_precio_btc():
     precio = await _get_btc_price()
     tasa_ves = await _get_tasa_ves()
-    return {"precio_btc": precio, "tasa_btc_ves": tasa_ves, "updated_at": _btc_price_cache.get("updated_at")}
+    # Puede devolver nulos, y es a propósito. La pantalla sabe qué hacer con
+    # eso: no convierte, no promete y no deja avanzar. Un número inventado acá
+    # se vería bien y sería mentira.
+    # La fecha de la tasa viaja para que el panel pueda mostrarla. Un control
+    # que corta sin decir desde cuándo obliga a adivinar qué pasó.
+    doc = await db.config.find_one({"clave": "tasa_usd_ves_btc"})
+    return {
+        "precio_btc": precio,
+        "tasa_btc_ves": tasa_ves,
+        "disponible": precio is not None and tasa_ves is not None,
+        "updated_at": _btc_price_cache.get("updated_at"),
+        "tasa_actualizada_en": (doc or {}).get("updated_at"),
+    }
+
+
+def _blink_rechazo_el_vencimiento(respuesta):
+    """¿El proveedor rechazó la petición por no conocer `expiresIn`?
+
+    Se mira sólo el error de GraphQL de nivel superior —el que se devuelve
+    cuando la consulta no valida contra el esquema— y no los errores de
+    negocio, que vienen adentro de `lnInvoiceCreate.errors`. Confundirlos haría
+    reintentar un cobro que el proveedor rechazó por un motivo real, como un
+    monto fuera de rango.
+    """
+    for e in (respuesta or {}).get("errors") or []:
+        mensaje = str(e.get("message", "")).lower()
+        if "expiresin" in mensaje:
+            return True
+    return False
 
 
 @router.post("/generar-invoice", dependencies=[Depends(sin_transacciones_personales)])
@@ -140,8 +299,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
     if not beneficiario:
         raise HTTPException(status_code=404, detail="Beneficiario no encontrado.")
         
-    precio_btc = await _get_btc_price()
-    tasa_ves = await _get_tasa_ves()
+    precio_btc, tasa_ves = await _cotizacion_o_error()
     margen_dinamico = await _get_margen_dinamico()
     comision_dinamica = await _get_comision_dinamica()
     precio_con_margen = precio_btc * margen_dinamico
@@ -176,21 +334,42 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
             "Content-Type": "application/json"
         }
             
-        payload = {
-            "query": mutation,
-            "variables": {
-                "input": {
-                    "amount": sats,
-                    "memo": memo,
-                    "walletId": BLINK_WALLET_ID
-                }
-            }
-        }
-            
+        # EL INVOICE VENCE CUANDO VENCE NUESTRA VENTANA, no después.
+        #
+        #   Hasta acá el invoice se pedía sin vencimiento y quedaba con el que
+        #   pone el proveedor por omisión, que es mucho más largo. O sea que la
+        #   ventana de diez minutos era sólo del lado nuestro: un cliente podía
+        #   pagar a los cuarenta y la red aceptaba el pago igual.
+        #
+        #   Dos formas de terminar mal, y las dos con plata de por medio:
+        #   procesar el envío a un precio de hace cuarenta minutos, o —si el
+        #   cliente había cancelado— cobrarle sin que el envío exista.
+        #
+        #   Acortar la ventana sin esto habría hecho las dos más probables.
+        entrada = {"amount": sats, "memo": memo, "walletId": BLINK_WALLET_ID}
+        minutos = max(1, int(DURACION_DEL_COBRO.total_seconds() // 60))
+
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(BLINK_GRAPHQL_URL, headers=headers, json=payload)
+            resp = await client.post(
+                BLINK_GRAPHQL_URL, headers=headers,
+                json={"query": mutation,
+                      "variables": {"input": {**entrada, "expiresIn": minutos}}})
             result = resp.json()
             logger.debug(f"Blink lnInvoiceCreate status: {resp.status_code}")
+
+            # Si el proveedor no conoce ese campo, se reintenta sin él en vez
+            # de dejar al cliente sin poder pagar. Adivinar el nombre de un
+            # campo y equivocarse no puede costar que no se emita ningún
+            # cobro; queda registrado para que se note y se corrija.
+            if _blink_rechazo_el_vencimiento(result):
+                logger.error(
+                    "El proveedor no aceptó `expiresIn`: el invoice queda con "
+                    "su vencimiento por omisión, más largo que nuestra "
+                    "ventana. Revisar el nombre del campo en su API.")
+                resp = await client.post(
+                    BLINK_GRAPHQL_URL, headers=headers,
+                    json={"query": mutation, "variables": {"input": entrada}})
+                result = resp.json()
             
     except Exception as e:
         logger.error(f"Blink except: {type(e).__name__}: {e}")
@@ -228,7 +407,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         "estado": "pendiente", 
         "no_reembolsable": True, 
         "creado_en": datetime.now(timezone.utc), 
-        "expira_en": datetime.now(timezone.utc) + timedelta(minutes=30)
+        "expira_en": datetime.now(timezone.utc) + DURACION_DEL_COBRO
     })
     
     return {
@@ -241,7 +420,16 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         "ves_recibe": ves_recibe, 
         "precio_btc_usado": precio_btc, 
         "tasa_ves": tasa_ves, 
-        "expira_en": 1800, 
+        # `expira_en_segundos` y no `expira_en`.
+        #
+        #   Acá se devolvían segundos y en `/mi-remesa-activa` una fecha ISO,
+        #   las dos con el MISMO nombre. La pantalla lo resolvía sin querer:
+        #   hacía `new Date(600)`, le daba 1970, lo descartaba por estar en el
+        #   pasado y caía en un 1800 escrito a mano que resultaba ser el valor
+        #   correcto. Funcionaba de casualidad, y dejó de funcionar en cuanto
+        #   la duración cambió.
+        "expira_en_segundos": int(DURACION_DEL_COBRO.total_seconds()),
+        "expira_en": (datetime.now(timezone.utc) + DURACION_DEL_COBRO).isoformat(),
         "aviso": "Los pagos en BTC no son reembolsables bajo ningun motivo."
     }
 
@@ -271,9 +459,57 @@ async def webhook_blink(request: Request):
     status = str(transaction.get("status", payload.get("status", ""))).upper()
     if status not in ("PAID", "SUCCESS"):
         return {"ok": True, "msg": "Evento ignorado"}
-    remesa = await db.btc_remesas.find_one({"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}], "estado": "pendiente"})
+    # Se busca sin filtrar por estado a propósito. Filtrar por «pendiente»
+    # hacía que un pago de una orden cancelada no encontrara nada y el webhook
+    # contestara «ya procesada»: el cliente pagaba y no quedaba rastro de que
+    # su plata había llegado.
+    remesa = await db.btc_remesas.find_one(
+        {"$or": [{"payment_hash": payment_hash}, {"remesa_id": payment_hash}]})
     if not remesa:
-        return {"ok": True, "msg": "Orden no encontrada o ya procesada"}
+        logger.error(f"Pago recibido sin orden que lo explique: {payment_hash}")
+        return {"ok": True, "msg": "Orden no encontrada"}
+    if remesa.get("estado") == "pagado":
+        return {"ok": True, "msg": "Ya procesada"}
+
+    # UN PAGO QUE LLEGA TARDE NO SE ACREDITA SOLO.
+    #
+    #   El precio quedó fijo al generar el cobro. Acreditarlo después de que
+    #   venció es enviar bolívares calculados con un bitcoin de otro momento, y
+    #   la diferencia la pone alguien sin haberlo decidido.
+    #
+    #   Tampoco se ignora: la plata llegó. Queda marcado para que una persona
+    #   lo mire, que es la única forma de resolverlo bien —devolver o completar
+    #   a la cotización de hoy— y es una decisión de negocio, no de código.
+    vencida = remesa.get("expira_en") and remesa["expira_en"].replace(
+        tzinfo=remesa["expira_en"].tzinfo or timezone.utc) < datetime.now(timezone.utc)
+    if vencida or remesa.get("estado") == "cancelado":
+        motivo = "vencida" if vencida else "cancelada"
+        logger.error(f"Pago de una orden {motivo}: {remesa['remesa_id']}. "
+                     "Queda para revisión manual.")
+        await db.btc_remesas.update_one(
+            {"remesa_id": remesa["remesa_id"]},
+            {"$set": {"estado": "revision_manual",
+                      "motivo_revision": f"pago recibido con la orden {motivo}",
+                      "pagado_en": datetime.now(timezone.utc)}})
+        try:
+            from services.notifications import create_notification
+            async for admin in db.users.find({"role": "super_admin"}):
+                await create_notification(
+                    user_id=admin["user_id"],
+                    title="Un pago con Bitcoin llegó tarde",
+                    message=(f"Llegó el pago de una orden {motivo}. No se "
+                             "acreditó solo, porque el precio con el que se "
+                             "calculó ya no es el de ahora. Hay que revisarla "
+                             "en el panel."),
+                    notification_type="warning",
+                    data={"remesa_id": remesa["remesa_id"], "motivo": motivo})
+        except Exception as e:
+            logger.error(f"No se pudo avisar del pago tardío: {type(e).__name__}")
+        return {"ok": True, "msg": "Orden vencida: queda para revisión"}
+
+    if remesa.get("estado") != "pendiente":
+        return {"ok": True, "msg": "Orden en un estado que no admite el pago"}
+
     ves_recibe = remesa["ves_recibe"]
     user_id = remesa["user_id"]
     await db.btc_ves_wallets.update_one({"user_id": user_id}, {"$inc": {"saldo": ves_recibe}, "$set": {"moneda": "BTC-VES", "user_id": user_id}, "$setOnInsert": {"creado_en": datetime.now(timezone.utc)}}, upsert=True)

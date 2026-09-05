@@ -1,33 +1,14 @@
 /**
- * ComoFunciona.jsx — Página pública de transparencia operativa.
+ * ComoFunciona.jsx — NO SE PUBLICA.
  *
- * POR QUE EXISTE
+ *   Esta página no tiene ruta y no se llega a ella desde ningún lado. Se armó
+ *   como material interno y se decidió que no salga a la web: describe con
+ *   detalle cómo opera la plataforma por dentro, y ese nivel de detalle no va
+ *   publicado.
  *
- *   Quien evalúa esta plataforma —un usuario que decide si confía, o una
- *   revisión de cumplimiento -- mira primero lo que está publicado: quién
- *   opera, con qué límites, qué verificación pide, y qué queda registrado.
- *   Eso estaba repartido entre la landing y la página legal, o directamente no
- *   estaba.
- *
- * LA REGLA QUE RESPETA
- *
- *   `Landing.jsx` deja escrita una regla de negocio explícita: las páginas
- *   públicas NO mencionan remesas ni transferencias internacionales; todo se
- *   describe como "operaciones digitales" de forma genérica. Esta página se
- *   escribió dentro de esa regla a propósito.
- *
- * LOS NUMEROS SON VIVOS, NO ESCRITOS A MANO
- *
- *   Los límites y el cupo salen de `GET /api/limits`, que es el MISMO módulo
- *   que el servidor usa para validar. Escribirlos acá a mano significaría que
- *   el día que alguien cambie una constante, esta página seguiría publicando
- *   el número viejo — y nadie se enteraría, porque no falla nada. Hay tests en
- *   el backend que comprueban que lo publicado y lo que se hace cumplir son el
- *   mismo valor.
- *
- *   Si la consulta falla, NO se inventa un número: se dice que no se pudieron
- *   cargar. Un límite equivocado en una página pública es una promesa que no
- *   se puede cumplir.
+ *   Se conserva el archivo por si algún día se sirve dentro de la aplicación,
+ *   con sesión iniciada. Volver a ponerle una ruta pública es una decisión del
+ *   operador, no un arreglo; `test_lo_que_no_se_publica.py` la frena.
  */
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -196,9 +177,8 @@ export default function ComoFunciona() {
           </Tarjeta>
           <Tarjeta icono={<ShieldCheck size={18} color={MORADO} />} titulo="Qué se pide">
             Documento de identidad con su reverso cuando el tipo de documento lo
-            tiene, comprobante de CPF y una selfie. Se revisa a mano, una por
-            una. Si algo no se lee bien, se rechaza indicando el motivo y se
-            puede volver a enviar.
+            tiene, comprobante de CPF y una selfie. Si algo no se lee bien, se
+            rechaza indicando el motivo y se puede volver a enviar.
           </Tarjeta>
         </div>
 
@@ -211,19 +191,22 @@ export default function ComoFunciona() {
         }}>
           <Tarjeta icono={<ScrollText size={18} color={MORADO} />} titulo="Cada movimiento de saldo">
             Toda entrada y salida de saldo deja un asiento contable con su
-            fecha, su monto, su motivo y la operación que lo originó. El saldo
-            de una cuenta y la suma de sus asientos tienen que coincidir, y hay
-            una comprobación periódica que lo verifica.
+            fecha, su monto, su motivo y la operación que lo originó. Un asiento
+            no se borra ni se reescribe: si algo se corrige, la corrección es un
+            asiento más.
           </Tarjeta>
-          <Tarjeta icono={<Gauge size={18} color={MORADO} />} titulo="Cada decisión administrativa">
-            Aprobar o rechazar una verificación, aprobar una recarga, ajustar un
-            saldo, cambiar una tasa o modificar permisos queda asentado con
-            quién lo hizo, cuándo, desde dónde, y cuál era el estado anterior.
+          <Tarjeta icono={<Gauge size={18} color={MORADO} />} titulo="Cada intervención del equipo">
+            Cuando alguien del equipo interviene sobre una cuenta, queda
+            asentado con quién lo hizo y cuándo. Si querés saber qué pasó con
+            una operación tuya, podés pedir ese detalle desde el{' '}
+            <Link to="/support" style={{ color: MORADO }}>centro de ayuda</Link>.
           </Tarjeta>
-          <Tarjeta icono={<Lock size={18} color={MORADO} />} titulo="El acceso a la administración">
-            El acceso administrativo exige un segundo factor. Las cuentas del
-            personal no pueden realizar operaciones a título personal, y las
-            altas y bajas de personal quedan registradas.
+          <Tarjeta icono={<Lock size={18} color={MORADO} />} titulo="Quién ve tus documentos">
+            Los documentos que enviás para verificar tu identidad se usan sólo
+            para eso, y los ve únicamente quien hace esa revisión. Qué datos se
+            guardan, por cuánto tiempo, y cómo pedir su corrección o su
+            eliminación está en la{' '}
+            <Link to="/legal#privacidad" style={{ color: MORADO }}>política de privacidad</Link>.
           </Tarjeta>
           <Tarjeta icono={<MessageSquare size={18} color={MORADO} />} titulo="Si algo sale mal">
             Cada operación tiene un identificador propio que sirve para

@@ -21,6 +21,11 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+# El mismo límite que aplica el camino del cobro. Importarlo —en vez de
+# repetir el número— es lo que hace que el panel no pueda mostrar una hora
+# distinta de la que se hace cumplir.
+from routes.btc_lightning import EDAD_MAXIMA_DE_LA_TASA
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -209,6 +214,22 @@ async def get_btc_config(admin: User = Depends(get_super_admin)):
     tasa_usd_ves = await _read_config_value("tasa_usd_ves_btc", DEFAULT_TASA_USD_VES)
     btc_price = await _fetch_current_btc_price()
 
+    # Desde cuándo rige la tasa, y cuánto le queda.
+    #
+    #   La tasa paralela se fija a mano. Pasado el límite de antigüedad los
+    #   envíos con Bitcoin se cortan y se avisa, pero enterarse por una
+    #   notificación es enterarse tarde: para entonces ya hubo alguien que no
+    #   pudo enviar. Acá se ve antes, en la pantalla donde se cambia.
+    doc_tasa = await db.config.find_one({"clave": "tasa_usd_ves_btc"})
+    fijada_en = (doc_tasa or {}).get("updated_at")
+    if fijada_en is not None and fijada_en.tzinfo is None:
+        fijada_en = fijada_en.replace(tzinfo=timezone.utc)
+    horas_de_vida = None
+    if fijada_en is not None:
+        transcurrido = datetime.now(timezone.utc) - fijada_en
+        horas_de_vida = round(
+            (EDAD_MAXIMA_DE_LA_TASA - transcurrido).total_seconds() / 3600, 1)
+
     # Compute representative example: 1 USD client â ? BTC, ? VES
     example = {}
     if btc_price:
@@ -229,6 +250,10 @@ async def get_btc_config(admin: User = Depends(get_super_admin)):
         "margen": margen,
         "comision": comision,
         "tasa_usd_ves": tasa_usd_ves,
+        "tasa_fijada_en": fijada_en,
+        "tasa_horas_restantes": horas_de_vida,
+        "tasa_vencida": horas_de_vida is not None and horas_de_vida <= 0,
+        "tasa_limite_horas": EDAD_MAXIMA_DE_LA_TASA.total_seconds() / 3600,
         "btc_price_usd": btc_price,
         "btc_price_source": "blockchain.info/ticker",
         "example": example,

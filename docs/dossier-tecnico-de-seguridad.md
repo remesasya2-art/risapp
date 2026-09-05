@@ -357,7 +357,82 @@ verificada en el KYC la más fuerte.
 
 `backend/services/geo_restrictions.py`, `backend/routes/credits.py`
 
-### 5.6 Dónde se miran estos controles
+### 5.6 Sin cotización no se cobra
+
+Los envíos con Bitcoin se cobran con dos números: el precio de Bitcoin en
+dólares y la tasa USDI → VES. Los dos estaban escritos a mano como valor por
+defecto, y los dos fallaban en silencio hacia lados opuestos.
+
+| | Valor por defecto | Qué pasaba si se usaba |
+|---|---|---|
+| Precio de Bitcoin | 58 500 USD en el caché inicial | Con el bitcoin cerca de 79 000, el cliente pagaba ~36 % de más en bitcoin |
+| Tasa USDI → VES | 680,0 al faltar la configuración | Con la real en 270, al beneficiario se le prometían 2,5 veces los bolívares; la diferencia la pone el operador |
+
+Ninguno hacía ruido: la remesa se emitía, el cliente pagaba, el número estaba
+mal. Es la decisión que tomó el operador con sus palabras: «mejor que falle por
+error de cálculo en la tasa; asumir representa perder o ganar dinero y quiero
+ser lo más justo posible».
+
+Lo que se hace cumplir ahora:
+
+- **El caché del precio arranca vacío.** El precio se pide en vivo en cada
+  consulta —no hay intervalo de actualización— y la pantalla consulta cada
+  diez segundos. Si el proveedor no contesta, se acepta el último precio
+  conocido sólo **treinta segundos**: el bitcoin se mueve, y cobrar con el
+  precio de hace un minuto es cobrar mal, para un lado o para el otro.
+- **La tasa devuelve nada** si falta, si no es un número, o si es cero o
+  negativa.
+- **`_cotizacion_o_error()` es el único camino** por el que el cobro obtiene
+  esas dos cifras, y corta con 503 y un mensaje que una persona entiende.
+- **`GET /btc/precio` devuelve nulos** en vez de inventar. La pantalla no
+  convierte, no promete y no deja avanzar.
+
+**La antigüedad de la tasa, que es el modo de fallar más probable.** El precio
+de Bitcoin se pide en vivo, así que no envejece. La tasa USDI → VES es la
+paralela y se fija **a mano**: el raspador que corre solo trae el dólar del BCV
+—otro número, otra colección— y nadie lo conecta con esta clave. O sea que el
+riesgo real no es que la tasa falte, sino que nadie la toque durante semanas y
+se sigan prometiendo bolívares con la de hace un mes.
+
+Por eso se controla contra `EDAD_MAXIMA_DE_LA_TASA` (24 h, un solo número
+puesto para ajustarlo a la cadencia con que se fije). Al vencerse, los envíos
+con Bitcoin se cortan **y se avisa al super administrador** —una vez por
+vencimiento, no una por consulta: la pantalla consulta cada diez segundos y un
+aviso que llega cien veces deja de ser un aviso—. El panel muestra desde cuándo
+rige la tasa y cuántas horas le quedan, para no enterarse por la notificación,
+que es enterarse tarde.
+
+**La ventana del cobro: diez minutos.** Es LA exposición a la volatilidad del
+bitcoin. Al generar el cobro quedan fijos los sats que paga el cliente y los
+bolívares que recibe el beneficiario; si el precio se mueve en ese rato, la
+diferencia la absorbe el operador, con el colchón del margen y la comisión
+(~3 %). Eran treinta minutos.
+
+Acortarla obligó a cerrar dos huecos que ya existían y que la ventana más corta
+volvía **más** probables, porque más órdenes vencen:
+
+- **El invoice se pedía sin vencimiento propio** y quedaba con el del
+  proveedor, mucho más largo. La ventana era sólo del lado nuestro: se podía
+  pagar a los cuarenta minutos y la red aceptaba. Ahora se le pide al proveedor
+  el mismo vencimiento, con reintento sin ese campo si no lo conoce —adivinar
+  el nombre de un campo y errarle no puede costar que no se emita ningún cobro.
+- **El webhook acreditaba sin mirar la fecha.** Un pago tardío enviaba
+  bolívares calculados con un bitcoin de otro momento; y si la orden estaba
+  cancelada, la búsqueda filtraba por «pendiente», no encontraba nada y el
+  webhook contestaba «ya procesada»: el cliente pagaba y no quedaba rastro.
+  Ahora la orden se busca sin filtrar por estado, un pago fuera de ventana
+  queda en `revision_manual` y se avisa al super administrador. No se acredita
+  solo y no se ignora: la plata llegó, y qué hacer con ella —devolver o
+  completar a la cotización de hoy— es una decisión de negocio.
+
+`backend/routes/btc_lightning.py`, `backend/services/aviso_de_tasa.py`,
+`backend/tests/test_cotizacion_btc.py`,
+`backend/tests/test_aviso_de_tasa_vencida.py`,
+`backend/tests/test_ventana_del_cobro.py`
+
+---
+
+### 5.7 Dónde se miran estos controles
 
 Un control que nadie puede mirar no es un control. Los cuatro de arriba
 —solvencia, reconciliación, integridad y quién tiene las llaves del dinero—
@@ -405,6 +480,43 @@ El otorgamiento de permisos es el asiento que ordena a todos los demás: mover
 dinero se anotaba, pero entregarle a una persona *el poder* de mover dinero no.
 
 `backend/services/auditoria.py`, `backend/tests/test_auditoria.py`
+
+### 6.1 Lo que se publica de todo esto, y lo que no
+
+Las páginas públicas prometen el **resultado**; no describen el **mecanismo**.
+
+Durante un tiempo lo describieron. La página «Cómo funciona» enumeraba, para
+mostrar seriedad, que el acceso administrativo exige un segundo factor, que la
+comprobación de saldos es periódica, y la lista completa de lo que puede hacer
+una cuenta interna: aprobar una verificación, aprobar una recarga, **ajustar un
+saldo**, cambiar una tasa, modificar permisos. La portada y la política de
+privacidad decían además que el segundo factor es obligatorio para el personal.
+
+Nada de eso ayuda a quien está decidiendo si confía, y todo eso ayuda a quien
+está mirando por dónde entrar: le nombra la operación que vale la pena tomar
+—ajustar un saldo—, le dice qué defensa va a encontrar del otro lado, y le
+dice qué tiene que imitar una pantalla falsa dirigida a un empleado para que el
+empleado no sospeche. «Periódica», además, es la palabra que anuncia que hay
+una ventana.
+
+Lo que quedó publicado: que todo movimiento de saldo deja un asiento, que un
+asiento no se reescribe, que toda intervención del equipo queda asentada, y que
+el usuario puede pedir ese detalle. Todas son promesas comprobables y ninguna
+es un plano.
+
+Dos distinciones que costaron una corrección y conviene no perder:
+
+- **Ofrecerle el segundo factor al usuario se sigue diciendo.** Es una función
+  que él puede prender; contarla lo protege y no le sirve a nadie más. Lo que
+  no se publica es qué se le exige al **personal**. La regla no está en la
+  palabra sino en de quién se habla, y por eso el test busca las dos cosas en
+  la misma oración y no una lista de palabras prohibidas.
+- **La política de privacidad sigue declarando que hay medidas técnicas y
+  organizativas**, que es lo que pide la LGPD (art. 46). Lo que dejó de hacer
+  es enumerarlas: el detalle se documenta acá y se pone a disposición de la
+  autoridad de control o de una auditoría que lo pida.
+
+`backend/tests/test_lenguaje_de_las_paginas_publicas.py`
 
 ---
 

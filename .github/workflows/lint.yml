@@ -55,3 +55,55 @@ jobs:
         # Sin variable de servidor: los tests de integración HTTP se saltan
         # solos en vez de salir a la red. Ver tests/conftest.py.
         run: python -m pytest tests/ -q --no-header
+
+  # Hasta ahora CI no miraba el frontend en absoluto: ni que compilara. El bug
+  # que motivó esto —un `useEffect` adentro de un manejador de eventos, en el
+  # panel de administración— pasó por acá sin que nada se quejara.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Dos banderas, y las dos tienen historia.
+      #
+      # `npm install` y no `npm ci` porque no hay package-lock.json en el
+      # repositorio. Eso significa que CI puede instalar versiones distintas de
+      # las que se probaron. Es una deuda anotada, no un descuido: generar el
+      # candado fija lo que resuelva hoy, y es una decisión del operador.
+      #
+      # `--legacy-peer-deps` porque hay un conflicto de pares que ya existía y
+      # que este trabajo destapó: `expo` arrastra `react-native`, que exige
+      # react ^19.2.3, y el proyecto fija react 19.1.0. Localmente no se veía
+      # —`node_modules` ya estaba instalado y npm no vuelve a resolver—; en un
+      # runner limpio, la instalación falla.
+      #
+      # LA CAUSA DE VERDAD: `expo` está declarado como dependencia y NO SE
+      # IMPORTA en ningún lado. El script `npm run expo` corre `expo-shim.cjs`,
+      # que sólo lanza Vite y no requiere el paquete. Sacarlo haría desaparecer
+      # el conflicto sin banderas.
+      #
+      # No se sacó acá porque tocar las dependencias de una aplicación que
+      # cobra, en el mismo cambio que arregla otra cosa, es widening: si algo
+      # en el despliegue espera que `expo` exista, se rompe el deploy y no se
+      # sabría cuál de los dos cambios fue. Queda como decisión aparte.
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: "[BLOQUEANTE] Que compile"
+        working-directory: frontend
+        run: npm run build
+
+      - name: "[BLOQUEANTE] Reglas que ya rompieron la aplicación"
+        working-directory: frontend
+        run: node scripts/lint-bloqueante.mjs
+
+      - name: "[INFO] Lint completo (no bloquea)"
+        working-directory: frontend
+        run: npm run lint
+        continue-on-error: true
