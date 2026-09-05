@@ -51,9 +51,25 @@ async def unsubscribe_web_push(current_user: User = Depends(get_current_user)):
 
 @router.get("/status")
 async def get_web_push_status(current_user: User = Depends(get_current_user)):
-    """Check if user has web push subscription"""
+    """Si el usuario tiene una suscripcion guardada, y cual.
+
+    SE DEVUELVE EL `endpoint`, Y NO ES UN CAPRICHO
+
+        Este documento guarda UNA suscripcion por usuario: activar en el
+        telefono pisa la de la computadora. El navegador de la computadora
+        conserva su propia suscripcion local, asi que si solo dijeramos
+        "subscribed: true" esa pantalla mostraria el interruptor ENCENDIDO y no
+        recibiria nada, porque el servidor ya apunta al telefono.
+
+        Con el endpoint, cada navegador compara y sabe si la suscripcion
+        guardada es la suya o la de otro aparato.
+
+        Va el endpoint solo, nunca las `keys`: sin ellas no se puede firmar ni
+        cifrar un envio, y el que lo recibe es el duenio de la sesion.
+    """
     user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0})
-    return {"subscribed": "web_push_subscription" in user}
+    sub = (user or {}).get("web_push_subscription") or {}
+    return {"subscribed": bool(sub), "endpoint": sub.get("endpoint")}
 
 
 @router.post("/test")

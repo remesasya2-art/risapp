@@ -47,6 +47,13 @@
  *      pantalla de cambio obligado, y sale de un solo lugar:
  *      `confirmarCierreDeSesion`.
  *
+ *   8. EL INTERRUPTOR DE NOTIFICACIONES SE APAGABA SOLO AL RECARGAR. Leía
+ *      `estado.enabled && estado.subscribed`, y `enabled` no existe en ninguna
+ *      respuesta del servidor: se lo inventaba el `catch` de `getStatus()`.
+ *      Daba `undefined` siempre. Las notificaciones quedaban activadas de
+ *      verdad —«Probar» sonaba— y la pantalla decía que no. Venía de antes y
+ *      lo arrastré tal cual al rehacer esta pantalla.
+ *
  * QUE NO SE TOCO
  *
  *   Los códigos de respaldo 2FA: misma llamada, mismas validaciones, mismo
@@ -72,8 +79,9 @@ import {
 } from '../components/flujo/estilos';
 import { confirmarCierreDeSesion } from '../components/flujo/confirmar.js';
 import {
-  convieneVerificar, cpfDelPerfil, estadoDeVerificacion, fotoDePerfil,
-  motivoSinNotificaciones, nombreVisible, panelDelRol, problemaDelCambioDeClave,
+  convieneVerificar, cpfDelPerfil, estadoDeNotificaciones, estadoDeVerificacion,
+  fotoDePerfil, motivoSinNotificaciones, nombreVisible, panelDelRol,
+  problemaDelCambioDeClave,
 } from '../utils/perfil';
 
 /* ─── Piezas de esta pantalla ─────────────────────────────────────────────
@@ -239,6 +247,7 @@ export default function Profile() {
   const [pushActivo, setPushActivo] = useState(false);
   const [pushOcupado, setPushOcupado] = useState(false);
   const [pushSoporte, setPushSoporte] = useState(null);
+  const [avisoDelEstado, setAvisoDelEstado] = useState(null);
 
   const [ver2FA, setVer2FA] = useState(false);
   const [codigo2FA, setCodigo2FA] = useState('');
@@ -252,8 +261,8 @@ export default function Profile() {
   const esSuperAdmin = user?.role === 'super_admin';
   const problemaDeLaClave = problemaDelCambioDeClave(clave);
   const empezoAEscribir = Boolean(clave.actual || clave.nueva || clave.repetida);
-  const avisoPush = motivoSinNotificaciones(pushSoporte);
-  const puedeUsarPush = pushSoporte !== null && !avisoPush;
+  const avisoPush = motivoSinNotificaciones(pushSoporte) || avisoDelEstado;
+  const puedeUsarPush = pushSoporte !== null && !motivoSinNotificaciones(pushSoporte);
 
   // La lectura del estado vive DENTRO del efecto. Definida afuera y llamada
   // acá, el linter ve un setState sincrónico en el cuerpo del efecto —y tiene
@@ -267,8 +276,19 @@ export default function Profile() {
       if (vigente) setPushSoporte(info);
       if (!pushService.isSupported()) return;
       try {
-        const estadoPush = await pushService.getStatus();
-        if (vigente) setPushActivo(Boolean(estadoPush?.enabled && estadoPush?.subscribed));
+        // Las dos puntas: lo que el servidor tiene guardado y lo que este
+        // navegador tiene de verdad. Con una sola se miente. Ver
+        // `estadoDeNotificaciones` en utils/perfil.js.
+        const [servidor, endpointLocal] = await Promise.all([
+          pushService.getStatus(),
+          pushService.endpointDeEsteNavegador(),
+        ]);
+        if (!vigente) return;
+        const leido = estadoDeNotificaciones({
+          servidor, endpointLocal, permiso: info.permission,
+        });
+        setPushActivo(leido.activas);
+        setAvisoDelEstado(leido.aviso);
       } catch {
         // Sin respuesta del servidor se muestra apagado, que es el estado
         // seguro: el usuario puede encenderlo y ahí se entera de si va.
@@ -296,11 +316,13 @@ export default function Profile() {
       if (pushActivo) {
         await pushService.unsubscribe();
         setPushActivo(false);
+        setAvisoDelEstado(null);
         toast.success('Notificaciones desactivadas');
       } else {
         await pushService.init();
         await pushService.subscribe();
         setPushActivo(true);
+        setAvisoDelEstado(null);
         toast.success('Listo. Te avisamos de tus operaciones.');
       }
     } catch (e) {

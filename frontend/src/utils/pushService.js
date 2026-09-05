@@ -194,7 +194,38 @@ class PushNotificationService {
       return response.data;
     } catch (error) {
       console.error('Failed to get push status:', error);
-      return { enabled: false, subscribed: false };
+      // ESTA FORMA TIENE QUE SER LA MISMA QUE LA DEL SERVIDOR.
+      //
+      // Acá decía `{ enabled: false, subscribed: false }`, y `enabled` no
+      // existe en ninguna respuesta real: se lo inventó este `catch`. La
+      // pantalla de perfil lo leía —`estado.enabled && estado.subscribed`—,
+      // daba `undefined`, y el interruptor volvía a apagarse en cada recarga
+      // aunque las notificaciones estuvieran activadas y funcionando.
+      //
+      // Un valor de repuesto que no calza con el de verdad es una mentira que
+      // sólo se ve el día que algo falla.
+      return { subscribed: false, endpoint: null };
+    }
+  }
+
+  /**
+   * El endpoint de la suscripción de ESTE navegador, o null si no tiene.
+   *
+   * No llama a `init()` a propósito: `init()` registra el service worker y sale
+   * a buscar la clave del servidor, y esto se usa al dibujar una pantalla, sólo
+   * para saber cómo poner un interruptor. Mirar el registro que ya existe no
+   * tiene ningún efecto.
+   */
+  async endpointDeEsteNavegador() {
+    if (!this.isSupported()) return null;
+    try {
+      const registro = this.registration
+        || await navigator.serviceWorker.getRegistration();
+      const suscripcion = await registro?.pushManager?.getSubscription();
+      return suscripcion?.endpoint || null;
+    } catch (error) {
+      console.error('No se pudo leer la suscripción local:', error);
+      return null;
     }
   }
 

@@ -140,6 +140,45 @@ export function motivoSinNotificaciones(info) {
   return null;
 }
 
+/**
+ * Cómo va el interruptor de notificaciones, y qué explicar.
+ *
+ * EL BUG QUE ESTO CIERRA
+ *
+ *   La pantalla leía `estado.enabled && estado.subscribed`. El servidor NUNCA
+ *   devolvió un campo `enabled`: existía sólo en el valor de repuesto del
+ *   `catch` de `getStatus()`. `undefined && true` es `undefined`, y
+ *   `Boolean(undefined)` es `false`, así que el interruptor volvía a apagarse
+ *   en CADA recarga aunque las notificaciones estuvieran activadas —y lo
+ *   estaban: el botón «Probar» sonaba—.
+ *
+ * POR QUE NO ALCANZA CON MIRAR EL SERVIDOR
+ *
+ *   El servidor guarda UNA suscripción por usuario: activarlas en el teléfono
+ *   pisa la de la computadora. La computadora conserva la suya local, así que
+ *   con sólo `subscribed` mostraría el interruptor encendido y no recibiría
+ *   nada. Por eso se comparan los dos endpoints: el guardado y el de acá.
+ *
+ *   Y el permiso del navegador manda sobre todo lo demás: revocado, no llega
+ *   nada aunque las dos puntas digan que sí.
+ */
+export function estadoDeNotificaciones({ servidor, endpointLocal, permiso }) {
+  if (permiso === 'denied') {
+    return { activas: false, aviso: motivoSinNotificaciones({ permission: 'denied' }) };
+  }
+  if (!servidor?.subscribed) return { activas: false, aviso: null };
+
+  // El servidor tiene una suscripción, pero puede no ser la de este aparato.
+  if (!endpointLocal || (servidor.endpoint && servidor.endpoint !== endpointLocal)) {
+    return {
+      activas: false,
+      aviso: 'Tenés las notificaciones activadas en otro dispositivo. Se reciben '
+        + 'en uno por vez: si las activás acá, dejan de llegar allá.',
+    };
+  }
+  return { activas: true, aviso: null };
+}
+
 /* ─── El rol ───────────────────────────────────────────────────────────── */
 
 /**
