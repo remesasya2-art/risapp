@@ -16,6 +16,7 @@ import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
+import { confirmarCierreDeSesion } from '../components/flujo/confirmar.js';
 import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo';
 
 export default function Dashboard() {
@@ -77,7 +78,12 @@ export default function Dashboard() {
     if (isMobile) setSidebarOpen(false);
   }, [location.pathname]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // El botón está al pie del menú, debajo de la ficha del usuario y pegado a
+    // los enlaces de navegación: es el más fácil de tocar sin querer de toda la
+    // aplicación. La pregunta es la misma que en el perfil, y sale del mismo
+    // lugar para que no se separen.
+    if (!await confirmarCierreDeSesion()) return;
     logout();
     navigate('/login');
   };

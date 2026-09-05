@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { validarPassword, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
+import { confirmarCierreDeSesion } from '../components/flujo/confirmar.js';
 
 export default function ForceChangePassword() {
   const navigate = useNavigate();
@@ -54,7 +55,8 @@ export default function ForceChangePassword() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (!await confirmarCierreDeSesion()) return;
     logout();
     navigate('/login');
   };

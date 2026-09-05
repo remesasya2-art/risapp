@@ -41,8 +41,11 @@
  *   7. «CERRAR SESION» SALIA AL PRIMER TOQUE. Es la única acción de la
  *      pantalla que deshace algo, y estaba a la misma distancia que abrir un
  *      formulario: un toque mal apuntado en la fila de arriba y te vas.
- *      Pregunta en la fila misma —no con `window.confirm`, que se puede
- *      bloquear y devuelve `false` sin que nadie se entere—.
+ *      Pregunta antes, en la ventana del centro que usa toda la aplicación
+ *      —no con `window.confirm`, que se puede bloquear y devuelve `false` sin
+ *      que nadie se entere—. La misma pregunta está en el menú lateral y en la
+ *      pantalla de cambio obligado, y sale de un solo lugar:
+ *      `confirmarCierreDeSesion`.
  *
  * QUE NO SE TOCO
  *
@@ -67,6 +70,7 @@ import { Boton, Aviso } from '../components/flujo';
 import {
   C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
 } from '../components/flujo/estilos';
+import { confirmarCierreDeSesion } from '../components/flujo/confirmar.js';
 import {
   convieneVerificar, cpfDelPerfil, estadoDeVerificacion, fotoDePerfil,
   motivoSinNotificaciones, nombreVisible, panelDelRol, problemaDelCambioDeClave,
@@ -236,8 +240,6 @@ export default function Profile() {
   const [pushOcupado, setPushOcupado] = useState(false);
   const [pushSoporte, setPushSoporte] = useState(null);
 
-  const [cerrandoSesion, setCerrandoSesion] = useState(false);
-
   const [ver2FA, setVer2FA] = useState(false);
   const [codigo2FA, setCodigo2FA] = useState('');
   const [respaldos, setRespaldos] = useState(null);
@@ -374,7 +376,8 @@ export default function Profile() {
     }
   };
 
-  const cerrarSesion = () => {
+  const cerrarSesion = async () => {
+    if (!await confirmarCierreDeSesion()) return;
     logout();
     navigate('/login');
   };
@@ -572,39 +575,8 @@ export default function Profile() {
           <Fila Icono={Lock} texto="Cambiar contraseña"
             detalle="Se cierran las demás sesiones"
             onClick={() => setCambiandoClave(true)} testid="change-password-btn" />
-          {cerrandoSesion ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
-              padding: '14px 16px', background: C.errorSuave,
-            }}>
-              <span style={{
-                width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
-                background: C.lienzo, display: 'inline-flex',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <LogOut size={18} color={C.error} />
-              </span>
-              <span style={{ flex: 1, minWidth: '150px' }}>
-                <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.error }}>
-                  ¿Cerrás la sesión?
-                </span>
-                <span style={{ display: 'block', fontSize: '12.5px', color: C.texto, marginTop: '1px' }}>
-                  Vas a tener que volver a entrar.
-                </span>
-              </span>
-              <span style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                <Boton onClick={() => setCerrandoSesion(false)} testid="logout-cancel">
-                  No
-                </Boton>
-                <Boton tipo="primario" onClick={cerrarSesion} testid="logout-confirm">
-                  Cerrar sesión
-                </Boton>
-              </span>
-            </div>
-          ) : (
-            <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima flecha={false}
-              onClick={() => setCerrandoSesion(true)} testid="logout-btn" />
-          )}
+          <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima flecha={false}
+            onClick={cerrarSesion} testid="logout-btn" />
         </section>
       </div>
 
