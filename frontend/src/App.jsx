@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import ConfirmacionHost from './components/flujo/ConfirmacionHost';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
 
@@ -177,6 +178,11 @@ export default function App() {
               },
             }}
           />
+          {/* Una sola vez, al lado del Toaster y por el mismo motivo: las
+              preguntas de «¿seguro?» se hacen desde cualquier pantalla y no
+              tienen por qué subir estado hasta acá. Ver components/flujo/
+              confirmar.jsx. */}
+          <ConfirmacionHost />
         </RateProvider>
       </AuthProvider>
     </Router>

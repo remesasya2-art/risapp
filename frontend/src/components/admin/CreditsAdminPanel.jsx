@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar } from '../flujo/confirmar.js';
 import { formatRelativeTime, formatAbsoluteTime } from '../../utils/dates';
 
 // Estados posibles en crypto_deposits (reales via NOWPayments + acreditaciones manuales)
@@ -123,10 +124,12 @@ export default function CreditsAdminPanel() {
       toast.error('El monto debe ser mayor a 0');
       return;
     }
-    const confirmed = window.confirm(
-      `¿Confirmas acreditar ${amountNum} ${currency.toUpperCase()} a ${email.trim()}? Esto NO afecta balance_ris, solo créditos cripto.`
-    );
-    if (!confirmed) return;
+    const confirmado = await confirmar({
+      titulo: `¿Acreditar ${amountNum} ${currency.toUpperCase()} a ${email.trim()}?`,
+      detalle: 'Toca sólo los créditos cripto. El saldo RIS del usuario no se modifica.',
+      accion: 'Acreditar',
+    });
+    if (!confirmado) return;
 
     setCrediting(true);
     try {

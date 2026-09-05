@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { confirmar } from '../components/flujo/confirmar.js';
 import OrdenesPorProcesar from '../components/admin/OrdenesPorProcesar';
 import DiferenciasPago from '../components/admin/DiferenciasPago';
 import Reportes from '../components/admin/Reportes';
@@ -390,7 +391,16 @@ const [searchParams, setSearchParams] = useSearchParams();
 
   const handleSetAgent = async (u) => {
     const makeAgent = u.role !== 'agent';
-    if (!window.confirm(makeAgent ? `¿Convertir a ${u.name || u.email} en agente de soporte?` : `¿Quitar el rol de agente a ${u.name || u.email}?`)) return;
+    if (!await confirmar({
+      titulo: makeAgent
+        ? `¿Convertir a ${u.name || u.email} en agente de soporte?`
+        : `¿Quitarle el rol de agente a ${u.name || u.email}?`,
+      detalle: makeAgent
+        ? 'Va a poder ver y responder los tickets de soporte.'
+        : 'Deja de ver los tickets de soporte.',
+      accion: makeAgent ? 'Convertir en agente' : 'Quitar el rol',
+      tono: makeAgent ? undefined : 'peligro',
+    })) return;
     try {
       await api.post(`/admin/users/${u.user_id}/set-agent`, { is_agent: makeAgent });
       toast.success(makeAgent ? 'Ahora es agente de soporte' : 'Rol de agente quitado');
@@ -402,7 +412,12 @@ const [searchParams, setSearchParams] = useSearchParams();
 
   const handleBanUser = async (u) => {
     if (!u?.email) { toast.error('Este usuario no tiene correo'); return; }
-    if (!window.confirm(`¿Agregar a ${u.name || u.email} a la lista negra? Su correo (${u.email}) quedará bloqueado para registrarse de nuevo.`)) return;
+    if (!await confirmar({
+      titulo: `¿Agregar a ${u.name || u.email} a la lista negra?`,
+      detalle: `El correo ${u.email} queda bloqueado para registrarse de nuevo.`,
+      accion: 'Agregar a la lista negra',
+      tono: 'peligro',
+    })) return;
     try {
       await api.post('/admin/blacklist', { type: 'email', value: u.email, reason: 'Agregado desde Usuarios' });
       toast.success('Usuario agregado a la lista negra');
@@ -710,7 +725,11 @@ const [searchParams, setSearchParams] = useSearchParams();
   };
 
   const handleMarcarBtcEnviado = async (remesa_id) => {
-    if (!window.confirm('¿Confirmar que ya realizaste la transferencia al beneficiario?')) return;
+    if (!await confirmar({
+      titulo: '¿Ya le hiciste la transferencia al beneficiario?',
+      detalle: 'Al confirmar, la orden queda como enviada y el usuario recibe el aviso.',
+      accion: 'Sí, ya la hice',
+    })) return;
     try {
       setMarcandoBtc(remesa_id);
       await api.post('/admin/btc/marcar-enviado', { remesa_id, comprobante: comprobanteByOrden[remesa_id] || null });

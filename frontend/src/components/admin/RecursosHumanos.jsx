@@ -20,6 +20,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import {
   RefreshCw, UserPlus, Users, ShieldCheck, X, Trash2, History, Save,
   Mail, AlertTriangle,
@@ -141,11 +142,12 @@ export default function RecursosHumanos() {
     // Se avisa qué implica antes de hacerlo: emitir una invitación nueva
     // ANULA la anterior, así que si la persona todavía tiene el correo viejo
     // a mano, ese enlace deja de servir.
-    if (!window.confirm(
-      `Reenviar la invitación de acceso a ${ficha.email}.\n\n`
-      + 'El enlace anterior deja de funcionar en el momento en que se envía '
-      + 'el nuevo. El nuevo vence en 72 horas.',
-    )) return;
+    if (!await confirmar({
+      titulo: `¿Reenviar la invitación a ${ficha.email}?`,
+      detalle: 'El enlace anterior deja de funcionar apenas se manda el nuevo. '
+        + 'El nuevo vence en 72 horas.',
+      accion: 'Reenviar',
+    })) return;
     try {
       const { data } = await api.post(`/admin/rrhh/${ficha.user_id}/reenviar-invitacion`);
       if (data?.acceso?.correo_enviado) {
@@ -160,11 +162,21 @@ export default function RecursosHumanos() {
   };
 
   const darDeBaja = async (ficha) => {
-    const motivo = window.prompt(
-      `Baja de ${ficha.email}.\n\nSe le quitan los permisos, se desactiva la ` +
-      `cuenta y se cierran sus sesiones. El usuario NO se borra, para que el ` +
-      `libro de auditoría siga teniendo sentido.\n\nMotivo:`);
-    if (!motivo || !motivo.trim()) return;
+    // El motivo NO es opcional: queda en el libro de auditoría y es lo único
+    // que explica la baja meses después. Con `window.prompt` un motivo vacío
+    // cancelaba en silencio y nadie entendía por qué no pasaba nada; acá el
+    // botón queda apagado hasta que hay texto.
+    const motivo = await pedirTexto({
+      titulo: `¿Dar de baja a ${ficha.email}?`,
+      detalle: 'Se le quitan los permisos, se desactiva la cuenta y se cierran '
+        + 'sus sesiones. El usuario no se borra, para que el libro de auditoría '
+        + 'siga teniendo sentido.',
+      etiqueta: 'Motivo de la baja',
+      placeholder: 'Queda asentado en el libro de auditoría',
+      accion: 'Dar de baja',
+      tono: 'peligro',
+    });
+    if (motivo === null) return;
     try {
       const r = await api.delete(`/admin/rrhh/${ficha.user_id}`, { data: { motivo } });
       toast.success(`Dado de baja · ${r.data?.sesiones_cerradas ?? 0} sesiones cerradas`);

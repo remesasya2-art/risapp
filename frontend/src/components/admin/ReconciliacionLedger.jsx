@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { confirmar } from '../flujo/confirmar.js';
 import { RefreshCw, ShieldCheck, AlertTriangle, BookOpen, X, Play } from 'lucide-react';
 
 const MOV_LABEL = {
@@ -50,7 +51,11 @@ export default function ReconciliacionLedger() {
   useEffect(() => { reconciliar(); }, []);
 
   const crearApertura = async () => {
-    if (!window.confirm('Crear las líneas de saldo de apertura para los usuarios que aún no la tienen. Es seguro y no duplica. ¿Continuar?')) return;
+    if (!await confirmar({
+      titulo: '¿Crear las líneas de saldo de apertura?',
+      detalle: 'Se crean sólo para los usuarios que todavía no la tienen. No duplica nada si se corre de nuevo.',
+      accion: 'Crear apertura',
+    })) return;
     setBusyOpening(true);
     try {
       const res = await api.post('/admin/ledger/opening');

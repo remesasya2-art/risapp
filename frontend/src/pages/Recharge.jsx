@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { confirmar } from '../components/flujo/confirmar.js';
 import { QRCodeSVG } from 'qrcode.react';
 import NotificationBell from '../components/NotificationBell';
 import CardPaymentBrick from '../components/CardPaymentBrick';
@@ -261,8 +262,14 @@ export default function Recharge() {
   const handleCancelPix = async () => {
     if (!pixData?.payment_id) return;
     
-    const confirmed = window.confirm('¿Estás seguro de cancelar este pago PIX?');
-    if (!confirmed) return;
+    const confirmado = await confirmar({
+      titulo: '¿Cancelás este pago PIX?',
+      detalle: 'Se anula el código. Si después querés recargar, vas a tener que generar uno nuevo.',
+      accion: 'Sí, cancelar',
+      cancelar: 'Seguir esperando',
+      tono: 'peligro',
+    });
+    if (!confirmado) return;
 
     setLoading(true);
     try {
