@@ -299,6 +299,10 @@ export default function MesaDeAyuda({ usuario }) {
   const [filtro, setFiltro] = useState('abiertos');
   const [soloMios, setSoloMios] = useState(false);
   const [buscar, setBuscar] = useState('');
+  // Lo que se escribe y lo que se busca son dos cosas. Con una sola, cada
+  // tecla dispara una consulta: escribir un correo son treinta pedidos al
+  // servidor y treinta redibujados de la lista debajo del dedo.
+  const [busqueda, setBusqueda] = useState('');
   const [respuesta, setRespuesta] = useState('');
   const [interno, setInterno] = useState(false);
   const [adjunto, setAdjunto] = useState(null);
@@ -319,11 +323,18 @@ export default function MesaDeAyuda({ usuario }) {
   const traerCasos = useCallback(async () => {
     try {
       const res = await api.get('/admin/soporte/casos', {
-        params: { estado: filtro, mios: soloMios, buscar: buscar.trim() || undefined },
+        params: { estado: filtro, mios: soloMios, buscar: busqueda || undefined },
       });
       setCasos(res.data?.casos || []);
     } catch { /* la lista se reintenta sola en el próximo ciclo */ }
-  }, [filtro, soloMios, buscar]);
+  }, [filtro, soloMios, busqueda]);
+
+  // Medio segundo de pausa antes de buscar: el tiempo que tarda alguien en
+  // dejar de tipear, y el que hace que la lista no salte mientras escribe.
+  useEffect(() => {
+    const id = setTimeout(() => setBusqueda(buscar.trim()), 500);
+    return () => clearTimeout(id);
+  }, [buscar]);
 
   const traerDetalle = useCallback(async (casoId) => {
     if (!casoId) return;
@@ -628,11 +639,17 @@ export default function MesaDeAyuda({ usuario }) {
             </p>
             <div style={{ display: 'grid', gap: '9px', marginBottom: '18px' }}>
               {[
-                [User, 'Nombre', cliente.name || caso.user_name],
-                [Wallet, 'Saldo', `RI$ ${fmt(cliente.balance_ris || 0)}`],
-                [ShieldCheck, 'Verificación', cliente.verification_status || '—'],
-                [Clock, 'Casos anteriores', String(detalle?.casos_previos ?? 0)],
-              ].map(([Icono, titulo, valor]) => (
+                { icono: User, titulo: 'Nombre', valor: cliente.name || caso.user_name },
+                { icono: Wallet, titulo: 'Saldo', valor: `RI$ ${fmt(cliente.balance_ris || 0)}` },
+                { icono: ShieldCheck, titulo: 'Verificación', valor: cliente.verification_status || '—' },
+                { icono: Clock, titulo: 'Casos anteriores', valor: String(detalle?.casos_previos ?? 0) },
+              ].map((dato) => {
+                // En mayúscula porque React sólo dibuja un componente si el
+                // nombre empieza así; en la desestructuración el `eslint` lo
+                // tomaba por un argumento sin usar.
+                const Icono = dato.icono;
+                const { titulo, valor } = dato;
+                return (
                 <div key={titulo} style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '9px 11px', background: C.fondo, borderRadius: '10px',
@@ -647,7 +664,8 @@ export default function MesaDeAyuda({ usuario }) {
                     </span>
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {(detalle?.operaciones || []).length > 0 ? (

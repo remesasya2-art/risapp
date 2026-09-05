@@ -131,13 +131,16 @@ def test_el_circuito_completo():
     caso = _abrir_caso()
     assert caso["numero"].startswith("S-")
     assert caso["estado"] == "abierto"
-    # El motivo encamina el caso: «envío de dinero» arranca en soporte.
-    assert caso["area"] == "soporte"
+    # El área es encaminamiento interno y no viaja al cliente: se comprueba
+    # desde el lado del asesor, que es quien la usa.
+    assert "area" not in caso
 
     caso_id = caso["caso_id"]
 
     # El asesor lo ve en la bandeja y lo toma.
     _como(ASESOR)
+    # El motivo encamina el caso: «envío de dinero» arranca en soporte.
+    assert CLIENTE.get(f"/api/admin/soporte/casos/{caso_id}").json()["caso"]["area"] == "soporte"
     r = CLIENTE.get("/api/admin/soporte/casos")
     assert r.status_code == 200, r.text
     assert any(c["caso_id"] == caso_id for c in r.json()["casos"])
@@ -174,7 +177,11 @@ def test_dos_consultas_son_dos_casos():
     dos = _abrir_caso("verificacion", "Subí el documento y sigue pendiente")
     assert uno["caso_id"] != dos["caso_id"]
     assert uno["numero"] != dos["numero"]
-    assert dos["area"] == "verificaciones"
+
+    _como(ASESOR)
+    detalle = CLIENTE.get(f"/api/admin/soporte/casos/{dos['caso_id']}").json()
+    assert detalle["caso"]["area"] == "verificaciones", (
+        "El motivo del cliente tiene que encaminar el caso al área correcta.")
 
     _como(CLIENTA)
     assert len(CLIENTE.get("/api/soporte/casos").json()["casos"]) == 2
@@ -399,3 +406,76 @@ def test_el_asesor_ve_la_ficha_sin_abrir_otra_pantalla():
     assert detalle["cliente"]["balance_ris"] == 1500.0
     assert detalle["cliente"]["verification_status"] == "verified"
     assert len(detalle["operaciones"]) == 1
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La máquina de estados tiene que describir lo que el sistema HACE
+# ══════════════════════════════════════════════════════════════════════════
+
+def _estado(caso_id):
+    return CLIENTE.get(f"/api/admin/soporte/casos/{caso_id}").json()["caso"]["estado"]
+
+
+@pytest.mark.parametrize("operacion", ["soltar", "responder", "transferir"])
+def test_ninguna_operacion_deja_el_caso_en_un_estado_imposible(operacion):
+    """`tomar`, `soltar`, `responder` y `transferir` fijan el estado directo.
+
+    Si el estado que dejan no está en `TRANSICIONES`, la máquina deja de
+    describir el sistema: cualquiera que lea `services/soporte.py` para razonar
+    sobre el ciclo de vida —o la pantalla, que ofrece el menú de estados a
+    partir de ahí— saca conclusiones falsas.
+    """
+    from services import soporte
+
+    caso_id = _abrir_caso()["caso_id"]
+    _como(ASESOR)
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/tomar")
+    # Se lo deja esperando al cliente, que es el estado desde el que las tres
+    # operaciones producían un salto que la máquina no contemplaba.
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/mensajes",
+                 json={"mensaje": "Ya lo estoy viendo"})
+    desde = _estado(caso_id)
+    assert desde == soporte.ESPERANDO_CLIENTE
+
+    if operacion == "soltar":
+        CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/soltar")
+    elif operacion == "responder":
+        CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/estado",
+                     json={"estado": "resuelto"})
+        desde = _estado(caso_id)
+        CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/mensajes",
+                     json={"mensaje": "Una cosa más"})
+    else:
+        CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/transferir",
+                     json={"area": "finanzas", "nota": "Falta revisar el saldo"})
+
+    hasta = _estado(caso_id)
+    assert soporte.puede_pasar(desde, hasta) or desde == hasta, (
+        f"«{operacion}» dejó el caso de «{desde}» en «{hasta}», y la máquina "
+        "dice que ese paso no existe.")
+
+
+def test_al_cliente_no_le_viaja_nada_de_la_cocina():
+    """La respuesta del cliente es una LISTA DE LO PERMITIDO.
+
+    Con una de lo prohibido, cada campo nuevo del caso viaja hasta que alguien
+    se acuerde de agregarlo — y el que se olvida no avisa. Así se colaban el
+    motivo del escalamiento y el nombre de quien lo marcó.
+    """
+    caso_id = _abrir_caso()["caso_id"]
+    _como(ASESOR)
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/tomar")
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/escalar",
+                 json={"motivo": "El cliente amenaza con denunciarnos"})
+
+    _como(CLIENTA)
+    caso = CLIENTE.get(f"/api/soporte/casos/{caso_id}").json()["caso"]
+    prohibidos = ["escalado_motivo", "escalado_por", "escalado_por_nombre",
+                  "asignado_a", "area", "prioridad", "sin_leer_asesor",
+                  "escalado", "cerrado_por"]
+    filtrados = [k for k in prohibidos if k in caso]
+    assert not filtrados, f"Le viajaron al cliente campos internos: {filtrados}"
+
+    # Y lo que sí necesita, sigue estando.
+    for necesario in ("numero", "asunto", "estado", "asignado_a_nombre"):
+        assert necesario in caso, f"Al cliente le falta «{necesario}»."

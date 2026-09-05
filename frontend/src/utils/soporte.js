@@ -48,12 +48,16 @@ export function tonoDeEstado(estado) {
   return ESTADOS[estado]?.tono || 'neutro';
 }
 
-/** Espeja a `TRANSICIONES` del backend. Lo que no está acá, no se ofrece. */
+/** Espeja a `TRANSICIONES` del backend. Lo que no está acá, no se ofrece.
+ *
+ *  Un test compara las dos tablas estado por estado: si allá se agrega un paso
+ *  y acá no, el asesor deja de ver una opción que sí existe; al revés, se le
+ *  ofrece una que el servidor va a rechazar. */
 const TRANSICIONES = {
   [ABIERTO]: [EN_CURSO, RESUELTO, CERRADO],
   [EN_CURSO]: [ESPERANDO_CLIENTE, RESUELTO, CERRADO, ABIERTO],
-  [ESPERANDO_CLIENTE]: [EN_CURSO, RESUELTO, CERRADO],
-  [RESUELTO]: [EN_CURSO, CERRADO],
+  [ESPERANDO_CLIENTE]: [EN_CURSO, RESUELTO, CERRADO, ABIERTO],
+  [RESUELTO]: [EN_CURSO, ESPERANDO_CLIENTE, CERRADO, ABIERTO],
   [CERRADO]: [],
 };
 

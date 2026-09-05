@@ -98,12 +98,27 @@ async def _registrar(caso_id, texto, autor_id=None, autor_nombre=None):
     })
 
 
+# Lo que el cliente ve de su caso. LISTA DE LO PERMITIDO, no de lo prohibido, y
+# la diferencia no es de estilo: con una lista de lo prohibido, cada campo nuevo
+# que se le agregue al caso viaja al cliente hasta que alguien se acuerde de
+# agregarlo a la lista, y el que se olvida no avisa. Así lo escribí la primera
+# vez y ya se colaban `escalado_por_nombre` y el motivo del escalamiento —quién
+# de la casa marcó el caso como grave y por qué—.
+#
+# `asignado_a_nombre` va a propósito: el cliente lee «¿Cómo fue la atención de
+# Ana?». `asignado_a` no: el identificador interno no le sirve para nada.
+_DEL_CLIENTE = (
+    "caso_id", "numero", "asunto", "motivo", "estado", "creado_en",
+    "actualizado_en", "ultimo_mensaje", "ultimo_mensaje_en", "ultimo_mensaje_de",
+    "sin_leer_cliente", "calificacion", "asignado_a_nombre", "cerrado_en",
+)
+
+
 def _publico(caso):
-    """El caso como lo ve el cliente: sin las notas de la casa."""
+    """El caso como lo ve el cliente: sin nada de la cocina."""
     if not caso:
         return None
-    fuera = ("asignado_a", "escalado_motivo", "notas_internas")
-    return {k: v for k, v in caso.items() if k not in fuera}
+    return {k: caso[k] for k in _DEL_CLIENTE if k in caso}
 
 
 async def _staff_con(permiso):
@@ -168,9 +183,13 @@ async def mi_caso(caso_id: str, current_user: User = Depends(get_current_user)):
     mensajes = await db.soporte_mensajes.find(
         {"caso_id": caso_id, "interno": {"$ne": True}}, {"_id": 0},
     ).sort("creado_en", 1).to_list(500)
-    # Al abrirlo, deja de haber nada sin leer para el cliente.
-    await db.soporte_casos.update_one(
-        {"caso_id": caso_id}, {"$set": {"sin_leer_cliente": 0}})
+    # Al abrirlo, deja de haber nada sin leer para el cliente. La condición no
+    # es un adorno: esta pantalla vuelve a preguntar cada ocho segundos, y sin
+    # ella cada consulta sería una escritura para poner en cero algo que ya
+    # estaba en cero.
+    if caso.get("sin_leer_cliente"):
+        await db.soporte_casos.update_one(
+            {"caso_id": caso_id}, {"$set": {"sin_leer_cliente": 0}})
     return {"caso": _publico(caso), "mensajes": mensajes}
 
 
@@ -465,8 +484,11 @@ async def ver_caso(caso_id: str, current_user: User = Depends(get_crm_user)):
     caso["semaforo"] = soporte.semaforo(caso, ahora)
     caso["minutos_esperando"] = soporte.minutos_esperando(caso, ahora)
 
-    await db.soporte_casos.update_one(
-        {"caso_id": caso_id}, {"$set": {"sin_leer_asesor": 0}})
+    # Igual que del lado del cliente: la consola relee el caso cada seis
+    # segundos y no tiene por qué escribir en cada vuelta.
+    if caso.get("sin_leer_asesor"):
+        await db.soporte_casos.update_one(
+            {"caso_id": caso_id}, {"$set": {"sin_leer_asesor": 0}})
 
     return {
         "caso": caso,

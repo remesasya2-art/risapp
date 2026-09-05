@@ -62,13 +62,27 @@ ESTADOS = (ABIERTO, EN_CURSO, ESPERANDO_CLIENTE, RESUELTO, CERRADO)
 ABIERTOS = (ABIERTO, EN_CURSO, ESPERANDO_CLIENTE, RESUELTO)
 
 # De dónde se puede pasar a dónde. Lo que no está acá, no se puede.
+#
+# ESTA TABLA DESCRIBE TODO LO QUE EL SISTEMA HACE, no sólo el menú que ve el
+# asesor. Es la distinción que se me pasó al escribirla: `tomar`, `soltar`,
+# `responder` y `transferir` también mueven el estado, y lo hacían a saltos que
+# esta tabla declaraba imposibles. Nadie fallaba —esas rutas no la consultan—,
+# pero la tabla mentía: quien la leyera para razonar sobre el ciclo de vida, o
+# la pantalla, que arma el menú de estados a partir de ella, sacaba
+# conclusiones falsas. Hay un test que recorre las cuatro operaciones y falla
+# si alguna vuelve a dejar el caso fuera de acá.
 TRANSICIONES = {
     ABIERTO: (EN_CURSO, RESUELTO, CERRADO),
     EN_CURSO: (ESPERANDO_CLIENTE, RESUELTO, CERRADO, ABIERTO),
-    ESPERANDO_CLIENTE: (EN_CURSO, RESUELTO, CERRADO),
+    # A `abierto` se vuelve soltando el caso o transfiriéndolo a un área sin
+    # elegir a nadie: es «devolver a la bandeja», y pasa desde cualquier estado
+    # vivo.
+    ESPERANDO_CLIENTE: (EN_CURSO, RESUELTO, CERRADO, ABIERTO),
     # Resuelto vuelve a en_curso si el cliente escribe: es la reapertura, y es
-    # automática. Nadie tiene que acordarse de hacerla a mano.
-    RESUELTO: (EN_CURSO, CERRADO),
+    # automática. Nadie tiene que acordarse de hacerla a mano. Y vuelve a
+    # esperando_cliente si el asesor le agrega algo después de haberlo dado por
+    # resuelto.
+    RESUELTO: (EN_CURSO, ESPERANDO_CLIENTE, CERRADO, ABIERTO),
     # Cerrado es el final. Para volver a hablar se abre un caso nuevo, que es
     # justamente lo que el modelo viejo no permitía.
     CERRADO: (),
