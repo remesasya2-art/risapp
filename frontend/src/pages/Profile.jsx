@@ -1,628 +1,694 @@
+/**
+ * Profile.jsx — Mi Perfil.
+ *
+ * POR QUE SE REHIZO
+ *
+ *   Era la última pantalla grande con diseño propio: fondo con degradado
+ *   violeta y celeste, tarjetas de 20px de radio al lado de tarjetas de 16px,
+ *   y cada bloque con su paleta —#dbeafe acá, #dcfce7 allá, #fef3c7 más
+ *   abajo—. Al lado de los tres flujos de envío, que ya usan
+ *   `components/flujo`, se notaba de otra época.
+ *
+ *   Ahora usa EL MISMO módulo. No uno parecido.
+ *
+ * LO QUE NO ERA CUESTION DE ESTILO
+ *
+ *   1. LA FOTO SE LEIA DE UN CAMPO QUE NO EXISTE (`user.picture`; el modelo
+ *      declara `profile_picture`). Ver `utils/perfil.js`.
+ *
+ *   2. SE MANDABA UNA SELFIE FALSA AL CAMBIAR LA CONTRASEÑA:
+ *      `selfie_image: 'data:image/png;base64,placeholder'`. El endpoint no
+ *      recibe ese campo —`ChangePasswordRequest` tiene tres— así que Pydantic
+ *      lo tiraba. Código que finge un requisito que no existe: el próximo que
+ *      lo lea va a buscar la cámara que nunca hubo.
+ *
+ *   3. LA POLITICA DE CONTRASEÑA VIVIA EN UN `placeholder`. El texto con las
+ *      cinco reglas se borraba al escribir la primera letra, justo cuando hace
+ *      falta. Ahora es la lista en vivo que ya usa la pantalla de recuperación.
+ *
+ *   4. EL CAMBIO NO EXIGIA QUE LA CONTRASEÑA FUERA DISTINTA. Ver
+ *      `problemaDelCambioDeClave` en `utils/perfil.js`.
+ *
+ *   5. «VOLVER» SALIA DE LA APLICACION cuando se entraba directo a /perfil
+ *      (un enlace, la aplicación instalada): `navigate(-1)` sin historial
+ *      propio devuelve al sitio anterior. Ahora cae al inicio.
+ *
+ *   6. EL PERMISO DENEGADO NO SE EXPLICABA. Si el usuario había bloqueado las
+ *      notificaciones, el interruptor se veía apagado y clickearlo no hacía
+ *      nada: el navegador ya no vuelve a preguntar. Ahora lo dice y dice dónde
+ *      se arregla.
+ *
+ * QUE NO SE TOCO
+ *
+ *   Los códigos de respaldo 2FA: misma llamada, mismas validaciones, mismo
+ *   flujo. Sólo cambió cómo se ve.
+ */
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  ArrowLeft, User, Mail, Phone, Shield, Lock, LogOut, 
-  CheckCircle, AlertCircle, Clock, ChevronRight, Bell, BellOff, Gem, Crown, Settings, Users, Gift
+import {
+  ArrowLeft, Mail, Phone, Shield, Lock, LogOut, Check, ChevronRight,
+  Bell, BellOff, Gem, Crown, Users, Gift, IdCard,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
-import { validarPassword, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
+import { passwordRules } from '../utils/passwordPolicy';
 import pushService from '../utils/pushService';
 import PinSettings from '../components/PinSettings';
 import WebAuthnSettings from '../components/WebAuthnSettings';
+import { Boton, Aviso } from '../components/flujo';
+import {
+  C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
+} from '../components/flujo/estilos';
+import {
+  convieneVerificar, cpfDelPerfil, estadoDeVerificacion, fotoDePerfil,
+  motivoSinNotificaciones, nombreVisible, panelDelRol, problemaDelCambioDeClave,
+} from '../utils/perfil';
 
-// Función para enmascarar el CPF (solo muestra últimos 3 dígitos)
-const maskCPF = (cpf) => {
-  if (!cpf) return '';
-  const cleanCPF = cpf.replace(/\D/g, '');
-  if (cleanCPF.length < 3) return cpf;
-  const lastThree = cleanCPF.slice(-3);
-  return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
+/* ─── Piezas de esta pantalla ─────────────────────────────────────────────
+   A nivel de módulo y no adentro del componente: React trata un componente
+   definido durante el render como un tipo nuevo en cada dibujo, lo desmonta y
+   lo vuelve a montar, y el campo que estabas escribiendo pierde el foco a la
+   primera tecla. Es el mismo motivo por el que `PinSettings` y
+   `WebAuthnSettings` dejaron de declarar su `Header` adentro.            */
+
+const TONOS = {
+  exito: [C.exitoSuave, C.exito],
+  alerta: [C.alertaSuave, C.alerta],
+  error: [C.errorSuave, C.error],
+  neutro: [C.fondo, C.suave],
 };
 
-// Verificar si es SuperAdmin Diamante.
-//
-// Antes esto comparaba contra una dirección de correo escrita acá adentro. El
-// frontend se compila y se sirve al navegador, así que ese correo viajaba —y
-// se podía leer— en el bundle de CADA visitante del sitio: le decía a
-// cualquiera exactamente qué cuenta atacar para quedarse con la aplicación.
-//
-// El rol ya viene en el usuario de la sesión y significa lo mismo, sin
-// publicar a nadie.
+function Insignia({ tono, children }) {
+  const [fondo, color] = TONOS[tono] || TONOS.neutro;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '5px',
+      padding: '4px 10px', borderRadius: '999px', background: fondo, color,
+      fontSize: '12px', fontWeight: 700,
+    }}>
+      {children}
+    </span>
+  );
+}
+
+/** Una fila de dato: el icono, la etiqueta chica y el valor.
+ *
+ *  El icono se saca de `props` en una línea aparte, y no destructurado en la
+ *  firma, por lo mismo que en `components/flujo/index.jsx`: el `no-unused-vars`
+ *  de este proyecto no cuenta `<Icono />` como uso, y su `varsIgnorePattern`
+ *  perdona las VARIABLES en mayúscula, no los argumentos. */
+function Dato(props) {
+  const { titulo, valor } = props;
+  const Icono = props.Icono;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 14px',
+      background: C.fondo, borderRadius: '12px', minWidth: 0,
+    }}>
+      <Icono size={18} color={C.tenue} style={{ flexShrink: 0 }} />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ ...microEtiqueta, display: 'block' }}>{titulo}</span>
+        <span style={{
+          display: 'block', fontSize: '14.5px', color: C.tinta, fontWeight: 600,
+          marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {valor}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Una fila de la tarjeta de cuenta. Ver la nota de `Dato` sobre el icono. */
+function Fila(props) {
+  const { texto, detalle, tono = 'neutro', onClick, testid, ultima } = props;
+  const Icono = props.Icono;
+  const [fondo, color] = TONOS[tono] || TONOS.neutro;
+  const cuerpo = (
+    <>
+      <span style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+        <span style={{
+          width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
+          background: fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icono size={18} color={color} />
+        </span>
+        <span style={{ minWidth: 0, textAlign: 'left' }}>
+          <span style={{
+            display: 'block', fontSize: '14.5px', fontWeight: 600,
+            color: tono === 'error' ? C.error : C.tinta,
+          }}>
+            {texto}
+          </span>
+          {detalle ? (
+            <span style={{ display: 'block', fontSize: '12.5px', color: C.suave, marginTop: '1px' }}>
+              {detalle}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      <ChevronRight size={18} color={C.tenue} style={{ flexShrink: 0 }} />
+    </>
+  );
+
+  return (
+    <button type="button" onClick={onClick} className="env-tap" data-testid={testid}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '12px', width: '100%', padding: '14px 16px', background: 'transparent',
+        border: 'none', borderBottom: ultima ? 'none' : `1px solid ${C.linea}`,
+        cursor: 'pointer',
+      }}>
+      {cuerpo}
+    </button>
+  );
+}
+
+/** El interruptor de las notificaciones. */
+function Interruptor({ encendido, onClick, disabled, testid }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled} data-testid={testid}
+      role="switch" aria-checked={encendido} aria-label="Notificaciones push"
+      style={{
+        width: '50px', height: '28px', borderRadius: '999px', flexShrink: 0,
+        border: 'none', position: 'relative', transition: 'background-color .15s ease',
+        background: encendido ? C.exito : C.lineaFuerte,
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+      }}>
+      <span style={{
+        position: 'absolute', top: '3px', left: encendido ? '25px' : '3px',
+        width: '22px', height: '22px', borderRadius: '50%', background: '#fff',
+        transition: 'left .15s ease', boxShadow: '0 1px 3px rgba(16,24,40,.25)',
+      }} />
+    </button>
+  );
+}
+
+/** El checklist de la contraseña, en vivo. Las reglas salen de passwordPolicy. */
+function ReglasDeClave({ valor }) {
+  const reglas = passwordRules(valor);
+  const filas = [
+    [reglas.length, 'Al menos 8 caracteres'],
+    [reglas.uppercase, 'Una mayúscula'],
+    [reglas.lowercase, 'Una minúscula'],
+    [reglas.number, 'Un número'],
+    [reglas.special, 'Un símbolo'],
+  ];
+  return (
+    <ul style={{
+      listStyle: 'none', margin: '10px 0 0 0', padding: 0,
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px',
+    }}>
+      {filas.map(([ok, texto]) => (
+        <li key={texto} style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          fontSize: '12px', color: ok ? C.exito : C.tenue,
+        }}>
+          <Check size={13} strokeWidth={3} style={{ flexShrink: 0, opacity: ok ? 1 : 0.35 }} />
+          {texto}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ─── La pantalla ──────────────────────────────────────────────────────── */
 
 export default function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [loading, setLoading] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushLoading, setPushLoading] = useState(false);
-  const [pushSupported, setPushSupported] = useState(true);
-  const [pushMessage, setPushMessage] = useState('');
-  const [showRegenerate2FA, setShowRegenerate2FA] = useState(false);
-  const [twoFACode, setTwoFACode] = useState('');
-  const [newBackupCodes, setNewBackupCodes] = useState(null);
-  const [loading2FA, setLoading2FA] = useState(false);
 
+  const [verClave, setVerClave] = useState(false);
+  const [claveALaVista, setClaveALaVista] = useState(false);
+  const [clave, setClave] = useState({ actual: '', nueva: '', repetida: '' });
+  const [guardando, setGuardando] = useState(false);
+
+  const [pushActivo, setPushActivo] = useState(false);
+  const [pushOcupado, setPushOcupado] = useState(false);
+  const [pushSoporte, setPushSoporte] = useState(null);
+
+  const [ver2FA, setVer2FA] = useState(false);
+  const [codigo2FA, setCodigo2FA] = useState('');
+  const [respaldos, setRespaldos] = useState(null);
+  const [ocupado2FA, setOcupado2FA] = useState(false);
+
+  const estado = estadoDeVerificacion(user?.verification_status);
+  const foto = fotoDePerfil(user);
+  const cpf = cpfDelPerfil(user);
+  const panel = panelDelRol(user?.role);
+  const esSuperAdmin = user?.role === 'super_admin';
+  const problemaDeLaClave = problemaDelCambioDeClave(clave);
+  const avisoPush = motivoSinNotificaciones(pushSoporte);
+  const puedeUsarPush = pushSoporte !== null && !avisoPush;
+
+  // La lectura del estado vive DENTRO del efecto. Definida afuera y llamada
+  // acá, el linter ve un setState sincrónico en el cuerpo del efecto —y tiene
+  // razón en el caso general—. Adentro queda claro que corre después del
+  // montaje y una sola vez.
   useEffect(() => {
-    checkPushStatus();
+    let vigente = true;
+
+    (async () => {
+      const info = pushService.getSupportInfo();
+      if (vigente) setPushSoporte(info);
+      if (!pushService.isSupported()) return;
+      try {
+        const estadoPush = await pushService.getStatus();
+        if (vigente) setPushActivo(Boolean(estadoPush?.enabled && estadoPush?.subscribed));
+      } catch {
+        // Sin respuesta del servidor se muestra apagado, que es el estado
+        // seguro: el usuario puede encenderlo y ahí se entera de si va.
+      }
+    })();
+
+    // Si el usuario se va antes de que conteste, no se escribe estado sobre
+    // una pantalla desmontada.
+    return () => { vigente = false; };
   }, []);
 
-  const checkPushStatus = async () => {
-    const supportInfo = pushService.getSupportInfo();
-    
-    if (!pushService.isSupported()) {
-      setPushSupported(false);
-      // Set specific message for iOS
-      if (supportInfo.isIOS && !supportInfo.isPWA) {
-        setPushMessage('En iPhone/iPad, instala la app desde Safari: "Compartir" → "Agregar a inicio"');
-      } else {
-        setPushMessage('Tu navegador no soporta notificaciones');
-      }
-      return;
-    }
-    
-    try {
-      const status = await pushService.getStatus();
-      setPushEnabled(status.enabled && status.subscribed);
-    } catch (error) {
-      console.error('Error checking push status:', error);
-    }
+  /* ── Volver ──────────────────────────────────────────────────────────
+     `navigate(-1)` a secas se va de la aplicación cuando se entró directo a
+     esta dirección: un enlace del correo, la aplicación instalada, un
+     refresco. La pantalla anterior es el sitio del que venía.            */
+  const volver = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/');
   };
 
-  const handleTogglePush = async () => {
-    if (!pushSupported) {
-      toast.error(pushMessage || 'Tu navegador no soporta notificaciones push');
-      return;
-    }
-    
-    setPushLoading(true);
+  const alternarPush = async () => {
+    if (avisoPush) return toast.error(avisoPush);
+    setPushOcupado(true);
     try {
-      if (pushEnabled) {
+      if (pushActivo) {
         await pushService.unsubscribe();
-        setPushEnabled(false);
+        setPushActivo(false);
         toast.success('Notificaciones desactivadas');
       } else {
         await pushService.init();
         await pushService.subscribe();
-        setPushEnabled(true);
-        toast.success('¡Notificaciones activadas! Recibirás alertas de tus transacciones.');
+        setPushActivo(true);
+        toast.success('Listo. Te avisamos de tus operaciones.');
       }
-    } catch (error) {
-      console.error('Push toggle error:', error);
-      if (error.message?.includes('denegado') || error.message?.includes('Permiso')) {
-        toast.error('Debes permitir las notificaciones en la configuración de tu navegador');
-      } else {
-        toast.error(error.message || 'Error al cambiar notificaciones');
-      }
+    } catch (e) {
+      // El permiso se puede haber denegado recién, en el diálogo del
+      // navegador: se relee el soporte para que el cartel diga la verdad.
+      setPushSoporte(pushService.getSupportInfo());
+      toast.error(e?.message || 'No se pudo cambiar las notificaciones');
     } finally {
-      setPushLoading(false);
+      setPushOcupado(false);
     }
   };
 
-  const handleTestNotification = async () => {
+  const probarPush = async () => {
     try {
       await pushService.sendTestNotification();
       toast.success('Notificación de prueba enviada');
-    } catch (error) {
-      toast.error('Error al enviar notificación de prueba');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo enviar la prueba');
     }
   };
 
-  const getVerificationStatus = () => {
-    switch (user?.verification_status) {
-      case 'verified': return { icon: CheckCircle, color: '#16a34a', bg: '#dcfce7', text: 'Verificado' };
-      case 'pending': return { icon: Clock, color: '#d97706', bg: '#fef3c7', text: 'Pendiente' };
-      case 'rejected': return { icon: AlertCircle, color: '#dc2626', bg: '#fee2e2', text: 'Rechazado' };
-      default: return { icon: Shield, color: '#6b7280', bg: '#f3f4f6', text: 'Sin verificar' };
-    }
+  // Cerrar la ventana borra lo escrito. Dejar la contraseña actual cargada en
+  // memoria y a la vista —el interruptor de «mostrar» queda como estaba— es
+  // regalarla a quien agarre el teléfono con la sesión abierta.
+  const cerrarCambioDeClave = () => {
+    setVerClave(false);
+    setClaveALaVista(false);
+    setClave({ actual: '', nueva: '', repetida: '' });
   };
 
-  const status = getVerificationStatus();
-  const StatusIcon = status.icon;
-
-  const handleChangePassword = async (e) => {
+  const cambiarClave = async (e) => {
     e.preventDefault();
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Las contraseñas no coinciden');
-      return;
-    }
-    const errorPassword = validarPassword(passwordData.newPassword);
-    if (errorPassword) {
-      toast.error(errorPassword);
-      return;
-    }
-    setLoading(true);
+    if (problemaDeLaClave) return toast.error(problemaDeLaClave);
+    setGuardando(true);
     try {
       await api.post('/auth/change-password', {
-        current_password: passwordData.currentPassword,
-        new_password: passwordData.newPassword,
-        confirm_password: passwordData.confirmPassword,
-        selfie_image: 'data:image/png;base64,placeholder',
+        current_password: clave.actual,
+        new_password: clave.nueva,
+        confirm_password: clave.repetida,
       });
-      toast.success('Contraseña actualizada');
-      setShowChangePassword(false);
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al cambiar contraseña');
+      // El servidor cierra TODAS las otras sesiones al cambiar la contraseña.
+      // Es la mitad del sentido de cambiarla, y hasta ahora no se decía: quien
+      // la cambia porque sospecha que le entraron no tenía forma de saber que
+      // al otro lo acababan de echar.
+      toast.success('Contraseña actualizada. Se cerraron las demás sesiones.');
+      cerrarCambioDeClave();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo cambiar la contraseña');
     } finally {
-      setLoading(false);
+      setGuardando(false);
     }
   };
 
-  const handleRegenerateBackupCodes = async (e) => {
+  const regenerarRespaldos = async (e) => {
     e.preventDefault();
-    if (twoFACode.length !== 6) {
-      toast.error('Ingresa el código de 6 dígitos de tu app de autenticación');
-      return;
+    if (codigo2FA.length !== 6) {
+      return toast.error('Ingresá el código de 6 dígitos de tu app de autenticación');
     }
-    setLoading2FA(true);
+    setOcupado2FA(true);
     try {
-      const { data } = await api.post('/auth/2fa/regenerate-backup-codes', { code: twoFACode });
-      setNewBackupCodes(data.backup_codes);
-      setTwoFACode('');
+      const { data } = await api.post('/auth/2fa/regenerate-backup-codes', { code: codigo2FA });
+      setRespaldos(data.backup_codes);
+      setCodigo2FA('');
       toast.success('Códigos de respaldo regenerados');
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error al regenerar códigos');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudieron regenerar los códigos');
     } finally {
-      setLoading2FA(false);
+      setOcupado2FA(false);
     }
   };
 
-  const handleLogout = () => {
+  const cerrarSesion = () => {
     logout();
     navigate('/login');
   };
 
-  const pageStyle = {
-    minHeight: '100vh',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
-    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
-  };
-
-  const cardStyle = {
-    backgroundColor: '#ffffff',
-    borderRadius: '20px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #e5e7eb'
-  };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '14px 16px',
-    borderRadius: '12px',
-    border: '1px solid #d1d5db',
-    fontSize: '14px',
-    outline: 'none'
-  };
-
   return (
-    <div style={pageStyle}>
-      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <button 
-            onClick={() => navigate(-1)} 
-            style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
-          </button>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Mi Perfil</h1>
-        </div>
+    <div className="env" data-testid="profile-page" style={{
+      minHeight: '100vh', background: C.fondo,
+      fontFamily: 'Inter, -apple-system, Segoe UI, Roboto, sans-serif',
+    }}>
+      <style>{HOJA}</style>
 
-        {/* Profile Card */}
-        <div style={{ ...cardStyle, padding: '24px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-            {user?.picture ? (
-              <img src={user.picture} alt={user.name} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #ffffff', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
-            ) : (
-              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontSize: '28px', fontWeight: '700', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-            )}
-            <div>
-              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 4px 0' }}>{user?.full_name || user?.name}</h2>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>{user?.email}</p>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '9999px', backgroundColor: status.bg, color: status.color, fontSize: '12px', fontWeight: '600' }}>
-                <StatusIcon style={{ width: '14px', height: '14px' }} />
-                {status.text}
-              </div>
-            </div>
-          </div>
+      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '20px 16px 44px' }}>
 
-          {/* Info Items */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
-              <Mail style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
-              <div>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>Email</p>
-                <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{user?.email}</p>
-              </div>
-            </div>
-            {user?.phone && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
-                <Phone style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
-                <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>Teléfono</p>
-                  <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{user.phone}</p>
-                </div>
-              </div>
-            )}
-            {user?.cpf_number && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
-                <Shield style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
-                <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>CPF</p>
-                  <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>{maskCPF(user.cpf_number)}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Verification Card */}
-        {user?.verification_status !== 'verified' && (
-          <button onClick={() => navigate('/verification')} style={{ width: '100%', padding: '16px', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '16px', cursor: 'pointer', marginBottom: '16px', textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#fde68a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Shield style={{ width: '20px', height: '20px', color: '#d97706' }} />
-                </div>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: 0 }}>Verificar identidad</p>
-                  <p style={{ fontSize: '12px', color: '#a16207', margin: '2px 0 0 0' }}>Desbloquea todas las funciones</p>
-                </div>
-              </div>
-              <ChevronRight style={{ width: '20px', height: '20px', color: '#d97706' }} />
-            </div>
-          </button>
-        )}
-
-        {/* Notifications Card */}
-        <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: pushEnabled ? '#dcfce7' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-                {pushEnabled ? <Bell style={{ width: '20px', height: '20px', color: '#16a34a' }} /> : <BellOff style={{ width: '20px', height: '20px', color: '#6b7280' }} />}
-              </div>
-              <div>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>Notificaciones Push</p>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
-                  {!pushSupported ? 'No soportado' : pushEnabled ? 'Activadas' : 'Desactivadas'}
-                </p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {pushEnabled && (
-                <button 
-                  onClick={handleTestNotification}
-                  style={{ padding: '8px 12px', backgroundColor: '#f3f4f6', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '500', color: '#374151' }}
-                  data-testid="test-notification-btn"
-                >
-                  Probar
-                </button>
-              )}
-              <button
-                onClick={handleTogglePush}
-                disabled={!pushSupported || pushLoading}
-                style={{
-                  width: '52px', height: '28px', borderRadius: '14px', border: 'none', cursor: pushSupported ? 'pointer' : 'not-allowed',
-                  backgroundColor: pushEnabled ? '#16a34a' : '#d1d5db', position: 'relative', transition: 'all 0.2s',
-                  opacity: pushLoading || !pushSupported ? 0.5 : 1
-                }}
-                data-testid="toggle-push-btn"
-              >
-                <div style={{
-                  width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#ffffff',
-                  position: 'absolute', top: '2px', left: pushEnabled ? '26px' : '2px',
-                  transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                }} />
-              </button>
-            </div>
-          </div>
-          {!pushSupported && pushMessage && (
-            <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <AlertCircle style={{ width: '16px', height: '16px', color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
-              <p style={{ fontSize: '12px', color: '#92400e', margin: 0, lineHeight: '1.4' }}>{pushMessage}</p>
-            </div>
-          )}
-        </div>
-
-        {/* PIN de seguridad */}
-        <PinSettings user={user} />
-
-        {/* Ingreso con huella */}
-        <WebAuthnSettings />
-        {/* Gestionar 2FA (solo super_admin) */}
-        {user?.role === 'super_admin' && (
-          <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Shield style={{ width: '20px', height: '20px', color: '#6b7280' }} />
-                </div>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>Códigos de respaldo 2FA</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>Genera 10 nuevos códigos de un solo uso</p>
-                </div>
-              </div>
-              <button
-                onClick={() => { setShowRegenerate2FA(true); setNewBackupCodes(null); setTwoFACode(''); }}
-                style={{ padding: '10px 16px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#374151' }}
-              >
-                Regenerar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showRegenerate2FA && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', zIndex: 1000 }}>
-            <div style={{ ...cardStyle, padding: '24px', width: '100%', maxWidth: '400px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: '0 0 16px 0' }}>Regenerar códigos de respaldo</h3>
-              {!newBackupCodes ? (
-                <form onSubmit={handleRegenerateBackupCodes} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Ingresa el código de 6 dígitos de tu app de autenticación para generar 10 nuevos códigos. Los códigos anteriores dejarán de funcionar.</p>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="000000"
-                    value={twoFACode}
-                    onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, ''))}
-                    style={{ ...inputStyle, textAlign: 'center', fontSize: '20px', letterSpacing: '4px' }}
-                  />
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <button type="button" onClick={() => setShowRegenerate2FA(false)} style={{ flex: 1, padding: '14px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Cancelar</button>
-                    <button type="submit" disabled={loading2FA} style={{ flex: 1, padding: '14px', backgroundColor: '#6366f1', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#ffffff', opacity: loading2FA ? 0.6 : 1 }}>
-                      {loading2FA ? 'Verificando...' : 'Confirmar'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: '600', margin: 0 }}>Guarda estos códigos en un lugar seguro. No se mostrarán de nuevo.</p>
-                  <div style={{ backgroundColor: '#f8f9fa', borderRadius: '12px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontFamily: 'monospace', fontSize: '14px' }}>
-                    {newBackupCodes.map((code, i) => (
-                      <div key={i} style={{ color: '#111827' }}>{code}</div>
-                    ))}
-                  </div>
-                  <button onClick={() => { setShowRegenerate2FA(false); setNewBackupCodes(null); }} style={{ padding: '14px', backgroundColor: '#6366f1', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>
-                    Ya guardé mis códigos
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Partner Dashboard Button (only for socios) */}
-        {user?.role === 'socio' && (
-          <Link to="/partner" style={{ textDecoration: 'none' }}>
-            <div style={{ 
-              ...cardStyle, 
-              padding: '20px', 
-              marginBottom: '16px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-              color: '#ffffff',
-              cursor: 'pointer'
+        {/* ── Encabezado ────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
+          <button type="button" onClick={volver} aria-label="Volver" className="env-tap"
+            data-testid="back-button"
+            style={{
+              width: '42px', height: '42px', borderRadius: '11px', flexShrink: 0,
+              border: `1px solid ${C.linea}`, background: C.lienzo, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Gift style={{ width: '24px', height: '24px', color: '#ffffff' }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Panel de Socio</p>
-                    <p style={{ fontSize: '13px', opacity: 0.9, margin: '4px 0 0 0' }}>Ver referidos y ganancias</p>
-                  </div>
-                </div>
-                <ChevronRight style={{ width: '24px', height: '24px', opacity: 0.9 }} />
-              </div>
-            </div>
-          </Link>
-        )}
-
-        {/* Gestor Dashboard Button (only for socio_gestor) */}
-        {user?.role === 'socio_gestor' && (
-          <Link to="/gestor" style={{ textDecoration: 'none' }}>
-            <div style={{ 
-              ...cardStyle, 
-              padding: '20px', 
-              marginBottom: '16px',
-              background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-              color: '#ffffff',
-              cursor: 'pointer'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Users style={{ width: '24px', height: '24px', color: '#ffffff' }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Panel Gestor</p>
-                    <p style={{ fontSize: '13px', opacity: 0.9, margin: '4px 0 0 0' }}>Procesar envíos de terceros</p>
-                  </div>
-                </div>
-                <ChevronRight style={{ width: '24px', height: '24px', opacity: 0.9 }} />
-              </div>
-            </div>
-          </Link>
-        )}
-
-        {/* Actions */}
-        <div style={{ ...cardStyle, overflow: 'hidden' }}>
-          <button onClick={() => setShowChangePassword(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', backgroundColor: 'transparent', border: 'none', borderBottom: '1px solid #e5e7eb', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Lock style={{ width: '20px', height: '20px', color: '#2563eb' }} />
-              </div>
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>Cambiar contraseña</span>
-            </div>
-            <ChevronRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
+            <ArrowLeft size={19} color={C.texto} />
           </button>
-          <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LogOut style={{ width: '20px', height: '20px', color: '#dc2626' }} />
-              </div>
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#dc2626' }}>Cerrar sesión</span>
-            </div>
-          </button>
+          <h1 style={{
+            fontSize: '21px', fontWeight: 700, color: C.tinta, margin: 0,
+            letterSpacing: '-.01em',
+          }}>
+            Mi perfil
+          </h1>
         </div>
 
-        {/* Role Badge */}
-        {(user?.role === 'admin' || user?.role === 'super_admin') && (
-          user?.role === 'super_admin' ? (
-            // SuperAdministrador Diamante - Diseño Premium
-            <div style={{ 
-              marginTop: '16px', 
-              padding: '20px', 
-              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', 
-              borderRadius: '20px', 
-              color: '#ffffff',
-              position: 'relative',
-              overflow: 'hidden',
-              border: '2px solid rgba(168, 216, 234, 0.3)'
-            }}>
-              {/* Efecto de brillo */}
-              <div style={{
-                position: 'absolute',
-                top: '-50%',
-                left: '-50%',
-                width: '200%',
-                height: '200%',
-                background: 'linear-gradient(45deg, transparent 40%, rgba(168, 216, 234, 0.1) 50%, transparent 60%)',
-                animation: 'shimmer 3s infinite'
+        {/* ── Quién sos ─────────────────────────────────────────────── */}
+        <section style={{ ...tarjeta, padding: '20px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
+            {foto ? (
+              <img src={foto} alt="" style={{
+                width: '62px', height: '62px', borderRadius: '50%', flexShrink: 0,
+                objectFit: 'cover', border: `1px solid ${C.linea}`,
               }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 1, marginBottom: '16px' }}>
-                <div style={{ 
-                  width: '56px', 
-                  height: '56px', 
-                  borderRadius: '16px', 
-                  background: 'linear-gradient(135deg, #a8d8ea 0%, #89c4e1 50%, #5eb1d8 100%)',
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 15px rgba(168, 216, 234, 0.4)'
-                }}>
-                  <Gem style={{ width: '28px', height: '28px', color: '#1a1a2e' }} />
-                </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <p style={{ fontSize: '18px', fontWeight: '700', margin: 0, background: 'linear-gradient(90deg, #a8d8ea, #ffffff, #a8d8ea)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                      SuperAdministrador Diamante
-                    </p>
-                    <Crown style={{ width: '18px', height: '18px', color: '#a8d8ea' }} />
-                  </div>
-                  <p style={{ fontSize: '13px', color: '#a8d8ea', margin: 0 }}>Acceso total al sistema • Máximo nivel</p>
-                </div>
-              </div>
-              {/* Botón Panel de Administración */}
-              <Link
-                to="/admin"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  width: '100%',
-                  padding: '14px 20px',
-                  background: 'linear-gradient(135deg, #a8d8ea 0%, #5eb1d8 100%)',
-                  borderRadius: '12px',
-                  color: '#1a1a2e',
-                  fontWeight: '600',
-                  fontSize: '15px',
-                  textDecoration: 'none',
-                  position: 'relative',
-                  zIndex: 1,
-                  boxShadow: '0 4px 15px rgba(168, 216, 234, 0.3)',
-                  transition: 'all 0.2s'
-                }}
-                data-testid="admin-panel-btn"
-              >
-                <Settings style={{ width: '20px', height: '20px' }} />
-                Acceder al Panel de Control
-              </Link>
-              <style>{`
-                @keyframes shimmer {
-                  0% { transform: translateX(-100%) rotate(45deg); }
-                  100% { transform: translateX(100%) rotate(45deg); }
-                }
-              `}</style>
+            ) : (
+              <span style={{
+                width: '62px', height: '62px', borderRadius: '50%', flexShrink: 0,
+                background: C.marcaSuave, color: C.marca, fontSize: '21px', fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {iniciales(nombreVisible(user))}
+              </span>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{
+                margin: 0, fontSize: '17px', fontWeight: 700, color: C.tinta,
+                lineHeight: 1.3, wordBreak: 'break-word',
+              }}>
+                {nombreVisible(user)}
+              </h2>
+              <p style={{ margin: '4px 0 8px 0', fontSize: '13px', color: C.suave }}>
+                {user?.email}
+              </p>
+              <Insignia tono={estado.tono}>
+                <Shield size={12} strokeWidth={2.5} /> {estado.texto}
+              </Insignia>
             </div>
-          ) : (
-            // Administrador normal
-            <Link
-              to="/admin"
-              style={{ 
-                marginTop: '16px', 
-                padding: '16px', 
-                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
-                borderRadius: '16px', 
-                color: '#ffffff',
-                textDecoration: 'none',
-                display: 'block'
-              }}
-              data-testid="admin-panel-btn"
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Shield style={{ width: '20px', height: '20px' }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>Administrador</p>
-                    <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Acceder al panel de administración</p>
-                  </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: '9px' }}>
+            <Dato Icono={Mail} titulo="Correo" valor={user?.email || '—'} />
+            {user?.phone ? <Dato Icono={Phone} titulo="Teléfono" valor={user.phone} /> : null}
+            {/* El CPF va tapado incluso en tu propia pantalla: es la misma
+                pantalla que se abre en un colectivo. */}
+            {cpf ? <Dato Icono={IdCard} titulo="CPF" valor={cpf} /> : null}
+          </div>
+        </section>
+
+        {/* ── Verificar la identidad ────────────────────────────────── */}
+        {convieneVerificar(user) ? (
+          <div style={{ marginBottom: '16px' }}>
+            <Aviso tono={estado.clave === 'pendiente' ? 'info' : 'alerta'}
+              titulo={estado.clave === 'pendiente' ? 'Estamos revisando tus documentos'
+                : 'Verificá tu identidad'}>
+              {estado.clave === 'pendiente'
+                ? 'Te avisamos apenas esté resuelto. Mientras tanto podés seguir operando con el cupo sin verificar.'
+                : 'Sin verificar tenés un cupo limitado por monto y por cantidad de operaciones.'}
+              {estado.clave === 'pendiente' ? null : (
+                <div style={{ marginTop: '11px' }}>
+                  <Boton tipo="primario" onClick={() => navigate('/verification')}
+                    Icono={Shield} testid="verify-identity-btn">
+                    Verificar identidad
+                  </Boton>
                 </div>
-                <ChevronRight style={{ width: '20px', height: '20px', color: '#94a3b8' }} />
-              </div>
-            </Link>
-          )
-        )}
+              )}
+            </Aviso>
+          </div>
+        ) : null}
+
+        {/* ── Notificaciones ────────────────────────────────────────── */}
+        <section style={{ ...tarjeta, padding: '18px 20px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{
+              width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
+              background: pushActivo ? C.exitoSuave : C.fondo,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {pushActivo ? <Bell size={18} color={C.exito} /> : <BellOff size={18} color={C.suave} />}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
+                Notificaciones
+              </span>
+              <span style={{ display: 'block', fontSize: '12.5px', color: C.suave, marginTop: '1px' }}>
+                {avisoPush ? 'No disponibles acá'
+                  : pushActivo ? 'Activadas' : 'Te avisamos de tus operaciones'}
+              </span>
+            </span>
+            {pushActivo ? (
+              <Boton onClick={probarPush} testid="test-notification-btn">Probar</Boton>
+            ) : null}
+            <Interruptor encendido={pushActivo} onClick={alternarPush}
+              disabled={!puedeUsarPush || pushOcupado} testid="toggle-push-btn" />
+          </div>
+
+          {avisoPush ? (
+            <div style={{ marginTop: '13px' }}>
+              <Aviso tono="alerta" testid="push-no-disponible">{avisoPush}</Aviso>
+            </div>
+          ) : null}
+        </section>
+
+        {/* El PIN no aplica a super_admin y la huella depende del navegador:
+            cada componente decide si se dibuja. */}
+        <PinSettings user={user} />
+        <WebAuthnSettings />
+
+        {/* ── Códigos de respaldo 2FA (sólo super_admin) ────────────── */}
+        {esSuperAdmin ? (
+          <section style={{ ...tarjeta, padding: '18px 20px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <span style={{
+                width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
+                background: C.fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Shield size={18} color={C.suave} />
+              </span>
+              <span style={{ flex: 1, minWidth: '160px' }}>
+                <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
+                  Códigos de respaldo 2FA
+                </span>
+                <span style={{ display: 'block', fontSize: '12.5px', color: C.suave, marginTop: '1px' }}>
+                  Diez códigos de un solo uso
+                </span>
+              </span>
+              <Boton onClick={() => { setVer2FA(true); setRespaldos(null); setCodigo2FA(''); }}
+                testid="regenerate-2fa-btn">
+                Regenerar
+              </Boton>
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── El panel del rol ──────────────────────────────────────── */}
+        {panel ? (
+          <Link to={panel.destino} data-testid="role-panel-btn" style={{
+            ...tarjeta, display: 'flex', alignItems: 'center', gap: '13px',
+            padding: '18px 20px', marginBottom: '16px', textDecoration: 'none',
+            background: C.tinta, border: `1px solid ${C.tinta}`,
+          }}>
+            <span style={{
+              width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0,
+              background: 'rgba(255,255,255,.12)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {esSuperAdmin ? <Gem size={20} color="#fff" />
+                : user?.role === 'socio' ? <Gift size={20} color="#fff" />
+                  : user?.role === 'socio_gestor' ? <Users size={20} color="#fff" />
+                    : <Shield size={20} color="#fff" />}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: '7px',
+                fontSize: '15px', fontWeight: 700, color: '#fff',
+              }}>
+                {panel.titulo}
+                {esSuperAdmin ? <Crown size={15} color="#fff" /> : null}
+              </span>
+              <span style={{ display: 'block', fontSize: '12.5px', color: 'rgba(255,255,255,.72)', marginTop: '2px' }}>
+                {panel.detalle}
+              </span>
+            </span>
+            <ChevronRight size={19} color="rgba(255,255,255,.72)" style={{ flexShrink: 0 }} />
+          </Link>
+        ) : null}
+
+        {/* ── Cuenta ────────────────────────────────────────────────── */}
+        <section style={{ ...tarjeta, overflow: 'hidden' }}>
+          <Fila Icono={Lock} texto="Cambiar contraseña"
+            detalle="Se cierran las demás sesiones"
+            onClick={() => setVerClave(true)} testid="change-password-btn" />
+          <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima
+            onClick={cerrarSesion} testid="logout-btn" />
+        </section>
       </div>
 
-      {/* Change Password Modal */}
-      {showChangePassword && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '400px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Lock style={{ width: '24px', height: '24px', color: '#2563eb' }} />
+      {/* ── Cambiar contraseña ──────────────────────────────────────── */}
+      {verClave ? (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(16,24,40,.55)', zIndex: 60,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+        }}>
+          <div style={{ ...tarjeta, padding: '22px', width: '100%', maxWidth: '420px' }}>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
+              Cambiar contraseña
+            </h3>
+            <p style={{ ...ayuda, marginBottom: '16px' }}>
+              Al guardar se cierran todas tus otras sesiones. Esta no.
+            </p>
+
+            <form onSubmit={cambiarClave}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={etiqueta} htmlFor="pf-actual">Contraseña actual</label>
+                <input id="pf-actual" className="env-campo" style={campo}
+                  type={claveALaVista ? 'text' : 'password'}
+                  autoComplete="current-password" value={clave.actual}
+                  onChange={(e) => setClave((p) => ({ ...p, actual: e.target.value }))} />
               </div>
-              <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Cambiar contraseña</h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '2px 0 0 0' }}>Ingresa tu contraseña actual y la nueva</p>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={etiqueta} htmlFor="pf-nueva">Contraseña nueva</label>
+                <input id="pf-nueva" className="env-campo" style={campo}
+                  type={claveALaVista ? 'text' : 'password'}
+                  autoComplete="new-password" value={clave.nueva}
+                  onChange={(e) => setClave((p) => ({ ...p, nueva: e.target.value }))} />
+                <ReglasDeClave valor={clave.nueva} />
               </div>
-            </div>
-            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Contraseña actual</label>
-                <input type="password" value={passwordData.currentPassword} onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})} style={inputStyle} placeholder="••••••••" />
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={etiqueta} htmlFor="pf-repetida">Repetí la nueva</label>
+                <input id="pf-repetida" className="env-campo"
+                  type={claveALaVista ? 'text' : 'password'}
+                  autoComplete="new-password" value={clave.repetida}
+                  onChange={(e) => setClave((p) => ({ ...p, repetida: e.target.value }))}
+                  style={{
+                    ...campo,
+                    borderColor: clave.repetida && clave.repetida !== clave.nueva
+                      ? C.error : C.lineaFuerte,
+                  }} />
+                {clave.repetida && clave.repetida !== clave.nueva ? (
+                  <p style={{ ...ayuda, color: C.error }}>No coincide con la de arriba.</p>
+                ) : null}
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Nueva contraseña</label>
-                <input type="password" value={passwordData.newPassword} onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})} style={inputStyle} placeholder={PASSWORD_HELP_TEXT} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Confirmar nueva contraseña</label>
-                <input type="password" value={passwordData.confirmPassword} onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})} style={inputStyle} placeholder="••••••••" />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setShowChangePassword(false)} style={{ flex: 1, padding: '14px', backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '14px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" disabled={loading} style={{ flex: 1, padding: '14px', backgroundColor: '#6366f1', color: '#ffffff', borderRadius: '14px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>{loading ? 'Guardando...' : 'Guardar'}</button>
+
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                fontSize: '13px', color: C.texto, marginBottom: '16px', cursor: 'pointer',
+              }}>
+                <input type="checkbox" checked={claveALaVista}
+                  onChange={(e) => setClaveALaVista(e.target.checked)} />
+                Mostrar lo que escribo
+              </label>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Boton onClick={cerrarCambioDeClave}>
+                  Cancelar
+                </Boton>
+                <Boton tipo="primario" ancho enviar
+                  disabled={guardando || Boolean(problemaDeLaClave)}
+                  Icono={Check} testid="save-password-btn">
+                  {guardando ? 'Guardando…' : 'Guardar'}
+                </Boton>
               </div>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
+
+      {/* ── Regenerar códigos 2FA ───────────────────────────────────── */}
+      {ver2FA ? (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(16,24,40,.55)', zIndex: 60,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+        }}>
+          <div style={{ ...tarjeta, padding: '22px', width: '100%', maxWidth: '420px' }}>
+            <h3 style={{ margin: '0 0 14px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
+              {respaldos ? 'Tus códigos nuevos' : 'Regenerar códigos de respaldo'}
+            </h3>
+
+            {respaldos ? (
+              <>
+                <Aviso tono="alerta" titulo="Guardalos ahora">
+                  No se vuelven a mostrar. Los códigos anteriores ya no sirven.
+                </Aviso>
+                <div style={{
+                  margin: '14px 0', padding: '15px', background: C.fondo,
+                  border: `1px solid ${C.linea}`, borderRadius: '12px',
+                  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '14px', color: C.tinta,
+                }}>
+                  {respaldos.map((c) => <span key={c}>{c}</span>)}
+                </div>
+                <Boton tipo="primario" ancho
+                  onClick={() => { setVer2FA(false); setRespaldos(null); }}>
+                  Ya los guardé
+                </Boton>
+              </>
+            ) : (
+              <form onSubmit={regenerarRespaldos}>
+                <p style={{ ...ayuda, margin: '0 0 14px 0' }}>
+                  Escribí el código de seis dígitos de tu app de autenticación. Se
+                  generan diez códigos nuevos y los anteriores dejan de servir.
+                </p>
+                <input className="env-campo" inputMode="numeric" maxLength={6}
+                  placeholder="000000" value={codigo2FA}
+                  onChange={(e) => setCodigo2FA(e.target.value.replace(/\D/g, ''))}
+                  style={{
+                    ...campo, textAlign: 'center', fontSize: '24px',
+                    fontWeight: 700, letterSpacing: '.3em',
+                  }} />
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                  <Boton onClick={() => setVer2FA(false)}>Cancelar</Boton>
+                  <Boton tipo="primario" ancho enviar disabled={ocupado2FA}>
+                    {ocupado2FA ? 'Verificando…' : 'Confirmar'}
+                  </Boton>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

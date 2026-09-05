@@ -46,6 +46,11 @@ import { C } from './estilos';
 function Boton(props) {
   const { children, onClick, tipo = 'secundario', disabled, ancho, testid, iconoDerecha } = props;
   const Icono = props.Icono;
+  // `type="button"` por defecto y a propósito: un <button> sin type adentro de
+  // un <form> envía el formulario, y estos botones viven casi siempre sueltos.
+  // `enviar` lo pide explícitamente el que sí quiere enviar, para que Enter
+  // funcione en un formulario sin cablear el submit a mano.
+  const tipoHtml = props.enviar ? 'submit' : 'button';
   const paleta = {
     primario: { background: C.marca, color: '#fff', border: `1px solid ${C.marca}` },
     exito: { background: C.exito, color: '#fff', border: `1px solid ${C.exito}` },
@@ -54,7 +59,7 @@ function Boton(props) {
 
   return (
     <button
-      type="button" onClick={onClick} disabled={disabled} data-testid={testid}
+      type={tipoHtml} onClick={onClick} disabled={disabled} data-testid={testid}
       className={`env-tap${tipo === 'primario' ? ' env-pri' : ''}`}
       style={{
         ...paleta, height: '52px', padding: '0 20px', borderRadius: '12px',
