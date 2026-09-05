@@ -21,7 +21,8 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import usePulso from '../../hooks/usePulso';
-import { Plus, Send, ArrowLeft, Paperclip, X, Check, MessageSquare } from 'lucide-react';
+import { confirmar } from '../flujo/confirmar.js';
+import { Plus, Send, ArrowLeft, Paperclip, X, Check, CheckCheck, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { rutaDeArchivo, abrirArchivo } from '../../utils/urlDeArchivo';
@@ -29,7 +30,7 @@ import { Boton, Aviso } from '../flujo';
 import { C, etiqueta, campo, ayuda } from '../flujo/estilos';
 import {
   haceCuanto, nombreDeEstado, problemaParaAbrirCaso, sePuedeCalificar,
-  sePuedeEscribir, tonoDeEstado,
+  sePuedeCerrarPorElCliente, sePuedeEscribir, tonoDeEstado,
 } from '../../utils/soporte';
 
 const TONOS = {
@@ -193,6 +194,26 @@ export default function CasosDelCliente({ onSinLeer }) {
     }
   };
 
+  const cerrarMiCaso = async () => {
+    const seguro = await confirmar({
+      titulo: '¿Ya no necesitás esta consulta?',
+      detalle: 'Se cierra y el equipo deja de trabajarla. Vas a poder calificar '
+        + 'la atención, y si vuelve a pasarte, abrir una consulta nueva.',
+      accion: 'Sí, ya está',
+    });
+    if (!seguro) return;
+    setOcupado(true);
+    try {
+      await api.post(`/soporte/casos/${abierto}/cerrar`);
+      await traerDetalle(abierto);
+      await traerCasos();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo cerrar');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
   const calificar = async () => {
     if (estrellas < 1) return;
     setOcupado(true);
@@ -232,6 +253,24 @@ export default function CasosDelCliente({ onSinLeer }) {
             <span style={{ display: 'block', fontSize: '11px', color: C.tenue }}>{caso.numero}</span>
           </span>
           <Etiqueta tono={tonoDeEstado(caso.estado)}>{nombreDeEstado(caso.estado, 'cliente')}</Etiqueta>
+          {/* El que abrió la consulta es el que sabe si ya no la necesita. Sin
+              esto, la que resolvió solo se quedaba en la cola del asesor como
+              trabajo pendiente y le contaba contra su tope de consultas
+              abiertas. */}
+          {sePuedeCerrarPorElCliente(caso) ? (
+            <button type="button" onClick={cerrarMiCaso} disabled={ocupado}
+              className="env-tap" data-testid="cerrar-mi-caso"
+              title="Ya no necesito esta consulta"
+              style={{
+                border: `1px solid ${C.lineaFuerte}`, background: C.lienzo,
+                borderRadius: '9px', padding: '5px 9px', cursor: 'pointer',
+                color: C.suave, fontSize: '12px', fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+              <CheckCheck size={14} /> Ya está
+            </button>
+          ) : null}
         </div>
 
         <div ref={hiloRef} style={{

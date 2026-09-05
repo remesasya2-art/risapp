@@ -224,8 +224,32 @@ export function sePuedeEscribir(caso) {
   return Boolean(caso) && caso.estado !== CERRADO;
 }
 
+/**
+ * Se califica cuando el trabajo ya está hecho: resuelto o cerrado.
+ *
+ * Los dos y no sólo cerrado. Al asesor se le dice —y con razón— que deje el
+ * caso en «resuelto» si puede faltar algo, porque cerrado no se reabre. Con la
+ * calificación atada a «cerrado», se le pedía la opinión al cliente justo en
+ * el estado que al asesor se le pide NO usar.
+ *
+ * Espeja a `TERMINADOS` del backend.
+ */
+export const TERMINADOS = [RESUELTO, CERRADO];
+
 export function sePuedeCalificar(caso) {
-  return Boolean(caso) && caso.estado === CERRADO && !caso.calificacion;
+  return Boolean(caso) && TERMINADOS.includes(caso.estado) && !caso.calificacion;
+}
+
+/**
+ * ¿Puede el cliente dar por terminado el caso?
+ *
+ * El que abrió la consulta es el que sabe si ya no la necesita —encontró la
+ * respuesta solo, se arregló, se equivocó de motivo—. Sin esto, ese caso
+ * quedaba en la cola del asesor como trabajo pendiente hasta que alguien lo
+ * mirara para descubrir que no había nada que hacer.
+ */
+export function sePuedeCerrarPorElCliente(caso) {
+  return Boolean(caso) && caso.estado !== CERRADO;
 }
 
 /**

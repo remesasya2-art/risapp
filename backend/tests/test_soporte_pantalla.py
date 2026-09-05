@@ -66,6 +66,16 @@ def test_las_transiciones_son_las_mismas_de_los_dos_lados():
             f"acepta {del_servidor}.")
 
 
+def test_cuando_se_da_por_terminado_es_lo_mismo_de_los_dos_lados():
+    """La lista que habilita la calificación tiene que ser LA MISMA.
+
+    Si acá sobrara un estado, la pantalla ofrece calificar y el servidor
+    rechaza; si faltara, la atención termina sin ningún lugar donde opinar.
+    """
+    from services import soporte
+    assert set(_js("m.TERMINADOS")) == set(soporte.TERMINADOS)
+
+
 def test_los_compromisos_de_tiempo_son_los_mismos():
     from services import soporte
     assert _js("m.COMPROMISO_MINUTOS") == soporte.COMPROMISO_MINUTOS
@@ -207,6 +217,26 @@ def test_al_cliente_se_le_pide_motivo_y_texto():
     assert _js("m.problemaParaAbrirCaso({ motivo: '', mensaje: 'hola' })")
     assert _js("m.problemaParaAbrirCaso({ motivo: 'envio', mensaje: '  ' })")
     assert _js("m.problemaParaAbrirCaso({ motivo: 'envio', mensaje: 'no llegó' })") is None
+
+
+def test_el_cliente_califica_un_caso_resuelto_sin_esperar_al_cierre():
+    """La pantalla espeja a `TERMINADOS` del backend.
+
+    Si acá pidiera «cerrado» y allá aceptara «resuelto», el cliente vería una
+    atención terminada sin ningún lugar donde opinar, que es justo el caso más
+    común: al asesor se le pide dejarlo en «resuelto».
+    """
+    assert _js("m.sePuedeCalificar({estado: 'resuelto'})") is True
+    assert _js("m.sePuedeCalificar({estado: 'cerrado'})") is True
+    assert _js("m.sePuedeCalificar({estado: 'en_curso'})") is False
+    assert _js("m.sePuedeCalificar({estado: 'resuelto', calificacion: {estrellas: 3}})") is False
+
+
+def test_el_cliente_puede_dar_por_terminada_su_consulta_hasta_que_este_cerrada():
+    for estado in ("abierto", "en_curso", "esperando_cliente", "resuelto"):
+        assert _js(f"m.sePuedeCerrarPorElCliente({{estado: '{estado}'}})") is True, estado
+    assert _js("m.sePuedeCerrarPorElCliente({estado: 'cerrado'})") is False
+    assert _js("m.sePuedeCerrarPorElCliente(null)") is False
 
 
 def test_en_un_caso_cerrado_el_cliente_no_escribe_pero_califica():

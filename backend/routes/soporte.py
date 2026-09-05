@@ -384,7 +384,7 @@ async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
 @router.post("/soporte/casos/{caso_id}/calificar")
 async def calificar(caso_id: str, datos: Calificacion,
                     current_user: User = Depends(get_current_user)):
-    """El cliente califica UN caso. Uno por caso, y sólo cerrado."""
+    """El cliente califica UN caso. Uno por caso, resuelto o cerrado."""
     if datos.estrellas < 1 or datos.estrellas > 5:
         raise HTTPException(status_code=400, detail="La calificación va de 1 a 5")
     caso = await _mio(caso_id, current_user.user_id)
@@ -411,6 +411,49 @@ async def calificar(caso_id: str, datos: Calificacion,
         "comment": calificacion["comentario"],
         "created_at": calificacion["en"],
     })
+    return {"success": True}
+
+
+@router.post("/soporte/casos/{caso_id}/cerrar")
+async def cerrar_el_cliente(caso_id: str, current_user: User = Depends(get_current_user)):
+    """El cliente da por terminada SU consulta.
+
+    El que la abrió es el que sabe si ya no la necesita: encontró la respuesta
+    solo, se le arregló, se equivocó de motivo. Sin esta puerta ese caso se
+    quedaba en la cola del asesor como trabajo pendiente hasta que alguien lo
+    mirara para descubrir que no había nada que hacer, y mientras tanto le
+    contaba contra el tope de cinco consultas abiertas.
+
+    Cierra y no «resuelve»: resuelto es una afirmación sobre el trabajo del
+    equipo, y no le toca al cliente hacerla. Cerrado es sobre la consulta, que
+    sí es suya. Igual puede calificarla después.
+    """
+    caso = await _mio(caso_id, current_user.user_id)
+    if not caso:
+        raise HTTPException(status_code=404, detail="Ese caso no existe")
+    if caso.get("estado") == soporte.CERRADO:
+        raise HTTPException(status_code=400, detail="Ese caso ya está cerrado")
+
+    ahora = _AHORA()
+    await db.soporte_casos.update_one({"caso_id": caso_id}, {"$set": {
+        "estado": soporte.CERRADO,
+        "cerrado_en": ahora,
+        "cerrado_por_el_cliente": True,
+        "actualizado_en": ahora,
+        "sin_leer_cliente": 0,
+    }})
+    await _registrar(caso_id, "El cliente dio por terminada la consulta.",
+                     current_user.user_id, current_user.name)
+
+    # Al asesor que lo tenía tomado, para que no lo siga trabajando. Si no lo
+    # tenía nadie, no hay a quién avisarle: se cae solo de la bandeja.
+    if caso.get("asignado_a"):
+        await _avisar(
+            user_id=caso["asignado_a"],
+            title=f"El cliente cerró {caso.get('numero')}",
+            message=f"{caso.get('user_name')} dio por terminada la consulta.",
+            notification_type="soporte_estado",
+        )
     return {"success": True}
 
 

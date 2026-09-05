@@ -584,3 +584,63 @@ def test_el_asesor_tampoco_manda_cualquier_cosa_como_imagen():
     r = CLIENTE.post(f"/api/admin/soporte/casos/{caso['caso_id']}/mensajes",
                      json={"mensaje": "mirá esto", "adjunto": "javascript:alert(1)"})
     assert r.status_code == 400, r.text
+
+
+def test_el_cliente_puede_dar_por_terminada_su_consulta():
+    """El que la abrió sabe si ya no la necesita.
+
+    Sin esta puerta, la consulta que el cliente resolvió solo se quedaba en la
+    cola del asesor como trabajo pendiente hasta que alguien la mirara para
+    descubrir que no había nada que hacer —y encima le contaba contra el tope
+    de cinco consultas abiertas—.
+    """
+    caso = _abrir_caso()
+    caso_id = caso["caso_id"]
+
+    _como(CLIENTA)
+    r = CLIENTE.post(f"/api/soporte/casos/{caso_id}/cerrar")
+    assert r.status_code == 200, r.text
+    assert CLIENTE.get(f"/api/soporte/casos/{caso_id}").json()["caso"]["estado"] == "cerrado"
+
+    # Se cayó de la bandeja de abiertos del asesor.
+    _como(ASESOR)
+    abiertos = CLIENTE.get("/api/admin/soporte/casos").json()["casos"]
+    assert all(c["caso_id"] != caso_id for c in abiertos)
+
+    # Y queda en el hilo quién lo cerró, no aparece cerrado y ya.
+    detalle = CLIENTE.get(f"/api/admin/soporte/casos/{caso_id}").json()
+    assert any("dio por terminada" in (m.get("texto") or "")
+               for m in detalle["mensajes"])
+
+
+def test_nadie_cierra_la_consulta_de_otro():
+    caso = _abrir_caso()
+    _como(OTRO_ASESOR)      # ni siquiera un asesor por esta puerta
+    assert CLIENTE.post(f"/api/soporte/casos/{caso['caso_id']}/cerrar").status_code == 404
+
+
+def test_se_califica_un_caso_resuelto_sin_esperar_a_que_lo_cierren():
+    """El asesor deja el caso en «resuelto» a propósito: cerrado no se reabre.
+
+    Con la calificación atada a «cerrado», se le pedía la opinión al cliente
+    justo en el estado que al asesor se le pide NO usar.
+    """
+    caso = _abrir_caso()
+    caso_id = caso["caso_id"]
+    _como(ASESOR)
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/tomar")
+    CLIENTE.post(f"/api/admin/soporte/casos/{caso_id}/estado", json={"estado": "resuelto"})
+
+    _como(CLIENTA)
+    r = CLIENTE.post(f"/api/soporte/casos/{caso_id}/calificar",
+                     json={"estrellas": 4, "comentario": "Bien"})
+    assert r.status_code == 200, r.text
+
+    # Calificar no cierra: si faltaba algo, el cliente sigue pudiendo escribir
+    # —y eso reabre el caso— sin perder la opinión que ya dejó.
+    r = CLIENTE.post(f"/api/soporte/casos/{caso_id}/mensajes",
+                     json={"mensaje": "Che, me pasó de nuevo"})
+    assert r.status_code == 200, r.text
+    mio = CLIENTE.get(f"/api/soporte/casos/{caso_id}").json()["caso"]
+    assert mio["estado"] != "resuelto"
+    assert mio["calificacion"]["estrellas"] == 4

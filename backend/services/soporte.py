@@ -258,16 +258,28 @@ def problema_para_cerrar(caso):
     return None
 
 
+# Cuando el trabajo ya está hecho. Los dos y no sólo `CERRADO`: al asesor se le
+# dice —y con razón— que deje el caso en «resuelto» si puede faltar algo,
+# porque cerrado no se reabre. Con la calificación atada a «cerrado», se le
+# pedía la opinión al cliente justo en el estado que al asesor se le pide NO
+# usar, y los casos resueltos quedaban sin medir.
+TERMINADOS = (RESUELTO, CERRADO)
+
+
 def problema_para_calificar(caso):
     """El cliente califica el CASO, y una sola vez.
 
     Antes la calificación colgaba del usuario: se calificaba una vez en la
     vida y todas las consultas siguientes quedaban sin medir.
+
+    Calificar no cierra nada: el cliente puede calificar un caso resuelto y
+    seguir escribiendo si algo faltaba —eso lo reabre— sin perder la opinión
+    que ya dejó.
     """
     if not caso:
         return "No hay un caso para calificar."
-    if caso.get("estado") != CERRADO:
-        return "Vas a poder calificar cuando el caso esté cerrado."
+    if caso.get("estado") not in TERMINADOS:
+        return "Vas a poder calificar cuando el caso esté resuelto."
     if caso.get("calificacion"):
         return "Este caso ya lo calificaste."
     return None

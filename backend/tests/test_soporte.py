@@ -135,8 +135,25 @@ def test_se_califica_cada_caso_y_una_sola_vez():
 
 
 def test_no_se_califica_un_caso_todavia_abierto():
-    problema = soporte.problema_para_calificar(_caso(estado=soporte.EN_CURSO))
-    assert problema and "cerrado" in problema.lower()
+    for estado in (soporte.ABIERTO, soporte.EN_CURSO, soporte.ESPERANDO_CLIENTE):
+        assert soporte.problema_para_calificar(_caso(estado=estado)), estado
+
+
+def test_un_caso_resuelto_ya_se_puede_calificar():
+    """Sin esto, la calificación no se juntaba casi nunca.
+
+    Al asesor se le dice —y con razón— que deje el caso en «resuelto» y no en
+    «cerrado» si puede faltar algo: cerrado no se reabre. Con la calificación
+    atada a «cerrado», la pantalla le pedía la opinión al cliente justo en el
+    estado que se le pide al asesor NO usar, y los casos resueltos quedaban
+    sin medir.
+
+    El cliente sigue pudiendo escribir en un caso resuelto —y eso lo reabre—.
+    Calificar no lo cierra: son dos cosas distintas.
+    """
+    assert soporte.problema_para_calificar(_caso(estado=soporte.RESUELTO)) is None
+    ya = _caso(estado=soporte.RESUELTO, calificacion={"estrellas": 4})
+    assert soporte.problema_para_calificar(ya) is not None
 
 
 # ══════════════════════════════════════════════════════════════════════════
