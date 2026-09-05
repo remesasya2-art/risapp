@@ -122,7 +122,7 @@ function Dato(props) {
 
 /** Una fila de la tarjeta de cuenta. Ver la nota de `Dato` sobre el icono. */
 function Fila(props) {
-  const { texto, detalle, tono = 'neutro', onClick, testid, ultima } = props;
+  const { texto, detalle, tono = 'neutro', onClick, testid, ultima, flecha = true } = props;
   const Icono = props.Icono;
   const [fondo, color] = TONOS[tono] || TONOS.neutro;
   const cuerpo = (
@@ -148,7 +148,7 @@ function Fila(props) {
           ) : null}
         </span>
       </span>
-      <ChevronRight size={18} color={C.tenue} style={{ flexShrink: 0 }} />
+      {flecha ? <ChevronRight size={18} color={C.tenue} style={{ flexShrink: 0 }} /> : null}
     </>
   );
 
@@ -220,7 +220,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const [verClave, setVerClave] = useState(false);
+  const [cambiandoClave, setCambiandoClave] = useState(false);
   const [claveALaVista, setClaveALaVista] = useState(false);
   const [clave, setClave] = useState({ actual: '', nueva: '', repetida: '' });
   const [guardando, setGuardando] = useState(false);
@@ -240,6 +240,7 @@ export default function Profile() {
   const panel = panelDelRol(user?.role);
   const esSuperAdmin = user?.role === 'super_admin';
   const problemaDeLaClave = problemaDelCambioDeClave(clave);
+  const empezoAEscribir = Boolean(clave.actual || clave.nueva || clave.repetida);
   const avisoPush = motivoSinNotificaciones(pushSoporte);
   const puedeUsarPush = pushSoporte !== null && !avisoPush;
 
@@ -293,9 +294,13 @@ export default function Profile() {
       }
     } catch (e) {
       // El permiso se puede haber denegado recién, en el diálogo del
-      // navegador: se relee el soporte para que el cartel diga la verdad.
-      setPushSoporte(pushService.getSupportInfo());
-      toast.error(e?.message || 'No se pudo cambiar las notificaciones');
+      // navegador. Se relee el soporte para que el cartel diga la verdad, y
+      // se avisa con ESE motivo: «Permission denied» —lo que trae el error—
+      // no le dice a nadie dónde se arregla.
+      const info = pushService.getSupportInfo();
+      setPushSoporte(info);
+      toast.error(motivoSinNotificaciones(info)
+        || e?.message || 'No se pudo cambiar las notificaciones');
     } finally {
       setPushOcupado(false);
     }
@@ -314,7 +319,7 @@ export default function Profile() {
   // memoria y a la vista —el interruptor de «mostrar» queda como estaba— es
   // regalarla a quien agarre el teléfono con la sesión abierta.
   const cerrarCambioDeClave = () => {
-    setVerClave(false);
+    setCambiandoClave(false);
     setClaveALaVista(false);
     setClave({ actual: '', nueva: '', repetida: '' });
   };
@@ -557,20 +562,22 @@ export default function Profile() {
         <section style={{ ...tarjeta, overflow: 'hidden' }}>
           <Fila Icono={Lock} texto="Cambiar contraseña"
             detalle="Se cierran las demás sesiones"
-            onClick={() => setVerClave(true)} testid="change-password-btn" />
-          <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima
+            onClick={() => setCambiandoClave(true)} testid="change-password-btn" />
+          <Fila Icono={LogOut} texto="Cerrar sesión" tono="error" ultima flecha={false}
             onClick={cerrarSesion} testid="logout-btn" />
         </section>
       </div>
 
       {/* ── Cambiar contraseña ──────────────────────────────────────── */}
-      {verClave ? (
+      {cambiandoClave ? (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(16,24,40,.55)', zIndex: 60,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
         }}>
-          <div style={{ ...tarjeta, padding: '22px', width: '100%', maxWidth: '420px' }}>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="pf-titulo-clave"
+            style={{ ...tarjeta, padding: '22px', width: '100%', maxWidth: '420px' }}>
+            <h3 id="pf-titulo-clave"
+              style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
               Cambiar contraseña
             </h3>
             <p style={{ ...ayuda, marginBottom: '16px' }}>
@@ -620,6 +627,17 @@ export default function Profile() {
                 Mostrar lo que escribo
               </label>
 
+              {/* El botón de guardar está apagado mientras haya un problema.
+                  Un botón apagado sin motivo a la vista es una pared: acá se
+                  dice cuál es, apenas el usuario empezó a escribir. */}
+              {empezoAEscribir && problemaDeLaClave ? (
+                <div style={{ marginBottom: '14px' }}>
+                  <Aviso tono="error" testid="problema-de-la-clave">
+                    {problemaDeLaClave}
+                  </Aviso>
+                </div>
+              ) : null}
+
               <div style={{ display: 'flex', gap: '10px' }}>
                 <Boton onClick={cerrarCambioDeClave}>
                   Cancelar
@@ -641,8 +659,10 @@ export default function Profile() {
           position: 'fixed', inset: 0, background: 'rgba(16,24,40,.55)', zIndex: 60,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
         }}>
-          <div style={{ ...tarjeta, padding: '22px', width: '100%', maxWidth: '420px' }}>
-            <h3 style={{ margin: '0 0 14px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="pf-titulo-2fa"
+            style={{ ...tarjeta, padding: '22px', width: '100%', maxWidth: '420px' }}>
+            <h3 id="pf-titulo-2fa"
+              style={{ margin: '0 0 14px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
               {respaldos ? 'Tus códigos nuevos' : 'Regenerar códigos de respaldo'}
             </h3>
 

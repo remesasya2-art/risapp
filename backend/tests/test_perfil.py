@@ -292,14 +292,32 @@ def test_no_se_manda_una_selfie_que_el_endpoint_no_recibe():
     assert "selfie" not in cuerpo.lower()
 
 
-def test_el_pin_no_se_pide_por_window_prompt():
-    """`window.prompt` no enmascara: la contraseña queda a la vista.
+@pytest.mark.parametrize("cuadro", ["window.prompt", "window.confirm"])
+def test_nada_se_pregunta_con_un_cuadro_nativo(cuadro):
+    """Los dos fallan callados, y uno además deja la contraseña a la vista.
 
-    Y algunos navegadores lo bloquean, así que el botón podía no hacer nada.
+    `window.prompt` no enmascara lo que se escribe: la contraseña de la cuenta
+    quedaba a la vista de cualquiera que mirara la pantalla. Y los dos cuadros
+    se pueden bloquear —pasa en la aplicación instalada—: `prompt` devuelve
+    null y `confirm` devuelve false, así que el botón no hace absolutamente
+    nada, sin error. Un botón que a veces no hace nada es peor que uno que
+    falla.
     """
     for pantalla in PANTALLAS:
-        fuente = pantalla.read_text(encoding="utf-8")
-        visible = "\n".join(l for l in fuente.splitlines()
+        visible = "\n".join(l for l in pantalla.read_text(encoding="utf-8").splitlines()
                             if not l.strip().startswith(("*", "//", "/*")))
-        assert "window.prompt" not in visible, (
-            f"{pantalla.name} volvió a pedir un dato con window.prompt.")
+        assert cuadro not in visible, (
+            f"{pantalla.name} volvió a preguntar con {cuadro}.")
+
+
+def test_el_boton_apagado_dice_por_que_esta_apagado():
+    """Guardar está deshabilitado mientras la contraseña no va.
+
+    La lista en vivo cubre la política y el «no coincide» tiene su línea, pero
+    «tiene que ser distinta de la actual» no se veía en ningún lado: el botón
+    quedaba gris y nada explicaba por qué. Un botón apagado sin motivo a la
+    vista es una pared.
+    """
+    fuente = PANTALLAS[0].read_text(encoding="utf-8")
+    assert "empezoAEscribir && problemaDeLaClave" in fuente, (
+        "El modal ya no muestra el motivo por el que Guardar está apagado.")

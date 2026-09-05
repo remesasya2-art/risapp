@@ -58,6 +58,24 @@ function Encabezado() {
 
 const soloDigitos = (v) => String(v || '').replace(/\D/g, '').slice(0, 4);
 
+/**
+ * El estado del PIN, o null si no se pudo leer.
+ *
+ * Devuelve el dato en vez de escribirlo: así la usan el efecto del montaje y
+ * el refresco de después de guardar, sin copiar la llamada en los dos lados y
+ * sin meter un setState en el cuerpo del efecto.
+ */
+async function traerEstadoDelPin() {
+  try {
+    const res = await api.get('/pin/status');
+    return res.data;
+  } catch {
+    // Sin respuesta se asume que no hay PIN: la tarjeta ofrece configurarlo y
+    // el servidor decide si ya existía.
+    return null;
+  }
+}
+
 export default function PinSettings({ user }) {
   const [estado, setEstado] = useState(null);
   const [formulario, setFormulario] = useState(null); // null | 'definir' | 'desactivar'
@@ -81,15 +99,10 @@ export default function PinSettings({ user }) {
     if (esSuperAdmin || !verificado) return undefined;
 
     (async () => {
-      try {
-        const res = await api.get('/pin/status');
-        if (vigente) setEstado(res.data);
-      } catch {
-        // Sin respuesta se asume que no hay PIN: la tarjeta ofrece
-        // configurarlo y el servidor decide si ya existía.
-      } finally {
-        if (vigente) setCargando(false);
-      }
+      const leido = await traerEstadoDelPin();
+      if (!vigente) return;
+      if (leido) setEstado(leido);
+      setCargando(false);
     })();
 
     return () => { vigente = false; };
@@ -98,10 +111,8 @@ export default function PinSettings({ user }) {
   if (esSuperAdmin) return null;
 
   const releerEstado = async () => {
-    try {
-      const res = await api.get('/pin/status');
-      setEstado(res.data);
-    } catch { /* ver el efecto */ }
+    const leido = await traerEstadoDelPin();
+    if (leido) setEstado(leido);
   };
 
   const limpiar = () => { setPassword(''); setPin(''); setPin2(''); setFormulario(null); };

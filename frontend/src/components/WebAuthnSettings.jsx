@@ -19,8 +19,12 @@
  *      —o no reconoce— un dispositivo de la lista: si tenés tres «Mi
  *      dispositivo», la fecha es lo único que los distingue.
  *
- *   4. BORRAR EL ULTIMO NO AVISABA QUE ERA EL ULTIMO. Se pedía la misma
- *      confirmación para el segundo de tres que para el único que quedaba.
+ *   4. BORRAR SE CONFIRMABA CON `window.confirm`, Y NO AVISABA CUANDO ERA EL
+ *      ULTIMO. El cuadro nativo falla igual de callado que el `window.prompt`
+ *      del PIN: si el navegador lo bloquea devuelve `false`, y el botón de la
+ *      papelera no hace nada, sin error ni aviso. Ahora la pregunta aparece en
+ *      la fila misma, y dice cuándo el dispositivo que estás sacando es el
+ *      único que te queda.
  *
  * QUE NO SE TOCO
  *
@@ -59,6 +63,23 @@ function Encabezado() {
   );
 }
 
+/**
+ * Los dispositivos registrados, o null si no se pudo leer.
+ *
+ * Devuelve el dato en vez de escribirlo: la usan el efecto del montaje y el
+ * refresco de después de activar o borrar, sin copiar la llamada.
+ */
+async function traerCredenciales() {
+  try {
+    const res = await api.get('/webauthn/credentials');
+    return res.data?.credentials || [];
+  } catch {
+    // Sin credenciales o sin respuesta: la tarjeta ofrece activar. Un error
+    // acá asustaría sin dar nada que hacer.
+    return null;
+  }
+}
+
 /** «Agregado el 4 de septiembre». Si la fecha no vino o no se entiende, nada. */
 function agregadoEl(valor) {
   if (!valor) return null;
@@ -75,31 +96,25 @@ export default function WebAuthnSettings() {
   const [ocupado, setOcupado] = useState(false);
   const [nombrando, setNombrando] = useState(false);
   const [nombre, setNombre] = useState('');
+  const [porBorrar, setPorBorrar] = useState(null);
 
   useEffect(() => {
     let vigente = true;
     if (!soportado) return undefined;
 
     (async () => {
-      try {
-        const res = await api.get('/webauthn/credentials');
-        if (vigente) setCreds(res.data?.credentials || []);
-      } catch {
-        // Sin credenciales o sin respuesta: lista vacía, y la tarjeta ofrece
-        // activar. Un error acá asustaría sin dar nada que hacer.
-      } finally {
-        if (vigente) setCargando(false);
-      }
+      const leidas = await traerCredenciales();
+      if (!vigente) return;
+      if (leidas) setCreds(leidas);
+      setCargando(false);
     })();
 
     return () => { vigente = false; };
   }, [soportado]);
 
   const releer = async () => {
-    try {
-      const res = await api.get('/webauthn/credentials');
-      setCreds(res.data?.credentials || []);
-    } catch { /* ver el efecto */ }
+    const leidas = await traerCredenciales();
+    if (leidas) setCreds(leidas);
   };
 
   const activar = async () => {
@@ -121,15 +136,11 @@ export default function WebAuthnSettings() {
   };
 
   const eliminar = async (cred) => {
-    const ultimo = creds.length === 1;
-    const pregunta = ultimo
-      ? `«${cred.label || 'Dispositivo'}» es el único que te queda. Si lo sacás, vas a entrar sólo con tu contraseña. ¿Lo sacamos?`
-      : `¿Sacar «${cred.label || 'Dispositivo'}» de la lista?`;
-    if (!window.confirm(pregunta)) return;
     try {
       setOcupado(true);
       await api.delete(`/webauthn/credentials/${encodeURIComponent(cred.credential_id)}`);
       toast.success('Dispositivo eliminado');
+      setPorBorrar(null);
       await releer();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo eliminar el dispositivo');
@@ -161,37 +172,61 @@ export default function WebAuthnSettings() {
         <>
           {creds.length > 0 ? (
             <div style={{ display: 'grid', gap: '8px', marginBottom: '14px' }}>
-              {creds.map((c) => (
-                <div key={c.credential_id} style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '11px 13px', borderRadius: '11px',
-                  background: C.fondo, border: `1px solid ${C.linea}`,
-                }}>
-                  <Fingerprint size={16} color={C.marca} style={{ flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{
-                      display: 'block', fontSize: '13.5px', fontWeight: 600, color: C.texto,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {c.label || 'Dispositivo'}
-                    </span>
-                    {agregadoEl(c.created_at) ? (
-                      <span style={{ display: 'block', fontSize: '11.5px', color: C.tenue, marginTop: '1px' }}>
-                        {agregadoEl(c.created_at)}
+              {creds.map((c) => {
+                const nombreDe = c.label || 'Dispositivo';
+                const fecha = agregadoEl(c.created_at);
+                const confirmando = porBorrar === c.credential_id;
+                return (
+                  <div key={c.credential_id} style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '11px 13px', borderRadius: '11px',
+                    background: confirmando ? C.errorSuave : C.fondo,
+                    border: `1px solid ${confirmando ? C.errorBorde : C.linea}`,
+                    flexWrap: 'wrap',
+                  }}>
+                    <Fingerprint size={16} color={C.marca} style={{ flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: '140px' }}>
+                      <span style={{
+                        display: 'block', fontSize: '13.5px', fontWeight: 600, color: C.texto,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {nombreDe}
                       </span>
-                    ) : null}
-                  </span>
-                  <button type="button" onClick={() => eliminar(c)} disabled={ocupado}
-                    aria-label={`Eliminar ${c.label || 'dispositivo'}`}
-                    style={{
-                      border: 'none', background: 'none', padding: '5px', flexShrink: 0,
-                      color: C.error, cursor: ocupado ? 'not-allowed' : 'pointer',
-                      display: 'inline-flex',
-                    }}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+                      <span style={{
+                        display: 'block', fontSize: '11.5px', marginTop: '1px',
+                        color: confirmando ? C.error : C.tenue,
+                      }}>
+                        {confirmando
+                          ? (creds.length === 1
+                            ? 'Es el único que te queda: vas a entrar sólo con tu contraseña.'
+                            : '¿Lo sacamos de la lista?')
+                          : fecha}
+                      </span>
+                    </span>
+                    {confirmando ? (
+                      <span style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <Boton onClick={() => setPorBorrar(null)} testid="webauthn-borrar-no">
+                          No
+                        </Boton>
+                        <Boton tipo="primario" onClick={() => eliminar(c)} disabled={ocupado}
+                          testid="webauthn-borrar-si">
+                          {ocupado ? 'Sacando…' : 'Sacar'}
+                        </Boton>
+                      </span>
+                    ) : (
+                      <button type="button" onClick={() => setPorBorrar(c.credential_id)}
+                        disabled={ocupado} aria-label={`Eliminar ${nombreDe}`}
+                        style={{
+                          border: 'none', background: 'none', padding: '5px', flexShrink: 0,
+                          color: C.error, cursor: ocupado ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                        }}>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p style={{ ...ayuda, margin: '0 0 13px 0' }}>
