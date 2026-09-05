@@ -164,35 +164,109 @@ async def _audit(
     )
 
 
-async def _get_active_rates(session=None) -> Dict[str, Any]:
-    """Read the active rates singleton.
+# Las tasas que el motor necesita, y de dónde sale cada una.
+#
+#   El nombre interno, la clave en `db.rates`, y para qué se usa. La cuarta
+#   —el dólar del BCV— no está acá porque no vive en `db.rates`: la trae el
+#   raspador a `db.bcv_rates`.
+TASAS = {
+    "ris_to_ves_withdrawal": ("ris_to_ves", "RIS a bolívares, para los retiros"),
+}
 
-    Maps existing /rates fields to the engine schema:
-      ris_to_ves_withdrawal  ← rates.ris_to_ves            (default 110)
-      ves_to_ris_recharge    ← rates.ves_to_ris_rate       (default 140)
-      bcv_ves_usd            ← latest bcv_rates.rates.dolar (default 50)
-      market_brl_usd         ← rates.brl_to_usd            (default 5.0)
+# `ves_to_ris_recharge` (rates.ves_to_ris_rate) se calculaba acá y no lo
+# consumía nadie. No se exige: exigir una tasa que no se usa sería cortar el
+# motor por un campo que no cambia ningún número.
+#
+# `market_brl_usd` (rates.brl_to_usd) TAMPOCO se exige acá, y merece explicación
+# porque es la que más llama la atención:
+#
+#   Lo usa un solo camino, el arbitraje P2P, que convierte a dólares un costo
+#   en reales. El operador fue explícito: BRL/USD no es una fórmula que use
+#   risappbr.com. Y se corresponde con el código: el endpoint existe en el
+#   backend, ninguna pantalla lo ofrece, y `rates.brl_to_usd` no lo escribe
+#   ningún endpoint ni lo crea la siembra — en producción vale 5.0 desde
+#   siempre.
+#
+#   Exigirla acá cortaría el informe contable, que sí se usa, por una tasa de
+#   maquinaria dormida. Así que se pide en el lugar donde se usa: quien llame
+#   al arbitraje sin haberla configurado recibe un error que dice cuál falta,
+#   en vez de una ganancia calculada contra un real a 5,00 por dólar.
+
+
+class TasaSinConfigurar(RuntimeError):
+    """Falta una tasa. Se distingue de cualquier otro RuntimeError para que
+    quien la reciba pueda decirle a una persona qué tiene que ir a configurar,
+    en vez de mostrar «error interno»."""
+
+    def __init__(self, clave, para_que):
+        self.clave = clave
+        super().__init__(
+            f"Falta la tasa «{clave}» ({para_que}). No se calcula con un valor "
+            "supuesto: se configura en el panel, en Tasas.")
+
+
+async def _get_active_rates(session=None) -> Dict[str, Any]:
+    """Las tasas activas. Si falta alguna, corta.
+
+    POR QUE NO HAY VALORES POR DEFECTO
+
+        Los había: 110, 140, 50 y 5.0. Ninguno dejaba el sistema roto —dejaba
+        el libro mayor calculado con números que nadie fijó, que es peor,
+        porque un asiento equivocado se ve igual que uno correcto.
+
+        `market_brl_usd` era el caso extremo: `rates.brl_to_usd` no lo escribía
+        NINGUN endpoint y la siembra tampoco lo creaba, así que en producción
+        valía 5.0 siempre. La ganancia de cada operación P2P se calculaba
+        contra un real a 5,00 por dólar, fuera cual fuera el real. No era una
+        configuración con un valor por defecto: era una constante disfrazada.
+
+        Es el mismo criterio que el operador fijó para las remesas con bitcoin:
+        mejor que falle por error de cálculo en la tasa; asumir representa
+        perder o ganar dinero.
+
+    EL DOLAR DEL BCV
+
+        Sale del raspador (`db.bcv_rates`), y si no hay nada raspado todavía,
+        de `rates.usd_to_ves`. Si no hay ninguna de las dos, corta igual: el
+        motor lo usa para pasar bolívares a dólares y sin eso la cuenta no se
+        puede hacer.
     """
     rates = await db.rates.find_one({}, session=session)
     if not rates:
-        raise RuntimeError("Sistema sin tasas configuradas")
+        raise TasaSinConfigurar("db.rates", "el documento entero de tasas")
 
-    # Try to fetch latest BCV from bcv_rates (scraper). Fallback to rates.usd_to_ves.
+    activas = {}
+    for interno, (clave, para_que) in TASAS.items():
+        valor = rates.get(clave)
+        if valor is None:
+            raise TasaSinConfigurar(clave, para_que)
+        try:
+            valor = float(valor)
+        except (TypeError, ValueError):
+            raise TasaSinConfigurar(clave, f"{para_que} — está guardada como «{valor}»")
+        if valor <= 0:
+            # Cero divide, y negativo da vuelta el signo de la ganancia.
+            raise TasaSinConfigurar(clave, f"{para_que} — está en {valor}")
+        activas[interno] = valor
+
+    # Puede quedar en None: el único que la usa la exige por su cuenta.
+    bruto = rates.get("brl_to_usd")
+    try:
+        activas["market_brl_usd"] = float(bruto) if bruto not in (None, "") else None
+    except (TypeError, ValueError):
+        activas["market_brl_usd"] = None
+
     bcv_doc = await db.bcv_rates.find_one(
         {}, sort=[("fetched_at", -1)], session=session
     )
-    bcv_ves_usd = (
-        bcv_doc.get("rates", {}).get("dolar")
-        if bcv_doc
-        else rates.get("usd_to_ves", 50.0)
-    ) or 50.0
+    bcv_ves_usd = (bcv_doc or {}).get("rates", {}).get("dolar") or rates.get("usd_to_ves")
+    if not bcv_ves_usd or float(bcv_ves_usd) <= 0:
+        raise TasaSinConfigurar(
+            "bcv_rates.dolar",
+            "el dólar del BCV, para pasar bolívares a dólares")
+    activas["bcv_ves_usd"] = float(bcv_ves_usd)
 
-    return {
-        "ris_to_ves_withdrawal": float(rates.get("ris_to_ves", 110)),
-        "ves_to_ris_recharge": float(rates.get("ves_to_ris_rate", 140)),
-        "bcv_ves_usd": float(bcv_ves_usd),
-        "market_brl_usd": float(rates.get("brl_to_usd", 5.0)),
-    }
+    return activas
 
 
 # ============================================================
@@ -437,8 +511,15 @@ class CoreAccountingEngine:
 
         async with _atomic_session() as session:
             rates = await _get_active_rates(session=session)
-            if rates["market_brl_usd"] <= 0:
-                raise RuntimeError("market_brl_usd no configurado")
+            # Acá SI es obligatoria: este cálculo divide por ella. Antes el
+            # control era `<= 0`, que no se disparaba nunca porque el valor por
+            # defecto era 5.0 — un número mayor que cero que nadie había
+            # fijado. Ahora falta de verdad cuando falta.
+            if not rates.get("market_brl_usd"):
+                raise TasaSinConfigurar(
+                    "brl_to_usd",
+                    "reales por dólar, que este cálculo necesita para pasar a "
+                    "dólares el costo en reales")
 
             # FIFO consumption
             cursor = db.usdt_lots.find(
@@ -628,7 +709,12 @@ class ExecutiveReportService:
 
         rates = await _get_active_rates()
         ris_to_ves_rate = rates["ris_to_ves_withdrawal"]
-        market_brl_usd = rates["market_brl_usd"] or 1
+        # Sin `or 1`. Ese uno decía «un real vale un dólar»: multiplicaba por
+        # cinco las comisiones convertidas, que después se restan de la
+        # ganancia neta. Un informe con un número inventado adentro es peor que
+        # un informe con un número menos: sobre el primero se toman decisiones.
+        market_brl_usd = rates.get("market_brl_usd")
+        advertencias = []
         bcv_ves_usd = rates["bcv_ves_usd"] or 1
 
         date_match = {"created_at": {"$gte": start_iso, "$lte": end_iso}}
@@ -769,7 +855,14 @@ class ExecutiveReportService:
             if cur == "BRL":
                 global_gross_brl += gross
                 global_fees_brl += fees
-                total_fees_in_usdt_eq += fees / market_brl_usd
+                if market_brl_usd:
+                    total_fees_in_usdt_eq += fees / market_brl_usd
+                elif fees:
+                    advertencias.append(
+                        f"Las comisiones en reales ({_round2(fees)} BRL) no se "
+                        "sumaron al equivalente en dólares: falta la tasa "
+                        "«brl_to_usd». La ganancia neta de este informe queda "
+                        "sobreestimada en ese monto.")
             elif cur == "VES":
                 total_fees_in_usdt_eq += fees / bcv_ves_usd
 
@@ -796,6 +889,9 @@ class ExecutiveReportService:
                 "to": end_iso.isoformat(),
             },
             "rates_snapshot": rates,
+            # Lo que no se pudo calcular, dicho en el informe y no sólo en un
+            # registro que nadie lee. Vacío quiere decir que salió completo.
+            "advertencias": advertencias,
             "liabilities": {
                 "circulation_ris": _round2(total_ris_circulation),
                 "escrow_withdrawing_ves": _round2(total_ves_escrow),

@@ -29,6 +29,7 @@ LO QUE MAS IMPORTA ACA
 import asyncio
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -627,3 +628,183 @@ def test_la_venta_queda_registrada_con_su_rastro(base):
         assert await base.accounting_audit_log.count_documents(
             {"action": "FIFO_LOT_DISPATCH"}) == 1
     corre(caso())
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9. Las tasas del motor: falta una, no se inventa
+# ══════════════════════════════════════════════════════════════════════════
+#
+# QUE HABIA
+#
+#     `_get_active_rates` completaba con valores por defecto lo que faltara:
+#     110 para RIS→VES, 140 para VES→RIS, 50 para el dólar del BCV y 5.0 para
+#     reales por dólar. Ninguno dejaba el sistema roto: dejaba el libro mayor
+#     calculado con números que nadie fijó, que es peor, porque un asiento
+#     equivocado se ve igual que uno correcto.
+#
+# EL CASO QUE MERECE ATENCION
+#
+#     `rates.brl_to_usd` no lo escribía NINGUN endpoint y la siembra tampoco lo
+#     creaba. En producción valía 5.0 desde siempre: no era una configuración
+#     con valor por defecto, era una constante disfrazada de configuración.
+#
+#     El operador aclaró que BRL/USD no es una fórmula que use la plataforma, y
+#     el código lo confirma —el endpoint del arbitraje P2P existe pero ninguna
+#     pantalla lo ofrece—. Por eso no se exige al leer las tasas, que cortaría
+#     el informe contable por maquinaria dormida: se exige en el único lugar
+#     que la usa.
+
+def test_falta_la_tasa_de_retiros_y_el_motor_corta(base):
+    corre(base.rates.insert_one({"ves_to_ris_rate": 140, "usd_to_ves": 50}))
+    corre(base.bcv_rates.insert_one({"rates": {"dolar": 50}}))
+
+    with pytest.raises(ae.TasaSinConfigurar) as e:
+        corre(ae._get_active_rates())
+    assert e.value.clave == "ris_to_ves"
+    # El mensaje lo lee una persona que tiene que ir a arreglarlo.
+    assert "panel" in str(e.value)
+
+
+@pytest.mark.parametrize("valor, porque", [
+    (0, "cero divide"),
+    (-110, "negativa da vuelta el signo"),
+    ("ciento diez", "no es un número"),
+])
+def test_una_tasa_que_no_sirve_es_lo_mismo_que_no_tenerla(base, valor, porque):
+    corre(base.rates.insert_one({"ris_to_ves": valor, "usd_to_ves": 50}))
+    corre(base.bcv_rates.insert_one({"rates": {"dolar": 50}}))
+
+    with pytest.raises(ae.TasaSinConfigurar):
+        corre(ae._get_active_rates())
+
+
+def test_sin_dolar_del_bcv_el_motor_corta(base):
+    """El motor lo usa para pasar bolívares a dólares. Sin eso no hay cuenta."""
+    corre(base.rates.insert_one({"ris_to_ves": 110}))
+
+    with pytest.raises(ae.TasaSinConfigurar) as e:
+        corre(ae._get_active_rates())
+    assert "bcv" in e.value.clave.lower()
+
+
+def test_el_dolar_del_bcv_puede_venir_de_las_tasas_si_no_hay_raspado(base):
+    """La otra mitad: no se corta por un raspador que todavía no corrió."""
+    corre(base.rates.insert_one({"ris_to_ves": 110, "usd_to_ves": 47.5}))
+    tasas = corre(ae._get_active_rates())
+    assert tasas["bcv_ves_usd"] == 47.5
+
+
+def test_sin_brl_to_usd_las_tasas_se_leen_igual(base):
+    """No se exige al leer: cortaría el informe por una tasa que no se usa."""
+    corre(base.rates.insert_one({"ris_to_ves": 110}))
+    corre(base.bcv_rates.insert_one({"rates": {"dolar": 50}}))
+
+    tasas = corre(ae._get_active_rates())
+    assert tasas["market_brl_usd"] is None
+    assert tasas["ris_to_ves_withdrawal"] == 110
+
+
+def test_el_arbitraje_p2p_si_la_exige():
+    """El único que divide por ella la pide, y dice cuál falta.
+
+    Se mira el código: montar un arbitraje completo pediría lotes de USDT,
+    sesión y seis colecciones. Lo que hay que impedir es concreto — que se
+    calcule una ganancia sin esa tasa— y se puede afirmar de la forma.
+    """
+    fuente = open(ae.__file__, encoding="utf-8").read()
+    cuerpo = fuente[fuente.index("async def execute_p2p_arbitrage"):]
+    cuerpo = cuerpo[:cuerpo.index("total_cost_in_usd = total_cost_brl")]
+
+    assert "TasaSinConfigurar" in cuerpo, (
+        "El arbitraje divide por `market_brl_usd` sin comprobar que exista. "
+        "Antes el control era `<= 0`, que no saltaba nunca porque el valor por "
+        "defecto era 5.0: un número mayor que cero que nadie había fijado.")
+
+
+def test_el_informe_no_convierte_con_un_uno_inventado():
+    """`or 1` decía «un real vale un dólar».
+
+    Multiplicaba por cinco las comisiones convertidas, que después se restan de
+    la ganancia neta. Un informe con un número inventado adentro es peor que un
+    informe con un número menos: sobre el primero se toman decisiones.
+    """
+    fuente = open(ae.__file__, encoding="utf-8").read()
+    assert 'rates["market_brl_usd"] or 1' not in fuente
+    assert '"advertencias"' in fuente, (
+        "El informe dejó de decir qué no pudo calcular. Omitir en silencio es "
+        "lo mismo que inventar: el que lo lee no sabe que falta algo.")
+
+
+def test_el_informe_se_puede_generar(base):
+    """Que el informe CORRA, no sólo que su código diga lo correcto.
+
+    Vale la pena decir por qué está: al agregar las advertencias dejé el
+    diccionario de salida usando una variable que todavía no había definido.
+    Los 2501 tests siguieron en verde, porque ninguno llamaba al informe: era
+    un `NameError` esperando al primer administrador que lo abriera.
+
+    Un test que revisa el texto del archivo no ve eso. Este lo corre.
+    """
+    corre(_tasas(base))
+    informe = corre(ae.ExecutiveReportService.generate_report("2026-01-01", "2026-12-31"))
+
+    assert informe["advertencias"] == [], (
+        "Con todas las tasas puestas el informe no debería advertir nada.")
+    assert informe["rates_snapshot"]["ris_to_ves_withdrawal"] == 110
+
+
+def _comision_en_reales(base, monto=7.5):
+    """Una comisión de pasarela en reales, dentro del rango del informe.
+
+    Es la fila que llega al cálculo que divide por `brl_to_usd`. Sin datos que
+    lleguen ahí, un test sobre esa conversión no prueba nada: fue el error de
+    la primera versión de este archivo.
+    """
+    return base.gateway_fee_ledger.insert_one({
+        "currency": "BRL", "gross_amount": 100.0, "fee_deducted": monto,
+        "created_at": datetime(2026, 6, 1, tzinfo=timezone(timedelta(hours=-4))),
+    })
+
+
+def test_el_informe_avisa_cuando_no_pudo_convertir(base):
+    """Sin `brl_to_usd`, las comisiones en reales quedan afuera Y SE DICE.
+
+    Las dos mitades importan y se afirman por separado:
+
+      · que la comisión NO se sume como si un real valiera un dólar —era lo
+        que hacía el `or 1`, y multiplicaba la cifra por cinco antes de
+        restarla de la ganancia neta—;
+      · que el informe lo diga, porque omitir en silencio es lo mismo que
+        inventar para quien lo lee.
+    """
+    corre(base.rates.insert_one({"ris_to_ves": 110, "usd_to_ves": 50}))
+    corre(base.bcv_rates.insert_one({"rates": {"dolar": 50}}))
+    corre(_comision_en_reales(base, monto=7.5))
+
+    informe = corre(ae.ExecutiveReportService.generate_report("2026-01-01", "2026-12-31"))
+
+    assert informe["advertencias"], (
+        "Faltaba `brl_to_usd`, había comisiones en reales, y el informe no "
+        "advirtió nada. Quien lo lee no puede saber que falta algo.")
+    assert "brl_to_usd" in informe["advertencias"][0]
+
+    # La mitad que la versión anterior de este test no comprobaba: que además
+    # de avisar, NO haya convertido. Con `or 1` los 7,50 reales entraban como
+    # 7,50 dólares.
+    equivalente = informe["arbitrage_performance"]["gateway_fees_usdt_equivalent"]
+    assert equivalente == 0, (
+        f"Se convirtieron {equivalente} sin tasa. El `or 1` volvió: un real "
+        "no vale un dólar.")
+
+
+def test_con_la_tasa_puesta_la_comision_se_convierte(base):
+    """La contracara: que no se resuelva no convirtiendo nunca."""
+    corre(base.rates.insert_one({"ris_to_ves": 110, "usd_to_ves": 50,
+                                 "brl_to_usd": 5.0}))
+    corre(base.bcv_rates.insert_one({"rates": {"dolar": 50}}))
+    corre(_comision_en_reales(base, monto=10.0))
+
+    informe = corre(ae.ExecutiveReportService.generate_report("2026-01-01", "2026-12-31"))
+    assert informe["advertencias"] == []
+    assert informe["arbitrage_performance"]["gateway_fees_usdt_equivalent"] == 2.0, (
+        "10 reales a 5,00 por dólar son 2 dólares.")
