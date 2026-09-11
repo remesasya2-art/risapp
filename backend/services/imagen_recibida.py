@@ -144,3 +144,131 @@ def limpiar_lista(valores, *, campo: str = "los comprobantes"):
     if not isinstance(valores, (list, tuple)):
         raise ImagenInvalida(f"{campo}: no llegó una lista.")
     return [limpiar_imagen(v, campo=campo) for v in valores]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# EL CHAT DE SOPORTE: MAS ESTRICTO QUE EL RESTO
+# ══════════════════════════════════════════════════════════════════════════
+#
+# `limpiar_imagen` acepta tres cosas: un `data:image/…`, una ruta nuestra y una
+# direccion `https://`. Para los comprobantes y el KYC esta bien: quien sube ahi
+# ya paso por un formulario nuestro.
+#
+# El chat de soporte es otra cosa. Cualquiera con una cuenta escribe, y lo que
+# mande lo abre un asesor. Las tres puertas se cierran a una.
+#
+# POR QUE SE VA EL `https://`
+#
+#     La pantalla pinta el adjunto como `<img src="…">`, y la CSP permite
+#     imagenes de cualquier origen (`img-src: 'self' data: blob: https:`). O sea
+#     que un cliente puede adjuntar una foto alojada en SU servidor.
+#
+#     No ejecuta codigo, y por eso es facil no verlo. Lo que hace es: cada vez
+#     que un asesor abre ese caso, el servidor de quien la mando recibe la IP
+#     del asesor, su navegador y la hora exacta. Sirve para saber cuando lo
+#     estan mirando, y para cambiar la imagen DESPUES de que la revisaron: se
+#     aprueba una cosa y queda guardada otra.
+#
+#     Vale igual del lado del asesor, y por eso esto se aplica a los dos
+#     sentidos: un adjunto del asesor con una direccion ajena le cuenta lo mismo
+#     al cliente.
+#
+# POR QUE SE MIRAN LOS BYTES
+#
+#     `limpiar_imagen` le cree a la etiqueta: un `data:image/png;base64,` con
+#     cualquier cosa adentro pasa. Aca se compara la FIRMA real del archivo, que
+#     es lo unico que no se puede mentir, y el tipo que se guarda es el que dicen
+#     los bytes, no el que declaro quien subio.
+#
+# POR QUE SE BORRAN LOS METADATOS
+#
+#     Una foto de telefono lleva las coordenadas GPS de donde se tomo, el modelo
+#     y el numero de serie. Un cliente que manda la foto de un comprobante no
+#     esta decidiendo mandar su domicilio, y eso queda guardado para siempre.
+
+# Las firmas de los tipos que el chat acepta. `services/envios_archivos.py` tiene
+# su propia tabla —con PDF y sin GIF/WEBP/BMP/AVIF— porque cubre otro camino;
+# esta cubre exactamente `TIPOS_PERMITIDOS`.
+_FIRMAS_IMAGEN = (
+    (b"\xff\xd8\xff", "jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"GIF87a", "gif"),
+    (b"GIF89a", "gif"),
+    (b"BM", "bmp"),
+)
+
+
+def tipo_por_los_bytes(datos: bytes):
+    """El tipo que dicen los BYTES, o None si no es una imagen conocida."""
+    if not datos:
+        return None
+    for firma, tipo in _FIRMAS_IMAGEN:
+        if datos.startswith(firma):
+            return tipo
+    # WEBP y AVIF viven dentro de contenedores: su marca no esta al principio.
+    if len(datos) >= 12:
+        if datos[:4] == b"RIFF" and datos[8:12] == b"WEBP":
+            return "webp"
+        if datos[4:12] in (b"ftypavif", b"ftypavis"):
+            return "avif"
+    return None
+
+
+def limpiar_foto_del_chat(valor, *, campo: str = "La imagen"):
+    """Una foto subida desde el navegador, mirada por dentro y sin metadatos.
+
+    A diferencia de `limpiar_imagen`, esta NO devuelve el original: devuelve la
+    foto reescrita, con el tipo que dicen sus bytes y sin EXIF. Quien la llama
+    tiene que guardar lo que esto devuelve, no lo que recibio.
+    """
+    import base64
+
+    if valor is None:
+        return None
+    if not isinstance(valor, str):
+        raise ImagenInvalida(f"{campo}: no llegó una imagen.")
+
+    limpio = _sin_lo_que_el_navegador_ignora(valor)
+    if not limpio:
+        return None
+
+    if len(valor.encode("utf-8")) > TOPE_BYTES:
+        raise ImagenInvalida(
+            f"{campo} pesa demasiado. Sacá la foto con menos resolución o "
+            "mandá una más liviana.")
+
+    m = _DATA.match(limpio)
+    if not m:
+        # Una ruta nuestra, un `https://`, o cualquier otra cosa. En este canal
+        # solo entra la foto que sube el navegador.
+        logger.warning("soporte: se rechazó un adjunto que no es una foto subida "
+                       "(empieza con %r)", limpio[:24])
+        raise ImagenInvalida(
+            f"{campo}: acá sólo se pueden adjuntar fotos desde tu dispositivo. "
+            "No se aceptan direcciones de internet.")
+
+    if m.group(1).lower() not in TIPOS_PERMITIDOS:
+        raise ImagenInvalida(
+            f"{campo}: ese formato no se acepta. Mandá una foto en JPG o PNG.")
+
+    try:
+        crudos = base64.b64decode(limpio.split(",", 1)[1], validate=True)
+    except Exception:
+        raise ImagenInvalida(f"{campo}: la foto llegó dañada. Subila de nuevo.")
+
+    real = tipo_por_los_bytes(crudos)
+    if real is None:
+        # La etiqueta decia «imagen» y los bytes dicen otra cosa. No se intenta
+        # adivinar que es: lo que no se reconoce, no entra.
+        logger.warning("soporte: adjunto con etiqueta %r y bytes desconocidos",
+                       m.group(1).lower())
+        raise ImagenInvalida(
+            f"{campo}: eso no es una foto. Mandá una imagen en JPG o PNG.")
+
+    # `sin_exif` vive en el modulo de archivos de envios. Se importa aca adentro
+    # y no arriba a proposito: ese modulo habla con la base, y este es puro.
+    from services.envios_archivos import sin_exif
+    sin_rastro = sin_exif(crudos, f"image/{real}")
+
+    return (f"data:image/{real};base64,"
+            + base64.b64encode(sin_rastro).decode("ascii"))

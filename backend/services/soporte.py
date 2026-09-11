@@ -478,3 +478,117 @@ def problema_para_responder_pedido(pedido, quien_permisos, es_super_admin=False)
     if requerido and requerido not in (quien_permisos or []):
         return f"Este pedido lo contesta {nombre_de_area(pedido.get('area'))}."
     return None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ENLACES EN EL MENSAJE DEL CLIENTE
+# ══════════════════════════════════════════════════════════════════════════
+#
+# El texto se pinta como TEXTO PLANO en las dos pantallas —no hay
+# `dangerouslySetInnerHTML` ni autoenlazado—, así que un enlace acá no ejecuta
+# nada ni es clicable. El daño es de otro tipo: una dirección falsa que el
+# cliente le pide al asesor que abra, o al revés. Es engaño, no código.
+#
+# Se bloquea SOLO al cliente. El asesor a veces tiene que mandar un enlace de
+# seguimiento o un formulario, y quitárselo le rompe el trabajo.
+#
+# DOS COSAS QUE ESTE FILTRO NO INTENTA
+#
+#   1. Ser perfecto. Quien quiera dictar una dirección por partes lo va a
+#      lograr. Lo que se corta es el copiar y pegar, que es como llega el 99%.
+#
+#   2. Bloquear correos. «mi correo es ana@ejemplo.com» es una frase normal en
+#      soporte, y rechazarla molesta al que dice la verdad sin frenar a nadie.
+#      Los correos se sacan del texto ANTES de buscar dominios.
+#
+# EL FALSO POSITIVO QUE SI IMPORTA
+#
+#   En español se escribe «esto.es urgente» o «nada.de eso» cuando falta el
+#   espacio tras el punto. `.es` y `.de` son dominios de país, así que una lista
+#   ingenua rechazaría esas frases. Los dominios de dos letras que chocan con
+#   palabras del idioma sólo cuentan si vienen con esquema, con `www.` o con una
+#   barra después: `esto.es` pasa, `esto.es/algo` no.
+
+import re as _re
+
+# Dominios que por sí solos ya son una dirección.
+_TLD_CLAROS = (
+    "com|net|org|info|biz|app|link|click|live|online|site|shop|store|club|top|"
+    "vip|xyz|pro|cloud|dev|page|space|fun|icu|work|website|host|press|"
+    "br|ve|ru|cn|tk|ml|ga|cf|gq|io|ly|gl|gd|cc|ws|co|mx|cl|pe|py|uy|bo|ec|us|"
+    "uk|pt|ar|cr|do|gt|hn|ni|pa|sv"
+)
+# Dominios que chocan con palabras del español o del portugués. Sólo cuentan
+# acompañados: `esto.es` no, `esto.es/x` sí.
+_TLD_AMBIGUOS = "es|de|it|be|to|no|se|la|si|me|tv|ai|id|im|in|is|ma|na|ha|va|da"
+
+_CORREO = _re.compile(r"[^\s@]+@[^\s@]+\.[a-z]{2,}", _re.IGNORECASE)
+
+# Los esquemas se miran ANTES de sacar los correos, y el orden importa: el
+# patrón de correo se come `mailto:otro@x.com` entero —«mailto:otro» no tiene
+# espacios ni arrobas— y el esquema pasaba sin que nadie lo viera.
+_SENALES_ESQUEMA = (
+    # Cualquier esquema con `://`, escrito como esté.
+    _re.compile(r"[a-z][a-z0-9+.-]*://", _re.IGNORECASE),
+    # Esquemas que no llevan `//` y que igual abren algo.
+    #
+    # `tel:` no está a propósito: choca con «tel: 555-1234», que es como se
+    # escribe un teléfono, y un enlace de teléfono no hace daño.
+    _re.compile(r"\b(javascript|file|vbscript|mailto|ftp|magnet)\s*:",
+                _re.IGNORECASE),
+    # `data:` sólo cuando lo sigue un tipo de contenido. En portugués «data» es
+    # fecha, y «data: 11/09/2026» es una frase normal en este chat.
+    _re.compile(r"\bdata\s*:\s*[a-z]+/", _re.IGNORECASE),
+)
+
+# Estos se miran DESPUES de sacar los correos: «ana@ejemplo.com» lleva un dominio
+# adentro y es una frase legítima en soporte.
+_SENALES_DOMINIO = (
+    # `www.loquesea`
+    _re.compile(r"\bwww\s*\.\s*[a-z0-9-]", _re.IGNORECASE),
+    # Un dominio claro: `ejemplo.com`, con o sin ruta.
+    _re.compile(rf"\b[a-z0-9][a-z0-9-]*\.({_TLD_CLAROS})\b", _re.IGNORECASE),
+    # Un dominio ambiguo, pero sólo si trae ruta o puerto.
+    _re.compile(rf"\b[a-z0-9][a-z0-9-]*\.({_TLD_AMBIGUOS})[:/]", _re.IGNORECASE),
+    # Una dirección IP.
+    _re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"),
+)
+
+# Las formas de escribir un punto sin escribir un punto. Se normalizan antes de
+# mirar, porque quien las usa lo hace justamente para esquivar el filtro.
+_DISFRACES = (
+    (_re.compile(r"\s*[\(\[\{<]\s*\.\s*[\)\]\}>]\s*"), "."),
+    (_re.compile(r"\s+(punto|ponto|dot)\s+", _re.IGNORECASE), "."),
+    (_re.compile(r"\bh\s*x\s*x\s*p(s?)\b", _re.IGNORECASE), r"http\1"),
+    (_re.compile(r"\s*\[\s*:\s*\]\s*"), ":"),
+)
+
+
+def _sin_disfraces(texto: str) -> str:
+    for patron, reemplazo in _DISFRACES:
+        texto = patron.sub(reemplazo, texto)
+    return texto
+
+
+def problema_por_enlaces(texto) -> str | None:
+    """Por qué NO se puede enviar ese mensaje. None si se puede.
+
+    El mensaje que devuelve va derecho al cliente, así que dice qué hacer en
+    vez de sólo que no.
+    """
+    if not texto:
+        return None
+    aviso = ("Por seguridad no se pueden enviar enlaces ni direcciones "
+             "de internet por el chat. Contanos con palabras qué pasó y "
+             "el asesor te guía.")
+
+    destapado = _sin_disfraces(str(texto))
+    for senal in _SENALES_ESQUEMA:
+        if senal.search(destapado):
+            return aviso
+
+    sin_correos = _CORREO.sub(" ", destapado)
+    for senal in _SENALES_DOMINIO:
+        if senal.search(sin_correos):
+            return aviso
+    return None
