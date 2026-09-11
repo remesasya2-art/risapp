@@ -192,10 +192,14 @@ class AdjustBalanceRequest(BaseModel):
 #     GET  /admin/users/{user_id}           -> routes.admin.get_user_detail
 #     GET  /admin/verifications/pending     -> routes.admin.get_pending_verifications
 #     POST /admin/verifications/decide      -> routes.admin.decide_verification
-#     GET  /admin/support/chats             -> routes.support.get_admin_support_chats
-#     GET  /admin/support/chat/{user_id}    -> routes.support.get_admin_chat_messages
-#     POST /admin/support/respond           -> routes.support.admin_respond
-#     POST /admin/support/close             -> routes.support.close_chat
+#     GET  /admin/support/chats             -> routes.support (retirado)
+#     GET  /admin/support/chat/{user_id}    -> routes.support (retirado)
+#     POST /admin/support/respond           -> routes.support (retirado)
+#     POST /admin/support/close             -> routes.support (retirado)
+#
+# Las cuatro de soporte ya no tienen a dónde apuntar: `routes/support.py` se
+# borró al quedar el chat viejo sin uso. Se dejan escritas porque lo que este
+# bloque documenta es qué había ACA y por qué no servía, no qué existe hoy.
 #
 # FastAPI resuelve por ORDEN DE REGISTRO, y `routes/` se incluye antes, así
 # que las nueve de acá no atendían un solo pedido. Nunca.

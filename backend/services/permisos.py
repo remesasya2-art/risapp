@@ -163,20 +163,14 @@ MAPA = {
     ("GET",    "/api/admin/payment-records/{record_id}"):    "transactions.view",
 
     # ── Soporte ───────────────────────────────────────────────────────────
-    ("GET",    "/api/admin/support/chats"):                  "support.view",
-    ("GET",    "/api/admin/support/chat/{user_id}"):         "support.view",
     ("GET",    "/api/admin/support-requests"):               "support.view",
     ("GET",    "/api/admin/quick-replies"):                  "support.view",
-    ("POST",   "/api/admin/support/respond"):                "support.respond",
-    ("POST",   "/api/admin/support/claim"):                  "support.respond",
-    ("POST",   "/api/admin/support/release"):                "support.respond",
     ("POST",   "/api/admin/quick-replies"):                  "support.respond",
     ("DELETE", "/api/admin/quick-replies/{qr_id}"):          "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/claim"):    "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/release"):  "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/reply"):    "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/priority"): "support.respond",
-    ("POST",   "/api/admin/support/close"):                  "support.close",
     ("POST",   "/api/admin/support-requests/{request_id}/resolve"):  "support.close",
 
     # ── Envíos ────────────────────────────────────────────────────────────

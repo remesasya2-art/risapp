@@ -175,9 +175,12 @@ async def ejecutar_si_hace_falta() -> dict:
     migración corre de nuevo: se cura sola en vez de quedarse dormida sobre
     conversaciones sin mover.
 
-    Deliberadamente NO se marca «hecha y nunca más». Una marca así, con las
-    rutas viejas todavía montadas, dejaría a un chat que entrara después sin
-    caso y sin nadie mirándolo.
+    Deliberadamente NO se marca «hecha y nunca más». Hoy ya no hay quien
+    escriba en `support_chats` —las rutas viejas se retiraron—, así que en la
+    práctica después de la primera corrida siempre se sale por el atajo. La
+    cuenta se queda igual: cuesta una consulta por arranque y es lo que hace
+    que un chat aparecido por cualquier camino que no previmos termine como
+    caso en vez de quedarse esperando a que alguien lo note.
     """
     chats = await db.support_chats.count_documents({})
     if not chats:

@@ -174,43 +174,58 @@ def test_las_calificaciones_ya_guardadas_no_se_quedan_sin_referencia():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 2. Una atención, una sola calificación
+# 2 y 3. El chat viejo ya no está
 # ══════════════════════════════════════════════════════════════════════════
 
-def test_la_puerta_vieja_para_calificar_el_chat_ya_no_existe():
-    """El defecto: la misma conversación se podía calificar dos veces.
+def test_el_modulo_del_chat_viejo_no_existe():
+    """`routes/support.py` se borró entero.
 
-    El cliente cuyo chat se migró califica su caso por la ruta nueva, y además
-    podía volver a `POST /support/rate` y calificar el chat original —que la
-    migración deja intacto a propósito—. Eran dos documentos en `ratings` por
-    una sola atención, los dos contando en el promedio del agente.
+    Traía trece endpoints de los que doce estaban muertos —ninguna pantalla los
+    llamaba desde el rediseño— y los dos vivos hacían daño: `POST /support/rate`
+    permitía calificar por segunda vez una atención ya calificada como caso, y
+    `POST /admin/support/respond` guardaba el adjunto sin mirarlo, mientras la
+    mesa de ayuda nueva lo saneaba a un archivo de distancia.
     """
-    from routes.support import router
-
-    rutas = {r.path for r in router.routes}
-    assert "/support/rate" not in rutas, (
-        "volvió la ruta que permitía calificar dos veces la misma atención")
-    # Y la de casos, que es la que queda, sigue en pie.
-    from routes.soporte import router as router_casos
-    assert any(r.path.endswith("/calificar") for r in router_casos.routes)
+    import importlib
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("routes.support")
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# 3. El adjunto del endpoint viejo se mira antes de guardarlo
-# ══════════════════════════════════════════════════════════════════════════
+def test_ninguna_ruta_del_chat_viejo_sigue_atendiendo():
+    """Contra el router de verdad, que es lo que la aplicación monta.
 
-def test_el_endpoint_viejo_no_guarda_una_imagen_que_no_es_una_imagen():
-    """El defecto: `/admin/support/respond` guardaba `image` tal cual llegaba.
-
-    La mesa de ayuda nueva lo saneaba; la vieja, que quedó montada al lado, no.
-    El campo lo elige quien manda el mensaje y lo abre el otro, así que un
-    `javascript:…` guardado ahí espera a que alguien abra «la imagen».
+    Se mira el router y no el archivo: un endpoint no desaparece porque se
+    borre el módulo si alguien lo volvió a montar desde otro lado.
     """
-    _base_limpia("ris_adjunto")
+    from routes import api_router
+
+    rutas = {r.path for r in api_router.routes}
+    muertas = {
+        "/api/support/send", "/api/support/history", "/api/support/conversation",
+        "/api/support/rate", "/api/admin/support/chats",
+        "/api/admin/support/chat/{user_id}", "/api/admin/support/respond",
+        "/api/admin/support/close", "/api/admin/support/claim",
+        "/api/admin/support/release",
+    }
+    assert not (rutas & muertas), f"volvieron rutas del chat viejo: {rutas & muertas}"
+
+    # Y la mesa de ayuda por casos, que es la que queda, sigue entera.
+    assert "/api/soporte/casos" in rutas
+    assert "/api/soporte/casos/{caso_id}/calificar" in rutas
+
+
+def test_las_respuestas_rapidas_sobrevivieron_a_la_mudanza():
+    """Eran lo único vivo del archivo viejo, y por eso no se podía borrar.
+
+    Se mudaron a `routes/soporte.py` CON LA MISMA RUTA: si cambiara, el
+    desplegable del asesor se queda vacío sin que nada falle a la vista, que es
+    la peor manera de romper algo.
+    """
+    base = _base_limpia("ris_rapidas")
     _sin_webpush()
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from routes.support import router
+    from routes.soporte import router
     from routes import dependencies as deps
 
     app = FastAPI()
@@ -218,19 +233,41 @@ def test_el_endpoint_viejo_no_guarda_una_imagen_que_no_es_una_imagen():
     app.dependency_overrides[deps.get_crm_user] = lambda: ASESOR
     cliente = TestClient(app)
 
-    respuesta = cliente.post("/api/admin/support/respond", json={
-        "user_id": "u_ana", "message": "Mirá la captura",
-        "image": "javascript:alert(document.cookie)",
-    })
-    assert respuesta.status_code == 400, (
-        f"se guardó un adjunto que no es una imagen: {respuesta.text}")
+    # La primera lectura siembra las de fábrica: sin eso el asesor abre el
+    # desplegable y no hay nada.
+    primera = cliente.get("/api/admin/quick-replies")
+    assert primera.status_code == 200, primera.text
+    assert len(primera.json()) == 6
+
+    # Sembrar es una sola vez, no una por lectura.
+    assert len(cliente.get("/api/admin/quick-replies").json()) == 6
+
+    creada = cliente.post("/api/admin/quick-replies", json={"text": "Ya te respondo"})
+    assert creada.json()["success"] is True
+    qr_id = creada.json()["qr_id"]
+    assert len(cliente.get("/api/admin/quick-replies").json()) == 7
+
+    assert cliente.delete(f"/api/admin/quick-replies/{qr_id}").json()["success"] is True
+    assert len(cliente.get("/api/admin/quick-replies").json()) == 6
 
     async def revisar():
-        from database import db
-        assert await db.support_messages.count_documents({}) == 0, (
-            "el mensaje se guardó igual, con el adjunto adentro")
+        assert await base.quick_replies.count_documents({}) == 6
 
     _ya(revisar())
+
+
+def test_la_tabla_de_permisos_sigue_cubriendo_las_respuestas_rapidas():
+    """Mudar una ruta y olvidar su permiso la deja sin llave.
+
+    `dependencies.py` NIEGA lo que no está declarado, así que el olvido no
+    abriría una puerta: cerraría una que debe estar abierta, y el asesor se
+    encontraría con un 403 al abrir el panel.
+    """
+    from services.permisos import MAPA
+
+    assert MAPA[("GET", "/api/admin/quick-replies")] == "support.view"
+    assert MAPA[("POST", "/api/admin/quick-replies")] == "support.respond"
+    assert MAPA[("DELETE", "/api/admin/quick-replies/{qr_id}")] == "support.respond"
 
 
 # ══════════════════════════════════════════════════════════════════════════
