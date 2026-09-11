@@ -23,11 +23,16 @@ LO QUE ESTE ARCHIVO AGREGA SOBRE EL CHAT VIEJO
       · La ficha del cliente al lado de la conversación: saldo, verificación y
         últimas operaciones. Antes se atendía a ciegas o abriendo otra pestaña.
 
-QUE NO SE TOCO
+EL CHAT VIEJO YA NO ESTA
 
-    Las rutas viejas de `routes/support.py` siguen ahí y siguen andando. La
-    migración pasa los chats existentes a casos cerrados, así que el historial
-    no se pierde ni se duplica.
+    `routes/support.py` se apagó: diez endpoints que ninguna pantalla llamaba
+    y que seguían escribiendo en `support_chats`, una colección que ya nadie
+    lee. Mientras esa puerta estuvo abierta, un mensaje que entrara por ahí
+    caía en un buzón mudo —y, peor, la migración no lo rescataba: es
+    idempotente POR CHAT, así que un chat ya migrado se saltea entero.
+
+    Las colecciones viejas quedan intactas. La migración
+    (`migrations/002_chats_a_casos.py`) las pasa a casos sin tocarlas.
 """
 import asyncio
 import logging

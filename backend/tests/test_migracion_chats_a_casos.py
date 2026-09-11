@@ -164,3 +164,140 @@ def test_correrla_dos_veces_no_duplica_nada():
         assert await base.support_messages.count_documents({}) == 6
 
     _ya(revisar())
+
+
+# ─── Lo que pasa cuando los datos viejos no son perfectos ──────────────────
+
+
+def _con_indices(base):
+    """La base del test, con los índices reales de la mesa de ayuda puestos.
+
+    Sin esto, el único de `mensaje_id` no existe y los dos tests de abajo
+    pasarían por el motivo equivocado: no porque la migración aguante un
+    duplicado, sino porque nada lo detecta.
+    """
+    from services.soporte_indices import asegurar_indices
+    _ya(asegurar_indices(base))
+    return base
+
+
+def test_un_mensaje_repetido_no_corta_la_corrida():
+    """El defecto: `insert_many(ordered=False)` sigue, pero LEVANTA al final.
+
+    Dos mensajes viejos con el mismo `message_id` en chats DISTINTOS pasan el
+    chequeo de `ya_movidos` —que mira sólo los del propio caso— y chocan
+    contra el único al insertar. Sin atajar esa excepción, la corrida se
+    cortaba ahí y los chats que venían después no se migraban nunca.
+    """
+    base = _con_indices(_base_limpia())
+
+    async def escenario():
+        for n in (0, 1, 2):
+            uid = f"u_{n}"
+            await base.support_chats.insert_one({
+                "user_id": uid, "user_name": f"Cliente {n}",
+                "status": "open", "created_at": _cuando(1),
+                "last_message": "Hola", "last_message_at": _cuando(2),
+            })
+            # La misma llave en los tres chats: el caso que el chequeo por
+            # caso no puede ver.
+            await base.support_messages.insert_one({
+                "user_id": uid, "sender": "user", "message_id": "m_repetido",
+                "message": f"mensaje de {uid}", "created_at": _cuando(1),
+            })
+            await base.support_messages.insert_one({
+                "user_id": uid, "sender": "user", "message_id": f"m_propio_{n}",
+                "message": f"otro de {uid}", "created_at": _cuando(2),
+            })
+
+    _ya(escenario())
+    resultado = _correr()
+
+    # Los TRES casos se crearon: la corrida no se cortó en el segundo.
+    assert resultado["casos_creados"] == 3
+    # Cuatro mensajes movidos: los tres propios, más el repetido UNA vez.
+    assert resultado["mensajes_movidos"] == 4
+    assert resultado["mensajes_repetidos"], (
+        "el resultado tiene que decir qué mensajes se descartaron por "
+        "repetidos; si no, la pérdida es silenciosa")
+
+    async def revisar():
+        casos = await base.soporte_casos.find({}, {"_id": 0}).to_list(10)
+        assert len(casos) == 3
+        # Ningún caso quedó sin su mensaje propio.
+        for caso in casos:
+            cuantos = await base.soporte_mensajes.count_documents(
+                {"caso_id": caso["caso_id"]})
+            assert cuantos >= 1, f"{caso['numero']} quedó vacío"
+
+    _ya(revisar())
+
+
+def test_un_error_que_no_es_de_llave_repetida_si_frena():
+    """Seguir después de un error cualquiera sería migrar a medias y callarlo.
+
+    Sólo el 11000 —llave repetida— es esperable y se descarta. Cualquier otro
+    tiene que subir.
+    """
+    import importlib
+    from pymongo.errors import BulkWriteError
+
+    _base_limpia()
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    class BaseQueFalla:
+        class soporte_mensajes:
+            @staticmethod
+            async def insert_many(docs, ordered=True):
+                raise BulkWriteError({
+                    "nInserted": 0,
+                    "writeErrors": [{"code": 121, "errmsg": "documento inválido"}],
+                })
+
+    original = modulo.db
+    modulo.db = BaseQueFalla
+    try:
+        with pytest.raises(BulkWriteError):
+            _ya(modulo._insertar([{"mensaje_id": "m_1"}]))
+    finally:
+        modulo.db = original
+
+
+def test_el_ensayo_no_escribe_nada():
+    """Es lo que se corre en producción antes de la corrida de verdad."""
+    import importlib
+    base = _base_limpia()
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    _ya(_sembrar(base, cuantos_chats=2))
+    informe = _ya(modulo.ensayo())
+
+    assert informe["chats"] == 2
+    assert informe["casos_a_crear"] == 2
+    assert informe["mensajes_a_mover"] == 6
+    assert informe["ya_migrados"] == 0
+
+    async def revisar():
+        assert await base.soporte_casos.count_documents({}) == 0, (
+            "el ensayo escribió casos")
+        assert await base.soporte_mensajes.count_documents({}) == 0, (
+            "el ensayo escribió mensajes")
+        assert await base.contadores.count_documents({}) == 0, (
+            "el ensayo movió el contador de números")
+
+    _ya(revisar())
+
+
+def test_el_ensayo_no_cuenta_dos_veces_lo_ya_migrado():
+    """Corrido después de la migración tiene que dar cero para hacer."""
+    base = _base_limpia()
+    import importlib
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    _ya(_sembrar(base, cuantos_chats=2))
+    _correr()
+    informe = _ya(modulo.ensayo())
+
+    assert informe["casos_a_crear"] == 0
+    assert informe["mensajes_a_mover"] == 0
+    assert informe["ya_migrados"] == 2

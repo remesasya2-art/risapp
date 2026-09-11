@@ -81,17 +81,10 @@ async def lifespan(app):
         await db.support_messages.create_index([("user_id", 1), ("read", 1)])
         await db.support_chats.create_index("user_id")
         await db.support_chats.create_index([("last_message_at", -1)])
-        # La mesa de ayuda por casos. La bandeja del asesor filtra por estado y
-        # área, y el cliente pide los suyos: sin estos índices, cada apertura
-        # del panel recorre la colección entera.
-        await db.soporte_casos.create_index("caso_id", unique=True)
-        await db.soporte_casos.create_index([("user_id", 1), ("actualizado_en", -1)])
-        await db.soporte_casos.create_index([("estado", 1), ("area", 1)])
-        await db.soporte_casos.create_index([("asignado_a", 1), ("estado", 1)])
-        await db.soporte_mensajes.create_index([("caso_id", 1), ("creado_en", 1)])
-        await db.soporte_pedidos.create_index([("area", 1), ("estado", 1)])
-        await db.soporte_pedidos.create_index("caso_id")
-        await db.quick_replies.create_index([("created_at", 1)])
+        # Los índices de la mesa de ayuda estaban acá, en una lista más corta
+        # que la de database.py y sin ninguno de los tres únicos. Se fueron a
+        # services/soporte_indices.py, que es ahora la única fuente y se llama
+        # más abajo, en su propio try.
         await db.blacklist.create_index([("type", 1), ("value", 1)])
         await db.blacklist.create_index("value")
         await db.verifications.create_index([("status", 1), ("created_at", -1)])
@@ -168,6 +161,15 @@ async def lifespan(app):
         await ensure_envios_indexes()
     except Exception as e:
         logger.warning(f"Envios indexes warning: {e}")
+    try:
+        # La mesa de ayuda. Incluye los tres índices únicos que ninguna de las
+        # dos listas viejas llegaba a crear: `mensaje_id` —la red de la
+        # migración del historial—, `pedido_id`, y el `[estado,
+        # actualizado_en]` que es la consulta de la bandeja del asesor.
+        from services.soporte_indices import asegurar_indices as indices_soporte
+        await indices_soporte(db)
+    except Exception as e:
+        logger.warning(f"Indices de la mesa de ayuda: {e}")
     try:
         # El cofre de los documentos del KYC. Se revisa al arrancar para que una
         # llave equivocada se vea en el primer segundo y no dentro de tres meses,
