@@ -48,7 +48,7 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user, get_crm_user
 from services import soporte
-from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
+from services.imagen_recibida import ImagenInvalida, limpiar_foto_del_chat
 from services.money import to_float
 from services.notifications import create_notification
 
@@ -142,18 +142,20 @@ def _adjunto(valor):
 
     El campo es texto elegido por quien manda el mensaje, y lo abre el otro:
     la foto del cliente la abre un asesor en su sesión de administrador, y la
-    del asesor la abre el cliente. Un `javascript:…` guardado ahí se ejecuta
-    al abrir «la imagen». El filtro del navegador
-    (`frontend/src/utils/urlDeArchivo.js`) ya no lo deja abrir; esto es la otra
-    mitad, que no se guarde.
+    del asesor la abre el cliente.
 
-    De paso pone el tope de tamaño. Un `data:` de base64 viaja adentro del
-    documento de Mongo, y sin tope una foto grande entra hasta chocar contra
-    el límite de 16 MB: lo que se rompe entonces no es la subida, es la lectura
-    de la conversación, para todos, desde ese momento.
+    Este canal usa el filtro ESTRICTO (`limpiar_foto_del_chat`), no el general:
+    sólo entra una foto subida desde el navegador, se comprueban sus bytes
+    reales y se le borran los metadatos. Se cierran tres cosas de una: el
+    `javascript:…` que se ejecutaba al abrir «la imagen», la dirección `https://`
+    ajena que convierte cada apertura del caso en un aviso para el servidor de
+    quien la mandó, y las coordenadas GPS que viajan dentro de cualquier foto
+    de teléfono.
+
+    Devuelve la foto REESCRITA, no la que llegó: hay que guardar esto.
     """
     try:
-        return limpiar_imagen_opcional(valor, campo="La imagen")
+        return limpiar_foto_del_chat(valor, campo="La imagen")
     except ImagenInvalida as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -288,6 +290,12 @@ async def abrir_caso(datos: AbrirCaso, current_user: User = Depends(get_current_
     texto = datos.mensaje.strip()
     if not texto:
         raise HTTPException(status_code=400, detail="Escribí tu consulta")
+    # Sólo del lado del cliente. El asesor sí puede mandar un enlace: a veces
+    # necesita pasar un seguimiento o un formulario, y quitárselo le rompe el
+    # trabajo. Ver `services/soporte.problema_por_enlaces`.
+    enlaces = soporte.problema_por_enlaces(texto)
+    if enlaces:
+        raise HTTPException(status_code=400, detail=enlaces)
     # Antes de tocar la base: un adjunto rechazado a mitad de camino dejaría un
     # caso creado, con su número gastado y sin el mensaje que lo explica.
     adjunto = _adjunto(datos.adjunto)
@@ -370,6 +378,9 @@ async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
             detail="Este caso está cerrado. Abrí uno nuevo y lo vemos.")
 
     texto = (datos.mensaje or "").strip()
+    enlaces = soporte.problema_por_enlaces(texto)
+    if enlaces:
+        raise HTTPException(status_code=400, detail=enlaces)
     adjunto = _adjunto(datos.adjunto)
     if not texto and not adjunto:
         raise HTTPException(status_code=400, detail="Escribí algo o adjuntá una imagen")
