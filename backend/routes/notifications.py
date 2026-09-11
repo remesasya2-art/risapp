@@ -20,6 +20,27 @@ POR QUE «PERSONAL» SE PREGUNTA AL REVES
     existiera no lo tienen. Preguntando `ambito == "personal"` desaparecerían
     de la bandeja de su dueño —y son casi todos los que hay hoy—.
 
+SE BORRA A MANO, Y NADA SE BORRA SOLO
+
+    No hay vencimiento automático. Fue una decisión: un aviso que desaparece
+    solo es un aviso que alguien no llegó a leer, y nadie se entera de que
+    existió.
+
+    Y el borrado en tanda NUNCA toca lo que no se leyó. «Limpiar leídas»
+    limpia lo leído; para tirar algo sin leer hay que abrirlo y borrarlo de a
+    uno, mirándolo. Un botón que vacía la bandeja entera de un clic es un
+    botón que alguien aprieta sin querer.
+
+EL PAGINADO DEVUELVE UNA LISTA, NO UN SOBRE
+
+    Se sigue devolviendo la lista pelada, como siempre. «Hay más» se deduce de
+    que hayan venido tantos como se pidieron.
+
+    Envolverla en `{"notificaciones": [...], "hay_mas": true}` habría sido más
+    explícito y habría dejado la campana del panel vacía durante los minutos
+    que van del despliegue del servidor al de la pantalla. El costo de esto es
+    un pedido de más cuando el total es múltiplo exacto del tamaño de página.
+
 SIN EL PARAMETRO, TODO
 
     A propósito. El servidor se despliega antes que la pantalla, y en esos
@@ -27,6 +48,8 @@ SIN EL PARAMETRO, TODO
     vacía sería un apagón de avisos por cada despliegue.
 """
 import logging
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from database import db
@@ -37,9 +60,11 @@ from services.notifications import PERSONAL, TRABAJO
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["notifications"])
 
-# Cuántos avisos se devuelven de una vez. El paginado es de la Fase 4; hasta
-# entonces este número es el techo real de lo que la pantalla puede mostrar.
-_TOPE = 50
+# Cuántos avisos trae una página, y hasta cuántos puede pedir quien insista.
+# El tope de arriba existe para que un `limite=100000` no se traiga la
+# colección entera a memoria.
+_POR_PAGINA = 20
+_TOPE = 100
 
 
 def _bandeja(user_id: str, ambito: str | None) -> dict:
@@ -59,14 +84,63 @@ def _bandeja(user_id: str, ambito: str | None) -> dict:
                f"{PERSONAL!r} y {TRABAJO!r}.")
 
 
+# El orden. `notification_id` está para desempatar: dos avisos escritos en el
+# mismo instante —pasa: una operación dispara dos— quedarían en orden
+# arbitrario, y el paginado, que se apoya en el orden, se saltearía uno.
+_ORDEN = [("created_at", -1), ("notification_id", -1)]
+
+
+def _mas_viejos_que(antes_de: str | None, ultimo_id: str | None) -> dict:
+    """El corte para pedir la página siguiente.
+
+    Se pagina por CONTENIDO —«dame los más viejos que éste»— y no por posición
+    —«saltea los primeros 20»—. La diferencia se ve cuando llega un aviso
+    nuevo mientras alguien está mirando: con posiciones, todo se corre uno y la
+    página siguiente repite el último que ya se vio.
+    """
+    if not antes_de:
+        return {}
+
+    try:
+        corte = datetime.fromisoformat(antes_de.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"`antes_de` no es una fecha: {antes_de!r}")
+
+    if not ultimo_id:
+        return {"created_at": {"$lt": corte}}
+    # Con el identificador se desempata dentro del mismo instante. Sin esto, de
+    # dos avisos con la misma hora uno se pierde entre página y página.
+    return {"$or": [
+        {"created_at": {"$lt": corte}},
+        {"created_at": corte, "notification_id": {"$lt": ultimo_id}},
+    ]}
+
+
 @router.get("/notifications")
 async def get_notifications(current_user: User = Depends(get_current_user),
-                            ambito: str | None = Query(None)):
-    """Los avisos de una bandeja, del más nuevo al más viejo."""
+                            ambito: str | None = Query(None),
+                            limite: int = Query(_POR_PAGINA, ge=1, le=_TOPE),
+                            antes_de: str | None = Query(None),
+                            ultimo_id: str | None = Query(None),
+                            solo_sin_leer: bool = Query(False)):
+    """Una página de avisos, del más nuevo al más viejo.
+
+    Para pedir la siguiente se mandan la fecha y el identificador del último
+    que se recibió. Que vengan `limite` significa que puede haber más.
+    """
+    filtro = _bandeja(current_user.user_id, ambito)
+    if solo_sin_leer:
+        filtro["read"] = False
+
+    corte = _mas_viejos_que(antes_de, ultimo_id)
+    if corte:
+        filtro = {"$and": [filtro, corte]}
+
     return await db.notifications.find(
-        _bandeja(current_user.user_id, ambito),
-        {"_id": 0},
-    ).sort("created_at", -1).limit(_TOPE).to_list(_TOPE)
+        filtro, {"_id": 0},
+    ).sort(_ORDEN).limit(limite).to_list(limite)
 
 
 @router.get("/notifications/unread-count")
@@ -102,3 +176,37 @@ async def mark_all_read(current_user: User = Depends(get_current_user),
     filtro["read"] = False
     resultado = await db.notifications.update_many(filtro, {"$set": {"read": True}})
     return {"success": True, "marcados": resultado.modified_count}
+
+
+@router.delete("/notifications/leidas")
+async def borrar_leidas(current_user: User = Depends(get_current_user),
+                        ambito: str | None = Query(None)):
+    """«Limpiar leídas»: borra lo LEIDO de una bandeja. Nunca lo demás.
+
+    Que esto no pueda tocar un aviso sin leer es la mitad del diseño. Un botón
+    que vacía la bandeja entera de un clic es un botón que alguien aprieta sin
+    querer, y lo que se lleva puesto no vuelve: el aviso era la única copia de
+    «tu retiro se completó» que esa persona iba a ver.
+
+    Para tirar algo sin leer hay que abrirlo y borrarlo de a uno, mirándolo.
+    """
+    filtro = _bandeja(current_user.user_id, ambito)
+    filtro["read"] = True
+    r = await db.notifications.delete_many(filtro)
+    return {"success": True, "borrados": r.deleted_count}
+
+
+@router.delete("/notifications/{notification_id}")
+async def borrar_notificacion(notification_id: str,
+                              current_user: User = Depends(get_current_user)):
+    """Borra uno. El `user_id` del filtro es lo que impide borrar el de otro.
+
+    Devuelve 404 si no existe o no es suyo: las dos cosas se contestan igual a
+    propósito. Distinguirlas dejaría averiguar, probando identificadores, qué
+    avisos tiene otra persona.
+    """
+    r = await db.notifications.delete_one(
+        {"notification_id": notification_id, "user_id": current_user.user_id})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="No se encontró ese aviso.")
+    return {"success": True}

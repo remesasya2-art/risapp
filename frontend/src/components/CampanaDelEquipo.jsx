@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, Trash2 } from 'lucide-react';
+import { confirmar } from './flujo/confirmar.js';
 import api from '../utils/api';
 
 /**
@@ -135,6 +136,25 @@ export default function CampanaDelEquipo({ onIrA }) {
     }
   };
 
+  // Sólo lo leído. Un botón que vacía la bandeja del equipo de un clic es un
+  // botón que alguien aprieta sin querer, y lo que se lleva no vuelve: ese
+  // aviso era el único rastro de que había un KYC esperando.
+  const limpiarLeidos = async () => {
+    if (!await confirmar({
+      titulo: 'Borrar los avisos leídos',
+      detalle: 'Se borran los del equipo que ya leíste. Los que no leíste se '
+             + 'quedan. Esto no se puede deshacer.',
+      accion: 'Borrar los leídos',
+      tono: 'peligro',
+    })) return;
+    try {
+      await api.delete('/notifications/leidas', { params: { ambito: 'trabajo' } });
+      setAvisos((previos) => previos.filter((a) => !a.read));
+    } catch {
+      traer();
+    }
+  };
+
   const marcarTodas = async () => {
     try {
       await api.post('/notifications/mark-all-read', null, { params: { ambito: 'trabajo' } });
@@ -189,19 +209,34 @@ export default function CampanaDelEquipo({ onIrA }) {
             top: 0, backgroundColor: '#ffffff',
           }}>
             <strong style={{ fontSize: '14px', color: '#111827' }}>Avisos del equipo</strong>
-            {avisos.some((a) => !a.read) && (
-              <button
-                onClick={marcarTodas}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px', border: 'none',
-                  background: 'transparent', color: '#4338ca', fontSize: '12px',
-                  fontWeight: 600, cursor: 'pointer', padding: 0,
-                }}
-                data-testid="campana-del-equipo-marcar-todas"
-              >
-                <CheckCheck style={{ width: '14px', height: '14px' }} /> Marcar todas
-              </button>
-            )}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {avisos.some((a) => !a.read) && (
+                <button
+                  onClick={marcarTodas}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', border: 'none',
+                    background: 'transparent', color: '#4338ca', fontSize: '12px',
+                    fontWeight: 600, cursor: 'pointer', padding: 0,
+                  }}
+                  data-testid="campana-del-equipo-marcar-todas"
+                >
+                  <CheckCheck style={{ width: '14px', height: '14px' }} /> Marcar todas
+                </button>
+              )}
+              {avisos.some((a) => a.read) && (
+                <button
+                  onClick={limpiarLeidos}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', border: 'none',
+                    background: 'transparent', color: '#9ca3af', fontSize: '12px',
+                    fontWeight: 600, cursor: 'pointer', padding: 0,
+                  }}
+                  data-testid="campana-del-equipo-limpiar"
+                >
+                  <Trash2 style={{ width: '14px', height: '14px' }} /> Limpiar leídos
+                </button>
+              )}
+            </span>
           </div>
 
           {avisos.length === 0 ? (
