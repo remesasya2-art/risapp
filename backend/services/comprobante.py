@@ -27,14 +27,33 @@ HTML DE CORREO, QUE NO ES HTML DE PANTALLA
 
     Por eso esto está armado con TABLAS anidadas y con los estilos escritos en
     cada etiqueta. No es descuido: es lo único que se ve igual en todos lados.
-    Y por eso el talón va al COSTADO con anchos fijos —420 + 180— y no con
+    Y por eso el talón va al COSTADO con anchos fijos —380 + 220— y no con
     columnas que se reacomodan: reacomodarse es lo que ninguno hace igual.
 
-LAS BARRAS DEL TALON SON DECORACION, Y EL NUMERO ESTA ESCRITO
+EL QR SE LEE DE VERDAD, Y EL NUMERO IGUAL VA ESCRITO
 
-    No es un código de barras que se pueda escanear, y por eso el número va
-    escrito abajo, legible. Un código que parece escaneable y no lo es hace
-    que alguien lo intente en un mostrador y se quede sin su comprobante.
+    Antes el talón tenía barras decorativas. Ahora es un código QR de verdad,
+    dibujado con celdas de tabla —ver `services/qr.py` para por qué no es una
+    imagen— y medido: se fotografió y se leyó con un lector real a la mitad
+    del tamaño y sigue leyéndose.
+
+    El número igual va escrito, grande, arriba del código y en el mismo talón.
+    Un código sirve si hay con qué escanearlo; el número escrito sirve siempre,
+    y por teléfono es lo único que se puede dictar. Escrito DOS veces, en
+    cambio, no sirve más: se probó y lo único que hacía era ensuciar el talón.
+
+CUANTO ENTRA EN EL QR, Y POR ESO SE MIDE
+
+    Con corrección M, 84 bytes entran en un código de 37x37 módulos, que a 4
+    píxeles por módulo mide 180 px de lado y entra en el talón de 220. El que
+    sigue, de 41x41, mediría 196 y también entraría —pero cada salto son cuatro
+    módulos más repartidos en el MISMO ancho, o sea menos píxeles por módulo, y
+    ahí es donde se deja de leer. El tope no está para que quepa: está para que
+    se lea.
+
+    Por eso `carga_del_qr` tiene un TOPE y acorta el tipo de operación si hace
+    falta. Sin el tope, una descripción larga agranda el código en silencio
+    hasta que un día deja de caber y sale cortado.
 
 QUE NO VA EN EL COMPROBANTE
 
@@ -72,26 +91,60 @@ def _fecha(cuando) -> str:
     return cuando.strftime("%d %b %Y · %H:%M").upper()
 
 
-def _barras(semilla: str) -> str:
-    """La tira decorativa del talón, armada con celdas de tabla.
+# El tope de lo que entra en un código de 37x37, que es el más grande que cabe
+# en el talón a 5 píxeles por módulo. Ver el encabezado.
+TOPE_DEL_QR = 84
 
-    Con celdas y no con un dibujo ni una imagen: un `<img>` lo bloquean casi
-    todos los programas de correo hasta que la persona toca «mostrar
-    imágenes», y entonces el talón llega vacío.
+
+def _dia(cuando) -> str:
+    """La fecha corta, para el QR. La larga no entra."""
+    if not isinstance(cuando, datetime):
+        return ""
+    if cuando.tzinfo is None:
+        cuando = cuando.replace(tzinfo=timezone.utc)
+    return cuando.strftime("%d/%m/%Y %H:%M")
+
+
+def carga_del_qr(*, referencia: str, tipo: str = "", monto: str = "",
+                 cuando=None, estado: str = "") -> str:
+    """Lo que va ADENTRO del código. Seis líneas, y nada más.
+
+    Decisión del dueño del proyecto: la marca, el número, de qué operación se
+    trata, cuánto, cuándo, y si salió bien o no.
+
+    Nada de la otra persona —ni nombre, ni documento, ni cuenta—. Y esto no es
+    lo mismo que la decisión de los últimos cuatro dígitos de más arriba: lo
+    que hay adentro del código NO SE VE. Los campos escritos los lee quien
+    reenvía el correo y decide si los manda; el código, no. Alguien puede
+    pasarle la foto del comprobante a un tercero sin saber qué está entregando.
+
+    Tampoco va ningún enlace: el de seguimiento del paquete es una credencial
+    —quien lo tiene ve el envío, y no caduca—, y `services/envios_seguimiento`
+    ya tiene escrito que no puede viajar en algo que se reenvía.
     """
-    if not semilla:
-        semilla = "RISAPP"
-    celdas = []
-    for i, ch in enumerate(semilla * 3):
-        if len(celdas) >= 34:
-            break
-        ancho = 1 + (ord(ch) + i) % 3
-        color = TINTA if (ord(ch) + i) % 3 else "transparent"
-        celdas.append(f'<td width="{ancho * 2}" bgcolor="{color}" '
-                      f'style="width:{ancho * 2}px;height:34px;font-size:0;">&nbsp;</td>'
-                      f'<td width="2" style="width:2px;font-size:0;">&nbsp;</td>')
-    return ("<table cellpadding=\"0\" cellspacing=\"0\" role=\"presentation\">"
-            f"<tr>{''.join(celdas)}</tr></table>")
+    def armar(el_tipo):
+        return "\n".join([p for p in (
+            "RISAPP", referencia, el_tipo, monto, _dia(cuando),
+            (estado or "").upper()) if p])
+
+    carga = armar(tipo)
+    # Si no entra, se acorta el TIPO y no el resto: el número, el monto y la
+    # fecha son lo que se va a mirar en un reclamo.
+    while len(carga.encode("utf-8")) > TOPE_DEL_QR and len(tipo) > 4:
+        tipo = tipo[:-4].rstrip(" ,.-")
+        carga = armar(tipo)
+    return carga
+
+
+def _qr(carga: str) -> str:
+    """El código, o nada si no hay qué codificar."""
+    if not carga:
+        return ""
+    from services import qr
+    # El marco ovalado, a pedido del dueño del proyecto. Va en el recuadro
+    # blanco de afuera: los módulos no se pueden redondear sin romper la
+    # rejilla, y está explicado en `services/qr.py`.
+    return qr.tabla(carga, radio=14, borde=ORO)
 
 
 def _campo(etiqueta: str, valor: str, ancho: str = "") -> str:
@@ -116,7 +169,8 @@ def _fila(etiqueta: str, valor: str) -> str:
 def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
           desde: str = "", desde_pie: str = "", hasta: str = "", hasta_pie: str = "",
           monto: str = "", campos=(), filas=(), referencia: str = "",
-          cuando=None, estado: str = "", color_estado: str = ORO_OSCURO) -> str:
+          cuando=None, estado: str = "", color_estado: str = ORO_OSCURO,
+          carga_qr: str = "") -> str:
     """El pasaje entero.
 
     `campos` son los recuadritos en mayúsculas de arriba —lo que en un pasaje
@@ -172,7 +226,7 @@ def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
 
         <tr>
           <!-- ── El cuerpo del pasaje ──────────────────────────────── -->
-          <td width="420" valign="top" style="width:420px;padding:20px 22px 18px 22px;">
+          <td width="380" valign="top" style="width:380px;padding:20px 20px 18px 22px;">
 
             <div style="color:{TINTA};font-size:19px;font-weight:700;">{titulo}</div>
             {f'<div style="color:{GRIS};font-size:13px;padding-top:5px;line-height:1.5;">{detalle}</div>' if detalle else ''}
@@ -190,9 +244,9 @@ def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
           </td>
 
           <!-- ── El talón, separado por la perforación ─────────────── -->
-          <td width="180" valign="top"
-              style="width:180px;background:{CREMA};border-left:2px dashed {ORO_MEDIO};
-                     padding:20px 18px 18px 18px;">
+          <td width="220" valign="top"
+              style="width:220px;background:{CREMA};border-left:2px dashed {ORO_MEDIO};
+                     padding:18px 16px 16px 18px;">
             <div style="color:{ORO_OSCURO};font-size:9px;letter-spacing:1.6px;
                         text-transform:uppercase;font-weight:700;">Comprobante</div>
             <div style="color:{TINTA};font-size:15px;font-weight:800;padding-top:5px;
@@ -207,9 +261,9 @@ def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
                         text-transform:uppercase;padding-top:16px;">Fecha</div>
             <div style="color:{TINTA};font-size:11px;font-weight:700;padding-top:2px;">{_fecha(cuando) or '—'}</div>
 
-            <div style="padding-top:18px;">{_barras(referencia)}</div>
-            <div style="color:{TENUE};font-size:9px;padding-top:6px;letter-spacing:1px;
-                        font-family:'Courier New',Courier,monospace;">{referencia or ''}</div>
+            {f'''<div style="padding-top:16px;">{_qr(carga_qr)}</div>
+            <div style="color:{TENUE};font-size:9px;padding-top:7px;letter-spacing:.6px;
+                        text-transform:uppercase;">Escaneá para ver los datos</div>''' if carga_qr else ''}
           </td>
         </tr>
 
