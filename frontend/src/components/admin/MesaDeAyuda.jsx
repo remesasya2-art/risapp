@@ -431,6 +431,12 @@ export default function MesaDeAyuda({ usuario }) {
   const [vista, setVista] = useState('casos');       // 'casos' | 'pedidos'
   const [pedidos, setPedidos] = useState([]);
   const [misAreas, setMisAreas] = useState([]);
+  // Los dos fallos que esta pantalla se tragaba en silencio. Van en el estado
+  // y no en un `toast` porque las dos cargas laten cada pocos segundos: un
+  // aviso por vuelta sería un cartel cada seis segundos mientras dure la
+  // caída, y el asesor terminaría cerrándolos sin leer.
+  const [fallaLista, setFallaLista] = useState(null);
+  const [fallaDetalle, setFallaDetalle] = useState(null);
   const hiloRef = useRef(null);
   const cantidadPrevia = useRef(0);
 
@@ -439,13 +445,22 @@ export default function MesaDeAyuda({ usuario }) {
     caso: detalle?.caso, yo: usuario?.user_id, esSuperAdmin,
   });
 
+  // Si la bandeja falla, la lista NO se deja vacía: vacía, la pantalla dice
+  // «No hay casos con este filtro», que es una afirmación sobre el trabajo
+  // pendiente. No se pudo preguntar y no hay nada que atender son cosas
+  // distintas, y confundirlas manda al asesor a tomarse un café mientras la
+  // cola crece. Se conserva lo último que se supo y se avisa que está viejo.
   const traerCasos = useCallback(async () => {
     try {
       const res = await api.get('/admin/soporte/casos', {
         params: { estado: filtro, mios: soloMios, buscar: busqueda || undefined },
       });
       setCasos(res.data?.casos || []);
-    } catch { /* la lista se reintenta sola en el próximo ciclo */ }
+      setFallaLista(null);
+    } catch (e) {
+      setFallaLista(e?.response?.data?.detail
+        || 'No se pudo actualizar la lista de casos.');
+    }
   }, [filtro, soloMios, busqueda]);
 
   // Los pedidos de MI área. Se traen siempre, no sólo con la pestaña abierta:
@@ -470,13 +485,30 @@ export default function MesaDeAyuda({ usuario }) {
   // caso a otro mientras el primero todavía viaja deja al asesor leyendo la
   // conversación de un cliente bajo el nombre de otro: el peor error posible
   // en esta pantalla, porque no se nota.
+  //
+  // Y si falla, se DICE. Esto estaba en `catch {}`: el asesor hacía click en
+  // un caso y no pasaba nada —sin cartel, sin error, sin explicación—, que es
+  // la peor forma de fallar porque no se puede ni reportar. Lo que no se ve
+  // no se arregla.
   const traerDetalle = useCallback(async (casoId) => {
     if (!casoId) return;
     const mio = (turno.current += 1);
     try {
       const res = await api.get(`/admin/soporte/casos/${casoId}`);
-      if (turno.current === mio) setDetalle(res.data || null);
-    } catch { /* silencioso: el caso pudo haberse cerrado en otra pestaña */ }
+      if (turno.current === mio) {
+        setDetalle(res.data || null);
+        setFallaDetalle(null);
+      }
+    } catch (e) {
+      // Sólo si sigue siendo el caso que el asesor mira: si ya saltó a otro,
+      // el error del anterior no es noticia.
+      if (turno.current !== mio) return;
+      const codigo = e?.response?.status;
+      setFallaDetalle(
+        codigo === 404 ? 'Este caso ya no existe. Puede haberse cerrado desde otra pestaña.'
+          : codigo === 403 ? (e?.response?.data?.detail || 'No tenés permiso para abrir este caso.')
+            : (e?.response?.data?.detail || 'No se pudo abrir la conversación.'));
+    }
   }, []);
 
   useEffect(() => {
@@ -684,14 +716,36 @@ export default function MesaDeAyuda({ usuario }) {
               </button>
             </div>
           </div>
+          {/* La bandeja caída se avisa ARRIBA de la lista y no en lugar de
+              ella: lo que se ve abajo sigue siendo cierto, sólo que viejo. */}
+          {fallaLista ? (
+            <div style={{ padding: '9px 12px' }} data-testid="falla-lista">
+              <Aviso tono="alerta">
+                {fallaLista}{casos.length > 0 ? ' Lo que ves es lo último que se pudo traer.' : ''}
+                {' '}
+                <button type="button" onClick={() => traerCasos()}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    color: 'inherit', font: 'inherit', textDecoration: 'underline',
+                  }}>
+                  Reintentar
+                </button>
+              </Aviso>
+            </div>
+          ) : null}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {casos.length === 0 ? (
               <p style={{ ...ayuda, textAlign: 'center', padding: '30px 16px' }}>
-                No hay casos con este filtro.
+                {/* Sin esta distinción, una bandeja caída se leía como «no hay
+                    trabajo». Son cosas opuestas. */}
+                {fallaLista
+                  ? 'No se pudo traer la lista, así que no sabemos si hay casos.'
+                  : 'No hay casos con este filtro.'}
               </p>
             ) : casos.map((c) => (
               <FilaDeCaso key={c.caso_id} caso={c} ahora={ahora}
-                elegido={elegido === c.caso_id} onClick={() => { setDetalle(null); setElegido(c.caso_id); }} />
+                elegido={elegido === c.caso_id}
+                onClick={() => { setDetalle(null); setFallaDetalle(null); setElegido(c.caso_id); }} />
             ))}
           </div>
         </div>
@@ -699,11 +753,37 @@ export default function MesaDeAyuda({ usuario }) {
         {/* ── La conversación ───────────────────────────────────────── */}
         <div style={{ ...tarjeta, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           {!caso ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ textAlign: 'center', color: C.tenue }}>
-                <MessageSquare size={52} style={{ opacity: 0.35 }} />
-                <p style={{ fontSize: '14px', marginTop: '10px' }}>Elegí un caso de la izquierda.</p>
-              </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+              {/* Tres estados distintos, y antes los tres se veían igual: como
+                  si no hubieras elegido nada. El del medio —elegiste un caso y
+                  la carga falló— es el que dejaba al asesor clickeando sin que
+                  pasara nada. */}
+              {fallaDetalle ? (
+                <div style={{ textAlign: 'center', maxWidth: '420px' }} data-testid="falla-detalle">
+                  <AlertTriangle size={44} color={C.error} style={{ opacity: 0.85 }} />
+                  <p style={{ fontSize: '14.5px', marginTop: '10px', color: C.tinta, fontWeight: 600 }}>
+                    No se pudo abrir este caso
+                  </p>
+                  <p style={{ fontSize: '13.5px', marginTop: '6px', color: C.suave, lineHeight: 1.5 }}>
+                    {fallaDetalle}
+                  </p>
+                  <div style={{ marginTop: '14px' }}>
+                    <Boton onClick={() => traerDetalle(elegido)} testid="reintentar-detalle">
+                      Reintentar
+                    </Boton>
+                  </div>
+                </div>
+              ) : elegido ? (
+                <div style={{ textAlign: 'center', color: C.tenue }}>
+                  <MessageSquare size={52} style={{ opacity: 0.35 }} />
+                  <p style={{ fontSize: '14px', marginTop: '10px' }}>Abriendo la conversación…</p>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', color: C.tenue }}>
+                  <MessageSquare size={52} style={{ opacity: 0.35 }} />
+                  <p style={{ fontSize: '14px', marginTop: '10px' }}>Elegí un caso de la izquierda.</p>
+                </div>
+              )}
             </div>
           ) : (
             <>

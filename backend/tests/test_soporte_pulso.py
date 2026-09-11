@@ -92,10 +92,40 @@ def test_cada_pantalla_descarta_las_respuestas_viejas():
             f"{ruta.name} no numera sus pedidos: la respuesta lenta de un caso "
             "puede pisar la del caso que el usuario ya abrió después")
         # Numerarlos y no mirar el número sería lo mismo que no numerarlos.
-        assert re.search(r"if\s*\(\s*turno\.current\s*===\s*mio\s*\)\s*setDetalle",
-                         codigo), (
+        #
+        # La llave es opcional: lo que importa es que `setDetalle` esté DENTRO
+        # del `if`, no que la comparación y la llamada entren en un renglón.
+        # Escrito sin ella, el test obligaba a guardar una sola cosa al
+        # acertar el turno, que es una restricción sobre el estilo y no sobre
+        # el defecto.
+        assert re.search(
+            r"if\s*\(\s*turno\.current\s*===\s*mio\s*\)\s*\{?\s*setDetalle",
+            codigo), (
             f"{ruta.name} numera los pedidos pero guarda la respuesta igual: "
             "el número tiene que decidir si se guarda o se tira")
+
+
+def test_el_error_de_un_pedido_viejo_tampoco_pisa_la_pantalla():
+    """El mismo cuidado, en el camino del fallo.
+
+    Mientras el fallo era un `catch {}` mudo, esto no hacía falta: no se
+    escribía nada, así que no había nada que pisar. Desde que el error SE
+    MUESTRA —y tiene que mostrarse, porque un click que no hace nada no se
+    puede ni reportar—, un pedido viejo que falla tarde puede plantar «no se
+    pudo abrir este caso» encima del caso que el asesor ya abrió después y
+    está leyendo bien.
+    """
+    ruta = _PANTALLAS[0]
+    codigo = _sin_comentarios(ruta)
+
+    muestra_el_fallo = re.search(r"catch\s*\([^)]*\)\s*\{[^}]*set[A-Z]", codigo)
+    if not muestra_el_fallo:
+        return  # sigue siendo mudo: no hay nada que pisar
+
+    assert re.search(r"turno\.current\s*!==\s*mio", codigo), (
+        f"{ruta.name} muestra el error de la carga pero no mira el turno: el "
+        "fallo de un caso que el asesor ya dejó atrás va a aparecer sobre el "
+        "que tiene abierto")
 
 
 def test_los_pedidos_a_mi_area_tienen_donde_contestarse():
