@@ -49,6 +49,7 @@ from models.user import User
 from routes.dependencies import get_current_user, get_crm_user
 from services import soporte
 from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
+from services.money import to_float
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -631,6 +632,28 @@ async def ver_caso(caso_id: str, current_user: User = Depends(get_crm_user)):
     ).sort("created_at", -1).limit(8).to_list(8)
     otros = await db.soporte_casos.count_documents({
         "user_id": caso.get("user_id"), "caso_id": {"$ne": caso_id}})
+
+    # EL DINERO SALE COMO LO QUIERE EL JSON, Y NO COMO SALE DE MONGO.
+    #
+    # En esta base la plata se guarda en `Decimal128`, que FastAPI no sabe
+    # serializar: intenta `dict(obj)` y después `vars(obj)`, las dos fallan, y
+    # el 500 ocurre DESPUES de que el manejador retornó —en `serialize_response`,
+    # fuera del alcance de cualquier try/except de acá—. El asesor abre el caso
+    # y no ve nada; en el registro queda «'Decimal128' object is not iterable».
+    #
+    # Sólo dos campos de esta respuesta son dinero, y las dos proyecciones son
+    # listas de lo permitido, así que la cuenta está cerrada: `balance_ris` de la
+    # ficha y `amount` de cada operación.
+    #
+    # Se convierte con `to_float`, que es lo que ya usa el resto de la API para
+    # mostrar —el cálculo interno sigue en Decimal— y tolera `float` viejo,
+    # `str`, `Decimal` y `Decimal128` por igual. El `if` evita inventar un saldo
+    # de 0 para una ficha que no tiene el campo: ausente y cero no son lo mismo.
+    if "balance_ris" in cliente:
+        cliente["balance_ris"] = to_float(cliente["balance_ris"])
+    for operacion in operaciones:
+        if "amount" in operacion:
+            operacion["amount"] = to_float(operacion["amount"])
 
     ahora = _AHORA()
     caso["semaforo"] = soporte.semaforo(caso, ahora)

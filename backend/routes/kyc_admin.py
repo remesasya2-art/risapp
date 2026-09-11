@@ -24,6 +24,7 @@ from database import db
 from services import cofre
 from models.user import User
 from routes.dependencies import get_super_admin, get_crm_user
+from services.money import to_float
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -371,6 +372,17 @@ async def get_kyc_detail(verification_id: str, admin: User = Depends(get_crm_use
         {"_id": 0, "user_id": 1, "email": 1, "full_name": 1, "phone_number": 1,
          "role": 1, "balance_ris": 1, "created_at": 1, "verification_status": 1}
     )
+    # El saldo sale como numero y no como sale de Mongo. `services/saldos.py`
+    # escribe `balance_ris` en `Decimal128`, que FastAPI no sabe serializar: el
+    # 500 ocurre en `serialize_response`, DESPUES de que este manejador retorno,
+    # asi que ningun try/except de aca lo atrapa. El revisor abre la ficha de
+    # KYC y no ve nada; en el registro queda "'Decimal128' object is not
+    # iterable".
+    #
+    # El mismo defecto estaba en la consola de la mesa de ayuda. Los dos son la
+    # misma causa: devolver un documento de Mongo tal cual cuando trae plata.
+    if user and "balance_ris" in user:
+        user["balance_ris"] = to_float(user["balance_ris"])
     return {
         "verification": _serialize_verification(v, user),
         "user": user,
