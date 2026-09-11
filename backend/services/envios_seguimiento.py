@@ -99,6 +99,21 @@ AVISOS = {
         "Entregamos tu paquete",
         "Ya está en la oficina del transportista. Desde acá el tramo final lo "
         "hacen ellos, con la guía que te dejamos en el envío."),
+    # Tres estados que no avisaban y sí importan. `cotizado`,
+    # `esperando_postagem` y `en_transito_origen` siguen sin avisar a
+    # propósito: los acaba de provocar el usuario, y avisarle de algo que
+    # acaba de hacer es ruido.
+    "repesado": (
+        "Ya pesamos tu paquete",
+        "Lo pesamos con nuestra balanza y el precio quedó cerrado. Si cambió, "
+        "lo vas a ver en el detalle del envío."),
+    "retenido": (
+        "Tu paquete quedó retenido",
+        "Aduana o el contenido quedaron observados. Lo estamos gestionando y "
+        "te contamos apenas se resuelva."),
+    "cancelado": (
+        "Tu envío se canceló",
+        "El envío quedó cancelado. Si había algo cobrado, se devuelve."),
     "devuelto": (
         "Tu paquete volvió al remitente",
         "No se pudo completar el traslado. Escribinos y lo vemos."),

@@ -11,6 +11,8 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Header, Response
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from pymongo import ReturnDocument
+
 from database import db
 from services import sesiones
 from services.money import from_db, to_float, to_decimal128
@@ -18,12 +20,13 @@ from models.user import User, UserSession
 from models.requests import (
     SetPasswordRequest, LoginWithPasswordRequest, RegisterUserRequest,
     VerifyEmailCodeRequest, ResendVerificationCodeRequest,
-    RequestPasswordResetRequest, ResetPasswordRequest, ChangePasswordRequest
+    ChangePasswordRequest, PedirCodigoDeCambioRequest
 )
 from routes.dependencies import get_current_user, set_session_cookie, clear_session_cookie
-from services.email import send_verification_email, send_password_reset_email
+from services import codigos, correo
+from services.email import send_verification_email
 from services.email_notifications import notify_login, notify_password_change
-from utils.security import hash_password, verify_password, validate_password, generate_temp_password
+from utils.security import hash_password, verify_password, validate_password
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -377,112 +380,138 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         set_session_cookie(response, result["session_token"])
     return result
 
-@router.post("/request-password-reset")
-async def request_password_reset(request: Request, body: RequestPasswordResetRequest):
-    """Request password reset"""
+# LA CONTRASEÑA TEMPORAL POR CORREO SE FUE
+#
+#   Acá vivían `/request-password-reset` y `/reset-password`. Mandaban por
+#   correo una CONTRASEÑA DE VERDAD —doce caracteres al azar, válida una hora,
+#   que dejaba entrar a la cuenta— y ninguna pantalla de la aplicación las
+#   usaba: el botón «¿Olvidaste tu contraseña?» va a `/recovery/*`, que pide
+#   los datos de identidad y manda un CODIGO, que no deja entrar a ningún lado.
+#
+#   Una credencial completa viajando por correo, por una puerta que nadie
+#   miraba, es superficie regalada. Quien olvida la contraseña entra por
+#   `routes/recovery.py`.
+
+
+# Cuánto vive el código del cambio de contraseña, y cuántas veces se puede
+# errar. Diez minutos alcanzan para ir al correo y volver; tres intentos
+# alcanzan para equivocarse tipeando y no alcanzan para adivinar.
+_MINUTOS_DEL_CODIGO = 10
+_INTENTOS_DEL_CODIGO = 3
+
+
+@router.post("/change-password/pedir-codigo")
+async def pedir_codigo_de_cambio(request: PedirCodigoDeCambioRequest, pedido: Request,
+                                 current_user: User = Depends(get_current_user)):
+    """Primer paso para cambiar la contraseña: manda un código al correo.
+
+    POR QUE HACE FALTA UN CODIGO
+
+        Antes alcanzaba con la contraseña actual. Quien se llevaba un teléfono
+        con la sesión abierta, o robaba una sesión, tenía la cuenta: entraba a
+        Perfil, ponía la contraseña que veía guardada en el navegador, y
+        cambiaba la contraseña dejando al dueño afuera.
+
+        Con el código hay que tener TAMBIEN el correo. Y si alguien lo
+        intenta, al dueño le llega un correo que no pidió, que es la primera
+        señal de que algo pasa.
+    """
     from routes.security_2fa import frenar
 
-    async def _do_request_reset(request: Request, body: RequestPasswordResetRequest):
-        # 5/15min: evita el bombardeo de correos de reseteo a una víctima.
-        frenar(request, "auth.password_reset", "5/15minutes")
-        email_lower = body.email.lower().strip()
+    # 5/15min. Esta ruta comprueba la contraseña actual, así que sin freno se
+    # puede usar para adivinarla desde una sesión robada, de a una por pedido.
+    frenar(pedido, "auth.pedir_codigo_de_cambio", "5/15minutes")
 
-        user = await db.users.find_one({"email": email_lower})
-        if not user:
-            # Don't reveal if user exists
-            return {"message": "Si el email existe, recibirás instrucciones"}
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not verify_password(request.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
 
-        temp_password = generate_temp_password()
+    codigo = codigos.nuevo()
+    await db.codigos_de_cambio.delete_many({"user_id": current_user.user_id})
+    await db.codigos_de_cambio.insert_one({
+        "user_id": current_user.user_id,
+        "codigo": codigo,
+        "intentos": 0,
+        "expira_en": datetime.now(timezone.utc) + timedelta(minutes=_MINUTOS_DEL_CODIGO),
+        "creado_en": datetime.now(timezone.utc),
+    })
 
-        await db.users.update_one(
-            {"email": email_lower},
-            {
-                "$set": {
-                    "password_reset_token": hash_password(temp_password),
-                    "password_reset_expires": datetime.now(timezone.utc) + timedelta(hours=1),
-                    "must_change_password": True
-                }
-            }
-        )
+    # Se ESPERA a que salga. Si no sale, la persona se queda mirando una
+    # pantalla que le pide un código que nunca va a llegar, y eso hay que
+    # decírselo ahora y no dejarlo esperando.
+    salio = await correo.enviar(
+        user["email"],
+        "Tu código para cambiar la contraseña",
+        f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #6366f1;">Código para cambiar tu contraseña</h2>
+            <p>Hola {user.get('name') or ''},</p>
+            <p>Pediste cambiar la contraseña de tu cuenta. Tu código es:</p>
+            <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
+                <span style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #111827;">{codigo}</span>
+            </div>
+            <p style="color: #ef4444; font-weight: 600;">Vence en {_MINUTOS_DEL_CODIGO} minutos.</p>
+            <p style="color: #6b7280; font-size: 14px;"><strong>Si no pediste este cambio, alguien tiene tu
+               contraseña.</strong> No uses el código y escribinos por soporte.</p>
+        </div>
+        """,
+        que_es="código de cambio de contraseña")
 
-        await send_password_reset_email(email_lower, temp_password)
+    if not salio:
+        raise HTTPException(
+            status_code=503,
+            detail="No pudimos enviarte el código. Probá de nuevo en un rato.")
 
-        return {"message": "Si el email existe, recibirás instrucciones"}
+    correo_tapado = user["email"]
+    return {"success": True,
+            "email_enmascarado": correo_tapado[:3] + "***"
+                                 + correo_tapado[correo_tapado.index("@"):],
+            "minutos": _MINUTOS_DEL_CODIGO}
 
-    return await _do_request_reset(request, body)
-
-@router.post("/reset-password")
-async def reset_password(request: ResetPasswordRequest, pedido: Request):
-    """Reset password with temp password"""
-    from routes.security_2fa import frenar
-
-    # 10/15min. La contraseña temporal son 12 caracteres al azar, así que
-    # adivinarla no es el riesgo. El riesgo es el COSTO: cada llamada corre
-    # bcrypt, que gasta CPU a propósito. Sin tope, un pedido por segundo desde
-    # una sola IP ocupa el servidor sin necesitar ninguna credencial.
-    frenar(pedido, "auth.reset_password", "10/15minutes")
-
-    email_lower = request.email.lower().strip()
-    
-    user = await db.users.find_one({"email": email_lower})
-    if not user:
-        raise HTTPException(status_code=400, detail="Usuario no encontrado")
-    
-    reset_token = user.get("password_reset_token")
-    reset_expires = user.get("password_reset_expires")
-    
-    if not reset_token or not reset_expires:
-        raise HTTPException(status_code=400, detail="No hay solicitud de reseteo pendiente")
-    
-    if reset_expires.tzinfo is None:
-        reset_expires = reset_expires.replace(tzinfo=timezone.utc)
-    
-    if datetime.now(timezone.utc) > reset_expires:
-        raise HTTPException(status_code=400, detail="El enlace ha expirado")
-    
-    if not verify_password(request.temp_password, reset_token):
-        raise HTTPException(status_code=400, detail="Contraseña temporal inválida")
-    
-    # Validate new password
-    if request.new_password != request.confirm_password:
-        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
-    
-    is_valid, message = validate_password(request.new_password)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=message)
-    
-    # Update password
-    await db.users.update_one(
-        {"email": email_lower},
-        {
-            "$set": {
-                "password_hash": hash_password(request.new_password),
-                "password_set": True,
-                "must_change_password": False
-            },
-            "$unset": {
-                "password_reset_token": "",
-                "password_reset_expires": ""
-            }
-        }
-    )
-
-    # A esta ruta se llega desde el correo, sin estar adentro: no hay sesión
-    # actual que conservar. Si alguien tenía la cuenta tomada, acá se lo saca.
-    await sesiones.cerrar_todas(db, user.get("user_id"),
-                                motivo="reseteo con contraseña temporal")
-
-    return {"message": "Contraseña actualizada exitosamente"}
 
 @router.post("/change-password")
 async def change_password(request: ChangePasswordRequest, pedido: Request,
                           current_user: User = Depends(get_current_user)):
-    """Change password for logged in user"""
+    """Cambia la contraseña. Pide la actual Y el código que llegó al correo."""
     user = await db.users.find_one({"user_id": current_user.user_id})
-    
+
     if not verify_password(request.current_password, user.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
-    
+
+    # El código se comprueba ANTES de tocar nada. Y el contador de intentos se
+    # sube en la MISMA escritura que lo lee, para que dos pedidos a la vez no
+    # se regalen un intento cada uno.
+    pendiente = await db.codigos_de_cambio.find_one_and_update(
+        {"user_id": current_user.user_id},
+        {"$inc": {"intentos": 1}},
+        return_document=ReturnDocument.BEFORE)
+
+    if not pendiente:
+        raise HTTPException(
+            status_code=400,
+            detail="Pedí un código primero: te lo mandamos por correo.")
+
+    vence = pendiente["expira_en"]
+    if vence.tzinfo is None:
+        vence = vence.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > vence:
+        await db.codigos_de_cambio.delete_many({"user_id": current_user.user_id})
+        raise HTTPException(status_code=400, detail="El código venció. Pedí uno nuevo.")
+
+    if pendiente["intentos"] >= _INTENTOS_DEL_CODIGO:
+        await db.codigos_de_cambio.delete_many({"user_id": current_user.user_id})
+        raise HTTPException(
+            status_code=400,
+            detail="Se acabaron los intentos. Pedí un código nuevo.")
+
+    if not codigos.coincide(request.codigo, pendiente["codigo"]):
+        quedan = _INTENTOS_DEL_CODIGO - pendiente["intentos"] - 1
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Ese código no es. Te quedan {quedan} intentos."
+                    if quedan > 0 else
+                    "Ese código no es, y se acabaron los intentos. Pedí uno nuevo."))
+
     if request.new_password != request.confirm_password:
         raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
     
@@ -500,6 +529,9 @@ async def change_password(request: ChangePasswordRequest, pedido: Request,
         }
     )
     
+    # El código se gasta: sirve una vez y no queda dando vueltas en la base.
+    await db.codigos_de_cambio.delete_many({"user_id": current_user.user_id})
+
     # Cambiar la contraseña es lo que hace alguien que sospecha que le entraron
     # a la cuenta. Si las demás sesiones sobreviven, ese gesto no sirve de nada.
     # Se conserva la de esta pantalla —echarla de acá justo después de hacer las

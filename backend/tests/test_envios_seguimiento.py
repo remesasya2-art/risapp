@@ -473,19 +473,35 @@ def test_todos_los_estados_del_sistema_tienen_texto_publico():
 
 # ─── 4. Los avisos ────────────────────────────────────────────────────────
 
-def test_no_se_avisa_por_cada_movimiento_interno():
-    """Un aviso por cada movimiento entrena al usuario a ignorarlos, y después el
-    único que importaba —tenés un cobro pendiente— llega a alguien que ya no los
-    lee."""
-    assert seg.se_avisa("pago_pendiente") is True
-    assert seg.se_avisa("entregado_transportista") is True
-    assert seg.se_avisa("repesado") is False
-    assert seg.se_avisa("cotizado") is False
+def test_no_se_avisa_DE_LO_QUE_EL_USUARIO_ACABA_DE_HACER():
+    """Dónde quedó la raya, y por qué se movió.
+
+    ANTES la raya era «no avisar por cada movimiento interno», y `repesado`
+    quedaba afuera con ese argumento. Decisión del dueño del proyecto: el
+    usuario quiere enterarse de CADA actualización de su paquete.
+
+    Así que la raya ahora está en otro lado, y sigue habiendo una: no se avisa
+    de lo que la persona ACABA DE HACER. Contarle que cotizó justo después de
+    cotizar no es información, es eco — y el eco es lo que entrena a ignorar
+    los avisos, que era el miedo original.
+
+    `repesado` pasó del lado de los que sí: es el momento en que el precio
+    queda cerrado, y eso no lo hizo el usuario ni lo sabe hasta que se lo
+    dicen.
+    """
+    # Lo que le pasa al paquete, lejos de sus manos: sí.
+    for estado in ("pago_pendiente", "entregado_transportista", "repesado",
+                   "retenido", "cancelado"):
+        assert seg.se_avisa(estado) is True, f"{estado} tiene que avisar"
+
+    # Lo que acaba de hacer él: no.
+    for estado in ("cotizado", "esperando_postagem", "en_transito_origen"):
+        assert seg.se_avisa(estado) is False, f"{estado} es eco de lo que hizo"
 
     # Y `avisar` respeta esa decisión: no alcanza con que la función lo diga.
     base = db_completa()
-    assert corre(seg.avisar(ENVIO, "repesado", db=base)) is None
     assert corre(seg.avisar(ENVIO, "cotizado", db=base)) is None
+    assert corre(seg.avisar(ENVIO, "esperando_postagem", db=base)) is None
     assert base.notifications.filas == []
 
 
