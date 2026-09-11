@@ -37,9 +37,13 @@ mongomock_motor = pytest.importorskip(
     reason="mongomock-motor no está instalado: es de test y no va en producción",
 )
 
-from conftest import usar_base                         # noqa: E402
-from routes import notifications as rutas              # noqa: E402
-from services import notifications as n                # noqa: E402
+from fastapi import FastAPI                            # noqa: E402
+from fastapi.testclient import TestClient               # noqa: E402
+
+from conftest import usar_base                          # noqa: E402
+from routes import notifications as rutas               # noqa: E402
+from routes.dependencies import get_current_user        # noqa: E402
+from services import notifications as n                 # noqa: E402
 
 
 def corre(coro):
@@ -50,6 +54,26 @@ class _Quien:
     """Lo único que las rutas le piden a la sesión."""
     def __init__(self, user_id):
         self.user_id = user_id
+
+
+# Se pasa por HTTP y no se llaman las funciones a mano: llamándolas a mano los
+# valores por omisión de FastAPI no se resuelven —el parámetro llega como el
+# objeto `Query(...)`— y el test se rompe cada vez que la ruta gana uno nuevo.
+_app = FastAPI()
+_app.include_router(rutas.router, prefix="/api")
+_QUIEN = {"actual": None}
+_app.dependency_overrides[get_current_user] = lambda: _QUIEN["actual"]
+cliente = TestClient(_app)
+
+
+def pedir(quien, **parametros):
+    _QUIEN["actual"] = quien
+    r = cliente.get("/api/notifications", params=parametros)
+    if r.status_code != 200:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=r.status_code,
+                            detail=r.json().get("detail"))
+    return r.json()
 
 
 @pytest.fixture
@@ -99,12 +123,12 @@ def _ids(avisos):
 # ─── Qué trae cada bandeja ────────────────────────────────────────────────
 
 def test_la_bandeja_del_equipo_trae_solo_el_trabajo(con_avisos):
-    lista = corre(rutas.get_notifications(JEFA, ambito=n.TRABAJO))
+    lista = pedir(JEFA, ambito=n.TRABAJO, limite=50)
     assert _ids(lista) == ["equipo_1", "equipo_2"]
 
 
 def test_la_bandeja_personal_no_trae_el_trabajo(con_avisos):
-    lista = corre(rutas.get_notifications(JEFA, ambito=n.PERSONAL))
+    lista = pedir(JEFA, ambito=n.PERSONAL, limite=50)
     assert "equipo_1" not in _ids(lista), (
         "El aviso del equipo se coló en la campana del cliente.")
 
@@ -115,7 +139,7 @@ def test_un_aviso_viejo_sin_marca_sigue_siendo_de_su_dueno(con_avisos):
     Si «personal» se preguntara como `ambito == "personal"`, todos los avisos
     guardados antes de este cambio desaparecerían de la campana.
     """
-    lista = corre(rutas.get_notifications(JEFA, ambito=n.PERSONAL))
+    lista = pedir(JEFA, ambito=n.PERSONAL, limite=50)
     assert "viejo" in _ids(lista), (
         "Un aviso guardado antes de que existiera el campo desapareció de la "
         "bandeja de su dueño. Son casi todos los que hay hoy.")
@@ -123,7 +147,7 @@ def test_un_aviso_viejo_sin_marca_sigue_siendo_de_su_dueno(con_avisos):
 
 def test_ninguna_bandeja_trae_avisos_de_otra_persona(con_avisos):
     for cual in (n.PERSONAL, n.TRABAJO, None):
-        lista = corre(rutas.get_notifications(JEFA, ambito=cual))
+        lista = pedir(JEFA, limite=50, **({"ambito": cual} if cual else {}))
         assert "ajeno" not in _ids(lista), f"ambito={cual!r} filtró de más"
 
 
@@ -133,12 +157,12 @@ def test_sin_ambito_trae_todo_lo_suyo(con_avisos):
     Durante esos minutos la campana vieja pide sin filtro. Devolverle una
     lista vacía sería un apagón de avisos en cada despliegue.
     """
-    lista = corre(rutas.get_notifications(JEFA, ambito=None))
+    lista = pedir(JEFA, limite=50)
     assert _ids(lista) == ["equipo_1", "equipo_2", "mio_1", "viejo"]
 
 
 def test_vienen_del_mas_nuevo_al_mas_viejo(con_avisos):
-    lista = corre(rutas.get_notifications(JEFA, ambito=None))
+    lista = pedir(JEFA, limite=50)
     fechas = [a["created_at"] for a in lista]
     assert fechas == sorted(fechas, reverse=True)
 
@@ -148,7 +172,7 @@ def test_un_ambito_mal_escrito_se_rechaza(con_avisos):
     entera y el aviso del equipo aparecería en la campana del cliente."""
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as e:
-        corre(rutas.get_notifications(JEFA, ambito="persnal"))
+        pedir(JEFA, ambito="persnal")
     assert e.value.status_code == 400
 
 

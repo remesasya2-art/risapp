@@ -1,31 +1,108 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, CheckCheck, X, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCheck, X, ExternalLink, Trash2 } from 'lucide-react';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
+import { confirmar } from '../components/flujo/confirmar.js';
+
+// Cuántos trae cada página. Que vuelvan tantos como se pidieron es lo que
+// significa «hay más»: el servidor devuelve la lista pelada, sin sobre.
+const POR_PAGINA = 20;
 
 export default function Notifications() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [hayMas, setHayMas] = useState(false);
+  const [trayendoMas, setTrayendoMas] = useState(false);
+  const [soloSinLeer, setSoloSinLeer] = useState(false);
+  const [borrando, setBorrando] = useState(null);
 
   useEffect(() => {
     loadNotifications();
-  }, []);
+    // Cambiar el filtro vuelve a empezar desde arriba.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soloSinLeer]);
+
+  // Sólo lo personal: lo del equipo se atiende desde el Panel de Control.
+  const parametros = (extra = {}) => ({
+    ambito: 'personal',
+    limite: POR_PAGINA,
+    ...(soloSinLeer ? { solo_sin_leer: true } : {}),
+    ...extra,
+  });
 
   const loadNotifications = async () => {
+    setLoading(true);
     try {
-      // Sólo lo personal: lo del equipo se atiende desde el Panel de Control.
-      const response = await api.get('/notifications', { params: { ambito: 'personal' } });
-      // Handle both { notifications: [...] } and direct array response
-      const data = response.data;
-      setNotifications(Array.isArray(data) ? data : (data.notifications || []));
+      const { data } = await api.get('/notifications', { params: parametros() });
+      const lista = Array.isArray(data) ? data : (data.notifications || []);
+      setNotifications(lista);
+      setHayMas(lista.length === POR_PAGINA);
     } catch (error) {
       console.error('Error loading notifications:', error);
       setNotifications([]);
+      setHayMas(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // La página siguiente se pide por CONTENIDO: «los más viejos que éste». Con
+  // posiciones —«saltea los primeros veinte»— un aviso que llega mientras
+  // alguien mira corre todo un lugar y la página siguiente repite el último.
+  const traerMas = async () => {
+    const ultimo = notifications[notifications.length - 1];
+    if (!ultimo || trayendoMas) return;
+    setTrayendoMas(true);
+    try {
+      const { data } = await api.get('/notifications', {
+        params: parametros({
+          antes_de: ultimo.created_at,
+          ultimo_id: ultimo.notification_id,
+        }),
+      });
+      const lista = Array.isArray(data) ? data : (data.notifications || []);
+      setNotifications((previos) => [...previos, ...lista]);
+      setHayMas(lista.length === POR_PAGINA);
+    } catch (error) {
+      console.error('Error loading more notifications:', error);
+    } finally {
+      setTrayendoMas(false);
+    }
+  };
+
+  const borrarUno = async (notification) => {
+    setBorrando(notification.notification_id);
+    try {
+      await api.delete(`/notifications/${notification.notification_id}`);
+      setNotifications((previos) => previos.filter(
+        (x) => x.notification_id !== notification.notification_id));
+      setSelectedNotification(null);
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    } finally {
+      setBorrando(null);
+    }
+  };
+
+  // Sólo lo leído, y lo dice el botón. Vaciar la bandeja entera de un clic es
+  // algo que alguien hace sin querer, y lo que se lleva no vuelve: ese aviso
+  // era la única copia de «tu retiro se completó» que iba a ver.
+  const limpiarLeidas = async () => {
+    if (!await confirmar({
+      titulo: 'Borrar los avisos leídos',
+      detalle: 'Se borran los que ya leíste. Los que no leíste se quedan. '
+             + 'Esto no se puede deshacer.',
+      accion: 'Borrar los leídos',
+      tono: 'peligro',
+    })) return;
+    try {
+      await api.delete('/notifications/leidas', { params: { ambito: 'personal' } });
+      setNotifications((previos) => previos.filter((x) => !x.read));
+    } catch (error) {
+      console.error('Error clearing read notifications:', error);
     }
   };
 
@@ -184,20 +261,57 @@ export default function Notifications() {
               )}
             </div>
           </div>
-          {unreadCount > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+                  backgroundColor: '#dbeafe', color: '#2563eb', border: 'none',
+                  borderRadius: '12px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+                }}
+                data-testid="mark-all-read"
+              >
+                <CheckCheck style={{ width: '16px', height: '16px' }} />
+                Marcar todas
+              </button>
+            )}
+            {notifications.some((x) => x.read) && (
+              <button
+                onClick={limpiarLeidas}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+                  backgroundColor: 'rgba(255,255,255,0.8)', color: '#6b7280',
+                  border: '1px solid #e5e7eb', borderRadius: '12px', fontSize: '14px',
+                  fontWeight: '500', cursor: 'pointer'
+                }}
+                data-testid="limpiar-leidas"
+              >
+                <Trash2 style={{ width: '16px', height: '16px' }} />
+                Limpiar leídos
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Todas / Sin leer */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          {[['todas', false], ['Sin leer', true]].map(([etiqueta, valor]) => (
             <button
-              onClick={markAllAsRead}
+              key={String(valor)}
+              onClick={() => setSoloSinLeer(valor)}
               style={{
-                display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-                backgroundColor: '#dbeafe', color: '#2563eb', border: 'none',
-                borderRadius: '12px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+                padding: '8px 16px', borderRadius: '10px', fontSize: '14px',
+                fontWeight: 600, cursor: 'pointer',
+                border: soloSinLeer === valor ? '1px solid #6366f1' : '1px solid #e5e7eb',
+                backgroundColor: soloSinLeer === valor ? '#eef2ff' : 'rgba(255,255,255,0.8)',
+                color: soloSinLeer === valor ? '#4F46E5' : '#6b7280',
               }}
-              data-testid="mark-all-read"
+              data-testid={valor ? 'filtro-sin-leer' : 'filtro-todas'}
             >
-              <CheckCheck style={{ width: '16px', height: '16px' }} />
-              Marcar todas
+              {valor ? etiqueta : 'Todas'}
             </button>
-          )}
+          ))}
         </div>
 
         {/* Content */}
@@ -265,9 +379,39 @@ export default function Notifications() {
                       backgroundColor: '#6366f1', flexShrink: 0, marginTop: '6px'
                     }} />
                   )}
+                  {/* Borrar uno se puede aunque esté sin leer: la persona lo
+                      tiene delante cuando decide. Lo que no se puede es
+                      llevárselos todos de un clic. */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); borrarUno(notification); }}
+                    disabled={borrando === notification.notification_id}
+                    title="Borrar este aviso"
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      padding: '2px', color: '#c4c7cf', flexShrink: 0,
+                    }}
+                    data-testid={`borrar-${notification.notification_id}`}
+                  >
+                    <Trash2 style={{ width: '16px', height: '16px' }} />
+                  </button>
                 </div>
               </div>
             ))}
+            {hayMas && (
+              <button
+                onClick={traerMas}
+                disabled={trayendoMas}
+                style={{
+                  display: 'block', width: '100%', padding: '14px', border: 'none',
+                  borderTop: '1px solid #e5e7eb', backgroundColor: '#fafafa',
+                  color: '#4F46E5', fontSize: '14px', fontWeight: 600,
+                  cursor: trayendoMas ? 'default' : 'pointer',
+                }}
+                data-testid="ver-mas"
+              >
+                {trayendoMas ? 'Trayendo…' : 'Ver más'}
+              </button>
+            )}
           </div>
         )}
       </div>
