@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import api from '../utils/api';
 
+// La campana del CLIENTE: sólo lo que le pasa a esta persona.
+//
+// Antes pedía sin filtrar, así que a un administrador le mezclaba «te
+// aprobaron el KYC» (suyo) con «hay un KYC nuevo por revisar» (del equipo) en
+// la misma lista y sin ninguna diferencia visual. Lo del equipo vive ahora en
+// la campana del Panel de Control. Ver `CampanaDelEquipo.jsx`.
 export default function NotificationBell() {
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -16,7 +22,7 @@ export default function NotificationBell() {
 
   const loadUnreadCount = async () => {
     try {
-      const response = await api.get('/notifications/unread-count');
+      const response = await api.get('/notifications/unread-count', { params: { ambito: 'personal' } });
       // Backend returns unread_count, not count
       setUnreadCount(response.data.unread_count || response.data.count || 0);
     } catch (error) {

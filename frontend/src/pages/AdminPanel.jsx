@@ -25,6 +25,7 @@ import MesaDeAyuda from '../components/admin/MesaDeAyuda';
 import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
 import ErrorBoundary from '../components/common/ErrorBoundary';
+import CampanaDelEquipo from '../components/CampanaDelEquipo';
 import { AutoRateCard } from '../components/common/AutoRateCard';
 import { BcvRatesCard } from '../components/common/BcvRatesCard';
 import KycPanel from '../components/admin/KycPanel';
@@ -629,6 +630,10 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Lo que el equipo tiene que atender. Hasta ahora esta campana no
+                  existía acá: para enterarse de un KYC nuevo había que salirse
+                  del panel a una pantalla de cliente. */}
+              <CampanaDelEquipo onIrA={setActiveTab} />
               <RestoreButton userRole={user?.role} onSuccess={loadData} size="sm" />
               <button onClick={loadData} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
                 <RefreshCw style={{ width: '20px', height: '20px', color: '#374151', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
