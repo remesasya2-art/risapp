@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -96,6 +96,28 @@ const TABS = [
   { key: 'auditoria', label: 'Auditoría', icon: ScrollText, superAdminOnly: true },
 ];
 
+// El número que dice cuánto espera en una pestaña.
+//
+// Se pinta SOLO si hay algo. Un «0» permanente en nueve pestañas es ruido que
+// se aprende a no mirar, y entonces el 3 de al lado tampoco se mira.
+function Pendiente({ cuantos, activa }) {
+  if (!cuantos) return null;
+  return (
+    <span
+      style={{
+        minWidth: '20px', height: '20px', padding: '0 6px', borderRadius: '9999px',
+        fontSize: '11px', fontWeight: 700, display: 'inline-flex',
+        alignItems: 'center', justifyContent: 'center',
+        backgroundColor: activa ? 'rgba(255,255,255,0.28)' : '#fee2e2',
+        color: activa ? '#ffffff' : '#b91c1c',
+      }}
+      data-testid="pendiente"
+    >
+      {cuantos > 99 ? '99+' : cuantos}
+    </span>
+  );
+}
+
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
 
 export default function AdminPanel() {
@@ -141,7 +163,14 @@ const [searchParams, setSearchParams] = useSearchParams();
     if (isAgent && !['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion'].includes(activeTab)) setActiveTab('chat');
   }, [isAgent]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ users: 0, pending_withdrawals: 0, pending_recharges: 0, pending_kyc: 0 });
+  // Cuánto trabajo espera en cada pestaña, y cuántos usuarios hay.
+  //
+  // Antes esto se calculaba descargando CUATRO LISTAS COMPLETAS y midiendo su
+  // largo acá. «Usuarios totales» mentía pasados los 1000 y «Recargas
+  // pendientes» pasadas las 100, porque las rutas cortan ahí. Ahora lo cuenta
+  // la base. Ver `backend/services/pendientes.py`.
+  const [pendientes, setPendientes] = useState({});
+  const [usuariosTotales, setUsuariosTotales] = useState(null);
   // El banco que el operador elige a mano para una recarga que nacio sin el.
   const [users, setUsers] = useState([]);
 
@@ -200,23 +229,43 @@ const [searchParams, setSearchParams] = useSearchParams();
     api.get('/oauth/drive/status').then(res => setDriveConnected(res.data.connected)).catch(() => {});
   }, []);
 
+  // Un solo pedido para las nueve secciones. El servidor devuelve únicamente
+  // los contadores de las que ESTE usuario puede abrir: un contador es
+  // información, y «hay 14 retiros pendientes» le dice a quien no puede verlos
+  // cuánto dinero está esperando salir.
+  const cargarPendientes = useCallback(async () => {
+    try {
+      const { data } = await api.get('/admin/pendientes');
+      setPendientes(data?.pendientes || {});
+      setUsuariosTotales(data?.usuarios ?? null);
+    } catch {
+      // Es un adorno del panel: si no se puede contar, las pestañas quedan sin
+      // número y se sigue trabajando igual.
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarPendientes();
+    const reloj = setInterval(cargarPendientes, 60000);
+    return () => clearInterval(reloj);
+  }, [cargarPendientes]);
+
+  // CRM no tiene trabajo propio: es la puerta a KYC, Soporte y las demás. Su
+  // número es la suma de lo que hay adentro, o la pestaña se ve vacía mientras
+  // hay ocho KYC esperando a un clic de distancia.
+  const pendientesDe = (clave) => {
+    if (clave === 'crm') {
+      return CRM_SUBTABS.reduce((suma, s) => suma + (pendientes[s.key] || 0), 0);
+    }
+    return pendientes[clave] || 0;
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
       switch (activeTab) {
         case 'overview':
-          const [wRes, rRes, uRes, kRes] = await Promise.all([
-            api.get('/admin/withdrawals/pending').catch(() => ({ data: [] })),
-            api.get('/admin/recharges/ves/pending').catch(() => ({ data: { recharges: [] } })),
-            api.get('/admin/users').catch(() => ({ data: { users: [] } })),
-            api.get('/admin/kyc/list', { params: { status: 'pending', limit: 1 } }).catch(() => ({ data: { counts: { pending: 0 } } }))
-          ]);
-          setStats({
-            pending_withdrawals: (wRes.data || []).length,
-            pending_recharges: (rRes.data?.recharges || []).length,
-            users: (uRes.data?.users || []).length,
-            pending_kyc: (kRes.data?.counts?.pending ?? 0)
-          });
+          await cargarPendientes();
           break;
         case 'partners':
           // Load both socios and gestores
@@ -252,13 +301,9 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   };
 
-  // Refresh overview stats after KYC actions (the KycPanel manages its own state)
-  const refreshKycStats = async () => {
-    try {
-      const res = await api.get('/admin/kyc/list', { params: { status: 'pending', limit: 1 } });
-      setStats((prev) => ({ ...prev, pending_kyc: res.data?.counts?.pending ?? 0 }));
-    } catch { /* silent */ }
-  };
+  // Después de aprobar o rechazar un KYC, los contadores se ponen al día solos
+  // (el KycPanel lleva su propia lista).
+  const refreshKycStats = cargarPendientes;
 
   const handleSetAgent = async (u) => {
     const makeAgent = u.role !== 'agent';
@@ -647,15 +692,18 @@ const [searchParams, setSearchParams] = useSearchParams();
       <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', rowGap: '8px' }}>
-            {(isAgent ? TABS.filter(t => t.key === 'crm' || t.key === 'operacion') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => (
+            {(isAgent ? TABS.filter(t => t.key === 'crm' || t.key === 'operacion') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => {
+              const activa = activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab));
+              return (
               <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? (isAgent ? 'chat' : 'users') : tab.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
-                  backgroundColor: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#6366f1' : 'transparent', color: (activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab))) ? '#ffffff' : '#6b7280' }}
+                  backgroundColor: activa ? '#6366f1' : 'transparent', color: activa ? '#ffffff' : '#6b7280' }}
                 data-testid={`tab-${tab.key}`}
               >
                 <tab.icon style={{ width: '18px', height: '18px' }} /> {tab.label}
+                <Pendiente cuantos={pendientesDe(tab.key)} activa={activa} />
               </button>
-            ))}
+            );})}
           </div>
         </div>
       </div>
@@ -668,6 +716,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', border: activeTab === st.key ? '1px solid #6366f1' : '1px solid #e5e7eb', backgroundColor: activeTab === st.key ? '#eef2ff' : '#fff', color: activeTab === st.key ? '#4F46E5' : '#6b7280', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
               >
                 <st.icon style={{ width: '16px', height: '16px' }} /> {st.label}
+                <Pendiente cuantos={pendientes[st.key] || 0} activa={false} />
               </button>
             ))}
           </div>
@@ -705,10 +754,10 @@ const [searchParams, setSearchParams] = useSearchParams();
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               {[
-                { icon: ArrowUpRight, value: stats.pending_withdrawals, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
-                { icon: ArrowDownLeft, value: stats.pending_recharges, label: 'Recargas pendientes', bg: '#dcfce7', iconColor: '#16a34a' },
-                { icon: Users, value: stats.users, label: 'Usuarios totales', bg: '#dbeafe', iconColor: '#2563eb' },
-                { icon: Shield, value: stats.pending_kyc, label: 'KYC pendientes', bg: '#f3e8ff', iconColor: '#9333ea' },
+                { icon: ArrowUpRight, value: pendientes.withdrawals ?? 0, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
+                { icon: ArrowDownLeft, value: pendientes.recharges ?? 0, label: 'Recargas pendientes', bg: '#dcfce7', iconColor: '#16a34a' },
+                { icon: Users, value: usuariosTotales ?? 0, label: 'Usuarios totales', bg: '#dbeafe', iconColor: '#2563eb' },
+                { icon: Shield, value: pendientes.kyc ?? 0, label: 'KYC pendientes', bg: '#f3e8ff', iconColor: '#9333ea' },
               ].map((item, i) => (
                 <div key={i} style={{ ...cardStyle, padding: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
