@@ -1,6 +1,7 @@
 """
 Admin routes - User management, Withdrawals, Rates, KYC
 """
+import asyncio
 import os
 import uuid
 import logging
@@ -17,8 +18,10 @@ from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
-from routes.dependencies import get_admin_user, get_super_admin, get_crm_user
-from services.notifications import create_notification
+from routes.dependencies import (get_admin_user, get_current_user,
+                                 get_super_admin, get_crm_user)
+from services.notifications import create_notification, ROLES_DEL_PERSONAL
+from services import pendientes as pendientes_svc
 from services import auditoria, kyc_quota
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
@@ -2820,3 +2823,31 @@ async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_
 
     logger.info(f"User {user_id} banned (scope={scope}) by {admin.user_id}")
     return {"success": True, "message": "Usuario baneado", "scope": scope}
+
+
+# ============== LOS PENDIENTES DE CADA SECCION ==============
+#
+# POR QUE NO PASA POR `get_crm_user`
+#
+#   Los dos guardas con permiso exigen UN permiso por ruta, y esta ruta no
+#   tiene uno: es un resumen que cruza nueve secciones con nueve guardianes
+#   distintos. Declararla bajo cualquiera de ellos sería mentir sobre lo que
+#   protege; inventar un permiso nuevo dejaría sin números a todo el personal
+#   que ya existe, hasta que alguien se lo marcara a mano.
+#
+#   El filtro está adentro y es por sección: `services/pendientes.contar_para`
+#   devuelve sólo los contadores de las secciones que ESTE usuario puede abrir.
+#   Un cliente no recibe ninguno; un agente recibe los suyos y no se entera de
+#   cuántos retiros hay esperando.
+
+@router.get("/pendientes")
+async def get_pendientes(current_user: User = Depends(get_current_user)):
+    """Cuánto trabajo espera en cada pestaña, para quien pregunta."""
+    if current_user.role not in ROLES_DEL_PERSONAL:
+        raise HTTPException(status_code=403, detail="CRM access required")
+
+    pendientes, usuarios = await asyncio.gather(
+        pendientes_svc.contar_para(current_user),
+        pendientes_svc.total_de_usuarios(),
+    )
+    return {"pendientes": pendientes, "usuarios": usuarios}
