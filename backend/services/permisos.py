@@ -79,9 +79,13 @@ CATALOGO = {
     "transactions.view":     "Ver transacciones",
     "transactions.export":   "Exportar transacciones",
 
-    "support.view":          "Ver chats y pedidos de soporte",
+    "support.view":          "Ver casos y pedidos de soporte",
     "support.respond":       "Responder y tomar soporte",
-    "support.close":         "Cerrar chats de soporte",
+    # «Casos» y no «chats»: es lo que el asesor cierra desde que la mesa de
+    # ayuda dejó de ser un chat por usuario. El rótulo es lo que se lee en
+    # RRHH al tildar la casilla, así que nombrar lo que ya no existe manda a
+    # buscar una pantalla que no está.
+    "support.close":         "Cerrar casos de soporte",
     # Los pedidos internos los CONTESTA otra área —Verificaciones, Finanzas,
     # Envíos—, no soporte. Si la ruta pidiera `support.respond`, quedaría
     # cerrada justo para la gente que tiene que responderla. Este permiso dice
@@ -163,20 +167,21 @@ MAPA = {
     ("GET",    "/api/admin/payment-records/{record_id}"):    "transactions.view",
 
     # ── Soporte ───────────────────────────────────────────────────────────
-    ("GET",    "/api/admin/support/chats"):                  "support.view",
-    ("GET",    "/api/admin/support/chat/{user_id}"):         "support.view",
+    #
+    # Acá estaban también las seis rutas del chat viejo —`/admin/support/chats`,
+    # `/chat/{user_id}`, `/respond`, `/claim`, `/release` y `/close`—. Se fueron
+    # con él: la mesa de ayuda por casos las reemplaza a todas y su propio
+    # bloque está más arriba. Lo que queda en este bloque son las respuestas
+    # rápidas y las solicitudes de recuperación de acceso, que son otro
+    # circuito y siguen vivas.
     ("GET",    "/api/admin/support-requests"):               "support.view",
     ("GET",    "/api/admin/quick-replies"):                  "support.view",
-    ("POST",   "/api/admin/support/respond"):                "support.respond",
-    ("POST",   "/api/admin/support/claim"):                  "support.respond",
-    ("POST",   "/api/admin/support/release"):                "support.respond",
     ("POST",   "/api/admin/quick-replies"):                  "support.respond",
     ("DELETE", "/api/admin/quick-replies/{qr_id}"):          "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/claim"):    "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/release"):  "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/reply"):    "support.respond",
     ("POST",   "/api/admin/support-requests/{request_id}/priority"): "support.respond",
-    ("POST",   "/api/admin/support/close"):                  "support.close",
     ("POST",   "/api/admin/support-requests/{request_id}/resolve"):  "support.close",
 
     # ── Envíos ────────────────────────────────────────────────────────────

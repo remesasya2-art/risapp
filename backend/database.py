@@ -13,7 +13,29 @@ db = client[DB_NAME]
 
 
 async def create_indexes():
-    """Create database indexes for optimal performance"""
+    """Create database indexes for optimal performance.
+
+    OJO: ESTA FUNCION NO LA LLAMA NADIE.
+
+        La llama `init_db()`, y a `init_db()` no la llama nadie. Un grep del
+        backend entero devuelve estas dos definiciones y ninguna invocación:
+        los índices de acá abajo NUNCA se crearon en producción.
+
+        Lo que sí corre es el bloque del `lifespan` de `server.py`, que es una
+        lista distinta —parecida, no igual— y los módulos que se enganchan ahí
+        con su propia función (`envios_indices`, `soporte_indices`,
+        `auditoria`, `invitaciones`, `bancos`, `pagos_una_sola_vez`).
+
+        No se activa de un tirón porque las dos listas se contradicen en
+        cosas que romperían el arranque: acá `transactions.transaction_id` es
+        `unique`, allá es `sparse` sin único (IndexOptionsConflict), y acá se
+        indexa `db.sessions`, colección que la aplicación ya no usa —usa
+        `user_sessions`—. Reconciliarlas es un trabajo aparte, con la base
+        real a la vista.
+
+        Mientras tanto: si agregás un índice, agregalo donde CORRA. Acá no
+        hace nada, y parece que sí.
+    """
     try:
         # Users indexes
         await db.users.create_index("user_id", unique=True)
@@ -64,25 +86,8 @@ async def create_indexes():
         await db.crypto_deposits.create_index("user_id")
         await db.crypto_deposits.create_index([("credited", 1), ("status", 1)])
 
-        # Mesa de ayuda (casos). Las tres consultas que se hacen todo el
-        # dia: «mis casos» del cliente, la bandeja del asesor filtrada por
-        # estado o area, y la conversacion de un caso. Sin estos indices cada
-        # vuelta del reloj de la pantalla recorre la coleccion entera, y la
-        # bandeja se consulta cada pocos segundos por cada asesor conectado.
-        await db.soporte_casos.create_index("caso_id", unique=True)
-        await db.soporte_casos.create_index([("user_id", 1), ("actualizado_en", -1)])
-        await db.soporte_casos.create_index([("estado", 1), ("actualizado_en", -1)])
-        await db.soporte_casos.create_index([("area", 1), ("estado", 1)])
-        await db.soporte_casos.create_index([("asignado_a", 1), ("estado", 1)])
-        # El numero NO es unico a proposito: si un caso viejo de la migracion
-        # trajera uno repetido, un indice unico haria fallar la creacion y se
-        # perderian todos los indices que vienen despues, dentro del mismo try.
-        await db.soporte_casos.create_index("numero")
-        await db.soporte_mensajes.create_index("mensaje_id", unique=True)
-        await db.soporte_mensajes.create_index([("caso_id", 1), ("creado_en", 1)])
-        await db.soporte_pedidos.create_index("pedido_id", unique=True)
-        await db.soporte_pedidos.create_index([("area", 1), ("estado", 1)])
-        await db.soporte_pedidos.create_index([("caso_id", 1), ("creado_en", 1)])
+        # Los de la mesa de ayuda estaban acá y se fueron a
+        # services/soporte_indices.py, que SI corre. Ver el aviso de arriba.
 
         logger.info("Database indexes created successfully")
     except Exception as e:

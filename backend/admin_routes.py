@@ -197,6 +197,10 @@ class AdjustBalanceRequest(BaseModel):
 #     POST /admin/support/respond           -> routes.support.admin_respond
 #     POST /admin/support/close             -> routes.support.close_chat
 #
+# Las cuatro de soporte ya no existen en ningún lado: `routes/support.py` se
+# apagó entero cuando la mesa de ayuda por casos lo reemplazó. Se dejan
+# listadas porque lo que este bloque cuenta es qué pasó acá, no qué hay hoy.
+#
 # FastAPI resuelve por ORDEN DE REGISTRO, y `routes/` se incluye antes, así
 # que las nueve de acá no atendían un solo pedido. Nunca.
 #
