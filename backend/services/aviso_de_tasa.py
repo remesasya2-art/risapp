@@ -78,19 +78,21 @@ async def avisar_si_hace_falta(db, fecha_de_la_tasa, edad):
             upsert=True,
         )
 
-        from services.notifications import create_notification
+        from services.notifications import avisar_al_personal
 
-        cuantos = 0
-        async for admin in db.users.find({"role": "super_admin"}):
-            await create_notification(
-                user_id=admin["user_id"],
-                title=TITULO,
-                message=_mensaje(edad),
-                notification_type="warning",
-                data={"motivo": "tasa_usd_ves_btc_vencida",
-                      "fijada_en": fecha_de_la_tasa.isoformat()},
-            )
-            cuantos += 1
+        # Solo super administradores, y no por costumbre: la tasa que vencio se
+        # edita en `PATCH /admin/btc/config`, que guarda `get_super_admin`. Un
+        # `admin` con `settings.edit` no puede abrir esa pantalla, asi que
+        # avisarle seria pedirle algo que no puede hacer. Quien recibe el aviso
+        # es quien puede arreglarlo. Ver `services/notifications.py`.
+        cuantos = await avisar_al_personal(
+            title=TITULO,
+            message=_mensaje(edad),
+            notification_type="warning",
+            solo_super_admin=True,
+            data={"motivo": "tasa_usd_ves_btc_vencida",
+                  "fijada_en": fecha_de_la_tasa.isoformat()},
+        )
 
         if not cuantos:
             logger.error("La tasa venció y no hay ningún super administrador "

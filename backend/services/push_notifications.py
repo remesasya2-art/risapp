@@ -82,7 +82,13 @@ async def send_push_to_user(user_id: str, title: str, body: str, data: dict = No
     """Send push notification to a specific user"""
     from database import db
     
-    user = await db.users.find_one({"user_id": user_id})
+    # Solo los dos campos que se usan. Sin proyeccion esto traia el usuario
+    # ENTERO en cada aviso —documento de identidad, telefono, direcciones— y
+    # `avisar_al_personal` dispara uno por destinatario.
+    user = await db.users.find_one(
+        {"user_id": user_id},
+        {"_id": 0, "push_token": 1, "web_push_subscription": 1},
+    )
     if not user:
         return False
     
@@ -98,15 +104,8 @@ async def send_push_to_user(user_id: str, title: str, body: str, data: dict = No
     
     return success
 
-async def send_push_to_admins(title: str, body: str, data: dict = None) -> int:
-    """Send push notification to all admin users"""
-    from database import db
-    
-    admins = await db.users.find({"role": {"$in": ["admin", "super_admin"]}}).to_list(100)
-    
-    sent_count = 0
-    for admin in admins:
-        if await send_push_to_user(admin["user_id"], title, body, data):
-            sent_count += 1
-    
-    return sent_count
+# `send_push_to_admins` vivia aca y no la llamaba nadie. Era una sexta forma
+# de elegir destinatarios —admin + super_admin, tope 100, sin mirar
+# `is_active`— esperando a que alguien la usara y repitiera el error. Quien
+# avisa al equipo es `services/notifications.avisar_al_personal`, que elige
+# por permiso y manda el push por el mismo camino que el aviso guardado.
