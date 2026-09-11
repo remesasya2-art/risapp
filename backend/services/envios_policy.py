@@ -154,6 +154,23 @@ def _limite_utilizable(valor) -> Decimal | None:
     del float, que devuelve False en silencio— así que una ficha con un valor
     roto tumbaba la intersección entera y con ella la ruta pública. Un dato que
     no se puede comparar es un límite que no está declarado.
+
+    CERO TAMPOCO ES UN LIMITE, y esto es lo que tenía el sitio parado.
+
+    En el panel, el campo vacío y el cero se ven casi igual, y significan lo
+    contrario: vacío es «no restrinjo», cero es «no pasa nada». Un super
+    administrador escribió 0 en `lado_max_cm` de TRP-VZL creyendo que era «sin
+    límite», y a partir de ahí NINGUNA caja cotizaba —ni una de 1 cm—, con el
+    mensaje «Ningún lado puede superar los 0 cm». Nadie leyó eso como un error
+    de configuración: parecía que el módulo de envíos estaba roto.
+
+    La regla es que un tope de cero, o negativo, no es una regla de negocio que
+    alguien haya querido escribir: es el campo sin llenar. Se lee como límite no
+    declarado, que es la interpretación permisiva y la única que no deja el
+    sitio muerto esperando a que alguien encuentre el formulario.
+
+    Aplica también a los mínimos, donde es inocuo por partida doble: un mínimo
+    de cero no restringe nada, esté declarado o no.
     """
     if valor is None or isinstance(valor, bool):
         return None
@@ -169,7 +186,9 @@ def _limite_utilizable(valor) -> Decimal | None:
             d = to_decimal(valor)
         except Exception:
             return None
-    return d if d.is_finite() else None
+    if not d.is_finite():
+        return None
+    return d if d > 0 else None
 
 
 def limites_efectivos(transportistas, limites_propios=None) -> dict:
@@ -251,7 +270,17 @@ def validar_paquete(peso_kg, largo_cm, ancho_cm, alto_cm, valor_declarado=0,
     # Los limites se convierten aca y no se asumen ya convertidos: la firma
     # invita a pasarle el dict del panel o los limites propios de la tarifa
     # directamente, y comparar un Decimal contra el string "30" lanza TypeError.
-    limites = {k: to_decimal(v) for k, v in (limites or {}).items() if v is not None}
+    #
+    # Y se convierten con `_limite_utilizable`, la MISMA función que usa la
+    # intersección, no con `to_decimal` a secas. Hoy los dos llamadores pasan la
+    # salida de `limites_efectivos()`, que ya viene filtrada, así que esto no
+    # cambia nada — pero el docstring de acá arriba invita a pasar el dict del
+    # panel en crudo, y por ese camino un cero volvía a rechazar todo aunque la
+    # intersección lo hubiera descartado. La regla de qué es un límite vive en
+    # un solo lugar o no vive en ninguno.
+    limites = {k: d for k, d in
+               ((k, _limite_utilizable(v)) for k, v in (limites or {}).items())
+               if d is not None}
 
     valores = {"peso": peso_kg, "largo": largo_cm, "ancho": ancho_cm, "alto": alto_cm}
     convertidos = {}

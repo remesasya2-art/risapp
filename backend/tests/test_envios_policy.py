@@ -328,3 +328,83 @@ def test_un_limite_que_no_se_puede_comparar_no_tumba_la_interseccion(roto):
 def test_si_el_unico_limite_declarado_esta_roto_es_como_si_no_hubiera():
     malo = {"codigo": "TRP-XXXX", "activo": True, "limites": {"peso_max_kg": float("nan")}}
     assert "peso_max_kg" not in policy.limites_efectivos([malo])
+
+
+# ─── El cero no es un limite ──────────────────────────────────────────────
+#
+# Lo que tenia el modulo de envios parado en produccion. En el panel, el campo
+# vacio y el cero se ven casi igual y significan lo contrario: vacio es «no
+# restrinjo», cero es «no pasa nada». Un super administrador escribio 0 en
+# `lado_max_cm` de TRP-VZL creyendo que era «sin limite», y a partir de ahi
+# ninguna caja cotizaba.
+#
+# Se prueba con el mismo escenario que devolvia la ruta publica, para que si
+# alguien vuelve a tratar el cero como un tope, falle aca y no en la cara de un
+# usuario que solo queria mandar una caja.
+
+_CERO = {"codigo": "TRP-VZL", "activo": True,
+         "limites": {"peso_max_kg": 30, "lado_max_cm": 0, "valor_declarado_max": 600}}
+
+
+def test_un_tope_en_cero_no_restringe_nada():
+    """Es el campo sin llenar, no una regla de negocio que alguien escribió."""
+    lim = policy.limites_efectivos([_CERO])
+    assert "lado_max_cm" not in lim, (
+        "el cero volvió a leerse como un tope: ninguna caja cotizaría")
+
+
+def test_con_un_cero_al_lado_gana_el_limite_de_verdad():
+    """El cero no puede ganar la intersección por ser «el más estricto»."""
+    lim = policy.limites_efectivos([TRP_BR, _CERO])
+    assert lim["lado_max_cm"] == Decimal("100")
+    assert policy.quien_impone([TRP_BR, _CERO], "lado_max_cm") == "TRP-7K2M"
+
+
+def test_una_caja_normal_cotiza_aunque_alguien_haya_escrito_cero():
+    """El defecto tal como lo vivía el usuario, de punta a punta.
+
+    Rechazaba TODO, hasta una caja de 1 cm, con «Ningún lado puede superar los
+    0 cm». Nadie leía eso como un error de configuración: parecía que el módulo
+    estaba roto.
+    """
+    lim = policy.limites_efectivos([TRP_BR, _CERO])
+    for largo, ancho, alto in ((30, 20, 10), (50, 35, 30), (11, 6, 1)):
+        assert policy.validar_paquete(2, largo, ancho, alto, 100, lim) is None, (
+            f"la caja {largo}x{ancho}x{alto} cm se rechazó")
+
+    # Y con el cero SOLO —sin los mínimos de TRP_BR de por medio— pasa hasta la
+    # caja de 1 cm, que es literalmente lo que el mensaje de error rechazaba.
+    solo = policy.limites_efectivos([_CERO])
+    assert policy.validar_paquete(2, 1, 1, 1, 100, solo) is None
+
+
+def test_el_limite_de_verdad_sigue_frenando():
+    """La otra mitad: aflojar el cero no puede aflojar los topes reales."""
+    lim = policy.limites_efectivos([TRP_BR, _CERO])
+    problema = policy.validar_paquete(2, 120, 10, 10, 100, lim)
+    assert problema is not None and "100" in problema
+
+
+@pytest.mark.parametrize("negativo", [-1, "-5", Decimal("-0.5")])
+def test_un_tope_negativo_tampoco_es_un_limite(negativo):
+    """Un máximo negativo rechaza todo igual que el cero, y por lo mismo: nadie
+    quiso escribirlo."""
+    malo = {"codigo": "TRP-XXXX", "activo": True,
+            "limites": {"peso_max_kg": negativo}}
+    assert "peso_max_kg" not in policy.limites_efectivos([malo])
+
+
+def test_el_cero_tampoco_pasa_por_el_camino_crudo():
+    """`validar_paquete` acepta el dict del panel sin filtrar —lo dice su propia
+    firma—, y por ahí el cero volvía a rechazar todo aunque la intersección ya
+    lo hubiera descartado. La regla de qué es un límite vive en un solo lugar."""
+    assert policy.validar_paquete(2, 30, 20, 10, 100, {"lado_max_cm": 0}) is None
+    # Y un tope real pasado igual de crudo sigue frenando.
+    assert policy.validar_paquete(2, 30, 20, 10, 100, {"lado_max_cm": 25}) is not None
+
+
+def test_un_minimo_en_cero_no_declara_nada():
+    """Inocuo por partida doble —un mínimo de cero no restringe— pero se
+    comprueba para que la regla sea una sola y no dos con excepciones."""
+    malo = {"codigo": "TRP-XXXX", "activo": True, "limites": {"largo_min_cm": 0}}
+    assert "largo_min_cm" not in policy.limites_efectivos([malo])
