@@ -843,10 +843,23 @@ async def transferir(caso_id: str, datos: Transferencia,
 
     destino_nombre = None
     if datos.asesor_id:
-        destino = await db.users.find_one({"user_id": datos.asesor_id},
-                                          {"_id": 0, "name": 1, "role": 1})
+        destino = await db.users.find_one(
+            {"user_id": datos.asesor_id},
+            {"_id": 0, "name": 1, "role": 1, "is_active": 1})
         if not destino:
             raise HTTPException(status_code=404, detail="Ese asesor no existe")
+        # Que EXISTA no alcanza. Acá se preguntaba sólo eso —con el `role` ya
+        # traído de la base y sin mirar—, y así un caso se podía asignar a un
+        # cliente, incluido el del propio caso. No fallaba nada a la vista: el
+        # caso quedaba asignado, dejaba de figurar como libre, y quien lo tenía
+        # no podía abrir la consola. Salía de la cola de todos y el cliente
+        # seguía esperando. De yapa, el aviso de transferencia le llevaba al
+        # cliente la nota interna del asesor.
+        if not soporte.es_personal(destino):
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se le puede transferir un caso a alguien del equipo "
+                       "que siga activo.")
         destino_nombre = destino.get("name") or "Asesor"
 
     await db.soporte_casos.update_one({"caso_id": caso_id}, {"$set": {
@@ -880,27 +893,45 @@ async def escalar(caso_id: str, datos: Escalamiento,
                   current_user: User = Depends(get_crm_user)):
     """Marca el caso como escalado, con motivo, y lo pone primero en la lista."""
     caso = await _caso(caso_id)
-    if not caso:
-        raise HTTPException(status_code=404, detail="Ese caso no existe")
-    if caso.get("estado") == soporte.CERRADO:
-        raise HTTPException(status_code=400, detail="Un caso cerrado no se escala")
+    problema = soporte.problema_para_escalar(caso)
+    if problema:
+        raise HTTPException(status_code=404 if not caso else 400, detail=problema)
 
-    await db.soporte_casos.update_one({"caso_id": caso_id}, {"$set": {
-        "escalado": True,
-        "escalado_motivo": datos.motivo.strip(),
-        "escalado_por": current_user.user_id,
-        "escalado_por_nombre": current_user.name or "Asesor",
-        "escalado_en": _AHORA(),
-        "prioridad": "urgente",
-        "actualizado_en": _AHORA(),
-    }})
+    # El filtro por `escalado` es lo que hace la guarda de verdad. Comprobar y
+    # después escribir deja pasar a dos asesores que escalan a la vez: los dos
+    # leen `escalado: False` y los dos escriben, y el segundo pisa el motivo del
+    # primero. Con el filtro adentro, el segundo no modifica nada y se entera.
+    resultado = await db.soporte_casos.update_one(
+        {"caso_id": caso_id, "escalado": {"$ne": True}}, {"$set": {
+            "escalado": True,
+            "escalado_motivo": datos.motivo.strip(),
+            "escalado_por": current_user.user_id,
+            "escalado_por_nombre": current_user.name or "Asesor",
+            "escalado_en": _AHORA(),
+            "prioridad": "urgente",
+            "actualizado_en": _AHORA(),
+        }})
+    if resultado.modified_count != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Ese caso ya está escalado. Para agregar algo, dejá una nota interna.")
+
     await _registrar(caso_id,
                      f"{current_user.name or 'Un asesor'} escaló el caso: {datos.motivo.strip()}",
                      current_user.user_id, current_user.name)
 
+    # El `is_active` es el arreglo. La consulta de acá no lo tenía —la única del
+    # módulo sin él, porque no pasa por `_staff_con`— así que un super
+    # administrador dado de baja seguía recibiendo los casos escalados, con su
+    # número y su motivo, después de irse de la empresa.
+    #
+    # Se consulta directo y no por `_staff_con`: esa función trae a TODO el
+    # personal con un tope de 200 y habría que filtrar después, y en un equipo
+    # grande el tope podría comerse justo a los super administradores.
     await _avisar_a_varios(
-        await db.users.find({"role": "super_admin"},
-                            {"_id": 0, "user_id": 1}).limit(20).to_list(20),
+        await db.users.find(
+            {"role": "super_admin", "is_active": {"$ne": False}},
+            {"_id": 0, "user_id": 1}).limit(20).to_list(20),
         title=f"Caso escalado {caso.get('numero')}",
         message=datos.motivo.strip()[:100],
         notification_type="soporte_escalado",
@@ -984,13 +1015,22 @@ async def responder_pedido(pedido_id: str, datos: RespuestaAlPedido,
         raise HTTPException(status_code=400, detail=problema)
 
     ahora = _AHORA()
-    await db.soporte_pedidos.update_one({"pedido_id": pedido_id}, {"$set": {
-        "estado": soporte.PEDIDO_RESPONDIDO,
-        "respuesta": datos.respuesta.strip(),
-        "respondido_por": current_user.user_id,
-        "respondido_por_nombre": current_user.name or "Área",
-        "respondido_en": ahora,
-    }})
+    # El estado va en el FILTRO, no sólo en la comprobación de arriba. Leer,
+    # comprobar y después escribir deja pasar a dos personas de la misma área
+    # que contestan a la vez: las dos ven «pendiente», las dos escriben, y
+    # quedan dos notas en el hilo con la segunda respuesta pisando a la
+    # primera. `tomar`, `estado` y `prioridad` ya se resuelven así.
+    resultado = await db.soporte_pedidos.update_one(
+        {"pedido_id": pedido_id, "estado": soporte.PEDIDO_PENDIENTE}, {"$set": {
+            "estado": soporte.PEDIDO_RESPONDIDO,
+            "respuesta": datos.respuesta.strip(),
+            "respondido_por": current_user.user_id,
+            "respondido_por_nombre": current_user.name or "Área",
+            "respondido_en": ahora,
+        }})
+    if resultado.modified_count != 1:
+        raise HTTPException(status_code=400,
+                            detail="Ese pedido ya fue respondido o cancelado.")
     await _registrar(
         pedido["caso_id"],
         f"{soporte.nombre_de_area(pedido.get('area'))} respondió ({current_user.name or 'área'}): {datos.respuesta.strip()}",
