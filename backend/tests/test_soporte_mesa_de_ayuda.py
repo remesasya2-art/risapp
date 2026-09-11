@@ -452,3 +452,85 @@ def test_en_una_carrera_la_segunda_respuesta_al_pedido_no_escribe(monkeypatch):
         assert p["respuesta"] == "Sí, ya se le devolvió el martes"
 
     _ya(revisar())
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. El dinero de la ficha no tumba la consola
+# ══════════════════════════════════════════════════════════════════════════
+#
+# UN 500 DE PRODUCCION QUE NINGUN TEST PODIA VER
+#
+#     En esta base la plata se guarda en `Decimal128`. FastAPI no lo sabe
+#     serializar: prueba `dict(obj)`, prueba `vars(obj)`, las dos fallan, y el
+#     500 ocurre en `serialize_response` —DESPUES de que el manejador retornó—,
+#     fuera del alcance de cualquier try/except de la ruta.
+#
+#     GET /api/admin/soporte/casos/{caso_id} -> 500
+#     ValueError: [TypeError("'Decimal128' object is not iterable"), ...]
+#
+#     El asesor abre el caso y no ve nada. No hay pantalla de error que ayude:
+#     la consola queda en blanco y el registro habla de un tipo de bson.
+#
+#     Los tests no lo veían porque insertaban números de Python. `mongomock` SI
+#     conserva `Decimal128` cuando se le inserta uno —comprobado—, así que la
+#     única razón por la que esto pasó a producción es que ningún test escribió
+#     la plata como la escribe la aplicación de verdad.
+
+from bson.decimal128 import Decimal128                                # noqa: E402
+from decimal import Decimal                                           # noqa: E402
+
+
+def test_la_ficha_del_cliente_con_saldo_en_decimal128_no_rompe_la_consola():
+    """El 500 exacto que se vio en producción."""
+    cliente, actual, base = _mesa("ris_decimal128")
+    caso_id = _abrir(cliente, actual, base)
+
+    async def sembrar():
+        # Como lo escribe la aplicación de verdad: `services/money.to_decimal128`.
+        await base.users.update_one(
+            {"user_id": "u_ana"},
+            {"$set": {"balance_ris": Decimal128(Decimal("1234.56"))}})
+        await base.transactions.insert_one({
+            "transaction_id": "tx_1", "user_id": "u_ana", "type": "envio",
+            "amount": Decimal128(Decimal("500.00")), "status": "completed",
+            "currency": "RIS",
+        })
+
+    _ya(sembrar())
+
+    r = cliente.get(f"/api/admin/soporte/casos/{caso_id}")
+    assert r.status_code == 200, f"la consola no pudo abrir el caso: {r.text[:300]}"
+
+    datos = r.json()
+    assert datos["cliente"]["balance_ris"] == 1234.56
+    assert datos["operaciones"][0]["amount"] == 500.0
+
+
+@pytest.mark.parametrize("guardado,esperado", [
+    (Decimal128(Decimal("1234.56")), 1234.56),   # lo que escribe la app hoy
+    (1234.56, 1234.56),                          # float de los datos viejos
+    ("1234.56", 1234.56),                        # string, que también hay
+    (0, 0.0),
+])
+def test_el_saldo_sale_como_numero_venga_como_venga(guardado, esperado):
+    """La base tiene la plata escrita de tres formas según quién la tocó. La
+    consola tiene que abrir con todas: un asesor no puede depender de qué
+    versión del código guardó ese saldo."""
+    cliente, actual, base = _mesa(f"ris_saldo_{type(guardado).__name__}_{guardado}")
+    caso_id = _abrir(cliente, actual, base)
+    _ya(base.users.update_one({"user_id": "u_ana"},
+                              {"$set": {"balance_ris": guardado}}))
+
+    r = cliente.get(f"/api/admin/soporte/casos/{caso_id}")
+    assert r.status_code == 200, r.text[:300]
+    assert r.json()["cliente"]["balance_ris"] == esperado
+
+
+def test_una_ficha_sin_saldo_no_inventa_un_cero():
+    """Ausente y cero no son lo mismo: un saldo de 0 dice «no tiene plata», y la
+    ausencia dice «este campo no está cargado»."""
+    cliente, actual, base = _mesa("ris_sin_saldo")
+    caso_id = _abrir(cliente, actual, base)
+    r = cliente.get(f"/api/admin/soporte/casos/{caso_id}")
+    assert r.status_code == 200, r.text[:300]
+    assert "balance_ris" not in r.json()["cliente"]
