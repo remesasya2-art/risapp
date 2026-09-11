@@ -55,8 +55,13 @@ const CRM_SUBTABS = [
   { key: 'kyc', label: 'KYC', icon: Shield },
   { key: 'blacklist', label: 'Lista negra', icon: Shield },
   { key: 'partners', label: 'Socios', icon: Briefcase },
-  { key: 'chat', label: 'Chat', icon: MessageSquare },
-  { key: 'support', label: 'Soporte', icon: MessageSquare },
+  // Dos colas distintas, y los nombres tienen que decirlo. Se llamaban «Chat»
+  // y «Soporte», las dos con el mismo icono y las dos con un botón que decía
+  // «Atender este caso»: nada en la pantalla distinguía la mesa de ayuda del
+  // circuito de recuperación de acceso, y quien buscaba una conversación
+  // entraba a la solapa donde no hay ninguna.
+  { key: 'chat', label: 'Mesa de ayuda', icon: MessageSquare },
+  { key: 'support', label: 'Recuperar acceso', icon: KeyRound },
   { key: 'ratings', label: 'Calificaciones', icon: Star },
 ];
 
@@ -1270,9 +1275,20 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'support' && (
           <div style={{ padding: '0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
-                Solicitudes de Soporte
-              </h2>
+              <div>
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+                  Solicitudes de recuperación de acceso
+                </h2>
+                {/* Quién llega acá y por qué. Sin esto, la pantalla parecía la
+                    bandeja de soporte y el operador buscaba un chat que nunca
+                    existió en este circuito. */}
+                <p style={{ fontSize: '13.5px', color: '#6b7280', margin: '6px 0 0 0', maxWidth: '640px', lineHeight: 1.5 }}>
+                  Las manda el formulario de «olvidé mi contraseña»: son personas que
+                  no pueden entrar a su cuenta, así que se les responde por correo y no
+                  por chat. Las conversaciones con clientes que sí pueden entrar están
+                  en <strong>Mesa de ayuda</strong>.
+                </p>
+              </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {['pending', 'resolved', 'all'].map(filter => (
                   <button 
@@ -1412,7 +1428,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                         ) : (
                           <button onClick={() => claimRequest(request)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <UserCog style={{ width: '16px', height: '16px' }} />
-                            Atender este caso
+                            {/* «Atender esta solicitud» y no «este caso»: el
+                                botón de la mesa de ayuda dice «Atender este
+                                caso» y son dos colas distintas. El mismo texto
+                                en las dos hacía imposible saber en cuál estabas. */}
+                            Atender esta solicitud
                           </button>
                         )}
                         <button
