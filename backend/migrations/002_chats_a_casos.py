@@ -28,6 +28,13 @@ ANTES DE CORRERLA
         python3 -c "import asyncio; from services.soporte_indices import \\
             asegurar_indices; print(asyncio.run(asegurar_indices()))"
 
+    Esto NO es un consejo: `run()` lo verifica contra la base y se planta
+    antes de escribir una sola línea si el único no está. `asegurar_indices()`
+    no lanza cuando no puede crear un índice —a propósito, para no tumbar el
+    arranque de la aplicación por eso—, así que «la aplicación levantó» no
+    prueba que el índice esté, y el caso en que falla es justo el peor: falla
+    cuando `soporte_mensajes` YA tiene `mensaje_id` repetidos.
+
     Y ANTES QUE ESO: que nadie siga escribiendo en `support_chats`. La
     idempotencia de esta migración es POR CHAT, no por mensaje: un chat ya
     migrado se saltea entero, así que un mensaje que entre por la puerta vieja
@@ -106,9 +113,18 @@ async def ensayo() -> dict:
         nuevos += 1
         mensajes += await db.support_messages.count_documents({"user_id": user_id})
 
+    # El ensayo es el paso previo a la corrida, así que dice si la red está
+    # puesta. Acá NO se planta: el ensayo informa, no decide.
+    try:
+        await _verificar_la_red()
+        red = "sí"
+    except FaltaLaRed as e:
+        red = f"NO — {e}"
+
     contador = await db.contadores.find_one({"_id": "soporte_casos"})
     desde = (contador or {}).get("valor") or 0
     return {
+        "indice_unico_de_mensaje_id": red,
         "chats": len(chats),
         "chats_sin_user_id": sin_user,
         "casos_a_crear": nuevos,
@@ -119,7 +135,52 @@ async def ensayo() -> dict:
     }
 
 
+class FaltaLaRed(RuntimeError):
+    """No está el único de `mensaje_id`. Sin él esto no se corre."""
+
+
+async def _verificar_la_red():
+    """Se planta si falta el único sobre `soporte_mensajes.mensaje_id`.
+
+    TODA la idempotencia de esta migración se apoya en ese índice. El chequeo
+    de `ya_movidos` mira lo que ya está en el caso, pero entre ese SELECT y el
+    insert no hay nada más: si la corrida se corta a la mitad y se vuelve a
+    correr, lo único que impide duplicar el historial entero es el índice.
+
+    `asegurar_indices()` lo crea en cada arranque, pero NO lanza si no pudo
+    —a propósito: un índice caído no debe tumbar la aplicación—. Así que
+    «la aplicación levantó» no prueba que el índice esté. Y el caso en que
+    falla es justo el peor: falla cuando ya hay duplicados en la colección.
+
+    Por eso se mira acá, contra la base, y no se confía en que alguien haya
+    leído el log del arranque.
+    """
+    try:
+        info = await db.soporte_mensajes.index_information()
+    except Exception as e:
+        raise FaltaLaRed(
+            f"no se pudieron leer los índices de soporte_mensajes: {e}") from e
+
+    for definicion in info.values():
+        claves = [c for c, _ in definicion.get("key", [])]
+        if claves == ["mensaje_id"] and definicion.get("unique"):
+            return
+
+    raise FaltaLaRed(
+        "falta el índice único sobre `soporte_mensajes.mensaje_id`, que es lo "
+        "que impide duplicar el historial si esta corrida se corta y se "
+        "repite. Creálo antes:\n\n"
+        '    python3 -c "import asyncio; from services.soporte_indices import '
+        'asegurar_indices; print(asyncio.run(asegurar_indices()))"\n\n'
+        "Si después de eso sigue faltando, es porque `soporte_mensajes` YA "
+        "tiene `mensaje_id` repetidos: hay que resolver eso primero, no "
+        "migrar encima.")
+
+
 async def run() -> dict:
+    # Antes de la primera escritura, no después.
+    await _verificar_la_red()
+
     resultado = {"casos_creados": 0, "mensajes_movidos": 0, "ya_estaban": 0,
                  "mensajes_repetidos": []}
 

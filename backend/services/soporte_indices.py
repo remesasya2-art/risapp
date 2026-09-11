@@ -50,6 +50,12 @@ NINGUN ERROR DE ACA PUEDE TUMBAR EL ARRANQUE, NI DEMORARLO
 
     Crear un índice en Mongo es idempotente: si ya existe con la misma
     definición, no pasa nada. Por eso esto corre en cada arranque.
+
+    Con la MISMA definición. Si las opciones no coinciden —`unique`, `sparse`—
+    Mongo no lo reescribe: lo rechaza con IndexOptionsConflict. Por eso la
+    lista de abajo declara cada índice tal como ya está en la base, y los
+    choques que igual aparezcan se cuentan aparte de los fallos: un índice que
+    ya está no es un dato sucio, y mezclarlos esconde el aviso que importa.
 """
 
 import asyncio
@@ -68,7 +74,19 @@ COLECCIONES = ("soporte_casos", "soporte_mensajes", "soporte_pedidos",
 # resto.
 INDICES = (
     # ─── casos ────────────────────────────────────────────────────────────
-    ("soporte_casos", "caso_id", {"unique": True, "sparse": True}),
+    # SIN `sparse`, y no por descuido: el `lifespan` viejo de server.py ya
+    # creó este índice como `unique` a secas, y ESE bloque sí corría. Mongo
+    # no reescribe un índice que ya está: si las opciones no coinciden
+    # —`sparse` es una opción— rechaza la creación con IndexOptionsConflict,
+    # y en toda base donde la aplicación ya arrancó esto fallaría en cada
+    # arranque, para siempre. Declararlo igual a lo que hay es lo que hace
+    # que la línea de abajo sea un no-op en vez de un error diario.
+    #
+    # No se pierde nada: `sparse` sólo sirve para permitir varios documentos
+    # SIN la clave, y todo caso tiene `caso_id` —lo pone la migración y lo
+    # ponen las altas—. Los otros dos únicos sí lo llevan porque son índices
+    # nuevos, sin nada previo con qué chocar.
+    ("soporte_casos", "caso_id", {"unique": True}),
     # La bandeja del asesor: filtra por estado y ORDENA por actualizado_en.
     # Las dos mitades en el mismo índice o el orden se hace en memoria.
     ("soporte_casos", [("estado", 1), ("actualizado_en", -1)], {}),
@@ -99,6 +117,45 @@ INDICES = (
 )
 
 
+# (colección, nombre) de los índices que el `lifespan` viejo creó y que los de
+# arriba dejaron sin trabajo. Van por NOMBRE porque es así como se borran.
+#
+#   · soporte_casos/estado_1_area_1 — lo reemplaza `area_1_estado_1`. Un
+#     filtro por igualdad sobre los dos campos usa el compuesto sin importar
+#     en qué orden estén declarados, así que tener los dos es pagar dos
+#     escrituras por cada alta de caso para responder la misma consulta.
+#   · soporte_pedidos/caso_id_1 — lo reemplaza `caso_id_1_creado_en_1`, que
+#     lo tiene de prefijo. Un índice cuyo prefijo es otro índice no aporta.
+#
+# Se borran DESPUES de crear (ver `_crear`), nunca antes: así no hay un
+# instante en que la consulta se quede sin ningún índice que la cubra.
+SOBRANTES = (
+    ("soporte_casos", "estado_1_area_1"),
+    ("soporte_pedidos", "caso_id_1"),
+)
+
+
+async def _borrar_sobrantes(db) -> list:
+    """Saca los índices que quedaron sin trabajo. No lanza.
+
+    Borrar uno que no está es lo normal —base nueva, o segundo arranque— y no
+    es un error: se ignora en silencio. Lo que se devuelve es lo que de verdad
+    se borró, que es lo único que vale la pena contar.
+    """
+    borrados = []
+    for coleccion, nombre in SOBRANTES:
+        try:
+            await db[coleccion].drop_index(nombre)
+            borrados.append(f"{coleccion}/{nombre}")
+            logger.info(f"soporte: se borró el índice viejo {coleccion}/{nombre}")
+        except Exception:
+            # IndexNotFound es el caso esperado y no se loguea para no llenar
+            # el arranque de ruido. Cualquier otro fallo tampoco importa: un
+            # índice de más es lento, no incorrecto.
+            pass
+    return borrados
+
+
 # Tope para TODO el bloque, no por índice. Con la base sana, crear once
 # índices que ya existen tarda milisegundos; si esto se agota, la base no está
 # en condiciones y lo que importa es que la aplicación levante igual.
@@ -117,7 +174,8 @@ async def asegurar_indices(db=None, timeout_s: float = TIMEOUT_TOTAL_S) -> dict:
             db = db_real
     except Exception as e:                                   # pragma: no cover
         logger.warning(f"soporte: no hay base para crear índices: {e}")
-        return {"creados": 0, "fallidos": [], "timeout": False, "sin_base": True}
+        return {"creados": 0, "fallidos": [], "conflictos": [], "sobrantes": [],
+                "timeout": False, "sin_base": True}
 
     try:
         return await asyncio.wait_for(_crear(db), timeout=timeout_s)
@@ -126,16 +184,42 @@ async def asegurar_indices(db=None, timeout_s: float = TIMEOUT_TOTAL_S) -> dict:
             f"soporte: la creación de índices no terminó en {timeout_s}s. La "
             "aplicación levanta igual; los que falten se crean en el próximo "
             "arranque.")
-        return {"creados": 0, "fallidos": [], "timeout": True}
+        return {"creados": 0, "fallidos": [], "conflictos": [], "sobrantes": [],
+                "timeout": True}
+
+
+def _es_conflicto_de_opciones(e) -> bool:
+    """¿Es «ya existe con otras opciones» (IndexOptionsConflict, 85)?
+
+    Se mira el código y, si no viene, el texto: mongomock levanta la misma
+    situación sin número, y los tests corren sobre mongomock.
+    """
+    if getattr(e, "code", None) == 85:
+        return True
+    return "already exists with different options" in str(e)
 
 
 async def _crear(db) -> dict:
-    creados, fallidos = 0, []
+    creados, fallidos, conflictos = 0, [], []
     for coleccion, claves, opciones in INDICES:
         try:
             await db[coleccion].create_index(claves, **opciones)
             creados += 1
         except Exception as e:
+            if _es_conflicto_de_opciones(e):
+                # El índice ESTA, con otras opciones. No es un problema de
+                # datos y no se arregla solo, así que va en su propia lista:
+                # mezclarlo con `fallidos` sería enterrar el aviso que de
+                # verdad importa —«hay duplicados»— bajo ruido de cada
+                # arranque. Y NO se borra para recrearlo: sobre una colección
+                # grande eso deja la base sin el único justo mientras se
+                # reconstruye. Se informa y lo decide una persona.
+                conflictos.append({"coleccion": coleccion, "claves": claves,
+                                   "error": str(e)})
+                logger.info(
+                    f"soporte: el índice {coleccion}/{claves} ya existe con "
+                    f"otras opciones; se deja el que está ({e})")
+                continue
             # Un único sobre datos que ya violan la unicidad falla acá, y es
             # información valiosa: dice que hay duplicados. Se loguea con la
             # colección y la clave para poder ir a buscarlos.
@@ -144,5 +228,11 @@ async def _crear(db) -> dict:
             logger.warning(
                 f"soporte: no se pudo crear el índice {coleccion}/{claves}: {e}")
 
-    logger.info(f"soporte: {creados} índices listos, {len(fallidos)} con problemas")
-    return {"creados": creados, "fallidos": fallidos, "timeout": False}
+    sobrantes = await _borrar_sobrantes(db)
+
+    logger.info(
+        f"soporte: {creados} índices listos, {len(fallidos)} con problemas, "
+        f"{len(conflictos)} ya estaban con otras opciones, "
+        f"{len(sobrantes)} viejos borrados")
+    return {"creados": creados, "fallidos": fallidos, "conflictos": conflictos,
+            "sobrantes": sobrantes, "timeout": False}

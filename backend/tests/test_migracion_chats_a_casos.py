@@ -53,6 +53,13 @@ def _base_limpia():
     from conftest import usar_base
     base = mongomock_motor.AsyncMongoMockClient()["ris_migracion"]
     usar_base(base)
+    # Los índices de verdad, con la misma función que corre en el arranque.
+    # No es decorado: `run()` se planta si falta el único de `mensaje_id`, y
+    # una base de test sin índices no se parece a ninguna base real. Armarlos
+    # con el módulo —y no a mano acá— hace que estos tests corran contra la
+    # definición que está en producción, no contra una copia que se despega.
+    from services.soporte_indices import asegurar_indices
+    _ya(asegurar_indices(base))
     return base
 
 
@@ -169,18 +176,6 @@ def test_correrla_dos_veces_no_duplica_nada():
 # ─── Lo que pasa cuando los datos viejos no son perfectos ──────────────────
 
 
-def _con_indices(base):
-    """La base del test, con los índices reales de la mesa de ayuda puestos.
-
-    Sin esto, el único de `mensaje_id` no existe y los dos tests de abajo
-    pasarían por el motivo equivocado: no porque la migración aguante un
-    duplicado, sino porque nada lo detecta.
-    """
-    from services.soporte_indices import asegurar_indices
-    _ya(asegurar_indices(base))
-    return base
-
-
 def test_un_mensaje_repetido_no_corta_la_corrida():
     """El defecto: `insert_many(ordered=False)` sigue, pero LEVANTA al final.
 
@@ -189,7 +184,7 @@ def test_un_mensaje_repetido_no_corta_la_corrida():
     contra el único al insertar. Sin atajar esa excepción, la corrida se
     cortaba ahí y los chats que venían después no se migraban nunca.
     """
-    base = _con_indices(_base_limpia())
+    base = _base_limpia()
 
     async def escenario():
         for n in (0, 1, 2):
@@ -301,3 +296,78 @@ def test_el_ensayo_no_cuenta_dos_veces_lo_ya_migrado():
     assert informe["casos_a_crear"] == 0
     assert informe["mensajes_a_mover"] == 0
     assert informe["ya_migrados"] == 2
+
+
+# ─── La red tiene que estar puesta ────────────────────────────────────────
+#
+# Toda la idempotencia de esta migración se apoya en el único de `mensaje_id`.
+# `asegurar_indices()` lo crea en el arranque pero NO lanza si no pudo —a
+# propósito, para no tumbar la aplicación por un índice—, así que «la
+# aplicación levantó» no prueba que el índice esté. Y el caso en que falla es
+# el peor: falla cuando la colección YA tiene duplicados.
+
+
+def _base_sin_red():
+    """Como `_base_limpia()`, pero sin ningún índice. La base que no debería
+    recibir esta migración."""
+    from conftest import usar_base
+    base = mongomock_motor.AsyncMongoMockClient()["ris_sin_red"]
+    usar_base(base)
+    return base
+
+
+def test_sin_el_unico_de_mensaje_id_la_migracion_no_arranca():
+    base = _base_sin_red()
+    import importlib
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    _ya(_sembrar(base, cuantos_chats=2))
+
+    with pytest.raises(modulo.FaltaLaRed) as e:
+        _ya(modulo.run())
+
+    # Y dice qué hacer, no sólo que no.
+    assert "asegurar_indices" in str(e.value)
+
+
+def test_plantarse_es_antes_de_escribir_la_primera_linea():
+    """Frenar a mitad de camino dejaría casos creados sin sus mensajes, que es
+    peor que no haber corrido: la segunda corrida los saltea por migrados."""
+    base = _base_sin_red()
+    import importlib
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    _ya(_sembrar(base, cuantos_chats=2))
+    with pytest.raises(modulo.FaltaLaRed):
+        _ya(modulo.run())
+
+    async def revisar():
+        assert await base.soporte_casos.count_documents({}) == 0
+        assert await base.soporte_mensajes.count_documents({}) == 0
+        assert await base.contadores.count_documents({}) == 0
+
+    _ya(revisar())
+
+
+def test_el_ensayo_avisa_que_falta_la_red_pero_no_se_planta():
+    """El ensayo es el paso previo: tiene que poder decirte que falta, no
+    reventar antes de contarte cuánto habría para migrar."""
+    base = _base_sin_red()
+    import importlib
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    _ya(_sembrar(base, cuantos_chats=2))
+    informe = _ya(modulo.ensayo())
+
+    assert informe["indice_unico_de_mensaje_id"].startswith("NO")
+    assert informe["casos_a_crear"] == 2
+
+
+def test_con_la_red_puesta_el_ensayo_lo_dice():
+    _base_limpia()   # por el efecto: deja `database.db` apuntando acá
+    import importlib
+    modulo = importlib.import_module("migrations.002_chats_a_casos")
+
+    informe = _ya(modulo.ensayo())
+
+    assert informe["indice_unico_de_mensaje_id"] == "sí"

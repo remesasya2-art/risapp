@@ -159,6 +159,121 @@ def test_una_base_que_no_responde_no_cuelga_el_arranque():
     assert resultado["timeout"] is True
 
 
+# ─── Bases que ya venían con los índices viejos ───────────────────────────
+#
+# Todos los tests de arriba arrancan de una base limpia, y por eso ninguno veía
+# el problema: en producción la base NO está limpia. El `lifespan` viejo de
+# server.py ya creó ahí unos cuantos índices, y son esos los que chocan.
+
+
+def _como_estaba_en_produccion(base):
+    """Los índices de la mesa de ayuda tal como los dejó el `lifespan` viejo.
+
+    Copiados de server.py antes de este cambio. Es el estado real de cualquier
+    base donde la aplicación arrancó alguna vez.
+    """
+    async def sembrar():
+        await base.soporte_casos.create_index("caso_id", unique=True)
+        await base.soporte_casos.create_index([("user_id", 1), ("actualizado_en", -1)])
+        await base.soporte_casos.create_index([("estado", 1), ("area", 1)])
+        await base.soporte_casos.create_index([("asignado_a", 1), ("estado", 1)])
+        await base.soporte_mensajes.create_index([("caso_id", 1), ("creado_en", 1)])
+        await base.soporte_pedidos.create_index([("area", 1), ("estado", 1)])
+        await base.soporte_pedidos.create_index("caso_id")
+        await base.quick_replies.create_index([("created_at", 1)])
+    _ya(sembrar())
+
+
+def test_sobre_una_base_que_ya_arranco_no_falla_ninguno():
+    """El caso que importa, y el que ninguna base limpia podía mostrar.
+
+    `caso_id` ya está creado como `unique` a secas. Si acá se lo declarara
+    `unique + sparse`, Mongo rechazaría la creación con IndexOptionsConflict
+    —«ya existe con otras opciones»— en CADA arranque, para siempre.
+    """
+    base = _base()
+    _como_estaba_en_produccion(base)
+
+    resultado = _ya(soporte_indices.asegurar_indices(base))
+
+    assert resultado["fallidos"] == []
+    assert resultado["conflictos"] == []
+
+
+def test_el_unico_de_caso_id_sigue_atajando_duplicados():
+    """Sacarle `sparse` no puede haberle sacado el único."""
+    from pymongo.errors import DuplicateKeyError
+
+    base = _base()
+    _como_estaba_en_produccion(base)
+    _ya(soporte_indices.asegurar_indices(base))
+
+    async def escenario():
+        await base.soporte_casos.insert_one({"caso_id": "c_1"})
+        with pytest.raises(DuplicateKeyError):
+            await base.soporte_casos.insert_one({"caso_id": "c_1"})
+
+    _ya(escenario())
+
+
+def test_un_choque_de_opciones_no_se_cuenta_como_dato_sucio():
+    """`fallidos` significa «hay duplicados en la base» y alguien tiene que ir
+    a mirar. Un índice que ya está con otras opciones no es eso: si cayera en
+    la misma lista, el aviso que importa quedaría enterrado bajo un warning
+    que sale en todos los arranques."""
+    base = _base()
+    # Con otras opciones que las declaradas: acá `mensaje_id` va sin `sparse`.
+    _ya(base.soporte_mensajes.create_index("mensaje_id", unique=True))
+
+    resultado = _ya(soporte_indices.asegurar_indices(base))
+
+    assert resultado["fallidos"] == []
+    assert [c["coleccion"] for c in resultado["conflictos"]] == ["soporte_mensajes"]
+
+
+# ─── Los índices que quedaron sin trabajo ─────────────────────────────────
+
+
+def test_los_viejos_que_ya_no_sirven_se_borran():
+    """Un índice de más no da respuestas equivocadas: cuesta una escritura en
+    cada alta para responder algo que ya responde otro."""
+    base = _base()
+    _como_estaba_en_produccion(base)
+
+    resultado = _ya(soporte_indices.asegurar_indices(base))
+
+    assert set(resultado["sobrantes"]) == {"soporte_casos/estado_1_area_1",
+                                           "soporte_pedidos/caso_id_1"}
+    assert "estado_1_area_1" not in _ya(base.soporte_casos.index_information())
+    assert "caso_id_1" not in _ya(base.soporte_pedidos.index_information())
+
+
+def test_borrar_los_viejos_no_se_queja_si_no_estan():
+    """Base nueva, o segundo arranque. Es el caso normal, no un error."""
+    base = _base()
+    primera = _ya(soporte_indices.asegurar_indices(base))
+    segunda = _ya(soporte_indices.asegurar_indices(base))
+
+    assert primera["sobrantes"] == []
+    assert segunda["sobrantes"] == []
+    assert segunda["fallidos"] == []
+
+
+def test_no_se_borra_ninguno_de_los_que_si_se_declaran():
+    """Una lista de borrados y otra de creados se despegan calladas. Si un
+    nombre cayera en las dos, el arranque crearía y borraría lo mismo cada vez
+    y la consulta se quedaría sin índice."""
+    declarados = set()
+    for coleccion, claves, _ in soporte_indices.INDICES:
+        if isinstance(claves, str):
+            nombre = f"{claves}_1"
+        else:
+            nombre = "_".join(f"{c}_{d}" for c, d in claves)
+        declarados.add((coleccion, nombre))
+
+    assert declarados.isdisjoint(set(soporte_indices.SOBRANTES))
+
+
 # ─── La puerta del chat viejo ─────────────────────────────────────────────
 
 
