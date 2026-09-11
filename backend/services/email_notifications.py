@@ -1,23 +1,19 @@
 """
-Email Notification Service - Send security notifications via Resend
-All notifications are mandatory for security-critical events
+services/email_notifications.py — Los correos de seguridad y de movimiento.
+
+Arma el texto y se lo pasa a `services/correo.py`, que es la única puerta por
+la que sale un correo. Antes este archivo tenía SU PROPIO remitente
+—`notificaciones@risapp.com`, un dominio que no es de la empresa— y su propia
+llamada a Resend, la que frenaba al servidor mientras el correo viajaba.
 """
-import os
 import logging
 from datetime import datetime, timezone
-from typing import Optional
-import resend
+
+from services import correo
 
 logger = logging.getLogger(__name__)
 
-# Initialize Resend
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-SENDER_EMAIL = os.getenv("SENDER_EMAIL", "notificaciones@risapp.com")
-APP_NAME = "RIS App"
-
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
-    logger.info("Resend email service initialized")
+APP_NAME = correo.APP
 
 def get_email_template(title: str, content: str, footer_note: str = "") -> str:
     """Generate HTML email template"""
@@ -68,24 +64,19 @@ def get_email_template(title: str, content: str, footer_note: str = "") -> str:
     """
 
 async def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    """Send email via Resend"""
-    if not RESEND_API_KEY:
-        logger.warning("Resend API key not configured - email not sent")
-        return False
-    
-    try:
-        params = {
-            "from": f"{APP_NAME} <{SENDER_EMAIL}>",
-            "to": [to_email],
-            "subject": subject,
-            "html": html_content
-        }
-        resend.Emails.send(params)
-        logger.info(f"Email sent to {to_email}: {subject}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send email to {to_email}: {e}")
-        return False
+    """Manda uno y espera. Devuelve si salió."""
+    return await correo.enviar(to_email, subject, html_content, que_es=subject)
+
+
+def _cortesia(to_email: str, subject: str, html_content: str) -> None:
+    """Lo manda sin hacer esperar a quien acaba de operar.
+
+    «Entraste a tu cuenta» y «se movió tu saldo» son cortesía: el trabajo ya
+    está hecho y el aviso ya quedó guardado dentro de la aplicación. Que
+    Resend tarde un segundo no puede ser un segundo más de ruedita para quien
+    acaba de iniciar sesión.
+    """
+    correo.en_segundo_plano(to_email, subject, html_content, que_es=subject)
 
 
 # ============================================================================
@@ -107,7 +98,7 @@ async def notify_login(email: str, user_name: str, ip_address: str = "Unknown", 
     """
     
     html = get_email_template("Nuevo inicio de sesión", content)
-    await send_email(email, f"🔐 {APP_NAME} - Nuevo inicio de sesión detectado", html)
+    _cortesia(email, f"🔐 {APP_NAME} - Nuevo inicio de sesión detectado", html)
 
 
 async def notify_password_change(email: str, user_name: str):
@@ -124,7 +115,7 @@ async def notify_password_change(email: str, user_name: str):
     """
     
     html = get_email_template("Contraseña actualizada", content)
-    await send_email(email, f"🔑 {APP_NAME} - Tu contraseña ha sido cambiada", html)
+    _cortesia(email, f"🔑 {APP_NAME} - Tu contraseña ha sido cambiada", html)
 
 
 async def notify_recharge_success(email: str, user_name: str, amount: float, method: str, balance_type: str = "principal"):
@@ -207,7 +198,7 @@ async def notify_pix_received(email: str, user_name: str, amount: float, client_
     """
     
     html = get_email_template("Pago PIX recibido", content)
-    await send_email(email, f"💰 {APP_NAME} - Pago PIX de R$ {amount:.2f} recibido", html)
+    _cortesia(email, f"💰 {APP_NAME} - Pago PIX de R$ {amount:.2f} recibido", html)
 
 
 async def notify_transfer_sent(email: str, user_name: str, amount_ves: float, beneficiary: str, amount_ris: float):

@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Optional
 from twilio.rest import Client as TwilioClient
 from admin_routes import admin_router
-import resend
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -48,10 +47,10 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
     twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 # Resend Email Configuration
-RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'noreply@risappbr.com')
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
+# El remitente y la llave de Resend se deciden en `services/correo.py`, que es
+# la única puerta por la que sale un correo. Acá había un TERCER valor por
+# omisión para el remitente (había uno en config.py y otro en
+# email_notifications.py), y los tres eran distintos.
 
 # Lifespan context manager (replaces @app.on_event startup/shutdown)
 @asynccontextmanager
@@ -181,17 +180,14 @@ async def lifespan(app):
         # Sin esto, el alta "funciona" —la cuenta queda creada— pero el correo
         # con la llave no sale, y quien la dio de alta se entera cuando el
         # colaborador avisa que nunca le llegó nada. Mejor gritarlo acá.
-        from config import RESEND_API_KEY, FRONTEND_URL, FROM_EMAIL
-        if not RESEND_API_KEY:
+        from config import FRONTEND_URL
+        from services import correo
+        if not correo.revisar():
             logger.error(
-                "ALTA DE PERSONAL A MEDIAS: falta RESEND_API_KEY. Las cuentas "
-                "se van a crear, pero el correo con el enlace de activación NO "
-                "va a salir y el colaborador no va a poder entrar.")
-        if "example.com" in (FROM_EMAIL or ""):
-            logger.error(
-                "ALTA DE PERSONAL A MEDIAS: FROM_EMAIL sigue en el valor de "
-                "ejemplo (%s). Los correos de activación se van a rechazar.",
-                FROM_EMAIL)
+                "ALTA DE PERSONAL A MEDIAS: con el correo así, las cuentas se "
+                "van a crear pero el enlace de activación NO va a salir, y el "
+                "colaborador no va a poder entrar. El motivo está en la línea "
+                "de arriba.")
         if not (FRONTEND_URL or "").startswith("https://"):
             logger.error(
                 "FRONTEND_URL = %r. Con esto se arma el enlace de activación "
