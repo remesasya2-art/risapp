@@ -16,7 +16,8 @@ export default function Notifications() {
 
   const loadNotifications = async () => {
     try {
-      const response = await api.get('/notifications');
+      // Sólo lo personal: lo del equipo se atiende desde el Panel de Control.
+      const response = await api.get('/notifications', { params: { ambito: 'personal' } });
       // Handle both { notifications: [...] } and direct array response
       const data = response.data;
       setNotifications(Array.isArray(data) ? data : (data.notifications || []));
@@ -50,7 +51,7 @@ export default function Notifications() {
 
   const markAllAsRead = async () => {
     try {
-      await api.post('/notifications/mark-all-read');
+      await api.post('/notifications/mark-all-read', null, { params: { ambito: 'personal' } });
       setNotifications(notifications.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Error marking all as read:', error);
