@@ -2598,7 +2598,13 @@ async def get_agent_ratings(admin: User = Depends(get_super_admin)):
             "stars": r.get("stars"),
             "comment": r.get("comment") or "",
             "channel": r.get("channel"),
-            "case_code": r.get("case_code"),
+            # `case_ref` de respaldo, y no por prolijidad: las calificaciones
+            # que ya están guardadas se escribieron sólo con ese campo, así que
+            # sin el respaldo el panel seguiría sin decir de qué caso habla
+            # hasta que llegue una calificación nueva. Para un caso `case_ref`
+            # es el identificador interno; para un chat viejo es el usuario,
+            # que es justo con lo que se abría esa conversación.
+            "case_code": r.get("case_code") or r.get("case_ref"),
             "created_at": r.get("created_at"),
         })
     result = []

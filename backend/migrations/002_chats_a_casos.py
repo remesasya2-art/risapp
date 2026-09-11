@@ -20,8 +20,16 @@ QUE NO TOCA
 
 Idempotente — se puede correr las veces que haga falta.
 
-Uso:
-    cd /app/backend && python3 -m migrations.002_chats_a_casos
+CUANDO CORRE
+
+    Sola, al arrancar el servidor (`server.py`, en el lifespan), a través de
+    `ejecutar_si_hace_falta()`. Antes había que acordarse de correrla a mano, y
+    por eso no se corrió nunca: mientras tanto el frontend ya leía únicamente
+    casos, así que el historial de cada cliente estaba entero en la base y no
+    se veía en ninguna pantalla.
+
+    A mano sigue funcionando, para forzarla sin reiniciar:
+        cd /app/backend && python3 -m migrations.002_chats_a_casos
 """
 import asyncio
 import hashlib
@@ -29,6 +37,8 @@ from datetime import datetime, timezone
 
 from database import db
 from services import soporte
+
+_MARCA = "002_chats_a_casos"
 
 
 async def _numero(secuencia):
@@ -148,6 +158,43 @@ async def run() -> dict:
         await db.contadores.update_one(
             {"_id": "soporte_casos"}, {"$set": {"valor": siguiente}}, upsert=True)
 
+    return resultado
+
+
+async def ejecutar_si_hace_falta() -> dict:
+    """La misma migración, pero decidiendo sola si hay algo que hacer.
+
+    Esto es lo que llama el arranque del servidor. `run()` es idempotente, así
+    que llamarla en cada arranque sería correcto —pero no gratis: se trae hasta
+    diez mil chats para descubrir que ya están todos migrados, en cada reinicio
+    y en cada despliegue.
+
+    El atajo es una cuenta, que Mongo responde sin recorrer documentos. Si hay
+    los mismos chats que la última vez que terminó, no hay nada nuevo y se
+    vuelve enseguida. Si aparecieron chats después, la cuenta no coincide y la
+    migración corre de nuevo: se cura sola en vez de quedarse dormida sobre
+    conversaciones sin mover.
+
+    Deliberadamente NO se marca «hecha y nunca más». Una marca así, con las
+    rutas viejas todavía montadas, dejaría a un chat que entrara después sin
+    caso y sin nadie mirándolo.
+    """
+    chats = await db.support_chats.count_documents({})
+    if not chats:
+        return {"nada_que_migrar": True}
+
+    marca = await db.migraciones.find_one({"_id": _MARCA})
+    if marca and marca.get("chats_vistos") == chats:
+        return {"ya_estaba": True, "chats_vistos": chats}
+
+    resultado = await run()
+    await db.migraciones.update_one(
+        {"_id": _MARCA},
+        {"$set": {"chats_vistos": chats,
+                  "ultima_corrida": datetime.now(timezone.utc),
+                  "ultimo_resultado": resultado}},
+        upsert=True,
+    )
     return resultado
 
 

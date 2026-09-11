@@ -428,10 +428,18 @@ async def calificar(caso_id: str, datos: Calificacion,
         {"caso_id": caso_id}, {"$set": {"calificacion": calificacion}})
     # El resumen por agente ya lee de `ratings`: se sigue escribiendo ahí para
     # no partir en dos la única vista de calidad que existe.
+    #
+    # Van los DOS campos a propósito. `case_ref` es el identificador interno,
+    # que es con lo que se busca el caso en la base. `case_code` es el número
+    # legible (S-000123), que es lo que el panel muestra y lo que una persona
+    # puede citar: sin él, el super admin leía «★★★★★ · 11/9» sin manera de
+    # saber de qué atención hablaba. El panel lee `case_code` desde siempre;
+    # lo que faltaba era que alguien lo escribiera.
     await db.ratings.insert_one({
         "rating_id": f"rat_{uuid.uuid4().hex[:12]}",
         "channel": "caso",
         "case_ref": caso_id,
+        "case_code": caso.get("numero"),
         "agent_id": caso.get("asignado_a"),
         "agent_name": caso.get("asignado_a_nombre"),
         "stars": datos.estrellas,
