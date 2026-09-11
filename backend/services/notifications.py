@@ -115,7 +115,9 @@ async def create_notification(
     # forma más rápida de que deje de mirar los correos de la aplicación.
     if ambito == PERSONAL:
         from services.avisos_por_correo import acompanar
-        await acompanar(user_id, title, message, notification_type)
+        # `data` va también: es de donde sale el número de la operación, y sin
+        # él el correo no puede armar el comprobante y sale como un párrafo.
+        await acompanar(user_id, title, message, notification_type, data)
 
     return notification_id
 

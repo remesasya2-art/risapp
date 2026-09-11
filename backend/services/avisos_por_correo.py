@@ -102,7 +102,7 @@ def _cuerpo(titulo: str, mensaje: str, pie: str) -> str:
 
 
 async def acompanar(user_id: str, titulo: str, mensaje: str,
-                    notification_type: str) -> bool:
+                    notification_type: str, data=None) -> bool:
     """Manda el correo que acompaña a un aviso, si a esa clase le corresponde.
 
     NO LEVANTA NUNCA, y no espera. El aviso ya quedó guardado dentro de la
@@ -130,12 +130,26 @@ async def acompanar(user_id: str, titulo: str, mensaje: str,
                            notification_type, user_id)
             return False
 
-        correo.en_segundo_plano(
-            persona["email"], asunto,
-            _cuerpo(titulo, mensaje,
-                    "Este es un aviso automático de RIS App. Podés ver el "
-                    "detalle en la aplicación."),
-            que_es=f"aviso de {notification_type}")
+        # EL COMPROBANTE PRIMERO, EL PARRAFO DESPUES.
+        #
+        # Si se puede armar el pasaje —hay número de operación y la operación
+        # está en la base—, va eso: el número, el monto, la fecha y el código
+        # para escanear, que es lo que hace falta en un reclamo. Si no, va el
+        # párrafo de siempre.
+        #
+        # Y el orden importa: si esto se cayera, el correo tiene que salir
+        # igual. `para_el_aviso` no levanta nunca, pero acá está de todos
+        # modos adentro del `try` de afuera, que tampoco.
+        from services import pasaje
+        cuerpo = await pasaje.para_el_aviso(titulo, mensaje,
+                                            notification_type, data)
+        if not cuerpo:
+            cuerpo = _cuerpo(titulo, mensaje,
+                             "Este es un aviso automático de RIS App. Podés "
+                             "ver el detalle en la aplicación.")
+
+        correo.en_segundo_plano(persona["email"], asunto, cuerpo,
+                                que_es=f"aviso de {notification_type}")
         return True
     except Exception as e:                                    # pragma: no cover
         logger.warning("no se pudo acompañar el aviso %r con un correo: %s",

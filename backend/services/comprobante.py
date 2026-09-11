@@ -69,6 +69,13 @@ ORO = "#F5A623"
 ORO_MEDIO = "#D4920A"
 ORO_OSCURO = "#B8860B"
 
+# Los tres del sello de estado. Van acá y no en cada llamador: el correo que
+# dice «rechazado» en un verde apenas distinto del de «completado» es peor que
+# el que no dice nada, porque se lee al revés de un vistazo.
+VERDE = "#047857"
+ROJO = "#dc2626"
+ESPERA = ORO_OSCURO
+
 TINTA = "#111827"
 GRIS = "#6b7280"
 TENUE = "#9ca3af"
@@ -81,6 +88,32 @@ def ultimos4(valor) -> str:
     """Los últimos cuatro, para reconocer sin exponer."""
     texto = "".join(ch for ch in str(valor or "") if ch.isalnum())
     return f"••••{texto[-4:]}" if len(texto) > 4 else (texto or "")
+
+
+def plata(valor, moneda: str = "") -> str:
+    """El monto como lo lee la gente: 4.500,00 y no 4500.0.
+
+    Pasa por `Decimal` y nunca por `float`. Es la regla del repositorio, y acá
+    tiene un motivo extra: el dinero que se guarda es `Decimal128`, y darle
+    `f"{...:,.2f}"` a un `Decimal128` crudo revienta.
+    """
+    from services.money import from_db
+
+    # Vacío y no «0,00». `to_decimal` devuelve cero para lo que no entiende
+    # —para no reventar donde se mueve plata, y ahí está bien—, pero un
+    # comprobante que dice «0,00 Bs» porque el campo vino vacío se lee como
+    # «no te mandamos nada», que es una acusación y no un dato que falta.
+    if valor is None or valor == "":
+        return ""
+    try:
+        numero = from_db(valor)
+    except Exception:
+        return ""
+    # El truco de las tres vueltas: el formato con coma de miles y punto
+    # decimal es el inglés, y acá es al revés. Se pasa por un carácter que no
+    # aparece en ningún número para no pisar lo ya cambiado.
+    texto = f"{numero:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{texto} {moneda}".strip()
 
 
 def _fecha(cuando) -> str:
@@ -122,18 +155,46 @@ def carga_del_qr(*, referencia: str, tipo: str = "", monto: str = "",
     —quien lo tiene ve el envío, y no caduca—, y `services/envios_seguimiento`
     ya tiene escrito que no puede viajar en algo que se reenvía.
     """
-    def armar(el_tipo):
+    estado = (estado or "").upper()
+    # La primera palabra del estado es la que dice lo que pasó: RECHAZADO,
+    # COMPLETADO, DEVUELTO. El resto es la explicación, y explicar no es para
+    # lo que sirve un código.
+    resumido = estado.split()[0] if estado else ""
+
+    def armar(el_tipo, el_estado):
         return "\n".join([p for p in (
             "RISAPP", referencia, el_tipo, monto, _dia(cuando),
-            (estado or "").upper()) if p])
+            el_estado) if p])
 
-    carga = armar(tipo)
-    # Si no entra, se acorta el TIPO y no el resto: el número, el monto y la
-    # fecha son lo que se va a mirar en un reclamo.
-    while len(carga.encode("utf-8")) > TOPE_DEL_QR and len(tipo) > 4:
-        tipo = tipo[:-4].rstrip(" ,.-")
-        carga = armar(tipo)
-    return carga
+    def entra(texto):
+        return len(texto.encode("utf-8")) <= TOPE_DEL_QR
+
+    # De lo más completo a lo más pelado, y se toma el PRIMERO que entra.
+    #
+    # Escrito como un bucle que acorta el tipo y nada más, se rendía en
+    # silencio: salía cuando al tipo le quedaban cuatro letras, con el tope
+    # cumplido o no. Y con un estado largo —«Devuelto al remitente por
+    # dirección incompleta», que es un estado real de paquetería— no alcanzaba
+    # ni sacando el tipo entero. El código saltaba al tamaño siguiente, que no
+    # entra en el talón y no se lee, y nadie se enteraba hasta que alguien lo
+    # intentara escanear.
+    #
+    # Lo que NUNCA se toca: el número, el monto y la fecha. Son los tres que
+    # se miran en un reclamo.
+    intentos = [armar(tipo, estado), armar(tipo, resumido)]
+    corto = tipo
+    while len(corto) > 4:
+        corto = corto[:-4].rstrip(" ,.-")
+        intentos.append(armar(corto, resumido))
+    intentos += [armar("", resumido), armar("", "")]
+
+    for carga in intentos:
+        if entra(carga):
+            return carga
+
+    # Ni pelado entra, o sea que el número o el monto son enormes. Se corta
+    # acá, donde se ve, y no en el dibujo, donde saldría un código roto.
+    return intentos[-1].encode("utf-8")[:TOPE_DEL_QR].decode("utf-8", "ignore")
 
 
 def _qr(carga: str) -> str:
