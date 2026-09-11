@@ -152,6 +152,31 @@ ASESOR = "asesor"
 SISTEMA = "sistema"
 
 
+# ─── Quién puede tener un caso asignado ───────────────────────────────────
+
+ROLES_DEL_PERSONAL = ("agent", "admin", "super_admin")
+
+
+def es_personal(usuario) -> bool:
+    """¿Esta persona puede atender un caso?
+
+    Existe porque `transferir` preguntaba si el destinatario EXISTE, no si es
+    del equipo —traía su `role` en la consulta y no lo miraba—, y con eso un
+    caso se podía asignar a un cliente. Lo que pasaba entonces no era un error
+    visible: el caso quedaba asignado, así que dejaba de figurar como libre, y
+    quien lo tenía no podía abrir la consola. El caso salía de la cola de todos
+    y el cliente seguía esperando.
+
+    Un empleado dado de baja cuenta igual que un cliente: ya no entra al panel,
+    así que un caso suyo tampoco lo atiende nadie.
+    """
+    if not usuario:
+        return False
+    if usuario.get("is_active") is False:
+        return False
+    return usuario.get("role") in ROLES_DEL_PERSONAL
+
+
 # ─── El número del caso ───────────────────────────────────────────────────
 
 def numero_legible(secuencia):
@@ -247,6 +272,30 @@ def problema_para_transferir(caso, quien_id, es_super_admin=False):
     asignado = caso.get("asignado_a")
     if asignado and asignado != quien_id and not es_super_admin:
         return f"Lo está atendiendo {caso.get('asignado_a_nombre') or 'otro asesor'}."
+    return None
+
+
+def problema_para_escalar(caso):
+    """Por qué NO se puede escalar. None si se puede.
+
+    Esta regla existía SOLO en la pantalla (`utils/soporte.js`), que apagaba el
+    botón en un caso ya escalado. El servidor aceptaba igual, y volver a
+    escalar SOBRESCRIBE el motivo y el autor del escalamiento original —que es
+    justo lo que lee un super administrador para decidir—, fuerza la prioridad
+    a urgente pisando una bajada deliberada y avisa a todos de nuevo.
+
+    La cabecera de `MesaDeAyuda.jsx` promete que «si un botón se ofrece, el
+    servidor lo va a aceptar». Eso solo se sostiene si la regla vive acá: la
+    pantalla espeja al servidor, no al revés.
+    """
+    if not caso:
+        return "Ese caso no existe."
+    if caso.get("estado") == CERRADO:
+        return "Un caso cerrado no se escala."
+    if caso.get("escalado"):
+        quien = caso.get("escalado_por_nombre")
+        return (f"Ese caso ya está escalado{f' por {quien}' if quien else ''}. "
+                "Para agregar algo, dejá una nota interna.")
     return None
 
 

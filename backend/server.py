@@ -123,6 +123,24 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Migracion chats->casos: no se pudo completar: {e}")
     try:
+        # Los casos asignados a alguien que no puede atenderlos: un cliente o un
+        # empleado dado de baja. `transferir` los dejaba entrar y el caso salia
+        # de la cola de todos sin que nada avisara. La puerta ya esta cerrada;
+        # esto devuelve a la cola los que quedaron atascados antes.
+        #
+        # Se revisa en CADA arranque a proposito, y no una sola vez: busca una
+        # condicion, no ejecuta un paso. Si un caso vuelve a atascarse por un
+        # camino que no previmos, el proximo arranque lo suelta.
+        import importlib
+        _atascados = importlib.import_module("migrations.003_casos_atascados")
+        _soltados = await _atascados.ejecutar_si_hace_falta()
+        if _soltados.get("liberados"):
+            logger.warning("Casos atascados devueltos a la cola: %s", _soltados)
+        else:
+            logger.info("Casos atascados: %s", _soltados)
+    except Exception as e:
+        logger.error(f"Casos atascados: no se pudo revisar: {e}")
+    try:
         from routes.security_2fa import ensure_security_indexes
         await ensure_security_indexes()
     except Exception as e:
