@@ -162,7 +162,7 @@ def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
           <td colspan="2" style="background:{ORO};padding:14px 22px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RIS APP</td>
+                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RISAPP</td>
                 <td align="right" style="color:#4a3806;font-size:10px;font-weight:700;
                                          letter-spacing:2px;">{tipo.upper()}</td>
               </tr>
