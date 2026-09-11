@@ -23,11 +23,16 @@ LO QUE ESTE ARCHIVO AGREGA SOBRE EL CHAT VIEJO
       · La ficha del cliente al lado de la conversación: saldo, verificación y
         últimas operaciones. Antes se atendía a ciegas o abriendo otra pestaña.
 
-QUE NO SE TOCO
+DE DONDE VIENE
 
-    Las rutas viejas de `routes/support.py` siguen ahí y siguen andando. La
-    migración pasa los chats existentes a casos cerrados, así que el historial
-    no se pierde ni se duplica.
+    Reemplazó a `routes/support.py`, el chat viejo de un hilo por usuario, que
+    ya no existe. Sus conversaciones son casos: la migración
+    (`migrations/002_chats_a_casos.py`) las pasa al arrancar el servidor, sin
+    perder ni duplicar nada, y `support_chats` y `support_messages` quedan
+    intactas por si hubiera que mirarlas.
+
+    Lo único de aquel archivo que seguía en uso, las respuestas rápidas, vive
+    ahora al final de éste con la misma ruta.
 """
 import asyncio
 import logging
@@ -428,10 +433,18 @@ async def calificar(caso_id: str, datos: Calificacion,
         {"caso_id": caso_id}, {"$set": {"calificacion": calificacion}})
     # El resumen por agente ya lee de `ratings`: se sigue escribiendo ahí para
     # no partir en dos la única vista de calidad que existe.
+    #
+    # Van los DOS campos a propósito. `case_ref` es el identificador interno,
+    # que es con lo que se busca el caso en la base. `case_code` es el número
+    # legible (S-000123), que es lo que el panel muestra y lo que una persona
+    # puede citar: sin él, el super admin leía «★★★★★ · 11/9» sin manera de
+    # saber de qué atención hablaba. El panel lee `case_code` desde siempre;
+    # lo que faltaba era que alguien lo escribiera.
     await db.ratings.insert_one({
         "rating_id": f"rat_{uuid.uuid4().hex[:12]}",
         "channel": "caso",
         "case_ref": caso_id,
+        "case_code": caso.get("numero"),
         "agent_id": caso.get("asignado_a"),
         "agent_name": caso.get("asignado_a_nombre"),
         "stars": datos.estrellas,
@@ -991,4 +1004,74 @@ async def responder_pedido(pedido_id: str, datos: RespuestaAlPedido,
         message=datos.respuesta.strip()[:100],
         notification_type="soporte_pedido_respuesta",
     )
+    return {"success": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# RESPUESTAS RAPIDAS
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Vivían en `routes/support.py` junto al chat viejo, y eran lo único de ese
+# archivo que seguía en uso: por eso no se podía borrar. Se mudan acá, que es
+# donde se usan —el asesor las inserta mientras contesta un caso— y se
+# conservan la ruta y la forma de la respuesta, así que la pantalla no cambia.
+
+
+class RespuestaRapida(BaseModel):
+    text: str
+
+
+# La primera vez no hay ninguna y el asesor se encuentra con un desplegable
+# vacío, que parece roto. Se siembran estas seis, que después se editan o se
+# borran desde el panel como cualquier otra.
+_RAPIDAS_POR_DEFECTO = [
+    'Hola {nombre}, ¿en qué puedo ayudarte?',
+    'Gracias por tu paciencia, {nombre}. Estoy revisando tu caso.',
+    'Tu solicitud está siendo procesada. Te avisaremos al completarse.',
+    'Para ayudarte mejor, ¿podrías enviarme una captura de pantalla?',
+    '¿Hay algo más en lo que pueda ayudarte, {nombre}?',
+    'Gracias por contactarnos. ¡Que tengas un buen día!',
+]
+
+
+@router.get("/admin/quick-replies")
+async def respuestas_rapidas(current_user: User = Depends(get_crm_user)):
+    """Las respuestas rápidas compartidas. Siembra las de fábrica la primera vez."""
+    cuantas = await db.quick_replies.count_documents({})
+    if cuantas == 0:
+        ahora = _AHORA()
+        await db.quick_replies.insert_many([{
+            "qr_id": f"qr_{uuid.uuid4().hex[:12]}",
+            "text": t,
+            "created_by": "system",
+            "created_by_name": "Sistema",
+            "created_at": ahora,
+        } for t in _RAPIDAS_POR_DEFECTO])
+    return await db.quick_replies.find({}, {"_id": 0}).sort(
+        "created_at", 1).to_list(200)
+
+
+@router.post("/admin/quick-replies")
+async def crear_respuesta_rapida(datos: RespuestaRapida,
+                                 current_user: User = Depends(get_crm_user)):
+    """Crea una respuesta rápida compartida."""
+    texto = (datos.text or "").strip()
+    if not texto:
+        return {"success": False, "error": "empty"}
+    doc = {
+        "qr_id": f"qr_{uuid.uuid4().hex[:12]}",
+        "text": texto,
+        "created_by": current_user.user_id,
+        "created_by_name": current_user.name or "Admin",
+        "created_at": _AHORA(),
+    }
+    await db.quick_replies.insert_one(doc)
+    return {"success": True, "qr_id": doc["qr_id"], "text": texto}
+
+
+@router.delete("/admin/quick-replies/{qr_id}")
+async def borrar_respuesta_rapida(qr_id: str,
+                                  current_user: User = Depends(get_crm_user)):
+    """Elimina una respuesta rápida compartida."""
+    await db.quick_replies.delete_one({"qr_id": qr_id})
     return {"success": True}

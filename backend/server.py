@@ -100,6 +100,29 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Index creation warning: {e}")
     try:
+        # Los chats viejos pasan a ser casos, solos. Esto se corría a mano
+        # (`python3 -m migrations.002_chats_a_casos`) y por eso nunca se corrió:
+        # mientras tanto el frontend ya leía únicamente casos, así que el
+        # historial de soporte de cada cliente estaba en la base pero no se veía
+        # en ninguna pantalla.
+        #
+        # Va DESPUES de los índices a propósito: la migración escribe en
+        # `soporte_casos` y `soporte_mensajes`, que tienen índices únicos, y
+        # crearlos después de los datos falla si la migración dejó un repetido.
+        #
+        # Un problema acá NO tumba la aplicación. La migración no borra nada
+        # —`support_chats` y `support_messages` quedan intactas—, así que lo
+        # peor que pasa es que el historial siga sin verse y quede el error
+        # escrito para mirarlo.
+        import importlib
+        # `import_module` y no `from migrations.002... import`: el módulo
+        # empieza con un número, que no es un nombre válido en un import.
+        _chats_a_casos = importlib.import_module("migrations.002_chats_a_casos")
+        _movido = await _chats_a_casos.ejecutar_si_hace_falta()
+        logger.info("Migracion chats->casos: %s", _movido)
+    except Exception as e:
+        logger.error(f"Migracion chats->casos: no se pudo completar: {e}")
+    try:
         from routes.security_2fa import ensure_security_indexes
         await ensure_security_indexes()
     except Exception as e:

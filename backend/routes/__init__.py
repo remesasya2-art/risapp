@@ -15,7 +15,6 @@ from routes.gestor import router as gestor_router
 from routes.partner import router as partner_router
 from routes.gestor_pix import router as gestor_pix_router, webhook_router
 from routes.notifications import router as notifications_router
-from routes.support import router as support_router
 from routes.soporte import router as soporte_router
 from routes.push import router as push_router
 from routes.misc import router as misc_router
@@ -58,9 +57,11 @@ api_router.include_router(partner_router)
 api_router.include_router(gestor_pix_router)
 api_router.include_router(webhook_router)
 api_router.include_router(notifications_router)
-api_router.include_router(support_router)
-# La mesa de ayuda por casos. Convive con `support_router`, que sigue
-# atendiendo el chat viejo mientras el historial termina de migrar.
+# La mesa de ayuda por casos. Acá vivía también `support_router`, el chat
+# viejo de un hilo por usuario: se retiró una vez que la migración pasó a
+# correr sola al arrancar y sus conversaciones quedaron como casos. Lo único
+# suyo que seguía en uso —las respuestas rápidas— se mudó a `routes/soporte.py`
+# con la misma ruta, así que la pantalla del asesor no cambió.
 api_router.include_router(soporte_router)
 api_router.include_router(push_router)
 api_router.include_router(webhooks_router)
