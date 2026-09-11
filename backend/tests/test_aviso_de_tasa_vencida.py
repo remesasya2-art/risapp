@@ -28,7 +28,13 @@ import pytest
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _BACKEND)
 
-from services import aviso_de_tasa  # noqa: E402
+mongomock_motor = pytest.importorskip(
+    "mongomock-motor".replace("-", "_"),
+    reason="mongomock-motor no está instalado: es de test y no va en producción",
+)
+
+from conftest import usar_base            # noqa: E402
+from services import aviso_de_tasa        # noqa: E402
 
 
 def corre(coro):
@@ -36,8 +42,8 @@ def corre(coro):
 
 
 class _Coleccion:
-    """`config` y `users`, con lo justo. Guarda de verdad: la marca que evita
-    el segundo aviso se escribe y se vuelve a leer, y eso es lo que se prueba."""
+    """`config`, con lo justo. Guarda de verdad: la marca que evita el segundo
+    aviso se escribe y se vuelve a leer, y eso es lo que se prueba."""
 
     def __init__(self, docs=None):
         self.docs = list(docs or [])
@@ -57,27 +63,21 @@ class _Coleccion:
             self.docs.append(doc)
         doc.update(cambio["$set"])
 
-    def find(self, filtro):
-        docs = [d for d in self.docs
-                if all(d.get(k) == v for k, v in filtro.items())]
 
-        class _Cursor:
-            def __aiter__(self):
-                self._i = iter(docs)
-                return self
+def _base(config=None, users=None):
+    """`config` con el doble casero —que cuenta escrituras y ordena— y `users`
+    con mongomock, que entiende las consultas de verdad.
 
-            async def __anext__(self):
-                try:
-                    return next(self._i)
-                except StopIteration:
-                    raise StopAsyncIteration
-        return _Cursor()
-
-
-class _Base:
-    def __init__(self, config=None, users=None):
-        self.config = _Coleccion(config)
-        self.users = _Coleccion(users)
+    `usar_base` apunta el `db` global a esto: `avisar_al_personal` lee
+    `database.db`, no el `db` que recibe `avisar_si_hace_falta`. En producción
+    son el mismo objeto.
+    """
+    b = mongomock_motor.AsyncMongoMockClient()["ris_test"]
+    if users:
+        asyncio.run(b.users.insert_many([dict(u) for u in users]))
+    b.config = _Coleccion(config)
+    usar_base(b)
+    return b
 
 
 @pytest.fixture
@@ -85,10 +85,11 @@ def avisos(monkeypatch):
     """Intercepta las notificaciones creadas, sin tocar la base ni el push."""
     recibidas = []
 
-    async def _crear(user_id, title, message, notification_type="info", data=None):
+    async def _crear(user_id, title, message, notification_type="info",
+                     data=None, ambito="personal"):
         recibidas.append({"user_id": user_id, "title": title,
                           "message": message, "type": notification_type,
-                          "data": data or {}})
+                          "data": data or {}, "ambito": ambito})
         return "notif_test"
 
     import services.notifications as n
@@ -101,7 +102,7 @@ UN_SUPER = [{"user_id": "u1", "role": "super_admin"},
 
 
 def test_avisa_a_los_super_administradores(avisos):
-    base = _Base(users=UN_SUPER)
+    base = _base(users=UN_SUPER)
     cuando = datetime.now(timezone.utc) - timedelta(days=2)
     cuantos = corre(aviso_de_tasa.avisar_si_hace_falta(base, cuando, timedelta(days=2)))
 
@@ -114,7 +115,7 @@ def test_avisa_a_los_super_administradores(avisos):
 
 def test_no_vuelve_a_avisar_por_la_misma_tasa(avisos):
     """La pantalla consulta cada diez segundos: acá se simulan cinco consultas."""
-    base = _Base(users=UN_SUPER)
+    base = _base(users=UN_SUPER)
     cuando = datetime.now(timezone.utc) - timedelta(days=2)
     for _ in range(5):
         corre(aviso_de_tasa.avisar_si_hace_falta(base, cuando, timedelta(days=2)))
@@ -130,7 +131,7 @@ def test_vuelve_a_avisar_cuando_la_tasa_es_otra(avisos):
     Es la otra mitad. Una marca que no caduca convierte el primer aviso en el
     último para siempre.
     """
-    base = _Base(users=UN_SUPER)
+    base = _base(users=UN_SUPER)
     primera = datetime.now(timezone.utc) - timedelta(days=9)
     corre(aviso_de_tasa.avisar_si_hace_falta(base, primera, timedelta(days=9)))
 
@@ -147,7 +148,7 @@ def test_la_marca_se_escribe_antes_de_notificar(avisos):
     Si la marca se escribiera después de notificar, las dos pasarían por la
     comprobación y las dos avisarían.
     """
-    base = _Base(users=UN_SUPER)
+    base = _base(users=UN_SUPER)
     orden = []
 
     async def _crear(*_a, **_k):
@@ -172,7 +173,7 @@ def test_la_marca_se_escribe_antes_de_notificar(avisos):
 
 
 def test_si_no_hay_a_quien_avisar_queda_registrado(avisos, caplog):
-    base = _Base(users=[{"user_id": "u2", "role": "admin"}])
+    base = _base(users=[{"user_id": "u2", "role": "admin"}])
     with caplog.at_level(logging.ERROR):
         cuantos = corre(aviso_de_tasa.avisar_si_hace_falta(
             base, datetime.now(timezone.utc), timedelta(days=2)))
@@ -207,7 +208,7 @@ def test_el_mensaje_dice_que_lo_demas_sigue_andando(avisos):
     «La tasa venció» a secas se lee como «la aplicación está caída». Se cortan
     los envíos con Bitcoin y nada más.
     """
-    base = _Base(users=UN_SUPER)
+    base = _base(users=UN_SUPER)
     corre(aviso_de_tasa.avisar_si_hace_falta(
         base, datetime.now(timezone.utc), timedelta(days=3)))
 
@@ -224,7 +225,7 @@ def test_el_camino_del_precio_avisa_al_vencer(monkeypatch, avisos):
     from routes import btc_lightning as btc
 
     vieja = datetime.now(timezone.utc) - btc.EDAD_MAXIMA_DE_LA_TASA - timedelta(hours=2)
-    base = _Base(config=[{"clave": "tasa_usd_ves_btc", "valor": 268.4,
+    base = _base(config=[{"clave": "tasa_usd_ves_btc", "valor": 268.4,
                           "updated_at": vieja}],
                  users=UN_SUPER)
     monkeypatch.setattr(btc, "db", base)

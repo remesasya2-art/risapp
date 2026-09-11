@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
 from pydantic import BaseModel
 from services.aviso_de_tasa import avisar_si_hace_falta
+from services.notifications import avisar_al_personal
 from routes.dependencies import get_current_user, sin_transacciones_personales
 
 logger = logging.getLogger(__name__)
@@ -491,20 +492,20 @@ async def webhook_blink(request: Request):
             {"$set": {"estado": "revision_manual",
                       "motivo_revision": f"pago recibido con la orden {motivo}",
                       "pagado_en": datetime.now(timezone.utc)}})
-        try:
-            from services.notifications import create_notification
-            async for admin in db.users.find({"role": "super_admin"}):
-                await create_notification(
-                    user_id=admin["user_id"],
-                    title="Un pago con Bitcoin llegó tarde",
-                    message=(f"Llegó el pago de una orden {motivo}. No se "
-                             "acreditó solo, porque el precio con el que se "
-                             "calculó ya no es el de ahora. Hay que revisarla "
-                             "en el panel."),
-                    notification_type="warning",
-                    data={"remesa_id": remesa["remesa_id"], "motivo": motivo})
-        except Exception as e:
-            logger.error(f"No se pudo avisar del pago tardío: {type(e).__name__}")
+        # El panel de Bitcoin lo guarda `get_super_admin`: no hay permiso suelto
+        # que pedir acá, y avisarle a un `admin` sería avisarle de algo que no
+        # puede abrir. `avisar_al_personal` no levanta nunca, así que el `try`
+        # que había alrededor sobraba. Ver `services/notifications.py`.
+        await avisar_al_personal(
+            title="Un pago con Bitcoin llegó tarde",
+            message=(f"Llegó el pago de una orden {motivo}. No se "
+                     "acreditó solo, porque el precio con el que se "
+                     "calculó ya no es el de ahora. Hay que revisarla "
+                     "en el panel."),
+            notification_type="warning",
+            solo_super_admin=True,
+            data={"remesa_id": remesa["remesa_id"], "motivo": motivo},
+        )
         return {"ok": True, "msg": "Orden vencida: queda para revisión"}
 
     if remesa.get("estado") != "pendiente":
@@ -546,28 +547,25 @@ async def webhook_blink(request: Request):
         await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. Tu envío de {ves_recibe:,.2f} BTC-VES sera procesado en maximo 15 minutos.", notification_type="btc_payment")
     except Exception as e:
         logger.warning(f"Error notificacion usuario: {e}")
-    try:
-        from services.notifications import create_notification
-        beneficiario_data = remesa.get("beneficiario_data", {})
-        nombre_benef = beneficiario_data.get("full_name", "N/A")
-        cedula_benef = beneficiario_data.get("id_document", "N/A")
-        banco_benef = beneficiario_data.get("bank_code", "") or beneficiario_data.get("bank", "N/A")
-        telefono_benef = beneficiario_data.get("phone_number", "N/A")
-        tipo_pago = beneficiario_data.get("payment_type", "transferencia").upper()
-        remesa_id_corto = remesa.get("remesa_id", "N/A")[:8].upper()
-        usd_cliente = remesa.get("usd_cliente", 0)
-        admin_title = f"💸 Nueva orden BTC pagada - ID {remesa_id_corto}"
-        admin_message = (f"${usd_cliente:,.2f} USD | {ves_recibe:,.2f} Bs | {tipo_pago}\n"
-                        f"Beneficiario: {nombre_benef} | CI: {cedula_benef}\n"
-                        f"Banco: {banco_benef} | Tel: {telefono_benef}")
-        admins = await db.users.find({"role": {"$in": ["admin", "super_admin"]}}, {"user_id": 1}).to_list(50)
-        for admin in admins:
-            try:
-                await create_notification(user_id=admin["user_id"], title=admin_title, message=admin_message, notification_type="btc_remesa_pagada")
-            except Exception as ea:
-                logger.warning(f"Error notif admin {admin.get('user_id')}: {ea}")
-    except Exception as e:
-        logger.warning(f"Error notificacion in-app admins: {e}")
+    beneficiario_data = remesa.get("beneficiario_data", {})
+    nombre_benef = beneficiario_data.get("full_name", "N/A")
+    cedula_benef = beneficiario_data.get("id_document", "N/A")
+    banco_benef = beneficiario_data.get("bank_code", "") or beneficiario_data.get("bank", "N/A")
+    telefono_benef = beneficiario_data.get("phone_number", "N/A")
+    tipo_pago = beneficiario_data.get("payment_type", "transferencia").upper()
+    remesa_id_corto = remesa.get("remesa_id", "N/A")[:8].upper()
+    usd_cliente = remesa.get("usd_cliente", 0)
+    # Solo a los super administradores. Antes iba tambien a los `admin`, que no
+    # pueden abrir el panel de Bitcoin: un aviso sobre el que no se puede actuar.
+    await avisar_al_personal(
+        title=f"💸 Nueva orden BTC pagada - ID {remesa_id_corto}",
+        message=(f"${usd_cliente:,.2f} USD | {ves_recibe:,.2f} Bs | {tipo_pago}\n"
+                 f"Beneficiario: {nombre_benef} | CI: {cedula_benef}\n"
+                 f"Banco: {banco_benef} | Tel: {telefono_benef}"),
+        notification_type="btc_remesa_pagada",
+        solo_super_admin=True,
+        data={"remesa_id": remesa.get("remesa_id")},
+    )
     return {"ok": True}
 
 

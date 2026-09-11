@@ -151,9 +151,17 @@ def test_el_webhook_no_acredita_una_orden_vencida():
 
 
 def test_el_pago_tardio_avisa_a_quien_puede_resolverlo():
+    """Que el aviso salga, y que salga por la puerta que mira `is_active`.
+
+    Antes esto buscaba `"role": "super_admin"` en el cuerpo, porque la lista
+    de destinatarios estaba escrita ahí a mano. Ahora la arma
+    `avisar_al_personal`, y `solo_super_admin` dice lo mismo que dice la
+    puerta del panel de Bitcoin. A quién le llega de verdad se comprueba en
+    `test_avisos_al_personal.py`.
+    """
     fuente = open(btc.__file__, encoding="utf-8").read()
     cuerpo = _cuerpo_del_webhook(fuente)
-    assert 'create_notification' in cuerpo and '"role": "super_admin"' in cuerpo, (
+    assert 'avisar_al_personal' in cuerpo and 'solo_super_admin=True' in cuerpo, (
         "Llegó plata que no se acreditó y nadie se entera. Un pago en "
         "revisión que nadie mira es un cliente que pagó y no recibió nada.")
 
