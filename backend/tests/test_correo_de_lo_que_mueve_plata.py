@@ -197,6 +197,12 @@ MUEVEN_PLATA = {
     "crypto_send_paid", "crypto_send_refunded", "crypto_send_awaiting_topup",
     "crypto_send_underpaid_review",
     "btc_enviado", "btc_remesa_enviada",
+    # ── El bono de referidos ──────────────────────────────────────────────
+    # `bono_liberado` no mueve el saldo de una cuenta a otra: lo que cambia es
+    # el estado del bono, de bloqueado a gastable. Va igual, y por el motivo de
+    # fondo de esta lista: es plata que la persona pasa a tener disponible, y
+    # enterarse de eso no puede depender de que abra el panel a mirar.
+    "bono_liberado", "bono_referido",
 }
 
 

@@ -73,6 +73,13 @@ POR_CORREO = {
     # y no se dejan «por las dudas» —una tabla con clases que nadie manda no
     # se distingue de una tabla a la que le falta una, y hay un test que las
     # cuenta de los dos lados justamente para eso.
+    # ── El bono de referidos ─────────────────────────────────────────────
+    #
+    # Los dos van por correo porque los dos mueven plata, que es la regla de
+    # esta tabla. Y porque son avisos que la persona no está esperando: nadie
+    # abre la aplicación a ver si le llegó un bono.
+    "bono_liberado":                 "Tu bono de bienvenida quedó disponible",
+    "bono_referido":                 "Cobraste tu bono por invitar",
     # ── Los paquetes ─────────────────────────────────────────────────────
     #
     # Pedido expreso: el usuario quiere enterarse por correo de CADA

@@ -947,3 +947,100 @@ def test_auth_me_no_le_manda_al_navegador_el_id_de_quien_refirio(base):
         assert "u_refiere" not in str(bono)
         assert set(bono) == {"tiene", "saldo", "bloqueado", "leyenda"}
     corre(caso())
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9. Los avisos: que salgan, y que no cuenten lo que no es asunto de nadie
+# ══════════════════════════════════════════════════════════════════════════
+
+async def _avisos_de(base, user_id):
+    return await base.notifications.find({"user_id": user_id}).to_list(20)
+
+
+def test_al_dueno_del_codigo_le_avisan_que_cobro(base):
+    """Sin esto los cinco reales aparecían en su saldo y nadie le decía por qué.
+
+    El único rastro era una línea en su historial, que hay que ir a buscar.
+    """
+    async def caso():
+        await _sembrar(base)
+        await bonos.al_registrarse(base, "u_referido", "REFDUENO001")
+        await bonos.al_aprobarse_el_kyc(base, "u_referido", documento="111")
+
+        avisos = await _avisos_de(base, "u_refiere")
+        assert len(avisos) == 1, f"se esperaba un aviso y hay {len(avisos)}"
+        assert avisos[0]["type"] == "bono_referido"
+        assert "5,00" in avisos[0]["message"], (
+            f"el aviso no dice cuánto cobró: {avisos[0]['message']!r}")
+    corre(caso())
+
+
+def test_el_aviso_del_que_refiere_NO_NOMBRA_AL_REFERIDO(base):
+    """Quien invitó no tiene por qué enterarse de que esa persona completó su
+    verificación de identidad, ni cuándo. Es dato de otro."""
+    async def caso():
+        await _sembrar(base)
+        await bonos.al_registrarse(base, "u_referido", "REFDUENO001")
+        await bonos.al_aprobarse_el_kyc(base, "u_referido", documento="111")
+
+        texto = str(await _avisos_de(base, "u_refiere"))
+        for dato_ajeno in ("u_referido", "referido@example.com"):
+            assert dato_ajeno not in texto, (
+                f"el aviso filtra {dato_ajeno!r}, que es dato de la otra "
+                f"persona. El aviso completo: {texto}")
+    corre(caso())
+
+
+def test_al_referido_le_avisan_cuando_su_bono_queda_disponible(base):
+    """Es el momento en que la plata pasa de promesa a gastable."""
+    async def caso():
+        await _sembrar(base)
+        await bonos.al_registrarse(base, "u_referido", "REFDUENO001")
+        assert await _avisos_de(base, "u_referido") == [], (
+            "no hay que avisar nada al otorgarlo: todavía no se puede usar")
+
+        await bonos.al_aprobarse_el_kyc(base, "u_referido", documento="111")
+        avisos = await _avisos_de(base, "u_referido")
+        assert len(avisos) == 1
+        assert avisos[0]["type"] == "bono_liberado"
+        assert "15,00" in avisos[0]["message"]
+        assert "Venezuela" in avisos[0]["message"], (
+            "el aviso tiene que decir para qué sirve, que es la única "
+            "condición que importa")
+    corre(caso())
+
+
+def test_un_aviso_que_falla_NO_DESHACE_LA_PLATA(base, monkeypatch):
+    """La guarda de fondo de los dos avisos.
+
+    Un aviso que no sale es un reclamo; una acreditación que se cae porque el
+    aviso falló es plata que no llegó.
+    """
+    from services import notifications
+
+    async def explota(*a, **k):
+        raise RuntimeError("el servicio de avisos se cayó")
+    monkeypatch.setattr(notifications, "create_notification", explota)
+
+    async def caso():
+        await _sembrar(base)
+        await bonos.al_registrarse(base, "u_referido", "REFDUENO001")
+        informe = await bonos.al_aprobarse_el_kyc(base, "u_referido",
+                                                  documento="111")
+        assert informe["liberado"] is True, informe
+        assert informe["pagado_al_referente"] is True, informe
+        assert (await _saldos(base, "u_refiere"))[0] == Decimal("5.00")
+        assert (await _saldos(base, "u_referido"))[2]["estado"] == bonos.LIBERADO
+    corre(caso())
+
+
+def test_los_dos_avisos_del_bono_salen_tambien_por_correo():
+    """La tabla del correo y la del código tienen que decir lo mismo.
+
+    Hay un test que las compara en los dos sentidos; esto es el recordatorio
+    en el archivo donde vive la función que los emite.
+    """
+    from services import avisos_por_correo
+    for clase in ("bono_liberado", "bono_referido"):
+        assert clase in avisos_por_correo.POR_CORREO, (
+            f"{clase} mueve plata y no manda correo. Agregalo a POR_CORREO.")
