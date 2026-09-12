@@ -174,12 +174,6 @@ const normalized = { ...tx };
   const menuItems = [...baseMenuItems];
   
   // Add role-specific menu items
-  if (user?.role === 'socio' || user?.role === 'socio_gestor') {
-    menuItems.splice(5, 0, { icon: TrendingUp, label: 'Socio', path: '/partner' });
-  }
-  if (user?.role === 'socio_gestor') {
-    menuItems.splice(6, 0, { icon: Settings, label: 'Gestor', path: '/gestor' });
-  }
   if (user?.role === 'admin' || user?.role === 'super_admin') {
     menuItems.splice(5, 0, { icon: Settings, label: 'Admin', path: '/admin' });
   }

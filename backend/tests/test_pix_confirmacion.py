@@ -60,8 +60,12 @@ def _cargar_gestor_pix():
         sys.modules["routes"] = paquete
     if "routes.dependencies" not in sys.modules:
         deps = types.ModuleType("routes.dependencies")
+        # `sin_transacciones_personales` faltaba, y el archivo sólo pasaba si
+        # OTRO test había cargado antes el módulo de verdad. Corrido solo,
+        # reventaba. Un test que depende del orden no es un test.
         for nombre in ("get_current_user", "get_admin_user", "get_crm_user",
-                       "get_super_admin", "get_verified_user"):
+                       "get_super_admin", "get_verified_user",
+                       "sin_transacciones_personales"):
             setattr(deps, nombre, (lambda n: (lambda: None))(nombre))
         sys.modules["routes.dependencies"] = deps
     import routes.gestor_pix as gp
@@ -129,21 +133,6 @@ def test_un_pix_confirmado_acredita_el_saldo_principal(base):
         doc = await base.users.find_one({"user_id": "usr_ana"})
         assert saldos.saldo_de(doc) == Decimal("500.00")
         assert saldos.saldo_de(doc, "balance_ris_terceros") == Decimal("0.00")
-    corre(caso())
-
-
-def test_un_gestor_cobrando_de_terceros_va_a_la_cuenta_de_terceros(base):
-    """Es la bifurcación que decide de quién es la plata. Equivocarla mezcla el
-    dinero de los clientes de un gestor con el suyo propio."""
-    async def caso():
-        await _usuario(base, "usr_gestor", rol="socio_gestor")
-        await _pago(base, "pix_g", "usr_gestor", monto=800, terceros=True)
-        assert await gp.process_pix_confirmation("pix_g", "usr_gestor") is True
-        doc = await base.users.find_one({"user_id": "usr_gestor"})
-        assert saldos.saldo_de(doc, "balance_ris_terceros") == Decimal("800.00")
-        assert saldos.saldo_de(doc, "balance_ris") == Decimal("0.00")
-        linea, = await _lineas(base, "usr_gestor")
-        assert linea["account"] == "balance_ris_terceros"
     corre(caso())
 
 

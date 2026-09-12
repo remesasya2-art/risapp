@@ -599,10 +599,7 @@ export default function Profile() {
               background: 'rgba(255,255,255,.12)',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              {esSuperAdmin ? <Gem size={20} color="#fff" />
-                : user?.role === 'socio' ? <Gift size={20} color="#fff" />
-                  : user?.role === 'socio_gestor' ? <Users size={20} color="#fff" />
-                    : <Shield size={20} color="#fff" />}
+              {esSuperAdmin ? <Gem size={20} color="#fff" /> : <Shield size={20} color="#fff" />}
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{

@@ -116,7 +116,7 @@ class GestorRechargeTercerosRequest(BaseModel):
 # Admin requests
 class ChangeRoleRequest(BaseModel):
     user_id: str
-    new_role: str  # user, socio, socio_gestor
+    new_role: str  # user, super_admin
     partner_code: Optional[str] = None
     gestor_code: Optional[str] = None
 

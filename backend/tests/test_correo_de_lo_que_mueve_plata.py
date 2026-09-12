@@ -187,14 +187,16 @@ def test_si_el_correo_falla_el_aviso_igual_queda(base, correos, monkeypatch):
 # SI AGREGAS UN EVENTO DE DINERO, AGREGALO ACA Y EN `POR_CORREO`. Este test
 # existe para que el que se olvide lo vea en rojo y no meses después, cuando
 # un cliente pregunte por qué no le avisaron de su retiro.
+# `gestor_transaction` y `partner_bonus` estaban acá y salieron al eliminarse
+# el área de socios y gestores. No los emite nadie, así que exigirles correo
+# sería exigir correo para algo que no ocurre.
 MUEVEN_PLATA = {
     "withdrawal_pending", "withdrawal_completed", "withdrawal_rejected",
     "recharge_approved", "recharge_rejected",
     "pix_received", "card_received", "credit_deposit", "btc_payment",
     "crypto_send_paid", "crypto_send_refunded", "crypto_send_awaiting_topup",
     "crypto_send_underpaid_review",
-    "btc_enviado", "btc_remesa_enviada", "gestor_transaction",
-    "partner_bonus",
+    "btc_enviado", "btc_remesa_enviada",
 }
 
 

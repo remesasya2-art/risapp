@@ -189,16 +189,6 @@ export function estadoDeNotificaciones({ servidor, endpointLocal, permiso }) {
  * la pantalla no crece.
  */
 const PANELES = {
-  socio: {
-    titulo: 'Panel de Socio',
-    detalle: 'Tus referidos y tus ganancias',
-    destino: '/partner',
-  },
-  socio_gestor: {
-    titulo: 'Panel Gestor',
-    detalle: 'Procesar envíos de terceros',
-    destino: '/gestor',
-  },
   admin: {
     titulo: 'Administrador',
     detalle: 'Acceder al panel de administración',

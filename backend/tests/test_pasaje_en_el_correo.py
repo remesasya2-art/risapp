@@ -442,7 +442,7 @@ CON_OPERACION = {
     "recharge_approved", "recharge_rejected",
     "crypto_send_paid", "crypto_send_refunded", "crypto_send_awaiting_topup",
     "crypto_send_underpaid_review",
-    "btc_enviado", "btc_remesa_enviada", "btc_payment", "gestor_transaction",
+    "btc_enviado", "btc_remesa_enviada", "btc_payment",
 }
 
 IDENTIFICADORES = ("transaction_id", "remesa_id", "tx_id", "display_id",

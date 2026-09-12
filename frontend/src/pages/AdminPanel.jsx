@@ -49,13 +49,12 @@ const maskCPF = (cpf) => {
   return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
 };
 
-const CRM_KEYS = ['partners', 'users', 'kyc', 'blacklist', 'chat', 'support'];
+const CRM_KEYS = ['users', 'kyc', 'blacklist', 'chat', 'support'];
 
 const CRM_SUBTABS = [
   { key: 'users', label: 'Usuarios', icon: Users },
   { key: 'kyc', label: 'KYC', icon: Shield },
   { key: 'blacklist', label: 'Lista negra', icon: Shield },
-  { key: 'partners', label: 'Socios', icon: Briefcase },
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'support', label: 'Soporte', icon: MessageSquare },
   { key: 'ratings', label: 'Calificaciones', icon: Star },
@@ -191,10 +190,7 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [driveConnected, setDriveConnected] = useState(false);
   const [uploadingKyc, setUploadingKyc] = useState(false);
   // Partner/Gestor management states
-  const [partners, setPartners] = useState([]);
-  const [gestors, setGestors] = useState([]);
   const [partnerSearchQuery, setPartnerSearchQuery] = useState('');
-  const [partnerTab, setPartnerTab] = useState('socios'); // 'socios' or 'gestores'
   // Support requests state
   const [supportRequests, setSupportRequests] = useState([]);
   const [supportFilter, setSupportFilter] = useState('pending'); // 'pending', 'resolved', 'all'
@@ -266,15 +262,6 @@ const [searchParams, setSearchParams] = useSearchParams();
       switch (activeTab) {
         case 'overview':
           await cargarPendientes();
-          break;
-        case 'partners':
-          // Load both socios and gestores
-          const [partnersRes, gestorsRes] = await Promise.all([
-            api.get('/admin/partners').catch(() => ({ data: [] })),
-            api.get('/admin/gestors').catch(() => ({ data: [] }))
-          ]);
-          setPartners(partnersRes.data || []);
-          setGestors(gestorsRes.data || []);
           break;
         case 'users':
           const usersRes = await api.get('/admin/users');
@@ -851,169 +838,6 @@ const [searchParams, setSearchParams] = useSearchParams();
         )}
 
         {/* Partners Tab - Socios y Gestores */}
-        {activeTab === 'partners' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Sub-tabs for Socios / Gestores */}
-            <div style={{ ...cardStyle, padding: '16px' }}>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                <button 
-                  onClick={() => setPartnerTab('socios')}
-                  style={{ 
-                    flex: 1, padding: '14px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                    backgroundColor: partnerTab === 'socios' ? '#7c3aed' : '#f3f4f6',
-                    color: partnerTab === 'socios' ? '#ffffff' : '#374151',
-                    fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                  }}
-                  data-testid="partner-tab-socios"
-                >
-                  <Gift style={{ width: '18px', height: '18px' }} />
-                  Socios Referidos ({partners.length})
-                </button>
-                <button 
-                  onClick={() => setPartnerTab('gestores')}
-                  style={{ 
-                    flex: 1, padding: '14px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                    backgroundColor: partnerTab === 'gestores' ? '#059669' : '#f3f4f6',
-                    color: partnerTab === 'gestores' ? '#ffffff' : '#374151',
-                    fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                  }}
-                  data-testid="partner-tab-gestores"
-                >
-                  <Briefcase style={{ width: '18px', height: '18px' }} />
-                  Socios Gestores ({gestors.length})
-                </button>
-              </div>
-              
-              {/* Search */}
-              <div style={{ position: 'relative' }}>
-                <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
-                <input 
-                  type="text" 
-                  placeholder={`Buscar ${partnerTab === 'socios' ? 'socio' : 'gestor'}...`}
-                  value={partnerSearchQuery} 
-                  onChange={(e) => setPartnerSearchQuery(e.target.value)}
-                  style={{ width: '100%', padding: '12px 12px 12px 40px', borderRadius: '12px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} 
-                />
-              </div>
-            </div>
-
-            {/* Socios List */}
-            {partnerTab === 'socios' && (
-              <div style={{ ...cardStyle, overflow: 'hidden' }}>
-                {loading ? (
-                  <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
-                ) : partners.filter(p => !partnerSearchQuery || p.name?.toLowerCase().includes(partnerSearchQuery.toLowerCase()) || p.email?.toLowerCase().includes(partnerSearchQuery.toLowerCase())).length === 0 ? (
-                  <div style={{ padding: '48px', textAlign: 'center' }}>
-                    <Gift style={{ width: '48px', height: '48px', color: '#d1d5db', margin: '0 auto 16px' }} />
-                    <p style={{ color: '#6b7280', margin: 0 }}>No hay socios registrados</p>
-                    <p style={{ color: '#9ca3af', fontSize: '13px', margin: '8px 0 0 0' }}>Asigna el rol Socio desde la pestaña de usuarios</p>
-                  </div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ backgroundColor: '#faf5ff' }}>
-                        <tr>
-                          {['Socio', 'Código', 'Referidos', 'Total Ganancias', 'Este Mes', 'Estado'].map(h => (
-                            <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#7c3aed', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {partners.filter(p => !partnerSearchQuery || p.name?.toLowerCase().includes(partnerSearchQuery.toLowerCase()) || p.email?.toLowerCase().includes(partnerSearchQuery.toLowerCase())).map((p) => (
-                          <tr key={p.user_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`partner-${p.user_id}`}>
-                            <td style={{ padding: '16px' }}>
-                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{p.name}</p>
-                              <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{p.email}</p>
-                            </td>
-                            <td style={{ padding: '16px' }}>
-                              <span style={{ fontSize: '13px', fontFamily: 'monospace', fontWeight: '600', color: '#7c3aed', backgroundColor: '#f5f3ff', padding: '4px 10px', borderRadius: '6px' }}>
-                                {p.referral_code || 'N/A'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-                              {p.referrals_count || 0}
-                            </td>
-                            <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-                              {fmt((p.total_earnings || 0))} RIS
-                            </td>
-                            <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#16a34a' }}>
-                              +{fmt((p.month_earnings || 0))} RIS
-                            </td>
-                            <td style={{ padding: '16px' }}>
-                              <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', backgroundColor: '#dcfce7', color: '#16a34a' }}>
-                                Activo
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Gestores List */}
-            {partnerTab === 'gestores' && (
-              <div style={{ ...cardStyle, overflow: 'hidden' }}>
-                {loading ? (
-                  <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
-                ) : gestors.filter(g => !partnerSearchQuery || g.name?.toLowerCase().includes(partnerSearchQuery.toLowerCase()) || g.email?.toLowerCase().includes(partnerSearchQuery.toLowerCase())).length === 0 ? (
-                  <div style={{ padding: '48px', textAlign: 'center' }}>
-                    <Briefcase style={{ width: '48px', height: '48px', color: '#d1d5db', margin: '0 auto 16px' }} />
-                    <p style={{ color: '#6b7280', margin: 0 }}>No hay gestores registrados</p>
-                    <p style={{ color: '#9ca3af', fontSize: '13px', margin: '8px 0 0 0' }}>Asigna el rol Socio Gestor desde la pestaña de usuarios</p>
-                  </div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ backgroundColor: '#ecfdf5' }}>
-                        <tr>
-                          {['Gestor', 'Código', 'Transacciones', 'Volumen Total', 'Saldo Terceros', 'Estado'].map(h => (
-                            <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#059669', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gestors.filter(g => !partnerSearchQuery || g.name?.toLowerCase().includes(partnerSearchQuery.toLowerCase()) || g.email?.toLowerCase().includes(partnerSearchQuery.toLowerCase())).map((g) => (
-                          <tr key={g.user_id} style={{ borderBottom: '1px solid #f3f4f6' }} data-testid={`gestor-${g.user_id}`}>
-                            <td style={{ padding: '16px' }}>
-                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{g.name}</p>
-                              <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{g.email}</p>
-                            </td>
-                            <td style={{ padding: '16px' }}>
-                              <span style={{ fontSize: '13px', fontFamily: 'monospace', fontWeight: '600', color: '#059669', backgroundColor: '#ecfdf5', padding: '4px 10px', borderRadius: '6px' }}>
-                                {g.gestor_code || 'N/A'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-                              {g.total_transactions || 0}
-                            </td>
-                            <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-                              {fmt((g.total_volume || 0))} RIS
-                            </td>
-                            <td style={{ padding: '16px' }}>
-                              <span style={{ fontSize: '14px', fontWeight: '700', color: '#059669' }}>
-                                {fmt((g.balance_ris_terceros || 0))} RIS
-                              </span>
-                            </td>
-                            <td style={{ padding: '16px' }}>
-                              <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', backgroundColor: '#dcfce7', color: '#16a34a' }}>
-                                Activo
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Users Tab */}
         {activeTab === 'users' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Search bar */}
@@ -1070,10 +894,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                               borderRadius: '8px', 
                               fontSize: '12px', 
                               fontWeight: '600',
-                              backgroundColor: u.role === 'socio' ? '#ede9fe' : u.role === 'socio_gestor' ? '#d1fae5' : '#f3f4f6',
-                              color: u.role === 'socio' ? '#7c3aed' : u.role === 'socio_gestor' ? '#059669' : '#6b7280'
+                              backgroundColor: u.role === 'super_admin' ? '#fee2e2' : '#f3f4f6',
+                              color: u.role === 'super_admin' ? '#b91c1c' : '#6b7280'
                             }}>
-                              {u.role === 'socio' ? '🎁 Socio' : u.role === 'socio_gestor' ? '🏪 Gestor' : '👤 Usuario'}
+                              {u.role === 'super_admin' ? 'Administrador' : 'Usuario'}
                             </span>
                           </td>
                           <td style={{ padding: '16px', display: 'flex', gap: '8px' }}>
@@ -2133,10 +1957,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                 <div style={{ marginTop: '8px' }}>
                   <span style={{ 
                     padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600',
-                    backgroundColor: selectedUserForRole.role === 'socio' ? '#ede9fe' : selectedUserForRole.role === 'socio_gestor' ? '#d1fae5' : '#f3f4f6',
-                    color: selectedUserForRole.role === 'socio' ? '#7c3aed' : selectedUserForRole.role === 'socio_gestor' ? '#059669' : '#6b7280'
+                    backgroundColor: selectedUserForRole.role === 'super_admin' ? '#fee2e2' : '#f3f4f6',
+                    color: selectedUserForRole.role === 'super_admin' ? '#b91c1c' : '#6b7280'
                   }}>
-                    Rol actual: {selectedUserForRole.role === 'socio' ? 'Socio' : selectedUserForRole.role === 'socio_gestor' ? 'Gestor' : 'Usuario'}
+                    Rol actual: {selectedUserForRole.role === 'super_admin' ? 'Administrador' : 'Usuario'}
                   </span>
                 </div>
               </div>
@@ -2164,48 +1988,6 @@ const [searchParams, setSearchParams] = useSearchParams();
                   <div>
                     <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>👤 Usuario Normal</p>
                     <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Acceso básico a la app</p>
-                  </div>
-                </button>
-
-                {/* Socio Role */}
-                <button
-                  onClick={() => handleChangeRole('socio')}
-                  disabled={assigningRole || selectedUserForRole.role === 'socio'}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
-                    backgroundColor: selectedUserForRole.role === 'socio' ? '#ede9fe' : '#ffffff',
-                    border: '2px solid #8b5cf6', borderRadius: '12px', cursor: selectedUserForRole.role === 'socio' ? 'not-allowed' : 'pointer',
-                    opacity: selectedUserForRole.role === 'socio' ? 0.5 : 1, textAlign: 'left'
-                  }}
-                  data-testid="role-socio-btn"
-                >
-                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Gift style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>🎁 Socio (Referidor)</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Puede referir usuarios y ganar comisiones</p>
-                  </div>
-                </button>
-
-                {/* Socio Gestor Role */}
-                <button
-                  onClick={() => handleChangeRole('socio_gestor')}
-                  disabled={assigningRole || selectedUserForRole.role === 'socio_gestor'}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
-                    backgroundColor: selectedUserForRole.role === 'socio_gestor' ? '#d1fae5' : '#ffffff',
-                    border: '2px solid #10b981', borderRadius: '12px', cursor: selectedUserForRole.role === 'socio_gestor' ? 'not-allowed' : 'pointer',
-                    opacity: selectedUserForRole.role === 'socio_gestor' ? 0.5 : 1, textAlign: 'left'
-                  }}
-                  data-testid="role-gestor-btn"
-                >
-                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Briefcase style={{ width: '22px', height: '22px', color: '#059669' }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>Socio Gestor</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Procesa envíos de terceros</p>
                   </div>
                 </button>
 
