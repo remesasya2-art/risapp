@@ -14,7 +14,7 @@ from services import sesiones
 from services import registro
 from services import cofre
 from services.ledger import create_closing_entries
-from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128
+from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel
@@ -822,9 +822,13 @@ async def process_withdrawal(
         # Notify user
         await create_notification(
             user_id=transaction["user_id"],
-            title="✅ Retiro Completado",
-            message=f"Tu retiro de {transaction.get('amount_output', 0):.2f} VES ha sido procesado.",
-            notification_type="withdrawal_completed"
+            title="Tu retiro se completó",
+            message=f"Ya enviamos {para_mostrar(transaction.get('amount_output'), 'VES')} a tu beneficiario.",
+            notification_type="withdrawal_completed",
+            # El número de la operación viaja en el aviso para que el correo
+            # pueda armar el comprobante con forma de pasaje, en vez de mandar
+            # un párrafo. Ver `services/pasaje.py`.
+            data={"transaction_id": transaction_id},
         )
         
         # Update gestor transaction if applicable
@@ -926,9 +930,10 @@ async def process_withdrawal(
         
         await create_notification(
             user_id=transaction["user_id"],
-            title="❌ Retiro Rechazado",
-            message=f"Tu retiro ha sido rechazado. El saldo ha sido devuelto.",
-            notification_type="withdrawal_rejected"
+            title="Tu retiro fue rechazado",
+            message="No pudimos procesarlo. Te devolvimos el saldo a tu cuenta.",
+            notification_type="withdrawal_rejected",
+            data={"transaction_id": transaction_id},
         )
         
         message = "Retiro rechazado y saldo devuelto"
@@ -1406,13 +1411,16 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
     try:
         await create_notification(
             user_id=claimed["user_id"],
-            title="Envío cancelado, saldo devuelto",
+            title="Tu envío se canceló y te devolvimos el saldo",
             message=(
                 f"Tu envío no pudo completarse porque el pago llegó incompleto. "
-                f"Te acreditamos {acreditado:.8f} {cur_in} como saldo disponible."
+                # Ocho decimales: es cripto, y redondear a dos le borraría el
+                # monto entero a una devolución chica.
+                f"Te acreditamos {para_mostrar(acreditado, cur_in, 8)} como saldo disponible."
                 if acreditado > 0 else
                 "Tu envío no pudo completarse porque el pago llegó incompleto y fue cancelado."
             ),
+            data={"transaction_id": claimed.get("transaction_id")},
             notification_type="crypto_send_refunded",
         )
     except Exception as e:
@@ -2025,8 +2033,8 @@ async def process_ves_recharge(
         # Notify user
         await create_notification(
             user_id=user_id,
-            title="✅ Recarga VES Aprobada",
-            message=f"Tu recarga de {amount_ves:.2f} VES ha sido aprobada. Se han añadido {amount_ris:.2f} RIS a tu saldo.",
+            title="Tu recarga se acreditó",
+            message=f"Acreditamos {para_mostrar(amount_ris, 'RIS')} en tu saldo por tu recarga de {para_mostrar(amount_ves, 'VES')}.",
             notification_type="recharge_approved",
             data={"transaction_id": transaction_id, "amount_ris": amount_ris}
         )
@@ -2053,8 +2061,8 @@ async def process_ves_recharge(
         # Notify user
         await create_notification(
             user_id=user_id,
-            title="❌ Recarga VES Rechazada",
-            message=f"Tu recarga de {amount_ves:.2f} VES ha sido rechazada. Motivo: {rejection_reason}",
+            title="Tu recarga fue rechazada",
+            message=f"No pudimos aprobar tu recarga de {para_mostrar(amount_ves, 'VES')}. Motivo: {rejection_reason}",
             notification_type="recharge_rejected",
             data={"transaction_id": transaction_id, "reason": rejection_reason}
         )

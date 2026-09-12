@@ -39,6 +39,8 @@ SOLO LO PERSONAL
 """
 import logging
 
+from services import comprobante
+
 logger = logging.getLogger(__name__)
 
 # Las clases de aviso que TAMBIEN salen por correo, y con qué asunto.
@@ -90,17 +92,6 @@ def asunto_de(notification_type: str, titulo: str) -> str | None:
     return POR_CORREO[notification_type] or titulo
 
 
-def _cuerpo(titulo: str, mensaje: str, pie: str) -> str:
-    return f"""
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #6366f1; margin-bottom: 6px;">{titulo}</h2>
-        <p style="font-size: 16px; color: #374151; line-height: 1.5; white-space: pre-line;">{mensaje}</p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-        <p style="color: #6b7280; font-size: 13px;">{pie}</p>
-    </div>
-    """
-
-
 async def acompanar(user_id: str, titulo: str, mensaje: str,
                     notification_type: str, data=None) -> bool:
     """Manda el correo que acompaña a un aviso, si a esa clase le corresponde.
@@ -137,16 +128,28 @@ async def acompanar(user_id: str, titulo: str, mensaje: str,
         # para escanear, que es lo que hace falta en un reclamo. Si no, va el
         # párrafo de siempre.
         #
-        # Y el orden importa: si esto se cayera, el correo tiene que salir
-        # igual. `para_el_aviso` no levanta nunca, pero acá está de todos
-        # modos adentro del `try` de afuera, que tampoco.
-        from services import pasaje
-        cuerpo = await pasaje.para_el_aviso(titulo, mensaje,
-                                            notification_type, data)
+        # EL PASAJE VA EN SU PROPIO `try`, Y NO ALCANZA EL DE AFUERA.
+        #
+        # El `try` grande de esta función está para que un aviso nunca se caiga
+        # por el correo. Pero se come TODO, y con el pasaje adentro de él una
+        # falla al armar el comprobante se llevaba puesto el correo entero: la
+        # persona no se enteraba de que su plata se movió por no poder dibujar
+        # un cuadradito. `para_el_aviso` dice que no levanta nunca, y hasta que
+        # un test lo rompió a propósito eso alcanzaba de explicación.
+        cuerpo = ""
+        try:
+            from services import pasaje
+            cuerpo = await pasaje.para_el_aviso(titulo, mensaje,
+                                                notification_type, data)
+        except Exception as e:
+            logger.warning("no se pudo armar el comprobante de %r, va el "
+                           "correo simple: %s", notification_type, e)
+
         if not cuerpo:
-            cuerpo = _cuerpo(titulo, mensaje,
-                             "Este es un aviso automático de RIS App. Podés "
-                             "ver el detalle en la aplicación.")
+            # Con la misma banda dorada que el comprobante. Ver
+            # `services/comprobante.nota`: un correo que habla de tu plata y
+            # no se parece al anterior se mira con desconfianza.
+            cuerpo = comprobante.nota(titulo=titulo, detalle=mensaje)
 
         correo.en_segundo_plano(persona["email"], asunto, cuerpo,
                                 que_es=f"aviso de {notification_type}")

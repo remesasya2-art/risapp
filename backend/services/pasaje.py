@@ -87,7 +87,7 @@ MONEDAS = {
 # Lo único que se lee de la operación. Lista de lo PERMITIDO.
 DE_LA_OPERACION = {
     "_id": 0,
-    "display_id": 1, "transaction_id": 1, "type": 1, "status": 1,
+    "display_id": 1, "transaction_id": 1, "remesa_id": 1, "type": 1, "status": 1,
     "amount_input": 1, "amount_output": 1,
     "currency_input": 1, "currency_output": 1,
     "rate": 1, "created_at": 1, "completed_at": 1,
@@ -124,10 +124,12 @@ async def de_la_operacion(identificador: str, *, titulo: str, detalle: str = "",
                           db=None) -> str | None:
     """El pasaje de un movimiento de dinero, o None si no se pudo armar.
 
-    `identificador` es el `transaction_id`. Se busca también por `display_id`
-    porque no todos los avisos mandan el mismo: unos guardan el interno y
-    otros el que ve el usuario, y pedirle a los diez que se pongan de acuerdo
-    es la clase de trabajo que se deja sin hacer.
+    `identificador` puede ser el `transaction_id`, el `display_id` o el
+    `remesa_id`, y se busca por los tres. No es pereza: las remesas con
+    Bitcoin NO tienen `transaction_id` —su documento en `transactions` se
+    encuentra por `remesa_id`—, y los retiros no tienen `remesa_id`. Pedirle a
+    los trece lugares que avisan que se pongan de acuerdo en un nombre es
+    trabajo que no se hace, y el que se olvida deja el correo sin comprobante.
     """
     if not identificador:
         return None
@@ -135,7 +137,8 @@ async def de_la_operacion(identificador: str, *, titulo: str, detalle: str = "",
         base = await _base(db)
         op = await base.transactions.find_one(
             {"$or": [{"transaction_id": identificador},
-                     {"display_id": identificador}]},
+                     {"display_id": identificador},
+                     {"remesa_id": identificador}]},
             DE_LA_OPERACION)
     except Exception as e:
         logger.warning("no se pudo leer la operación %s para el correo: %s",
@@ -147,7 +150,8 @@ async def de_la_operacion(identificador: str, *, titulo: str, detalle: str = "",
     quien = op.get("beneficiary_data") or {}
     entra, sale = op.get("currency_input") or "", op.get("currency_output") or ""
     estado, color = _sello(op.get("status"))
-    numero = op.get("display_id") or op.get("transaction_id") or identificador
+    numero = (op.get("display_id") or op.get("remesa_id")
+              or op.get("transaction_id") or identificador)
     monto = comp.plata(op.get("amount_output"), sale)
     cuando = op.get("completed_at") or op.get("created_at")
 
@@ -203,9 +207,13 @@ async def del_envio(envio_id: str, *, titulo: str, detalle: str = "",
     # centímetros de distancia.
     peso = envio.get("peso_facturable")
 
-    campos = [("Envío", numero)]
+    # El número NO va acá: ya está en el talón, grande, dos dedos a la
+    # derecha. Estaba, y lo único que hacía era ocupar lugar dos veces.
+    campos = []
     if peso:
         campos.append(("Peso", f"{comp.plata(peso)} kg"))
+    if provincia:
+        campos.append(("Estado", provincia))
 
     tipo = "Envío de paquete"
     return comp.armar(
@@ -222,10 +230,19 @@ async def del_envio(envio_id: str, *, titulo: str, detalle: str = "",
 
 # De qué clase de aviso se saca el identificador, y de qué colección.
 #
-# `envio` es la única que no mira `db.transactions`. El resto de los avisos de
-# dinero llevan el suyo en `transaction_id`, y los que no lo llevaban se les
-# agregó: está en los archivos de rutas, al lado de cada `create_notification`.
-DONDE_BUSCARLO = ("transaction_id", "tx_id", "display_id")
+# `envio` es la única que no mira `db.transactions`.
+#
+# Y NO TODOS LOS AVISOS DE DINERO TIENEN OPERACION QUE MOSTRAR. El pago por
+# PIX, el de tarjeta, el depósito en cripto y el bono de referido viven en
+# otras colecciones —`pix_payments`, la de Mercado Pago, `credit_orders`,
+# `partner_earnings`— y no tienen documento en `transactions`. Esos siguen
+# saliendo como párrafo, que es lo que hace esta función cuando devuelve
+# `None`, y está bien: un comprobante con la mitad de los campos vacíos es
+# peor que un párrafo que dice la verdad.
+#
+# A los que sí la tienen se les agregó el número al aviso, al lado de cada
+# `create_notification`, en los archivos de rutas.
+DONDE_BUSCARLO = ("transaction_id", "remesa_id", "tx_id", "display_id")
 
 
 async def para_el_aviso(titulo: str, mensaje: str, notification_type: str,

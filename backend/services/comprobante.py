@@ -91,29 +91,13 @@ def ultimos4(valor) -> str:
 
 
 def plata(valor, moneda: str = "") -> str:
-    """El monto como lo lee la gente: 4.500,00 y no 4500.0.
+    """El monto como lo lee la gente. Vive en `services/money.py`.
 
-    Pasa por `Decimal` y nunca por `float`. Es la regla del repositorio, y acá
-    tiene un motivo extra: el dinero que se guarda es `Decimal128`, y darle
-    `f"{...:,.2f}"` a un `Decimal128` crudo revienta.
+    Acá hay un alias y no una copia: tener dos formateadores de plata es cómo
+    se llega a que el mismo monto se vea distinto en el correo y en el aviso.
     """
-    from services.money import from_db
-
-    # Vacío y no «0,00». `to_decimal` devuelve cero para lo que no entiende
-    # —para no reventar donde se mueve plata, y ahí está bien—, pero un
-    # comprobante que dice «0,00 Bs» porque el campo vino vacío se lee como
-    # «no te mandamos nada», que es una acusación y no un dato que falta.
-    if valor is None or valor == "":
-        return ""
-    try:
-        numero = from_db(valor)
-    except Exception:
-        return ""
-    # El truco de las tres vueltas: el formato con coma de miles y punto
-    # decimal es el inglés, y acá es al revés. Se pasa por un carácter que no
-    # aparece en ningún número para no pisar lo ya cambiado.
-    texto = f"{numero:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-    return f"{texto} {moneda}".strip()
+    from services.money import para_mostrar
+    return para_mostrar(valor, moneda)
 
 
 def _fecha(cuando) -> str:
@@ -225,6 +209,63 @@ def _fila(etiqueta: str, valor: str) -> str:
                   <td style="padding:6px 0;color:{GRIS};font-size:12px;">{etiqueta}</td>
                   <td align="right" style="padding:6px 0;color:{TINTA};font-size:12px;font-weight:700;">{valor}</td>
                 </tr>"""
+
+
+def nota(*, titulo: str, detalle: str = "", tipo: str = "Aviso") -> str:
+    """El mismo correo, sin talón: cuando no hay operación que mostrar.
+
+    POR QUE NO ES UN PARRAFO SUELTO
+
+        Cuatro clases de aviso de dinero no tienen operación en
+        `transactions` —el PIX, la tarjeta, el depósito en cripto y el bono de
+        referido, que viven en otras colecciones—, así que no hay comprobante
+        que armarles.
+
+        Antes esos salían como un `<h2>` violeta sobre fondo blanco. Al lado
+        del pasaje dorado no parecía el mismo remitente, y un correo que habla
+        de tu plata y no se parece al anterior es un correo que se mira con
+        desconfianza, o que se borra. Lleva la misma banda, el mismo pie y el
+        mismo ancho. Lo único que no lleva es el talón, porque no hay número
+        que poner en él.
+    """
+    return f"""
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+       style="background:{FONDO};padding:26px 10px;font-family:Arial,Helvetica,sans-serif;">
+  <tr>
+    <td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+             style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;
+                    overflow:hidden;border:1px solid {LINEA};">
+        <tr>
+          <td style="background:{ORO};padding:14px 22px;">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RISAPP</td>
+                <td align="right" style="color:#4a3806;font-size:10px;font-weight:700;
+                                         letter-spacing:2px;">{tipo.upper()}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:22px;">
+            <div style="color:{TINTA};font-size:19px;font-weight:700;">{titulo}</div>
+            {f'<div style="color:{GRIS};font-size:14px;padding-top:8px;line-height:1.6;white-space:pre-line;">{detalle}</div>' if detalle else ''}
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#fafafa;border-top:1px solid {LINEA};padding:14px 22px;">
+            <div style="color:{GRIS};font-size:11px;line-height:1.6;">
+              Este es un aviso automático de RIS App; no respondas a este correo.
+              Podés ver el detalle en la aplicación.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+"""
 
 
 def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",

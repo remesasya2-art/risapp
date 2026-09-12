@@ -22,6 +22,7 @@ from models.user import User
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
 from services.email_notifications import notify_pix_received, notify_recharge_success
+from services.money import para_mostrar
 
 logger = logging.getLogger(__name__)
 # Cuánto vale una notificación firmada antes de considerarla vieja. El mismo
@@ -350,8 +351,8 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
     # Notify user (in-app)
     await create_notification(
         user_id=user_id,
-        title="💰 Pago PIX Confirmado",
-        message=f"Se han añadido R$ {amount_ris:.2f} a tu {balance_type}.",
+        title="Recibimos tu pago por PIX",
+        message=f"Acreditamos R$ {para_mostrar(amount_ris)} en tu {balance_type}.",
         notification_type="pix_received",
         data={"payment_id": payment_id, "amount": amount_ris}
     )
@@ -824,8 +825,8 @@ async def _handle_card_webhook(card_payment: dict, mp_payment_id: str) -> dict:
 
         await create_notification(
             user_id=user_id,
-            title="💳 Pago con Tarjeta Aprobado",
-            message=f"Se han añadido R$ {amount_ris:.2f} a tu saldo.",
+            title="Recibimos tu pago con tarjeta",
+            message=f"Acreditamos R$ {para_mostrar(amount_ris)} en tu saldo.",
             notification_type="card_received",
             data={"payment_id": mp_payment_id, "amount": amount_ris},
         )
