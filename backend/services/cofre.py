@@ -70,6 +70,7 @@ COMO ESTA CIFRADO
 """
 import base64
 import hashlib
+import hmac
 import logging
 import os
 
@@ -99,21 +100,122 @@ class CofreCerrado(Exception):
     """No se puede cifrar: falta la llave o está mal. El mensaje va al usuario."""
 
 
-def _bytes_de_llave(valor):
-    """Una llave de 32 bytes a partir del texto de la variable de entorno."""
+# ── De qué puede estar hecha una llave ─────────────────────────────────────
+#
+# EL MINIMO DE LARGO, Y POR QUE ES UN NUMERO Y NO UNA REGLA DE CONTRASEÑAS
+#
+#   Una llave generada al azar por un gestor de contraseñas tiene 40 o 64
+#   caracteres y pasa esto sin enterarse. El mínimo no está para molestar a esa:
+#   está para frenar la que alguien escribe a mano queriendo poder recordarla,
+#   que es exactamente la que no sirve. No se piden mayúsculas ni símbolos
+#   porque eso empuja a inventar «Risapp2026!», que cumple la regla y es peor
+#   que veinticuatro letras al azar.
+MINIMO_DE_LA_LLAVE = 24
+
+# Y un mínimo de caracteres DISTINTOS: «aaaaaaaa…» treinta veces cumple el largo
+# y no aporta nada. Cualquier llave sorteada lo pasa de sobra.
+MINIMO_DE_DISTINTOS = 10
+
+# El prefijo con el que se derivan los 32 bytes de una llave escrita como texto.
+#
+#   ESTE TEXTO NO SE CAMBIA NUNCA. Cambiarlo hace que la misma llave dé otros 32
+#   bytes, y entonces los documentos cifrados con ella no se abren más. Si
+#   alguna vez hiciera falta otra derivación, va con otro nombre y probando las
+#   dos al leer, como ya se hace con la llave anterior.
+_SAL_DE_LA_DERIVACION = b"llave-del-cofre:v1:"
+
+
+def bytes_y_motivo(valor):
+    """Los 32 bytes de una llave escrita, y si no se puede, POR QUE.
+
+    DOS FORMAS DE ESCRIBIR UNA LLAVE, Y POR QUE HAY DOS
+
+        La primera son 32 bytes en base64 —44 caracteres— que es lo que genera
+        el panel. Se reconoce porque decodifica a 32 bytes justos, y se usa
+        tal cual.
+
+        La segunda es CUALQUIER TEXTO LARGO, del que se derivan los 32 bytes con
+        sha256. Existe porque la primera forma, sola, obligaba al dueño del
+        proyecto a abrir una terminal y correr Python para poder llenar una
+        variable de entorno. En este proyecto hay una regla escrita sobre eso:
+        configurar nunca puede requerir tocar código. Con la segunda forma
+        alcanza el botón «generar contraseña» de cualquier gestor.
+
+        EL ORDEN NO SE CAMBIA. Si la derivación se probara primero, una llave en
+        base64 que ya estuviera en uso pasaría a dar OTROS 32 bytes, y todo lo
+        cifrado con ella quedaría ilegible.
+
+    POR QUE DEVUELVE EL MOTIVO Y NO SOLO `None`
+
+        Porque hay dos lectores: los registros del servidor y una persona
+        parada frente al panel con la llave en la mano. Si el motivo se armara
+        en dos lugares, un día dirían cosas distintas — y el día que eso pase es
+        el día en que alguien está tratando de entender por qué su llave no
+        entra.
+    """
     texto = (valor or "").strip()
     if not texto:
-        return None
+        return None, "No hay ninguna llave escrita."
+
+    # LO QUE DISCRIMINA UNA FORMA DE LA OTRA ES QUE DECODIFIQUE A 32 BYTES
+    # EXACTOS, y nada más. La primera versión de esto traía además una lista de
+    # largos permitidos y el alfabeto de base64, para que una contraseña con un
+    # «!» en el medio no se colara por esta rama: `b64decode` sin `validate`
+    # descarta en silencio lo que no es del alfabeto.
+    #
+    # Ninguna de las dos hacía nada, y se comprobó rompiéndolas: quitar un
+    # carácter cambia el largo, y un largo que no es múltiplo de cuatro hace
+    # fallar el decodificador antes de devolver nada. O sea que la puerta que
+    # pretendían cerrar no existe mientras se exijan 32 bytes justos.
+    #
+    # Se fueron. Dos guardas que se tapan entre sí y no se pueden romper es
+    # justo lo que este proyecto ya pagó una vez: nadie sabe cuál de las dos
+    # anda, y el día que una se toca nadie se entera.
     try:
         crudo = base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
     except Exception:
-        logger.error("cofre: la llave no está en base64. Generá una con "
-                     "`python backend/scripts/cofre.py crear`.")
-        return None
-    if len(crudo) != 32:
-        logger.error("cofre: la llave tiene %d bytes y tiene que tener 32.", len(crudo))
-        return None
+        crudo = None
+    if crudo is not None and len(crudo) == 32:
+        return crudo, ""
+
+    if len(texto) < MINIMO_DE_LA_LLAVE:
+        return None, (
+            f"La llave tiene {len(texto)} caracteres y necesita al menos "
+            f"{MINIMO_DE_LA_LLAVE}. Usá el botón «generar contraseña» de tu "
+            "gestor de contraseñas, o el del panel.")
+
+    if len(set(texto)) < MINIMO_DE_DISTINTOS:
+        return None, (
+            "La llave repite muy pocos caracteres distintos. Tiene que ser algo "
+            "sorteado al azar, no una palabra ni una tecla repetida.")
+
+    return hashlib.sha256(_SAL_DE_LA_DERIVACION + texto.encode("utf-8")).digest(), ""
+
+
+def _bytes_de_llave(valor):
+    """Los 32 bytes, o `None` con el motivo escrito en los registros."""
+    crudo, motivo = bytes_y_motivo(valor)
+    if crudo is None and (valor or "").strip():
+        # El caso «no hay llave» no se registra: es el estado normal mientras el
+        # cofre está apagado, y un error por cada lectura llenaría los registros
+        # de ruido justo donde hay que poder ver los problemas de verdad.
+        logger.error("cofre: la llave puesta no sirve. %s", motivo)
     return crudo
+
+
+def llave_nueva() -> dict:
+    """Una llave nueva al azar, con su huella. NO la guarda en ningún lado.
+
+    Sortear una llave no cambia nada: hasta que alguien la escriba en la
+    variable de entorno, esto es texto en una pantalla. Por eso puede vivir
+    detrás de un botón, mientras que cifrar los documentos viejos sigue siendo
+    un guión que se corre a mano.
+    """
+    crudo = os.urandom(32)
+    return {
+        "llave": base64.urlsafe_b64encode(crudo).decode("ascii"),
+        "huella": huella(crudo),
+    }
 
 
 def llave_actual():
@@ -215,12 +317,18 @@ def guardar(valor):
 
 # ── Abrir ──────────────────────────────────────────────────────────────────
 
-def abrir(valor):
+def abrir(valor, llaves=None):
     """El valor original. Un valor en claro pasa tal cual.
 
     Devuelve `None` si está cifrado y no se pudo abrir. Nunca devuelve algo a
     medias: GCM autentica, así que un byte cambiado en la base se detecta acá y
     no termina en la pantalla como una foto rota que nadie sabe explicar.
+
+    `llaves` sirve para preguntar «¿ESTA llave abre esto?» sin tocar el entorno,
+    que es lo que necesita el cotejo del panel. Se pasa la lista explícita en vez
+    de escribir un descifrado aparte: un segundo descifrado en otro lugar se
+    desincroniza del de verdad, y el día que eso pase la respuesta del panel
+    sería «tu llave sirve» sobre documentos que no se abren.
     """
     if not isinstance(valor, str) or not valor:
         return valor
@@ -238,7 +346,7 @@ def abrir(valor):
 
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    for llave in llaves_para_leer():
+    for llave in (llaves_para_leer() if llaves is None else llaves):
         try:
             abierto = AESGCM(llave).decrypt(nonce, sellado, None)
         except Exception:
@@ -247,9 +355,15 @@ def abrir(valor):
             return f"data:{tipo};base64,{base64.b64encode(abierto).decode('ascii')}"
         return abierto.decode("utf-8", errors="replace")
 
-    logger.error("cofre: NO SE PUDO ABRIR un documento. La llave que está "
-                 "corriendo (huella %s) no es la que lo cifró. Ver "
-                 "docs/la-llave-del-cofre.md antes de tocar nada.", huella())
+    if llaves is None:
+        # Sólo se grita cuando el que no abre es el cofre de verdad. Con `llaves`
+        # dadas, el que pregunta es el cotejo del panel y un «no abre» es una
+        # respuesta esperada: registrarlo como alarma haría que probar una llave
+        # equivocada a propósito ensuciara los registros con el aviso más grave
+        # que tiene este módulo, que es justo el que no se puede ignorar.
+        logger.error("cofre: NO SE PUDO ABRIR un documento. La llave que está "
+                     "corriendo (huella %s) no es la que lo cifró. Ver "
+                     "docs/la-llave-del-cofre.md antes de tocar nada.", huella())
     return None
 
 
@@ -347,3 +461,83 @@ async def revisar(db) -> dict:
 
     estado["detalle"] = "Cofre abierto y verificado contra el testigo."
     return estado
+
+
+async def cotejar(db, texto) -> dict:
+    """¿Esta llave anotada sirve, y es la que abre lo que ya está guardado?
+
+    POR QUE ESTO NO ES UN LUJO
+
+        El procedimiento entero descansa en una frase: «guardá la llave en tres
+        lugares que no fallen juntos». Una instrucción así no vale nada si quien
+        la sigue no puede comprobar que la siguió. Copiar cuarenta caracteres a
+        mano y no tener forma de saber si se copiaron bien es guardar un respaldo
+        que nadie probó — que es lo mismo que no tener respaldo, sólo que con la
+        tranquilidad puesta.
+
+        Antes esto se contestaba con un guión en una terminal. Eso dejaba el
+        único paso que de verdad protege los documentos fuera del alcance de
+        quien tiene que darlo.
+
+    LAS TRES PREGUNTAS, QUE SON DISTINTAS Y NO SE MEZCLAN
+
+        1. `sirve`: el texto tiene forma de llave. Es lo mínimo.
+        2. `es_la_que_corre`: es la misma que está puesta en el servidor ahora.
+        3. `abre_los_documentos`: con ella se abre el testigo, o sea que es la
+           llave con la que se cifró lo que ya está guardado. Es la única de las
+           tres que responde «¿podría recuperar las fotos con esto?».
+
+        La 3 vale `None` —no «False»— cuando no hay testigo todavía, porque el
+        cofre nunca se prendió. Decir «no abre los documentos» ahí sería mandar a
+        alguien a buscar un problema que no existe.
+    """
+    llave, motivo = bytes_y_motivo(texto)
+    if llave is None:
+        # Las otras dos en `None` y no en `False`: si el texto no tiene forma de
+        # llave, no se llegó a evaluar ninguna de las dos preguntas. Decir «no es
+        # la que corre» ahí es pintar de rojo algo que nadie miró, y tres
+        # renglones rojos esconden cuál es el que importa — que es el primero.
+        return {"sirve": False, "huella": "", "es_la_que_corre": None,
+                "abre_los_documentos": None, "detalle": motivo}
+
+    puesta = llave_actual()
+    respuesta = {
+        "sirve": True,
+        "huella": huella(llave),
+        # `None` cuando no hay ninguna llave puesta en el servidor, por el mismo
+        # motivo que `abre_los_documentos`: sin nada con qué comparar, «no es la
+        # misma» es cierto y se lee como una alarma. La pantalla lo pintaba en
+        # rojo con el cofre apagado —que es el estado normal— y eso se vio en la
+        # primera captura, no en los tests: las tres respuestas eran correctas
+        # una por una y el conjunto asustaba.
+        #
+        # `compare_digest` y no `==`: comparar secretos así es la costumbre
+        # correcta y no cuesta nada. Acá el que pregunta ya es el super
+        # administrador, así que no cambia el riesgo — cambia que la costumbre
+        # quede escrita donde alguien la va a copiar.
+        "es_la_que_corre": hmac.compare_digest(llave, puesta) if puesta else None,
+        "abre_los_documentos": None,
+        "detalle": "",
+    }
+
+    try:
+        testigo = await db.config.find_one({"_id": "cofre_testigo"})
+    except Exception as e:
+        respuesta["detalle"] = (
+            "La llave tiene forma válida, pero no se pudo llegar a la base para "
+            f"comprobar si es la de los documentos. ({type(e).__name__})")
+        return respuesta
+
+    if not testigo or not testigo.get("testigo"):
+        respuesta["detalle"] = (
+            "La llave tiene forma válida. Todavía no hay documentos cifrados con "
+            "ninguna llave, así que no hay con qué compararla.")
+        return respuesta
+
+    respuesta["abre_los_documentos"] = abrir(testigo["testigo"], llaves=[llave]) == TESTIGO
+    respuesta["detalle"] = (
+        "Con esta llave se abren los documentos guardados."
+        if respuesta["abre_los_documentos"] else
+        "Esta llave NO abre los documentos guardados. Los cifró otra: la de "
+        f"huella {testigo.get('huella')}.")
+    return respuesta
