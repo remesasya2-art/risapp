@@ -296,8 +296,6 @@ def test_cuando_se_puede_no_se_muestra_ningun_aviso():
 # ══════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.parametrize("rol, destino", [
-    ("socio", "/partner"),
-    ("socio_gestor", "/gestor"),
     ("admin", "/admin"),
     ("super_admin", "/admin"),
 ])

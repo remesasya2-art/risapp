@@ -32,7 +32,7 @@ class User(BaseModel):
         if isinstance(v, Decimal128):
             return float(v.to_decimal())
         return v
-    role: str = "user"  # user, socio, socio_gestor, admin, super_admin
+    role: str = "user"  # user, agent, admin, super_admin
     permissions: List[str] = []
     verification_status: str = "unverified"  # unverified, pending, verified
     kyc_documents: List[str] = []

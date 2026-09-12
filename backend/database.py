@@ -56,9 +56,6 @@ async def create_indexes():
         await db.gestor_beneficiaries.create_index("beneficiary_id", unique=True)
         await db.gestor_beneficiaries.create_index("gestor_id")
 
-        # Partner indexes
-        await db.partner_earnings.create_index([("partner_id", 1), ("created_at", -1)])
-
         # Crypto deposits indexes (creditos USDT/USDC via NOWPayments)
         await db.crypto_deposits.create_index("order_id", unique=True)
         await db.crypto_deposits.create_index("user_id")

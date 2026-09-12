@@ -302,22 +302,20 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
     
     # Get user to check role
     user = await db.users.find_one({"user_id": user_id})
-    user_role = user.get("role", "user") if user else "user"
     amount_ris = payment.get("amount_ris", 0)
-    
-    # Determine which balance to credit based on user role
-    # For socio_gestor processing third-party payments -> balance_ris_terceros
-    # For regular users recharging their own account -> balance_ris (main balance)
-    is_gestor_recharge = payment.get("is_gestor_terceros", False)
-    
-    if user_role == "socio_gestor" and is_gestor_recharge:
-        # Gestor receiving third-party payment
-        ledger_account = "balance_ris_terceros"
-        balance_type = "saldo de terceros"
-    else:
-        # Regular user or gestor recharging their own account -> main balance
-        ledger_account = "balance_ris"
-        balance_type = "saldo principal"
+
+    # Siempre al saldo principal.
+    #
+    # Acá había una rama: si quien cobraba era un «socio gestor» y el cobro
+    # estaba marcado como de terceros, la plata iba a `balance_ris_terceros`,
+    # una cuenta aparte donde el gestor guardaba plata de SUS CLIENTES. Ese rol
+    # se eliminó, así que esa rama ya no la puede tomar nadie.
+    #
+    # Se saca en vez de dejarla: una rama muerta que mueve plata a un saldo que
+    # ninguna pantalla muestra es la clase de código que alguien reactiva sin
+    # entender qué era.
+    ledger_account = "balance_ris"
+    balance_type = "saldo principal"
 
     # El saldo y la línea del libro salen de la misma operación. Antes el saldo
     # posterior se leía crudo del documento y se le restaba el monto para sacar
@@ -333,13 +331,12 @@ async def process_pix_confirmation(payment_id: str, user_id: str):
         reference_id=payment_id,
         actor_type="webhook",
         actor_id="mercadopago",
-        user_snapshot=({"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user_role} if user else None),
+        user_snapshot=({"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user.get("role", "user")} if user else None),
         counterparty={"client_name": payment.get("client_name")},
         metadata={
             "amount_brl": payment.get("amount_brl"),
             "amount_ves": payment.get("amount_ves"),
             "mp_payment_id": payment.get("mp_payment_id"),
-            "is_gestor_terceros": is_gestor_recharge,
         },
         notes="Recarga por PIX (Mercado Pago)",
     )

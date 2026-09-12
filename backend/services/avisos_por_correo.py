@@ -68,9 +68,11 @@ POR_CORREO = {
     "crypto_send_underpaid_review":  "Tu pago quedó incompleto",
     "btc_enviado":                   "Tu envío con Bitcoin se completó",
     "btc_remesa_enviada":            "Tu remesa con Bitcoin se envió",
-    "gestor_transaction":            "Se registró un movimiento en tu cuenta",
-    # ── Lo demás que mueve el saldo ──────────────────────────────────────
-    "partner_bonus":                 "Te acreditamos un bono por referido",
+    # Acá vivían `gestor_transaction` y `partner_bonus`. Los dos salieron al
+    # eliminarse el área de socios y gestores: ya no los emite nadie. Se sacan
+    # y no se dejan «por las dudas» —una tabla con clases que nadie manda no
+    # se distingue de una tabla a la que le falta una, y hay un test que las
+    # cuenta de los dos lados justamente para eso.
     # ── Los paquetes ─────────────────────────────────────────────────────
     #
     # Pedido expreso: el usuario quiere enterarse por correo de CADA

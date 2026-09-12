@@ -605,21 +605,18 @@ async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get
     if user.get("role") == "super_admin" and admin.user_id != request.user_id:
         raise HTTPException(status_code=403, detail="No puedes modificar al administrador principal")
     
-    valid_roles = ["user", "socio", "socio_gestor", "super_admin"]
+    # `socio` y `socio_gestor` ya no existen.
+    #
+    # Y el código de referido NO se toca acá. Antes, ascender a alguien a socio
+    # le asignaba —o le PISABA— su código. Ahora lo recibe todo el mundo al
+    # registrarse, una sola vez: pisarlo dejaría huérfano a cada referido que
+    # ya hubiera usado el anterior.
+    valid_roles = ["user", "agent", "admin", "super_admin"]
     if request.new_role not in valid_roles:
         raise HTTPException(status_code=400, detail="Rol inválido")
-    
+
     update_data = {"role": request.new_role}
-    
-    if request.new_role == "socio":
-        update_data["referral_code"] = request.partner_code or f"REF{uuid.uuid4().hex[:8].upper()}"
-        update_data["is_partner"] = True
-        update_data["became_partner_at"] = datetime.now(timezone.utc)
-    elif request.new_role == "socio_gestor":
-        update_data["gestor_code"] = request.gestor_code or f"GES{uuid.uuid4().hex[:6].upper()}"
-        update_data["balance_ris_terceros"] = to_float(from_db(user.get("balance_ris_terceros", 0)))
-        update_data["became_gestor_at"] = datetime.now(timezone.utc)
-    
+
     await db.users.update_one({"user_id": request.user_id}, {"$set": update_data})
     
     await create_notification(
@@ -2073,72 +2070,6 @@ async def process_ves_recharge(
     
     return {"message": message}
 
-
-@router.get("/partners")
-async def get_all_partners(admin: User = Depends(get_super_admin)):
-    """Get all partners (socios)"""
-    partners = await db.users.find({"role": "socio"}).to_list(500)
-    
-    result = []
-    for p in partners:
-        # Get referrals count
-        referrals_count = await db.users.count_documents({"referred_by": p.get("referral_code")})
-        
-        # Get earnings
-        earnings = await db.partner_earnings.find({"partner_id": p["user_id"]}).to_list(1000)
-        total_earnings = sum(e.get("amount", 0) for e in earnings)
-        
-        # This month
-        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        month_earnings = sum(
-            e.get("amount", 0) for e in earnings
-            if e.get("created_at") and e["created_at"].replace(tzinfo=timezone.utc) >= month_start
-        )
-        
-        result.append({
-            "user_id": p["user_id"],
-            "name": p.get("name", ""),
-            "email": p.get("email", ""),
-            "referral_code": p.get("referral_code", ""),
-            "referrals_count": referrals_count,
-            "total_earnings": round(total_earnings, 2),
-            "month_earnings": round(month_earnings, 2),
-            "became_partner_at": p.get("became_partner_at"),
-            "created_at": p.get("created_at")
-        })
-    
-    return result
-
-@router.get("/gestors")
-async def get_all_gestors(admin: User = Depends(get_super_admin)):
-    """Get all gestors with stats"""
-    gestors = await db.users.find({"role": "socio_gestor"}).to_list(500)
-    
-    result = []
-    for g in gestors:
-        # Count transactions
-        tx_count = await db.gestor_transactions.count_documents({"gestor_id": g["user_id"]})
-        
-        # Total volume
-        transactions = await db.gestor_transactions.find({"gestor_id": g["user_id"]}).to_list(1000)
-        total_volume = sum(t.get("amount_ris", 0) for t in transactions)
-        
-        result.append({
-            "user_id": g["user_id"],
-            "name": g.get("name", ""),
-            "email": g.get("email", ""),
-            "gestor_code": g.get("gestor_code", ""),
-            "total_transactions": tx_count,
-            "total_volume": round(total_volume, 2),
-            "balance_ris": to_float(from_db(g.get("balance_ris", 0))),
-            "balance_ris_terceros": to_float(from_db(g.get("balance_ris_terceros", 0))),
-            "became_gestor_at": g.get("became_gestor_at"),
-            "created_at": g.get("created_at")
-        })
-    
-    return result
-
-# ============== RATES ==============
 
 @router.get("/rates")
 async def get_rates(admin: User = Depends(get_super_admin)):
