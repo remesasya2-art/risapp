@@ -36,6 +36,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/referidos", tags=["referidos"])
 
 
+@router.get("/mis-referidos")
+async def mis_referidos(pagina: int = 1,
+                        current_user: User = Depends(get_current_user)):
+    """Los referidos de QUIEN PREGUNTA, y nada más.
+
+    El `user_id` sale de la sesión y no de un parámetro. Si viniera por la
+    dirección, cualquiera podría pedir la lista de referidos de otro cambiando
+    un número —y ahí adentro van nombres de terceros—.
+    """
+    from services import bonos
+    return await bonos.mis_referidos(db, current_user.user_id, pagina=pagina)
+
+
 @router.get("/mi-codigo")
 async def mi_codigo(current_user: User = Depends(get_current_user)):
     """El código de referido de quien pregunta, y su enlace para compartir."""

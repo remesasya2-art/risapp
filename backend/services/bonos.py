@@ -486,7 +486,135 @@ async def _al_enviar_a_venezuela(db, user_id: str, monto_ris) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 4. Lo que la pantalla necesita saber
+# 4. La lista de referidos de una persona
+# ══════════════════════════════════════════════════════════════════════════
+
+POR_PAGINA = 20
+
+# Qué se le cuenta al dueño del código de cada persona que usó su enlace, y
+# qué no.
+#
+# LO QUE SE MUESTRA: el nombre de pila con la inicial del apellido, el mes en
+# que se registró, y en qué estado está EL BONO —con el motivo, si está
+# pendiente—.
+#
+# LO QUE NO: el correo. No le sirve para contactar a nadie que no pueda
+# contactar ya —a esa persona la invitó él— y es el dato más abusable de los
+# tres. Si algún día hace falta de verdad, es un campo más en la proyección y
+# una decisión escrita al lado.
+#
+# El motivo SI se muestra, por decisión del dueño del proyecto. Vale decirlo
+# claro: «le falta verificar su identidad» le cuenta a una persona algo del
+# estado de otra. Se aceptó porque sin el motivo la pantalla no sirve para lo
+# único que se le pide —saber a quién recordarle— y porque quien invitó ya
+# sabe quién es.
+MOTIVOS = {
+    PENDIENTE_KYC: "Le falta verificar su identidad",
+    PENDIENTE_ENVIO: "Le falta hacer su primer envío a Venezuela",
+    PAGADO: "Cobrado",
+    SIN_PAGO: "Sin bono",
+}
+
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+         "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def nombre_corto(nombre: str) -> str:
+    """«Ana Pereira Souza» → «Ana P.».
+
+    El nombre de pila entero y la inicial del apellido. Alcanza para que quien
+    invitó reconozca a quién invitó, y no publica el apellido completo de
+    nadie en una pantalla que alguien puede estar mirando por encima del
+    hombro en un colectivo.
+    """
+    partes = [p for p in (nombre or "").strip().split() if p]
+    if not partes:
+        return "Alguien"
+    if len(partes) == 1:
+        return partes[0]
+    return f"{partes[0]} {partes[1][0].upper()}."
+
+
+def _cuando(fecha) -> str:
+    """«marzo de 2026». El mes y no el día: para recordarle a alguien alcanza
+    con saber que fue hace mucho o hace poco, y el día exacto es más dato de
+    esa persona sin ser más útil."""
+    if not fecha:
+        return ""
+    try:
+        return f"{MESES[fecha.month - 1]} de {fecha.year}"
+    except Exception:                                        # pragma: no cover
+        return ""
+
+
+async def mis_referidos(db, user_id: str, *, pagina: int = 1) -> dict:
+    """Los números y la página de referidos de ESTA persona.
+
+    PAGINADA DESDE EL PRIMER DIA, aunque hoy nadie tenga veinte. Una lista que
+    crece sin techo se descubre cuando alguien tiene cuatrocientos y la
+    pantalla tarda diez segundos en abrir; y agregar la paginación después
+    obliga a cambiar la ruta, la pantalla y sus tests a la vez.
+    """
+    pagina = max(1, int(pagina or 1))
+    filtro = {"bono.referente": user_id}
+
+    total = await db.users.count_documents(filtro)
+
+    # Los números, contados por la base y no trayendo todo para contar en
+    # Python: con cuatrocientos referidos eso serían cuatrocientos documentos
+    # para mostrar cuatro números.
+    cobrados = await db.users.count_documents(
+        {**filtro, "bono.pago_al_referente": PAGADO})
+    pendientes = await db.users.count_documents(
+        {**filtro, "bono.pago_al_referente": {"$in": [PENDIENTE_KYC,
+                                                      PENDIENTE_ENVIO]}})
+
+    # Lo ganado sale del LIBRO y no de multiplicar cobrados por el monto de
+    # hoy: el monto se configura desde el panel y puede haber cambiado entre
+    # un cobro y otro. El libro dice lo que de verdad se acreditó.
+    ganado = quantize_money(0)
+    try:
+        async for linea in db.ledger.find(
+                {"user_id": user_id, "movement_type": "bono_referido",
+                 "direction": "credit"},
+                {"_id": 0, "amount": 1}):
+            ganado += quantize_money(linea.get("amount") or 0)
+    except Exception as e:                                   # pragma: no cover
+        logger.warning("bonos: no se pudo sumar lo ganado de %s: %s", user_id, e)
+
+    # Proyección por lista de lo permitido, como todo lo que ve el usuario.
+    # Sin esto acá viajarían los documentos de identidad de cada referido.
+    filas = []
+    cursor = (db.users.find(filtro, {"_id": 0, "name": 1, "full_name": 1,
+                                     "bono": 1})
+              .sort("bono.otorgado_en", -1)
+              .skip((pagina - 1) * POR_PAGINA)
+              .limit(POR_PAGINA))
+    async for persona in cursor:
+        bono = persona.get("bono") or {}
+        estado_del_pago = bono.get("pago_al_referente") or PENDIENTE_KYC
+        filas.append({
+            "nombre": nombre_corto(persona.get("full_name")
+                                   or persona.get("name")),
+            "cuando": _cuando(bono.get("otorgado_en")),
+            "cobrado": estado_del_pago == PAGADO,
+            "motivo": MOTIVOS.get(estado_del_pago, "Sin bono"),
+        })
+
+    return {
+        "total": total,
+        "cobrados": cobrados,
+        "pendientes": pendientes,
+        "ganado": str(ganado),
+        "pagina": pagina,
+        "por_pagina": POR_PAGINA,
+        "hay_mas": total > pagina * POR_PAGINA,
+        "referidos": filas,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5. Lo que la pantalla necesita saber del bono propio
 # ══════════════════════════════════════════════════════════════════════════
 
 def para_la_pantalla(usuario: dict) -> dict:

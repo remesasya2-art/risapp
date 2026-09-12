@@ -7,6 +7,7 @@ import { RateProvider } from './contexts/RateContext';
 // Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Referidos from './pages/Referidos';
 import Dashboard from './pages/Dashboard';
 import Send from './pages/Send';
 import Recharge from './pages/Recharge';
@@ -131,6 +132,7 @@ function AppRoutes() {
       <Route path="/recharge-ves" element={<ProtectedRoute><RechargeVES /></ProtectedRoute>} />
       <Route path="/credits/deposit" element={<ProtectedRoute><CreditsDeposit /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      <Route path="/referidos" element={<ProtectedRoute><Referidos /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
       <Route path="/envios" element={<ProtectedRoute><EnviosMis /></ProtectedRoute>} />
       <Route path="/envios/nuevo" element={<ProtectedRoute><EnvioNuevo /></ProtectedRoute>} />
