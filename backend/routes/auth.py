@@ -37,11 +37,32 @@ async def get_me(current_user: User = Depends(get_current_user)):
     user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
     if user:
         user['password_set'] = user.get('password_set', False)
-        # Normaliza los montos para que la API devuelva siempre numeros limpios,
-        # tolerando datos viejos (float) y futuros (Decimal128). No cambia el valor hoy.
-        for f in ("balance_ris", "balance_ves", "balance_ris_terceros", "balance_personal", "balance_terceros", "balance_usdt", "balance_usdc"):
-            if f in user and user[f] is not None:
+        # Normaliza los montos: la API devuelve números limpios, tolerando
+        # datos viejos (float) y nuevos (Decimal128).
+        #
+        # SE RECORREN LOS CAMPOS QUE EMPIEZAN CON `balance_`, y no una lista
+        # escrita a mano. La lista era eso, y le faltaba el saldo nuevo:
+        # `Decimal128` NO SE PUEDE SERIALIZAR A JSON, así que esta ruta
+        # —la más llamada de la aplicación— habría devuelto 500 a cada
+        # usuario que tuviera un bono, y el defecto habría aparecido recién en
+        # producción, cuando el primero cobrara.
+        #
+        # Una lista escrita a mano de campos a CONVERTIR no es lo mismo que una
+        # lista de campos a EXPONER: acá no se decide qué se muestra —el
+        # documento ya sale entero— sino de qué tipo sale. Olvidarse de un
+        # nombre no filtra nada; rompe la ruta. Así que se recorren todos.
+        for f in [k for k in user if k.startswith("balance_")]:
+            if user[f] is not None:
                 user[f] = to_float(from_db(user[f]))
+        # El bono, ya interpretado: cuánto hay, si está bloqueado y el texto que
+        # lo explica. Reemplaza al subdocumento crudo por dos motivos: la
+        # pantalla no tiene que deducir la regla —el texto lo arma el servidor,
+        # así que el monto y la condición no pueden discrepar— y dejan de
+        # viajar al navegador campos internos como el id de quien refirió, que
+        # es el identificador de OTRA persona.
+        if "bono" in user:
+            from services import bonos
+            user["bono"] = bonos.para_la_pantalla(user)
     return user
 
 @router.post("/logout")
@@ -221,6 +242,10 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
         # tipo del saldo dependía de quién creó al usuario.
         "balance_ris": to_decimal128(0),
         "balance_ves": to_decimal128(0),
+        # El bono de bienvenida vive en su propia cuenta y nace en cero, con
+        # el tipo correcto. Naciendo ausente, el primer `$inc` lo crearía con
+        # el tipo que trajera ese `$inc`.
+        "balance_ris_bono": to_decimal128(0),
         "role": "user",
         "verification_status": "unverified",
         "referred_by": pending.get("referred_by"),
@@ -233,6 +258,14 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
     
     await db.users.insert_one(user)
     await db.pending_verifications.delete_one({"email": email_lower})
+
+    # El bono de bienvenida, si se registró con el código de alguien. Va DESPUES
+    # del insert porque necesita que la cuenta exista, y en su propio try
+    # adentro del servicio: que el bono falle no puede dejar a medias un
+    # registro que ya creó la cuenta y ya mandó el correo.
+    if user.get("referred_by"):
+        from services import bonos
+        await bonos.al_registrarse(db, user_id, user["referred_by"])
     
     # Create session
     session_token = secrets.token_urlsafe(32)

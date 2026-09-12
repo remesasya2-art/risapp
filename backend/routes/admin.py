@@ -2304,6 +2304,13 @@ async def decide_verification(
             message="Tu identidad ha sido verificada exitosamente. Ya puedes usar todas las funciones de RIS App.",
             notification_type="verification_approved"
         )
+
+        # El bono: libera el de esta cuenta y le paga al dueño de su código. Las
+        # TRES rutas que aprueban un KYC llaman a esta misma función; si colgara de
+        # una sola, a los aprobados por las otras el bono les quedaría bloqueado
+        # para siempre y en silencio. Nunca levanta.
+        from services import bonos
+        await bonos.al_aprobarse_el_kyc(db, user_id)
         
         logger.info(f"Verification approved for {user_id} by {admin.user_id}")
         await auditoria.registrar(
@@ -2368,6 +2375,13 @@ async def process_verification(user_id: str, action: str, reason: str = None, ad
             message="Tu identidad ha sido verificada exitosamente.",
             notification_type="verification_approved"
         )
+
+        # El bono: libera el de esta cuenta y le paga al dueño de su código. Las
+        # TRES rutas que aprueban un KYC llaman a esta misma función; si colgara de
+        # una sola, a los aprobados por las otras el bono les quedaría bloqueado
+        # para siempre y en silencio. Nunca levanta.
+        from services import bonos
+        await bonos.al_aprobarse_el_kyc(db, user_id)
     elif action == "reject":
         await db.users.update_one(
             {"user_id": user_id},

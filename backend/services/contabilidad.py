@@ -123,6 +123,11 @@ PLAN_DE_CUENTAS = OrderedDict([
     ("2.1.02", {"nombre": "Saldo RIS de terceros", "tipo": PASIVO}),
     ("2.1.03", {"nombre": "Créditos USDT de usuarios", "tipo": PASIVO}),
     ("2.1.04", {"nombre": "Créditos USDC de usuarios", "tipo": PASIVO}),
+    # El bono de bienvenida. Es un PASIVO como los otros saldos —la empresa se
+    # lo debe a quien lo tiene— pero NO entra en la conciliación del pozo
+    # mientras está bloqueado, por el motivo que está explicado en
+    # `CUENTAS_DEL_PASIVO`.
+    ("2.1.05", {"nombre": "Bono de bienvenida", "tipo": PASIVO}),
     # Contrapartida de los traspasos entre dos cuentas del MISMO usuario. Las
     # dos patas del traspaso caen acá con signos opuestos, así que esta cuenta
     # tiene que quedar SIEMPRE en cero: si no, hay un traspaso a medias.
@@ -202,6 +207,21 @@ ASIENTOS = {
     "bono_referido": {
         "contra": "5.1.01",
         "glosa": "Bono por referido"},
+    # El bono de bienvenida que recibe quien se registra con un código. Es un
+    # EGRESO en el momento de otorgarlo y no cuando se libera: la empresa ya se
+    # comprometió a pagarlo, y el compromiso es el gasto.
+    "bono_bienvenida": {
+        "contra": "5.1.01",
+        "glosa": "Bono de bienvenida por registrarse con un código"},
+    # La liberación no es un gasto nuevo: es el MISMO bono cambiando de estado.
+    # Va contra la cuenta de traspasos internos, igual que cualquier traspaso
+    # entre dos cuentas del mismo usuario, porque sus dos patas se anulan y el
+    # balance no se mueve. Un asiento propio y no `traspaso_interno` para que
+    # en el libro se lea qué fue: si cayera en la cuenta puente, el chequeo de
+    # integridad lo denunciaría.
+    "bono_liberado": {
+        "contra": "2.1.99",
+        "glosa": "Bono de bienvenida liberado tras la verificación"},
     "reembolso_pago_incompleto": {
         "contra": "5.1.02",
         "glosa": "Reembolso por pago incompleto"},
@@ -230,6 +250,7 @@ ASIENTOS = {
 CUENTA_DEL_USUARIO = {
     "balance_ris": "2.1.01",
     "balance_ris_terceros": "2.1.02",
+    "balance_ris_bono": "2.1.05",
     "balance_usdt": "2.1.03",
     "balance_usdc": "2.1.04",
 }
@@ -744,6 +765,17 @@ async def integridad(*, libro: str = None, limite: int = 100, db=None) -> dict:
 # («1 BRL = 1 RIS»), `transactions.create_reais_send` paga la remesa a Brasil
 # «1 a 1», y `limits.py` lo documenta. Por eso el pasivo en RIS se compara
 # contra los reales sin pasar por ninguna tasa.
+# `balance_ris_bono` NO está en esta lista, y no es un olvido.
+#
+# El bono BLOQUEADO no se puede gastar: es una obligación que todavía no
+# existe, porque puede no liberarse nunca —si la persona no completa su
+# verificación, o si su documento ya cobró con otra cuenta—. Meterlo acá
+# mostraría un faltante de reales por plata que quizá nadie use, y un control
+# que denuncia un hueco que no es un hueco es un control que se deja de mirar.
+#
+# El bono LIBERADO sí es deuda, y sí entra: se suma aparte, mirando el estado
+# de cada bono, en `_pasivo_del_bono`. Se informa desglosado para que el número
+# se pueda explicar.
 CUENTAS_DEL_PASIVO = ("balance_ris", "balance_ris_terceros")
 MONEDA_QUE_RESPALDA = "BRL"
 
@@ -797,6 +829,11 @@ async def conciliacion_pozo(*, db=None) -> dict:
     campos = {"_id": 0, "user_id": 1}
     for campo in CUENTAS_DEL_PASIVO:
         campos[campo] = 1
+    # El bono, con su estado: el liberado es deuda y el bloqueado todavía no.
+    # Sin el estado no se pueden distinguir, y sumar los dos mostraría un
+    # faltante por plata que puede no liberarse nunca.
+    campos["balance_ris_bono"] = 1
+    campos["bono"] = 1
     try:
         usuarios = await base.users.find({}, campos).to_list(TOPE_ESCANEO + 1)
     except Exception as e:
@@ -811,14 +848,28 @@ async def conciliacion_pozo(*, db=None) -> dict:
     # ── El pasivo ────────────────────────────────────────────────────────
     por_cuenta = {c: ZERO for c in CUENTAS_DEL_PASIVO}
     con_saldo = 0
+    bono_liberado = ZERO
+    bono_bloqueado = ZERO
     for u in usuarios:
         suma_usuario = ZERO
         for campo in CUENTAS_DEL_PASIVO:
             monto = _monto(u.get(campo))
             por_cuenta[campo] += monto
             suma_usuario += monto
+
+        # El bono se clasifica por su estado y no por su saldo.
+        del_bono = _monto(u.get("balance_ris_bono"))
+        if del_bono != ZERO:
+            if ((u.get("bono") or {}).get("estado")) == "liberado":
+                bono_liberado += del_bono
+                suma_usuario += del_bono
+            else:
+                bono_bloqueado += del_bono
+
         if suma_usuario != ZERO:
             con_saldo += 1
+
+    por_cuenta["balance_ris_bono"] = bono_liberado
     pasivo = quantize_money(sum(por_cuenta.values(), ZERO))
 
     # ── El activo, y el capital de trabajo ───────────────────────────────
@@ -873,7 +924,17 @@ async def conciliacion_pozo(*, db=None) -> dict:
                      "cuentas": caja["cuentas"]}
             for moneda, caja in sorted(por_moneda_trabajo.items())
         },
+        # El bono, desglosado. El liberado YA está sumado arriba en el pasivo
+        # —se puede gastar, así que es deuda—; el bloqueado se informa acá para
+        # que se vea cuánto compromiso hay esperando una verificación.
+        "bono_de_bienvenida": {
+            "liberado_y_en_el_pasivo": str(quantize_money(bono_liberado)),
+            "bloqueado_y_fuera_del_pasivo": str(quantize_money(bono_bloqueado)),
+        },
         "no_incluido": [
+            "El bono de bienvenida BLOQUEADO: no se puede gastar hasta que la "
+            "cuenta apruebe su verificación, y puede no liberarse nunca. Se "
+            "informa aparte en `bono_de_bienvenida`.",
             "Los saldos en USDT y USDC de los usuarios, que tienen su propio "
             "libro y su propio respaldo.",
             "Los bancos que no son en BRL: son capital de trabajo y se informan "
