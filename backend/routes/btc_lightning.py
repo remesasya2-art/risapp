@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from services.aviso_de_tasa import avisar_si_hace_falta
 from services.notifications import avisar_al_personal
 from routes.dependencies import get_current_user, sin_transacciones_personales
+from services.money import para_mostrar
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
@@ -544,7 +545,9 @@ async def webhook_blink(request: Request):
         logger.warning(f"Error al registrar transaccion en historial: {e_hist}")
     try:
         from services.notifications import create_notification
-        await create_notification(user_id=user_id, title="Pago BTC recibido", message=f"Recibimos tu pago. Tu envío de {ves_recibe:,.2f} BTC-VES sera procesado en maximo 15 minutos.", notification_type="btc_payment")
+        # `data` lleva el número de la remesa para que el correo arme el
+        # comprobante. Ver `services/pasaje.py`.
+        await create_notification(user_id=user_id, title="Recibimos tu pago con Bitcoin", message=f"Tu envío de {para_mostrar(ves_recibe, 'BTC-VES')} se procesa en hasta 15 minutos.", notification_type="btc_payment", data={"remesa_id": remesa.get("remesa_id")})
     except Exception as e:
         logger.warning(f"Error notificacion usuario: {e}")
     beneficiario_data = remesa.get("beneficiario_data", {})
@@ -601,7 +604,7 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
     try:
         from services.notifications import create_notification
         nombre = remesa.get("beneficiario_data", {}).get("full_name", "tu beneficiario")
-        await create_notification(user_id=remesa["user_id"], title="Envío completado", message=f"Tu envío de {remesa['ves_recibe']:,.2f} Bs fue completado a {nombre}.", notification_type="btc_enviado")
+        await create_notification(user_id=remesa["user_id"], title="Tu envío se completó", message=f"Enviamos {para_mostrar(remesa['ves_recibe'], 'Bs')} a {nombre}.", notification_type="btc_enviado", data={"remesa_id": body.remesa_id})
     except Exception as e:
         logger.warning(f"Error notificacion: {e}")
     return {"ok": True, "msg": "Orden marcada como enviada.", "remesa_id": body.remesa_id}

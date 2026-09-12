@@ -22,7 +22,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from database import db
-from services.money import to_decimal, to_decimal128
+from services.money import para_mostrar, to_decimal, to_decimal128
 from services import saldos
 from services.notifications import create_notification
 from services.imagen_recibida import limpiar_lista
@@ -230,9 +230,12 @@ async def process_withdrawal(
 
         await create_notification(
             user_id=transaction["user_id"],
-            title="Retiro Completado",
-            message=f"Tu retiro de {transaction.get('amount_output', 0):.2f} VES ha sido procesado.",
-            notification_type="withdrawal_completed"
+            title="Tu retiro se completó",
+            message=f"Ya enviamos {para_mostrar(transaction.get('amount_output'), 'VES')} a tu beneficiario.",
+            notification_type="withdrawal_completed",
+            # El número de la operación viaja en el aviso para que el correo
+            # pueda armar el comprobante. Ver `services/pasaje.py`.
+            data={"transaction_id": transaction_id},
         )
 
         if transaction.get("gestor_transaction_id"):
@@ -296,9 +299,10 @@ async def process_withdrawal(
 
         await create_notification(
             user_id=transaction["user_id"],
-            title="Retiro Rechazado",
-            message="Tu retiro ha sido rechazado. El saldo ha sido devuelto.",
-            notification_type="withdrawal_rejected"
+            title="Tu retiro fue rechazado",
+            message="No pudimos procesarlo. Te devolvimos el saldo a tu cuenta.",
+            notification_type="withdrawal_rejected",
+            data={"transaction_id": transaction_id},
         )
 
         logger.info(f"[adminbrl] Retiro {transaction_id} RECHAZADO")
@@ -371,9 +375,12 @@ async def process_btc(
 
     await create_notification(
         user_id=remesa["user_id"],
-        title="Remesa BTC Enviada",
-        message=f"Tu remesa de {ves_recibe:.2f} VES ha sido enviada al beneficiario.",
-        notification_type="btc_remesa_enviada"
+        title="Tu remesa se envió",
+        message=f"Enviamos {para_mostrar(ves_recibe, 'VES')} a tu beneficiario.",
+        notification_type="btc_remesa_enviada",
+        # La remesa no tiene `transaction_id`: su operación en `transactions`
+        # se busca por `remesa_id`, y `pasaje` sabe buscar por los dos.
+        data={"remesa_id": request.remesa_id},
     )
 
     logger.info(f"[adminbrl] Remesa BTC {request.remesa_id} marcada como enviada.")

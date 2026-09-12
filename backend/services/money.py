@@ -71,6 +71,29 @@ def from_db(value, places: int = 2) -> Decimal:
     return quantize_money(value, places)
 
 
+def para_mostrar(value, moneda: str = "", places: int = 2) -> str:
+    """El monto como lo lee la gente: 4.500,00 y no 4500.0 ni 4500.00.
+
+    Está acá y no en cada lugar que muestra plata porque había tres formas
+    distintas conviviendo: `f"{x:.2f}"` en los avisos —que da «4500.00», con
+    el punto decimal del inglés—, una función privada en `services/limits.py`
+    con el formato correcto, y nada en el resto. El mismo monto se le mostraba
+    a la misma persona de dos maneras en la misma pantalla.
+
+    Devuelve vacío si no hay monto. No «0,00»: un aviso que dice «0,00 Bs»
+    porque el campo vino vacío se lee como «no te mandamos nada», que es una
+    acusación y no un dato que falta.
+    """
+    if value is None or value == "":
+        return ""
+    # El truco de las tres vueltas: el formato con coma de miles y punto
+    # decimal es el inglés, y acá es al revés. Se pasa por un carácter que no
+    # aparece en ningún número para no pisar lo ya cambiado.
+    texto = (f"{quantize_money(value, places):,.{places}f}"
+             .replace(",", "_").replace(".", ",").replace("_", "."))
+    return f"{texto} {moneda}".strip()
+
+
 def to_float(value, places: int = 2) -> float:
     """Convierte un monto a float redondeado, para respuestas JSON / compatibilidad con el frontend.
     El cálculo interno se mantiene en Decimal; esto es solo para mostrar."""

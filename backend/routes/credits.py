@@ -365,8 +365,8 @@ async def nowpayments_webhook(request: Request):
     try:
         await create_notification(
             user_id=claimed["user_id"],
-            title="Deposito confirmado",
-            message=f"Se acreditaron {credit_amount} {CREDIT_LABELS.get(claimed['currency'], claimed['currency'])} a tu cuenta.",
+            title="Tu depósito se acreditó",
+            message=f"Acreditamos {credit_amount} {CREDIT_LABELS.get(claimed['currency'], claimed['currency'])} en tu cuenta.",
             notification_type="credit_deposit",
             data={"order_id": order_id, "currency": claimed["currency"], "amount": str(credit_amount)},
         )

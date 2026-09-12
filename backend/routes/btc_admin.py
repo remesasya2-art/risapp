@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from database import db
 from models.user import User
 from routes.dependencies import get_super_admin
+from services.money import para_mostrar
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/btc", tags=["admin-btc"])
@@ -488,9 +489,12 @@ async def completar_remesa_btc(remesa_id: str, comprobante: Optional[str] = None
         nombre = (remesa.get("beneficiario_data") or {}).get("full_name", "el beneficiario")
         await create_notification(
             user_id=remesa["user_id"],
-            title="Envío completado",
-            message=f"Tu envío de {remesa.get('ves_recibe', 0):,.2f} Bs fue completado a {nombre}.",
+            title="Tu envío se completó",
+            message=f"Enviamos {para_mostrar(remesa.get('ves_recibe'), 'Bs')} a {nombre}.",
             notification_type="btc_enviado",
+            # Ver `services/pasaje.py`: la operación de una remesa se busca
+            # por `remesa_id` y no por `transaction_id`.
+            data={"remesa_id": remesa_id},
         )
     except Exception as e:
         logger.warning(f"Error notificando envío BTC completado: {e}")

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from database import db
 
-from services.money import from_db, to_float, to_decimal, to_decimal128
+from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from services import saldos
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
@@ -203,14 +203,21 @@ async def _notificar_underpaid_review(
     user_id: str,
     title: str = "Tu pago está en revisión",
     message: str = "Tu pago llegó incompleto. Lo estamos revisando y te contactaremos pronto.",
+    transaction_id: str | None = None,
 ):
-    """Aviso de paso a revision manual. Best-effort: nunca rompe el flujo."""
+    """Aviso de paso a revision manual. Best-effort: nunca rompe el flujo.
+
+    `transaction_id` es opcional a proposito: este ayudante lo llaman varios
+    caminos y no todos tienen la operacion a mano. Sin el, el correo sale como
+    parrafo en vez de comprobante, que es peor pero no es nada.
+    """
     try:
         await create_notification(
             user_id=user_id,
             title=title,
             message=message,
             notification_type="crypto_send_underpaid_review",
+            data={"transaction_id": transaction_id} if transaction_id else None,
         )
     except Exception as e:
         logger.warning(f"crypto-send: no se pudo notificar revision a {user_id}: {e}")
@@ -438,9 +445,12 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
 
     await create_notification(
         user_id=current_user.user_id,
-        title="Envío a Brasil solicitado",
-        message=f"Tu envío de {request.amount:.2f} RIS (R$ {amount_brl:.2f}) a {beneficiary.get('full_name')} fue recibido y está en cola.",
+        title="Tu envío a Brasil está en cola",
+        message=f"Recibimos tu envío de {para_mostrar(request.amount, 'RIS')} (R$ {para_mostrar(amount_brl)}) a {beneficiary.get('full_name')}. Te avisamos cuando salga.",
         notification_type="withdrawal_pending",
+        # El número de la operación viaja en el aviso para que el correo pueda
+        # armar el comprobante con forma de pasaje. Ver `services/pasaje.py`.
+        data={"transaction_id": tx_id},
     )
     _resp_reais = {"success": True, "transaction_id": tx_id, "display_id": display_id, "amount_brl": amount_brl}
     await store_idempotency_result(current_user.user_id, "reais_send", request.idempotency_key, _resp_reais)
@@ -584,9 +594,10 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     # Notify user
     await create_notification(
         user_id=current_user.user_id,
-        title="Retiro Solicitado",
-        message=f"Tu retiro de {request.amount} RIS ({amount_ves:.2f} VES) ha sido recibido y esta en cola.",
-        notification_type="withdrawal_pending"
+        title="Tu retiro está en cola",
+        message=f"Recibimos tu retiro de {para_mostrar(request.amount, 'RIS')} ({para_mostrar(amount_ves, 'VES')}). Te avisamos cuando salga.",
+        notification_type="withdrawal_pending",
+        data={"transaction_id": tx_id},
     )
 
     # Registrar en CentroGestion
@@ -761,9 +772,10 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
 
         await create_notification(
             user_id=current_user.user_id,
-            title="Envío Solicitado",
-            message=f"Tu envío de {request.amount} {key.upper()} ({amount_ves:.2f} VES) ha sido recibido y está en cola.",
+            title="Tu envío está en cola",
+            message=f"Recibimos tu envío de {request.amount} {key.upper()} ({para_mostrar(amount_ves, 'VES')}). Te avisamos cuando salga.",
             notification_type="withdrawal_pending",
+            data={"transaction_id": tx_id},
         )
         _resp_balance = {
             "transaction_id": tx_id,
@@ -907,7 +919,9 @@ async def get_crypto_withdrawal_status(transaction_id: str, current_user: User =
         if claimed:
             status = "underpaid_review"
             logger.info(f"crypto-send: topup vencido para {transaction_id}, pasa a underpaid_review")
-            await _notificar_underpaid_review(claimed["user_id"])
+            await _notificar_underpaid_review(
+                claimed["user_id"],
+                transaction_id=claimed.get("transaction_id"))
         else:
             _fresh = await db.transactions.find_one(
                 {"transaction_id": transaction_id}, {"_id": 0, "status": 1}
@@ -1005,9 +1019,10 @@ async def finalizar_orden_pagada(claimed: dict):
     try:
         await create_notification(
             user_id=claimed["user_id"],
-            title="Pago recibido",
-            message=f"Recibimos tu pago. Tu envío de {claimed.get('amount_output', 0):,.2f} VES será procesado pronto.",
+            title="Recibimos tu pago",
+            message=f"Tu envío de {para_mostrar(claimed.get('amount_output'), 'VES')} se procesa en breve.",
             notification_type="crypto_send_paid",
+            data={"transaction_id": claimed.get("transaction_id")},
         )
     except Exception as e:
         logger.warning(f"crypto-send webhook: no se pudo notificar al usuario: {e}")
@@ -1075,6 +1090,7 @@ async def webhook_crypto_send(request: Request):
             await _notificar_underpaid_review(
                 claimed["user_id"],
                 message="No pudimos completar el pago de la diferencia. Lo pasamos a revisión y te contactaremos.",
+                transaction_id=claimed.get("transaction_id"),
             )
         return {"received": True, "processed": False, "status": payment_status}
 
@@ -1142,6 +1158,7 @@ async def webhook_crypto_send(request: Request):
                 claimed["user_id"],
                 title="Tu pago sigue incompleto",
                 message="No pudimos completar tu envío con el pago adicional. Lo pasamos a revisión y te contactaremos.",
+                transaction_id=claimed.get("transaction_id"),
             )
         return {"received": True, "processed": False, "status": "underpaid_review"}
 
@@ -1222,7 +1239,9 @@ async def webhook_crypto_send(request: Request):
                 return_document=True,
             )
             if claimed:
-                await _notificar_underpaid_review(claimed["user_id"])
+                await _notificar_underpaid_review(
+                    claimed["user_id"],
+                    transaction_id=claimed.get("transaction_id"))
             return {"received": True, "processed": False, "status": "underpaid_review"}
 
         claimed = await db.transactions.find_one_and_update(
@@ -1262,7 +1281,9 @@ async def webhook_crypto_send(request: Request):
         return_document=True,
     )
     if claimed:
-        await _notificar_underpaid_review(claimed["user_id"])
+        await _notificar_underpaid_review(
+            claimed["user_id"],
+            transaction_id=claimed.get("transaction_id"))
     return {"received": True, "processed": False, "status": "underpaid_review"}
 
 

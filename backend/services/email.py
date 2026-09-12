@@ -54,22 +54,10 @@ async def send_verification_email(email: str, code: str, name: str) -> bool:
     return salio
 
 
-async def send_password_reset_email(email: str, temp_password: str) -> bool:
-    """La contraseña temporal para recuperar el acceso."""
-    salio = await correo.enviar(
-        email, "Restablecimiento de Contraseña",
-        _cuerpo("Restablecimiento de Contraseña", f"""
-            <p>Has solicitado restablecer tu contraseña.</p>
-            <p>Tu contraseña temporal es:</p>
-            {_destacado(temp_password)}
-            <p>Usa esta contraseña temporal para iniciar sesión. Deberás cambiarla en tu primer acceso.</p>
-            <p>Esta contraseña expira en 1 hora.</p>
-            <p style="color: #666; font-size: 12px;">Si no solicitaste este cambio, ignora este mensaje y tu contraseña actual seguirá funcionando.</p>
-        """),
-        que_es="correo de reseteo")
-    if salio:
-        logger.info("Correo de reseteo enviado a %s", registro.correo(email))
-    return salio
+# `send_password_reset_email` vivía acá: mandaba por correo una contraseña de
+# verdad para el reseteo del usuario. Esa puerta se cerró —ver
+# `routes/auth.py`—, así que la función se fue con ella. El reseteo que arranca
+# un ADMINISTRADOR es otra cosa y sigue abajo.
 
 
 async def send_admin_password_reset_email(email: str, temp_password: str,

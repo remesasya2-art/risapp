@@ -27,19 +27,16 @@ class VerifyEmailCodeRequest(BaseModel):
 class ResendVerificationCodeRequest(BaseModel):
     email: str
 
-class RequestPasswordResetRequest(BaseModel):
-    email: str
+class PedirCodigoDeCambioRequest(BaseModel):
+    current_password: str
 
-class ResetPasswordRequest(BaseModel):
-    email: str
-    temp_password: str
-    new_password: str
-    confirm_password: str
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
+    # El código que llegó al correo. Ver `routes/auth.change_password`.
+    codigo: str
 
 class UpdatePhoneRequest(BaseModel):
     email: str

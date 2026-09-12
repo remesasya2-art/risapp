@@ -3,6 +3,7 @@ Referral and partner bonus service
 """
 import logging
 from datetime import datetime, timezone
+from services.money import para_mostrar
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,8 @@ async def process_referral_bonus(user_id: str, recharge_amount: float):
         # Notify partner
         await create_notification(
             user_id=partner["user_id"],
-            title="💰 Comisión Recibida",
-            message=f"Has recibido {total_bonus:.2f} RIS de comisión por tu referido.",
+            title="Te acreditamos una comisión",
+            message=f"Recibiste {para_mostrar(total_bonus, 'RIS')} de comisión por tu referido.",
             notification_type="partner_bonus",
             data={"amount": total_bonus, "referred_user_id": user_id}
         )

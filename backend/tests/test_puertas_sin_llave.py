@@ -219,7 +219,11 @@ def test_una_excepcion_sin_motivo_no_vale():
 TOPES_ESPERADOS = [
     ("routes/auth.py", "auth.register", "el registro crea cuentas y manda correos"),
     ("routes/auth.py", "auth.verify_email", "el código de seis dígitos del correo"),
-    ("routes/auth.py", "auth.reset_password", "cada llamada corre bcrypt"),
+    # `auth.reset_password` estaba acá. Esa puerta —la contraseña temporal por
+    # correo— se cerró. La que la reemplaza es la de abajo: también corre
+    # bcrypt en cada llamada, y además manda un correo.
+    ("routes/auth.py", "auth.pedir_codigo_de_cambio",
+     "corre bcrypt y manda un correo en cada llamada"),
     ("routes/recovery.py", "recovery.verify_code", "el código de recuperación"),
     ("routes/recovery.py", "recovery.reset_password", "cada llamada hashea"),
     ("routes/recovery.py", "recovery.support_contact", "manda un mensaje a soporte"),

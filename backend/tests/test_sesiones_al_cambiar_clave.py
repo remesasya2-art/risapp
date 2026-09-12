@@ -230,8 +230,9 @@ def test_un_authorization_que_no_es_bearer_no_se_toma_como_token():
 
 # Cada entrada: el archivo, la función que cambia la contraseña, y si tiene que
 # conservar la sesión de quien la llama.
+# `routes/auth.py::reset_password` estaba acá y ya no existe: la puerta de la
+# contraseña temporal por correo se cerró. Quedan tres.
 CAMINOS = [
-    ("routes/auth.py", "reset_password", False),
     ("routes/auth.py", "change_password", True),
     ("routes/recovery.py", "reset_password", False),
     ("routes/admin.py", "admin_reset_password", False),

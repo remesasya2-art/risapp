@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import db
-from services.money import from_db, to_float, to_decimal, to_decimal128
+from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from services import saldos
 from models.user import User
 from models.requests import GestorBeneficiaryRequest, GestorTransactionRequest, GestorRechargeTercerosRequest
@@ -271,8 +271,8 @@ async def process_gestor_transaction(request: GestorTransactionRequest, current_
     # Notify gestor
     await create_notification(
         user_id=current_user.user_id,
-        title="📤 Transacción Registrada",
-        message=f"Envío de {amount_ves:.2f} VES a {beneficiary.get('full_name')} para cliente {request.client_name}. Pendiente de procesamiento.",
+        title="Registramos un movimiento en tu cuenta",
+        message=f"Envío de {para_mostrar(amount_ves, 'VES')} a {beneficiary.get('full_name')} para el cliente {request.client_name}. Queda pendiente de procesamiento.",
         notification_type="gestor_transaction",
         data={"transaction_id": tx_id, "amount_ves": amount_ves}
     )

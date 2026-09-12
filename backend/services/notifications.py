@@ -105,6 +105,20 @@ async def create_notification(
     })
 
     await _push_sin_romper(user_id, title, message, data)
+
+    # Y el correo, para las clases de aviso que lo llevan: todo lo que mueve
+    # dinero, y cada actualización de un paquete. La regla vive en una tabla
+    # —`services/avisos_por_correo.py`— y no repartida por los dieciocho
+    # lugares que avisan.
+    #
+    # Sólo lo personal: llenarle la casilla de trabajo a cada operador es la
+    # forma más rápida de que deje de mirar los correos de la aplicación.
+    if ambito == PERSONAL:
+        from services.avisos_por_correo import acompanar
+        # `data` va también: es de donde sale el número de la operación, y sin
+        # él el correo no puede armar el comprobante y sale como un párrafo.
+        await acompanar(user_id, title, message, notification_type, data)
+
     return notification_id
 
 

@@ -240,6 +240,9 @@ export default function Profile() {
   const { user, logout } = useAuth();
 
   const [cambiandoClave, setCambiandoClave] = useState(false);
+  // El código que llega al correo, y a qué casilla se mandó.
+  const [codigo, setCodigo] = useState('');
+  const [casillaTapada, setCasillaTapada] = useState('');
   const [claveALaVista, setClaveALaVista] = useState(false);
   const [clave, setClave] = useState({ actual: '', nueva: '', repetida: '' });
   const [guardando, setGuardando] = useState(false);
@@ -355,6 +358,30 @@ export default function Profile() {
     setCambiandoClave(false);
     setClaveALaVista(false);
     setClave({ actual: '', nueva: '', repetida: '' });
+    setCodigo('');
+    setCasillaTapada('');
+  };
+
+  // Cambiar la contraseña son DOS PASOS, y el segundo es el punto.
+  //
+  // Antes alcanzaba con la contraseña actual: quien agarraba un teléfono con
+  // la sesión abierta ponía la que el navegador ya tenía guardada y dejaba al
+  // dueño afuera. Ahora hace falta también el correo.
+  const pedirElCodigo = async (e) => {
+    e.preventDefault();
+    if (problemaDeLaClave) return toast.error(problemaDeLaClave);
+    setGuardando(true);
+    try {
+      const { data } = await api.post('/auth/change-password/pedir-codigo', {
+        current_password: clave.actual,
+      });
+      setCasillaTapada(data?.email_enmascarado || 'tu correo');
+      toast.success('Te mandamos un código por correo.');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo enviar el código');
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const cambiarClave = async (e) => {
@@ -366,6 +393,7 @@ export default function Profile() {
         current_password: clave.actual,
         new_password: clave.nueva,
         confirm_password: clave.repetida,
+        codigo: codigo,
       });
       // El servidor cierra TODAS las otras sesiones al cambiar la contraseña.
       // Es la mitad del sentido de cambiarla, y hasta ahora no se decía: quien
@@ -615,10 +643,12 @@ export default function Profile() {
               Cambiar contraseña
             </h3>
             <p style={{ ...ayuda, marginBottom: '16px' }}>
-              Al guardar se cierran todas tus otras sesiones. Esta no.
+              {casillaTapada
+                ? 'Escribí el código que te mandamos y guardá. Se cierran todas tus otras sesiones; esta no.'
+                : 'Te vamos a mandar un código al correo para confirmar. Al guardar se cierran todas tus otras sesiones; esta no.'}
             </p>
 
-            <form onSubmit={cambiarClave}>
+            <form onSubmit={casillaTapada ? cambiarClave : pedirElCodigo}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={etiqueta} htmlFor="pf-actual">Contraseña actual</label>
                 <input id="pf-actual" className="env-campo" style={campo}
@@ -661,6 +691,26 @@ export default function Profile() {
                 Mostrar lo que escribo
               </label>
 
+              {/* El segundo paso. Aparece recién cuando el código salió, para
+                  que nadie mire un campo vacío preguntándose de dónde lo saca. */}
+              {casillaTapada ? (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={etiqueta} htmlFor="pf-codigo">
+                    Código que te mandamos a {casillaTapada}
+                  </label>
+                  <input id="pf-codigo" className="env-campo"
+                    style={{ ...campo, letterSpacing: '4px', fontWeight: 700 }}
+                    autoComplete="one-time-code" inputMode="text"
+                    maxLength={12} value={codigo}
+                    placeholder="ABCD2345"
+                    onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+                    data-testid="codigo-de-cambio" />
+                  <p style={ayuda}>
+                    Vence en 10 minutos. Si no te llegó, revisá el correo no deseado.
+                  </p>
+                </div>
+              ) : null}
+
               {/* El botón de guardar está apagado mientras haya un problema.
                   Un botón apagado sin motivo a la vista es una pared: acá se
                   dice cuál es, apenas el usuario empezó a escribir. */}
@@ -677,9 +727,12 @@ export default function Profile() {
                   Cancelar
                 </Boton>
                 <Boton tipo="primario" ancho enviar
-                  disabled={guardando || Boolean(problemaDeLaClave)}
+                  disabled={guardando || Boolean(problemaDeLaClave)
+                            || (Boolean(casillaTapada) && !codigo.trim())}
                   Icono={Check} testid="save-password-btn">
-                  {guardando ? 'Guardando…' : 'Guardar'}
+                  {guardando
+                    ? (casillaTapada ? 'Guardando…' : 'Enviando…')
+                    : (casillaTapada ? 'Guardar' : 'Enviarme el código')}
                 </Boton>
               </div>
             </form>

@@ -31,6 +31,7 @@ from models.user import User
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
 from services import bancos, pagos_una_sola_vez, saldos
+from services.money import para_mostrar
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -302,8 +303,8 @@ async def process_card_payment(
             # 2. Notification
             await create_notification(
                 user_id=current_user.user_id,
-                title="💳 Pago con Tarjeta Aprobado",
-                message=f"Se han añadido R$ {body.amount_ris:.2f} a tu saldo.",
+                title="Recibimos tu pago con tarjeta",
+                message=f"Acreditamos R$ {para_mostrar(body.amount_ris)} en tu saldo.",
                 notification_type="card_received",
                 data={"payment_id": payment_id, "amount": body.amount_ris},
             )

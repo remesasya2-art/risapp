@@ -2,7 +2,6 @@
 Password Recovery routes - Identity verification and password reset
 """
 import uuid
-import random
 import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Request
@@ -11,6 +10,7 @@ from pydantic import BaseModel, EmailStr
 from pymongo import ReturnDocument
 
 from database import db
+from services import codigos
 from services import registro
 from services import sesiones
 from services.email_notifications import send_email
@@ -93,8 +93,13 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
             # No revelamos cual campo especifico fallo (evita el oraculo campo-por-campo).
             raise HTTPException(status_code=400, detail=GENERIC_ERROR)
 
-        # Generate 6-digit verification code
-        code = str(random.randint(100000, 999999))
+        # El código, con la fuente de azar del SISTEMA.
+        #
+        # Acá había `random.randint`, que es un generador predecible: arranca
+        # de una semilla y quien vea unos cuantos valores puede calcular los
+        # que siguen. En el código que deja cambiar la contraseña de una
+        # cuenta, eso es la puerta. Ver `services/codigos.py`.
+        code = codigos.nuevo()
 
         # Store recovery attempt with expiration (5 minutes)
         recovery_id = f"rec_{uuid.uuid4().hex[:12]}"
@@ -122,7 +127,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
                     <p>Hola {data.full_name},</p>
                     <p>Tu código de verificación es:</p>
                     <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
-                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">{code}</span>
+                        <span style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #111827;">{code}</span>
                     </div>
                     <p style="color: #ef4444; font-weight: 600;">⚠️ Este código expira en 5 minutos.</p>
                     <p style="color: #6b7280; font-size: 14px;">Si no solicitaste este código, ignora este mensaje.</p>
@@ -172,7 +177,7 @@ async def verify_code(data: VerifyCodeRequest, request: Request):
         raise HTTPException(status_code=400, detail="Máximo de intentos alcanzado. Solicita un nuevo código.")
     
     # Verify code
-    if recovery["code"] != data.code:
+    if not codigos.coincide(data.code, recovery["code"]):
         await db.password_recovery.update_one(
             {"_id": recovery["_id"]},
             {"$inc": {"attempts": 1}}
