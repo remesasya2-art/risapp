@@ -89,9 +89,17 @@ def con_trabajo(base):
         {"caso_id": "c2", "estado": "en_curso"},
         {"caso_id": "c3", "estado": "cerrado"},
     ]))
+    # Una por cada parada de la cola, más una ya entregada. El contador tiene
+    # que distinguir dónde hay trabajo NUESTRO y dónde se espera a otro.
     corre(base.envios.insert_many([
-        {"envio_id": "e1", "estado": "disponible_retiro"},
-        {"envio_id": "e2", "estado": "entregado_transportista"},
+        {"envio_id": "e1", "estado": "disponible_retiro"},      # cuenta
+        {"envio_id": "e2", "estado": "en_transito_origen"},     # cuenta
+        {"envio_id": "e3", "estado": "recibido_pacaraima"},     # cuenta
+        {"envio_id": "e4", "estado": "repesado"},               # cuenta
+        {"envio_id": "e5", "estado": "retenido"},               # cuenta
+        {"envio_id": "e6", "estado": "pago_pendiente"},         # espera al cliente
+        {"envio_id": "e7", "estado": "en_transito_int"},         # está en la ruta
+        {"envio_id": "e8", "estado": "entregado_transportista"}, # terminado
     ]))
     corre(base.crypto_deposits.insert_many([
         {"order_id": "d1", "status": "pending"},
@@ -110,7 +118,11 @@ def test_cuenta_lo_que_espera_en_cada_seccion(con_trabajo):
     assert n["diferencias"] == 1
     assert n["kyc"] == 1
     assert n["support"] == 2, "`cerrado` no espera a nadie."
-    assert n["operacion"] == 1
+    assert n["operacion"] == 5, (
+        "El contador de la cola de envíos tiene que sumar las CINCO paradas "
+        "donde el trabajo es nuestro. Antes contaba una sola "
+        "—`disponible_retiro`—, así que la pestaña decía 0 con cinco paquetes "
+        "esperando verificación y tres para repesar.")
     assert n["credits"] == 1
     assert n["btc"] == 2, "Pagada y en revisión manual: las dos esperan."
 
@@ -248,3 +260,63 @@ def test_la_ruta_le_da_a_cada_uno_lo_suyo(con_trabajo):
     from routes import admin
     r = corre(admin.get_pendientes(quien("agent", "support.view")))
     assert set(r["pendientes"]) == {"support"}
+
+
+# ─── El contador de la cola, parada por parada ────────────────────────────
+#
+# El defecto que esto cierra: contaba UNA de las siete paradas
+# (`disponible_retiro`). La pestaña decía 1 mientras el operador entraba, caía
+# en «Por verificar», veía 0 y pensaba que el número estaba pegado. Y al
+# revés, que es peor: con cinco paquetes esperando verificación la pestaña
+# decía 0.
+
+def test_cada_parada_que_espera_trabajo_nuestro_suma_de_a_una(base):
+    """Una por vez, para que se vea cuál de las cinco falla si alguna falla."""
+    for parada in pendientes.PARADAS_QUE_ESPERAN:
+        corre(base.envios.delete_many({}))
+        corre(base.envios.insert_one({"envio_id": "x", "estado": parada}))
+        n = corre(pendientes.contar_para(JEFA))
+        assert n.get("operacion") == 1, (
+            f"un envío en «{parada}» no lo cuenta la pestaña, y ahí hay "
+            "trabajo nuestro esperando")
+
+
+def test_las_paradas_donde_se_espera_a_otro_no_suman(base):
+    """Un número que no baja haciendo trabajo deja de mirarse.
+
+    `pago_pendiente` espera que el cliente pague y `en_transito_int` espera que
+    el paquete llegue. Contarlos dejaría la pestaña con un número permanente
+    que nadie puede hacer bajar.
+    """
+    for parada in ("pago_pendiente", "en_transito_int"):
+        corre(base.envios.delete_many({}))
+        corre(base.envios.insert_one({"envio_id": "x", "estado": parada}))
+        n = corre(pendientes.contar_para(JEFA))
+        assert not n.get("operacion"), (
+            f"«{parada}» suma al contador, y ahí no hay nada que podamos hacer")
+
+
+def test_las_paradas_del_contador_existen_de_verdad_en_la_pantalla():
+    """Que la lista del backend y las paradas de la pantalla no se separen.
+
+    Un estado mal escrito acá no da error: simplemente no cuenta nada, y la
+    pestaña vuelve a decir 0 para siempre. Se leen las paradas del archivo del
+    frontend, que es donde está la verdad de cuáles hay.
+    """
+    import pathlib
+    import re
+
+    archivo = (pathlib.Path(_BACKEND).parent / "frontend" / "src"
+               / "components" / "admin" / "envios" / "operacion.js")
+    assert archivo.exists(), f"no está {archivo}"
+    de_la_pantalla = set(re.findall(r"estado:\s*'([a-z_]+)'",
+                                    archivo.read_text(encoding="utf-8")))
+    assert len(de_la_pantalla) >= 7, (
+        f"el extractor encontró {sorted(de_la_pantalla)} y la cola tiene siete "
+        "paradas. Si el archivo se reescribió, hay que ajustar la expresión.")
+
+    inventadas = set(pendientes.PARADAS_QUE_ESPERAN) - de_la_pantalla
+    assert not inventadas, (
+        f"PARADAS_QUE_ESPERAN nombra {sorted(inventadas)}, que no existe(n) "
+        "entre las paradas de la cola. Un estado mal escrito no da error: "
+        "simplemente no cuenta nada y la pestaña dice 0 para siempre.")

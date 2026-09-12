@@ -83,6 +83,45 @@ async def _casos_de_soporte() -> int:
 #
 # La clave es la MISMA que usa la pantalla para la pestaña: sin eso hay que
 # mantener una traducción aparte, y la traducción se desactualiza.
+# ─── Qué cuenta como «hay trabajo» en la cola de envíos ──────────────────
+#
+# EL DEFECTO QUE ESTO CIERRA
+#
+#     Antes se contaba una sola parada: `disponible_retiro` («En el
+#     mostrador»). La cola tiene SIETE, así que la pestaña decía 1 mientras el
+#     operador entraba, caía en «Por verificar», veía 0, y pensaba que el
+#     número estaba pegado. Y al revés, que es peor: con cinco paquetes
+#     esperando verificación y tres para repesar, la pestaña decía 0.
+#
+# POR QUE ESTAS CINCO Y NO LAS SIETE
+#
+#     Un número en una pestaña contesta una pregunta: «¿tengo que hacer algo
+#     acá?». Así que se cuentan las paradas donde el trabajo es NUESTRO:
+#
+#       · en_transito_origen  — hay que leer el peso y emitir el cobro
+#       · disponible_retiro   — hay que ir a retirar el lote
+#       · recibido_pacaraima  — hay que repesar
+#       · repesado            — hay que despachar
+#       · retenido            — hay que resolverlo
+#
+#     Quedan afuera las dos donde se espera a otro, porque un número que no
+#     baja haciendo trabajo deja de mirarse:
+#
+#       · pago_pendiente  — espera que el CLIENTE pague. Es la palanca de
+#         cobro del negocio y se ve en su propia parada, pero no es tarea
+#         nuestra.
+#       · en_transito_int — está en la ruta a Santa Elena. Cuando llegue pasa
+#         a entregarse; hasta entonces no hay nada que hacer.
+#
+#     Si algún día conviene otro criterio, es esta tupla y nada más.
+PARADAS_QUE_ESPERAN = (
+    "en_transito_origen",
+    "disponible_retiro",
+    "recibido_pacaraima",
+    "repesado",
+    "retenido",
+)
+
 SECCIONES = (
     ("ordenes",     SOLO_SUPER,     _ordenes_por_procesar),
     ("diferencias", SOLO_SUPER,     lambda: _contar("transactions", {
@@ -97,7 +136,7 @@ SECCIONES = (
                                                     {"status": "pending"})),
     ("support",     "support.view", _casos_de_soporte),
     ("operacion",   "envios.view",  lambda: _contar("envios",
-                                                    {"estado": "disponible_retiro"})),
+                                                    {"estado": {"$in": PARADAS_QUE_ESPERAN}})),
 )
 
 

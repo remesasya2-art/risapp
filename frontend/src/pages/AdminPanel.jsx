@@ -246,11 +246,20 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   }, []);
 
+  // Cada minuto, Y CADA VEZ QUE SE CAMBIA DE PESTAÑA.
+  //
+  // Faltaba lo segundo, y se notaba: el operador entraba a una sección,
+  // resolvía lo que había, y el número de la pestaña seguía ahí hasta que el
+  // reloj de sesenta segundos volviera a pasar. Parecía un contador pegado.
+  //
+  // Un pedido más por pestaña es barato: `/admin/pendientes` son unos
+  // `count_documents` con índice, y se dispara cuando la persona cambia de
+  // sección —no en un bucle—.
   useEffect(() => {
     cargarPendientes();
     const reloj = setInterval(cargarPendientes, 60000);
     return () => clearInterval(reloj);
-  }, [cargarPendientes]);
+  }, [cargarPendientes, activeTab]);
 
   // CRM no tiene trabajo propio: es la puerta a KYC, Soporte y las demás. Su
   // número es la suma de lo que hay adentro, o la pestaña se ve vacía mientras
@@ -1484,7 +1493,7 @@ const [searchParams, setSearchParams] = useSearchParams();
       )}
       {activeTab === 'operacion' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 16px 40px 16px' }}>
-          <OperacionPanel />
+          <OperacionPanel onTrabajoHecho={cargarPendientes} />
         </div>
       )}
 

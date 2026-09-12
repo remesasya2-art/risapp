@@ -80,7 +80,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from services import configuracion, saldos
-from services.money import from_db, quantize_money
+from services.money import from_db, para_mostrar, quantize_money
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +289,24 @@ async def _al_aprobarse_el_kyc(db, user_id: str, *, documento: str = "") -> dict
     }})
     logger.info("bonos: liberado el bono de %s", user_id)
 
+    # El aviso de que ya lo puede usar. Es el momento en que la plata pasa de
+    # ser una promesa a ser gastable, y sin aviso el usuario lo descubre sólo
+    # si entra a mirar su panel. Va en su propio try, como el otro.
+    try:
+        from services.notifications import create_notification
+        monto_del_bono = quantize_money(bono.get("monto") or 0)
+        await create_notification(
+            user_id=user_id,
+            title="Tu bono de bienvenida quedó disponible",
+            message=(f"Ya podés usar {para_mostrar(monto_del_bono, 'R$')} en "
+                     "tus envíos a Venezuela."),
+            notification_type="bono_liberado",
+            data={"monto": str(monto_del_bono)},
+        )
+    except Exception as e:
+        logger.error("bonos: no se pudo avisarle a %s de su bono liberado: %s",
+                     user_id, e)
+
     pago = await _pagarle_al_referente(db, user_id, bono)
     return {"liberado": True, "monto": bono.get("monto"), **pago}
 
@@ -399,6 +417,30 @@ async def _acreditarle_al_referente(db, user_id, referente, numero) -> dict:
                  "bono.pagado_al_referente_en": _ahora()}})
     logger.info("bonos: %s cobró %s por su referido número %s (%s)",
                 referente, monto, numero, user_id)
+
+    # El aviso. Va DESPUES de acreditar y en su propio try: un aviso que no
+    # sale no puede deshacer una plata que ya se movió. Y sin esto, los cinco
+    # reales aparecían en el saldo sin que nadie le dijera por qué —el único
+    # rastro era una línea en su historial que hay que ir a buscar—.
+    #
+    # NO SE NOMBRA AL REFERIDO. Quien invitó no tiene por qué enterarse de que
+    # esa persona completó su verificación de identidad, ni cuándo. Es dato de
+    # otro, y el bono se explica igual sin él.
+    try:
+        from services.notifications import create_notification
+        await create_notification(
+            user_id=referente,
+            title="Cobraste tu bono por invitar",
+            message=(f"Sumamos {para_mostrar(monto, 'R$')} a tu saldo porque "
+                     "alguien que entró con tu código completó su "
+                     "verificación. Gracias por recomendarnos."),
+            notification_type="bono_referido",
+            data={"monto": str(monto)},
+        )
+    except Exception as e:
+        logger.error("bonos: no se pudo avisarle a %s de su bono: %s",
+                     referente, e)
+
     return {"pagado_al_referente": True, "monto_al_referente": str(monto),
             "numero_de_referido": numero}
 

@@ -43,7 +43,15 @@ import { MOTIVOS_DE_RECHAZO, PARADAS, POR_ESTADO } from './operacion';
 
 const ESTADOS = PARADAS.map((p) => p.estado);
 
-export default function OperacionPanel() {
+/**
+ * `onTrabajoHecho` — para que el número de la pestaña baje al terminar.
+ *
+ * El panel ya recargaba su propia cola después de cada acción, pero el
+ * contador de «Cola de envíos» lo lleva `AdminPanel` y se enteraba recién en
+ * su reloj de sesenta segundos. El operador despachaba el último paquete y
+ * veía el número seguir ahí: parecía pegado.
+ */
+export default function OperacionPanel({ onTrabajoHecho }) {
   const [params, setParams] = useSearchParams();
   const pedido = params.get('cola');
   const estado = ESTADOS.includes(pedido) ? pedido : ESTADOS[0];
@@ -101,6 +109,10 @@ export default function OperacionPanel() {
   };
 
   const refrescar = (resultado) => {
+    // Se avisa afuera SIEMPRE, no sólo cuando viene `resultado`: el botón de
+    // recargar también llama acá, y si de paso otra persona resolvió algo, el
+    // número tiene que reflejarlo.
+    if (typeof onTrabajoHecho === 'function') onTrabajoHecho();
     if (resultado) {
       setUltimo(resultado);
       // El borrador de ese envío ya se usó: si quedara, la próxima vez que se
