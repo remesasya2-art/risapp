@@ -1,7 +1,7 @@
 """
 Request/Response Pydantic models
 """
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 from typing import Optional, List
 
 # Auth requests
@@ -18,7 +18,34 @@ class RegisterUserRequest(BaseModel):
     email: str
     password: str
     confirm_password: str
-    referred_by: Optional[str] = None
+
+    # ─── EL NOMBRE DEL CAMPO, Y POR QUE ESTAN LOS DOS ────────────────────
+    #
+    # La pantalla de registro manda el código de referido con el nombre
+    # `referral_code` (frontend/src/pages/Register.jsx). Este modelo lo
+    # declaraba SOLO como `referred_by`, y Pydantic con un campo que no
+    # conoce no se queja: lo ignora. Así que `referred_by` llegaba en `None`
+    # siempre y el enlace de referido NUNCA FUNCIONO. Ni un error, ni un 400,
+    # ni una línea en el registro: un nombre distinto y silencio.
+    #
+    # Se acepta por los dos nombres, no por indecisión:
+    #
+    #   · `referral_code` es el que manda la pantalla que está desplegada, y
+    #     el bundle vive en el navegador de cada visitante. Un usuario con la
+    #     página abierta desde ayer sigue mandando ese nombre después de
+    #     desplegar esto.
+    #   · `referred_by` es el nombre del campo en el documento del usuario y
+    #     el que usan los tests y los scripts. Sacarlo obligaría a tocarlos
+    #     para nada.
+    #
+    # El atributo se sigue llamando `referred_by` para que coincida con la
+    # base. Quien agregue un tercer nombre tiene que agregarlo acá, y
+    # `tests/test_el_codigo_de_referido_llega.py` se pone rojo si la pantalla
+    # empieza a mandar uno que esta lista no tenga.
+    referred_by: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("referral_code", "referred_by"),
+    )
 
 class VerifyEmailCodeRequest(BaseModel):
     email: str

@@ -100,7 +100,37 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
     is_valid, message = validate_password(request.password)
     if not is_valid:
         raise HTTPException(status_code=400, detail=message)
-    
+
+    # ─── El código de quien refirió ──────────────────────────────────────
+    #
+    # `codigos.normalizar` y no `.strip().upper()`: el código se comparte por
+    # WhatsApp y llega pegado con espacios adentro («REF 3A9F 2B01»), que
+    # `strip` no toca porque sólo saca los de las puntas.
+    #
+    # SE RECHAZA UN CODIGO QUE NO EXISTE, en vez de guardarlo o ignorarlo.
+    # Ignorarlo es lo que venía pasando de hecho, y es la peor de las tres: el
+    # que se registró por el enlace de un amigo pierde su bono, el amigo
+    # pierde el suyo, y ninguno de los dos se enteró nunca. Un 400 con el
+    # motivo le da la chance de mirar el enlace otra vez.
+    #
+    # Esto deja saber si un código existe, probándolo. No es un problema acá:
+    # el código son ocho símbolos —miles de millones de combinaciones— y esta
+    # ruta está frenada en diez pedidos por hora y por IP, que ahora es una IP
+    # que no se puede elegir (services/borde.py). Y lo que se averigua es que
+    # el código existe, no de quién es.
+    codigo_de_quien_refiere = codigos.normalizar(request.referred_by or "")
+    if codigo_de_quien_refiere:
+        # Proyección por lista de lo permitido: acá alcanza con saber que hay
+        # alguien. Sin proyección esto traería el usuario entero —documento,
+        # teléfono, saldos— para responder que sí o que no.
+        quien_refiere = await db.users.find_one(
+            {"referral_code": codigo_de_quien_refiere}, {"_id": 1})
+        if not quien_refiere:
+            raise HTTPException(
+                status_code=400,
+                detail="Ese código de invitación no existe. Revisá el enlace, "
+                       "o dejá el campo vacío para registrarte sin código.")
+
     # Generate verification code
     verification_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
     
@@ -113,7 +143,10 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
         "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
         "created_at": datetime.now(timezone.utc),
         "attempts": 0,
-        "referred_by": request.referred_by.strip().upper() if request.referred_by else None
+        # Ya normalizado y comprobado arriba. Se guarda vacío como None y no
+        # como "" para que el documento del usuario diga «sin código» de una
+        # sola forma.
+        "referred_by": codigo_de_quien_refiere or None
     }
     
     await db.pending_verifications.delete_many({"email": email_lower})
