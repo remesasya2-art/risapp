@@ -65,7 +65,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   ArrowLeft, Mail, Phone, Shield, Lock, LogOut, Check, ChevronRight,
-  Bell, BellOff, Gem, Crown, Users, Gift, IdCard,
+  Bell, BellOff, Gem, Crown, IdCard,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -73,6 +73,7 @@ import { passwordRules } from '../utils/passwordPolicy';
 import pushService from '../utils/pushService';
 import PinSettings from '../components/PinSettings';
 import WebAuthnSettings from '../components/WebAuthnSettings';
+import MiCodigoDeReferido from '../components/MiCodigoDeReferido';
 import { Boton, Aviso } from '../components/flujo';
 import {
   C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
@@ -522,6 +523,8 @@ export default function Profile() {
             </Aviso>
           </div>
         ) : null}
+
+        <MiCodigoDeReferido />
 
         {/* ── Notificaciones ────────────────────────────────────────── */}
         <section style={{ ...tarjeta, padding: '18px 20px', marginBottom: '16px' }}>

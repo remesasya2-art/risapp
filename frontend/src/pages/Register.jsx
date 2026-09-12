@@ -454,7 +454,7 @@ export default function Register() {
                 type="text"
                 value={referralCode}
                 onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                placeholder="Ej: JUAN2025"
+                placeholder="Ej: REF3A9F2B01"
                 data-testid="register-referral-input"
                 style={{
                   ...inputStyle,
@@ -463,9 +463,20 @@ export default function Register() {
                 }}
               />
             </div>
+            {/* DECIA «¡Código aplicado! Tu referidor recibirá una bonificación»,
+                y mentía dos veces a la vez.
+                  · «Aplicado» lo decidía el navegador, apenas la persona
+                    escribía una letra. El servidor recién comprueba que el
+                    código exista al pulsar Continuar, y si no existe devuelve
+                    un 400. O sea que el cartel verde y el error rojo aparecían
+                    juntos, en la misma pantalla.
+                  · La bonificación no existe: todavía no está construida.
+                    Prometer plata que la aplicación no sabe pagar es la clase
+                    de cartel que después hay que explicarle a un cliente.
+                Ahora dice lo único que es cierto mientras se escribe. */}
             {referralCode && (
               <p style={{ fontSize: '13px', color: '#6366f1', margin: '6px 0 0 0' }}>
-                🎁 ¡Código aplicado! Tu referidor recibirá una bonificación.
+                Te vas a registrar con esta invitación.
               </p>
             )}
           </div>
