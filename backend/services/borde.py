@@ -122,6 +122,42 @@ def paso_por_el_borde(cabeceras) -> bool:
     return bool(traida) and hmac.compare_digest(traida, esperada)
 
 
+def confiar_en_cloudflare(cabeceras) -> bool:
+    """Si `CF-Connecting-IP` se puede usar para contar intentos.
+
+    DOS CASOS, Y EL SEGUNDO ES EL QUE EVITA UN DESASTRE AL DESPLEGAR
+
+      1. Hay llave configurada: se confía sólo si el pedido la trae. Ese es el
+         arreglo.
+
+      2. NO hay llave configurada: se confía igual, como se hacía hasta ahora.
+
+    El segundo parece que deja el agujero abierto, y lo deja — a propósito,
+    hasta que la llave esté puesta. La alternativa es peor, y se midió:
+
+        Hoy `www.risappbr.com` YA pasa por Cloudflare: cliente → Cloudflare →
+        Railway → aplicación. Son DOS proxies. Si se deja de usar
+        `CF-Connecting-IP` sin llave configurada, se cae al respaldo de
+        `X-Forwarded-For` con `PROXIES_DE_CONFIANZA=1`, que en esa cadena
+        devuelve la IP del BORDE DE CLOUDFLARE y no la del usuario.
+
+        Medido: cinco usuarios distintos caían en un solo contador. El límite
+        de veinte intentos se lo comerían usuarios inocentes que comparten
+        borde, y el ingreso empezaría a devolver 429 a gente que nunca falló.
+
+    O sea: desplegar el arreglo sin la llave puesta ROMPERIA a los usuarios de
+    verdad para cerrarle la puerta a nadie, porque el atacante entra por el
+    hostname de Railway igual. Un número solo no puede ser correcto para los
+    dos caminos a la vez —dos proxies por Cloudflare, uno por la puerta de
+    atrás—, y por eso el arreglo es la llave y no el número.
+
+    El arranque avisa, fuerte, que la puerta está apagada.
+    """
+    if not llave():
+        return True
+    return paso_por_el_borde(cabeceras)
+
+
 def revisar() -> dict:
     """Qué va a hacer la puerta, para decirlo en el arranque."""
     m = modo()

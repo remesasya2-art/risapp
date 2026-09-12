@@ -136,7 +136,7 @@ def ip_del_cliente(request) -> str:
         # por el nuestro. Sin esa prueba es una cabecera más que manda el
         # cliente, y usarla es regalarle un contador nuevo por pedido.
         from services import borde
-        if borde.paso_por_el_borde(cabeceras):
+        if borde.confiar_en_cloudflare(cabeceras):
             cf = _limpia(cabeceras.get(CABECERA_CLOUDFLARE))
             if cf:
                 return cf

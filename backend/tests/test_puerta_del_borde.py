@@ -122,10 +122,44 @@ def test_sin_ninguna_cabecera_queda_la_conexion(con_llave):
 
 
 def test_si_no_hay_llave_configurada_nada_cambia(sin_llave):
-    """Una variable que falta no puede romper la aplicación. Sin llave, la
-    puerta está apagada y se comporta como antes."""
+    """Una variable que falta no puede romper la aplicación.
+
+    ESTE TEST DECIA ESTO Y NO LO COMPROBABA, Y ASI SE ME PASO UN DEFECTO
+
+        Sólo miraba `modo()` y `paso_por_el_borde()`. Las dos daban bien, y sin
+        embargo `ip_del_cliente` SI cambiaba de comportamiento sin llave: dejaba
+        de usar `CF-Connecting-IP` y se caía al respaldo.
+
+        Y eso, hoy, rompe a los usuarios de verdad. `www.risappbr.com` ya pasa
+        por Cloudflare —cliente, Cloudflare, Railway: DOS proxies—, así que el
+        respaldo con `PROXIES_DE_CONFIANZA=1` devuelve la IP del borde y no la
+        del usuario. Medido antes de arreglarlo: cinco usuarios distintos caían
+        en un solo contador, y el límite de veinte intentos se lo habrían
+        comido usuarios inocentes.
+
+        El test tenía el nombre correcto y la afirmación incompleta. Ahora
+        comprueba lo que dice.
+    """
     assert borde.modo() == "apagado"
     assert borde.paso_por_el_borde({borde.CABECERA: "lo que sea"}) is False
+
+    # Y lo que de verdad importa: la resolución de la IP no se movió.
+    usuarios = {ip_cliente.ip_del_cliente(_Pedido({
+        "CF-Connecting-IP": f"200.1.1.{i}",
+        "X-Forwarded-For": f"200.1.1.{i}, 172.70.5.9"})) for i in range(5)}
+    assert len(usuarios) == 5, (
+        "Sin llave configurada, cinco usuarios distintos cayeron en "
+        f"{len(usuarios)} contador(es). Desplegar esto dejaría a gente "
+        "inocente sin poder entrar.")
+
+
+def test_con_llave_puesta_el_agujero_si_se_cierra(con_llave):
+    """La otra mitad: con la llave, cinco intentos falseando la cabecera caen
+    todos en el mismo contador."""
+    atacante = {ip_cliente.ip_del_cliente(_Pedido({
+        "CF-Connecting-IP": f"200.1.1.{i}",
+        "X-Forwarded-For": f"200.1.1.{i}, 172.70.5.9"})) for i in range(5)}
+    assert atacante == {"172.70.5.9"}
 
 
 def test_la_comparacion_de_la_llave_no_corta_en_la_primera_letra(con_llave):

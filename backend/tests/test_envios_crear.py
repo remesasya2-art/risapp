@@ -991,11 +991,14 @@ def test_la_cabecera_de_cloudflare_solo_vale_con_el_secreto_del_borde(monkeypatc
         class client:
             host = "10.0.0.7"
 
-    # Sin el secreto: la escribió el cliente, se ignora.
+    # Sin llave configurada la puerta está apagada y nada cambia.
+    assert ip_real(_ConCF()) == "200.7.7.7"
+
+    # Con llave puesta y sin traerla: la escribió el cliente, se ignora.
+    monkeypatch.setenv(borde.VARIABLE_LLAVE, "secreto-de-prueba")
     assert ip_real(_ConCF()) == "10.0.0.1"
 
-    # Con el secreto: la escribió nuestro Cloudflare, gana.
-    monkeypatch.setenv(borde.VARIABLE_LLAVE, "secreto-de-prueba")
+    # Y trayéndola: la escribió nuestro Cloudflare, gana.
     _ConCF.headers = dict(_ConCF.headers, **{borde.CABECERA: "secreto-de-prueba"})
     assert ip_real(_ConCF()) == "200.7.7.7"
 

@@ -191,10 +191,18 @@ def test_la_cabecera_de_cloudflare_solo_vale_con_el_secreto_del_borde(base,
     corre(caso())
 
 
-def test_sin_el_secreto_la_cabecera_de_cloudflare_se_ignora(base):
+def test_sin_el_secreto_la_cabecera_de_cloudflare_se_ignora(base, monkeypatch):
     """El caso del atacante: entra por el hostname de Railway y escribe él
     mismo la cabecera. La auditoría tiene que anotar de dónde vino de verdad,
-    no lo que él eligió."""
+    no lo que él eligió.
+
+    Hace falta la llave puesta: sin ella la puerta está apagada y la cabecera
+    se usa igual, para no romper a los usuarios de verdad mientras Cloudflare
+    todavía no inyecta nada.
+    """
+    from services import borde
+    monkeypatch.setenv(borde.VARIABLE_LLAVE, "secreto-de-prueba")
+
     async def caso():
         pedido = _Pedido(ip="200.1.2.3", dice_venir_de="1.2.3.4")
         pedido.headers["cf-connecting-ip"] = "190.8.8.8"

@@ -101,15 +101,21 @@ def test_cloudflare_le_gana_SOLO_SI_SE_PUEDE_PROBAR_QUE_ES_EL_NUESTRO():
     """
     from services import borde
 
-    # Sin la prueba: es una cabecera más que manda el cliente, y se ignora.
+    # Sin llave configurada la puerta está apagada y NADA cambia: se sigue
+    # usando la cabecera, como siempre. Desactivarla acá rompería a los
+    # usuarios de verdad —ver `borde.confiar_en_cloudflare`—.
     assert ip_del_cliente(
-        pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")) == "10.0.0.1"
+        pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")) == "200.7.7.7"
 
-    # Con la prueba: le gana a todo, como antes.
     import os
     llave = os.environ.get(borde.VARIABLE_LLAVE)
     os.environ[borde.VARIABLE_LLAVE] = "secreto-de-prueba"
     try:
+        # Con llave puesta y sin traerla: la escribió el cliente, se ignora.
+        assert ip_del_cliente(
+            pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")) == "10.0.0.1"
+
+        # Con llave puesta y trayéndola: le gana a todo, como antes.
         p = pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")
         p.headers[borde.CABECERA] = "secreto-de-prueba"
         assert ip_del_cliente(p) == "200.7.7.7"
