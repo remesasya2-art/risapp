@@ -41,9 +41,36 @@ COMO SE RESUELVE
     `PROXIES_DE_CONFIANZA` dice cuántos hay. Con el valor por defecto de 1 —un
     solo proxy adelante— se toma el último.
 
-    Y antes que todo eso se mira `CF-Connecting-IP`: cuando Cloudflare está
-    adelante la escribe él, PISANDO lo que venga del cliente, así que no se
-    puede falsear. Es la fuente más confiable de las tres.
+    Y antes que todo eso se mira `CF-Connecting-IP` —PERO SOLO SI SE PUEDE
+    DEMOSTRAR QUE EL PEDIDO VINO POR NUESTRO CLOUDFLARE.
+
+    Esa distinción es el arreglo, y antes no estaba. La cabecera es confiable
+    porque Cloudflare la escribe pisando lo que mande el cliente… cuando
+    Cloudflare está adelante. El hostname de Railway responde igual sin pasar
+    por él: quien entra por ahí escribe la cabecera él mismo, la cambia en
+    cada pedido, y cada intento cae en un contador distinto.
+
+    O sea: este módulo razonaba con todo cuidado por qué no hay que confiar en
+    una cabecera que manda el cliente, y después hacía una excepción con
+    exactamente eso. La lectura de derecha a izquierda estaba bien y no
+    protegía nada, porque nunca se llegaba a ella.
+
+    Ahora `CF-Connecting-IP` se usa sólo si el pedido trae el secreto que
+    inyecta nuestro Cloudflare (`services/borde.py`). Si no, se cae a la
+    lectura de derecha a izquierda, que es correcta igual.
+
+POR QUE `PROXIES_DE_CONFIANZA` SIGUE EN UNO
+
+    Parece que con Cloudflare adelante tendrían que ser dos —cliente, CF,
+    Railway—. No: con el secreto presente NO se llega a mirar
+    `X-Forwarded-For`, se usa `CF-Connecting-IP` y listo. Y sin el secreto, el
+    pedido entró directo por Railway, o sea UN proxy. Los dos caminos quedan
+    separados y en los dos el número correcto es uno.
+
+    El comentario que estaba acá decía que con Cloudflare adelante el número
+    «no se usa». Eso dejó de ser cierto en cuanto la cabecera pasó a
+    condicionarse: ahora el número gobierna el camino de respaldo, que es
+    justamente el que usa quien entra por la puerta de atrás.
 
 POR QUE NO SE PUEDE «ARREGLAR» CONFIANDO EN LA PRIMERA IP
 
@@ -64,10 +91,15 @@ import os
 logger = logging.getLogger(__name__)
 
 
-# Cuántos proxies de confianza hay entre el cliente e esta aplicación. Con uno
+# Cuántos proxies de confianza hay entre el cliente y esta aplicación. Con uno
 # —lo normal: Railway, o un balanceador— el último valor de X-Forwarded-For es
-# la IP real. Con Cloudflare por delante de Railway serían dos, pero en ese
-# caso manda `CF-Connecting-IP` y este número no se usa.
+# la IP real.
+#
+# Y uno es el número correcto TAMBIEN con Cloudflare adelante, aunque no lo
+# parezca: por ese camino el pedido trae el secreto del borde y se usa
+# `CF-Connecting-IP` sin llegar a mirar `X-Forwarded-For`. Este número sólo
+# gobierna el camino de respaldo, que es el de quien entra directo por
+# Railway: un solo proxy.
 def _proxies_de_confianza() -> int:
     try:
         n = int(os.environ.get("PROXIES_DE_CONFIANZA", "1"))
@@ -100,9 +132,14 @@ def ip_del_cliente(request) -> str:
     cabeceras = getattr(request, "headers", None) or {}
 
     try:
-        cf = _limpia(cabeceras.get(CABECERA_CLOUDFLARE))
-        if cf:
-            return cf
+        # La cabecera de Cloudflare, SOLO si el pedido demuestra haber venido
+        # por el nuestro. Sin esa prueba es una cabecera más que manda el
+        # cliente, y usarla es regalarle un contador nuevo por pedido.
+        from services import borde
+        if borde.paso_por_el_borde(cabeceras):
+            cf = _limpia(cabeceras.get(CABECERA_CLOUDFLARE))
+            if cf:
+                return cf
 
         xff = _limpia(cabeceras.get(CABECERA_REENVIO))
         if xff:

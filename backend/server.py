@@ -223,6 +223,19 @@ async def lifespan(app):
                         estado_cofre["detalle"])
     except Exception as e:
         logger.warning(f"Cofre: no se pudo revisar al arrancar: {e}")
+
+    # La puerta del borde. Se dice en el arranque porque su estado por omisión
+    # —apagada— es justamente el que deja el agujero abierto, y un agujero que
+    # no se anuncia es un agujero que nadie cierra.
+    try:
+        from services import borde
+        estado_borde = borde.revisar()
+        if estado_borde["listo"]:
+            logger.info("Borde: %s", estado_borde["detalle"])
+        else:
+            logger.warning("BORDE: %s", estado_borde["detalle"])
+    except Exception as e:
+        logger.warning(f"Borde: no se pudo revisar al arrancar: {e}")
     try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
@@ -294,6 +307,19 @@ async def security_headers_middleware(request, call_next):
 raworigins = os.getenv("ALLOWED_ORIGINS", "https://risappbr.com,https://www.risappbr.com")
 ALLOWED_ORIGINS = [o.strip() for o in raworigins.split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# LA PUERTA DEL BORDE VA ACA, Y EL ORDEN NO ES CASUAL.
+#
+# Queda por FUERA de CORS y del limitador de intentos —así un pedido que no
+# vino por nuestro Cloudflare se corta antes de que nadie gaste trabajo en
+# él— y por DENTRO del tope de cuerpo, para que un cuerpo de varios gigabytes
+# lo siga cortando primero quien está para eso.
+#
+# Arranca en modo aviso: no bloquea nada hasta que se ponga LLAVE_DEL_BORDE y
+# LLAVE_DEL_BORDE_MODO=exigir. Ver services/borde.py, que explica las tres
+# formas en que esta puerta puede tirar abajo la aplicación entera.
+from services.borde import PuertaDelBorde
+app.add_middleware(PuertaDelBorde)
 
 # EL TOPE DEL CUERPO VA REGISTRADO ULTIMO, Y ESO ES LO QUE LO PONE PRIMERO.
 #

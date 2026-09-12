@@ -163,9 +163,38 @@ def test_UNA_IP_ESCRITA_A_MANO_NO_ENTRA_EN_EL_LIBRO(base):
     corre(caso())
 
 
-def test_lo_que_escribe_cloudflare_le_gana_a_lo_que_diga_el_cliente(base):
-    """`CF-Connecting-IP` la pone Cloudflare PISANDO cualquier valor que venga
-    del cliente. Es la más confiable de las tres, así que va primero."""
+def test_la_cabecera_de_cloudflare_solo_vale_con_el_secreto_del_borde(base,
+                                                                     monkeypatch):
+    """Lo que se guarda en la auditoría es la IP en la que se puede confiar.
+
+    LA REGLA SE MOVIO. `CF-Connecting-IP` la escribe Cloudflare pisando lo que
+    venga del cliente — CUANDO CLOUDFLARE ESTA ADELANTE. El hostname de Railway
+    responde igual sin pasar por él, así que esa afirmación era condicional y la
+    condición no se comprobaba en ningún lado.
+
+    Ahora la cabecera vale sólo si el pedido trae el secreto que inyecta nuestro
+    Cloudflare; si no, se cae en la lectura de derecha a izquierda. Ver
+    `services/borde.py`.
+    """
+    from services import borde
+    monkeypatch.setenv(borde.VARIABLE_LLAVE, "secreto-de-prueba")
+
+    async def caso():
+        pedido = _Pedido(ip="200.1.2.3", dice_venir_de="1.2.3.4")
+        pedido.headers["cf-connecting-ip"] = "190.8.8.8"
+        pedido.headers[borde.CABECERA] = "secreto-de-prueba"
+        await auditoria.registrar(base, "personal.alta", quien=ADMIN,
+                                  request=pedido,
+                                  objetivo_tipo="usuario", objetivo_id="x")
+        linea = await base.auditoria.find_one({})
+        assert linea["origen"]["ip"] == "190.8.8.8"
+    corre(caso())
+
+
+def test_sin_el_secreto_la_cabecera_de_cloudflare_se_ignora(base):
+    """El caso del atacante: entra por el hostname de Railway y escribe él
+    mismo la cabecera. La auditoría tiene que anotar de dónde vino de verdad,
+    no lo que él eligió."""
     async def caso():
         pedido = _Pedido(ip="200.1.2.3", dice_venir_de="1.2.3.4")
         pedido.headers["cf-connecting-ip"] = "190.8.8.8"
@@ -173,7 +202,7 @@ def test_lo_que_escribe_cloudflare_le_gana_a_lo_que_diga_el_cliente(base):
                                   request=pedido,
                                   objetivo_tipo="usuario", objetivo_id="x")
         linea = await base.auditoria.find_one({})
-        assert linea["origen"]["ip"] == "190.8.8.8"
+        assert linea["origen"]["ip"] != "190.8.8.8"
     corre(caso())
 
 
