@@ -12,12 +12,17 @@
  *
  * LO QUE ESTA TARJETA NO DICE, A PROPOSITO
  *
- *   No promete plata. El bono de bienvenida todavía no está construido, y un
- *   cartel que diga «ganá 5 R$» antes de que el código sepa pagarlos es una
- *   promesa que la aplicación no puede cumplir. Cuando el bono exista, los
- *   montos se van a leer de la configuración del panel y este texto los va a
- *   citar; hasta entonces dice lo único que es cierto hoy: quien se registre
- *   con tu enlace queda ligado a tu cuenta.
+ *   No dice cuánto se gana. El bono ya existe, pero sus montos se configuran
+ *   desde el panel del super administrador y pueden cambiar cualquier día: un
+ *   «ganá 5 R$» escrito acá sería un número que se desactualiza solo, y el
+ *   primero en enterarse sería un cliente reclamando.
+ *
+ *   Para citarlos hace falta que el servidor los mande —hoy el catálogo de
+ *   configuración es sólo del super administrador—, y eso es un cambio con su
+ *   propia decisión: qué valores se hacen públicos y cuáles no.
+ *
+ *   Lo que la persona sí puede ver es lo que ya cobró y lo que le falta, en
+ *   «A quién invité».
  *
  * POR QUE NO SE DIBUJA NADA SI NO HAY CODIGO
  *
@@ -28,7 +33,8 @@
  *   se ve como que esa cuenta no tiene esta función, que es la verdad.
  */
 import { useEffect, useState } from 'react';
-import { Gift, Copy, Share2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Copy, Gift, Share2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { Boton } from './flujo';
@@ -129,6 +135,28 @@ export default function MiCodigoDeReferido() {
           <Copy size={17} color={C.suave} style={{ flexShrink: 0 }} />
         </button>
       </div>
+
+      {/* ── A quién invité ─────────────────────────────────────────────── */}
+      {/* Debajo del código y arriba del enlace: quien ya invitó a alguien
+          entra acá a ver cómo le fue, y quien todavía no lo hizo tiene el
+          enlace a un dedo de distancia. */}
+      <Link to="/referidos" data-testid="ver-mis-referidos"
+        className="env-tap"
+        style={{
+          marginTop: '13px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: '10px',
+          height: '46px', padding: '0 14px', borderRadius: '11px',
+          border: `1px solid ${C.linea}`, background: C.lienzo,
+          textDecoration: 'none',
+        }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
+          <Users size={16} color={C.suave} />
+          <span style={{ fontSize: '14px', fontWeight: 600, color: C.tinta }}>
+            A quién invité
+          </span>
+        </span>
+        <ChevronRight size={17} color={C.tenue} />
+      </Link>
 
       {/* ── El enlace ──────────────────────────────────────────────────── */}
       {datos.enlace ? (

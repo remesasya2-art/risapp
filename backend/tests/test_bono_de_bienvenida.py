@@ -1044,3 +1044,261 @@ def test_los_dos_avisos_del_bono_salen_tambien_por_correo():
     for clase in ("bono_liberado", "bono_referido"):
         assert clase in avisos_por_correo.POR_CORREO, (
             f"{clase} mueve plata y no manda correo. Agregalo a POR_CORREO.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 10. La lista de referidos, y qué NO le cuenta de cada persona
+# ══════════════════════════════════════════════════════════════════════════
+
+async def _sembrar_referidos(base, cuantos, *, pagados=0):
+    """`cuantos` cuentas con el código de u_refiere, `pagados` ya cobradas."""
+    for i in range(cuantos):
+        uid = f"u_lista_{i:03d}"
+        await base.users.insert_one({
+            "user_id": uid,
+            "name": f"Persona{i} Apellido{i}",
+            "full_name": f"Persona{i} Apellido{i} Segundo{i}",
+            "email": f"persona{i}@secreto.example.com",
+            "role": "user", "referred_by": "REFDUENO001",
+            # Un dato bien sensible, para comprobar que no se filtra.
+            "cpf": f"111222333{i:02d}",
+            "verification_status": "pending",
+            "balance_ris": to_decimal128(Decimal("0")),
+            "balance_ris_bono": to_decimal128(Decimal("0")),
+            "bono": {
+                "estado": bonos.BLOQUEADO,
+                "monto": "15.00",
+                "codigo": "REFDUENO001",
+                "referente": "u_refiere",
+                "otorgado_en": None,
+                "pago_al_referente": (bonos.PAGADO if i < pagados
+                                      else bonos.PENDIENTE_KYC),
+            },
+        })
+
+
+def test_la_lista_trae_los_numeros_que_cuenta_la_base(base):
+    async def caso():
+        await _sembrar(base)
+        await base.users.delete_one({"user_id": "u_referido"})
+        await _sembrar_referidos(base, 7, pagados=3)
+        # Lo ganado sale del libro, no de multiplicar.
+        await base.ledger.insert_many([
+            {"user_id": "u_refiere", "movement_type": "bono_referido",
+             "direction": "credit", "amount": 5.0},
+            {"user_id": "u_refiere", "movement_type": "bono_referido",
+             "direction": "credit", "amount": 5.0},
+            # Uno de cuando el monto era otro: el libro dice la verdad y
+            # multiplicar por el monto de hoy daría mal.
+            {"user_id": "u_refiere", "movement_type": "bono_referido",
+             "direction": "credit", "amount": 8.0},
+        ])
+
+        r = await bonos.mis_referidos(base, "u_refiere")
+        assert r["total"] == 7
+        assert r["cobrados"] == 3
+        assert r["pendientes"] == 4
+        assert r["ganado"] == "18.00", (
+            f"lo ganado dio {r['ganado']}: tiene que salir del libro "
+            "(5 + 5 + 8) y no de multiplicar los cobrados por el monto de hoy.")
+    corre(caso())
+
+
+# Lo único que puede llevar la fila de un referido. Cada fila es una persona
+# que NO es quien mira la pantalla.
+CAMPOS_PERMITIDOS_DE_UNA_FILA = {"nombre", "cuando", "cobrado", "motivo"}
+
+
+def test_la_lista_NO_FILTRA_DATOS_DE_TERCEROS(base):
+    """La guarda que más importa de esta pantalla, y la que más costó escribir.
+
+    LA PRIMERA VERSION NO SERVIA, Y VALE CONTAR POR QUE.
+
+    Buscaba datos ajenos en el texto de la respuesta —el correo, el CPF— y
+    pasaba con el producto roto de DOS formas distintas:
+
+      · Sacando la proyección de la consulta, no filtraba nada, porque las
+        filas se arman con cuatro campos escritos a mano y no con el
+        documento entero.
+      · Agregando `"correo": persona.get("email")` a la fila, tampoco, porque
+        la proyección hace que ese campo llegue en `None` y un `None` no
+        contiene «secreto.example.com».
+
+    O sea: dos guardas tapándose entre sí, y el test probando ninguna. Es el
+    defecto que `CLAUDE.md` cuenta que ya apareció en este repositorio.
+
+    Ahora se exige que la fila tenga EXACTAMENTE los campos permitidos. Así un
+    campo de más se ve, valga lo que valga —incluso `None`—, y la de la
+    proyección se prueba aparte, por la forma de la consulta.
+    """
+    async def caso():
+        await _sembrar(base)
+        await base.users.delete_one({"user_id": "u_referido"})
+        await _sembrar_referidos(base, 3)
+
+        r = await bonos.mis_referidos(base, "u_refiere")
+        for fila in r["referidos"]:
+            de_mas = set(fila) - CAMPOS_PERMITIDOS_DE_UNA_FILA
+            assert not de_mas, (
+                f"la fila de un referido lleva {sorted(de_mas)}, que no está "
+                "en la lista de lo permitido. Cada fila es una persona que no "
+                "es quien mira: si hace falta un campo más, agregalo a "
+                "CAMPOS_PERMITIDOS_DE_UNA_FILA con el motivo escrito al lado.")
+            assert set(fila) == CAMPOS_PERMITIDOS_DE_UNA_FILA, (
+                f"a la fila le falta {sorted(CAMPOS_PERMITIDOS_DE_UNA_FILA - set(fila))}")
+
+        # Y por si algún día las filas se armaran de otra forma: que en toda la
+        # respuesta no aparezca ningún dato ajeno.
+        crudo = str(r)
+        for dato_ajeno in ("secreto.example.com", "111222333",
+                           "balance_ris", "u_lista_000"):
+            assert dato_ajeno not in crudo, (
+                f"la respuesta filtra {dato_ajeno!r}: {crudo[:400]}")
+    corre(caso())
+
+
+def test_la_consulta_de_la_lista_usa_PROYECCION_POR_LISTA_DE_LO_PERMITIDO():
+    """La otra mitad, y se vigila por la FORMA porque no se puede por el
+    resultado.
+
+    Sin proyección la respuesta sale igual —las filas se arman a mano— así que
+    ningún test de comportamiento lo nota. Lo que cambia es que la aplicación
+    se trae a memoria el documento COMPLETO de cada referido: sus fotos de
+    documento de identidad, su CPF, sus saldos. Con veinte filas por página,
+    veinte documentos enteros para mostrar cuatro campos.
+
+    SE EXIGE QUE LA PROYECCION NOMBRE LOS CAMPOS. La primera versión de este
+    test sólo pedía que hubiera un `{"_id": 0`, y pasaba con la proyección
+    reducida a exactamente eso —que trae el documento entero menos el `_id`—.
+    Una proyección que no nombra nada no es una lista de lo permitido: es el
+    documento completo con otra cara.
+    """
+    import ast
+    import re
+
+    fuente = (_BACKEND / "services" / "bonos.py").read_text(encoding="utf-8")
+    arbol = ast.parse(fuente)
+    cuerpo = None
+    for nodo in ast.walk(arbol):
+        if (isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and nodo.name == "mis_referidos"):
+            cuerpo = ast.get_source_segment(fuente, nodo) or ""
+    assert cuerpo, "no se encontró `mis_referidos` en services/bonos.py"
+
+    consultas = re.findall(r"db\.users\.find\(filtro,\s*(\{[^}]*\})", cuerpo)
+    assert consultas, (
+        "la consulta de la lista dejó de llevar proyección. Sin ella se trae "
+        "el documento entero de cada referido —documento de identidad, CPF, "
+        "saldos— para mostrar cuatro campos.")
+
+    for proyeccion in consultas:
+        incluidos = set(re.findall(r'"(\w+)"\s*:\s*1', proyeccion))
+        assert incluidos, (
+            f"la proyección {proyeccion} no NOMBRA ningún campo. Una que sólo "
+            'dice `{"_id": 0}` trae el documento entero menos el `_id`: es lo '
+            "mismo que no tener proyección.")
+        excluidos = set(re.findall(r'"(\w+)"\s*:\s*0', proyeccion)) - {"_id"}
+        assert not excluidos, (
+            f"la proyección excluye {sorted(excluidos)}. Tiene que ser una "
+            "lista de lo PERMITIDO: una de exclusiones deja pasar cada campo "
+            "nuevo del documento hasta que alguien se acuerde.")
+
+
+def test_el_nombre_sale_acortado_y_sin_el_apellido_entero(base):
+    async def caso():
+        await _sembrar(base)
+        await base.users.delete_one({"user_id": "u_referido"})
+        await _sembrar_referidos(base, 1)
+        r = await bonos.mis_referidos(base, "u_refiere")
+        assert r["referidos"][0]["nombre"] == "Persona0 A.", (
+            f"salió {r['referidos'][0]['nombre']!r}")
+    corre(caso())
+
+
+def test_cada_pendiente_dice_su_motivo(base):
+    """Decisión del dueño del proyecto: el motivo se muestra.
+
+    Sin el motivo la pantalla no sirve para lo único que se le pide, que es
+    saber a quién recordarle.
+    """
+    async def caso():
+        await _sembrar(base)
+        await base.users.delete_one({"user_id": "u_referido"})
+        await _sembrar_referidos(base, 1)
+        await base.users.update_one({"user_id": "u_lista_000"}, {
+            "$set": {"bono.pago_al_referente": bonos.PENDIENTE_ENVIO}})
+
+        fila = (await bonos.mis_referidos(base, "u_refiere"))["referidos"][0]
+        assert fila["cobrado"] is False
+        assert "primer envío" in fila["motivo"], fila
+    corre(caso())
+
+
+def test_la_lista_esta_paginada_de_a_veinte(base):
+    """Paginada desde el primer día, aunque hoy nadie tenga veinte.
+
+    Una lista sin techo se descubre cuando alguien tiene cuatrocientos y la
+    pantalla tarda diez segundos en abrir.
+    """
+    async def caso():
+        await _sembrar(base)
+        await base.users.delete_one({"user_id": "u_referido"})
+        await _sembrar_referidos(base, 25)
+
+        primera = await bonos.mis_referidos(base, "u_refiere", pagina=1)
+        assert len(primera["referidos"]) == 20, (
+            f"la primera página trajo {len(primera['referidos'])} filas")
+        assert primera["hay_mas"] is True
+        assert primera["total"] == 25, "el total es de todos, no de la página"
+
+        segunda = await bonos.mis_referidos(base, "u_refiere", pagina=2)
+        assert len(segunda["referidos"]) == 5
+        assert segunda["hay_mas"] is False
+    corre(caso())
+
+
+def test_una_pagina_absurda_no_revienta(base):
+    async def caso():
+        await _sembrar(base)
+        await _sembrar_referidos(base, 3)
+        for pagina in (0, -5, 99):
+            r = await bonos.mis_referidos(base, "u_refiere", pagina=pagina)
+            assert r["total"] == 3
+            assert isinstance(r["referidos"], list)
+    corre(caso())
+
+
+def test_quien_no_invito_a_nadie_ve_una_lista_vacia_y_no_un_error(base):
+    async def caso():
+        await _sembrar(base)
+        r = await bonos.mis_referidos(base, "u_referido")
+        assert r["total"] == 0
+        assert r["referidos"] == []
+        assert r["ganado"] == "0.00"
+    corre(caso())
+
+
+def test_la_ruta_devuelve_LOS_REFERIDOS_DE_QUIEN_PREGUNTA(base):
+    """El `user_id` sale de la sesión y no de un parámetro.
+
+    Si viniera por la dirección, cualquiera pediría la lista de otro cambiando
+    un número —y ahí adentro van nombres de terceros—.
+    """
+    import inspect
+    from routes import referidos as rutas
+
+    firma = inspect.signature(rutas.mis_referidos)
+    assert set(firma.parameters) == {"pagina", "current_user"}, (
+        f"la ruta acepta {sorted(firma.parameters)}. Si aparece un `user_id` "
+        "entre los parámetros, se puede pedir la lista de cualquiera.")
+
+    async def caso():
+        await _sembrar(base)
+        await base.users.delete_one({"user_id": "u_referido"})
+        await _sembrar_referidos(base, 2)
+        from models.user import User
+        quien = User(user_id="u_refiere", name="Dueño",
+                     email="refiere@example.com", role="user")
+        r = await rutas.mis_referidos(pagina=1, current_user=quien)
+        assert r["total"] == 2
+    corre(caso())
