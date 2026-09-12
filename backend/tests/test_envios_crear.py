@@ -970,9 +970,18 @@ def test_UNA_IP_ESCRITA_A_MANO_NO_QUEDA_ASENTADA_EN_EL_ENVIO():
         "asentó la IP que eligió quien hizo el pedido"
 
 
-def test_lo_que_escribe_cloudflare_le_gana_a_lo_que_diga_el_cliente():
-    """`CF-Connecting-IP` la pone Cloudflare PISANDO lo que venga del cliente:
-    es la única de las tres que no se puede tocar desde afuera, así que gana."""
+def test_la_cabecera_de_cloudflare_solo_vale_con_el_secreto_del_borde(monkeypatch):
+    """
+    LA REGLA SE MOVIO. `CF-Connecting-IP` la escribe Cloudflare pisando lo que
+    venga del cliente — CUANDO CLOUDFLARE ESTA ADELANTE. El hostname de Railway
+    responde igual sin pasar por él, así que esa afirmación era condicional y la
+    condición no se comprobaba en ningún lado.
+
+    Ahora la cabecera vale sólo si el pedido trae el secreto que inyecta nuestro
+    Cloudflare; si no, se cae en la lectura de derecha a izquierda. Ver
+    `services/borde.py`.
+    """
+    from services import borde
     ip_real = _funcion_de_ruta("_ip_real")
 
     class _ConCF:
@@ -982,6 +991,15 @@ def test_lo_que_escribe_cloudflare_le_gana_a_lo_que_diga_el_cliente():
         class client:
             host = "10.0.0.7"
 
+    # Sin llave configurada la puerta está apagada y nada cambia.
+    assert ip_real(_ConCF()) == "200.7.7.7"
+
+    # Con llave puesta y sin traerla: la escribió el cliente, se ignora.
+    monkeypatch.setenv(borde.VARIABLE_LLAVE, "secreto-de-prueba")
+    assert ip_real(_ConCF()) == "10.0.0.1"
+
+    # Y trayéndola: la escribió nuestro Cloudflare, gana.
+    _ConCF.headers = dict(_ConCF.headers, **{borde.CABECERA: "secreto-de-prueba"})
     assert ip_real(_ConCF()) == "200.7.7.7"
 
 

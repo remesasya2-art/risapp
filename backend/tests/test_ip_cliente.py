@@ -84,11 +84,46 @@ def test_de_derecha_a_izquierda(xff, esperado):
     assert ip_del_cliente(pedido(xff)) == esperado
 
 
-def test_cloudflare_le_gana_a_todo_lo_demas():
-    """`CF-Connecting-IP` la escribe Cloudflare PISANDO lo que venga del
-    cliente: es la única de las tres que no se puede tocar desde afuera."""
+def test_cloudflare_le_gana_SOLO_SI_SE_PUEDE_PROBAR_QUE_ES_EL_NUESTRO():
+    """LA REGLA SE MOVIO, Y ESTE TEST AFIRMABA LA VERSION QUE TENIA EL AGUJERO.
+
+    Decía: «`CF-Connecting-IP` la escribe Cloudflare PISANDO lo que venga del
+    cliente: es la única de las tres que no se puede tocar desde afuera».
+
+    Eso es cierto CUANDO CLOUDFLARE ESTA ADELANTE, y ahí estaba el problema: el
+    hostname de Railway responde igual sin pasar por él, y quien entra por esa
+    puerta escribe la cabecera él mismo. La afirmación no era falsa, era
+    condicional — y la condición no se comprobaba en ninguna parte.
+
+    Ahora la cabecera se usa sólo si el pedido trae el secreto que inyecta
+    nuestro Cloudflare. Sin esa prueba se cae en la lectura de derecha a
+    izquierda, que es correcta igual. Ver `services/borde.py`.
+    """
+    from services import borde
+
+    # Sin llave configurada la puerta está apagada y NADA cambia: se sigue
+    # usando la cabecera, como siempre. Desactivarla acá rompería a los
+    # usuarios de verdad —ver `borde.confiar_en_cloudflare`—.
     assert ip_del_cliente(
         pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")) == "200.7.7.7"
+
+    import os
+    llave = os.environ.get(borde.VARIABLE_LLAVE)
+    os.environ[borde.VARIABLE_LLAVE] = "secreto-de-prueba"
+    try:
+        # Con llave puesta y sin traerla: la escribió el cliente, se ignora.
+        assert ip_del_cliente(
+            pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")) == "10.0.0.1"
+
+        # Con llave puesta y trayéndola: le gana a todo, como antes.
+        p = pedido(xff="1.2.3.4, 10.0.0.1", cf="200.7.7.7")
+        p.headers[borde.CABECERA] = "secreto-de-prueba"
+        assert ip_del_cliente(p) == "200.7.7.7"
+    finally:
+        if llave is None:
+            os.environ.pop(borde.VARIABLE_LLAVE, None)
+        else:
+            os.environ[borde.VARIABLE_LLAVE] = llave
 
 
 def test_sin_cabeceras_queda_la_direccion_del_socket():
