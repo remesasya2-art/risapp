@@ -267,6 +267,95 @@ def test_la_carga_no_lleva_nada_de_la_otra_persona():
         assert prohibido not in carga
 
 
+def cuerpo_sin_explicacion(funcion) -> str:
+    """El código de una función, SIN su docstring.
+
+    Hace falta la distinción: el comentario que explica por qué no va un
+    enlace adentro del código contiene, naturalmente, la palabra «enlace». Un
+    test que busca en el texto entero se pone rojo contra el código correcto —
+    y quien lo vea rojo sin motivo lo va a borrar.
+    """
+    import ast
+    import inspect
+    import textwrap
+    arbol = ast.parse(textwrap.dedent(inspect.getsource(funcion)))
+    definicion = arbol.body[0]
+    cuerpo = definicion.body
+    if (cuerpo and isinstance(cuerpo[0], ast.Expr)
+            and isinstance(cuerpo[0].value, ast.Constant)
+            and isinstance(cuerpo[0].value.value, str)):
+        cuerpo = cuerpo[1:]
+    return "\n".join(ast.unparse(n) for n in cuerpo)
+
+
+SOSPECHOSAS = ("http", "://", "token", "enlace", "link", "url", "secret",
+               "password", "clave")
+
+
+def test_adentro_del_codigo_no_entra_ni_un_enlace_ni_una_credencial():
+    """Lo de adentro NO SE VE, y ahí está el peligro.
+
+    Los campos escritos del comprobante los lee quien reenvía el correo, y
+    decide si los manda. El código, no: alguien puede pasarle la foto del
+    comprobante a un tercero sin saber qué está entregando.
+
+    Por eso lo que va adentro se arma con SEIS COSAS y ninguna más, y un
+    enlace no es una de ellas. El de seguimiento del paquete es una credencial
+    —quien lo tiene ve el envío, y no caduca—.
+
+    Esta guarda se escribió después de encontrar la carga con un
+    `"r.app/t/" + tracking_token` adentro. El único test que se puso rojo fue
+    el de la proyección, y sólo porque el token tenía que pasar por ahí: si
+    llegara por otro lado, nada lo frenaba.
+    """
+    import inspect
+    # Una pieza nueva adentro del código tiene que entrar por la firma.
+    firma = set(inspect.signature(comp.carga_del_qr).parameters)
+    assert firma == {"referencia", "tipo", "monto", "cuando", "estado"}, firma
+    cuerpo = cuerpo_sin_explicacion(comp.carga_del_qr).lower()
+    for sospechosa in SOSPECHOSAS:
+        assert sospechosa not in cuerpo, sospechosa
+
+
+def test_ninguna_carga_armada_lleva_algo_que_parezca_un_enlace():
+    """Y lo mismo mirando el resultado, no el código: por si alguna vez un
+    enlace llega adentro de uno de los campos que sí van."""
+    cargas = [
+        comp.carga_del_qr(referencia="RIS-1", tipo="Retiro", monto="1,00 Bs",
+                          cuando=CUANDO, estado="Completado"),
+        comp.carga_del_qr(referencia="RIS-2", cuando=CUANDO),
+        comp.carga_del_qr(referencia="RIS-3", tipo="Envío de paquete",
+                          cuando=CUANDO, estado="En Pacaraima"),
+    ]
+    for carga in cargas:
+        bajo = carga.lower()
+        for sospechosa in ("http", "://", ".com", ".app", "/t/"):
+            assert sospechosa not in bajo, (sospechosa, carga)
+
+
+def test_la_guarda_reconoce_una_credencial_metida_en_el_codigo():
+    """La guarda de la guarda: que sepa ver el caso que persigue.
+
+    Se le da la versión con el enlace adentro —la que apareció— y tiene que
+    notarla por las dos vías: por la firma y por el cuerpo.
+    """
+    import inspect
+
+    def carga_con_enlace(*, referencia, tipo="", monto="", cuando=None,
+                         estado="", enlace=""):
+        """Una carga con un enlace adentro, para probar la guarda."""
+        pedazo = "r.app/t/" + enlace
+        return "\n".join([referencia, tipo, monto, estado, pedazo])
+
+    firma = set(inspect.signature(carga_con_enlace).parameters)
+    assert firma != {"referencia", "tipo", "monto", "cuando", "estado"}
+    cuerpo = cuerpo_sin_explicacion(carga_con_enlace).lower()
+    assert any(s in cuerpo for s in SOSPECHOSAS)
+    # y que la explicación no alcance para disparar la guarda
+    assert "enlace" in inspect.getdoc(comp.carga_del_qr).lower()
+    assert "enlace" not in cuerpo_sin_explicacion(comp.carga_del_qr).lower()
+
+
 LARGOS = [
     "Recarga con transferencia VES",
     "Envío de dinero a Venezuela en bolívares soberanos",

@@ -160,6 +160,51 @@ def test_la_proyeccion_no_pide_ni_una_credencial():
             assert not any(p in bajo for p in SOSPECHOSAS), (nombre, campo)
 
 
+def test_no_hay_ni_una_consulta_sin_lista_de_lo_permitido():
+    """Toda lectura de este módulo va con proyección, SIN excepción.
+
+    La guarda de más arriba mira las dos listas de lo permitido. No alcanza:
+    apareció una segunda consulta al mismo envío, esta vez sin proyección
+    ninguna —`find_one({"envio_id": envio_id})` a secas—, que traía el
+    documento entero con el token adentro y dejaba las dos listas impecables.
+    La guarda de las listas pasaba, y el token salía igual.
+
+    Así que lo que se vigila es la FORMA de la consulta: si lee, lleva lista.
+    """
+    import ast
+    import inspect
+    from services import pasaje as modulo
+
+    fuente = inspect.getsource(modulo)
+    sin_lista = []
+    for nodo in ast.walk(ast.parse(fuente)):
+        if not isinstance(nodo, ast.Call):
+            continue
+        if getattr(nodo.func, "attr", None) not in ("find_one", "find",
+                                                    "find_one_and_update",
+                                                    "aggregate"):
+            continue
+        # La proyección va como segundo argumento posicional, o como
+        # `projection=`. Sin ninguno de los dos, Mongo devuelve TODO.
+        tiene = (len(nodo.args) >= 2
+                 or any(k.arg == "projection" for k in nodo.keywords))
+        if not tiene:
+            sin_lista.append((nodo.lineno, ast.unparse(nodo)[:90]))
+    assert sin_lista == [], sin_lista
+
+
+def test_esta_guarda_reconoce_la_consulta_sin_lista_que_aparecio():
+    """La guarda de la guarda, con la línea exacta."""
+    import ast
+    fuente = 'crudo = await base.envios.find_one({"envio_id": envio_id})'
+    llamada = next(n for n in ast.walk(ast.parse(fuente)) if isinstance(n, ast.Call))
+    assert len(llamada.args) == 1 and not llamada.keywords
+    # y la que sí lleva lista no se confunde con ella
+    buena = 'await base.envios.find_one({"envio_id": envio_id}, DEL_ENVIO)'
+    otra = next(n for n in ast.walk(ast.parse(buena)) if isinstance(n, ast.Call))
+    assert len(otra.args) == 2
+
+
 def test_un_campo_nuevo_de_la_operacion_no_entra_solo_al_correo():
     """La prueba de que la lista de lo permitido hace su trabajo."""
     async def caso():

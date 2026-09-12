@@ -335,6 +335,47 @@ def db_completa(envio=None, eventos=None):
 
 # ─── 1. El payload público no lleva nada personal ─────────────────────────
 
+
+# ── El token no puede salir en el aviso ───────────────────────────────────
+
+def test_el_token_del_seguimiento_no_viaja_en_el_aviso():
+    """El link de seguimiento es una CREDENCIAL: quien lo tiene ve el envío, y
+    no caduca. Un aviso se reenvía, se captura de pantalla, y su `data` se le
+    sirve al navegador y sale por correo.
+
+    La decisión estaba escrita en un comentario arriba del `data` y NADA la
+    vigilaba: apareció una línea que metía el token ahí y los treinta y tres
+    tests de este archivo pasaron igual. Un comentario no es una guarda.
+    """
+    import ast
+    import inspect
+    from services import envios_seguimiento as seg
+
+    arbol = ast.parse(inspect.getsource(seg.avisar))
+    for nodo in ast.walk(arbol):
+        if not isinstance(nodo, ast.Call):
+            continue
+        nombre = getattr(nodo.func, "id", None) or getattr(nodo.func, "attr", None)
+        if nombre != "create_notification":
+            continue
+        data = next((k.value for k in nodo.keywords if k.arg == "data"), None)
+        texto = ast.unparse(data).lower() if data is not None else ""
+        for sospechosa in ("token", "secret", "http", "://", "clave"):
+            assert sospechosa not in texto, (sospechosa, texto)
+
+
+def test_esta_guarda_reconoce_el_token_metido_en_el_aviso():
+    """La guarda de la guarda, con la línea exacta que apareció."""
+    import ast
+    fuente = ('create_notification(user_id=u, title=t, message=m,\n'
+              '    notification_type="envio",\n'
+              '    data={"envio_id": e, "tracking_token": envio.get("tracking_token")})')
+    llamada = next(n for n in ast.walk(ast.parse(fuente)) if isinstance(n, ast.Call)
+                   and getattr(n.func, "id", None) == "create_notification")
+    data = next(k.value for k in llamada.keywords if k.arg == "data")
+    assert "token" in ast.unparse(data).lower()
+
+
 def test_el_seguimiento_no_filtra_un_solo_dato_personal():
     """EL TEST CENTRAL. El link se comparte por WhatsApp y va a terminar en manos
     que no son la del usuario."""
