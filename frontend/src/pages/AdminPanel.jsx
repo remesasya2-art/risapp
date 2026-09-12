@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -17,6 +17,7 @@ import SeguridadFinanciera from '../components/admin/SeguridadFinanciera';
 import LibroMayor from '../components/admin/LibroMayor';
 import RecursosHumanos from '../components/admin/RecursosHumanos';
 import LibroAuditoria from '../components/admin/LibroAuditoria';
+import Configuracion from '../components/admin/Configuracion';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
@@ -93,6 +94,11 @@ const TABS = [
   // pudieran delegar, quien las tuviera podría darse a sí mismo el resto.
   { key: 'rrhh', label: 'Recursos Humanos', icon: UserCog, superAdminOnly: true },
   { key: 'auditoria', label: 'Auditoría', icon: ScrollText, superAdminOnly: true },
+  // Los números configurables del panel. `superAdminOnly` por el mismo motivo
+  // que Recursos Humanos: uno de esos números decide cuánta plata se le regala
+  // a cada cuenta que se registra, y quien pudiera cambiarlo podría subirlo,
+  // cobrar y bajarlo otra vez. El backend lo exige igual (`get_super_admin`).
+  { key: 'configuracion', label: 'Configuración', icon: SlidersHorizontal, superAdminOnly: true },
 ];
 
 // El número que dice cuánto espera en una pestaña.
@@ -735,6 +741,11 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'auditoria' && (
           <ErrorBoundary clave="auditoria" donde="Libro de auditoría">
             <LibroAuditoria />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'configuracion' && (
+          <ErrorBoundary clave="configuracion" donde="Configuración">
+            <Configuracion />
           </ErrorBoundary>
         )}
         {activeTab === 'overview' && (

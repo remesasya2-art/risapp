@@ -23,6 +23,7 @@ from routes.media import router as media_router
 from routes.google_drive import router as google_drive_router
 from routes.accounting import router as accounting_router
 from routes.accounting_v2 import router as accounting_v2_router
+from routes.configuracion import router as configuracion_router
 from routes.security_2fa import router as security_2fa_router
 from routes.payments_card import router as payments_card_router
 from routes.kyc_admin import router as kyc_admin_router
@@ -68,6 +69,7 @@ api_router.include_router(media_router)
 api_router.include_router(google_drive_router)
 api_router.include_router(accounting_router)
 api_router.include_router(accounting_v2_router)
+api_router.include_router(configuracion_router)
 api_router.include_router(security_2fa_router)
 api_router.include_router(payments_card_router)
 api_router.include_router(kyc_admin_router)
