@@ -75,7 +75,15 @@ COLECCION = "users"
 
 # Las dos cuentas de saldo RIS. El resto de los `balance_*` del usuario son
 # otros libros (cripto) y no se tocan desde acá.
-CUENTAS = frozenset({"balance_ris", "balance_ris_terceros"})
+# `balance_ris_bono` es el bono de bienvenida, y vive APARTE del saldo normal
+# a propósito y para siempre —no sólo mientras está bloqueado—.
+#
+# La regla del producto es que ese bono se gasta SOLO en envíos a Venezuela. Si
+# al liberarse se pasara a `balance_ris`, quedaría gastable en cualquier cosa:
+# un envío a Brasil, un retiro. La única forma de sostener la restricción es
+# que la plata nunca se mezcle, y que la ruta del envío a Venezuela sea la
+# única que sabe debitar de esta cuenta.
+CUENTAS = frozenset({"balance_ris", "balance_ris_terceros", "balance_ris_bono"})
 
 # Lo único que puede tocar el saldo de una cuenta de personal. Son movimientos
 # DE la empresa sobre esa cuenta —corregir un error, cerrar el libro— y no del

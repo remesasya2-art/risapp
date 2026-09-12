@@ -98,10 +98,16 @@ async def get_my_limits(current_user: User = Depends(get_current_user)):
 @router.get("/user/balance")
 async def get_user_balance(current_user: User = Depends(get_current_user)):
     """Get user balance"""
+    from services import bonos
     return {
         "balance_ris": current_user.balance_ris or 0,
         "balance_ris_terceros": current_user.balance_ris_terceros or 0,
-        "balance_ves": getattr(current_user, 'balance_ves', 0) or 0
+        "balance_ves": getattr(current_user, 'balance_ves', 0) or 0,
+        # El bono de bienvenida, con su estado y su leyenda. Viene de un
+        # servicio que hace su propia lectura: así esta ruta no nombra la
+        # cuenta del bono, y la lista de archivos que pueden tocarla —que es
+        # lo que sostiene «sólo envíos a Venezuela»— se mantiene corta.
+        "bono": await bonos.estado_para_la_pantalla(db, current_user.user_id),
     }
 
 

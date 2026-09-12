@@ -123,6 +123,16 @@ AJUSTES = {
         ayuda="Se paga libre, cuando la cuenta que usó su código aprueba su "
               "verificación de identidad."),
 
+    "minimo_del_primer_envio": Ajuste(
+        tipo=DINERO, defecto="100.00", minimo="0", maximo="5000",
+        unidad="R$",
+        etiqueta="Envío mínimo que cuenta como «primer envío»",
+        ayuda="A partir de la cuenta número que diga el ajuste de abajo, el "
+              "dueño del código cobra recién cuando la cuenta referida hace un "
+              "envío a Venezuela de al menos este monto. Sin un mínimo, un "
+              "envío de diez reales alcanzaría para cobrar el bono, y la "
+              "condición no protegería nada."),
+
     "referidos_que_pagan_con_solo_kyc": Ajuste(
         tipo=ENTERO, defecto=10, minimo=0, maximo=10000,
         unidad="cuentas",

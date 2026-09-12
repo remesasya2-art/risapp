@@ -462,6 +462,13 @@ async def approve_kyc(verification_id: str, payload: dict = Body(default={}), ad
         notification_type="verification_approved"
     )
 
+# El bono: libera el de esta cuenta y le paga al dueño de su código. Las
+    # TRES rutas que aprueban un KYC llaman a esta misma función; si colgara de
+    # una sola, a los aprobados por las otras el bono les quedaría bloqueado
+    # para siempre y en silencio. Nunca levanta.
+    from services import bonos
+    await bonos.al_aprobarse_el_kyc(db, user_id)
+
     await _audit(real_id, user_id, "approved", admin, {"checklist": checklist})
 
     logger.info(f"KYC approved: {real_id} by {admin.user_id}")

@@ -12,6 +12,7 @@ import SupportChat from '../components/SupportChat';
 import KycQuotaModal from '../components/KycQuotaModal';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
+import BonoCard from '../components/dashboard/BonoCard';
 import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
@@ -494,6 +495,15 @@ const normalized = { ...tx };
             isMobile={isMobile}
           />
         </div>
+
+        {/* El bono de bienvenida. Saldo aparte, con reglas propias: bloqueado
+            hasta la verificación y después sólo para envíos a Venezuela. No se
+            dibuja si la persona no tiene bono. */}
+        {user?.bono?.tiene ? (
+          <div style={{ marginBottom: '24px' }}>
+            <BonoCard bono={user.bono} isMobile={isMobile} />
+          </div>
+        ) : null}
 
         {/* Créditos cripto (USDT/USDC) — saldo separado del RIS, se refresca solo */}
         <div style={{ marginBottom: '24px' }}>

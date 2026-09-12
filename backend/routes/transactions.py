@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from database import db
 
 from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
-from services import saldos
+from services import bonos, saldos
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
 from services.min_amount import effective_min_amount
@@ -534,12 +534,45 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         "created_at": datetime.now(timezone.utc),
     }
 
-    # 3) Débito atómico (impide sobregiro y condiciones de carrera)
+    # ─── 3) El débito, que ahora puede salir de DOS cuentas ──────────────
+    #
+    # Esta es la única ruta de la aplicación que sabe gastar el bono de
+    # bienvenida, y es a propósito: la regla del producto es que ese bono se
+    # usa sólo en envíos a Venezuela. Si al liberarse se mezclara con
+    # `balance_ris`, habría que enseñarle la restricción a las veinte funciones
+    # que debitan ese campo, y la primera que se olvidara la dejaría sin
+    # efecto. Ver `services/bonos.py`.
+    #
+    # EL ORDEN: primero el bono, después el saldo normal. Porque el bono sólo
+    # sirve para esto y el saldo sirve para todo: gastar primero el que menos
+    # sirve le deja a la persona la mayor libertad con lo que le queda.
+    #
+    # UNA SOLA ESCRITURA, con las dos comprobaciones DENTRO del filtro. Partirlo
+    # en dos —debitar el bono y después el saldo— abriría la ventana en la que
+    # el bono ya salió y el saldo todavía no, y dos envíos simultáneos pasarían
+    # los dos la comprobación. Es el mismo motivo por el que
+    # `saldos.transferir` toca los dos campos en un solo `$inc`.
+    _monto_total = to_decimal(request.amount)
+    _antes = await db.users.find_one(
+        {"user_id": current_user.user_id},
+        {"_id": 0, "bono": 1, "balance_ris_bono": 1})
+    _del_bono = min(_monto_total,
+                    await bonos.disponible_para_enviar(db, _antes or {}))
+    _del_saldo = _monto_total - _del_bono
+
+    _filtro = {"user_id": current_user.user_id,
+               "balance_ris": {"$gte": to_decimal128(_del_saldo)}}
+    _resta = {"balance_ris": to_decimal128(-_del_saldo)}
+    if _del_bono > 0:
+        # Sólo se nombra la cuenta del bono si de verdad se va a usar. Las
+        # cuentas viejas no tienen ese campo, y un `$gte: 0` contra un campo
+        # ausente no coincide: el filtro rechazaría el envío de todo el que se
+        # registró antes de que el bono existiera.
+        _filtro[bonos.CUENTA_DEL_BONO] = {"$gte": to_decimal128(_del_bono)}
+        _resta[bonos.CUENTA_DEL_BONO] = to_decimal128(-_del_bono)
+
     user = await db.users.find_one_and_update(
-        {"user_id": current_user.user_id, "balance_ris": {"$gte": to_decimal128(to_decimal(request.amount))}},
-        {"$inc": {"balance_ris": to_decimal128(-to_decimal(request.amount))}},
-        return_document=True
-    )
+        _filtro, {"$inc": _resta}, return_document=True)
     if user is None:
         raise HTTPException(status_code=400, detail="Saldo insuficiente")
 
@@ -547,10 +580,12 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     try:
         await db.transactions.insert_one(transaction)
     except Exception as e:
-        await db.users.update_one(
-            {"user_id": current_user.user_id},
-            {"$inc": {"balance_ris": to_decimal128(to_decimal(request.amount))}}
-        )
+        # Se devuelve a CADA cuenta lo que salió de ella. Devolverlo todo a
+        # `balance_ris` convertiría un bono —que sólo sirve para Venezuela— en
+        # saldo libre, y un fallo de registro terminaría regalando plata.
+        await db.users.update_one({"user_id": current_user.user_id},
+                                  {"$inc": {k: to_decimal128(-v.to_decimal())
+                                            for k, v in _resta.items()}})
         logger.error(f"Fallo al registrar retiro {tx_id}, saldo devuelto: {e}")
         raise HTTPException(status_code=500, detail="No se pudo registrar el retiro. Tu saldo no fue afectado.")
 
@@ -562,17 +597,18 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         # monto para sacar el saldo anterior: con el campo en Decimal128 eso es
         # un TypeError, y como esto va dentro del `try`, la línea del libro se
         # perdía en silencio mientras la plata sí se movía.
-        _saldo_despues = saldos.saldo_de(user)
-        balance_after_ris = to_float(_saldo_despues)
-        balance_before_ris = to_float(_saldo_despues + to_decimal(request.amount))
-        await record_ris_entry(
+        # UNA LINEA POR CUENTA DE LA QUE SALIO PLATA, y no una sola por el
+        # total. Antes de que el bono existiera había una sola cuenta y daba lo
+        # mismo; ahora una línea que dijera «salieron 50 de balance_ris» cuando
+        # 15 salieron del bono haría que el libro no cuadre contra los saldos, y
+        # el chequeo de integridad lo denunciaría —con razón—.
+        _snapshot = {"email": user.get("email"),
+                     "name": user.get("full_name") or user.get("name"),
+                     "role": user.get("role", "user")}
+        _comun = dict(
             user_id=current_user.user_id,
             movement_type="envio_ves",
-            amount=request.amount,
             direction="debit",
-            account="balance_ris",
-            balance_before=balance_before_ris,
-            balance_after=balance_after_ris,
             reference_kind="transaction",
             reference_id=tx_id,
             transaction_id=tx_id,
@@ -585,11 +621,34 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
             amount_output=amount_ves,
             currency_output="VES",
             counterparty=beneficiary_data,
-            user_snapshot={"email": user.get("email"), "name": user.get("full_name") or user.get("name"), "role": user.get("role", "user")},
-            notes="Envío RIS → VES",
+            user_snapshot=_snapshot,
         )
+        for _cuenta, _parte, _nota in (
+                ("balance_ris", _del_saldo, "Envío RIS → VES"),
+                (bonos.CUENTA_DEL_BONO, _del_bono,
+                 "Envío RIS → VES pagado con el bono de bienvenida")):
+            if _parte <= 0:
+                # Un asiento de cero es ruido en el mayor, y `saldos.mover` ya
+                # se niega a escribirlo por el mismo motivo.
+                continue
+            _despues = saldos.saldo_de(user, _cuenta)
+            await record_ris_entry(
+                amount=to_float(_parte),
+                account=_cuenta,
+                balance_before=to_float(_despues + _parte),
+                balance_after=to_float(_despues),
+                notes=_nota,
+                **_comun,
+            )
     except Exception as e:
         logger.warning(f"Ledger envio_ves no registrado: {e}")
+
+    # El bono del dueño del código, para los referidos que pasaron el tope: de
+    # la cuenta número once en adelante cobra recién cuando su referido hace
+    # este envío. Va DESPUES de que la operación quedó registrada, y nunca
+    # levanta: que un bono no se pague no puede hacer fallar una remesa que ya
+    # se cobró.
+    await bonos.al_enviar_a_venezuela(db, current_user.user_id, request.amount)
 
     # Notify user
     await create_notification(
