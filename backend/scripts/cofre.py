@@ -37,16 +37,47 @@ LO QUE NO HACE
 import argparse
 import asyncio
 import base64
+import importlib.util
 import os
 import sys
 
 _BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _BACKEND)
 
+_cargado = None
+
 
 def _cofre():
-    from services import cofre
-    return cofre
+    """Carga `services/cofre.py` a mano, sin pasar por el paquete `services`.
+
+    POR QUE NO UN `from services import cofre`, QUE ES LO OBVIO
+
+        Importar así ejecuta primero `services/__init__.py`, que trae el correo
+        y las notificaciones push, y eso arrastra `pywebpush`. En el servidor
+        está instalado; en la computadora de quien corre este script, casi
+        nunca. El resultado era que la orden más inofensiva de todas —`crear`,
+        que no toca la base ni lee nada— moría con:
+
+            ModuleNotFoundError: No module named 'pywebpush'
+
+        Y el mensaje no dice nada de lo que está pasando, así que quien lo ve
+        se pone a instalar cosas que este script no necesita.
+
+        `services/cofre.py` no necesita nada del paquete: sólo la biblioteca
+        estándar y `cryptography`. Se carga por ruta y se termina el problema.
+
+        El nombre del módulo cargado es distinto a propósito. Si se registrara
+        como `services.cofre`, Python tendría que crear el paquete `services`
+        para colgarlo ahí, y volveríamos al mismo `__init__.py`.
+    """
+    global _cargado
+    if _cargado is None:
+        ruta = os.path.join(_BACKEND, "services", "cofre.py")
+        spec = importlib.util.spec_from_file_location("cofre_del_guion", ruta)
+        modulo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modulo)
+        _cargado = modulo
+    return _cargado
 
 
 # ══════════════════════════════════════════════════════════════════════════

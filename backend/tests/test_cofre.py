@@ -561,3 +561,75 @@ def test_LA_RUTA_DEL_PANEL_ES_SOLO_PARA_EL_SUPER_ADMINISTRADOR():
             f"la ruta del cofre no exige super administrador (tiene: {guardias})"
         return
     raise AssertionError("no se encontró la ruta del cofre")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El guión, que lo corre una persona en su computadora
+# ══════════════════════════════════════════════════════════════════════════
+
+def _sin_pywebpush(carpeta):
+    """Arma una carpeta que, puesta en PYTHONPATH, hace desaparecer `pywebpush`.
+
+    No alcanza con no tenerlo instalado: acá SI está (los tests lo reemplazan
+    por un doble). Un test que dependiera de que falte pasaría en la máquina de
+    desarrollo y no probaría nada en ninguna otra.
+
+    `sitecustomize.py` lo importa Python solo, antes de correr el guión.
+    """
+    (carpeta / "sitecustomize.py").write_text(
+        "import sys\n"
+        "\n"
+        "class _NoEstaInstalado:\n"
+        "    def find_spec(self, nombre, ruta=None, destino=None):\n"
+        "        if nombre == 'pywebpush' or nombre.startswith('pywebpush.'):\n"
+        "            raise ModuleNotFoundError(\"No module named 'pywebpush'\")\n"
+        "        return None\n"
+        "\n"
+        "sys.meta_path.insert(0, _NoEstaInstalado())\n",
+        encoding="utf-8")
+    entorno = dict(os.environ)
+    entorno["PYTHONPATH"] = os.pathsep.join(
+        [str(carpeta)] + ([entorno["PYTHONPATH"]] if entorno.get("PYTHONPATH") else []))
+    return entorno
+
+
+def test_EL_GUION_CREA_UNA_LLAVE_SIN_TENER_PYWEBPUSH(tmp_path):
+    """La orden `crear` no toca la base, no lee nada y no manda ningún aviso.
+    Tiene que correr en la computadora de quien va a guardar la llave, que no
+    tiene instaladas las dependencias del servidor.
+
+    Antes no corría: el guión hacía `from services import cofre`, eso ejecutaba
+    `services/__init__.py`, y ahí está `pywebpush`. La persona veía
+    «No module named 'pywebpush'» justo en el paso donde menos sentido tiene.
+    """
+    import subprocess
+    guion = os.path.join(_BACKEND, "scripts", "cofre.py")
+    r = subprocess.run([sys.executable, guion, "crear"],
+                       capture_output=True, text=True, timeout=180,
+                       env=_sin_pywebpush(tmp_path))
+    assert r.returncode == 0, f"salió {r.returncode}\n{r.stdout}\n{r.stderr}"
+    assert "pywebpush" not in r.stderr, r.stderr
+    assert "COFRE_LLAVE=" in r.stdout, r.stdout
+    assert "Huella:" in r.stdout, r.stdout
+
+
+def test_EL_GUION_VERIFICA_LA_LLAVE_SIN_TENER_PYWEBPUSH(tmp_path):
+    """`verificar` es el paso que hay que dar ANTES de prender el cofre, y se da
+    con la llave a mano en la máquina de quien la anotó. Si esta orden no corre
+    ahí, «comprobá que copiaste bien la llave» es un consejo imposible de seguir.
+
+    Sin base no puede decir si es LA llave de los documentos, y eso está bien:
+    lo que se prueba acá es que llega a leerla y a mostrar su huella.
+    """
+    import subprocess
+    guion = os.path.join(_BACKEND, "scripts", "cofre.py")
+    entorno = _sin_pywebpush(tmp_path)
+    entorno[cofre.VARIABLE_LLAVE] = una_llave()
+    # Una dirección de base que no existe: el guión tiene que contestar sobre la
+    # llave igual, y no morirse esperando a Mongo.
+    entorno["MONGO_URL"] = "mongodb://127.0.0.1:1/"
+    r = subprocess.run([sys.executable, guion, "verificar"],
+                       capture_output=True, text=True, timeout=180,
+                       env=entorno)
+    assert "pywebpush" not in r.stderr, r.stderr
+    assert "La llave se lee bien" in r.stdout, f"{r.stdout}\n{r.stderr}"

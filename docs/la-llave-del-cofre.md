@@ -56,6 +56,10 @@ Son cuatro pasos. **El orden importa.**
 python backend/scripts/cofre.py crear
 ```
 
+Esto corre en tu computadora. No necesita la base de datos ni las dependencias
+del servidor: lo único que hace falta instalado es `cryptography`
+(`pip install cryptography`). Lo mismo vale para el Paso 3.
+
 Imprime la llave **una sola vez**. No se vuelve a mostrar y no se puede
 recuperar.
 
