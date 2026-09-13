@@ -14,6 +14,7 @@ import DiferenciasPago from '../components/admin/DiferenciasPago';
 import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import SeguridadFinanciera from '../components/admin/SeguridadFinanciera';
+import CobrosSinAcreditar from '../components/admin/CobrosSinAcreditar';
 import LibroMayor from '../components/admin/LibroMayor';
 import RecursosHumanos from '../components/admin/RecursosHumanos';
 import LibroAuditoria from '../components/admin/LibroAuditoria';
@@ -70,6 +71,12 @@ const TABS = [
   // el detalle contable de cada una. Sólo del super administrador, igual que
   // las rutas que consulta (`get_super_admin` en el backend).
   { key: 'seguridad', label: 'Seguridad financiera', icon: ShieldCheck, superAdminOnly: true },
+  // Al lado de Seguridad financiera porque es la misma clase de pregunta —una
+  // sobre el dinero que hay que ir a buscar, no sobre la operación del día— y
+  // porque consulta la misma puerta del backend (`get_super_admin`). Va después
+  // y no antes: aquélla se carga sola y contesta de una, ésta hay que pulsarla
+  // y le pregunta a Mercado Pago pago por pago.
+  { key: 'cobros', label: 'Cobros sin acreditar', icon: Search, superAdminOnly: true },
   { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
@@ -737,6 +744,10 @@ const [searchParams, setSearchParams] = useSearchParams();
         )}
         {activeTab === 'seguridad' && user?.role === 'super_admin' && (
           <SeguridadFinanciera irAlLibro={irAlLibro} />
+        )}
+
+        {activeTab === 'cobros' && user?.role === 'super_admin' && (
+          <CobrosSinAcreditar />
         )}
 
         {activeTab === 'ledger' && (
