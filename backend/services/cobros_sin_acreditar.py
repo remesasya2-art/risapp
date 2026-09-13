@@ -119,6 +119,7 @@ ORIGENES = (
         "referencia": "pix_payment",
         "medio": "PIX",
         "campo_en_mercadopago": "mp_payment_id",
+        "campo_de_la_cuenta": "gestor_id",
         "proyeccion": {
             "_id": 0, "payment_id": 1, "mp_payment_id": 1, "client_name": 1,
             "amount_ris": 1, "amount_brl": 1, "status": 1, "created_at": 1,
@@ -130,6 +131,7 @@ ORIGENES = (
         "referencia": "card_payment",
         "medio": "Tarjeta",
         "campo_en_mercadopago": "payment_id",
+        "campo_de_la_cuenta": "user_id",
         "proyeccion": {
             "_id": 0, "payment_id": 1, "user_id": 1, "amount_ris": 1,
             "total_charged_brl": 1, "status": 1, "status_detail": 1,
@@ -352,7 +354,27 @@ async def revisar(db, *, dias=DIAS_POR_DEFECTO, tope=TOPE_POR_DEFECTO,
             "medio": origen["medio"],
             "pago": doc["payment_id"],
             "pago_en_mercadopago": str(doc.get(origen["campo_en_mercadopago"])),
-            "cliente": doc.get("client_name") or doc.get("user_id") or "",
+            # DOS COSAS DISTINTAS, Y HACEN FALTA LAS DOS
+            #
+            #   `cuenta` es de QUIEN es la plata: la cuenta de esta aplicación
+            #   que cobra o cobró. En PIX es `gestor_id` —que no es un rol, es
+            #   sencillamente la cuenta que generó el cobro y a la que
+            #   `process_pix_confirmation` le acredita— y en tarjeta es
+            #   `user_id`. Nunca falta, porque sin ella el pago no se habría
+            #   podido crear.
+            #
+            #   `cliente` es el NOMBRE DE QUIEN PAGA, que en PIX puede ser un
+            #   tercero. Es texto libre que escribe quien arma el cobro, y en
+            #   los pagos viejos está vacío.
+            #
+            #   La primera versión de esto mostraba una sola columna, con el
+            #   nombre del cliente y la cuenta como respaldo. En los tres únicos
+            #   descuadres que apareció en producción —todos de pagos viejos—
+            #   esa columna salió vacía: justo en las filas donde más falta
+            #   hace saber a quién corresponden. Un informe que no se puede
+            #   seguir hasta una cuenta no sirve para ir a arreglar nada.
+            "cuenta": str(doc.get(origen["campo_de_la_cuenta"]) or ""),
+            "cliente": doc.get("client_name") or "",
             "estado_en_la_app": doc.get("status"),
             "cuando": _cuando(doc.get("created_at")),
             "cuando_lo_aprobo_mercadopago": respuesta.get("date_approved"),

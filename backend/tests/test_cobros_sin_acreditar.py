@@ -91,7 +91,8 @@ def _hace(dias):
 
 
 async def _pix(db, payment_id, mp_id, *, status="pending", dias=1,
-               monto="100.00", cliente="Ana", decimal128=True):
+               monto="100.00", cliente="Ana", cuenta="u_gestor",
+               decimal128=True):
     # El dinero se escribe como Decimal128 —como lo escribe la app en todo lo
     # demás— salvo cuando el test quiere probar a propósito el caso viejo de
     # float. Un test que escribe `100.0` a secas pasa con el producto roto.
@@ -104,7 +105,7 @@ async def _pix(db, payment_id, mp_id, *, status="pending", dias=1,
         "amount_brl": monto_guardado,
         "status": status,
         "created_at": _hace(dias),
-        "gestor_id": "u_gestor",
+        "gestor_id": cuenta,
         "gestor_name": "Gestor",
     })
 
@@ -167,6 +168,7 @@ def test_un_pago_aprobado_sin_linea_en_el_libro_aparece_con_su_monto(base):
         assert fila["pago"] == "gpix_1"
         assert fila["pago_en_mercadopago"] == "mp_1"
         assert fila["cliente"] == "Ana"
+        assert fila["cuenta"] == "u_gestor"
         assert fila["estado_en_la_app"] == "expired"
         assert fila["monto_en_mercadopago"] == "150.00"
         assert fila["monto_en_la_app"] == "150.00"
@@ -381,7 +383,7 @@ def test_una_tarjeta_aprobada_y_sin_asentar_es_un_descuadre_no_una_deuda(base):
         assert r["cuantos_descuadres"] == 1, r
         fila = r["descuadres"][0]
         assert fila["medio"] == "Tarjeta"
-        assert fila["cliente"] == "u_1"
+        assert fila["cuenta"] == "u_1"
         # Lo que se le COBRO, no el saldo que se le iba a acreditar. En la
         # tarjeta son dos números distintos —la comisión de la pasarela va en el
         # medio— y el que importa acá es el que salió de su cuenta.
@@ -479,4 +481,39 @@ def test_la_fecha_sale_con_zona_horaria(base):
         assert r["cuantos"] == 1, r
         cuando = r["cobros"][0]["cuando"]
         assert cuando.endswith("+00:00"), cuando
+    _correr(caso())
+
+
+# ─── De quién es la plata ────────────────────────────────────────────────
+
+def test_en_pix_la_cuenta_sale_igual_aunque_no_haya_nombre_del_cliente(base):
+    """El nombre del cliente es texto libre y en los pagos viejos está vacío.
+
+    Es exactamente el caso que apareció en producción: los tres únicos
+    descuadres eran pagos viejos, y la única columna que identificaba la fila
+    salió en blanco — justo donde más falta hace saber a quién corresponde.
+
+    La cuenta no puede faltar: sin ella el cobro no se habría podido crear.
+    """
+    async def caso():
+        await _pix(base, "gpix_1", "mp_1", cliente=None, cuenta="u_marta")
+        mp = MercadoPagoDeMentira({"mp_1": _aprobado()})
+        r = await cobros_sin_acreditar.revisar(base, preguntar=mp)
+        fila = r["cobros"][0]
+        assert fila["cuenta"] == "u_marta", fila
+        assert fila["cliente"] == "", fila
+    _correr(caso())
+
+
+def test_la_cuenta_de_la_tarjeta_no_se_confunde_con_la_del_pix(base):
+    """Cada medio guarda la cuenta en un campo distinto —`gestor_id` en PIX,
+    `user_id` en la tarjeta— y leer el del otro deja la columna vacía."""
+    async def caso():
+        await _pix(base, "gpix_1", "mp_pix", cuenta="u_pix", dias=5)
+        await _tarjeta(base, "mp_card", usuario="u_tarjeta", dias=4)
+        mp = MercadoPagoDeMentira({"mp_pix": _aprobado(), "mp_card": _aprobado()})
+        r = await cobros_sin_acreditar.revisar(base, preguntar=mp)
+        cuentas = {f["medio"]: f["cuenta"]
+                   for f in r["cobros"] + r["descuadres"]}
+        assert cuentas == {"PIX": "u_pix", "Tarjeta": "u_tarjeta"}, cuentas
     _correr(caso())

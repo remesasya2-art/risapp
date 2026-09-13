@@ -138,7 +138,7 @@ function Tabla({ filas }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
         <thead>
           <tr style={{ backgroundColor: C.fondo }}>
-            <Encabezado>Cliente</Encabezado>
+            <Encabezado>Cuenta</Encabezado>
             <Encabezado>Medio</Encabezado>
             <Encabezado derecha>Cobrado en MP</Encabezado>
             <Encabezado derecha>Según la app</Encabezado>
@@ -152,7 +152,21 @@ function Tabla({ filas }) {
             const distinto = f.monto_en_mercadopago !== f.monto_en_la_app;
             return (
               <tr key={`${f.medio}-${f.pago}`}>
-                <Celda ancho>{f.cliente || '—'}</Celda>
+                {/* La CUENTA arriba y el nombre de quien pagó abajo, y no
+                    al revés: la cuenta es la que se busca en el panel para ir
+                    a arreglar la fila, y nunca falta. El nombre del cliente es
+                    texto libre —en PIX puede ser un tercero— y en los pagos
+                    viejos está vacío. Cuando esta columna mostraba sólo el
+                    nombre, las tres únicas filas que aparecieron en producción
+                    salieron todas con un guión. */}
+                <Celda ancho>
+                  <div style={{ fontWeight: 600 }}>{f.cuenta || '—'}</div>
+                  {f.cliente && (
+                    <div style={{ fontSize: 12, color: C.suave, marginTop: 2 }}>
+                      pagó {f.cliente}
+                    </div>
+                  )}
+                </Celda>
                 <Celda>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: C.suave }}>
                     {f.medio === 'PIX' ? <QrCode size={13} /> : <CreditCard size={13} />}
