@@ -42,3 +42,22 @@ export const fmtRelative = (input) => {
   const mo = Math.round(day / 30);
   return future ? `en ${mo} meses` : `hace ${mo} meses`;
 };
+
+/**
+ * La antiguedad de un dato en palabras, a partir de las HORAS que manda el
+ * servidor.
+ *
+ * Se usan las horas del servidor y no la fecha, a proposito: si el reloj del
+ * navegador esta desfasado, la pantalla diria una antiguedad distinta de la que
+ * uso la contabilidad para decidir si ese dato todavia sirve. Y esas dos cosas
+ * no pueden discrepar, porque el numero que se muestra tiene que explicar la
+ * decision que se tomo.
+ */
+export const fmtAntiguedadHoras = (horas) => {
+  if (horas === null || horas === undefined || isNaN(horas)) return 'sin fecha';
+  const h = Number(horas);
+  if (h < 1) return 'de hace menos de una hora';
+  if (h < 2) return 'de hace una hora';
+  if (h < 48) return `de hace ${Math.floor(h)} horas`;
+  return `de hace ${Math.floor(h / 24)} días`;
+};

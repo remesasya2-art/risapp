@@ -42,6 +42,13 @@ export function RateProvider({ children }) {
         bcv_usd_ves: response.data.bcv_usd_ves,
         bcv_eur_ves: response.data.bcv_eur_ves,
         bcv_value_date: response.data.bcv_value_date,
+        // La antiguedad del dato del BCV. Esta lista es POR LO PERMITIDO, asi
+        // que un campo nuevo del servidor que no se nombre aca se descarta en
+        // silencio — es lo que paso la primera vez que se probo esto: el
+        // servidor mandaba `bcv_vencida` y la pantalla seguia diciendo
+        // «Referencial · BCV» como si el dato fuera de hoy.
+        bcv_vencida: response.data.bcv_vencida,
+        bcv_edad_horas: response.data.bcv_edad_horas,
         updated_at: response.data.updated_at,
         usdtris_to_ves: response.data.usdtris_to_ves,
         usdcris_to_ves: response.data.usdcris_to_ves,

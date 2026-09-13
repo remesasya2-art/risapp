@@ -50,11 +50,26 @@ async def get_current_rate():
     effective["usdcris_to_ves"] = (rate or {}).get("usdcris_to_ves")
 
     # Expose BCV USD/EUR rates publicly (read-only)
+    #
+    # VIAJA CON SU ANTIGÜEDAD, y no es adorno. Estas pantallas dicen «Referencia
+    # BCV» al lado de un número; mientras el raspador estuvo roto ese número era
+    # de semanas atrás y la pantalla lo mostraba igual, sin decir nada. Un dato
+    # viejo presentado como de hoy miente por omisión.
     bcv = await db.bcv_rates.find_one({}, {"_id": 0, "rates": 1, "value_date": 1, "fetched_at": 1}, sort=[("fetched_at", -1)])
     if bcv and bcv.get("rates"):
         effective["bcv_usd_ves"] = bcv["rates"].get("dolar")
         effective["bcv_eur_ves"] = bcv["rates"].get("euro")
         effective["bcv_value_date"] = bcv.get("value_date")
+        try:
+            from services.bcv_scraper import vigencia
+            estado = await vigencia(db)
+            effective["bcv_vencida"] = estado["vencida"]
+            effective["bcv_edad_horas"] = estado["edad_horas"]
+        except Exception as e:
+            # Esta ruta la consulta cada visitante y cada diez segundos la
+            # pantalla de envíos. Que no se pueda calcular la antigüedad no
+            # puede tumbarla.
+            logger.warning(f"No se pudo calcular la antigüedad del BCV: {e}")
 
     # Log rate transitions (only if changed from last entry)
     try:

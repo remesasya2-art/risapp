@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, RefreshCw, DollarSign } from 'lucide-react';
+import { TrendingUp, RefreshCw, DollarSign, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { fmt } from '../../utils/format';
+import { fmt, fmtAntiguedadHoras } from '../../utils/format';
 
 const CURRENCY_META = {
   dolar: { label: 'USD', flag: '🇺🇸', name: 'Dólar' },
@@ -51,6 +51,20 @@ export const BcvRatesCard = () => {
     : '—';
   const hasData = Object.keys(rates).length > 0;
 
+  // POR QUE ESTA PANTALLA AHORA DICE DE CUANDO ES EL DATO
+  //
+  // El raspador del BCV estuvo roto semanas —al sitio le falta una pieza de su
+  // cadena de certificados— y esta tarjeta mostraba el ultimo numero que habia
+  // traido como si fuera el de hoy. No decia nada. Y peor: la contabilidad
+  // preferia ese numero congelado antes que el que el operador carga a mano.
+  //
+  // Un dato viejo presentado como de hoy miente por omision. Ahora la
+  // antiguedad la calcula el servidor (`vigencia` en bcv_scraper.py) y viaja
+  // con el dato, asi que la pantalla dice exactamente lo mismo que uso la
+  // contabilidad para decidir.
+  const vencida = data?.vencida === true;
+  const antiguedad = fmtAntiguedadHoras(data?.edad_horas);
+
   return (
     <div data-testid="bcv-rates-card" style={{
       backgroundColor: '#fff',
@@ -79,6 +93,27 @@ export const BcvRatesCard = () => {
           {refreshing ? 'Actualizando...' : 'Actualizar ahora'}
         </button>
       </div>
+
+      {hasData && vencida && (
+        <div data-testid="bcv-vencida" style={{
+          display: 'flex', alignItems: 'flex-start', gap: '10px',
+          padding: '12px 14px', marginBottom: '14px', borderRadius: '10px',
+          backgroundColor: '#fef2f2', border: '1px solid #fecaca'
+        }}>
+          <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626', flexShrink: 0, marginTop: '1px' }} />
+          <div>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: '#991b1b', margin: 0 }}>
+              Este dato es {antiguedad} y dejó de usarse
+            </p>
+            <p style={{ fontSize: '12px', color: '#b91c1c', margin: '4px 0 0 0', lineHeight: 1.45 }}>
+              El límite está en {data?.horas_de_vigencia ?? 24}{(data?.horas_de_vigencia ?? 24) === 1 ? ' hora' : ' horas'}. La contabilidad
+              está usando el dólar que vos cargás a mano en Tasas, no éste.
+              Probá «Actualizar ahora»; si sigue sin traer nada, el registro del
+              servidor dice por qué. El límite se cambia en Configuración.
+            </p>
+          </div>
+        </div>
+      )}
 
       {!hasData ? (
         <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '10px' }}>
@@ -111,7 +146,9 @@ export const BcvRatesCard = () => {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6b7280', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
             <span>{data?.value_date ? `Valor: ${data.value_date}` : ''}</span>
-            <span>Actualizado: {fetchedAt}</span>
+            <span style={{ color: vencida ? '#b91c1c' : '#6b7280', fontWeight: vencida ? 700 : 400 }}>
+              Actualizado: {fetchedAt}{hasData ? ` · ${antiguedad}` : ''}
+            </span>
           </div>
         </>
       )}
