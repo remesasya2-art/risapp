@@ -484,11 +484,37 @@ def describir(certificados) -> str:
 
 async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
                       permitir_loopback: bool = False) -> list:
-    """Los certificados intermedios que el servidor no manda, en PEM.
+    """Los certificados intermedios que faltan para cerrar la cadena, en PEM.
 
-    Levanta `NoSePudoCompletar` si no se consiguen o si no cierran la cadena.
-    Nunca devuelve una lista vacía: si no hizo falta completar nada, la
-    conexión estricta habría funcionado y nadie llamaría a esto.
+    SE CAMINA DESDE EL CERTIFICADO DEL SITIO HACIA ARRIBA, Y ESO NO ES UN DETALLE
+
+        La primera versión buscaba la dirección en la ULTIMA pieza que mandaba
+        el servidor. Eso da por sentado que lo que manda el servidor es el
+        principio correcto de la cadena, y el sitio del BCV demostró que no:
+
+            [0] *.bcv.org.ve
+                lo firmó: Sectigo Public Server Authentication CA DV R36
+            [1] Sectigo RSA Domain Validation Secure Server CA   ← OTRA COSA
+                lo firmó: USERTrust RSA Certification Authority
+
+        La pieza [1] NO es quien firmó el certificado del sitio: es una vieja,
+        de otra cadena, que no tiene nada que ver. Lo que de verdad falta —la
+        R36— no viene por ningún lado.
+
+        Al seguir la dirección de [1] se bajaba un certificado de USERTrust que
+        no servía para nada, y el arreglo fallaba diciendo «la cadena no
+        cierra», que era cierto pero por el motivo equivocado.
+
+        Ahora se camina como camina el navegador: se arranca en el certificado
+        del sitio, y en cada paso se busca A QUIEN LE FALTA EL EMISOR. Si ese
+        emisor está entre lo que mandó el servidor, se usa; si no está, se baja
+        por la dirección que trae adentro EL CERTIFICADO AL QUE LE FALTA — no
+        la de cualquier otro.
+
+        Lo que el servidor manda de más no molesta: queda como candidato y, si
+        no sirve, se ignora.
+
+    Levanta `NoSePudoCompletar` si no se consigue cerrar la cadena.
     """
     ofrecidos = await asyncio.to_thread(_lo_que_ofrece, host, puerto, segundos)
     if not ofrecidos:
@@ -503,8 +529,6 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
             f"no se pudo leer el certificado que mostró {host}: {e}")
 
     piezas = []
-    # Las que el servidor SI manda se suman como candidatas: si manda dos de
-    # tres, lo que falta es una sola y hay que conservar la que vino.
     for crudo in ofrecidos[1:]:
         try:
             piezas.append(x509.load_der_x509_certificate(crudo))
@@ -513,58 +537,51 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
     del_servidor = list(piezas)
     bajadas = []
 
+    # Quién es quién, por su nombre. Es como se busca el emisor de un
+    # certificado: su campo «emisor» es el «sujeto» de quien lo firmó.
+    conocidos = {c.subject: c for c in piezas}
+
+    def _cierra():
+        return la_cadena_cierra(hoja, piezas, host)
+
     # Si con lo que el servidor SI manda la cadena ya cierra, no se baja nada.
-    # No debería pasar —a esto se llega porque la conexión estricta falló— pero
-    # entonces el problema es otro (el nombre, la fecha) y bajar un certificado
-    # no lo va a arreglar.
-    if piezas and la_cadena_cierra(hoja, piezas, host):
+    if piezas and _cierra():
         logger.info("cadena_tls: %s manda la cadena completa; el fallo de la "
                     "conexión no era una pieza que falta.", host)
         return [p.public_bytes(serialization.Encoding.PEM) for p in piezas]
 
-    ultima = piezas[-1] if piezas else hoja
+    # NO HAY UN CORTE AL LLEGAR A UN CERTIFICADO AUTOFIRMADO, Y SE SACO A
+    # PROPOSITO. Lo había: «si el sujeto es igual al emisor, se llegó arriba de
+    # todo, cortar». Al romperlo no se puso roja ninguna prueba, y mirando por
+    # qué se ve que no hacía nada: la caminata ya está acotada por
+    # `MAXIMO_DE_SALTOS`, así que sin él sólo se dan unas vueltas de más
+    # comprobando lo mismo. Una guarda que no se puede poner en rojo es una
+    # guarda de la que nadie sabe si anda, y este repositorio ya pagó eso.
+    actual = hoja
     for _salto in range(MAXIMO_DE_SALTOS):
-        direcciones = direcciones_del_emisor(ultima)
-        if not direcciones:
-            if bajadas:
-                # Ya se bajó algo y la cadena no cerró. El motivo del fallo no
-                # es que falte una dirección: es que lo que vino no sirve. Decir
-                # «no dice dónde» acá mandaría a mirar el lugar equivocado.
+        emisor = conocidos.get(actual.issuer)
+        if emisor is None:
+            emisor = await _bajar_al_emisor(
+                actual, host, segundos=segundos,
+                permitir_loopback=permitir_loopback, ya_se_bajo=bool(bajadas))
+            if emisor is None:
                 break
-            raise NoSePudoCompletar(
-                f"el certificado de {host} no dice dónde bajar el de quien lo "
-                "firmó, así que no hay forma de completar la cadena sola")
+            piezas.append(emisor)
+            bajadas.append(emisor)
+            conocidos[emisor.subject] = emisor
 
-        nuevas = []
-        ultimo_error = None
-        for url in direcciones:
-            try:
-                nuevas = certificados_de(await _bajar(
-                    url, segundos=segundos,
-                    permitir_loopback=permitir_loopback))
-            except NoSePudoCompletar as e:
-                ultimo_error = e
-                continue
-            if nuevas:
-                break
-        if not nuevas:
-            raise ultimo_error or NoSePudoCompletar(
-                f"lo que devolvieron las direcciones de {host} no es un "
-                "certificado")
-
-        piezas.extend(nuevas)
-        bajadas.extend(nuevas)
-        if la_cadena_cierra(hoja, piezas, host):
+        if _cierra():
             logger.info(
                 "cadena_tls: %s manda una cadena incompleta; se bajaron %d "
                 "pieza(s) y ahora cierra contra una raíz pública.",
-                host, len(piezas))
-            return [p.public_bytes(serialization.Encoding.PEM)
-                    for p in piezas]
-        ultima = piezas[-1]
+                host, len(bajadas))
+            return [p.public_bytes(serialization.Encoding.PEM) for p in piezas]
+
+        actual = emisor
 
     # EL REGISTRO TIENE QUE DECIR QUE CADENA ERA. Sin esto, un fallo en
-    # producción sólo dice «no cierra» y diagnosticarlo es adivinar — ya pasó.
+    # producción sólo dice «no cierra» y diagnosticarlo es adivinar — ya pasó,
+    # y fue este registro el que lo resolvió.
     logger.error(
         "cadena_tls: la cadena de %s no cierra contra ninguna raíz pública.\n"
         "  Lo que ofreció el servidor:\n%s\n"
@@ -578,6 +595,48 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
         f"de bajar {len(bajadas)} pieza(s). NO se usa ninguna: una pieza que no "
         "cierra la cadena puede haberla puesto cualquiera. El registro de "
         "arriba dice qué certificados eran.")
+
+
+async def _bajar_al_emisor(certificado, host, *, segundos, permitir_loopback,
+                           ya_se_bajo):
+    """Baja el certificado de quien firmó a `certificado`, o `None`.
+
+    La dirección sale de ADENTRO de `certificado`, que es el que tiene el
+    eslabón roto. Seguir la de cualquier otro es lo que hacía la versión
+    anterior, y es lo que la dejó persiguiendo una pieza que no servía.
+    """
+    direcciones = direcciones_del_emisor(certificado)
+    if not direcciones:
+        if ya_se_bajo:
+            # Ya se bajó algo y la cadena no cerró: el motivo no es que falte
+            # una dirección. Decirlo acá mandaría a mirar el lugar equivocado.
+            return None
+        raise NoSePudoCompletar(
+            f"el certificado de {host} no dice dónde bajar el de quien lo "
+            "firmó, así que no hay forma de completar la cadena sola")
+
+    ultimo_error = None
+    for url in direcciones:
+        try:
+            encontrados = certificados_de(await _bajar(
+                url, segundos=segundos, permitir_loopback=permitir_loopback))
+        except NoSePudoCompletar as e:
+            ultimo_error = e
+            continue
+        for candidato in encontrados:
+            # Tiene que ser EL EMISOR, no cualquier certificado que devuelvan.
+            # Una dirección que contesta otra cosa no completa nada.
+            if candidato.subject == certificado.issuer:
+                return candidato
+        if encontrados:
+            logger.warning(
+                "cadena_tls: %s devolvió %d certificado(s), pero ninguno es "
+                "quien firmó a «%s».", url, len(encontrados),
+                _nombre_corto(certificado.subject))
+
+    if ultimo_error and not ya_se_bajo:
+        raise ultimo_error
+    return None
 
 
 # Las piezas ya conseguidas, por servidor. En memoria del proceso: son datos
