@@ -106,6 +106,10 @@ ACCIONES = {
     # regala a cada cuenta que se registra, así que «quién lo puso en
     # cincuenta y cuándo» tiene que poder responderse.
     "config.ajuste":            (Cat.CONFIG, "Cambio de un ajuste del panel"),
+    # Se registra la HUELLA de la llave sorteada, nunca la llave. Sirve para que
+    # meses después se pueda saber si la que está corriendo salió del panel o
+    # apareció de otro lado.
+    "cofre.llave_generada":     (Cat.CONFIG, "Llave del cofre generada"),
     # Sesión
     "sesion.ingreso_admin":     (Cat.SESION, "Ingreso de administrador"),
     "sesion.cerradas":          (Cat.SESION, "Sesiones cerradas"),

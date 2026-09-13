@@ -29,6 +29,7 @@ LO SEGUNDO QUE MAS SE PRUEBA
     todo tiene que comportarse EXACTAMENTE como antes.
 """
 import base64
+import hashlib
 import os
 import sys
 
@@ -561,3 +562,422 @@ def test_LA_RUTA_DEL_PANEL_ES_SOLO_PARA_EL_SUPER_ADMINISTRADOR():
             f"la ruta del cofre no exige super administrador (tiene: {guardias})"
         return
     raise AssertionError("no se encontró la ruta del cofre")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El guión, que lo corre una persona en su computadora
+# ══════════════════════════════════════════════════════════════════════════
+
+def _sin_pywebpush(carpeta):
+    """Arma una carpeta que, puesta en PYTHONPATH, hace desaparecer `pywebpush`.
+
+    No alcanza con no tenerlo instalado: acá SI está (los tests lo reemplazan
+    por un doble). Un test que dependiera de que falte pasaría en la máquina de
+    desarrollo y no probaría nada en ninguna otra.
+
+    `sitecustomize.py` lo importa Python solo, antes de correr el guión.
+    """
+    (carpeta / "sitecustomize.py").write_text(
+        "import sys\n"
+        "\n"
+        "class _NoEstaInstalado:\n"
+        "    def find_spec(self, nombre, ruta=None, destino=None):\n"
+        "        if nombre == 'pywebpush' or nombre.startswith('pywebpush.'):\n"
+        "            raise ModuleNotFoundError(\"No module named 'pywebpush'\")\n"
+        "        return None\n"
+        "\n"
+        "sys.meta_path.insert(0, _NoEstaInstalado())\n",
+        encoding="utf-8")
+    entorno = dict(os.environ)
+    entorno["PYTHONPATH"] = os.pathsep.join(
+        [str(carpeta)] + ([entorno["PYTHONPATH"]] if entorno.get("PYTHONPATH") else []))
+    return entorno
+
+
+def test_EL_GUION_CREA_UNA_LLAVE_SIN_TENER_PYWEBPUSH(tmp_path):
+    """La orden `crear` no toca la base, no lee nada y no manda ningún aviso.
+    Tiene que correr en la computadora de quien va a guardar la llave, que no
+    tiene instaladas las dependencias del servidor.
+
+    Antes no corría: el guión hacía `from services import cofre`, eso ejecutaba
+    `services/__init__.py`, y ahí está `pywebpush`. La persona veía
+    «No module named 'pywebpush'» justo en el paso donde menos sentido tiene.
+    """
+    import subprocess
+    guion = os.path.join(_BACKEND, "scripts", "cofre.py")
+    r = subprocess.run([sys.executable, guion, "crear"],
+                       capture_output=True, text=True, timeout=180,
+                       env=_sin_pywebpush(tmp_path))
+    assert r.returncode == 0, f"salió {r.returncode}\n{r.stdout}\n{r.stderr}"
+    assert "pywebpush" not in r.stderr, r.stderr
+    assert "COFRE_LLAVE=" in r.stdout, r.stdout
+    assert "Huella:" in r.stdout, r.stdout
+
+
+def test_EL_GUION_VERIFICA_LA_LLAVE_SIN_TENER_PYWEBPUSH(tmp_path):
+    """`verificar` es el paso que hay que dar ANTES de prender el cofre, y se da
+    con la llave a mano en la máquina de quien la anotó. Si esta orden no corre
+    ahí, «comprobá que copiaste bien la llave» es un consejo imposible de seguir.
+
+    Sin base no puede decir si es LA llave de los documentos, y eso está bien:
+    lo que se prueba acá es que llega a leerla y a mostrar su huella.
+    """
+    import subprocess
+    guion = os.path.join(_BACKEND, "scripts", "cofre.py")
+    entorno = _sin_pywebpush(tmp_path)
+    entorno[cofre.VARIABLE_LLAVE] = una_llave()
+    # Una dirección de base que no existe: el guión tiene que contestar sobre la
+    # llave igual, y no morirse esperando a Mongo.
+    entorno["MONGO_URL"] = "mongodb://127.0.0.1:1/"
+    r = subprocess.run([sys.executable, guion, "verificar"],
+                       capture_output=True, text=True, timeout=180,
+                       env=entorno)
+    assert "pywebpush" not in r.stderr, r.stderr
+    assert "La llave se lee bien" in r.stdout, f"{r.stdout}\n{r.stderr}"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Una llave escrita como texto: la que se puede poner sin abrir una terminal
+# ══════════════════════════════════════════════════════════════════════════
+#
+# POR QUE ESTA PARTE EXISTE
+#
+#   El cofre estuvo apagado desde que se escribió, y no por falta de código:
+#   porque la llave tenía que ser 44 caracteres en base64, y producirlos exigía
+#   correr Python en una terminal. El dueño del proyecto no escribe código, así
+#   que el paso que protege los documentos quedaba fuera de su alcance.
+#
+#   Ahora `COFRE_LLAVE` acepta además cualquier texto largo, del que se derivan
+#   los 32 bytes. Lo que se prueba acá es que eso no rompió la primera forma.
+
+UN_TEXTO_DE_LLAVE = "Kt7-vraLLaveGeneradaPorUnGestor-9fQz2xWb"
+
+
+def test_una_llave_escrita_como_texto_sirve():
+    """Lo que genera el botón «generar contraseña» de cualquier gestor."""
+    crudo, motivo = cofre.bytes_y_motivo(UN_TEXTO_DE_LLAVE)
+    assert motivo == ""
+    assert crudo is not None and len(crudo) == 32
+
+
+def test_la_misma_llave_escrita_da_siempre_los_mismos_32_bytes():
+    """Si esto no se cumpliera, un reinicio del servidor dejaría de abrir los
+    documentos cifrados un minuto antes. Es la propiedad de la que depende todo
+    lo demás."""
+    primero, _ = cofre.bytes_y_motivo(UN_TEXTO_DE_LLAVE)
+    segundo, _ = cofre.bytes_y_motivo(UN_TEXTO_DE_LLAVE)
+    assert primero == segundo
+    # Y con los espacios de los bordes que deja cualquier copiar y pegar.
+    conEspacios, _ = cofre.bytes_y_motivo(f"  {UN_TEXTO_DE_LLAVE}\n")
+    assert conEspacios == primero
+
+
+def test_UNA_LLAVE_EN_BASE64_SIGUE_DANDO_EXACTAMENTE_SUS_PROPIOS_BYTES():
+    """LA GUARDA QUE PROTEGE LOS DOCUMENTOS YA CIFRADOS.
+
+    Una llave en base64 tiene que seguir dando los 32 bytes que representa, y
+    NO el sha256 de su texto. Si el orden de las dos formas se invirtiera, cada
+    llave en base64 ya en uso pasaría a dar otros 32 bytes, y todos los
+    documentos cifrados con ella quedarían ilegibles para siempre.
+
+    No es una hipótesis: es exactamente el error que se comete al «unificar» las
+    dos ramas en una.
+    """
+    crudos = os.urandom(32)
+    texto = base64.urlsafe_b64encode(crudos).decode("ascii")
+    obtenidos, motivo = cofre.bytes_y_motivo(texto)
+    assert motivo == ""
+    assert obtenidos == crudos, "una llave en base64 dejó de dar sus propios bytes"
+    # Y no el derivado del texto, que es el error que se quiere impedir.
+    assert obtenidos != hashlib.sha256(
+        cofre._SAL_DE_LA_DERIVACION + texto.encode()).digest()
+
+
+def test_una_llave_en_base64_sin_el_relleno_tambien_entra():
+    """43 caracteres, que es la misma llave sin el `=` del final. Un gestor de
+    contraseñas o un copiar y pegar pueden comerse ese carácter."""
+    crudos = os.urandom(32)
+    texto = base64.urlsafe_b64encode(crudos).decode("ascii").rstrip("=")
+    assert len(texto) == 43
+    obtenidos, _ = cofre.bytes_y_motivo(texto)
+    assert obtenidos == crudos
+
+
+def test_dos_contrasenas_que_se_diferencian_en_un_signo_dan_llaves_distintas():
+    """Dos textos distintos, dos llaves distintas. Suena obvio y casi no lo fue.
+
+    `b64decode` sin `validate` DESCARTA en silencio los caracteres que no son
+    del alfabeto, así que la sospecha era que dos contraseñas diferenciadas sólo
+    por un «!» perdieran ese carácter y dieran la MISMA llave — y entonces el
+    cotejo diría «sí, es tu llave» sobre una llave que no es.
+
+    No puede pasar, y por un motivo que conviene dejar escrito: quitar un
+    carácter cambia el largo, y un largo que no es múltiplo de cuatro hace
+    fallar el decodificador antes de devolver nada. El texto cae entonces en la
+    derivación, que sí mira todos los caracteres.
+
+    Este test pasa por eso y no por una comprobación de alfabeto. Hubo una, y se
+    sacó justamente porque no se la podía poner en rojo rompiéndola.
+    """
+    base = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")[:43]
+    una, _ = cofre.bytes_y_motivo(base + "!")
+    otra, _ = cofre.bytes_y_motivo(base + "?")
+    assert una is not None and otra is not None
+    assert una != otra, "dos llaves distintas dieron los mismos bytes"
+
+
+@pytest.mark.parametrize("mala,parte_del_motivo", [
+    ("corta", "al menos"),
+    ("a" * (cofre.MINIMO_DE_LA_LLAVE - 1), "al menos"),
+    ("a" * 40, "caracteres distintos"),
+    ("abababababababababababababababab", "caracteres distintos"),
+    ("", "ninguna llave"),
+    (None, "ninguna llave"),
+])
+def test_una_llave_pobre_no_entra_y_dice_por_que(mala, parte_del_motivo):
+    """El motivo se prueba junto con el rechazo. Un «no sirve» sin motivo manda
+    a alguien a probar cosas al azar sobre la única cosa del sistema que no
+    tiene vuelta atrás."""
+    crudo, motivo = cofre.bytes_y_motivo(mala)
+    assert crudo is None
+    assert parte_del_motivo in motivo
+
+
+def test_el_cifrado_de_punta_a_punta_con_una_llave_escrita(base, monkeypatch):
+    """La prueba que importa: una llave puesta como texto cifra y abre de
+    verdad, y el testigo la reconoce. Las dos formas tienen que ser
+    intercambiables para el resto del módulo."""
+    monkeypatch.setenv(cofre.VARIABLE_MODO, "cifrando")
+    monkeypatch.setenv(cofre.VARIABLE_LLAVE, UN_TEXTO_DE_LLAVE)
+    monkeypatch.delenv(cofre.VARIABLE_LLAVE_ANTERIOR, raising=False)
+
+    original = foto(5000)
+    sellado = cofre.guardar(original)
+    assert cofre.esta_cifrado(sellado)
+    assert cofre.abrir(sellado) == original
+
+    corre(cofre.sellar_testigo(base))
+    estado = corre(cofre.revisar(base))
+    assert estado["ok"] is True
+    assert estado["modo"] == "cifrando"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La llave que sortea el panel
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_la_llave_nueva_trae_su_huella_y_las_dos_se_corresponden():
+    nueva = cofre.llave_nueva()
+    assert set(nueva) == {"llave", "huella"}
+    crudo, motivo = cofre.bytes_y_motivo(nueva["llave"])
+    assert motivo == "" and len(crudo) == 32
+    assert cofre.huella(crudo) == nueva["huella"]
+
+
+def test_dos_llaves_nuevas_no_son_la_misma():
+    """Una llave sorteada que se repite no es una llave. El día que esto falle,
+    todas las instalaciones estarían usando la misma."""
+    llaves = {cofre.llave_nueva()["llave"] for _ in range(25)}
+    assert len(llaves) == 25
+
+
+def test_LA_LLAVE_GENERADA_NO_VIAJA_A_LA_AUDITORIA():
+    """De la llave sorteada sólo se registra la HUELLA.
+
+    Escribirla en el libro de auditoría la convertiría en un secreto guardado en
+    texto dentro de la base — que es exactamente lo que el cofre existe para
+    evitar, y encima en la colección que más gente puede leer.
+
+    Se mira el árbol del código y no la respuesta, porque una llamada a
+    `registrar` con el campo equivocado no falla: escribe.
+    """
+    import ast
+    fuente = open(os.path.join(_BACKEND, "routes", "ledger_admin.py"),
+                  encoding="utf-8").read()
+    for fn in ast.walk(ast.parse(fuente)):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if fn.name != "llave_nueva_del_cofre":
+            continue
+        registros = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                     and isinstance(n.func, ast.Attribute)
+                     and n.func.attr == "registrar"]
+        assert registros, "la ruta dejó de registrar en auditoría"
+        for llamada in registros:
+            textos = {n.value for n in ast.walk(llamada)
+                      if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+            assert "llave" not in textos, \
+                f"la auditoría de la llave nueva menciona «llave»: {textos}"
+            assert "huella" in textos, "la auditoría dejó de guardar la huella"
+        return
+    raise AssertionError("no se encontró la ruta que genera la llave")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El cotejo: «¿la llave que anoté sirve?»
+# ══════════════════════════════════════════════════════════════════════════
+
+CAMPOS_DEL_COTEJO = {"sirve", "huella", "es_la_que_corre",
+                     "abre_los_documentos", "detalle"}
+
+
+def test_EL_COTEJO_DEVUELVE_ESTOS_CAMPOS_Y_NINGUNO_MAS(base, cerrado):
+    """Un conjunto exacto, no un «contiene».
+
+    Un `assert "llave" not in respuesta` pasa con el producto roto de dos formas
+    distintas: alcanza con llamar al campo `clave`, o con anidarlo dentro de
+    otro. Exigir el conjunto completo obliga a que cualquier campo nuevo pase
+    por acá, que es donde se decide si puede salir.
+    """
+    r = corre(cofre.cotejar(base, os.environ[cofre.VARIABLE_LLAVE]))
+    assert set(r) == CAMPOS_DEL_COTEJO
+
+
+def test_el_cotejo_no_devuelve_la_llave_en_ningun_valor(base, cerrado):
+    """La segunda guarda, independiente de la de arriba: que no salga escondida
+    dentro del texto de un campo que sí está permitido."""
+    puesta = os.environ[cofre.VARIABLE_LLAVE]
+    r = corre(cofre.cotejar(base, puesta))
+    for campo, valor in r.items():
+        assert puesta not in str(valor), f"la llave apareció en «{campo}»"
+
+
+def test_el_cotejo_reconoce_la_llave_que_cifro_los_documentos(base, cerrado):
+    corre(cofre.sellar_testigo(base))
+    r = corre(cofre.cotejar(base, os.environ[cofre.VARIABLE_LLAVE]))
+    assert r["sirve"] is True
+    assert r["es_la_que_corre"] is True
+    assert r["abre_los_documentos"] is True
+    assert r["huella"] == cofre.huella()
+
+
+def test_el_cotejo_dice_que_no_con_otra_llave(base, cerrado):
+    """Una llave válida pero que no es la de los documentos. Las tres respuestas
+    son distintas y tienen que poder contradecirse entre ellas."""
+    corre(cofre.sellar_testigo(base))
+    r = corre(cofre.cotejar(base, una_llave()))
+    assert r["sirve"] is True
+    assert r["es_la_que_corre"] is False
+    assert r["abre_los_documentos"] is False
+    assert "NO abre" in r["detalle"]
+
+
+def test_SIN_TESTIGO_EL_COTEJO_NO_DICE_QUE_NO_DICE_QUE_NO_SABE(base, apagado):
+    """`None`, nunca `False`.
+
+    Con el cofre recién configurado no hay nada cifrado con qué comparar. Decir
+    «esta llave no abre los documentos» ahí manda a alguien a buscar un problema
+    que no existe — y peor: a cambiar la llave, que es lo único que no hay que
+    tocar.
+    """
+    r = corre(cofre.cotejar(base, UN_TEXTO_DE_LLAVE))
+    assert r["sirve"] is True
+    assert r["abre_los_documentos"] is None
+
+
+def test_SIN_LLAVE_PUESTA_TAMPOCO_SE_DICE_QUE_NO_ES_LA_QUE_CORRE(base, apagado):
+    """Lo mismo que arriba, para la otra pregunta, y lo encontró una captura.
+
+    Con el cofre apagado no hay ninguna llave puesta en el servidor. Decir «no
+    es la misma que está corriendo» es cierto y se pinta en rojo, y entonces el
+    estado NORMAL de la aplicación —el cofre sin prender— se ve como si algo
+    estuviera roto. Cada respuesta era correcta por separado; el conjunto
+    asustaba. Eso no lo ve un test: se vio mirando la pantalla.
+    """
+    r = corre(cofre.cotejar(base, UN_TEXTO_DE_LLAVE))
+    assert r["es_la_que_corre"] is None
+
+
+def test_el_cotejo_de_una_llave_pobre_explica_el_motivo(base, cerrado):
+    """Y no contesta las otras dos preguntas.
+
+    Con el cofre prendido y una llave puesta, el servidor PODRIA contestar «no
+    es la que corre». No lo hace: si el texto no tiene forma de llave, ninguna
+    de las dos preguntas siguientes se evaluó, y contestarlas pinta de rojo tres
+    renglones cuando el que importa es el primero. Se vio en una captura.
+    """
+    r = corre(cofre.cotejar(base, "corta"))
+    assert r["sirve"] is False
+    assert r["es_la_que_corre"] is None
+    assert r["abre_los_documentos"] is None
+    assert "al menos" in r["detalle"]
+
+
+def test_PROBAR_UNA_LLAVE_EQUIVOCADA_NO_DISPARA_LA_ALARMA(base, cerrado, caplog):
+    """El aviso «NO SE PUDO ABRIR un documento» es la única alarma grave de este
+    módulo: significa que hay documentos que no se van a poder recuperar.
+
+    Cotejar una llave equivocada es una respuesta esperada, no una alarma. Si
+    cada intento la disparara, el aviso que no se puede ignorar aparecería
+    decenas de veces por una persona probando copias de papel — y a partir de
+    ahí nadie lo mira.
+    """
+    import logging
+    corre(cofre.sellar_testigo(base))
+    with caplog.at_level(logging.ERROR, logger="services.cofre"):
+        r = corre(cofre.cotejar(base, una_llave()))
+    assert r["abre_los_documentos"] is False
+    assert "NO SE PUDO ABRIR" not in caplog.text, caplog.text
+
+
+def test_pero_el_cofre_de_verdad_si_grita_cuando_no_abre(base, cerrado, caplog):
+    """El otro lado de la guarda de arriba. Sin este test, silenciar la alarma
+    entera pasaría las dos pruebas."""
+    import logging
+    sellado = cofre.guardar("una foto")
+    with caplog.at_level(logging.ERROR, logger="services.cofre"):
+        os.environ[cofre.VARIABLE_LLAVE] = una_llave()
+        assert cofre.abrir(sellado) is None
+    assert "NO SE PUDO ABRIR" in caplog.text
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Las dos rutas nuevas del panel
+# ══════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("ruta", ["llave_nueva_del_cofre",
+                                  "cotejar_la_llave_del_cofre"])
+def test_LAS_RUTAS_DE_LA_LLAVE_SON_SOLO_PARA_EL_SUPER_ADMINISTRADOR(ruta):
+    """Sortear una llave no revela nada, y cotejar tampoco devuelve la llave.
+    Pero el cotejo sí contesta «esta llave abre los documentos», y eso en manos
+    de cualquiera con una sesión es un oráculo para probar llaves."""
+    import ast
+    fuente = open(os.path.join(_BACKEND, "routes", "ledger_admin.py"),
+                  encoding="utf-8").read()
+    for fn in ast.walk(ast.parse(fuente)):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if fn.name != ruta:
+            continue
+        guardias = {n.id for n in ast.walk(fn.args) if isinstance(n, ast.Name)}
+        assert "get_super_admin" in guardias, \
+            f"«{ruta}» no exige super administrador (tiene: {guardias})"
+        return
+    raise AssertionError(f"no se encontró la ruta «{ruta}»")
+
+
+def test_LA_PANTALLA_NO_GUARDA_LA_LLAVE_EN_EL_NAVEGADOR():
+    """La llave sorteada vive en memoria y se va con la pestaña.
+
+    `localStorage` sobrevive al cierre del navegador y no se borra nunca solo.
+    Una llave ahí es un secreto que queda en la computadora de quien abrió el
+    panel —prestada, robada, vendida— sin que nadie se acuerde de que quedó.
+
+    SE MIRA EL CODIGO SIN SUS COMENTARIOS, y no el archivo entero, porque el
+    comentario que explica esta decisión NOMBRA lo que no hay que usar. La
+    primera versión de esta guarda se puso roja acusando a ese comentario —el
+    mismo tropiezo que ya pasó con la guarda de la pantalla de registro—, y una
+    guarda que acusa a su propia explicación es una guarda que alguien borra por
+    molesta. El limpiador es el de `test_el_codigo_de_referido_llega`, con su
+    prueba propia, en vez de un segundo limpiador que se desincronice.
+    """
+    from test_el_codigo_de_referido_llega import _sin_comentarios
+
+    ruta = os.path.join(_BACKEND, "..", "frontend", "src", "components",
+                        "admin", "SeguridadFinanciera.jsx")
+    vivo = _sin_comentarios(open(ruta, encoding="utf-8").read())
+    assert "function Cofre" in vivo, \
+        "cambió la pantalla del cofre: este test ya no mira lo que cree"
+    for guardadero in ("localStorage", "sessionStorage", "document.cookie"):
+        assert guardadero not in vivo, \
+            f"la pantalla del cofre usa {guardadero}"

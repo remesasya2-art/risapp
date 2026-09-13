@@ -7,7 +7,8 @@ Endpoints de administración del libro mayor RIS (solo super_admin).
 """
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field
 
 from database import db
 from models.user import User
@@ -292,3 +293,75 @@ async def estado_del_cofre(admin: User = Depends(get_super_admin)):
     """
     from services import cofre
     return await cofre.revisar(db)
+
+
+# ── La llave del cofre, desde el panel ─────────────────────────────────────
+#
+# POR QUE ESTAS DOS RUTAS EXISTEN
+#
+#   Sortear la llave y cotejar la que se anotó eran dos órdenes de un guión que
+#   se corría en una terminal. Eso dejaba los dos pasos que de verdad protegen
+#   los documentos —sortear una llave fuerte, y comprobar que la copia de
+#   respaldo está bien— fuera del alcance de la persona que tiene que darlos, que
+#   no escribe código.
+#
+#   El proyecto tiene una regla escrita sobre esto: configurar nunca puede
+#   requerir tocar código.
+#
+# POR QUE ESTAS DOS PUEDEN IR DETRAS DE UN BOTON, Y CIFRAR LOS VIEJOS NO
+#
+#   Ninguna de las dos escribe nada. Sortear una llave y no guardarla en ningún
+#   lado es texto en una pantalla: hasta que alguien la copie a la variable de
+#   entorno, no pasó nada. Cifrar los documentos históricos, en cambio, reescribe
+#   datos de personas reales, y eso sigue siendo un guión que se corre a mano
+#   después de leer qué hace. Un botón invita a apretarlo.
+
+
+class LlaveParaCotejar(BaseModel):
+    """El texto que la persona anotó.
+
+    El largo máximo no es una regla sobre la llave: es para no aceptar que
+    alguien pegue un archivo entero en la casilla.
+    """
+
+    llave: str = Field(default="", max_length=2000)
+
+
+@router.post("/cofre/llave-nueva")
+async def llave_nueva_del_cofre(request: Request,
+                                admin: User = Depends(get_super_admin)):
+    """Sortea una llave nueva y su huella. No la guarda en ningún lado.
+
+    QUE QUEDA EN LOS REGISTROS
+
+        Que el super administrador generó una llave, y su HUELLA. Nunca la
+        llave. La huella es pública a propósito —sirve para reconocer cuál es
+        cuál— y tenerla acá permite, meses después, saber si la llave que está
+        corriendo salió de este botón o apareció de otro lado.
+    """
+    from services import auditoria, cofre
+
+    nueva = cofre.llave_nueva()
+    await auditoria.registrar(
+        db, "cofre.llave_generada", quien=admin, request=request,
+        detalle={"huella": nueva["huella"]})
+    return nueva
+
+
+@router.post("/cofre/cotejar")
+async def cotejar_la_llave_del_cofre(cuerpo: LlaveParaCotejar,
+                                     admin: User = Depends(get_super_admin)):
+    """¿La llave que anoté sirve, es la que corre, y abre los documentos?
+
+    NO SE AUDITA, Y ES A PROPOSITO
+
+        Esta ruta no escribe nada y se usa varias veces seguidas: la persona
+        prueba la copia del gestor de contraseñas, después la del papel, se
+        equivoca y prueba otra vez. Un registro por intento llenaría la auditoría
+        de ruido sin dejar un hecho que a alguien le sirva.
+
+        Y sobre todo: la llave escrita NO se guarda en ningún lado, ni cuando es
+        la correcta ni cuando no. Lo único que sale de acá es la respuesta.
+    """
+    from services import cofre
+    return await cofre.cotejar(db, cuerpo.llave)

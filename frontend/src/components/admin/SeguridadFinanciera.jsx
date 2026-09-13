@@ -54,8 +54,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, ArrowRight, CheckCircle2, HelpCircle, KeyRound, Printer,
-  RefreshCw, ShieldAlert,
+  AlertTriangle, ArrowRight, CheckCircle2, Copy, HelpCircle, KeyRound, Lock,
+  Printer, RefreshCw, ShieldAlert,
 } from 'lucide-react';
 import api from '../../utils/api';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -666,6 +666,281 @@ function Movimientos({ bloque }) {
   );
 }
 
+/* ─── C-06 · El cofre de los documentos ────────────────────────────────── */
+
+/**
+ * POR QUE ESTE CONTROL TIENE HERRAMIENTAS Y LOS OTROS CINCO NO
+ *
+ *   Los otros cinco informan. Este además tiene que DEJAR HACER una cosa, y es
+ *   la única razón por la que el cofre estuvo apagado desde que se escribió:
+ *   generar la llave y comprobar la copia de respaldo se hacían con un guión en
+ *   una terminal, y el dueño del proyecto no escribe código. El control decía
+ *   «los documentos se guardan sin cifrar» y no había forma de cambiarlo desde
+ *   acá.
+ *
+ *   Lo que se puede hacer acá no escribe nada: sortear una llave y no guardarla
+ *   en ningún lado es texto en una pantalla. Cifrar los documentos que ya están
+ *   guardados sigue siendo un guión aparte, porque eso sí reescribe datos de
+ *   personas reales.
+ *
+ * POR QUE LAS HERRAMIENTAS NO SE IMPRIMEN
+ *
+ *   Este informe se imprime y se archiva. El estado del cofre pertenece al
+ *   papel; una casilla para pegar una llave, no. Van con `sf-no-imprimir`.
+ *
+ * POR QUE LA LLAVE GENERADA NO SE GUARDA EN NINGUN LADO DEL NAVEGADOR
+ *
+ *   Ni en `localStorage`, ni en la dirección, ni en un campo que el navegador
+ *   ofrezca recordar. Vive en memoria mientras la pantalla está abierta y se va
+ *   con ella. Un secreto que sobrevive a la pestaña es un secreto que después
+ *   nadie sabe dónde quedó.
+ */
+function Cofre({ bloque }) {
+  const v = bloque.estado === 'ok' ? bloque.valor : null;
+
+  const [abierto, setAbierto] = useState(false);
+  const [nueva, setNueva] = useState(null);
+  const [copiado, setCopiado] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [cotejo, setCotejo] = useState(null);
+  const [trabajando, setTrabajando] = useState('');
+  const [falla, setFalla] = useState('');
+
+  const generar = async () => {
+    setTrabajando('generar');
+    setFalla('');
+    setCopiado(false);
+    try {
+      const r = await api.post('/admin/ledger/cofre/llave-nueva');
+      setNueva(r.data);
+    } catch (e) {
+      setFalla(e?.response?.data?.detail || 'No se pudo generar la llave.');
+    } finally {
+      setTrabajando('');
+    }
+  };
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(nueva.llave);
+      setCopiado(true);
+    } catch {
+      setFalla('El navegador no dejó copiar. Seleccionala a mano.');
+    }
+  };
+
+  const cotejar = async () => {
+    setTrabajando('cotejar');
+    setFalla('');
+    setCotejo(null);
+    try {
+      const r = await api.post('/admin/ledger/cofre/cotejar', { llave: texto });
+      setCotejo(r.data);
+    } catch (e) {
+      setFalla(e?.response?.data?.detail || 'No se pudo cotejar la llave.');
+    } finally {
+      setTrabajando('');
+    }
+  };
+
+  return (
+    <>
+      {v ? (
+        <dl style={{ margin: 0, display: 'grid', gap: '14px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+          <div>
+            <dt style={microEtiqueta}>Modo</dt>
+            <dd style={{ margin: '3px 0 0 0', fontSize: '13.5px', fontWeight: 700 }}>
+              {v.modo === 'cifrando' ? 'Cifrando' : 'Apagado'}
+            </dd>
+          </div>
+          <div>
+            <dt style={microEtiqueta}>Huella de la llave</dt>
+            <dd style={{ margin: '3px 0 0 0', fontSize: '13.5px', fontWeight: 700,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {v.huella}
+            </dd>
+          </div>
+          <div>
+            <dt style={microEtiqueta}>Llave anterior</dt>
+            <dd style={{ margin: '3px 0 0 0', fontSize: '13.5px', fontWeight: 700 }}>
+              {v.hay_llave_anterior ? 'Sí' : 'No'}
+            </dd>
+          </div>
+        </dl>
+      ) : (
+        <NoVerificado que="el estado del cofre" error={bloque.error} />
+      )}
+
+      {v?.detalle ? (
+        <Nota estado={v.ok ? 'info' : 'mal'} titulo={v.ok ? null : 'Requiere atención'}>
+          {v.detalle}
+        </Nota>
+      ) : null}
+
+      <p style={{ margin: 0, fontSize: '12px', color: C.tenue, lineHeight: 1.6 }}>
+        La huella son ocho caracteres derivados de la llave; no permite
+        reconstruirla. Está acá para poder cotejarla contra la que figura en el
+        respaldo, sin sacar la llave de ningún lado. Lo que se cifra son las
+        cuatro imágenes del expediente de identidad. El número de documento no se
+        cifra: está indexado y cifrarlo rompería la búsqueda.
+      </p>
+
+      {/* ── Las herramientas ─────────────────────────────────────────────── */}
+      {!abierto ? (
+        <div className="sf-no-imprimir">
+          <Boton onClick={() => setAbierto(true)} Icono={KeyRound}>
+            Preparar la llave del cofre
+          </Boton>
+        </div>
+      ) : (
+        <div className="sf-no-imprimir" style={{ ...marco, backgroundColor: C.fondo,
+          padding: '16px 18px', display: 'grid', gap: '16px' }}>
+
+          <div>
+            <p style={{ ...microEtiqueta, color: C.acento }}>Preparar la llave</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: C.segundo,
+              lineHeight: 1.6, maxWidth: '76ch' }}>
+              Nada de lo que se hace acá cambia el estado del cofre. La llave se
+              pone a mano en las variables de entorno del servidor, y ése es el
+              único momento en que algo empieza a cifrarse.
+            </p>
+          </div>
+
+          {/* Paso 1 */}
+          <div style={{ display: 'grid', gap: '9px' }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: C.tinta }}>
+              1 · Generar una llave
+            </p>
+            {!nueva ? (
+              <>
+                <p style={{ margin: 0, fontSize: '12.5px', color: C.segundo, lineHeight: 1.6 }}>
+                  También sirve la que genere tu gestor de contraseñas, si tiene
+                  al menos 24 caracteres sorteados al azar.
+                </p>
+                <div>
+                  <Boton onClick={generar} primario disabled={trabajando === 'generar'}
+                    Icono={KeyRound}>
+                    {trabajando === 'generar' ? 'Generando…' : 'Generar una llave'}
+                  </Boton>
+                </div>
+              </>
+            ) : (
+              <>
+                <p data-testid="llave-nueva" style={{
+                  margin: 0, padding: '11px 13px', borderRadius: '4px',
+                  border: `1px solid ${C.lineaFuerte}`, backgroundColor: C.lienzo,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '13px', wordBreak: 'break-all', lineHeight: 1.5,
+                }}>
+                  {nueva.llave}
+                </p>
+                <p style={{ margin: 0, fontSize: '12px', color: C.segundo }}>
+                  Huella: <strong style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                    {nueva.huella}
+                  </strong> · la huella sí se puede anotar en cualquier lado.
+                </p>
+                <div style={{ display: 'flex', gap: '9px', flexWrap: 'wrap' }}>
+                  <Boton onClick={copiar} Icono={Copy}>
+                    {copiado ? 'Copiada' : 'Copiar la llave'}
+                  </Boton>
+                  <Boton onClick={() => { setNueva(null); setCopiado(false); }} Icono={Lock}>
+                    Ya la guardé, ocultala
+                  </Boton>
+                </div>
+                <Nota estado="atencion" titulo="Esto no se vuelve a mostrar">
+                  No hay forma de recuperar esta llave. Guardala en tres lugares
+                  que no fallen juntos —el gestor de contraseñas, algo impreso, y
+                  la variable del servidor— y recién después prendé el cofre. Si
+                  se pierde despu&eacute;s de cifrar, los documentos no se
+                  recuperan de ninguna manera.
+                </Nota>
+              </>
+            )}
+          </div>
+
+          {/* Paso 2 */}
+          <div style={{ display: 'grid', gap: '9px', borderTop: `1px solid ${C.linea}`,
+            paddingTop: '16px' }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: C.tinta }}>
+              2 · Comprobar una copia de respaldo
+            </p>
+            <p style={{ margin: 0, fontSize: '12.5px', color: C.segundo, lineHeight: 1.6,
+              maxWidth: '76ch' }}>
+              Pegá o escribí la llave tal como quedó anotada en el respaldo. Es el
+              paso que convierte «guardala en tres lugares» en algo comprobable:
+              un respaldo que nadie probó es lo mismo que no tener respaldo. Lo
+              que escribas no se guarda ni queda registrado en ningún lado.
+            </p>
+            <textarea value={texto} onChange={(e) => setTexto(e.target.value)}
+              data-testid="llave-para-cotejar" rows={2} spellCheck={false}
+              autoComplete="off" placeholder="La llave tal como la anotaste"
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: '4px',
+                border: `1px solid ${C.linea}`, backgroundColor: C.lienzo,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: '12.5px', color: C.texto, resize: 'vertical',
+              }} />
+            <div>
+              <Boton onClick={cotejar} disabled={!texto.trim() || trabajando === 'cotejar'}
+                Icono={CheckCircle2}>
+                {trabajando === 'cotejar' ? 'Cotejando…' : 'Cotejar'}
+              </Boton>
+            </div>
+            {cotejo ? (
+              <div data-testid="resultado-del-cotejo" style={{ display: 'grid', gap: '7px' }}>
+                <Renglon si={cotejo.sirve} texto="Tiene forma de llave válida" />
+                <Renglon si={cotejo.es_la_que_corre}
+                  texto="Es la misma que está puesta en el servidor ahora" />
+                <Renglon si={cotejo.abre_los_documentos}
+                  texto="Con ella se abren los documentos ya guardados" />
+                {cotejo.detalle ? (
+                  <Nota estado={cotejo.sirve ? 'info' : 'mal'}>{cotejo.detalle}</Nota>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Paso 3 */}
+          <div style={{ borderTop: `1px solid ${C.linea}`, paddingTop: '16px' }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: C.tinta }}>
+              3 · Prender el cofre
+            </p>
+            <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: C.segundo,
+              lineHeight: 1.7, maxWidth: '76ch' }}>
+              En las variables de entorno del servidor, las dos juntas en el mismo
+              guardado: <strong>COFRE_LLAVE</strong> con la llave, y{' '}
+              <strong>COFRE_MODO</strong> con el valor <strong>cifrando</strong>.
+              Poner el modo sin la llave deja el cofre prendido sin con qué
+              cifrar, y los expedientes nuevos no se pueden guardar. Al terminar,
+              volvé acá: la huella de arriba tiene que coincidir con la del
+              respaldo.
+            </p>
+          </div>
+
+          {falla ? <Nota estado="mal">{falla}</Nota> : null}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Un renglón del cotejo. `null` es «no se pudo saber», que no es «no». */
+function Renglon({ si, texto }) {
+  const color = si === true ? C.conforme : si === false ? C.excepcion : C.sinDato;
+  const Icono = si === true ? CheckCircle2 : si === false ? ShieldAlert : HelpCircle;
+  return (
+    <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px',
+      fontSize: '12.5px', color: C.texto }}>
+      <Icono size={15} color={color} style={{ flexShrink: 0 }} />
+      {texto}
+      {si === null || si === undefined ? (
+        <span style={{ color: C.tenue }}>· no se pudo comprobar</span>
+      ) : null}
+    </p>
+  );
+}
+
 /* ─── Encabezado del informe ───────────────────────────────────────────── */
 
 function Encabezado({ tarjetas, cuando, cargando, cargar }) {
@@ -716,7 +991,7 @@ function Encabezado({ tarjetas, cuando, cargando, cargar }) {
         <div>
           <dt style={microEtiqueta}>Alcance</dt>
           <dd style={{ margin: '4px 0 0 0', fontSize: '13px', fontWeight: 600 }}>
-            5 controles · 4 con dictamen
+            6 controles · 5 con dictamen
           </dd>
         </div>
         <div>
@@ -824,7 +1099,7 @@ function Informe({ irAlLibro }) {
 
       <div>
         <p style={{ ...microEtiqueta, marginBottom: '8px' }}>
-          Resumen de dictámenes · C-01 a C-04
+          Resumen de dictámenes · C-01 a C-04 y C-06
         </p>
         <Tablero tarjetas={tarjetas} />
       </div>
@@ -874,6 +1149,15 @@ function Informe({ irAlLibro }) {
             informativo
           >
             <Movimientos bloque={datos.movimientos} />
+          </Control>
+
+          <Control
+            clave="cofre"
+            titulo="Cofre de los documentos de identidad"
+            objetivo="Comprobar si los expedientes de identidad se guardan cifrados y si la llave que está corriendo es la misma con la que se cifraron. Es el único control que además deja preparar la llave, porque hacerlo desde afuera exigía una terminal y eso mantuvo el cofre apagado."
+            estado={tarjetas.find((t) => t.clave === 'cofre')?.estado}
+          >
+            <Cofre bloque={datos.cofre} />
           </Control>
 
           <footer style={{ borderTop: `1px solid ${C.linea}`, paddingTop: '14px' }}>

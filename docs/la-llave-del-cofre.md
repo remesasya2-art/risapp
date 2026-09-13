@@ -50,18 +50,26 @@ cifrarlos rompería las búsquedas. Es una decisión consciente, no un olvido.
 
 Son cuatro pasos. **El orden importa.**
 
+Todo esto se hace desde el panel: **Seguridad financiera → control C-06 → botón
+«Preparar la llave del cofre»**. No hace falta ninguna terminal.
+
+Al final de este documento, en el anexo, está el mismo procedimiento con el
+guión de línea de comandos, para quien prefiera ése.
+
 ### Paso 1 — Generar la llave
 
-```bash
-python backend/scripts/cofre.py crear
-```
+En el panel, «Preparar la llave del cofre» → **Generar una llave**.
 
-Imprime la llave **una sola vez**. No se vuelve a mostrar y no se puede
-recuperar.
+La muestra **una sola vez**. No se vuelve a mostrar y no se puede recuperar.
 
-También imprime una **huella**: ocho caracteres que identifican a la llave sin
+También muestra una **huella**: ocho caracteres que identifican a la llave sin
 revelarla. La huella se puede anotar en cualquier lado, mandar por chat y dejar
 a la vista. Sirve para reconocer cuál llave es cuál.
+
+**También sirve la contraseña que genere tu gestor.** `COFRE_LLAVE` acepta
+cualquier texto de 24 caracteres o más, sorteado al azar. El botón «generar
+contraseña» de 1Password o Bitwarden produce una llave perfectamente buena, y
+tiene la ventaja de quedar guardada en el gestor en el mismo acto.
 
 ### Paso 2 — Guardarla en tres lugares que no fallen juntos
 
@@ -79,35 +87,40 @@ si la que tenés es la buena.
 ### Paso 3 — Comprobar que la copiaste bien
 
 Esto es lo que hace que el paso 2 valga algo. Tomá la llave **de donde la
-anotaste** —no de la pantalla donde se generó— y probala:
+anotaste** —no de la pantalla donde se generó— y pegala en el paso 2 del panel,
+«Comprobar una copia de respaldo».
 
-```bash
-COFRE_LLAVE='<la que anotaste>' python backend/scripts/cofre.py verificar
-```
+Contesta tres cosas por separado:
 
-Tiene que decir que la lee bien y mostrar **la misma huella** del paso 1. Si la
-huella es distinta, copiaste mal: volvé al paso 2.
+| Lo que dice | Qué significa |
+|---|---|
+| Tiene forma de llave válida | El texto sirve como llave. Es lo mínimo. |
+| Es la misma que está puesta en el servidor | Coincide con la que está corriendo ahora. |
+| Con ella se abren los documentos ya guardados | **La que importa**: con esta copia se recuperan las fotos. |
+
+Un renglón en gris quiere decir «no se pudo comprobar», que **no** es «no». Con
+el cofre todavía apagado es lo normal: no hay nada cifrado con qué comparar.
 
 Hacelo con cada una de las tres copias. Lleva dos minutos y es el único momento
 en que se puede descubrir un error de copia sin consecuencias.
 
 ### Paso 4 — Prender
 
-En Railway:
+En Railway, **las dos variables en el mismo guardado**:
 
 ```
 COFRE_LLAVE = <la llave>
 COFRE_MODO  = cifrando
 ```
 
+⚠️ `COFRE_MODO` sin `COFRE_LLAVE` deja el cofre prendido sin con qué cifrar, y
+los expedientes nuevos no se pueden guardar. Por eso van juntas.
+
 Desde ese momento, **los documentos nuevos se guardan cifrados**. Los que ya
 estaban siguen en claro y se leen igual: la aplicación entiende las dos formas.
 
-Comprobá que arrancó bien:
-
-```bash
-python backend/scripts/cofre.py estado
-```
+Comprobá que arrancó bien: volvé al control C-06 del panel. Tiene que decir modo
+**Cifrando**, dictamen **conforme**, y **la misma huella** que anotaste.
 
 ---
 
@@ -200,3 +213,33 @@ rotación a medio camino no rompe nada.
 
 La última fila es a propósito: un cajón que no abre no puede cerrar el negocio
 entero.
+
+---
+
+## Anexo — Lo mismo desde una terminal
+
+El guión hace lo mismo que el panel, para quien prefiera la línea de comandos.
+Corre en cualquier carpeta del proyecto y sólo necesita `cryptography`
+instalado (`pip install cryptography`); las órdenes `crear` y `verificar` no
+tocan la base de datos.
+
+```bash
+python backend/scripts/cofre.py crear       # paso 1: generar la llave
+python backend/scripts/cofre.py verificar   # paso 3: comprobar una copia
+python backend/scripts/cofre.py estado      # paso 4: cómo quedó
+```
+
+Para `verificar`, la llave va delante de la orden:
+
+```bash
+COFRE_LLAVE='<la que anotaste>' python backend/scripts/cofre.py verificar
+```
+
+`estado` y `cifrar` necesitan llegar a la base, así que además hace falta
+`MONGO_URL` y `DB_NAME` apuntando a la de producción.
+
+**Por qué el panel es el camino principal y esto el anexo.** Porque el cofre
+estuvo apagado desde que se escribió, y no por falta de código: producir una
+llave exigía una terminal, y el paso que de verdad protege los documentos
+quedaba fuera del alcance de quien tiene que darlo. Configurar no puede requerir
+tocar código.
