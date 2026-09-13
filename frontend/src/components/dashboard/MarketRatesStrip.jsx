@@ -1,5 +1,5 @@
 import { useRate } from '../../contexts/RateContext';
-import { fmt } from '../../utils/format';
+import { fmt, fmtAntiguedadHoras } from '../../utils/format';
 
 /**
  * Indicadores de mercado (BCV USD/VES, EUR/VES) — solo visibles post-login.
@@ -15,6 +15,11 @@ export default function MarketRatesStrip({ isMobile = false }) {
   ].filter((i) => i.value);
 
   if (loading || items.length === 0) return null;
+
+  // Un numero viejo etiquetado «Referencial · BCV» se lee como el de hoy.
+  // Mientras el raspador estuvo roto lo era de semanas atras y esta tira no
+  // decia nada. Ahora lo dice.
+  const vencida = rates?.bcv_vencida === true;
 
   return (
     <div style={{
@@ -35,7 +40,9 @@ export default function MarketRatesStrip({ isMobile = false }) {
           </div>
         ))}
       </div>
-      <span style={{ fontSize: '10.5px', color: '#9ca3af' }}>Referencial · BCV</span>
+      <span style={{ fontSize: '10.5px', color: vencida ? '#b45309' : '#9ca3af' }}>
+        {vencida ? `Referencial · BCV ${fmtAntiguedadHoras(rates?.bcv_edad_horas)}` : 'Referencial · BCV'}
+      </span>
     </div>
   );
 }

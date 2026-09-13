@@ -224,12 +224,19 @@ async def _get_active_rates(session=None) -> Dict[str, Any]:
         mejor que falle por error de cálculo en la tasa; asumir representa
         perder o ganar dinero.
 
-    EL DOLAR DEL BCV
+    EL DOLAR DEL BCV, Y LA TRAMPA QUE TENIA
 
-        Sale del raspador (`db.bcv_rates`), y si no hay nada raspado todavía,
-        de `rates.usd_to_ves`. Si no hay ninguna de las dos, corta igual: el
-        motor lo usa para pasar bolívares a dólares y sin eso la cuenta no se
-        puede hacer.
+        Sale del raspador (`db.bcv_rates`) SOLO SI EL DATO ESTA VIGENTE. Si
+        venció —o si no tiene fecha, que es lo mismo que no poder afirmar que
+        esté vigente— gana el que el operador carga a mano en Tasas
+        (`rates.usd_to_ves`), y el viejo queda como último recurso.
+
+        Antes era al revés y sin mirar la fecha, así que un raspador roto dejaba
+        la contabilidad usando un número congelado al que ni cambiar la tasa en
+        el panel le ganaba. El detalle está abajo, en el cuerpo.
+
+        Si no hay ninguno de los dos, corta igual: el motor lo usa para pasar
+        bolívares a dólares y sin eso la cuenta no se puede hacer.
     """
     rates = await db.rates.find_one({}, session=session)
     if not rates:
@@ -256,15 +263,66 @@ async def _get_active_rates(session=None) -> Dict[str, Any]:
     except (TypeError, ValueError):
         activas["market_brl_usd"] = None
 
-    bcv_doc = await db.bcv_rates.find_one(
-        {}, sort=[("fetched_at", -1)], session=session
-    )
-    bcv_ves_usd = (bcv_doc or {}).get("rates", {}).get("dolar") or rates.get("usd_to_ves")
-    if not bcv_ves_usd or float(bcv_ves_usd) <= 0:
+    # ── El dólar del BCV: quién le gana a quién ────────────────────────────
+    #
+    # Acá había una trampa que estuvo puesta mucho tiempo:
+    #
+    #     bcv = (bcv_doc or {}).get("rates", {}).get("dolar") or rates.get("usd_to_ves")
+    #
+    # Esa línea prefiere el último número RASPADO sobre el que el operador carga
+    # a mano en el panel, SIN MIRAR DE CUANDO ES. Y el raspador estuvo roto
+    # semanas, porque el sitio del BCV manda la cadena de certificados
+    # incompleta. Resultado: la contabilidad calculando con un número congelado,
+    # y cambiar la tasa en el panel no cambiaba nada. Un fallo sin síntoma.
+    #
+    # Ahora el raspado tiene fecha de vencimiento (`bcv_scraper.vigencia`, que
+    # se configura desde el panel) y VENCIDO PIERDE. Un raspado sin fecha
+    # también pierde: lo que no se puede afirmar vigente no le gana a lo que
+    # una persona cargó a mano.
+    #
+    # Sigue habiendo un orden y no un corte, porque cortar tampoco sirve: si el
+    # panel no tiene nada cargado, un número viejo es mejor que un informe que
+    # no se puede generar. Pero el viejo pasa a ser el último recurso, no el
+    # primero.
+    from services import bcv_scraper
+
+    estado = await bcv_scraper.vigencia(db, session=session)
+    raspado = estado.get("dolar")
+    del_panel = rates.get("usd_to_ves")
+
+    if estado.get("sirve"):
+        candidatos = [raspado, del_panel]
+    else:
+        candidatos = [del_panel, raspado]
+        if estado.get("hay_raspado"):
+            logger.warning(
+                "El dólar del BCV que trajo el raspador tiene %s de antigüedad "
+                "(el límite son %s horas): se usa el de Tasas (usd_to_ves). "
+                "Revisá por qué el raspador no trae nada.",
+                "fecha desconocida" if estado.get("edad_horas") is None
+                else f"{estado['edad_horas']} horas",
+                estado.get("horas_de_vigencia"))
+
+    bcv_ves_usd = None
+    for candidato in candidatos:
+        if candidato in (None, ""):
+            continue
+        try:
+            valor = float(candidato)
+        except (TypeError, ValueError):
+            # Un valor ilegible es lo mismo que no tenerlo: se pasa al
+            # siguiente. Antes esto tiraba un ValueError pelado, que quien lo
+            # recibía no podía traducir a «andá a configurar tal cosa».
+            continue
+        if valor > 0:
+            bcv_ves_usd = valor
+            break
+
+    if bcv_ves_usd is None:
         raise TasaSinConfigurar(
             "bcv_rates.dolar",
             "el dólar del BCV, para pasar bolívares a dólares")
-    activas["bcv_ves_usd"] = float(bcv_ves_usd)
+    activas["bcv_ves_usd"] = bcv_ves_usd
 
     return activas
 

@@ -201,6 +201,27 @@ AJUSTES = {
               "la página de «cómo funciona», así que cambiarlo cambia lo que la "
               "aplicación le promete a quien todavía no verificó."),
 
+    # ── Cuánto vale una tasa del BCV recién raspada ────────────────────────
+    #
+    # NO ES UN LIMITE DE DINERO, ES UNA FECHA DE VENCIMIENTO, y está acá porque
+    # la regla del proyecto es que configurar no requiera editar código.
+    #
+    # Lo que pasó: el sitio del BCV empezó a rechazar la conexión (le falta una
+    # pieza de su cadena de certificados) y el raspador dejó de traer nada. La
+    # contabilidad siguió usando el ULTIMO número raspado, sin mirar de cuándo
+    # era, y encima ese número le GANABA al que el operador carga a mano en
+    # Tasas. O sea que cambiar la tasa en el panel no cambiaba la contabilidad,
+    # y nadie tenía forma de saberlo.
+    "bcv_horas_de_vigencia": Ajuste(
+        tipo=ENTERO, defecto=24, minimo=1, maximo=720,
+        unidad="horas",
+        etiqueta="Cuántas horas vale la tasa del BCV que trae el raspador",
+        ayuda="Pasadas estas horas, la contabilidad deja de usar el número del "
+              "raspador y usa el que está cargado a mano en Tasas. Además el "
+              "panel lo muestra en rojo y se avisa a los super "
+              "administradores. Bajarlo hace que la aplicación desconfíe "
+              "antes; subirlo, que aguante más tiempo con el último dato."),
+
     "cupo_sin_verificar_operaciones": Ajuste(
         tipo=ENTERO, defecto=2, minimo=0, maximo=100,
         unidad="operaciones",

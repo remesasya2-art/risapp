@@ -433,9 +433,33 @@ volvía **más** probables, porque más órdenes vencen:
   solo y no se ignora: la plata llegó, y qué hacer con ella —devolver o
   completar a la cotización de hoy— es una decisión de negocio.
 
+**El dólar del BCV tampoco se congela, y acá hubo un fallo sin síntoma.** El
+motor contable pasa bolívares a dólares con el dólar oficial del BCV, que lo
+trae un raspador. Ese valor **le ganaba** al que el operador carga a mano en el
+panel, y sin mirar de cuándo era. Cuando el sitio del BCV empezó a rechazar la
+conexión —le falta una pieza de su cadena de certificados— el raspador dejó de
+traer nada y la contabilidad siguió calculando con el último número, congelado.
+Cambiar la tasa en el panel no cambiaba el resultado. No había ningún síntoma
+visible: los informes salían y los asientos se hacían.
+
+Tres cosas cambiaron:
+
+- **El dato tiene fecha de vencimiento**, configurable desde el panel
+  (`bcv_horas_de_vigencia`, 24 h de fábrica). Vencido, **pierde** contra el que
+  el operador carga a mano; queda sólo como último recurso si no hay ninguno
+  otro. Un raspado **sin fecha** cuenta como vencido: lo que no se puede
+  afirmar vigente no le gana a lo que una persona cargó.
+- **Se avisa** a los super administradores, una vez por raspado vencido, y el
+  panel muestra la antigüedad del dato junto al número. Un dato viejo
+  presentado como de hoy miente por omisión.
+- **La cadena de certificados se completa sola**, sin aflojar la verificación.
+  Ver 8.1.
+
 `backend/routes/btc_lightning.py`, `backend/services/aviso_de_tasa.py`,
+`backend/services/bcv_scraper.py`, `backend/services/aviso_de_bcv.py`,
 `backend/tests/test_cotizacion_btc.py`,
 `backend/tests/test_aviso_de_tasa_vencida.py`,
+`backend/tests/test_la_tasa_vieja_no_le_gana_al_panel.py`,
 `backend/tests/test_ventana_del_cobro.py`
 
 ---
@@ -687,7 +711,32 @@ async with httpx.AsyncClient(verify=not BCV_TLS_INSEGURO, ...) as client:
   **deja un `WARNING` en cada obtención** mientras esté activa. No se puede
   encender y olvidar.
 
-`backend/services/bcv_scraper.py`, `backend/tests/test_tls_verificado.py`
+**Cadena de certificados incompleta: se completa, no se ignora.** El sitio del
+BCV manda su certificado pero **no** la pieza intermedia que lo une a una raíz
+conocida, y por eso la conexión se rechazaba con `unable to get local issuer
+certificate`. El navegador entra igual porque lee adentro del certificado la
+dirección de esa pieza y la baja; Python no lo hace nunca. Ahora se hace, y con
+tres condiciones que son las que evitan que esto sea un agujero:
+
+1. **La verificación no se apaga en ningún momento.** Para leer el certificado
+   que ofrece el servidor se usa un comprobador que **rechaza siempre**: el
+   saludo TLS falla igual, no se establece ninguna sesión de confianza, y lo
+   único que queda es la copia del certificado que el servidor mostró. Por eso
+   el guardián de todo el repositorio (`test_tls_verificado.py`) sigue pasando
+   **sin excepciones**: no hay ningún `verify=False` en ninguna parte.
+2. **La pieza bajada se verifica antes de usarla**, sin salir a la red, contra
+   las raíces públicas. Si con ella la cadena no cierra, se descarta y la
+   consulta sigue fallando. Un atacante necesitaría la firma de la autoridad.
+3. **La dirección de descarga está acotada**: sólo `http`/`https`, nada que
+   resuelva a una dirección interna, sin seguir redirecciones, con tope de
+   tamaño y tope de saltos.
+
+No se pegó el certificado dentro del repositorio a propósito: esas piezas
+caducan y las autoridades las rotan, así que el arreglo se rompería otra vez
+igual. Buscarla sola no caduca.
+
+`backend/services/bcv_scraper.py`, `backend/services/cadena_tls.py`,
+`backend/tests/test_tls_verificado.py`, `backend/tests/test_cadena_tls.py`
 
 ### 8.2 Cabeceras y origen
 
@@ -993,6 +1042,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Libro de auditoría con estado antes/después | `backend/services/auditoria.py` | `test_auditoria.py` |
 | Tipo de archivo por bytes, EXIF removido, dedup por SHA-256 | `backend/services/envios_archivos.py` | `test_envios_almacen.py` |
 | TLS verificado, falla cerrado | `backend/services/bcv_scraper.py` | `test_tls_verificado.py` |
+| Cadena de certificados incompleta completada sin aflojar la verificación | `backend/services/cadena_tls.py` | `test_cadena_tls.py` |
+| El dólar del BCV vencido pierde contra el que carga el operador | `backend/services/bcv_scraper.py`, `backend/services/accounting_engine.py` | `test_la_tasa_vieja_no_le_gana_al_panel.py` |
 | OAuth 2.0 con renovación anticipada y un solo pedido bajo concurrencia | `backend/services/oauth_cliente.py` | `test_oauth_cliente.py` |
 | Cabeceras de seguridad en toda respuesta, incluidos los errores | `backend/server.py` | `test_cabeceras_de_seguridad.py` |
 | CORS sin comodín y sólo sobre https | `backend/server.py` | `test_cabeceras_de_seguridad.py` |
