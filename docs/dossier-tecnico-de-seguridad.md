@@ -745,7 +745,18 @@ tres condiciones que son las que evitan que esto sea un agujero:
    dirección que él mismo elige.
 3. **La dirección de descarga está acotada**: sólo `http`/`https`, nada que
    resuelva a una dirección interna, sin seguir redirecciones, con tope de
-   tamaño y tope de saltos.
+   tamaño y tope de saltos. Y lo que se baja **se acepta sólo si es el emisor**
+   del certificado al que le falta la firma: una dirección que devuelve
+   cualquier otra cosa no completa nada.
+
+**Se camina desde el certificado del sitio hacia arriba**, y eso no es un
+detalle de implementación. El servidor del BCV manda una pieza intermedia que
+**no es la suya** —`Sectigo RSA Domain Validation Secure Server CA`, de otra
+cadena, cuando a su certificado lo firmó `Sectigo Public Server Authentication
+CA DV R36`—. Dar por sentado que lo que manda el servidor es el principio
+correcto de la cadena lleva a perseguir una pieza que no completa nada. En cada
+paso se busca a quién le falta el emisor, y se sigue la dirección que trae
+adentro **ese** certificado.
 
 No se pegó el certificado dentro del repositorio a propósito: esas piezas
 caducan y las autoridades las rotan, así que el arreglo se rompería otra vez

@@ -101,26 +101,33 @@ def _raiz(cn):
     return clave, cert
 
 
-def _intermedia(clave_raiz, cert_raiz, cn):
+def _intermedia(clave_raiz, cert_raiz, cn, largo=0, direccion=None):
+    """`largo` es cuántas autoridades más puede haber por debajo: 0 sólo firma
+    certificados de sitio, 1 puede firmar otra intermedia."""
     clave = _clave()
-    cert = (x509.CertificateBuilder()
-            .subject_name(_nombre(cn)).issuer_name(cert_raiz.subject)
-            .public_key(clave.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(_DESDE).not_valid_after(_HASTA)
-            .add_extension(x509.BasicConstraints(True, 0), critical=True)
-            .add_extension(x509.KeyUsage(
+    plano = (x509.CertificateBuilder()
+             .subject_name(_nombre(cn)).issuer_name(cert_raiz.subject)
+             .public_key(clave.public_key())
+             .serial_number(x509.random_serial_number())
+             .not_valid_before(_DESDE).not_valid_after(_HASTA)
+             .add_extension(x509.BasicConstraints(True, largo), critical=True)
+             .add_extension(x509.KeyUsage(
                 digital_signature=False, content_commitment=False,
                 key_encipherment=False, data_encipherment=False,
                 key_agreement=False, key_cert_sign=True, crl_sign=True,
                 encipher_only=False, decipher_only=False), critical=True)
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(
+             .add_extension(x509.SubjectKeyIdentifier.from_public_key(
                 clave.public_key()), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier
-                           .from_issuer_public_key(clave_raiz.public_key()),
-                           critical=False)
-            .sign(clave_raiz, hashes.SHA256()))
-    return clave, cert
+             .add_extension(x509.AuthorityKeyIdentifier
+                            .from_issuer_public_key(clave_raiz.public_key()),
+                            critical=False))
+    if direccion:
+        plano = plano.add_extension(x509.AuthorityInformationAccess([
+            x509.AccessDescription(
+                x509.oid.AuthorityInformationAccessOID.CA_ISSUERS,
+                x509.UniformResourceIdentifier(direccion)),
+        ]), critical=False)
+    return clave, plano.sign(clave_raiz, hashes.SHA256())
 
 
 def _hoja(clave_int, cert_int, host, direccion_del_emisor=None,
@@ -730,15 +737,22 @@ def test_AL_FALLAR_EL_REGISTRO_MUESTRA_LA_CADENA_ENTERA(lab, caplog):
 
     Cuando esto falla en producción no hay forma de mirar el certificado a mano:
     el registro es todo lo que hay. Si deja de decir qué cadena era, el próximo
-    fallo se vuelve a diagnosticar adivinando.
+    fallo se vuelve a diagnosticar adivinando — y fue justamente este registro
+    el que resolvió el caso del BCV.
+
+    El escenario es el del atacante completo: sirve SU certificado, y la
+    dirección de adentro apunta a SU intermedia. Así se baja algo de verdad —si
+    la dirección devolviera un certificado que no es el emisor, no se bajaría
+    nada y el registro no tendría qué mostrar.
     """
     lab.servidor_certs.cerrar()
-    falsa = ServidorDeCertificados(
+    suya = ServidorDeCertificados(
         lab.intermedia_mala.public_bytes(serialization.Encoding.DER))
-    lab.servidor_certs = falsa
-    lab.k_hoja, lab.hoja = _hoja(lab.k_int, lab.intermedia, HOST,
-                                 falsa.direccion)
-    srv = lab.servir_incompleta()
+    lab.servidor_certs = suya
+    clave_mala, hoja_mala = _hoja(lab.k_int_mala, lab.intermedia_mala, HOST,
+                                  suya.direccion)
+    srv = ServidorTLS(lab.tmp, [hoja_mala], clave_mala)
+    lab.servidor_tls = srv
 
     with caplog.at_level(logging.ERROR, logger="services.cadena_tls"):
         with pytest.raises(cadena_tls.NoSePudoCompletar):
@@ -748,7 +762,7 @@ def test_AL_FALLAR_EL_REGISTRO_MUESTRA_LA_CADENA_ENTERA(lab, caplog):
     # `getMessage()` ya aplica los argumentos: volver a formatear revienta.
     registro = "\n".join(r.getMessage() for r in caplog.records)
     assert "Lo que ofreció el servidor" in registro
-    assert "Intermedia De Laboratorio" in registro, (
+    assert "localhost" in registro, (
         "el registro no dice qué mandó el servidor")
     assert "Intermedia Del Atacante" in registro, (
         "el registro no dice qué se bajó, que es la pieza que hay que mirar")
@@ -779,3 +793,126 @@ def test_UNA_PIEZA_AUTOFIRMADA_NO_SE_VUELVE_RAIZ_DE_CONFIANZA(lab):
 
     # Y la contracara, para que no pase por no aceptar nunca nada.
     assert cadena_tls.la_cadena_cierra(lab.hoja, [lab.intermedia], HOST) is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9. El caso del BCV: el servidor manda la pieza EQUIVOCADA
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_EL_SERVIDOR_MANDA_LA_PIEZA_EQUIVOCADA(lab):
+    """LO QUE DE VERDAD PASA CON EL BCV, sacado de su registro de producción.
+
+        [0] *.bcv.org.ve
+            lo firmó: Sectigo Public Server Authentication CA DV R36
+        [1] Sectigo RSA Domain Validation Secure Server CA   ← OTRA COSA
+            lo firmó: USERTrust RSA Certification Authority
+
+    La pieza [1] no es quien firmó el certificado del sitio: es de otra cadena y
+    no sirve para nada. La que de verdad falta no viene.
+
+    La primera versión buscaba la dirección en la ULTIMA pieza que mandaba el
+    servidor —o sea, en la equivocada— y terminaba bajando un certificado que no
+    completaba nada. Hay que arrancar en el certificado del sitio y seguir SU
+    dirección.
+    """
+    lab.servidor_tls = ServidorTLS(
+        lab.tmp, [lab.hoja, lab.intermedia_mala], lab.k_hoja)
+
+    contexto = corre(cadena_tls.contexto_para(
+        HOST, lab.servidor_tls.puerto, permitir_loopback=True))
+    _conectar_verificando(lab.servidor_tls.puerto, contexto)
+
+    assert lab.servidor_certs.pedidos == ["/intermedia.crt"], (
+        "no se siguió la dirección del certificado del SITIO. Con la pieza "
+        "equivocada del servidor de por medio, seguir la dirección de ésta "
+        "lleva a un certificado que no completa nada — es exactamente lo que "
+        "pasó con el BCV.")
+
+
+def test_NO_SE_ACEPTA_UN_CERTIFICADO_QUE_NO_ES_EL_EMISOR(lab, caplog):
+    """La dirección de adentro puede contestar cualquier cosa.
+
+    Se baja de una dirección que viene escrita en un certificado que todavía no
+    se pudo verificar. Aceptar lo que sea que devuelva sería llenar la lista de
+    certificados que no pintan nada — y en el caso del BCV fue justamente un
+    certificado de USERTrust que no completaba ningún eslabón.
+
+    Sólo se acepta si su «sujeto» es el «emisor» del certificado al que le falta
+    la firma.
+    """
+    lab.servidor_certs.cerrar()
+    otro = ServidorDeCertificados(
+        lab.intermedia_mala.public_bytes(serialization.Encoding.DER))
+    lab.servidor_certs = otro
+    lab.k_hoja, lab.hoja = _hoja(lab.k_int, lab.intermedia, HOST,
+                                 otro.direccion)
+    srv = lab.servir_incompleta()
+
+    with caplog.at_level(logging.WARNING, logger="services.cadena_tls"):
+        with pytest.raises(cadena_tls.NoSePudoCompletar):
+            corre(cadena_tls.piezas_para(HOST, srv.puerto,
+                                         permitir_loopback=True))
+
+    registro = "\n".join(r.getMessage() for r in caplog.records)
+    assert "ninguno es quien firmó" in registro, (
+        "se aceptó un certificado que no es el emisor, o no se dijo que no lo "
+        "era")
+    assert cadena_tls._GUARDADAS == {}
+
+
+def test_si_el_servidor_manda_la_cadena_entera_no_se_pide_nada(lab):
+    """Lo obvio: si no falta nada, no se sale a la red."""
+    lab.servidor_tls = ServidorTLS(
+        lab.tmp, [lab.hoja, lab.intermedia_mala, lab.intermedia], lab.k_hoja)
+    contexto = corre(cadena_tls.contexto_para(
+        HOST, lab.servidor_tls.puerto, permitir_loopback=True))
+    _conectar_verificando(lab.servidor_tls.puerto, contexto)
+    assert lab.servidor_certs.pedidos == [], "se bajó algo que ya estaba"
+
+
+def test_NO_SE_BAJA_LO_QUE_EL_SERVIDOR_YA_MANDO(tmp_path, monkeypatch):
+    """Cuatro eslabones, y el servidor manda uno de los dos del medio.
+
+        raíz  ←  intermedia ALTA  ←  intermedia BAJA  ←  sitio
+
+    El servidor manda el certificado del sitio y la BAJA, pero no la ALTA. Como
+    la baja ya vino, no hay que volver a pedirla: se baja UNA sola pieza, la que
+    falta de verdad.
+
+    LA VERSION ANTERIOR DE ESTE TEST NO PROBABA NADA. Servía la cadena completa,
+    así que salía por el atajo de «ya cierra» sin llegar nunca a la línea que
+    decía estar probando. Al romperla a propósito seguía en verde.
+    """
+    raiz_k, raiz_c = _raiz("Raiz Honda")
+    # `largo=1`: esta autoridad puede firmar otra autoridad debajo.
+    alta_k, alta_c = _intermedia(raiz_k, raiz_c, "Intermedia Alta", largo=1)
+
+    archivo_raiz = str(tmp_path / "raices.pem")
+    with open(archivo_raiz, "wb") as f:
+        f.write(_pem(raiz_c))
+    monkeypatch.setattr(cadena_tls, "archivo_de_raices", lambda: archivo_raiz)
+    cadena_tls.olvidar()
+
+    srv_alta = ServidorDeCertificados(
+        alta_c.public_bytes(serialization.Encoding.DER))
+    baja_k, baja_c = _intermedia(alta_k, alta_c, "Intermedia Baja",
+                                 direccion=srv_alta.direccion)
+    srv_baja = ServidorDeCertificados(
+        baja_c.public_bytes(serialization.Encoding.DER))
+    hoja_k, hoja_c = _hoja(baja_k, baja_c, HOST, srv_baja.direccion)
+
+    servidor = ServidorTLS(str(tmp_path), [hoja_c, baja_c], hoja_k)
+    try:
+        contexto = corre(cadena_tls.contexto_para(
+            HOST, servidor.puerto, permitir_loopback=True))
+        _conectar_verificando(servidor.puerto, contexto)
+
+        assert srv_baja.pedidos == [], (
+            "se volvió a pedir la pieza que el servidor YA había mandado")
+        assert len(srv_alta.pedidos) == 1, (
+            f"se esperaba una sola descarga, hubo {len(srv_alta.pedidos)}")
+    finally:
+        servidor.cerrar()
+        srv_alta.cerrar()
+        srv_baja.cerrar()
+        cadena_tls.olvidar()
