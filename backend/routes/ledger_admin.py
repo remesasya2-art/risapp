@@ -4,6 +4,8 @@ Endpoints de administración del libro mayor RIS (solo super_admin).
 - GET  /admin/ledger/reconcile -> compara balance_ris vs suma del ledger y lista descuadres.
 - GET  /admin/ledger/entries   -> lista las líneas del ledger de un usuario.
 - GET  /admin/ledger/pozo      -> solvencia: RIS que se debe vs reales que hay.
+- GET  /admin/ledger/cobros-sin-acreditar -> pagos de Mercado Pago cobrados y
+  nunca acreditados (solo mira; no acredita nada).
 """
 import logging
 
@@ -13,6 +15,7 @@ from pydantic import BaseModel, Field
 from database import db
 from models.user import User
 from routes.dependencies import get_super_admin
+from services import cobros_sin_acreditar
 from services.ledger import sum_ris_balance, create_opening_entries
 from services.money import from_db, quantize_money, to_float
 
@@ -365,3 +368,37 @@ async def cotejar_la_llave_del_cofre(cuerpo: LlaveParaCotejar,
     """
     from services import cofre
     return await cofre.cotejar(db, cuerpo.llave)
+
+
+# ── Cobros de Mercado Pago que nadie acreditó ──────────────────────────────
+#
+# POR QUE ESTA RUTA VIVE EN EL LIBRO MAYOR Y NO EN LAS RUTAS DE PAGOS
+#
+#     Porque la pregunta que contesta no es «¿cómo salió este pago?» sino «¿hay
+#     plata cobrada que el libro no registra?». Quien decide es el libro, y
+#     `services/cobros_sin_acreditar.py` explica por qué. Las pantallas de
+#     control del dinero ya leen de `/admin/ledger/*` y la puerta es la misma
+#     —`get_super_admin`—, así que el control nuevo entra donde se lo va a
+#     buscar en vez de abrir un vecindario propio.
+
+@router.get("/cobros-sin-acreditar")
+async def ver_cobros_sin_acreditar(
+    dias: int = Query(cobros_sin_acreditar.DIAS_POR_DEFECTO),
+    tope: int = Query(cobros_sin_acreditar.TOPE_POR_DEFECTO),
+    admin: User = Depends(get_super_admin),
+):
+    """¿Alguien pagó y la app no le acreditó nada? SOLO MIRA.
+
+    No acredita, no corrige y no toca un saldo. Mover plata es una decisión de
+    una persona y va por otro camino, con su registro en la auditoría: una
+    consulta que además arregla es una consulta que nadie se anima a correr.
+
+    Los dos límites —`dias` y `tope`— los acota el servicio, no esta ruta:
+    dejarlos acá los ponía a un `?dias=99999` de distancia.
+    """
+    try:
+        return await cobros_sin_acreditar.revisar(db, dias=dias, tope=tope)
+    except Exception as e:
+        logger.error("cobros sin acreditar: la revisión falló: %s", e)
+        raise HTTPException(
+            503, "No se pudo revisar los cobros. Reintentá en un momento.")
