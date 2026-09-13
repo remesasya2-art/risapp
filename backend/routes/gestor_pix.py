@@ -69,12 +69,12 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
     """Create a PIX payment for third-party recharge via Mercado Pago"""
     # Limite de monto validado ANTES de crear el pago en Mercado Pago: si no,
     # la pantalla anuncia un techo que el servidor no hace cumplir.
-    error_monto = validate_pix_amount(request.amount_ris)
+    error_monto = await validate_pix_amount(db, request.amount_ris)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
     # Cupo de la cuenta sin verificar: se comprueba ANTES de crear nada.
     _kq_user = await db.users.find_one({"user_id": current_user.user_id})
-    _kq_error = kyc_quota.check_amount(_kq_user, request.amount_ris)
+    _kq_error = await kyc_quota.check_amount(db, _kq_user, request.amount_ris)
     if _kq_error:
         raise HTTPException(status_code=403, detail=_kq_error)
     

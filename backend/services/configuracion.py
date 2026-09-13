@@ -72,7 +72,9 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
-from services.money import from_db, quantize_money, to_decimal128
+from bson import Decimal128
+
+from services.money import quantize_money, to_decimal128
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +143,89 @@ AJUSTES = {
               "cobra en cuanto la cuenta aprueba su verificación. De ahí en "
               "adelante hace falta además que esa cuenta haga su primer "
               "envío."),
+
+    # ── Los límites de cada vía de dinero ──────────────────────────────────
+    #
+    # Vivían escritos a mano en tres archivos distintos —`services/limits.py`,
+    # `services/kyc_quota.py` y `routes/payments_card.py`— y cambiar cualquiera
+    # de ellos era un commit y un despliegue.
+    #
+    # LOS TOPES DE CADA AJUSTE NO SON EL LIMITE: SON LA RED
+    #
+    #   El «máximo» de acá abajo es hasta dónde se puede subir el número desde
+    #   el panel, no cuánto puede mandar un usuario. Están anchos a propósito,
+    #   para no tener que volver a tocar código por una promoción, y cerrados lo
+    #   suficiente como para que un cero de más al tipear no pase.
+
+    "pix_minimo": Ajuste(
+        tipo=DINERO, defecto="10.00", minimo="0", maximo="500",
+        unidad="R$",
+        etiqueta="Mínimo de una operación por PIX",
+        ayuda="Vale para recargar y para enviar. Por debajo de esto la "
+              "comisión fija se come la operación."),
+
+    "pix_maximo": Ajuste(
+        tipo=DINERO, defecto="5000.00", minimo="10", maximo="50000",
+        unidad="R$",
+        etiqueta="Máximo de una operación por PIX",
+        ayuda="El techo por operación, no por día. Subirlo es subir cuánto "
+              "puede mover una sola persona de una sola vez."),
+
+    "tarjeta_minimo": Ajuste(
+        tipo=DINERO, defecto="5.00", minimo="0", maximo="500",
+        unidad="R$",
+        etiqueta="Mínimo de una recarga con tarjeta",
+        ayuda="La tarjeta cobra una comisión fija además del porcentaje, así "
+              "que un monto muy chico se va casi entero en comisión."),
+
+    "tarjeta_maximo": Ajuste(
+        tipo=DINERO, defecto="5000.00", minimo="10", maximo="50000",
+        unidad="R$",
+        etiqueta="Máximo de una recarga con tarjeta",
+        ayuda="Recargar con tarjeta además exige tener la identidad "
+              "verificada; eso no se configura acá."),
+
+    "ves_minimo": Ajuste(
+        tipo=DINERO, defecto="100.00", minimo="0", maximo="100000",
+        unidad="VES",
+        etiqueta="Mínimo de una recarga en bolívares",
+        ayuda="No hay máximo en bolívares, por decisión de negocio, y por eso "
+              "no aparece acá: el catálogo guarda números y «sin techo» no lo "
+              "es."),
+
+    "cupo_sin_verificar_ris": Ajuste(
+        tipo=DINERO, defecto="200.00", minimo="0", maximo="10000",
+        unidad="RIS",
+        etiqueta="Cuánto puede mover una cuenta sin verificar",
+        ayuda="El total acumulado, no por operación. Este número SE PUBLICA en "
+              "la página de «cómo funciona», así que cambiarlo cambia lo que la "
+              "aplicación le promete a quien todavía no verificó."),
+
+    "cupo_sin_verificar_operaciones": Ajuste(
+        tipo=ENTERO, defecto=2, minimo=0, maximo=100,
+        unidad="operaciones",
+        etiqueta="Cuántas operaciones puede hacer una cuenta sin verificar",
+        ayuda="Se agota con lo que llegue primero: estas operaciones o el monto "
+              "de arriba. También se publica."),
 }
+
+
+# ─── Las parejas que tienen que quedar en orden ───────────────────────────
+#
+# POR QUE ESTO NO PUEDE VIVIR EN `Ajuste`
+#
+#   Cada ajuste se valida solo: su tipo, su piso, su techo. Pero «el mínimo de
+#   PIX no puede ser mayor que el máximo de PIX» es una regla ENTRE DOS, y
+#   ninguno de los dos la puede comprobar mirándose a sí mismo.
+#
+#   Sin esto, poner el mínimo en 400 y el máximo en 100 se guarda sin chistar y
+#   deja la vía entera muerta: ningún monto cumple las dos condiciones a la vez,
+#   y el usuario ve «el monto mínimo es R$ 400» justo después de «el monto
+#   máximo es R$ 100». Nadie relaciona eso con un campo del panel.
+PAREJAS_MINIMO_Y_MAXIMO = (
+    ("pix_minimo", "pix_maximo", "PIX"),
+    ("tarjeta_minimo", "tarjeta_maximo", "tarjeta"),
+)
 
 
 class AjusteDesconocido(KeyError):
@@ -189,6 +273,44 @@ def _a_dinero(escrito):
     if not valor.is_finite():
         return None, "no es un número"
     return quantize_money(valor), None
+
+
+def _dinero_guardado(crudo):
+    """Un monto LEIDO DE LA BASE: `(Decimal, None)` o `(None, motivo)`.
+
+    POR QUE NO ALCANZA CON `from_db`, Y COMO SE DESCUBRIO
+
+        `from_db` es tolerante a propósito: un valor que no se entiende vuelve
+        como `Decimal('0')`. Para leer un saldo viejo y raro eso está bien —una
+        pantalla no puede caerse por un dato feo—, pero para un AJUSTE es un
+        desastre distinto.
+
+        Esta función faltaba. La rama de los enteros ya volvía al valor de
+        fábrica cuando lo guardado era ilegible, y hasta lo anotaba en los
+        registros; la de la plata no comprobaba nada y devolvía cero. O sea que
+        un `pix_maximo` ilegible en la base dejaba el máximo en cero y NADIE
+        podía pagar por PIX, y un `bono_al_referido` ilegible le daba cero de
+        bono a todo el mundo sin un solo error en ningún lado.
+
+        Lo encontró un test que guardaba basura a mano y esperaba que la vía
+        siguiera andando. El comentario de la cabecera de este módulo ya avisaba
+        del peligro —«escribir "abc" en el campo del bono guardaría CERO sin que
+        nadie se entere»— pero la guarda se había puesto sólo al ESCRIBIR.
+        Escribir está cerrado con `normalizar`; leer no lo estaba.
+
+        Por eso la lista de tipos es blanca y no negra: lo que no se reconoce se
+        rechaza y se vuelve al valor de fábrica, en vez de intentar interpretarlo.
+    """
+    if isinstance(crudo, bool):
+        return None, "no es un número"
+    if isinstance(crudo, Decimal128):
+        try:
+            return quantize_money(crudo.to_decimal()), None
+        except Exception:
+            return None, "no es un número"
+    if isinstance(crudo, (int, Decimal, float, str)):
+        return _a_dinero(crudo)
+    return None, "no es un número"
 
 
 def _a_entero(escrito):
@@ -272,11 +394,8 @@ async def leer(db, clave: str):
     if not doc or doc.get("valor") is None:
         return _defecto(ajuste)
 
-    if ajuste.tipo == DINERO:
-        # `from_db` y no `to_decimal`: lee Decimal128, float y texto por igual,
-        # que es lo que hace falta para datos que ya están guardados.
-        return from_db(doc["valor"])
-    valor, motivo = _a_entero(doc["valor"])
+    valor, motivo = (_dinero_guardado(doc["valor"]) if ajuste.tipo == DINERO
+                     else _a_entero(doc["valor"]))
     if motivo:
         logger.error("configuracion: %r guardado con un valor ilegible (%r); "
                      "se usa el de fábrica", clave, doc["valor"])
@@ -287,6 +406,34 @@ async def leer(db, clave: str):
 def _defecto(ajuste):
     return (quantize_money(ajuste.defecto) if ajuste.tipo == DINERO
             else int(ajuste.defecto))
+
+
+async def revisar_las_parejas(db, limpios: dict):
+    """¿Queda algún mínimo por encima de su máximo? El motivo, o `None`.
+
+    SE MIRA EL RESULTADO, NO LO QUE SE MANDÓ
+
+        La pantalla puede mandar un solo campo. Comprobar la pareja sólo cuando
+        vienen los dos dejaría pasar el caso más probable de todos: alguien
+        cambia únicamente el mínimo de PIX, lo pone en 6.000, y el máximo
+        guardado sigue en 5.000. Por eso se arma cómo QUEDARIA todo —lo guardado
+        más lo que se está por guardar— y se mira eso.
+
+    SE COMPRUEBA ANTES DE ESCRIBIR NADA
+
+        Igual que la validación de cada campo. Escribir el mínimo y después
+        rechazar el máximo dejaría la vía muerta a medio camino, que es peor que
+        rechazar las dos cosas.
+    """
+    queda = {**await leer_todo(db), **limpios}
+    for clave_min, clave_max, via in PAREJAS_MINIMO_Y_MAXIMO:
+        if queda[clave_min] > queda[clave_max]:
+            return (
+                f"El mínimo de {via} ({_mostrar(AJUSTES[clave_min], queda[clave_min])}) "
+                f"quedaría por encima del máximo "
+                f"({_mostrar(AJUSTES[clave_max], queda[clave_max])}). Así ningún "
+                "monto sería válido y esa vía dejaría de funcionar para todos.")
+    return None
 
 
 async def leer_todo(db) -> dict:
@@ -302,15 +449,13 @@ async def leer_todo(db) -> dict:
         if crudo is None:
             salida[clave] = _defecto(ajuste)
             continue
-        if ajuste.tipo == DINERO:
-            salida[clave] = from_db(crudo)
-        else:
-            valor, motivo = _a_entero(crudo)
-            if motivo:
-                logger.error("configuracion: %r guardado con un valor "
-                             "ilegible (%r); se usa el de fábrica", clave, crudo)
-                valor = _defecto(ajuste)
-            salida[clave] = valor
+        valor, motivo = (_dinero_guardado(crudo) if ajuste.tipo == DINERO
+                         else _a_entero(crudo))
+        if motivo:
+            logger.error("configuracion: %r guardado con un valor "
+                         "ilegible (%r); se usa el de fábrica", clave, crudo)
+            valor = _defecto(ajuste)
+        salida[clave] = valor
     return salida
 
 
