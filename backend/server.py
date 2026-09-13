@@ -365,14 +365,53 @@ app.include_router(admin_router)
 # ==============================================================================
 FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "dist"
 
+# Lo que cae acá es todo lo que NINGUNA ruta quiso. Ver services/sin_ruta.py:
+# el aviso de cada pago de Mercado Pago estuvo meses cayendo justo acá, con un
+# 405 suelto por toda señal.
+from services import sin_ruta                                     # noqa: E402
+from fastapi.responses import JSONResponse                        # noqa: E402
+
+_SIN_RUTA = {"detail": "Not Found"}
+
+
+def _no_existe(request, full_path: str):
+    """El 404, y el grito si lo que rebotó era el aviso de un cobro."""
+    sin_ruta.avisar_si_es_un_pago_perdido(
+        request.method, request.url.path,
+        request.query_params, request.headers.keys())
+    return JSONResponse(_SIN_RUTA, status_code=404)
+
+
+# Los métodos que NO son GET no tienen ninguna pantalla que servir, y por eso
+# esta ruta se registra exista o no el build del frontend: quien manda datos a
+# una dirección que no existe tiene que enterarse, no recibir una página.
+#
+# EFECTO LATERAL, A PROPOSITO: un POST a una dirección que sólo acepta GET pasa
+# de contestar 405 a contestar 404. Se prefiere: el 405 le confirma a quien
+# prueba puertas que esa dirección existe, y eso no se le debe a nadie.
+@app.api_route("/{full_path:path}", methods=["POST", "PUT", "PATCH", "DELETE"],
+               include_in_schema=False)
+async def _sin_ruta_con_datos(request: Request, full_path: str):
+    return _no_existe(request, full_path)
+
+
 if FRONTEND_BUILD_DIR.exists():
     _assets_dir = FRONTEND_BUILD_DIR / "assets"
     if _assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="frontend_assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_frontend(full_path: str):
+    async def serve_frontend(request: Request, full_path: str):
         from fastapi.responses import FileResponse
+
+        # Debajo de /api/ no hay pantalla que servir: lo que no es una ruta es
+        # un error. Antes devolvía el index.html con un 200, y entonces un
+        # integrador que le pegaba a una dirección inexistente lo veía como si
+        # hubiera funcionado. Fuera de /api/ la página sigue saliendo, y tiene
+        # que seguir: `/envios/ABC123` lo resuelve el navegador, no el servidor.
+        if sin_ruta.es_de_la_api(full_path):
+            return _no_existe(request, full_path)
+
         # Servir archivos reales del build (sw.js, íconos, manifest, etc.) si existen;
         # si no, caer al index.html para las rutas del SPA.
         if full_path:
