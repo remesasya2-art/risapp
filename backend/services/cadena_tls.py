@@ -98,8 +98,7 @@ import certifi
 import httpx
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from cryptography.x509.oid import AuthorityInformationAccessOID
-from cryptography.x509.verification import PolicyBuilder, Store
+from cryptography.x509.oid import AuthorityInformationAccessOID, NameOID
 from OpenSSL import SSL, crypto
 
 logger = logging.getLogger(__name__)
@@ -142,11 +141,11 @@ def archivo_de_raices() -> str:
 _DEPOSITOS = {}
 
 
-def _deposito():
+def _raices():
     """Las raíces de `certifi`, que son las mismas que usa `httpx`.
 
-    Se arma una vez por archivo: son unas ciento cuarenta, y parsearlas en cada
-    consulta sería tirar trabajo a la basura.
+    Se arman una vez por archivo: son unas ciento cuarenta, y parsearlas en
+    cada consulta sería tirar trabajo a la basura.
     """
     ruta = archivo_de_raices()
     if ruta in _DEPOSITOS:
@@ -167,7 +166,7 @@ def _deposito():
                     trozo + b"-----END CERTIFICATE-----\n"))
             except Exception:
                 continue
-    _DEPOSITOS[ruta] = Store(raices)
+    _DEPOSITOS[ruta] = raices
     return _DEPOSITOS[ruta]
 
 
@@ -368,23 +367,115 @@ def certificados_de(crudo: bytes) -> list:
 # 3. La guarda: la pieza sólo vale si CIERRA la cadena contra una raíz pública
 # ══════════════════════════════════════════════════════════════════════════
 
-def la_cadena_cierra(hoja: x509.Certificate, piezas: list, host: str) -> bool:
-    """¿Con estas piezas, el certificado del sitio llega hasta una raíz pública?
+_DEPOSITOS_OPENSSL = {}
 
-    Se comprueba SIN SALIR A LA RED, contra las raíces de `certifi`. Las piezas
-    van como eslabones intermedios, NUNCA como raíces de confianza: eso es lo
-    que hace que una pieza inventada no sirva para nada.
+
+def _deposito_de_openssl():
+    """El depósito de raíces, en la forma que entiende OpenSSL."""
+    ruta = archivo_de_raices()
+    if ruta in _DEPOSITOS_OPENSSL:
+        return _DEPOSITOS_OPENSSL[ruta]
+
+    deposito = crypto.X509Store()
+    for raiz in _raices():
+        try:
+            deposito.add_cert(crypto.X509.from_cryptography(raiz))
+        except Exception:
+            # Una raíz repetida o ilegible no puede impedir armar el depósito
+            # entero. Son ciento cuarenta; que falte una no cambia nada.
+            continue
+    _DEPOSITOS_OPENSSL[ruta] = deposito
+    return deposito
+
+
+def por_que_no_cierra(hoja: x509.Certificate, piezas: list) -> str:
+    """El motivo por el que la cadena no cierra, o cadena vacía si cierra.
+
+    SE VERIFICA CON OPENSSL, QUE ES EL MISMO MOTOR QUE VA A HACER LA CONEXION
+
+        La primera versión usaba el verificador de `cryptography`, que aplica el
+        perfil formal del foro CA/B. Es MAS ESTRICTO que OpenSSL, y eso lo hacía
+        inservible como portero: rechazaba cadenas que la conexión de verdad
+        aceptaba sin chistar.
+
+        Comprobado con un certificado al que le falta la extensión 2.5.29.35
+        —el identificador de la clave de la autoridad, que muchos certificados
+        viejos no traen—:
+
+            perfil estricto : RECHAZA
+            conexión OpenSSL: ACEPTA
+
+        O sea que la guarda tiraba abajo el arreglo entero y encima con un
+        mensaje equivocado: decía «no cierra contra una raíz pública» cuando sí
+        cerraba. Un portero más exigente que el que después deja pasar no es
+        seguridad, es un fallo con otro nombre.
+
+    LA PROTECCION NO SE AFLOJA
+
+        Se comprobó a mano que OpenSSL, con sus banderas por omisión, EXIGE
+        llegar a un certificado autofirmado del depósito: una pieza suelta
+        metida ahí no se vuelve raíz de confianza. Una pieza inventada sigue sin
+        servir para nada.
+
+    NO SE MIRA EL NOMBRE DEL SITIO, A PROPOSITO
+
+        Lo mira la conexión real, que es donde corresponde. Acá sólo importa si
+        la cadena llega a una raíz pública. Y comprobarlo dos veces, con dos
+        implementaciones distintas de las reglas de comodines y nombres
+        alternativos, era otra fuente de rechazos equivocados.
     """
     try:
-        verificador = (PolicyBuilder()
-                       .store(_deposito())
-                       .build_server_verifier(x509.DNSName(host)))
-        verificador.verify(hoja, piezas)
-        return True
+        contexto = crypto.X509StoreContext(
+            _deposito_de_openssl(),
+            crypto.X509.from_cryptography(hoja),
+            [crypto.X509.from_cryptography(p) for p in piezas])
+        contexto.verify_certificate()
+        return ""
+    except crypto.X509StoreContextError as e:
+        return str(e)
     except Exception as e:
-        logger.debug("cadena_tls: la cadena no cierra todavía (%s: %s)",
-                     type(e).__name__, e)
-        return False
+        return f"{type(e).__name__}: {e}"
+
+
+def la_cadena_cierra(hoja: x509.Certificate, piezas: list,
+                     host: str = None) -> bool:
+    """¿Con estas piezas, el certificado del sitio llega hasta una raíz pública?
+
+    `host` ya no se usa para verificar (ver `por_que_no_cierra`); se conserva
+    porque los llamadores lo pasan y porque aparece en el registro.
+    """
+    motivo = por_que_no_cierra(hoja, piezas)
+    if motivo:
+        logger.debug("cadena_tls: la cadena de %s no cierra todavía (%s)",
+                     host, motivo)
+    return not motivo
+
+
+# ── Para que el registro diga QUE cadena mandó el servidor ─────────────────
+#
+# Cuando esto falla, «no cierra contra una raíz pública» no alcanza para saber
+# qué pasó: hace falta ver quién es cada certificado y quién lo firmó. Sin eso,
+# diagnosticar un fallo en producción es adivinar.
+
+def _nombre_corto(nombre) -> str:
+    partes = []
+    for oid, etiqueta in ((NameOID.COMMON_NAME, ""),
+                          (NameOID.ORGANIZATION_NAME, "de ")):
+        valores = nombre.get_attributes_for_oid(oid)
+        if valores:
+            partes.append(f"{etiqueta}{valores[0].value}")
+    return " — ".join(partes) or nombre.rfc4514_string()
+
+
+def describir(certificados) -> str:
+    """Una línea por certificado: quién es y quién lo firmó."""
+    if not certificados:
+        return "      (ninguno)"
+    filas = []
+    for i, c in enumerate(certificados):
+        filas.append(f"      [{i}] {_nombre_corto(c.subject)}")
+        filas.append(f"          lo firmó: {_nombre_corto(c.issuer)}")
+    return "\n".join(filas)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -419,6 +510,8 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
             piezas.append(x509.load_der_x509_certificate(crudo))
         except Exception:
             continue
+    del_servidor = list(piezas)
+    bajadas = []
 
     # Si con lo que el servidor SI manda la cadena ya cierra, no se baja nada.
     # No debería pasar —a esto se llega porque la conexión estricta falló— pero
@@ -429,7 +522,6 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
                     "conexión no era una pieza que falta.", host)
         return [p.public_bytes(serialization.Encoding.PEM) for p in piezas]
 
-    bajadas = 0
     ultima = piezas[-1] if piezas else hoja
     for _salto in range(MAXIMO_DE_SALTOS):
         direcciones = direcciones_del_emisor(ultima)
@@ -461,7 +553,7 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
                 "certificado")
 
         piezas.extend(nuevas)
-        bajadas += len(nuevas)
+        bajadas.extend(nuevas)
         if la_cadena_cierra(hoja, piezas, host):
             logger.info(
                 "cadena_tls: %s manda una cadena incompleta; se bajaron %d "
@@ -471,10 +563,21 @@ async def piezas_para(host: str, puerto: int = 443, *, segundos: int = SEGUNDOS,
                     for p in piezas]
         ultima = piezas[-1]
 
+    # EL REGISTRO TIENE QUE DECIR QUE CADENA ERA. Sin esto, un fallo en
+    # producción sólo dice «no cierra» y diagnosticarlo es adivinar — ya pasó.
+    logger.error(
+        "cadena_tls: la cadena de %s no cierra contra ninguna raíz pública.\n"
+        "  Lo que ofreció el servidor:\n%s\n"
+        "  Lo que se bajó siguiendo la dirección de adentro:\n%s\n"
+        "  Motivo de la última comprobación: %s",
+        host, describir([hoja] + del_servidor), describir(bajadas),
+        por_que_no_cierra(hoja, piezas) or "(ninguno: cerró y no debería)")
+
     raise NoSePudoCompletar(
         f"la cadena de {host} sigue sin cerrar contra una raíz pública después "
-        f"de bajar {bajadas} pieza(s). NO se usa ninguna: una pieza que no "
-        "cierra la cadena puede haberla puesto cualquiera.")
+        f"de bajar {len(bajadas)} pieza(s). NO se usa ninguna: una pieza que no "
+        "cierra la cadena puede haberla puesto cualquiera. El registro de "
+        "arriba dice qué certificados eran.")
 
 
 # Las piezas ya conseguidas, por servidor. En memoria del proceso: son datos

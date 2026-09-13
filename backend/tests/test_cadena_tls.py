@@ -33,6 +33,7 @@ POR QUE ACA SE FABRICAN CERTIFICADOS EN VEZ DE LLAMAR AL BCV
 """
 import asyncio
 import datetime
+import logging
 import http.server
 import os
 import socket
@@ -122,7 +123,8 @@ def _intermedia(clave_raiz, cert_raiz, cn):
     return clave, cert
 
 
-def _hoja(clave_int, cert_int, host, direccion_del_emisor=None):
+def _hoja(clave_int, cert_int, host, direccion_del_emisor=None,
+          con_identificador_de_autoridad=True):
     clave = _clave()
     plano = (x509.CertificateBuilder()
              .subject_name(_nombre(host)).issuer_name(cert_int.subject)
@@ -141,12 +143,22 @@ def _hoja(clave_int, cert_int, host, direccion_del_emisor=None):
                  encipher_only=False, decipher_only=False), critical=True)
              .add_extension(x509.SubjectKeyIdentifier.from_public_key(
                  clave.public_key()), critical=False)
-             # 2.5.29.35, el «identificador de la clave de la autoridad». El
-             # perfil de validación lo EXIGE, y sin él el laboratorio rechazaba
-             # su propia cadena buena.
-             .add_extension(x509.AuthorityKeyIdentifier
-                            .from_issuer_public_key(clave_int.public_key()),
-                            critical=False))
+             )
+    if con_identificador_de_autoridad:
+        # 2.5.29.35, el «identificador de la clave de la autoridad».
+        #
+        # ESTA EXTENSION TIENE HISTORIA EN ESTE ARCHIVO. La primera versión del
+        # laboratorio no la ponía, la guarda rechazaba su propia cadena buena, y
+        # lo leí como que al laboratorio le faltaba algo. Era al revés: la
+        # guarda usaba el verificador estricto de `cryptography` y rechazaba
+        # cadenas que la conexión real acepta. Muchos certificados de verdad no
+        # traen esta extensión, y por eso el arreglo no funcionó en producción.
+        #
+        # Por eso ahora se puede omitir: hay un test que EXIGE que sin ella la
+        # cadena se acepte igual.
+        plano = plano.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                clave_int.public_key()), critical=False)
     if direccion_del_emisor:
         # La extensión que lee el navegador y que este arreglo vino a leer.
         plano = plano.add_extension(x509.AuthorityInformationAccess([
@@ -260,7 +272,8 @@ class ServidorDeCertificados:
 # ══════════════════════════════════════════════════════════════════════════
 
 class Laboratorio:
-    def __init__(self, tmp, con_direccion=True):
+    def __init__(self, tmp, con_direccion=True,
+                 con_identificador_de_autoridad=True):
         self.tmp = tmp
         self.k_raiz, self.raiz = _raiz("Raiz De Laboratorio")
         self.k_int, self.intermedia = _intermedia(
@@ -278,8 +291,9 @@ class Laboratorio:
             self.servidor_certs = ServidorDeCertificados(crudo)
             direccion = self.servidor_certs.direccion
 
-        self.k_hoja, self.hoja = _hoja(self.k_int, self.intermedia, HOST,
-                                       direccion)
+        self.k_hoja, self.hoja = _hoja(
+            self.k_int, self.intermedia, HOST, direccion,
+            con_identificador_de_autoridad=con_identificador_de_autoridad)
         self.archivo_raiz = os.path.join(tmp, "raices.pem")
         with open(self.archivo_raiz, "wb") as f:
             f.write(_pem(self.raiz))
@@ -614,3 +628,154 @@ def test_olvidar_hace_que_se_vuelva_a_buscar(lab):
     cadena_tls.olvidar(HOST, srv.puerto)
     corre(cadena_tls.contexto_para(HOST, srv.puerto, permitir_loopback=True))
     assert len(lab.servidor_certs.pedidos) == 2
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. La guarda no puede ser más estricta que la conexión que vigila
+# ══════════════════════════════════════════════════════════════════════════
+#
+# EL DEFECTO QUE ESTOS TESTS VIENEN A IMPEDIR
+#
+#   La primera versión de `la_cadena_cierra` usaba el verificador de
+#   `cryptography`, que aplica el perfil formal del foro CA/B. Es MAS ESTRICTO
+#   que OpenSSL, que es quien hace la conexión de verdad.
+#
+#   Resultado en producción: el servidor bajó la pieza que faltaba, la guarda la
+#   rechazó, y el registro dijo «no cierra contra una raíz pública» — cuando sí
+#   cerraba. El arreglo entero no servía, y encima el mensaje mandaba a mirar
+#   el lugar equivocado.
+#
+#   Un portero más exigente que el que después deja pasar no es seguridad.
+
+def test_LA_GUARDA_NO_ES_MAS_ESTRICTA_QUE_LA_CONEXION(tmp_path, monkeypatch):
+    """Un certificado sin la extensión 2.5.29.35 tiene que pasar.
+
+    Muchos certificados de verdad no la traen. El perfil estricto los rechaza;
+    OpenSSL los acepta. Manda OpenSSL, porque es el que hace la conexión.
+    """
+    laboratorio = Laboratorio(str(tmp_path),
+                              con_identificador_de_autoridad=False)
+    monkeypatch.setattr(cadena_tls, "archivo_de_raices",
+                        lambda: laboratorio.archivo_raiz)
+    cadena_tls.olvidar()
+    try:
+        # Sin la extensión, la cadena buena sigue siendo buena.
+        assert cadena_tls.la_cadena_cierra(
+            laboratorio.hoja, [laboratorio.intermedia], HOST) is True, (
+            "la guarda rechazó una cadena que la conexión real acepta. Es el "
+            "defecto que dejó el arreglo sin funcionar en producción.")
+
+        # Y de punta a punta: se completa y la conexión VERIFICADA pasa.
+        srv = laboratorio.servir_incompleta()
+        contexto = corre(cadena_tls.contexto_para(HOST, srv.puerto,
+                                                  permitir_loopback=True))
+        _conectar_verificando(srv.puerto, contexto)
+    finally:
+        laboratorio.cerrar()
+        cadena_tls.olvidar()
+
+
+def test_la_pieza_del_atacante_sigue_sin_servir_sin_esa_extension(tmp_path,
+                                                                  monkeypatch):
+    """La contracara, y es la que importa: aflojar el verificador no puede
+    haber aflojado la protección."""
+    laboratorio = Laboratorio(str(tmp_path),
+                              con_identificador_de_autoridad=False)
+    monkeypatch.setattr(cadena_tls, "archivo_de_raices",
+                        lambda: laboratorio.archivo_raiz)
+    cadena_tls.olvidar()
+    try:
+        assert cadena_tls.la_cadena_cierra(
+            laboratorio.hoja, [laboratorio.intermedia_mala], HOST) is False
+        assert cadena_tls.la_cadena_cierra(laboratorio.hoja, [], HOST) is False
+    finally:
+        laboratorio.cerrar()
+        cadena_tls.olvidar()
+
+
+def test_por_que_no_cierra_dice_el_motivo(lab):
+    """El motivo va al registro. «No cierra» a secas no alcanza para
+    diagnosticar nada, y ya costó una ronda entera de suposiciones."""
+    assert cadena_tls.por_que_no_cierra(lab.hoja, [lab.intermedia]) == ""
+    motivo = cadena_tls.por_que_no_cierra(lab.hoja, [])
+    assert motivo, "no dio ningún motivo"
+    assert "issuer" in motivo.lower() or "certificate" in motivo.lower()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. Que el registro diga QUE cadena era
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_EL_REGISTRO_DICE_QUIEN_FIRMO_A_QUIEN(lab):
+    """Sin esto, un fallo en producción sólo dice «no cierra».
+
+    Es exactamente lo que pasó: hubo que adivinar qué certificados eran, y se
+    adivinó mal dos veces.
+    """
+    texto = cadena_tls.describir([lab.hoja, lab.intermedia])
+    assert HOST in texto
+    assert "Intermedia De Laboratorio" in texto
+    assert "Raiz De Laboratorio" in texto, (
+        "no dice quién firmó la pieza intermedia, que es justo el eslabón que "
+        "hay que mirar cuando la cadena no cierra")
+    assert "lo firmó" in texto
+
+
+def test_describir_aguanta_una_lista_vacia():
+    assert "ninguno" in cadena_tls.describir([])
+
+
+def test_AL_FALLAR_EL_REGISTRO_MUESTRA_LA_CADENA_ENTERA(lab, caplog):
+    """La guarda del diagnóstico.
+
+    Cuando esto falla en producción no hay forma de mirar el certificado a mano:
+    el registro es todo lo que hay. Si deja de decir qué cadena era, el próximo
+    fallo se vuelve a diagnosticar adivinando.
+    """
+    lab.servidor_certs.cerrar()
+    falsa = ServidorDeCertificados(
+        lab.intermedia_mala.public_bytes(serialization.Encoding.DER))
+    lab.servidor_certs = falsa
+    lab.k_hoja, lab.hoja = _hoja(lab.k_int, lab.intermedia, HOST,
+                                 falsa.direccion)
+    srv = lab.servir_incompleta()
+
+    with caplog.at_level(logging.ERROR, logger="services.cadena_tls"):
+        with pytest.raises(cadena_tls.NoSePudoCompletar):
+            corre(cadena_tls.piezas_para(HOST, srv.puerto,
+                                         permitir_loopback=True))
+
+    # `getMessage()` ya aplica los argumentos: volver a formatear revienta.
+    registro = "\n".join(r.getMessage() for r in caplog.records)
+    assert "Lo que ofreció el servidor" in registro
+    assert "Intermedia De Laboratorio" in registro, (
+        "el registro no dice qué mandó el servidor")
+    assert "Intermedia Del Atacante" in registro, (
+        "el registro no dice qué se bajó, que es la pieza que hay que mirar")
+    assert "Motivo de la última comprobación" in registro
+
+
+def test_UNA_PIEZA_AUTOFIRMADA_NO_SE_VUELVE_RAIZ_DE_CONFIANZA(lab):
+    """EL ATAQUE DE VERDAD, y el caso que ningún otro test cubría.
+
+    Una pieza INTERMEDIA inventada no sirve aunque se metiera al depósito de
+    raíces: OpenSSL exige llegar a un certificado AUTOFIRMADO, y una intermedia
+    no lo es. Eso hace que el error de meterla al depósito pase desapercibido.
+
+    Pero una RAIZ inventada sí es autofirmada. Si las piezas bajadas fueran al
+    depósito de raíces en vez de ir como eslabones intermedios, al atacante le
+    alcanzaría con firmarse la suya: pone la dirección en el certificado que
+    sirve, el servidor la baja, y queda confiada.
+
+    Por eso van como eslabones. Este test es el único que lo comprueba.
+    """
+    _clave, hoja_del_atacante = _hoja(lab.k_raiz_mala, lab.raiz_mala, HOST)
+
+    assert cadena_tls.la_cadena_cierra(
+        hoja_del_atacante, [lab.raiz_mala], HOST) is False, (
+        "una raíz autofirmada inventada quedó aceptada. Cualquiera que pueda "
+        "interponerse en la conexión se firma la suya, la publica en la "
+        "dirección que él mismo elige, y la aplicación se la cree.")
+
+    # Y la contracara, para que no pase por no aceptar nunca nada.
+    assert cadena_tls.la_cadena_cierra(lab.hoja, [lab.intermedia], HOST) is True

@@ -727,6 +727,22 @@ tres condiciones que son las que evitan que esto sea un agujero:
 2. **La pieza bajada se verifica antes de usarla**, sin salir a la red, contra
    las raíces públicas. Si con ella la cadena no cierra, se descarta y la
    consulta sigue fallando. Un atacante necesitaría la firma de la autoridad.
+
+   Esa verificación usa **OpenSSL**, el mismo motor que después hace la
+   conexión. La primera versión usaba el verificador de `cryptography`, que
+   aplica el perfil formal del foro CA/B y es **más estricto**: rechazaba
+   cadenas que la conexión real acepta —por ejemplo, certificados sin la
+   extensión `2.5.29.35`, que muchos no traen— y dejó el arreglo sin funcionar
+   en producción, con un mensaje que además mandaba a mirar el lugar
+   equivocado. Un portero más exigente que el que después deja pasar no es
+   seguridad.
+
+   Las piezas bajadas entran como **eslabones intermedios**, nunca al depósito
+   de raíces. La diferencia importa: OpenSSL exige llegar a un certificado
+   autofirmado, así que una pieza intermedia inventada no sirve de todos modos
+   — pero **una raíz inventada sí es autofirmada**, y si las piezas fueran al
+   depósito le alcanzaría al atacante con firmarse la suya y publicarla en la
+   dirección que él mismo elige.
 3. **La dirección de descarga está acotada**: sólo `http`/`https`, nada que
    resuelva a una dirección interna, sin seguir redirecciones, con tope de
    tamaño y tope de saltos.
