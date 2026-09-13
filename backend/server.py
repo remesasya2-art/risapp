@@ -20,8 +20,15 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+# La red que hace que una respuesta con plata adentro no se caiga con un 500.
+# Va ANTES de importar las rutas: el traductor a JSON tiene que conocer el tipo
+# desde el primer pedido, no desde el primero que le toque un saldo.
+from services.json_de_mongo import ensenarle_decimal128_a_fastapi
+
+ensenarle_decimal128_a_fastapi()
+
 # Import modular routers
-from routes import api_router as modular_api_router
+from routes import api_router as modular_api_router  # noqa: E402
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
