@@ -340,6 +340,14 @@ Dos capas distintas, y la distinción es intencional:
   la única salida es verificar la identidad. Cualquier operación por encima de
   200 exige KYC aprobado, porque no hay forma de que entre en el cupo.
 
+Los números de las dos capas son **ajustes del panel**, no constantes del
+código: los citados son los de fábrica y el super administrador puede cambiarlos
+sin desplegar. Cada cambio queda registrado en el libro de auditoría con autor,
+fecha y valores anterior y nuevo, de modo que el umbral vigente en cualquier
+fecha es reconstruible. El servidor los valida antes de escribirlos: un mínimo
+por encima de su máximo se rechaza, porque dejaría la vía sin ningún monto
+válido.
+
 `backend/services/limits.py`, `backend/services/kyc_quota.py`
 
 ### 5.5 Restricción de jurisdicciones

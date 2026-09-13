@@ -184,6 +184,17 @@ Una cuenta sin KYC aprobado tiene **200 RIS acumulados y 2 operaciones**. Se
 agota con lo que ocurra primero y **no se renueva**. Cualquier operación mayor a
 200 exige verificación, porque no hay forma de que entre en el cupo.
 
+**Dónde vive ese par de números, y quién puede cambiarlo.** Desde que el panel
+tiene su pantalla de configuración, los dos son ajustes —no constantes en el
+código— y el **super administrador** puede modificarlos sin desplegar nada.
+200 y 2 son los valores de fábrica y los que rigen hoy.
+
+Eso conviene decirlo en una política y no esconderlo: es un control cuyo umbral
+puede moverse en un minuto. Lo que lo hace auditable es que **cada cambio queda
+registrado** en el libro de auditoría, con quién lo hizo, cuándo, y el valor
+anterior y el nuevo (`config.ajuste`). El umbral vigente en cualquier fecha se
+reconstruye desde ahí.
+
 ### 3.3 Lo que falta recoger **[PROPUESTO]**
 
 Tres datos que hoy no se piden y que una revisión de cumplimiento va a pedir:
@@ -212,8 +223,14 @@ Tres datos que hoy no se piden y que una revisión de cumplimiento va a pedir:
 | Vía | Mínimo | Máximo |
 |---|---|---|
 | PIX / reales | R$ 10,00 | R$ 5.000,00 por operación |
+| Tarjeta | R$ 5,00 | R$ 5.000,00 por operación |
 | Bolívares | 100 VES | **sin techo** |
 | Cuenta sin verificar | — | 200 RIS acumulados y 2 operaciones |
+
+Todos los valores de esta tabla, salvo el «sin techo» de bolívares, son
+**ajustes del panel** y no constantes del código: son los de fábrica, y el super
+administrador puede cambiarlos sin desplegar. Cada cambio queda en el libro de
+auditoría. Ver 3.2.
 
 **Dos huecos, y conviene nombrarlos antes de proponer nada:**
 

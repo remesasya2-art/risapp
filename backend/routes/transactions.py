@@ -337,12 +337,12 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
     incluida en la recarga). Queda pendiente para que el super_admin la pague
     por PIX en Brasil desde el área de Órdenes por procesar."""
     # Mismo rango que la recarga: el envio sale por PIX y lo paga la misma via.
-    error_monto = validate_pix_amount(request.amount)
+    error_monto = await validate_pix_amount(db, request.amount)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
     # Cupo de la cuenta sin verificar: se comprueba ANTES de crear nada.
     _kq_user = await db.users.find_one({"user_id": current_user.user_id})
-    _kq_error = kyc_quota.check_amount(_kq_user, request.amount)
+    _kq_error = await kyc_quota.check_amount(db, _kq_user, request.amount)
     if _kq_error:
         raise HTTPException(status_code=403, detail=_kq_error)
     # Idempotencia: evita duplicar el envío por doble clic / reintento de red.
@@ -1459,7 +1459,7 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     payment_method = request.get("payment_method", "transferencia")
 
     # Piso de negocio en bolivares. Sin techo, a proposito.
-    error_monto = validate_ves_amount(amount_ves)
+    error_monto = await validate_ves_amount(db, amount_ves)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
 
@@ -1539,7 +1539,7 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=400, detail="El monto en VES es demasiado bajo para la tasa actual.")
     # Cupo de la cuenta sin verificar: se comprueba ANTES de crear nada.
     _kq_user = await db.users.find_one({"user_id": current_user.user_id})
-    _kq_error = kyc_quota.check_amount(_kq_user, amount_ris)
+    _kq_error = await kyc_quota.check_amount(db, _kq_user, amount_ris)
     if _kq_error:
         raise HTTPException(status_code=403, detail=_kq_error)
 

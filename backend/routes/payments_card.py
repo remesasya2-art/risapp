@@ -13,7 +13,8 @@ Flow:
 
 Business rules (per user spec, 2026-05-22):
   - Single payment only (installments=1).
-  - Min R$5, max R$5000.
+  - Min/max: configurables desde el panel (`tarjeta_minimo`, `tarjeta_maximo`).
+    De fabrica, R$5 y R$5000.
   - Customer pays the fee (added on top of the desired RIS amount).
 """
 import os
@@ -30,8 +31,9 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
-from services import bancos, pagos_una_sola_vez, saldos
-from services.money import para_mostrar
+from services import bancos, configuracion, pagos_una_sola_vez, saldos
+from services.limits import validate_card_amount
+from services.money import para_mostrar, to_float
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -46,8 +48,13 @@ DEFAULT_CARD_FEES = {
     "flat_brl": 0.40,     # fixed cents per transaction
 }
 
-MIN_AMOUNT_BRL = 5.0
-MAX_AMOUNT_BRL = 5000.0
+# Los limites de esta via ya no estan escritos aca: viven en el catalogo de
+# `services/configuracion.py` (`tarjeta_minimo` y `tarjeta_maximo`) y se cambian
+# desde el panel del super administrador, sin desplegar.
+#
+# La validacion en si la hace `services/limits.validate_card_amount`, para que
+# este archivo no tenga su propia copia de la regla — que es como este par de
+# numeros termino siendo distinto al de PIX sin que nadie lo decidiera.
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────
@@ -135,8 +142,8 @@ async def get_card_config(current_user: User = Depends(get_current_user)):
     return {
         "public_key": os.environ.get("MERCADOPAGO_PUBLIC_KEY"),
         "fees": fees,
-        "min_amount_brl": MIN_AMOUNT_BRL,
-        "max_amount_brl": MAX_AMOUNT_BRL,
+        "min_amount_brl": to_float(await configuracion.leer(db, "tarjeta_minimo")),
+        "max_amount_brl": to_float(await configuracion.leer(db, "tarjeta_maximo")),
         "locale": "pt-BR",
         "currency": "BRL",
     }
@@ -150,11 +157,9 @@ async def quote_card_payment(
 ):
     """Preview the total amount that will be charged on the card,
     given the desired RIS recharge amount."""
-    if amount_ris < MIN_AMOUNT_BRL or amount_ris > MAX_AMOUNT_BRL:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Monto debe estar entre R$ {MIN_AMOUNT_BRL:.2f} y R$ {MAX_AMOUNT_BRL:.2f}",
-        )
+    error_monto = await validate_card_amount(db, amount_ris)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
     fees = await _get_card_fees()
     fee = _calc_fee(amount_ris, payment_type_id, fees)
     total = round(amount_ris + fee, 2)
@@ -174,11 +179,9 @@ async def process_card_payment(
 ):
     """Submit the tokenized card to Mercado Pago and credit RIS on approval."""
     # ── Validation ───────────────────────────────────────────────────────
-    if body.amount_ris < MIN_AMOUNT_BRL or body.amount_ris > MAX_AMOUNT_BRL:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Monto debe estar entre R$ {MIN_AMOUNT_BRL:.2f} y R$ {MAX_AMOUNT_BRL:.2f}",
-        )
+    error_monto = await validate_card_amount(db, body.amount_ris)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
     if body.payment_type_id not in ("credit_card", "debit_card"):
         raise HTTPException(status_code=400, detail="Tipo de tarjeta inválido")
 

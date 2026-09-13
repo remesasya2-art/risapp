@@ -103,6 +103,13 @@ async def guardar_configuracion(cuerpo: GuardarAjustes, pedido: Request,
             raise HTTPException(status_code=400, detail=motivo)
         limpios[clave] = valor
 
+    # Y la regla que ningún campo puede comprobar mirándose a sí mismo: que
+    # ningún mínimo quede por encima de su máximo. Va acá, entre la validación y
+    # la escritura, porque necesita saber cómo quedaría el conjunto entero.
+    descuadre = await configuracion.revisar_las_parejas(db, limpios)
+    if descuadre:
+        raise HTTPException(status_code=400, detail=descuadre)
+
     # ── Segunda pasada: escribir, y anotar sólo lo que de verdad cambió ───
     antes = await configuracion.leer_todo(db)
     cambios = {c: v for c, v in limpios.items() if antes.get(c) != v}
