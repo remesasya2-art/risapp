@@ -61,6 +61,23 @@ SIN_TOPE_A_PROPOSITO = {
     ("GET", "/api/download-build"): "un archivo estático",
     ("GET", "/{full_path:path}"): "el frontend, no es una API",
 
+    # ── El comodín de lo que NINGUNA ruta quiso. Contesta 404 y nada más: no
+    #    lee la base, no mira la sesión, no toca un saldo. No hay nada que
+    #    adivinar repitiendo, así que un tope no protegería de nada.
+    #
+    #    Y protegería MENOS que nada: por acá cae la notificación de un
+    #    proveedor de pagos mal configurado —le pasó a Mercado Pago durante
+    #    meses—, y esas llegan todas desde las pocas IPs del proveedor. Un tope
+    #    por IP apagaría justo el aviso que se escribió para verlas.
+    #
+    #    Lo que sí queda expuesto es el registro: quien insista puede llenarlo
+    #    de líneas. Es volumen, no una puerta; se asume a cambio de no perder
+    #    la señal. Ver services/sin_ruta.py.
+    ("POST", "/{full_path:path}"): "el 404 de lo que no existe, no es una API",
+    ("PUT", "/{full_path:path}"): "el 404 de lo que no existe, no es una API",
+    ("PATCH", "/{full_path:path}"): "el 404 de lo que no existe, no es una API",
+    ("DELETE", "/{full_path:path}"): "el 404 de lo que no existe, no es una API",
+
     # ── Webhooks. El tope se mide por IP, y un webhook llega SIEMPRE desde las
     #    mismas pocas IPs del proveedor: un pico legítimo de pagos se cortaría
     #    solo, y lo que se pierde es la confirmación de que alguien ya pagó.
