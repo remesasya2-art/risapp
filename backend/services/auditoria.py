@@ -99,6 +99,11 @@ ACCIONES = {
     # a pagar y quién lo decidió — y eso, meses después, es la pregunta.
     "dinero.lote_armado":       (Cat.DINERO, "Lote de pagos armado"),
     "dinero.lote_cancelado":    (Cat.DINERO, "Lote de pagos cancelado"),
+    # Qué comprobante quedó colgado de qué orden, y si lo decidió el lector o
+    # una persona. Es la traza que pide un banco cuando pregunta por qué el
+    # expediente de un cliente tiene la foto del pago de otro.
+    "dinero.lote_comprobantes": (Cat.DINERO, "Comprobantes cargados a un lote"),
+    "dinero.lote_comprobante_asignado": (Cat.DINERO, "Comprobante asignado a mano"),
     # Usuarios
     "usuario.suspendido":       (Cat.USUARIOS, "Usuario suspendido"),
     "usuario.reactivado":       (Cat.USUARIOS, "Usuario reactivado"),

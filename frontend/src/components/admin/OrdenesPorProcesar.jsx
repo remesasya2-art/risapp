@@ -5,7 +5,8 @@ import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2 } from 'lucide-react';
+import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2, Images } from 'lucide-react';
+import ComprobantesDelLote from './ComprobantesDelLote';
 
 // ---- Paleta profesional / corporativa (plana, sin sombras decorativas) ----
 const C = {
@@ -86,6 +87,9 @@ export default function OrdenesPorProcesar() {
   const [resumen, setResumen] = useState(null);
   const [bajando, setBajando] = useState(false);
   const [lotes, setLotes] = useState([]);
+  // Cuál lote tiene abierto el panel de comprobantes. Uno por vez: la
+  // tabla es ancha y dos abiertas obligan a buscar cuál es cuál.
+  const [verComprobantesDe, setVerComprobantesDe] = useState(null);
   const prevIdsRef = useRef(null);
 
   const idDe = (o) => `${o.flujo}-${o.orden_id}`;
@@ -574,6 +578,14 @@ export default function OrdenesPorProcesar() {
                   <button onClick={() => bajarDeNuevo(l)} style={chip} title="Bajar otra vez el mismo archivo">
                     <Download size={13} /> Archivo
                   </button>
+                  <button
+                    onClick={() => setVerComprobantesDe(
+                      verComprobantesDe?.lote_id === l.lote_id ? null : l)}
+                    style={{ ...chip, ...(verComprobantesDe?.lote_id === l.lote_id
+                      ? { color: C.primary, borderColor: C.primary } : {}) }}
+                    title="Subir todos los comprobantes de este lote de una vez">
+                    <Images size={13} /> Comprobantes
+                  </button>
                   <button onClick={() => cancelarLote(l)} style={{ ...chip, color: C.red, borderColor: C.red + '55' }}
                     title="Devolver sus órdenes a la cola">
                     <Undo2 size={13} /> Cancelar
@@ -583,6 +595,13 @@ export default function OrdenesPorProcesar() {
             ))}
           </div>
         </div>
+      )}
+
+      {verComprobantesDe && (
+        <ComprobantesDelLote
+          lote={verComprobantesDe}
+          onCerrar={() => setVerComprobantesDe(null)}
+        />
       )}
 
       {seleccionables.length > 0 && (

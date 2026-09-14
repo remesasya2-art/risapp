@@ -50,6 +50,11 @@ MISMO_BANCO = "mismo_banco"
 OTROS_BANCOS = "otros_bancos"
 SIN_DATOS = "sin_datos"
 
+# Una cuenta bancaria venezolana son veinte dígitos, siempre. Los primeros
+# cuatro son el banco, y por eso sirve para adjudicar un comprobante: es única
+# y aparece entera en las transferencias.
+LARGO_DE_CUENTA = 20
+
 # Los rótulos de cada sección, tal como los lee el operador.
 TITULOS = {
     PAGO_MOVIL: "PAGO MÓVIL",
@@ -111,7 +116,7 @@ def clasificar(beneficiario, *, banco_pagador: str) -> str:
 
     # Transferencia: hace falta la cuenta de veinte dígitos.
     cuenta = _digitos(b.get("cuenta") or b.get("account_number"))
-    if len(cuenta) != 20:
+    if len(cuenta) != LARGO_DE_CUENTA:
         return SIN_DATOS
     if not codigo:
         # La cuenta empieza con el código del banco. Si el campo del banco no

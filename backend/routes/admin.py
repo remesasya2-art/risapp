@@ -23,7 +23,7 @@ from routes.dependencies import (get_admin_user, get_current_user,
                                  get_super_admin, get_crm_user)
 from services.notifications import create_notification, ROLES_DEL_PERSONAL
 from services import pendientes as pendientes_svc
-from services import auditoria, kyc_quota, lotes_de_pago
+from services import auditoria, comprobantes_del_lote, kyc_quota, lotes_de_pago
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -1298,6 +1298,86 @@ async def cancelar_lote(lote_id: str, request: Request,
     """Deshace un lote: sus órdenes vuelven a la cola de pendientes."""
     try:
         return await lotes_de_pago.cancelar(db, lote_id, quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+# ============== LOS COMPROBANTES DEL LOTE, DE UNA SOLA CARGA ==============
+#
+# El agente paga las once órdenes en la banca en línea y vuelve con once
+# capturas en el teléfono. Antes tenía que abrir orden por orden y buscar cuál
+# de las once era la de ésa — y el único dato a mano para distinguirlas era el
+# monto, que es justo el que se repite cuando dos personas cobran lo mismo.
+#
+# Acá se suben todas juntas y el sistema dice de quién es cada una. Lo que no
+# puede decir con certeza queda marcado y lo resuelve una persona: ver
+# `services/comprobantes_del_lote.py`, que explica por qué el monto nunca
+# adjudica y por qué ante la duda no se elige.
+#
+# Esto NO aprueba ni acredita nada. Colgar la foto y dar la orden por pagada
+# son dos decisiones distintas.
+
+class ComprobantesRequest(BaseModel):
+    imagenes: List[str] = Field(
+        ..., min_length=1, max_length=comprobantes_del_lote.MAXIMO_POR_CARGA)
+
+
+class AsignarComprobanteRequest(BaseModel):
+    # `None` suelta la foto: la saca de la orden que la tenía y la deja sin
+    # dueño, para volver a asignarla.
+    orden_id: Optional[str] = None
+
+
+@router.post("/lotes/{lote_id}/comprobantes")
+async def cargar_comprobantes_del_lote(
+    lote_id: str,
+    cuerpo: ComprobantesRequest,
+    request: Request,
+    admin: User = Depends(get_super_admin),
+):
+    """Sube varias fotos de una vez y las reparte entre las órdenes del lote."""
+    try:
+        return await comprobantes_del_lote.cargar(
+            db, lote_id, cuerpo.imagenes, quien=admin, request=request)
+    except ImagenInvalida as e:
+        raise HTTPException(400, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.get("/lotes/{lote_id}/comprobantes")
+async def ver_comprobantes_del_lote(lote_id: str,
+                                    admin: User = Depends(get_super_admin)):
+    """La tabla de fotos del lote y las órdenes a las que se pueden asignar."""
+    try:
+        return await comprobantes_del_lote.listar(db, lote_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/lotes/{lote_id}/comprobantes/{comprobante_id}/imagen")
+async def ver_una_foto_del_lote(lote_id: str, comprobante_id: str,
+                                admin: User = Depends(get_super_admin)):
+    """Una foto concreta. Se pide de a una: once en base64 son decenas de megas."""
+    try:
+        return {"imagen": await comprobantes_del_lote.imagen(
+            db, lote_id, comprobante_id)}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/asignar")
+async def asignar_comprobante_del_lote(
+    lote_id: str, comprobante_id: str,
+    cuerpo: AsignarComprobanteRequest,
+    request: Request,
+    admin: User = Depends(get_super_admin),
+):
+    """Cambia a mano de qué orden es una foto, o la suelta."""
+    try:
+        return await comprobantes_del_lote.asignar(
+            db, lote_id, comprobante_id, cuerpo.orden_id,
+            quien=admin, request=request)
     except ValueError as e:
         raise HTTPException(409, str(e))
 
