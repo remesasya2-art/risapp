@@ -223,3 +223,128 @@ def test_SI_NO_SE_PUEDEN_PREGUNTAR_LOS_IDIOMAS_NO_SE_LEVANTA(monkeypatch):
         raise OSError("no está")
     monkeypatch.setattr(pytesseract, "get_languages", revienta)
     assert lector.idiomas_instalados() == []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#
+# LO QUE FALLABA DE VERDAD NO ERA EL LECTOR
+#
+# Puesto el diagnóstico, el servidor contestó otra cosa: faltaba
+# `libstdc++.so.6`, una pieza de C++ del sistema. Sin ella no carga `numpy`, y
+# `pytesseract` importa `numpy` al cargarse — así que `import pytesseract`
+# reventaba y el lector nunca llegaba ni a buscar el programa.
+#
+# El mensaje de entonces decía «falta la librería pytesseract», que era FALSO:
+# estaba instalada. Mandar a alguien a revisar requirements.txt cuando lo que
+# falta es una pieza del sistema son horas buscando donde no está.
+
+# El sermón tal como lo escupe numpy cuando no encuentra la pieza de C++.
+# Se guarda entero, con su media página de consejos, porque el largo es parte
+# de lo que hay que probar.
+ERROR_DE_NUMPY = ImportError("""
+
+IMPORTANT: PLEASE READ THIS FOR ADVICE ON HOW TO SOLVE THIS ISSUE!
+
+Importing the numpy C-extensions failed. This error can happen for
+many reasons, often due to issues with your setup or how NumPy was
+installed. We have compiled some common reasons and troubleshooting tips at:
+
+    https://numpy.org/devdocs/user/troubleshooting-importerror.html
+
+Please note and check the following:
+
+  * The Python version is: Python3.11 from "/app/venv/bin/python"
+  * The NumPy version is: "2.4.0"
+
+and make sure that they are the versions you expect.
+
+Original error was: libstdc++.so.6: cannot open shared object file: No such file or directory
+""")
+
+
+def _pytesseract_no_carga(monkeypatch, error):
+    """Hace que `import pytesseract` falle con ese error, como en el servidor.
+
+    Se toca el import y no `sys.modules` porque lo que hay que reproducir es
+    justamente que la librería ESTA y aun así no carga.
+    """
+    import builtins
+    de_verdad = builtins.__import__
+
+    def falla(nombre, *a, **k):
+        if nombre == "pytesseract":
+            raise error
+        return de_verdad(nombre, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", falla)
+
+
+def test_SI_FALTA_UNA_PIEZA_DEL_SISTEMA_SE_DICE_CUAL_Y_NO_QUE_FALTE_PYTESSERACT(monkeypatch):
+    """El caso que pasó en producción, entero y por el camino de verdad."""
+    _pytesseract_no_carga(monkeypatch, ERROR_DE_NUMPY)
+
+    motivo = lector.por_que_no_hay_lector()
+    assert "libstdc++.so.6" in motivo, (
+        "sin el nombre del archivo que falta no hay nada accionable")
+    assert "Falta la librería pytesseract" not in motivo, (
+        "pytesseract ESTA instalada: decir que falta manda a buscar donde no está")
+    assert not lector.hay_lector()
+
+
+def _el_programa_no_corre(monkeypatch, texto):
+    """El único camino cuyo mensaje PEGA adentro el texto de una excepción.
+
+    La primera versión de estos dos tests usaba el camino de numpy, cuyo
+    mensaje lo escribe este archivo y ya sale corto. Así que pasaban con el
+    recorte borrado: probaban que un texto corto es corto.
+    """
+    import pytesseract
+    monkeypatch.setenv(lector.VARIABLE_DEL_PROGRAMA, "/opt/raro/tesseract")
+
+    def no_corre(*a, **k):
+        raise OSError(texto)
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", no_corre)
+
+
+def test_EL_MOTIVO_NO_PUEDE_SER_UNA_PARED_DE_TEXTO(monkeypatch):
+    """El sermón de numpy tapó el encabezado del panel y no se entendía nada.
+
+    Un motivo que no se puede leer no sirve más que el sí/no que había antes.
+    """
+    _el_programa_no_corre(monkeypatch, str(ERROR_DE_NUMPY))
+    assert len(lector.por_que_no_hay_lector()) <= lector.LARGO_MAXIMO_DEL_MOTIVO
+
+
+def test_EL_MOTIVO_ES_UN_RENGLON_Y_NO_UN_PARRAFO(monkeypatch):
+    """Recortar sin juntar los renglones deja un pedazo de párrafo torcido.
+
+    Son dos cosas distintas y por eso son dos tests: un texto de tres
+    renglones cortos entra en el tope y aun así desarma el encabezado.
+    """
+    _el_programa_no_corre(monkeypatch, "se cayó\n   por\n   algo")
+
+    motivo = lector.por_que_no_hay_lector()
+    assert "\n" not in motivo
+    assert "se cayó por algo" in motivo, "juntar no puede perder lo que decía"
+
+
+def test_SI_LA_LIBRERIA_FALTA_DE_VERDAD_SE_MANDA_A_REQUIREMENTS(monkeypatch):
+    """«No está instalada» y «está pero no carga» se arreglan en dos lugares
+    distintos. Un mensaje que los junta no sirve para ninguno."""
+    _pytesseract_no_carga(
+        monkeypatch,
+        ModuleNotFoundError("No module named 'pytesseract'", name="pytesseract"))
+
+    motivo = lector.por_que_no_hay_lector()
+    assert "requirements.txt" in motivo
+
+
+def test_SI_NO_CARGA_POR_OTRA_COSA_SE_MANDA_AL_REGISTRO(monkeypatch):
+    """Ningún mensaje adivina: lo que no se sabe explicar se dice que está en
+    el registro, donde sí entra un texto largo."""
+    _pytesseract_no_carga(monkeypatch, RuntimeError("algo que nadie previó"))
+
+    motivo = lector.por_que_no_hay_lector()
+    assert motivo, "quedarse callado deja la pantalla sin explicación"
+    assert "registro" in motivo
+    assert len(motivo) <= lector.LARGO_MAXIMO_DEL_MOTIVO
