@@ -400,29 +400,48 @@ if FRONTEND_BUILD_DIR.exists():
     if _assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="frontend_assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_frontend(request: Request, full_path: str):
-        from fastapi.responses import FileResponse
 
-        # Debajo de /api/ no hay pantalla que servir: lo que no es una ruta es
-        # un error. Antes devolvía el index.html con un 200, y entonces un
-        # integrador que le pegaba a una dirección inexistente lo veía como si
-        # hubiera funcionado. Fuera de /api/ la página sigue saliendo, y tiene
-        # que seguir: `/envios/ABC123` lo resuelve el navegador, no el servidor.
-        if sin_ruta.es_de_la_api(full_path):
-            return _no_existe(request, full_path)
+# El comodín de GET se registra SIEMPRE, haya build o no.
+#
+#   Antes vivía dentro del `if` de arriba, y eso estaba bien mientras fuera el
+#   único comodín: sin build no había ninguno y una dirección desconocida daba
+#   404. Al agregar el de POST/PUT/PATCH/DELETE eso dejó de ser cierto: sin
+#   build, el camino `/{full_path:path}` pasaba a existir SOLO para esos cuatro
+#   métodos, y entonces un GET a CUALQUIER dirección —incluida la raíz— se
+#   encontraba con una ruta que no acepta su método y contestaba 405.
+#
+#   O sea: el sitio entero contestaba «método no permitido» en cualquier
+#   despliegue sin build. Lo agarró la suite en CI, que corre justo así porque
+#   `frontend/dist` no está versionado.
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend(request: Request, full_path: str):
+    from fastapi.responses import FileResponse
 
-        # Servir archivos reales del build (sw.js, íconos, manifest, etc.) si existen;
-        # si no, caer al index.html para las rutas del SPA.
-        if full_path:
-            candidate = (FRONTEND_BUILD_DIR / full_path).resolve()
-            try:
-                candidate.relative_to(FRONTEND_BUILD_DIR.resolve())
-            except ValueError:
-                candidate = None
-            if candidate and candidate.is_file():
-                return FileResponse(str(candidate))
-        return FileResponse(str(FRONTEND_BUILD_DIR / "index.html"))
+    # Debajo de /api/ no hay pantalla que servir: lo que no es una ruta es un
+    # error. Antes devolvía el index.html con un 200, y entonces un integrador
+    # que le pegaba a una dirección inexistente lo veía como si hubiera
+    # funcionado.
+    if sin_ruta.es_de_la_api(full_path):
+        return _no_existe(request, full_path)
+
+    # Sin build no hay ninguna aplicación que servir, así que lo honesto es
+    # decir que eso no está — nunca un 405, que hablaría del método cuando el
+    # problema es que no hay nada ahí.
+    if not FRONTEND_BUILD_DIR.exists():
+        return _no_existe(request, full_path)
+
+    # Con build: los archivos reales (sw.js, íconos, manifest…) si existen; si
+    # no, el index.html, porque `/envios/ABC123` lo resuelve el navegador y no
+    # el servidor.
+    if full_path:
+        candidate = (FRONTEND_BUILD_DIR / full_path).resolve()
+        try:
+            candidate.relative_to(FRONTEND_BUILD_DIR.resolve())
+        except ValueError:
+            candidate = None
+        if candidate and candidate.is_file():
+            return FileResponse(str(candidate))
+    return FileResponse(str(FRONTEND_BUILD_DIR / "index.html"))
 
     
 # Last update: 2026-03-28 - Complete refactor to modular routers

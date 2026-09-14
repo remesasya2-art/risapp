@@ -33,6 +33,7 @@ LO QUE SE VIGILA, Y EN QUE ORDEN DE IMPORTANCIA
 import logging
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -44,6 +45,16 @@ os.environ.setdefault("DB_NAME", "ris_test")
 
 from conftest import usar_base                                    # noqa: E402,F401
 from services import sin_ruta                                     # noqa: E402
+
+# `frontend/dist` NO está versionado, así que en CI la aplicación corre sin
+# build — y ahí no hay ninguna pantalla que servir. Eso cambia qué se PUEDE
+# exigir, y no da lo mismo: escribir los tests dando por sentado que el build
+# está fue lo que dejó pasar un defecto que rompía el sitio entero sin él.
+HAY_BUILD = (Path(_BACKEND).parent / "frontend" / "dist" / "index.html").is_file()
+sin_build = pytest.mark.skipif(
+    not HAY_BUILD,
+    reason="sin `frontend/dist` no hay ninguna pantalla que servir: correr "
+           "`npm run build` en frontend/ para que esto se pruebe de verdad")
 
 
 @pytest.fixture(scope="module")
@@ -60,25 +71,39 @@ def cliente():
 # 1. Lo que NO se puede romper
 # ══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.parametrize("pantalla", [
-    "/envios/ABC123", "/history", "/admin", "/seguimiento/un-token-largo",
-    "/recharge", "/una-que-no-existe-todavia",
-])
+PANTALLAS = ["/", "/envios/ABC123", "/history", "/admin",
+             "/seguimiento/un-token-largo", "/recharge",
+             "/una-que-no-existe-todavia"]
+
+
+@pytest.mark.parametrize("pantalla", PANTALLAS)
+def test_UNA_PANTALLA_DEL_NAVEGADOR_NUNCA_CONTESTA_405(cliente, pantalla):
+    """Este test existe por un defecto que metí y que agarró CI.
+
+    Al registrar el comodín de POST/PUT/PATCH/DELETE, el camino
+    `/{full_path:path}` pasó a existir sólo para esos cuatro métodos cuando no
+    hay build. Entonces un GET a cualquier dirección —la raíz incluida— se
+    encontraba con una ruta que no acepta su método: 405. El sitio entero
+    contestando «método no permitido».
+
+    Vale HAYA O NO build, que es justo lo que le faltaba al test de abajo.
+    """
+    r = cliente.get(pantalla)
+    assert r.status_code != 405, (
+        f"{pantalla} contesta «método no permitido» a un GET normal")
+
+
+@sin_build
+@pytest.mark.parametrize("pantalla", PANTALLAS)
 def test_LAS_PANTALLAS_DEL_NAVEGADOR_SIGUEN_SALIENDO(cliente, pantalla):
     """Ninguna de éstas es una ruta del servidor: las resuelve el navegador.
 
-    Un 404 acá deja la aplicación inservible para todo el mundo que entre por
-    un enlace directo o recargue la página estando adentro.
+    Un 404 acá deja la aplicación inservible para todo el que entre por un
+    enlace directo o recargue estando adentro. Es el riesgo grande del cambio.
     """
     r = cliente.get(pantalla)
     assert r.status_code == 200, f"{pantalla} dejó de servir la aplicación"
     assert "text/html" in r.headers.get("content-type", ""), pantalla
-
-
-def test_la_raiz_sigue_sirviendo_la_aplicacion(cliente):
-    r = cliente.get("/")
-    assert r.status_code == 200
-    assert "text/html" in r.headers.get("content-type", "")
 
 
 def test_LA_RUTA_DEL_AVISO_DE_MERCADOPAGO_NO_QUEDA_TAPADA(cliente):
