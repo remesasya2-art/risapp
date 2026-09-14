@@ -107,6 +107,25 @@ _REFERENCIA = re.compile(r"\d{9,13}")
 # Los separadores que la gente y los bancos meten adentro de un número.
 _SEPARADORES = re.compile(r"[\s\-.·•]")
 
+# Cuánto puede medir, como mucho, el motivo que se manda a la pantalla.
+#
+# POR QUE HAY UN TOPE, Y POR QUE NO ES UNA MANIA
+#
+#     El primer motivo de verdad que apareció fue el de numpy, que adentro
+#     trae media página de consejos con enlaces y todo. En el panel tapó el
+#     encabezado entero y no se entendía nada. Un motivo que no se puede leer
+#     no sirve más que el sí/no que había antes.
+#
+#     El detalle completo no se pierde: va al registro del servidor, que es
+#     donde se lee un texto largo.
+LARGO_MAXIMO_DEL_MOTIVO = 240
+
+# «libloquesea.so.6: cannot open shared object file» — una pieza del sistema
+# que falta. Se busca el nombre del archivo porque es el único dato accionable
+# de todo el sermón: con ese nombre se sabe qué agregar al despliegue.
+_FALTA_UNA_PIEZA_DEL_SISTEMA = re.compile(
+    r"(lib[\w.+-]+\.so[\d.]*): cannot open shared object file")
+
 
 class SinLector(RuntimeError):
     """No hay `tesseract` en esta máquina. Lo maneja quien llama, no el usuario."""
@@ -186,24 +205,47 @@ def _apuntar_a_donde_este():
     return ruta
 
 
-def por_que_no_hay_lector() -> str:
-    """Vacío si el lector anda; si no, POR QUE no anda, en una línea.
+def _por_que_no_carga_pytesseract(e: BaseException) -> str:
+    """Por qué falló `import pytesseract`, nombrando lo que falla DE VERDAD.
 
-    LA DIFERENCIA CON UN BOOLEANO, Y POR QUE VALE LA PENA
+    NO ES SIEMPRE PYTESSERACT, Y DECIR QUE SI ERA MENTIR
 
-        Antes esto era un sí/no, y la pantalla decía «el servidor no tiene el
-        lector instalado» pasara lo que pasara. La primera vez que falló de
-        verdad, ese mensaje era una conjetura: podía ser que el programa no
-        estuviera, que estuviera en otro lado, o que faltara el idioma. Sin
-        saber cuál, arreglarlo son vueltas de despliegue a ciegas.
+        Este mensaje decía «falta la librería pytesseract» pasara lo que
+        pasara, y la primera vez que se leyó en el servidor era falso:
+        pytesseract estaba instalado. Lo que no cargaba era `numpy`, que
+        `pytesseract` importa al cargarse, porque en la imagen faltaba
+        `libstdc++.so.6`.
 
-        El motivo lo lee un super administrador en su panel, no un cliente.
+        Mandar a alguien a revisar requirements.txt cuando lo que falta es una
+        pieza del sistema son horas buscando donde no está.
+
+        Se separan tres casos porque se arreglan en tres lugares distintos:
+        la librería falta de veras (requirements.txt), falta una pieza del
+        sistema (la configuración del despliegue), o es otra cosa (el registro
+        del servidor, que es donde entra un texto largo).
     """
+    if isinstance(e, ModuleNotFoundError) and getattr(e, "name", "") == "pytesseract":
+        return ("Falta la librería pytesseract en el servidor. "
+                "Tiene que estar en backend/requirements.txt.")
+
+    pieza = _FALTA_UNA_PIEZA_DEL_SISTEMA.search(str(e))
+    if pieza:
+        return (f"Falta la pieza del sistema «{pieza.group(1)}» en el "
+                "servidor. Sin ella no carga pytesseract. Se agrega en la "
+                "configuración del despliegue, no en requirements.txt.")
+
+    return ("La librería pytesseract está instalada pero no carga. "
+            "El detalle completo está en el registro del servidor.")
+
+
+def _diagnosticar() -> str:
+    """El motivo crudo, sin recortar. Lo recorta `por_que_no_hay_lector`."""
     try:
         import pytesseract
     except Exception as e:
-        return (f"Falta la librería pytesseract en el servidor ({e}). "
-                "Tiene que estar en backend/requirements.txt.")
+        # El sermón entero va al registro, que es donde se lee un texto largo.
+        logger.warning("lector_de_comprobantes: no cargó pytesseract", exc_info=True)
+        return _por_que_no_carga_pytesseract(e)
 
     ruta = _apuntar_a_donde_este()
     if not ruta:
@@ -217,6 +259,34 @@ def por_que_no_hay_lector() -> str:
         return f"El programa está en {ruta} pero no se pudo ejecutar: {e}"
 
     return ""
+
+
+def por_que_no_hay_lector() -> str:
+    """Vacío si el lector anda; si no, POR QUE no anda, en una línea.
+
+    LA DIFERENCIA CON UN BOOLEANO, Y POR QUE VALE LA PENA
+
+        Antes esto era un sí/no, y la pantalla decía «el servidor no tiene el
+        lector instalado» pasara lo que pasara. La primera vez que falló de
+        verdad, ese mensaje era una conjetura: podía ser que el programa no
+        estuviera, que estuviera en otro lado, o que faltara el idioma. Sin
+        saber cuál, arreglarlo son vueltas de despliegue a ciegas.
+
+        El motivo lo lee un super administrador en su panel, no un cliente.
+
+    EL RECORTE ESTA ACA Y NO EN CADA MENSAJE
+
+        Porque los motivos que se arman con el texto de una excepción no tienen
+        largo conocido: el de numpy medía media página. En un solo lugar, cada
+        camino nuevo que alguien agregue queda cubierto sin acordarse de nada.
+    """
+    # Un renglón: el sermón de numpy venía con saltos de línea y sangrías, y
+    # en el panel se desarmaba en un párrafo torcido antes siquiera de ser
+    # largo. Recortar sin juntar los renglones deja un pedazo de párrafo.
+    motivo = " ".join(_diagnosticar().split())
+    if len(motivo) > LARGO_MAXIMO_DEL_MOTIVO:
+        return motivo[:LARGO_MAXIMO_DEL_MOTIVO - 1].rstrip() + "…"
+    return motivo
 
 
 def idiomas_instalados() -> list:
