@@ -135,11 +135,21 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
         {datos && !datos.hay_lector && (
           // Sin lector no se rompe nada, pero el agente tiene que saber por qué
           // ninguna se asignó sola: si no, va a pensar que la pantalla falla.
+          //
+          // Y va el MOTIVO, no «no está instalado». Ese texto era una
+          // conjetura: podía ser eso, que estuviera en otro lado, o que le
+          // faltara el idioma, y cada uno se arregla distinto. Lo lee un super
+          // administrador, que es quien puede hacer algo con el dato.
           <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px',
-            color: C.amber, backgroundColor: C.amberBg, padding: '4px 8px', borderRadius: '6px',
+            display: 'inline-flex', alignItems: 'flex-start', gap: '5px', fontSize: '12px',
+            color: C.amber, backgroundColor: C.amberBg, padding: '6px 9px',
+            borderRadius: '6px', maxWidth: '420px',
           }}>
-            <AlertTriangle size={13} /> El servidor no tiene el lector: se asignan a mano
+            <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
+            <span>
+              <b>Las fotos se asignan a mano.</b>{' '}
+              {datos.por_que_no_hay_lector || 'El servidor no tiene el lector.'}
+            </span>
           </span>
         )}
         <button onClick={onCerrar} style={{ ...chip, marginLeft: 'auto' }}>

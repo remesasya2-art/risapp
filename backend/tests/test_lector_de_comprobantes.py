@@ -22,6 +22,8 @@ POR QUE LAS SEÑALES SON LISTAS Y NO VALORES
 import os
 import sys
 
+import pytest
+
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _BACKEND)
 
@@ -116,3 +118,108 @@ def test_UN_TEXTO_VACIO_NO_DEVUELVE_NINGUNA_SEÑAL():
 def test_VACIO_TIENE_LA_MISMA_FORMA_QUE_UNA_LECTURA_DE_VERDAD():
     """Quien adjudica no puede tener que preguntar si hubo lector o no."""
     assert set(lector.vacio()) == set(lector.senales_del_texto("algo"))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Encontrar el programa, y decir por qué no se encontró
+# ══════════════════════════════════════════════════════════════════════════
+#
+# El lector no quedó instalado en el primer despliegue y la pantalla decía «el
+# servidor no tiene el lector» pasara lo que pasara. Ese mensaje era una
+# conjetura: podía ser que no estuviera, que estuviera en otro lado, o que le
+# faltara el idioma. Sin saber cuál, arreglarlo son vueltas de despliegue a
+# ciegas — y eso costó una entera.
+
+def test_LA_VARIABLE_DEL_AMBIENTE_MANDA_SOBRE_TODO_LO_DEMAS(monkeypatch):
+    """Es la salida cuando el programa aterriza donde la lista no mira.
+
+    Tiene que poder arreglarse desde el panel del servidor: acá configurar
+    nunca puede exigir editar código y volver a desplegar.
+    """
+    monkeypatch.setenv(lector.VARIABLE_DEL_PROGRAMA, "/un/lugar/raro/tesseract")
+    assert lector._donde_esta_el_programa() == "/un/lugar/raro/tesseract"
+
+
+def test_SIN_VARIABLE_SE_BUSCA_EN_EL_PATH(monkeypatch):
+    """La ruta que devuelve tiene que venir del PATH y de ningún otro lado.
+
+    La primera versión de este test esperaba «/usr/bin/tesseract», que es
+    también lo que devuelve la lista de respaldo en una máquina donde el
+    programa está ahí. O sea que pasaba sin el PATH, y una mutación que borra
+    esa búsqueda entera lo dejaba en verde.
+
+    Ahora la ruta es una que SOLO puede salir del PATH, y la lista de respaldo
+    se vacía para que no haya de dónde sacarla.
+    """
+    monkeypatch.delenv(lector.VARIABLE_DEL_PROGRAMA, raising=False)
+    monkeypatch.setattr(lector, "DONDE_SUELE_ESTAR", ())
+    monkeypatch.setattr("shutil.which", lambda _: "/solo/desde/el/path/tesseract")
+    assert lector._donde_esta_el_programa() == "/solo/desde/el/path/tesseract"
+
+
+def test_SI_NO_ESTA_EN_EL_PATH_SE_MIRA_DONDE_SUELE_ESTAR(monkeypatch, tmp_path):
+    """La lista de respaldo es la que cubre el caso que pasó: instalado por el
+    despliegue en un lugar que el PATH del proceso no tenía."""
+    falso = tmp_path / "tesseract"
+    falso.write_text("#!/bin/sh\n")
+    falso.chmod(0o755)
+
+    monkeypatch.delenv(lector.VARIABLE_DEL_PROGRAMA, raising=False)
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    monkeypatch.setattr(lector, "DONDE_SUELE_ESTAR", (str(falso),))
+    assert lector._donde_esta_el_programa() == str(falso)
+
+
+def test_SI_NO_ESTA_EN_NINGUN_LADO_SE_DICE_QUE_FALTA_EL_PROGRAMA(monkeypatch):
+    """El caso que pasó de verdad: instalado en el despliegue y no encontrado
+    por el proceso, que se ve igual que no instalado."""
+    monkeypatch.delenv(lector.VARIABLE_DEL_PROGRAMA, raising=False)
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    monkeypatch.setattr(lector, "DONDE_SUELE_ESTAR", ())
+
+    motivo = lector.por_que_no_hay_lector()
+    assert "tesseract" in motivo
+    assert lector.VARIABLE_DEL_PROGRAMA in motivo, (
+        "el mensaje tiene que decir CÓMO arreglarlo, no sólo que está mal")
+    assert not lector.hay_lector()
+
+
+def test_SI_EL_PROGRAMA_ESTA_PERO_NO_CORRE_SE_DICE_DONDE_ESTABA(monkeypatch):
+    """«Está en /usr/bin pero no se pudo ejecutar» y «no está» se arreglan de
+    formas distintas. Un mensaje que los junta no sirve para ninguna."""
+    import pytesseract
+    monkeypatch.setenv(lector.VARIABLE_DEL_PROGRAMA, "/opt/raro/tesseract")
+
+    def no_corre(*a, **k):
+        raise OSError("permiso denegado")
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", no_corre)
+
+    motivo = lector.por_que_no_hay_lector()
+    assert "/opt/raro/tesseract" in motivo
+    assert "permiso denegado" in motivo
+
+
+def test_CUANDO_EL_LECTOR_ANDA_NO_HAY_MOTIVO_QUE_MOSTRAR():
+    """Si devolviera un texto con el lector funcionando, la pantalla mostraría
+    una advertencia permanente que nadie volvería a leer."""
+    if not lector.hay_lector():
+        pytest.skip("este entorno no tiene tesseract; el caso se prueba en el otro")
+    assert lector.por_que_no_hay_lector() == ""
+
+
+def test_LOS_IDIOMAS_SE_PUEDEN_PREGUNTAR_SIN_ROMPER(monkeypatch):
+    """Distinguir «no hay lector» de «hay lector sin español» es lo que evita
+    la siguiente vuelta de despliegue a ciegas."""
+    import pytesseract
+    monkeypatch.setattr(pytesseract, "get_languages", lambda config="": ["eng", "spa"])
+    assert lector.idiomas_instalados() == ["eng", "spa"]
+
+
+def test_SI_NO_SE_PUEDEN_PREGUNTAR_LOS_IDIOMAS_NO_SE_LEVANTA(monkeypatch):
+    """Es un dato de diagnóstico: que falte no puede tumbar la pantalla."""
+    import pytesseract
+
+    def revienta(*a, **k):
+        raise OSError("no está")
+    monkeypatch.setattr(pytesseract, "get_languages", revienta)
+    assert lector.idiomas_instalados() == []

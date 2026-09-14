@@ -2,7 +2,23 @@
 NODE_VERSION = "20"
 
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "nodejs_20", "tesseract"]
+nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
+
+# EL LECTOR DE COMPROBANTES VA POR APT, NO POR NIX, Y ES A PROPOSITO.
+#
+#   La primera versión lo pedía como `nixPkgs = [..., "tesseract"]` y en el
+#   servidor NO QUEDO: la pantalla de comprobantes decía «el servidor no tiene
+#   el lector» y todas las fotos había que asignarlas a mano.
+#
+#   Por apt aterriza en /usr/bin, que está en el PATH del proceso que sirve la
+#   aplicación sin depender de cómo quedó armado el perfil de nix. Y el idioma
+#   se pide APARTE y explícito: los comprobantes están en español, y un lector
+#   sin `spa` lee peor las palabras aunque los números salgan igual.
+#
+#   Si aun así no aparece, la aplicación lo dice con el motivo en la pantalla
+#   de comprobantes, y se puede apuntar a mano con la variable TESSERACT_CMD
+#   sin tocar este archivo.
+aptPkgs = ["tesseract-ocr", "tesseract-ocr-spa"]
 
 [phases.build]
 cmds = [

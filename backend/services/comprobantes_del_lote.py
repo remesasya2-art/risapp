@@ -477,6 +477,7 @@ async def listar(db, lote_id: str) -> dict:
     if not lote:
         raise ValueError("Ese lote no existe")
     ordenes = lote.get("ordenes") or []
+    por_que_no = lector.por_que_no_hay_lector()
     comprobantes = [_para_la_pantalla(c, ordenes)
                     for c in (lote.get("comprobantes") or [])]
     con_foto = {c["orden_id"] for c in comprobantes if c["orden_id"]}
@@ -484,7 +485,12 @@ async def listar(db, lote_id: str) -> dict:
         "lote_id": lote["lote_id"],
         "numero": lote.get("numero"),
         "estado": lote.get("estado"),
-        "hay_lector": lector.hay_lector(),
+        # El motivo va junto al sí/no. Cuando falla, «no está instalado» era
+        # una conjetura: podía ser eso, o que estuviera en otro lado, o que le
+        # faltara el idioma. Lo lee un super administrador, no un cliente.
+        "hay_lector": not por_que_no,
+        "por_que_no_hay_lector": por_que_no,
+        "idiomas_del_lector": lector.idiomas_instalados() if not por_que_no else [],
         "comprobantes": comprobantes,
         "ordenes": [{"orden_id": o.get("orden_id"),
                      "display_id": o.get("display_id"),
