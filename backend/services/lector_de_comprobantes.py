@@ -132,15 +132,115 @@ def sin_adornos(texto) -> str:
     return re.sub(r"[^A-Z0-9 ]", " ", sin_tildes.upper())
 
 
-def hay_lector() -> bool:
-    """¿Está instalado `tesseract`? No levanta: es para decidir, no para cortar."""
+# Dónde buscar el programa cuando no está en el PATH del proceso.
+#
+# POR QUE HACE FALTA BUSCARLO
+#
+#     `tesseract` se instala desde la configuración del despliegue, y dónde
+#     aterriza depende de cómo se construyó la imagen: `apt` lo deja en
+#     /usr/bin, `nix` en /nix/store con un enlace que no siempre queda en el
+#     PATH del proceso que sirve la aplicación. Instalado y no encontrado se
+#     ve exactamente igual que no instalado, y la primera vez costó una vuelta
+#     entera de despliegue no poder distinguirlos.
+#
+# LA VARIABLE VA PRIMERO, Y ES LA SALIDA SIN TOCAR CODIGO
+#
+#     Si mañana aterriza en un lugar que esta lista no tiene, se pone
+#     `TESSERACT_CMD` en el panel del servidor y anda. Acá configurar nunca
+#     puede exigir editar código y volver a desplegar.
+VARIABLE_DEL_PROGRAMA = "TESSERACT_CMD"
+
+DONDE_SUELE_ESTAR = (
+    "/usr/bin/tesseract",
+    "/usr/local/bin/tesseract",
+    "/bin/tesseract",
+    "/opt/homebrew/bin/tesseract",
+)
+
+
+def _donde_esta_el_programa() -> str:
+    """La ruta del programa: la de la variable, la del PATH, o la que se
+    encuentre en los lugares de siempre. Vacío si no hay ninguna."""
+    import os
+    import shutil
+
+    puesta = (os.environ.get(VARIABLE_DEL_PROGRAMA) or "").strip()
+    if puesta:
+        return puesta
+    encontrado = shutil.which("tesseract")
+    if encontrado:
+        return encontrado
+    for ruta in DONDE_SUELE_ESTAR:
+        if os.path.isfile(ruta) and os.access(ruta, os.X_OK):
+            return ruta
+    return ""
+
+
+def _apuntar_a_donde_este():
+    """Le dice a pytesseract dónde está el programa, si hizo falta buscarlo."""
+    import pytesseract
+
+    ruta = _donde_esta_el_programa()
+    if ruta:
+        pytesseract.pytesseract.tesseract_cmd = ruta
+    return ruta
+
+
+def por_que_no_hay_lector() -> str:
+    """Vacío si el lector anda; si no, POR QUE no anda, en una línea.
+
+    LA DIFERENCIA CON UN BOOLEANO, Y POR QUE VALE LA PENA
+
+        Antes esto era un sí/no, y la pantalla decía «el servidor no tiene el
+        lector instalado» pasara lo que pasara. La primera vez que falló de
+        verdad, ese mensaje era una conjetura: podía ser que el programa no
+        estuviera, que estuviera en otro lado, o que faltara el idioma. Sin
+        saber cuál, arreglarlo son vueltas de despliegue a ciegas.
+
+        El motivo lo lee un super administrador en su panel, no un cliente.
+    """
     try:
         import pytesseract
-        pytesseract.get_tesseract_version()
-        return True
     except Exception as e:
-        logger.info("lector_de_comprobantes: no hay tesseract disponible (%s)", e)
+        return (f"Falta la librería pytesseract en el servidor ({e}). "
+                "Tiene que estar en backend/requirements.txt.")
+
+    ruta = _apuntar_a_donde_este()
+    if not ruta:
+        return ("No se encuentra el programa «tesseract» en el servidor. "
+                f"Instalalo en el despliegue, o poné la variable "
+                f"{VARIABLE_DEL_PROGRAMA} con su ruta.")
+
+    try:
+        pytesseract.get_tesseract_version()
+    except Exception as e:
+        return f"El programa está en {ruta} pero no se pudo ejecutar: {e}"
+
+    return ""
+
+
+def idiomas_instalados() -> list:
+    """Los idiomas que tiene el lector. Vacío si no se pudo preguntar.
+
+    Sirve para distinguir «no hay lector» de «hay lector pero le falta el
+    español», que se arreglan de formas distintas y que sin esto se ven igual.
+    """
+    try:
+        import pytesseract
+        _apuntar_a_donde_este()
+        return sorted(pytesseract.get_languages(config=""))
+    except Exception as e:
+        logger.info("lector_de_comprobantes: no se pudieron listar los idiomas (%s)", e)
+        return []
+
+
+def hay_lector() -> bool:
+    """¿Se puede leer una foto en este servidor? No levanta nunca."""
+    motivo = por_que_no_hay_lector()
+    if motivo:
+        logger.info("lector_de_comprobantes: sin lector — %s", motivo)
         return False
+    return True
 
 
 def _derecha(imagen):
@@ -199,6 +299,9 @@ def _un_solo_hilo_por_lectura():
 def _texto_de(imagen, idiomas: str) -> str:
     import pytesseract
     _un_solo_hilo_por_lectura()
+    # Si el programa no está en el PATH, acá se le dice dónde está. Sin esto,
+    # `hay_lector()` podría decir que sí —porque buscó— y la lectura fallar.
+    _apuntar_a_donde_este()
     try:
         # El corte por tiempo mata el proceso. Sin él, una foto que `tesseract`
         # no puede digerir deja un proceso comiendo un procesador para siempre,
@@ -227,11 +330,9 @@ def texto_de_la_imagen(datos: bytes) -> str:
 
     from PIL import Image
 
-    try:
-        import pytesseract
-        pytesseract.get_tesseract_version()
-    except Exception as e:
-        raise SinLector(str(e))
+    motivo = por_que_no_hay_lector()
+    if motivo:
+        raise SinLector(motivo)
 
     with Image.open(io.BytesIO(datos)) as abierta:
         grande = _derecha(abierta.convert("L"))
