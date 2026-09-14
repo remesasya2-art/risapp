@@ -20,7 +20,7 @@ from models.user import User, UserSession
 from models.requests import (
     SetPasswordRequest, LoginWithPasswordRequest, RegisterUserRequest,
     VerifyEmailCodeRequest, ResendVerificationCodeRequest,
-    ChangePasswordRequest, PedirCodigoDeCambioRequest
+    ChangePasswordRequest, PedirCodigoDeCambioRequest, SetNewPasswordRequest
 )
 from routes.dependencies import get_current_user, set_session_cookie, clear_session_cookie
 from services import codigos, correo, cpf_de_la_cuenta
@@ -642,6 +642,116 @@ async def change_password(request: ChangePasswordRequest, pedido: Request,
 
     return {"message": "Contraseña cambiada exitosamente",
             "sesiones_cerradas": cerradas}
+
+@router.post("/set-new-password")
+async def set_new_password(request: SetNewPasswordRequest, pedido: Request,
+                           current_user: User = Depends(get_current_user)):
+    """La contraseña nueva de quien entró con una temporal puesta por un admin.
+
+    LA RUTA QUE FALTABA, Y LO QUE COSTO QUE FALTARA
+
+        `frontend/src/pages/ForceChangePassword.jsx` la llamaba desde el
+        principio. Nunca existió en el servidor. Así que TODA persona a la que
+        un administrador le reseteó la contraseña quedó encerrada: la
+        aplicación la manda a esa pantalla desde cualquier lado mientras tenga
+        la marca puesta, y esa pantalla era la única que no funcionaba. El
+        único botón que le servía era «Cerrar sesión».
+
+        El cartel decía «Not Found» —el `detail` de una dirección que no
+        existe— y antes decía «Method Not Allowed», que es lo mismo de
+        inútil. Ninguno de los dos se parece a «esta función no está hecha»,
+        que es lo que pasaba.
+
+    POR QUE NO PIDE LA CONTRASEÑA ACTUAL NI UN CODIGO
+
+        Las dos comprobaciones que sí hace `/change-password` sobran acá y
+        estorban: la actual es la temporal que la persona acaba de tipear para
+        entrar, y el código al correo es una segunda vuelta para quien ya pasó
+        por el reseteo.
+
+        LO QUE AUTORIZA A SALTARSELAS ES LA MARCA, Y NADA MAS. Sin
+        `must_change_password`, esta ruta sería una forma de cambiar la
+        contraseña de cualquier cuenta cuya sesión alguien haya conseguido,
+        sin saber la actual y sin pasar por el correo — o sea, de quedarse con
+        la cuenta para siempre. Por eso la marca se comprueba ANTES que nada y
+        se baja en la MISMA escritura que guarda la contraseña: entre mirarla
+        y borrarla no queda ventana para usar la ruta dos veces.
+
+    LA NUEVA NO PUEDE SER LA TEMPORAL
+
+        Dejarla pasar sería dar el trámite por hecho con la contraseña que el
+        administrador conoce, que es exactamente lo que este paso viene a
+        deshacer.
+    """
+    from routes.security_2fa import frenar
+
+    # 10/15min. La ruta no adivina nada —no hay secreto que probar acá— pero
+    # cada llamada hashea una contraseña, que cuesta a propósito. Diez es
+    # holgado para alguien que se equivoca tipeando y corta el abuso.
+    frenar(pedido, "auth.set_new_password", "10/15minutes")
+
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if not user.get("must_change_password"):
+        # No se le cuenta al cliente que existe una marca: para quien llegó
+        # acá sin que le corresponda, esto no es un camino.
+        logger.warning("set-new-password: %s la pidió sin tener la marca puesta",
+                       current_user.user_id)
+        raise HTTPException(
+            status_code=403,
+            detail="Tu cuenta no tiene un cambio de contraseña pendiente. "
+                   "Para cambiarla, entrá a tu perfil.")
+
+    if request.new_password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+
+    es_valida, mensaje = validate_password(request.new_password)
+    if not es_valida:
+        raise HTTPException(status_code=400, detail=mensaje)
+
+    if verify_password(request.new_password, user.get("password_hash", "")):
+        raise HTTPException(
+            status_code=400,
+            detail="Esa es la contraseña temporal que te dieron. Elegí una "
+                   "distinta, que sólo sepas vos.")
+
+    # La marca va en el FILTRO, no sólo en el `$set`: si entre la lectura de
+    # arriba y esta escritura la cuenta dejó de tener el cambio pendiente
+    # —otra pestaña lo hizo, un admin la tocó— acá no se escribe nada.
+    resultado = await db.users.update_one(
+        {"user_id": current_user.user_id, "must_change_password": True},
+        {"$set": {"password_hash": hash_password(request.new_password),
+                  "password_set": True,
+                  "must_change_password": False,
+                  "password_cambiada_en": datetime.now(timezone.utc)}},
+    )
+    if getattr(resultado, "modified_count", 0) != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Tu contraseña ya se cambió desde otro lado. Volvé a "
+                   "iniciar sesión con la nueva.")
+
+    # Este camino existe porque alguien avisó que le tomaron la cuenta. Si las
+    # otras sesiones sobrevivieran, el cambio no serviría de nada. Se conserva
+    # la de esta pantalla: echar a la persona justo después de hacer las cosas
+    # bien se lee como un error.
+    cerradas = await sesiones.cerrar_todas(
+        db, current_user.user_id,
+        excepto=sesiones.token_del_pedido(pedido),
+        motivo="cambio obligado tras un reseteo del administrador")
+
+    try:
+        await notify_password_change(email=user["email"],
+                                     user_name=user.get("name", "Usuario"))
+    except Exception as e:
+        logger.warning(f"set-new-password: no salió el aviso por correo: {e}")
+
+    logger.info("set-new-password: %s eligió su contraseña; %s sesión(es) cerradas",
+                current_user.user_id, cerradas)
+    return {"message": "Contraseña actualizada", "sesiones_cerradas": cerradas}
+
 
 @router.get("/password-status")
 async def get_password_status(current_user: User = Depends(get_current_user)):

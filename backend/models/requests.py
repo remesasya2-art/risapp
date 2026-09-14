@@ -74,6 +74,27 @@ class ChangePasswordRequest(BaseModel):
     # El código que llegó al correo. Ver `routes/auth.change_password`.
     codigo: str
 
+class SetNewPasswordRequest(BaseModel):
+    """La contraseña que elige quien llega obligado a cambiarla.
+
+    NO PIDE LA ACTUAL, Y ESA ES LA DIFERENCIA CON `ChangePasswordRequest`
+
+        Quien llega a esta pantalla tiene una contraseña temporal que le puso
+        un administrador —porque avisó que le tomaron la cuenta, o porque
+        perdió la suya—. Pedirle la actual sería pedirle que copie de nuevo lo
+        que acaba de tipear para entrar, y pedirle un código al correo sería
+        una segunda vuelta para alguien que ya demostró que entra a esa
+        casilla si el reseteo llegó por ahí.
+
+        Lo que autoriza a saltarse las dos comprobaciones es una sola cosa: que
+        la cuenta tenga puesta la marca `must_change_password`. Sin esa marca
+        esta ruta no hace nada, y el motivo está escrito en
+        `routes/auth.set_new_password`.
+    """
+    new_password: str
+    confirm_password: str
+
+
 class UpdatePhoneRequest(BaseModel):
     email: str
     phone: str
