@@ -136,6 +136,33 @@ def test_ordenes_por_procesar_junta_los_tres_flujos(con_trabajo):
         "2 retiros + 1 remesa de Bitcoin pagada + 1 recarga VES.")
 
 
+def test_LO_QUE_ESTA_EN_UN_LOTE_NO_SE_CUENTA_DOS_VECES(con_trabajo):
+    """La pestaña y la lista tienen que decir lo mismo.
+
+    Cuando se arma un lote, sus órdenes salen de la cola de pendientes. Si el
+    contador las siguiera contando, la pestaña diría diez y la pantalla
+    mostraría cuatro — y un número que discrepa de lo que hay abajo es peor
+    que ninguno, que es el motivo por el que este módulo existe.
+    """
+    antes = corre(pendientes.contar_para(JEFA))["ordenes"]
+
+    # Se mete UN retiro y UNA remesa en un lote.
+    corre(con_trabajo.transactions.update_one(
+        {"transaction_id": "t1"}, {"$set": {"estado_admin": "en_lote"}}))
+    corre(con_trabajo.btc_remesas.update_one(
+        {"remesa_id": "b1"}, {"$set": {"estado_admin": "en_lote"}}))
+
+    despues = corre(pendientes.contar_para(JEFA))["ordenes"]
+    assert despues == antes - 2, f"la pestaña sigue contando lo que ya está en un lote ({antes} → {despues})"
+
+
+def test_una_recarga_en_un_lote_tampoco_se_cuenta(con_trabajo):
+    antes = corre(pendientes.contar_para(JEFA))["recharges"]
+    corre(con_trabajo.transactions.update_one(
+        {"transaction_id": "t5"}, {"$set": {"estado_admin": "en_lote"}}))
+    assert corre(pendientes.contar_para(JEFA))["recharges"] == antes - 1
+
+
 def test_sin_trabajo_los_numeros_son_cero(base):
     n = corre(pendientes.contar_para(JEFA))
     assert set(n) == {"ordenes", "diferencias", "withdrawals", "recharges",

@@ -3,11 +3,12 @@ Admin routes - User management, Withdrawals, Rates, KYC
 """
 import asyncio
 import os
+import re
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from typing import Optional
+from typing import List, Optional
 
 from database import db
 from services import sesiones
@@ -17,12 +18,12 @@ from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
                                  get_super_admin, get_crm_user)
 from services.notifications import create_notification, ROLES_DEL_PERSONAL
 from services import pendientes as pendientes_svc
-from services import auditoria, kyc_quota
+from services import auditoria, comprobantes_del_lote, kyc_quota, lotes_de_pago
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -1080,8 +1081,12 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 
     # 1) RIS → VES y RIS → Reais (retiros): el admin paga y sube comprobante.
     #    Se distinguen por currency_output (VES vs BRL).
+    # Las que están en un lote salen de la cola: ya las tomó alguien para
+    # pagarlas. Se las ve en el panel de lotes abiertos, no acá — si no
+    # estuvieran en ningún lado, para el operador habrían desaparecido.
     async for tx in db.transactions.find(
-        {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True}}
+        {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True},
+         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
     ).sort("created_at", 1):
         u = await _user(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
@@ -1095,6 +1100,11 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula") or b.get("id_document", ""),
                 "banco": b.get("bank") or b.get("bank_code", ""),
+                # El CODIGO aparte del nombre. El campo `banco` de arriba se
+                # queda con lo primero que encuentre, y en una transferencia eso
+                # es el nombre: el código se perdía. Para agrupar pagos por banco
+                # y para el formulario de pago móvil hace falta el código.
+                "banco_codigo": b.get("bank_code") or "",
                 "telefono": b.get("phone") or b.get("phone_number", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
@@ -1117,6 +1127,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula") or b.get("id_document", ""),
                 "banco": b.get("bank") or b.get("bank_code", ""),
+                "banco_codigo": b.get("bank_code") or "",
                 "telefono": b.get("phone") or b.get("phone_number", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
@@ -1141,7 +1152,9 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
         })
 
     # 2) BTC → VES (remesas pagadas): el admin paga VES y sube comprobante
-    async for r in db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1):
+    async for r in db.btc_remesas.find(
+        {"estado": "pagado", "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}},
+        {"_id": 0}).sort("pagado_en", 1):
         u = await _user(r.get("user_id"))
         b = r.get("beneficiario_data", {}) or {}
         ordenes.append({
@@ -1159,6 +1172,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula", ""),
                 "banco": b.get("bank", ""),
+                "banco_codigo": b.get("bank_code") or "",
                 "telefono": b.get("phone", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type", ""),
@@ -1171,7 +1185,8 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 
     # 3) VES → RIS (recargas): el admin REVISA el comprobante del usuario y aprueba
     async for tx in db.transactions.find(
-        {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True}}
+        {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True},
+         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
     ).sort("created_at", 1):
         u = await _user(tx.get("user_id"))
         ordenes.append({
@@ -1195,6 +1210,185 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     # Más antiguas primero (orden cronológico robusto ante created_at None)
     ordenes.sort(key=lambda o: str(o.get("created_at") or ""))
     return {"ordenes": ordenes, "total": len(ordenes)}
+
+# ============== EL ARCHIVO DE PAGOS DE UN LOTE ==============
+#
+# Para pagar un grupo de órdenes en bolívares hay que pasar los datos de cada
+# beneficiario a la banca en línea. Hoy eso se hace copiando de la pantalla, de
+# a un campo por vez: con once órdenes son cuarenta y cuatro copiados, y cada
+# uno es una chance de pegar el monto de una fila en la cuenta de otra.
+#
+# Esta ruta arma ese texto de una sola vez, agrupado por banco y numerado.
+# SOLO LEE: no cambia el estado de ninguna orden, no toca plata, no marca nada
+# como pagado. Bajar el archivo y pagar son dos cosas distintas, y quien baja
+# el archivo todavía no pagó nada.
+
+class ArmarLoteRequest(BaseModel):
+    orden_ids: List[str] = Field(..., min_length=1, max_length=lotes_de_pago.MAXIMO)
+    # El código de cuatro dígitos del banco desde el que se paga ESTE lote.
+    # Es un dato del lote y no una constante: la misma orden va a «mismo banco»
+    # o a «otros bancos» según desde dónde se pague ese día.
+    banco_pagador: str
+
+
+@router.post("/lotes")
+async def armar_lote(
+    cuerpo: ArmarLoteRequest,
+    request: Request,
+    admin: User = Depends(get_super_admin),
+):
+    """Arma un lote con estas órdenes y devuelve su archivo.
+
+    Las órdenes salen de la MISMA consulta que alimenta la pantalla, filtradas
+    por los identificadores que mandó el operador. Que sea la misma fuente no
+    es comodidad: si el lote armara su propia lista, podría incluir una orden
+    que en la pantalla ya no está —porque otro operador la tomó hace diez
+    segundos— y esa orden se pagaría dos veces.
+
+    Armar un lote NO mueve plata ni marca nada como pagado: reserva las
+    órdenes y guarda el papel que se va a pegar en el banco.
+    """
+    disponibles = (await get_ordenes_pendientes(admin=admin)).get("ordenes", [])
+    por_id = {o.get("orden_id"): o for o in disponibles}
+
+    elegidas, ya_no_estan = [], []
+    for oid in cuerpo.orden_ids:
+        if oid in por_id:
+            elegidas.append(por_id[oid])
+        else:
+            ya_no_estan.append(oid)
+
+    try:
+        lote = await lotes_de_pago.armar(
+            db, elegidas, banco_pagador=cuerpo.banco_pagador,
+            quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+    # Las que se cayeron entre que la pantalla cargó y el operador pulsó el
+    # botón vuelven nombradas. Sacarlas en silencio sería entregar un archivo
+    # con menos pagos de los que la persona creyó pedir.
+    lote["ya_no_estan"] = ya_no_estan
+    return lote
+
+
+@router.get("/lotes")
+async def listar_lotes_abiertos(admin: User = Depends(get_super_admin)):
+    """Los lotes que todavía están en la calle, con sus órdenes reservadas."""
+    return {"lotes": await lotes_de_pago.abiertos(db)}
+
+
+@router.get("/lotes/{lote_id}/archivo")
+async def archivo_del_lote(lote_id: str, admin: User = Depends(get_super_admin)):
+    """El archivo GUARDADO de un lote, para volver a bajarlo idéntico.
+
+    No se vuelve a generar: entre que se bajó y ahora pudo cambiar la tasa o
+    corregirse la cuenta de un beneficiario, y entonces el segundo archivo no
+    sería el que la persona ya pegó en el banco.
+    """
+    try:
+        return await lotes_de_pago.archivo(db, lote_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/lotes/{lote_id}/cancelar")
+async def cancelar_lote(lote_id: str, request: Request,
+                        admin: User = Depends(get_super_admin)):
+    """Deshace un lote: sus órdenes vuelven a la cola de pendientes."""
+    try:
+        return await lotes_de_pago.cancelar(db, lote_id, quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+# ============== LOS COMPROBANTES DEL LOTE, DE UNA SOLA CARGA ==============
+#
+# El agente paga las once órdenes en la banca en línea y vuelve con once
+# capturas en el teléfono. Antes tenía que abrir orden por orden y buscar cuál
+# de las once era la de ésa — y el único dato a mano para distinguirlas era el
+# monto, que es justo el que se repite cuando dos personas cobran lo mismo.
+#
+# Acá se suben todas juntas y el sistema dice de quién es cada una. Lo que no
+# puede decir con certeza queda marcado y lo resuelve una persona: ver
+# `services/comprobantes_del_lote.py`, que explica por qué el monto nunca
+# adjudica y por qué ante la duda no se elige.
+#
+# Esto NO aprueba ni acredita nada. Colgar la foto y dar la orden por pagada
+# son dos decisiones distintas.
+
+class ComprobantesRequest(BaseModel):
+    imagenes: List[str] = Field(
+        ..., min_length=1, max_length=comprobantes_del_lote.MAXIMO_POR_CARGA)
+
+
+class AsignarComprobanteRequest(BaseModel):
+    # `None` suelta la foto: la saca de la orden que la tenía y la deja sin
+    # dueño, para volver a asignarla.
+    orden_id: Optional[str] = None
+
+
+@router.post("/lotes/{lote_id}/comprobantes")
+async def cargar_comprobantes_del_lote(
+    lote_id: str,
+    cuerpo: ComprobantesRequest,
+    request: Request,
+    admin: User = Depends(get_super_admin),
+):
+    """Sube varias fotos de una vez y las reparte entre las órdenes del lote."""
+    try:
+        return await comprobantes_del_lote.cargar(
+            db, lote_id, cuerpo.imagenes, quien=admin, request=request)
+    except ImagenInvalida as e:
+        raise HTTPException(400, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.get("/lotes/{lote_id}/comprobantes")
+async def ver_comprobantes_del_lote(lote_id: str,
+                                    admin: User = Depends(get_super_admin)):
+    """La tabla de fotos del lote y las órdenes a las que se pueden asignar."""
+    try:
+        return await comprobantes_del_lote.listar(db, lote_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/lotes/{lote_id}/comprobantes/{comprobante_id}/imagen")
+async def ver_una_foto_del_lote(lote_id: str, comprobante_id: str,
+                                admin: User = Depends(get_super_admin)):
+    """Una foto concreta. Se pide de a una: once en base64 son decenas de megas."""
+    try:
+        return {"imagen": await comprobantes_del_lote.imagen(
+            db, lote_id, comprobante_id)}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/asignar")
+async def asignar_comprobante_del_lote(
+    lote_id: str, comprobante_id: str,
+    cuerpo: AsignarComprobanteRequest,
+    request: Request,
+    admin: User = Depends(get_super_admin),
+):
+    """Cambia a mano de qué orden es una foto, o la suelta."""
+    try:
+        return await comprobantes_del_lote.asignar(
+            db, lote_id, comprobante_id, cuerpo.orden_id,
+            quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.get("/ordenes/bancos-para-pagar")
+async def bancos_para_pagar(admin: User = Depends(get_super_admin)):
+    """La lista de bancos, para elegir desde cuál se paga el lote."""
+    from services import bancos_venezuela
+    return {"bancos": [{"codigo": c, "nombre": n}
+                       for c, n in sorted(bancos_venezuela.BANCOS.items())]}
+
 
 # ============== ENVIOS CRIPTO CON PAGO INCOMPLETO ==============
 # Ordenes que llegaron con menos dinero del pedido y que el sistema no pudo

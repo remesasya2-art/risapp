@@ -44,14 +44,21 @@ logger = logging.getLogger(__name__)
 SOLO_SUPER = object()
 
 
+# Las que ya están reservadas en un lote de pagos salen de la cuenta, igual que
+# salen de la lista: si el contador las siguiera contando, la pestaña diría
+# diez y la pantalla mostraría cuatro. Un número que discrepa de lo que hay
+# abajo es peor que ninguno — es el motivo por el que este módulo existe.
+_FUERA_DE_UN_LOTE = {"estado_admin": {"$ne": "en_lote"}}
+
+
 def _retiros():
     return {"type": "withdrawal", "status": "pending",
-            "hidden_from_admin": {"$ne": True}}
+            "hidden_from_admin": {"$ne": True}, **_FUERA_DE_UN_LOTE}
 
 
 def _recargas_ves():
     return {"type": "recharge_ves", "status": "pending",
-            "hidden_from_admin": {"$ne": True}}
+            "hidden_from_admin": {"$ne": True}, **_FUERA_DE_UN_LOTE}
 
 
 async def _contar(coleccion, filtro) -> int:
@@ -68,7 +75,7 @@ async def _ordenes_por_procesar() -> int:
     """
     partes = await asyncio.gather(
         _contar("transactions", _retiros()),
-        _contar("btc_remesas", {"estado": "pagado"}),
+        _contar("btc_remesas", {"estado": "pagado", **_FUERA_DE_UN_LOTE}),
         _contar("transactions", _recargas_ves()),
     )
     return sum(partes)

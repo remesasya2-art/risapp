@@ -5,7 +5,8 @@ import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock } from 'lucide-react';
+import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2, Images } from 'lucide-react';
+import ComprobantesDelLote from './ComprobantesDelLote';
 
 // ---- Paleta profesional / corporativa (plana, sin sombras decorativas) ----
 const C = {
@@ -32,6 +33,11 @@ const FLUJO_STYLE = {
   ves_ris: { bg: '#ECFDF5', fg: '#047857' },
   ris_reais: { bg: '#FEFCE8', fg: '#A16207' },
 };
+
+// Los flujos que terminan en un pago en BOLIVARES a una cuenta venezolana. Son
+// los únicos que pueden ir al archivo que se pega en la banca en línea: un PIX
+// a Brasil o una recarga que sólo hay que aprobar no tienen nada que pegar ahí.
+const PAGA_BOLIVARES = new Set(['ris_ves', 'btc_ves', 'usdt_ves', 'usdc_ves']);
 
 const FILTROS = [
   { key: 'all', label: 'Todas' },
@@ -75,6 +81,15 @@ export default function OrdenesPorProcesar() {
   const [filtro, setFiltro] = useState('all');
   const [nuevosIds, setNuevosIds] = useState([]);
   const [verImg, setVerImg] = useState(null);
+  const [elegidas, setElegidas] = useState(() => new Set());
+  const [bancoPagador, setBancoPagador] = useState('');
+  const [bancos, setBancos] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [bajando, setBajando] = useState(false);
+  const [lotes, setLotes] = useState([]);
+  // Cuál lote tiene abierto el panel de comprobantes. Uno por vez: la
+  // tabla es ancha y dos abiertas obligan a buscar cuál es cuál.
+  const [verComprobantesDe, setVerComprobantesDe] = useState(null);
   const prevIdsRef = useRef(null);
 
   const idDe = (o) => `${o.flujo}-${o.orden_id}`;
@@ -97,6 +112,13 @@ export default function OrdenesPorProcesar() {
       }
       prevIdsRef.current = currentIds;
       setOrdenes(lista);
+      // Los lotes abiertos se traen con las órdenes, no aparte: sus órdenes
+      // salieron de esta misma cola, y mostrar una sin la otra deja al
+      // operador con la sensación de que se perdieron.
+      try {
+        const { data } = await api.get('/admin/lotes');
+        setLotes(data?.lotes || []);
+      } catch { /* la cola se muestra igual aunque los lotes fallen */ }
     } catch (e) {
       if (!opts.silent) toast.error('No se pudieron cargar las órdenes');
     } finally {
@@ -109,6 +131,94 @@ export default function OrdenesPorProcesar() {
     const t = setInterval(() => cargar({ silent: true }), 15000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    api.get('/admin/ordenes/bancos-para-pagar')
+      .then(({ data }) => setBancos(data?.bancos || []))
+      .catch(() => setBancos([]));
+  }, []);
+
+  // ---- El archivo de pagos del lote ----
+  const alternar = (o) => {
+    setElegidas((prev) => {
+      const copia = new Set(prev);
+      if (copia.has(o.orden_id)) copia.delete(o.orden_id); else copia.add(o.orden_id);
+      return copia;
+    });
+  };
+
+  const seleccionables = visiblesQuePaganBolivares();
+  function visiblesQuePaganBolivares() {
+    const lista = filtro === 'all' ? ordenes : ordenes.filter((o) => o.flujo === filtro);
+    return lista.filter((o) => PAGA_BOLIVARES.has(o.flujo));
+  }
+
+  const todasElegidas = seleccionables.length > 0
+    && seleccionables.every((o) => elegidas.has(o.orden_id));
+
+  const alternarTodas = () => {
+    setElegidas((prev) => {
+      const copia = new Set(prev);
+      seleccionables.forEach((o) => (todasElegidas ? copia.delete(o.orden_id) : copia.add(o.orden_id)));
+      return copia;
+    });
+  };
+
+  const guardarComoArchivo = (data) => {
+    // El archivo se arma en el navegador a partir del texto que manda el
+    // servidor. Así el servidor no tiene que guardar nada en disco ni servir
+    // un archivo, y el texto viaja por la misma ruta autenticada que todo
+    // lo demás.
+    const url = URL.createObjectURL(new Blob([data.texto], { type: 'text/plain;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data.numero || 'lote'}-${data.banco_pagador?.codigo || ''}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const bajarDeNuevo = async (lote) => {
+    try {
+      const { data } = await api.get(`/admin/lotes/${lote.lote_id}/archivo`);
+      guardarComoArchivo(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo bajar el archivo');
+    }
+  };
+
+  const cancelarLote = async (lote) => {
+    if (!await confirmar({
+      titulo: `¿Cancelar el lote ${lote.numero}?`,
+      detalle: `Sus ${lote.total} orden(es) vuelven a la cola de pendientes. `
+        + 'Si ya pagaste alguna, NO la canceles: cancelar no deshace un pago.',
+      accion: 'Cancelar el lote',
+      cancelar: 'Dejarlo como está',
+      tono: 'peligro',
+    })) return;
+    try {
+      const { data } = await api.post(`/admin/lotes/${lote.lote_id}/cancelar`);
+      toast.success(`${data.devueltas} orden(es) volvieron a la cola`);
+      await cargar({ fromAction: true });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo cancelar el lote');
+    }
+  };
+
+  const bajarArchivo = async () => {
+    if (!bancoPagador) { toast.error('Elegí desde qué banco vas a pagar'); return; }
+    setBajando(true);
+    try {
+      const { data } = await api.post('/admin/lotes', {
+        orden_ids: [...elegidas], banco_pagador: bancoPagador,
+      });
+      guardarComoArchivo(data);
+      setResumen(data);
+      setElegidas(new Set());
+      await cargar({ fromAction: true });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo armar el lote');
+    } finally { setBajando(false); }
+  };
 
   const onSelectComprobante = (ordenId, file) => {
     if (!file) return;
@@ -376,6 +486,19 @@ export default function OrdenesPorProcesar() {
       <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '12px 14px', border: '1px solid ' + C.borderLight }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
+            {/* Sólo las que terminan en un pago en bolívares llevan casilla. En
+                el resto no hay casilla, en vez de una apagada: una casilla que
+                no se puede marcar es una pregunta sobre por qué, cada vez que
+                alguien la mira. */}
+            {PAGA_BOLIVARES.has(o.flujo) && (
+              <input
+                type="checkbox"
+                checked={elegidas.has(o.orden_id)}
+                onChange={() => alternar(o)}
+                title="Incluir en el archivo de pagos"
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: C.primary }}
+              />
+            )}
             <span style={badge(st)}>{o.flujo_label}</span>
             <span style={{ fontSize: '13px', color: '#374151' }}>
               {fmt(o.origen?.valor)} {o.origen?.unidad} <span style={{ color: C.faint }}>→</span>{' '}
@@ -421,6 +544,155 @@ export default function OrdenesPorProcesar() {
           <button onClick={() => cargar()} style={btnGhost(false)}><RefreshCw size={15} /> Actualizar</button>
         </div>
       </div>
+
+      {lotes.length > 0 && (
+        <div style={{ marginBottom: '12px' }}>
+          {/* Estos lotes tienen órdenes reservadas que ya NO están en la lista
+              de abajo. Si no se vieran acá, para el operador habrían
+              desaparecido — y volvería a armar el lote de las mismas. */}
+          <div style={{ fontSize: '12px', fontWeight: 700, color: C.soft, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+            Lotes en la calle ({lotes.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {lotes.map((l) => (
+              <div key={l.lote_id} style={{
+                display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+                padding: '9px 12px', borderRadius: '9px', backgroundColor: C.amberBg,
+                border: '1px solid ' + C.amber + '33',
+              }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: C.amber, fontSize: '13px' }}>
+                  <Package size={14} /> {l.numero}
+                </span>
+                <span style={{ fontSize: '13px', color: '#374151' }}>
+                  <b>{l.total}</b> orden(es) · {l.banco_pagador?.nombre}
+                </span>
+                <span style={{ fontSize: '12px', color: C.soft }}>
+                  {l.creado_por_nombre} · {formatDate(l.creado_en)}
+                </span>
+                {l.sin_datos?.length > 0 && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: C.red }}>
+                    <AlertTriangle size={13} /> {l.sin_datos.length} sin datos
+                  </span>
+                )}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                  <button onClick={() => bajarDeNuevo(l)} style={chip} title="Bajar otra vez el mismo archivo">
+                    <Download size={13} /> Archivo
+                  </button>
+                  <button
+                    onClick={() => setVerComprobantesDe(
+                      verComprobantesDe?.lote_id === l.lote_id ? null : l)}
+                    style={{ ...chip, ...(verComprobantesDe?.lote_id === l.lote_id
+                      ? { color: C.primary, borderColor: C.primary } : {}) }}
+                    title="Subir todos los comprobantes de este lote de una vez">
+                    <Images size={13} /> Comprobantes
+                  </button>
+                  <button onClick={() => cancelarLote(l)} style={{ ...chip, color: C.red, borderColor: C.red + '55' }}
+                    title="Devolver sus órdenes a la cola">
+                    <Undo2 size={13} /> Cancelar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {verComprobantesDe && (
+        <ComprobantesDelLote
+          lote={verComprobantesDe}
+          onCerrar={() => setVerComprobantesDe(null)}
+        />
+      )}
+
+      {seleccionables.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+          padding: '10px 12px', marginBottom: '12px', borderRadius: '9px',
+          border: '1px solid ' + C.border, backgroundColor: C.bgSubtle,
+        }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+            <input type="checkbox" checked={todasElegidas} onChange={alternarTodas}
+              style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: C.primary }} />
+            Todas las de bolívares ({seleccionables.length})
+          </label>
+          <span style={{ fontSize: '13px', color: elegidas.size ? C.ink : C.faint, fontWeight: elegidas.size ? 700 : 400 }}>
+            {elegidas.size} elegida{elegidas.size === 1 ? '' : 's'}
+          </span>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: C.soft }}>
+            Pago desde
+            <select value={bancoPagador} onChange={(e) => setBancoPagador(e.target.value)}
+              style={{ padding: '6px 8px', borderRadius: '7px', border: '1px solid ' + C.border, fontSize: '13px', backgroundColor: '#fff' }}>
+              <option value="">elegí el banco…</option>
+              {bancos.map((b) => <option key={b.codigo} value={b.codigo}>{b.nombre} · {b.codigo}</option>)}
+            </select>
+          </label>
+          <button onClick={bajarArchivo} disabled={!elegidas.size || !bancoPagador || bajando}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
+              borderRadius: '7px', border: 'none', backgroundColor: C.primary, color: '#fff',
+              fontWeight: 700, fontSize: '13px',
+              cursor: (elegidas.size && bancoPagador && !bajando) ? 'pointer' : 'not-allowed',
+              opacity: (elegidas.size && bancoPagador && !bajando) ? 1 : 0.45,
+            }}>
+            <Download size={14} /> {bajando ? 'Armando…' : 'Armar lote y descargar'}
+          </button>
+          {/* Bajar el archivo NO es pagar. Se dice acá, al lado del botón, y no
+              en una ayuda que nadie abre. */}
+          <span style={{ fontSize: '12px', color: C.faint }}>
+            Reserva las órdenes y guarda el archivo. No marca nada como pagado.
+          </span>
+        </div>
+      )}
+
+      {resumen && (
+        <div style={{
+          padding: '10px 12px', marginBottom: '12px', borderRadius: '9px',
+          border: '1px solid ' + C.border, backgroundColor: '#fff', fontSize: '13px', color: '#374151',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+            <span>
+              Lote <b>{resumen.numero}</b> — {resumen.total} orden(es) para <b>{resumen.banco_pagador?.nombre}</b>:{' '}
+              {resumen.por_seccion?.pago_movil || 0} pago móvil ·{' '}
+              {resumen.por_seccion?.mismo_banco || 0} mismo banco ·{' '}
+              {resumen.por_seccion?.otros_bancos || 0} otros bancos
+            </span>
+            <button onClick={() => setResumen(null)}
+              style={{ border: 'none', background: 'none', color: C.soft, cursor: 'pointer', fontSize: '12px' }}>
+              cerrar
+            </button>
+          </div>
+          {/* Lo que quedó afuera se dice acá y en el archivo. Un archivo con
+              menos pagos de los que se pidieron es un pago que no se hace y que
+              nadie nota hasta que el cliente reclama. */}
+          {resumen.por_seccion?.sin_datos > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '7px', alignItems: 'flex-start', color: C.amber }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                <b>{resumen.por_seccion.sin_datos} orden(es) sin datos completos</b> no se pueden pagar así:{' '}
+                {resumen.sin_datos?.join(', ')}. Están al final del archivo, marcadas.
+              </span>
+            </div>
+          )}
+          {resumen.no_se_pudieron_tomar?.length > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '7px', alignItems: 'flex-start', color: C.amber }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                <b>{resumen.no_se_pudieron_tomar.length} orden(es) ya estaban en otro lote</b>{' '}
+                y quedaron afuera: {resumen.no_se_pudieron_tomar.join(', ')}.
+              </span>
+            </div>
+          )}
+          {resumen.ya_no_estan?.length > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '7px', alignItems: 'flex-start', color: C.amber }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                <b>{resumen.ya_no_estan.length} orden(es) ya no estaban pendientes</b> cuando se armó el
+                archivo y quedaron afuera: {resumen.ya_no_estan.join(', ')}.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
         {FILTROS.map((f) => (
