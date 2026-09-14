@@ -3,11 +3,12 @@ Admin routes - User management, Withdrawals, Rates, KYC
 """
 import asyncio
 import os
+import re
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from typing import Optional
+from typing import List, Optional
 
 from database import db
 from services import sesiones
@@ -17,7 +18,7 @@ from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
                                  get_super_admin, get_crm_user)
 from services.notifications import create_notification, ROLES_DEL_PERSONAL
@@ -1095,6 +1096,11 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula") or b.get("id_document", ""),
                 "banco": b.get("bank") or b.get("bank_code", ""),
+                # El CODIGO aparte del nombre. El campo `banco` de arriba se
+                # queda con lo primero que encuentre, y en una transferencia eso
+                # es el nombre: el código se perdía. Para agrupar pagos por banco
+                # y para el formulario de pago móvil hace falta el código.
+                "banco_codigo": b.get("bank_code") or "",
                 "telefono": b.get("phone") or b.get("phone_number", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
@@ -1117,6 +1123,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula") or b.get("id_document", ""),
                 "banco": b.get("bank") or b.get("bank_code", ""),
+                "banco_codigo": b.get("bank_code") or "",
                 "telefono": b.get("phone") or b.get("phone_number", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type") or tx.get("payment_type", ""),
@@ -1159,6 +1166,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
                 "nombre": b.get("full_name") or b.get("name", ""),
                 "documento": b.get("cedula", ""),
                 "banco": b.get("bank", ""),
+                "banco_codigo": b.get("bank_code") or "",
                 "telefono": b.get("phone", ""),
                 "cuenta": b.get("account_number", ""),
                 "tipo_pago": b.get("payment_type", ""),
@@ -1195,6 +1203,83 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     # Más antiguas primero (orden cronológico robusto ante created_at None)
     ordenes.sort(key=lambda o: str(o.get("created_at") or ""))
     return {"ordenes": ordenes, "total": len(ordenes)}
+
+# ============== EL ARCHIVO DE PAGOS DE UN LOTE ==============
+#
+# Para pagar un grupo de órdenes en bolívares hay que pasar los datos de cada
+# beneficiario a la banca en línea. Hoy eso se hace copiando de la pantalla, de
+# a un campo por vez: con once órdenes son cuarenta y cuatro copiados, y cada
+# uno es una chance de pegar el monto de una fila en la cuenta de otra.
+#
+# Esta ruta arma ese texto de una sola vez, agrupado por banco y numerado.
+# SOLO LEE: no cambia el estado de ninguna orden, no toca plata, no marca nada
+# como pagado. Bajar el archivo y pagar son dos cosas distintas, y quien baja
+# el archivo todavía no pagó nada.
+
+class ArchivoDePagosRequest(BaseModel):
+    orden_ids: List[str] = Field(..., min_length=1, max_length=300)
+    # El código de cuatro dígitos del banco desde el que se paga ESTE lote.
+    # Es un dato del lote y no una constante: la misma orden va a «mismo banco»
+    # o a «otros bancos» según desde dónde se pague ese día.
+    banco_pagador: str
+
+
+@router.post("/ordenes/archivo-de-pagos")
+async def armar_archivo_de_pagos(
+    cuerpo: ArchivoDePagosRequest,
+    admin: User = Depends(get_super_admin),
+):
+    """El texto para pegar en la banca en línea. SOLO LEE.
+
+    Las órdenes salen de la MISMA consulta que alimenta la pantalla, filtradas
+    por los identificadores que mandó el operador. Que sea la misma fuente no
+    es comodidad: si el archivo armara su propia lista, podría incluir una
+    orden que en la pantalla ya no está —porque otro operador la procesó hace
+    diez segundos— y esa orden se pagaría dos veces.
+    """
+    from services import archivo_de_pagos, bancos_venezuela
+
+    codigo_pagador = re.sub(r"\D", "", cuerpo.banco_pagador or "")
+    if codigo_pagador not in bancos_venezuela.BANCOS:
+        raise HTTPException(400, "El banco desde el que se paga no está en la lista")
+
+    disponibles = (await get_ordenes_pendientes(admin=admin)).get("ordenes", [])
+    por_id = {o.get("orden_id"): o for o in disponibles}
+
+    elegidas, ya_no_estan = [], []
+    for oid in cuerpo.orden_ids:
+        if oid in por_id:
+            elegidas.append(por_id[oid])
+        else:
+            ya_no_estan.append(oid)
+
+    if not elegidas:
+        raise HTTPException(
+            409, "Ninguna de esas órdenes sigue pendiente. Actualizá la lista.")
+
+    armado = archivo_de_pagos.armar(elegidas, banco_pagador=cuerpo.banco_pagador)
+    # Las que se cayeron entre que la pantalla cargó y el operador pulsó el
+    # botón vuelven nombradas. Sacarlas en silencio sería entregar un archivo
+    # con menos pagos de los que la persona creyó pedir.
+    armado["ya_no_estan"] = ya_no_estan
+    armado["banco_pagador"] = {
+        "codigo": codigo_pagador,
+        "nombre": bancos_venezuela.nombre_de(codigo_pagador),
+    }
+    logger.info(
+        "archivo de pagos: %s órden(es) para %s, armado por %s (%s sin datos, %s ya no están)",
+        len(elegidas), armado["banco_pagador"]["nombre"], admin.user_id,
+        armado["por_seccion"].get("sin_datos"), len(ya_no_estan))
+    return armado
+
+
+@router.get("/ordenes/bancos-para-pagar")
+async def bancos_para_pagar(admin: User = Depends(get_super_admin)):
+    """La lista de bancos, para elegir desde cuál se paga el lote."""
+    from services import bancos_venezuela
+    return {"bancos": [{"codigo": c, "nombre": n}
+                       for c, n in sorted(bancos_venezuela.BANCOS.items())]}
+
 
 # ============== ENVIOS CRIPTO CON PAGO INCOMPLETO ==============
 # Ordenes que llegaron con menos dinero del pedido y que el sistema no pudo

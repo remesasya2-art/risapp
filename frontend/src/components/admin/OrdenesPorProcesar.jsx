@@ -5,7 +5,7 @@ import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock } from 'lucide-react';
+import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle } from 'lucide-react';
 
 // ---- Paleta profesional / corporativa (plana, sin sombras decorativas) ----
 const C = {
@@ -32,6 +32,11 @@ const FLUJO_STYLE = {
   ves_ris: { bg: '#ECFDF5', fg: '#047857' },
   ris_reais: { bg: '#FEFCE8', fg: '#A16207' },
 };
+
+// Los flujos que terminan en un pago en BOLIVARES a una cuenta venezolana. Son
+// los únicos que pueden ir al archivo que se pega en la banca en línea: un PIX
+// a Brasil o una recarga que sólo hay que aprobar no tienen nada que pegar ahí.
+const PAGA_BOLIVARES = new Set(['ris_ves', 'btc_ves', 'usdt_ves', 'usdc_ves']);
 
 const FILTROS = [
   { key: 'all', label: 'Todas' },
@@ -75,6 +80,11 @@ export default function OrdenesPorProcesar() {
   const [filtro, setFiltro] = useState('all');
   const [nuevosIds, setNuevosIds] = useState([]);
   const [verImg, setVerImg] = useState(null);
+  const [elegidas, setElegidas] = useState(() => new Set());
+  const [bancoPagador, setBancoPagador] = useState('');
+  const [bancos, setBancos] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [bajando, setBajando] = useState(false);
   const prevIdsRef = useRef(null);
 
   const idDe = (o) => `${o.flujo}-${o.orden_id}`;
@@ -109,6 +119,62 @@ export default function OrdenesPorProcesar() {
     const t = setInterval(() => cargar({ silent: true }), 15000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    api.get('/admin/ordenes/bancos-para-pagar')
+      .then(({ data }) => setBancos(data?.bancos || []))
+      .catch(() => setBancos([]));
+  }, []);
+
+  // ---- El archivo de pagos del lote ----
+  const alternar = (o) => {
+    setElegidas((prev) => {
+      const copia = new Set(prev);
+      if (copia.has(o.orden_id)) copia.delete(o.orden_id); else copia.add(o.orden_id);
+      return copia;
+    });
+  };
+
+  const seleccionables = visiblesQuePaganBolivares();
+  function visiblesQuePaganBolivares() {
+    const lista = filtro === 'all' ? ordenes : ordenes.filter((o) => o.flujo === filtro);
+    return lista.filter((o) => PAGA_BOLIVARES.has(o.flujo));
+  }
+
+  const todasElegidas = seleccionables.length > 0
+    && seleccionables.every((o) => elegidas.has(o.orden_id));
+
+  const alternarTodas = () => {
+    setElegidas((prev) => {
+      const copia = new Set(prev);
+      seleccionables.forEach((o) => (todasElegidas ? copia.delete(o.orden_id) : copia.add(o.orden_id)));
+      return copia;
+    });
+  };
+
+  const bajarArchivo = async () => {
+    if (!bancoPagador) { toast.error('Elegí desde qué banco vas a pagar'); return; }
+    setBajando(true);
+    try {
+      const { data } = await api.post('/admin/ordenes/archivo-de-pagos', {
+        orden_ids: [...elegidas], banco_pagador: bancoPagador,
+      });
+      // El archivo se arma en el navegador a partir del texto que manda el
+      // servidor. Así el servidor no tiene que guardar nada en disco ni servir
+      // un archivo, y el texto viaja por la misma ruta autenticada que todo
+      // lo demás.
+      const url = URL.createObjectURL(new Blob([data.texto], { type: 'text/plain;charset=utf-8' }));
+      const a = document.createElement('a');
+      const hoy = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `pagos-${data.banco_pagador?.codigo || 'lote'}-${hoy}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setResumen(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo armar el archivo');
+    } finally { setBajando(false); }
+  };
 
   const onSelectComprobante = (ordenId, file) => {
     if (!file) return;
@@ -376,6 +442,19 @@ export default function OrdenesPorProcesar() {
       <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '12px 14px', border: '1px solid ' + C.borderLight }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
+            {/* Sólo las que terminan en un pago en bolívares llevan casilla. En
+                el resto no hay casilla, en vez de una apagada: una casilla que
+                no se puede marcar es una pregunta sobre por qué, cada vez que
+                alguien la mira. */}
+            {PAGA_BOLIVARES.has(o.flujo) && (
+              <input
+                type="checkbox"
+                checked={elegidas.has(o.orden_id)}
+                onChange={() => alternar(o)}
+                title="Incluir en el archivo de pagos"
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: C.primary }}
+              />
+            )}
             <span style={badge(st)}>{o.flujo_label}</span>
             <span style={{ fontSize: '13px', color: '#374151' }}>
               {fmt(o.origen?.valor)} {o.origen?.unidad} <span style={{ color: C.faint }}>→</span>{' '}
@@ -421,6 +500,87 @@ export default function OrdenesPorProcesar() {
           <button onClick={() => cargar()} style={btnGhost(false)}><RefreshCw size={15} /> Actualizar</button>
         </div>
       </div>
+
+      {seleccionables.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+          padding: '10px 12px', marginBottom: '12px', borderRadius: '9px',
+          border: '1px solid ' + C.border, backgroundColor: C.bgSubtle,
+        }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+            <input type="checkbox" checked={todasElegidas} onChange={alternarTodas}
+              style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: C.primary }} />
+            Todas las de bolívares ({seleccionables.length})
+          </label>
+          <span style={{ fontSize: '13px', color: elegidas.size ? C.ink : C.faint, fontWeight: elegidas.size ? 700 : 400 }}>
+            {elegidas.size} elegida{elegidas.size === 1 ? '' : 's'}
+          </span>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: C.soft }}>
+            Pago desde
+            <select value={bancoPagador} onChange={(e) => setBancoPagador(e.target.value)}
+              style={{ padding: '6px 8px', borderRadius: '7px', border: '1px solid ' + C.border, fontSize: '13px', backgroundColor: '#fff' }}>
+              <option value="">elegí el banco…</option>
+              {bancos.map((b) => <option key={b.codigo} value={b.codigo}>{b.nombre} · {b.codigo}</option>)}
+            </select>
+          </label>
+          <button onClick={bajarArchivo} disabled={!elegidas.size || !bancoPagador || bajando}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
+              borderRadius: '7px', border: 'none', backgroundColor: C.primary, color: '#fff',
+              fontWeight: 700, fontSize: '13px',
+              cursor: (elegidas.size && bancoPagador && !bajando) ? 'pointer' : 'not-allowed',
+              opacity: (elegidas.size && bancoPagador && !bajando) ? 1 : 0.45,
+            }}>
+            <Download size={14} /> {bajando ? 'Armando…' : 'Descargar archivo de pagos'}
+          </button>
+          {/* Bajar el archivo NO es pagar. Se dice acá, al lado del botón, y no
+              en una ayuda que nadie abre. */}
+          <span style={{ fontSize: '12px', color: C.faint }}>
+            Bajar el archivo no cambia ninguna orden ni marca nada como pagado.
+          </span>
+        </div>
+      )}
+
+      {resumen && (
+        <div style={{
+          padding: '10px 12px', marginBottom: '12px', borderRadius: '9px',
+          border: '1px solid ' + C.border, backgroundColor: '#fff', fontSize: '13px', color: '#374151',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+            <span>
+              Archivo de <b>{resumen.total}</b> orden(es) para <b>{resumen.banco_pagador?.nombre}</b>:{' '}
+              {resumen.por_seccion?.pago_movil || 0} pago móvil ·{' '}
+              {resumen.por_seccion?.mismo_banco || 0} mismo banco ·{' '}
+              {resumen.por_seccion?.otros_bancos || 0} otros bancos
+            </span>
+            <button onClick={() => setResumen(null)}
+              style={{ border: 'none', background: 'none', color: C.soft, cursor: 'pointer', fontSize: '12px' }}>
+              cerrar
+            </button>
+          </div>
+          {/* Lo que quedó afuera se dice acá y en el archivo. Un archivo con
+              menos pagos de los que se pidieron es un pago que no se hace y que
+              nadie nota hasta que el cliente reclama. */}
+          {resumen.por_seccion?.sin_datos > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '7px', alignItems: 'flex-start', color: C.amber }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                <b>{resumen.por_seccion.sin_datos} orden(es) sin datos completos</b> no se pueden pagar así:{' '}
+                {resumen.sin_datos?.join(', ')}. Están al final del archivo, marcadas.
+              </span>
+            </div>
+          )}
+          {resumen.ya_no_estan?.length > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '7px', alignItems: 'flex-start', color: C.amber }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                <b>{resumen.ya_no_estan.length} orden(es) ya no estaban pendientes</b> cuando se armó el
+                archivo y quedaron afuera: {resumen.ya_no_estan.join(', ')}.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
         {FILTROS.map((f) => (
