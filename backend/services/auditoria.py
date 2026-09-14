@@ -94,6 +94,11 @@ ACCIONES = {
     "dinero.recarga_rechazada": (Cat.DINERO, "Recarga rechazada"),
     "dinero.retiro_aprobado":   (Cat.DINERO, "Retiro aprobado"),
     "dinero.retiro_rechazado":  (Cat.DINERO, "Retiro rechazado"),
+    # Armar un lote saca órdenes de la cola y las reserva; cancelarlo las
+    # devuelve. Ninguna de las dos mueve plata, pero las dos deciden QUE se va
+    # a pagar y quién lo decidió — y eso, meses después, es la pregunta.
+    "dinero.lote_armado":       (Cat.DINERO, "Lote de pagos armado"),
+    "dinero.lote_cancelado":    (Cat.DINERO, "Lote de pagos cancelado"),
     # Usuarios
     "usuario.suspendido":       (Cat.USUARIOS, "Usuario suspendido"),
     "usuario.reactivado":       (Cat.USUARIOS, "Usuario reactivado"),

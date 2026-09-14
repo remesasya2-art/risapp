@@ -23,7 +23,7 @@ from routes.dependencies import (get_admin_user, get_current_user,
                                  get_super_admin, get_crm_user)
 from services.notifications import create_notification, ROLES_DEL_PERSONAL
 from services import pendientes as pendientes_svc
-from services import auditoria, kyc_quota
+from services import auditoria, kyc_quota, lotes_de_pago
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -1081,8 +1081,12 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 
     # 1) RIS → VES y RIS → Reais (retiros): el admin paga y sube comprobante.
     #    Se distinguen por currency_output (VES vs BRL).
+    # Las que están en un lote salen de la cola: ya las tomó alguien para
+    # pagarlas. Se las ve en el panel de lotes abiertos, no acá — si no
+    # estuvieran en ningún lado, para el operador habrían desaparecido.
     async for tx in db.transactions.find(
-        {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True}}
+        {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True},
+         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
     ).sort("created_at", 1):
         u = await _user(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
@@ -1148,7 +1152,9 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
         })
 
     # 2) BTC → VES (remesas pagadas): el admin paga VES y sube comprobante
-    async for r in db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1):
+    async for r in db.btc_remesas.find(
+        {"estado": "pagado", "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}},
+        {"_id": 0}).sort("pagado_en", 1):
         u = await _user(r.get("user_id"))
         b = r.get("beneficiario_data", {}) or {}
         ordenes.append({
@@ -1179,7 +1185,8 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 
     # 3) VES → RIS (recargas): el admin REVISA el comprobante del usuario y aprueba
     async for tx in db.transactions.find(
-        {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True}}
+        {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True},
+         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
     ).sort("created_at", 1):
         u = await _user(tx.get("user_id"))
         ordenes.append({
@@ -1216,33 +1223,31 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
 # como pagado. Bajar el archivo y pagar son dos cosas distintas, y quien baja
 # el archivo todavía no pagó nada.
 
-class ArchivoDePagosRequest(BaseModel):
-    orden_ids: List[str] = Field(..., min_length=1, max_length=300)
+class ArmarLoteRequest(BaseModel):
+    orden_ids: List[str] = Field(..., min_length=1, max_length=lotes_de_pago.MAXIMO)
     # El código de cuatro dígitos del banco desde el que se paga ESTE lote.
     # Es un dato del lote y no una constante: la misma orden va a «mismo banco»
     # o a «otros bancos» según desde dónde se pague ese día.
     banco_pagador: str
 
 
-@router.post("/ordenes/archivo-de-pagos")
-async def armar_archivo_de_pagos(
-    cuerpo: ArchivoDePagosRequest,
+@router.post("/lotes")
+async def armar_lote(
+    cuerpo: ArmarLoteRequest,
+    request: Request,
     admin: User = Depends(get_super_admin),
 ):
-    """El texto para pegar en la banca en línea. SOLO LEE.
+    """Arma un lote con estas órdenes y devuelve su archivo.
 
     Las órdenes salen de la MISMA consulta que alimenta la pantalla, filtradas
     por los identificadores que mandó el operador. Que sea la misma fuente no
-    es comodidad: si el archivo armara su propia lista, podría incluir una
-    orden que en la pantalla ya no está —porque otro operador la procesó hace
-    diez segundos— y esa orden se pagaría dos veces.
+    es comodidad: si el lote armara su propia lista, podría incluir una orden
+    que en la pantalla ya no está —porque otro operador la tomó hace diez
+    segundos— y esa orden se pagaría dos veces.
+
+    Armar un lote NO mueve plata ni marca nada como pagado: reserva las
+    órdenes y guarda el papel que se va a pegar en el banco.
     """
-    from services import archivo_de_pagos, bancos_venezuela
-
-    codigo_pagador = re.sub(r"\D", "", cuerpo.banco_pagador or "")
-    if codigo_pagador not in bancos_venezuela.BANCOS:
-        raise HTTPException(400, "El banco desde el que se paga no está en la lista")
-
     disponibles = (await get_ordenes_pendientes(admin=admin)).get("ordenes", [])
     por_id = {o.get("orden_id"): o for o in disponibles}
 
@@ -1253,24 +1258,48 @@ async def armar_archivo_de_pagos(
         else:
             ya_no_estan.append(oid)
 
-    if not elegidas:
-        raise HTTPException(
-            409, "Ninguna de esas órdenes sigue pendiente. Actualizá la lista.")
+    try:
+        lote = await lotes_de_pago.armar(
+            db, elegidas, banco_pagador=cuerpo.banco_pagador,
+            quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
 
-    armado = archivo_de_pagos.armar(elegidas, banco_pagador=cuerpo.banco_pagador)
     # Las que se cayeron entre que la pantalla cargó y el operador pulsó el
     # botón vuelven nombradas. Sacarlas en silencio sería entregar un archivo
     # con menos pagos de los que la persona creyó pedir.
-    armado["ya_no_estan"] = ya_no_estan
-    armado["banco_pagador"] = {
-        "codigo": codigo_pagador,
-        "nombre": bancos_venezuela.nombre_de(codigo_pagador),
-    }
-    logger.info(
-        "archivo de pagos: %s órden(es) para %s, armado por %s (%s sin datos, %s ya no están)",
-        len(elegidas), armado["banco_pagador"]["nombre"], admin.user_id,
-        armado["por_seccion"].get("sin_datos"), len(ya_no_estan))
-    return armado
+    lote["ya_no_estan"] = ya_no_estan
+    return lote
+
+
+@router.get("/lotes")
+async def listar_lotes_abiertos(admin: User = Depends(get_super_admin)):
+    """Los lotes que todavía están en la calle, con sus órdenes reservadas."""
+    return {"lotes": await lotes_de_pago.abiertos(db)}
+
+
+@router.get("/lotes/{lote_id}/archivo")
+async def archivo_del_lote(lote_id: str, admin: User = Depends(get_super_admin)):
+    """El archivo GUARDADO de un lote, para volver a bajarlo idéntico.
+
+    No se vuelve a generar: entre que se bajó y ahora pudo cambiar la tasa o
+    corregirse la cuenta de un beneficiario, y entonces el segundo archivo no
+    sería el que la persona ya pegó en el banco.
+    """
+    try:
+        return await lotes_de_pago.archivo(db, lote_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/lotes/{lote_id}/cancelar")
+async def cancelar_lote(lote_id: str, request: Request,
+                        admin: User = Depends(get_super_admin)):
+    """Deshace un lote: sus órdenes vuelven a la cola de pendientes."""
+    try:
+        return await lotes_de_pago.cancelar(db, lote_id, quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
 
 
 @router.get("/ordenes/bancos-para-pagar")

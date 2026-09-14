@@ -5,7 +5,7 @@ import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2 } from 'lucide-react';
 
 // ---- Paleta profesional / corporativa (plana, sin sombras decorativas) ----
 const C = {
@@ -85,6 +85,7 @@ export default function OrdenesPorProcesar() {
   const [bancos, setBancos] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [bajando, setBajando] = useState(false);
+  const [lotes, setLotes] = useState([]);
   const prevIdsRef = useRef(null);
 
   const idDe = (o) => `${o.flujo}-${o.orden_id}`;
@@ -107,6 +108,13 @@ export default function OrdenesPorProcesar() {
       }
       prevIdsRef.current = currentIds;
       setOrdenes(lista);
+      // Los lotes abiertos se traen con las órdenes, no aparte: sus órdenes
+      // salieron de esta misma cola, y mostrar una sin la otra deja al
+      // operador con la sensación de que se perdieron.
+      try {
+        const { data } = await api.get('/admin/lotes');
+        setLotes(data?.lotes || []);
+      } catch { /* la cola se muestra igual aunque los lotes fallen */ }
     } catch (e) {
       if (!opts.silent) toast.error('No se pudieron cargar las órdenes');
     } finally {
@@ -152,27 +160,59 @@ export default function OrdenesPorProcesar() {
     });
   };
 
+  const guardarComoArchivo = (data) => {
+    // El archivo se arma en el navegador a partir del texto que manda el
+    // servidor. Así el servidor no tiene que guardar nada en disco ni servir
+    // un archivo, y el texto viaja por la misma ruta autenticada que todo
+    // lo demás.
+    const url = URL.createObjectURL(new Blob([data.texto], { type: 'text/plain;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data.numero || 'lote'}-${data.banco_pagador?.codigo || ''}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const bajarDeNuevo = async (lote) => {
+    try {
+      const { data } = await api.get(`/admin/lotes/${lote.lote_id}/archivo`);
+      guardarComoArchivo(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo bajar el archivo');
+    }
+  };
+
+  const cancelarLote = async (lote) => {
+    if (!await confirmar({
+      titulo: `¿Cancelar el lote ${lote.numero}?`,
+      detalle: `Sus ${lote.total} orden(es) vuelven a la cola de pendientes. `
+        + 'Si ya pagaste alguna, NO la canceles: cancelar no deshace un pago.',
+      accion: 'Cancelar el lote',
+      cancelar: 'Dejarlo como está',
+      tono: 'peligro',
+    })) return;
+    try {
+      const { data } = await api.post(`/admin/lotes/${lote.lote_id}/cancelar`);
+      toast.success(`${data.devueltas} orden(es) volvieron a la cola`);
+      await cargar({ fromAction: true });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo cancelar el lote');
+    }
+  };
+
   const bajarArchivo = async () => {
     if (!bancoPagador) { toast.error('Elegí desde qué banco vas a pagar'); return; }
     setBajando(true);
     try {
-      const { data } = await api.post('/admin/ordenes/archivo-de-pagos', {
+      const { data } = await api.post('/admin/lotes', {
         orden_ids: [...elegidas], banco_pagador: bancoPagador,
       });
-      // El archivo se arma en el navegador a partir del texto que manda el
-      // servidor. Así el servidor no tiene que guardar nada en disco ni servir
-      // un archivo, y el texto viaja por la misma ruta autenticada que todo
-      // lo demás.
-      const url = URL.createObjectURL(new Blob([data.texto], { type: 'text/plain;charset=utf-8' }));
-      const a = document.createElement('a');
-      const hoy = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `pagos-${data.banco_pagador?.codigo || 'lote'}-${hoy}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
+      guardarComoArchivo(data);
       setResumen(data);
+      setElegidas(new Set());
+      await cargar({ fromAction: true });
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'No se pudo armar el archivo');
+      toast.error(e?.response?.data?.detail || 'No se pudo armar el lote');
     } finally { setBajando(false); }
   };
 
@@ -501,6 +541,50 @@ export default function OrdenesPorProcesar() {
         </div>
       </div>
 
+      {lotes.length > 0 && (
+        <div style={{ marginBottom: '12px' }}>
+          {/* Estos lotes tienen órdenes reservadas que ya NO están en la lista
+              de abajo. Si no se vieran acá, para el operador habrían
+              desaparecido — y volvería a armar el lote de las mismas. */}
+          <div style={{ fontSize: '12px', fontWeight: 700, color: C.soft, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
+            Lotes en la calle ({lotes.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {lotes.map((l) => (
+              <div key={l.lote_id} style={{
+                display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+                padding: '9px 12px', borderRadius: '9px', backgroundColor: C.amberBg,
+                border: '1px solid ' + C.amber + '33',
+              }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: C.amber, fontSize: '13px' }}>
+                  <Package size={14} /> {l.numero}
+                </span>
+                <span style={{ fontSize: '13px', color: '#374151' }}>
+                  <b>{l.total}</b> orden(es) · {l.banco_pagador?.nombre}
+                </span>
+                <span style={{ fontSize: '12px', color: C.soft }}>
+                  {l.creado_por_nombre} · {formatDate(l.creado_en)}
+                </span>
+                {l.sin_datos?.length > 0 && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: C.red }}>
+                    <AlertTriangle size={13} /> {l.sin_datos.length} sin datos
+                  </span>
+                )}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                  <button onClick={() => bajarDeNuevo(l)} style={chip} title="Bajar otra vez el mismo archivo">
+                    <Download size={13} /> Archivo
+                  </button>
+                  <button onClick={() => cancelarLote(l)} style={{ ...chip, color: C.red, borderColor: C.red + '55' }}
+                    title="Devolver sus órdenes a la cola">
+                    <Undo2 size={13} /> Cancelar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {seleccionables.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
@@ -531,12 +615,12 @@ export default function OrdenesPorProcesar() {
               cursor: (elegidas.size && bancoPagador && !bajando) ? 'pointer' : 'not-allowed',
               opacity: (elegidas.size && bancoPagador && !bajando) ? 1 : 0.45,
             }}>
-            <Download size={14} /> {bajando ? 'Armando…' : 'Descargar archivo de pagos'}
+            <Download size={14} /> {bajando ? 'Armando…' : 'Armar lote y descargar'}
           </button>
           {/* Bajar el archivo NO es pagar. Se dice acá, al lado del botón, y no
               en una ayuda que nadie abre. */}
           <span style={{ fontSize: '12px', color: C.faint }}>
-            Bajar el archivo no cambia ninguna orden ni marca nada como pagado.
+            Reserva las órdenes y guarda el archivo. No marca nada como pagado.
           </span>
         </div>
       )}
@@ -548,7 +632,7 @@ export default function OrdenesPorProcesar() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
             <span>
-              Archivo de <b>{resumen.total}</b> orden(es) para <b>{resumen.banco_pagador?.nombre}</b>:{' '}
+              Lote <b>{resumen.numero}</b> — {resumen.total} orden(es) para <b>{resumen.banco_pagador?.nombre}</b>:{' '}
               {resumen.por_seccion?.pago_movil || 0} pago móvil ·{' '}
               {resumen.por_seccion?.mismo_banco || 0} mismo banco ·{' '}
               {resumen.por_seccion?.otros_bancos || 0} otros bancos
@@ -567,6 +651,15 @@ export default function OrdenesPorProcesar() {
               <span>
                 <b>{resumen.por_seccion.sin_datos} orden(es) sin datos completos</b> no se pueden pagar así:{' '}
                 {resumen.sin_datos?.join(', ')}. Están al final del archivo, marcadas.
+              </span>
+            </div>
+          )}
+          {resumen.no_se_pudieron_tomar?.length > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '7px', alignItems: 'flex-start', color: C.amber }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                <b>{resumen.no_se_pudieron_tomar.length} orden(es) ya estaban en otro lote</b>{' '}
+                y quedaron afuera: {resumen.no_se_pudieron_tomar.join(', ')}.
               </span>
             </div>
           )}
