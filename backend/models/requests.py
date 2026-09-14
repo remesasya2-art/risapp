@@ -19,6 +19,15 @@ class RegisterUserRequest(BaseModel):
     password: str
     confirm_password: str
 
+    # El CPF se pide acá y no más adelante porque es lo que ata la cuenta a una
+    # persona: un CPF, una cuenta. Se valida de verdad —los dos dígitos
+    # verificadores— en `services/cpf.py`, no contando once cifras.
+    #
+    # Llega como texto libre («123.456.789-09» o «12345678909»): la pantalla
+    # lo formatea mientras se escribe y el servidor lo normaliza antes de
+    # guardarlo, así que las dos formas son el mismo documento.
+    cpf_number: str
+
     # ─── EL NOMBRE DEL CAMPO, Y POR QUE ESTAN LOS DOS ────────────────────
     #
     # La pantalla de registro manda el código de referido con el nombre
