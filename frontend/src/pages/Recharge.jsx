@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 import { confirmar } from '../components/flujo/confirmar.js';
 import { QRCodeSVG } from 'qrcode.react';
 import NotificationBell from '../components/NotificationBell';
@@ -22,6 +23,7 @@ export default function Recharge() {
   const idemRef = useRef(null);
   const [amount, setAmount] = useState('');
   const [cpf, setCpf] = useState('');
+  // (el efecto de más abajo lo rellena con el de la cuenta cuando ya lo hay)
   const [cpfError, setCpfError] = useState('');
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -57,8 +59,17 @@ export default function Recharge() {
   const pixMax = limits?.pix?.max_brl ?? null;
   const vesMin = limits?.ves?.min_ves ?? null;
 
-  // Get user's registered CPF for validation
-  const userRegisteredCpf = user?.cpf_number?.replace(/\D/g, '') || '';
+  // El CPF atado a esta cuenta. Vacío en las cuentas creadas antes de que el
+  // registro lo pidiera: a ésas se les pide una vez acá y queda atado.
+  const cpfDeLaCuenta = user?.cpf_number?.replace(/\D/g, '') || '';
+  const yaTieneCpf = cpfDeLaCuenta.length === 11;
+
+  // El campo arranca con el CPF de la cuenta cuando lo hay: si ya lo sabemos,
+  // que no lo tipee. Va en un efecto y no en el valor inicial del estado
+  // porque `user` llega después del primer dibujo.
+  useEffect(() => {
+    if (yaTieneCpf) setCpf(formatearCpf(cpfDeLaCuenta));
+  }, [cpfDeLaCuenta, yaTieneCpf]);
 
   // Check for pending PIX payment on mount
   useEffect(() => {
@@ -171,32 +182,28 @@ export default function Recharge() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatCpf = (value) => {
-    if (!value) return '';
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 3) return numbers;
-    if (numbers.length <= 6) return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
-    if (numbers.length <= 9) return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
-    return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9, 11)}`;
-  };
-
   const handleCpfChange = (e) => {
-    const formatted = formatCpf(e.target.value);
-    if (formatted.length <= 14) {
-      setCpf(formatted);
-      // Clear error when user starts typing
-      if (cpfError) setCpfError('');
-    }
+    setCpf(formatearCpf(e.target.value));
+    // Clear error when user starts typing
+    if (cpfError) setCpfError('');
   };
 
-  // Validate CPF matches registered CPF
+  // El CPF que se manda. Si la cuenta ya tiene uno, es ése y el campo ni se
+  // edita; si no lo tiene, es el que la persona escribe y queda atado.
+  //
+  // ACA NO SE DECIDE NADA. Antes esta función comparaba contra
+  // `user.cpf_number`, un campo que ninguna parte del servidor escribía, así
+  // que la comparación no podía dar bien NUNCA y la recarga estaba trabada
+  // para todos. Quien decide ahora es el servidor, en `/gestor/pix/create`.
+  // Esto es sólo para no hacerle perder el viaje a quien escribió mal.
   const validateCpf = (inputCpf) => {
-    const cleanInput = inputCpf.replace(/\D/g, '');
-    if (cleanInput.length !== 11) {
-      return { valid: false, error: 'Ingresa un CPF válido (11 dígitos)' };
+    const cleanInput = normalizarCpf(inputCpf);
+    const falta = queLeFaltaAlCpf(cleanInput);
+    if (falta) {
+      return { valid: false, error: falta };
     }
-    if (cleanInput !== userRegisteredCpf) {
-      return { valid: false, error: 'El CPF debe coincidir con el registrado en tu cuenta' };
+    if (yaTieneCpf && cleanInput !== cpfDeLaCuenta) {
+      return { valid: false, error: 'El CPF tiene que ser el de tu cuenta' };
     }
     return { valid: true, error: '' };
   };
@@ -224,12 +231,19 @@ export default function Recharge() {
       return;
     }
     
-    if (user?.verification_status !== 'verified') {
-      toast.error('Debes verificar tu cuenta antes de recargar con PIX');
-      navigate('/verification');
-      return;
-    }
-    
+    // EL PORTON DE KYC SALIO DE ACA, Y NO ES UN DESCUIDO.
+    //
+    // El servidor le da a toda cuenta sin verificar un cupo inicial —200 R$ y
+    // 2 operaciones, configurables— y la página «Cómo funciona» se lo promete
+    // al visitante. `services/kyc_quota.py` lo hace cumplir en
+    // `/gestor/pix/create`, con un mensaje que explica qué le falta.
+    //
+    // Esta pantalla lo mandaba a verificarse antes de dejarlo intentar, así
+    // que ese cupo no lo podía usar NADIE: el cliente nuevo no llegaba a hacer
+    // su primera recarga. Quien decide si puede es el cupo del servidor, que
+    // además es el único lugar donde la decisión no se salta con la consola
+    // abierta.
+
     setLoading(true);
     try {
       const response = await api.post('/gestor/pix/create', { 
@@ -582,13 +596,22 @@ export default function Recharge() {
               </div>
             </div>
 
+            {/* AVISA, NO TAPA. Antes este cartel venía con un portón que
+                mandaba a verificarse antes de dejar intentar, y así el cupo
+                inicial que el servidor concede no lo podía usar nadie. Ahora
+                cuenta lo que hay y deja pasar: el que se pase del cupo se
+                entera al apretar, con el mensaje del servidor diciendo
+                exactamente cuánto le queda. */}
             {user?.verification_status !== 'verified' && (
-              <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '12px', marginBottom: '24px', display: 'flex', gap: '12px' }}>
-                <AlertCircle style={{ width: '20px', height: '20px', color: '#d97706', flexShrink: 0 }} />
+              <div style={{ padding: '16px', backgroundColor: '#eff6ff', borderRadius: '12px', marginBottom: '24px', display: 'flex', gap: '12px' }}>
+                <AlertCircle style={{ width: '20px', height: '20px', color: '#2563eb', flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontWeight: '600', color: '#92400e', margin: 0 }}>Verificación requerida</p>
-                  <p style={{ fontSize: '14px', color: '#a16207', margin: '4px 0 0 0' }}>Debes verificar tu cuenta antes de usar PIX.</p>
-                  <button onClick={() => navigate('/verification')} style={{ marginTop: '8px', fontSize: '14px', fontWeight: '600', color: '#92400e', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                  <p style={{ fontWeight: '600', color: '#1e40af', margin: 0 }}>Estás usando tu cupo inicial</p>
+                  <p style={{ fontSize: '14px', color: '#1d4ed8', margin: '4px 0 0 0' }}>
+                    Podés recargar sin verificar tu cuenta hasta agotarlo. Después,
+                    para seguir operando, hay que verificar la identidad.
+                  </p>
+                  <button onClick={() => navigate('/verification')} style={{ marginTop: '8px', fontSize: '14px', fontWeight: '600', color: '#1e40af', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                     Verificar ahora
                   </button>
                 </div>
@@ -616,15 +639,22 @@ export default function Recharge() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>CPF del pagador</label>
+                {/* Si la cuenta ya tiene CPF, llega puesto y NO se edita: ya
+                    lo declaró al registrarse y es el único con el que puede
+                    pagar. Sólo lo tipea quien se registró antes de que el
+                    registro lo pidiera, y ahí queda atado para siempre. */}
                 <input
                   type="text"
                   value={cpf}
                   onChange={handleCpfChange}
+                  readOnly={yaTieneCpf}
                   placeholder="000.000.000-00"
-                  style={{ 
-                    ...inputStyle, 
+                  style={{
+                    ...inputStyle,
                     borderColor: cpfError ? '#ef4444' : '#e5e7eb',
-                    backgroundColor: cpfError ? '#fef2f2' : 'white'
+                    backgroundColor: cpfError ? '#fef2f2' : (yaTieneCpf ? '#f3f4f6' : 'white'),
+                    color: yaTieneCpf ? '#6b7280' : undefined,
+                    cursor: yaTieneCpf ? 'not-allowed' : undefined,
                   }}
                   data-testid="pix-cpf"
                 />
@@ -635,7 +665,9 @@ export default function Recharge() {
                   </p>
                 )}
                 <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>
-                  El CPF debe coincidir con el registrado en tu cuenta
+                  {yaTieneCpf
+                    ? 'Es el CPF de tu cuenta. La recarga la tenés que hacer vos, no un tercero.'
+                    : 'Queda registrado como el CPF de tu cuenta: de acá en adelante es el único con el que vas a poder recargar.'}
                 </p>
               </div>
 
@@ -840,8 +872,21 @@ export default function Recharge() {
                     toast.error('Monto debe estar entre R$ 5 y R$ 5.000');
                     return;
                   }
+                  // LA TARJETA SI PIDE VERIFICACION, Y PIX NO. NO ES UN OLVIDO.
+                  //
+                  // Un PIX no se puede revertir: el que paga, pagó. Una
+                  // tarjeta sí — el titular puede desconocer el cobro meses
+                  // después. Una cuenta sin verificar que recarga con tarjeta,
+                  // manda la plata a Venezuela y después desconoce el cobro
+                  // nos deja sin la plata y sin a quién reclamarle.
+                  //
+                  // Por eso el cupo inicial se usa con PIX y no con tarjeta.
+                  // Esta comprobación acompaña a la del servidor
+                  // (`routes/payments_card.py`), que es la que manda: sin
+                  // ella, la persona carga los datos de su tarjeta para
+                  // enterarse recién al final de que no puede.
                   if (user?.verification_status !== 'verified') {
-                    toast.error('Debes verificar tu cuenta antes de pagar con tarjeta');
+                    toast.error('Para pagar con tarjeta hay que verificar la cuenta. Con PIX podés recargar usando tu cupo inicial.');
                     navigate('/verification');
                     return;
                   }

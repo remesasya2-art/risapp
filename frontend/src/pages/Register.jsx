@@ -4,6 +4,7 @@ import { Eye, EyeOff, ArrowLeft, Gift } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { validarPassword, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
+import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function Register() {
   // Form fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
@@ -41,8 +43,17 @@ export default function Register() {
       return;
     }
     
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !email || !cpf || !password || !confirmPassword) {
       toast.error('Por favor completa todos los campos');
+      return;
+    }
+
+    // El CPF se comprueba de verdad —los dos dígitos verificadores— y no sólo
+    // contando once cifras. El servidor lo vuelve a comprobar: esto es para
+    // que se entere antes de mandar el formulario, no después.
+    const errorCpf = queLeFaltaAlCpf(cpf);
+    if (errorCpf) {
+      toast.error(errorCpf);
       return;
     }
     
@@ -62,6 +73,9 @@ export default function Register() {
       const response = await api.post('/auth/register', {
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        // Normalizado: «123.456.789-09» y «12345678909» son el mismo
+        // documento, y el servidor tiene que recibir siempre la misma forma.
+        cpf_number: normalizarCpf(cpf),
         password,
         confirm_password: confirmPassword,
         referral_code: referralCode.trim().toUpperCase() || null
@@ -341,6 +355,30 @@ export default function Register() {
               onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
               onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
             />
+          </div>
+
+          {/* CPF — se pide acá porque es lo que ata la cuenta a una persona:
+              un CPF, una cuenta. Y porque la recarga lo necesita igual, así
+              que pedirlo una sola vez evita que lo tipee dos veces. */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              CPF
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cpf}
+              onChange={(e) => setCpf(formatearCpf(e.target.value))}
+              placeholder="000.000.000-00"
+              data-testid="cpf-input"
+              style={inputStyle}
+              onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+              onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+            />
+            <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
+              Es con el que vas a recargar. No vas a tener que cargarlo de nuevo
+              al verificar tu cuenta.
+            </p>
           </div>
 
           {/* Email */}

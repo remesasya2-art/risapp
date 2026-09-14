@@ -63,6 +63,8 @@ from services import codigos                         # noqa: E402
 DATOS_MINIMOS = {
     "name": "Ana",
     "email": "ana@example.com",
+    # Un CPF de verdad: el modelo lo exige desde que el registro lo pide.
+    "cpf_number": "52998224725",
     "password": "Clave.larga1!",
     "confirm_password": "Clave.larga1!",
 }
@@ -100,6 +102,11 @@ def _campos_que_manda_la_pantalla() -> set[str]:
     claves `nombre:` del bloque entre llaves que sigue a la llamada.
     """
     texto = PANTALLA_DE_REGISTRO.read_text(encoding="utf-8")
+    # Los comentarios se sacan ANTES de buscar las claves. Sin esto, cualquier
+    # comentario adentro del objeto se lee como un campo —«// Normalizado: …»
+    # entra como el campo «Normalizado»— y la guarda se pone roja por una
+    # explicación bien escrita. Ya pasó al agregar el CPF.
+    texto = re.sub(r"//[^\n]*", "", texto)
     llamada = re.search(
         r"""api\.post\(\s*['"]/auth/register['"]\s*,\s*\{(.*?)\}\s*\)""",
         texto, re.DOTALL)
@@ -238,8 +245,40 @@ def cliente(base, monkeypatch):
     return TestClient(app)
 
 
+def _un_cpf_valido(semilla: str) -> str:
+    """Un CPF distinto por cada correo, con sus dígitos verificadores bien.
+
+    Hace falta uno DISTINTO por cuenta porque un CPF puede tener una sola: si
+    todos los registros de un test usaran el mismo, el segundo se rechazaría y
+    el rojo hablaría del CPF en vez de hablar del código de referido.
+
+    Los dos dígitos se calculan acá en vez de copiar una lista de números
+    escritos a mano, que es la que se queda corta cuando alguien agrega un
+    test. Que lo que sale de acá sea realmente válido lo comprueba
+    `test_los_cpf_de_este_archivo_son_validos`, con el validador de producción.
+    """
+    base = f"{abs(hash(semilla)) % 1_000_000_000:09d}"
+    for peso in (10, 11):
+        suma = sum(int(d) * (peso - i) for i, d in enumerate(base))
+        resto = (suma * 10) % 11
+        base += "0" if resto >= 10 else str(resto)
+    return base
+
+
+def test_los_cpf_de_este_archivo_son_validos():
+    """El ayudante de arriba tiene que producir CPF que el servidor acepte.
+
+    Si no, todos los tests de este archivo empezarían a fallar por el CPF y el
+    motivo real quedaría tapado.
+    """
+    from services import cpf
+    for semilla in ("a@example.com", "b@example.com", "vacia@example.com"):
+        assert cpf.es_valido(_un_cpf_valido(semilla)), semilla
+
+
 def _cuerpo(email, **extra):
     return {"name": "Ana", "email": email,
+            "cpf_number": _un_cpf_valido(email),
             "password": "Clave.larga1!", "confirm_password": "Clave.larga1!",
             **extra}
 

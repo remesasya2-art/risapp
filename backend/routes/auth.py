@@ -23,7 +23,7 @@ from models.requests import (
     ChangePasswordRequest, PedirCodigoDeCambioRequest
 )
 from routes.dependencies import get_current_user, set_session_cookie, clear_session_cookie
-from services import codigos, correo
+from services import codigos, correo, cpf_de_la_cuenta
 from services.email import send_verification_email
 from services.email_notifications import notify_login, notify_password_change
 from utils.security import hash_password, verify_password, validate_password
@@ -105,6 +105,23 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
     if await db.blacklist.find_one({"type": "email", "value": email_lower}):
         raise HTTPException(status_code=400, detail="Este correo no puede registrarse. Contacta a soporte.")
 
+    # ─── El CPF ──────────────────────────────────────────────────────────
+    #
+    # Se comprueba ACA, antes de crear nada: que esté bien formado, que no esté
+    # vetado, y que no sea el de otra cuenta. Un CPF, una cuenta.
+    #
+    # Por qué en el registro y no recién en la primera recarga: la recarga lo
+    # pide igual —es la identificación del pagador que exige PIX— y pedirlo dos
+    # veces obliga a la persona a tipear el mismo número dos veces, con lo que
+    # eso trae de dedos equivocados. El de la verificación también le va a
+    # llegar puesto desde acá.
+    try:
+        cpf_normalizado = await cpf_de_la_cuenta.revisar_para_registrar(
+            db, request.cpf_number)
+    except (cpf_de_la_cuenta.CpfInvalido, cpf_de_la_cuenta.CpfVetado,
+            cpf_de_la_cuenta.CpfEnUso) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Check existing user
     existing = await db.users.find_one({"email": email_lower})
     if existing:
@@ -167,7 +184,10 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
         # Ya normalizado y comprobado arriba. Se guarda vacío como None y no
         # como "" para que el documento del usuario diga «sin código» de una
         # sola forma.
-        "referred_by": codigo_de_quien_refiere or None
+        "referred_by": codigo_de_quien_refiere or None,
+        # Ya normalizado y comprobado arriba. Viaja acá porque la cuenta no
+        # existe hasta que se verifica el correo.
+        "cpf_number": cpf_normalizado,
     }
     
     await db.pending_verifications.delete_many({"email": email_lower})
@@ -249,6 +269,10 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
         "role": "user",
         "verification_status": "unverified",
         "referred_by": pending.get("referred_by"),
+        # El CPF que declaró al registrarse. Es el único con el que esta cuenta
+        # puede pagar, y el que le va a llegar puesto en la verificación.
+        "cpf_number": pending.get("cpf_number"),
+        "cpf_declarado_en": datetime.now(timezone.utc),
         "referral_code": referral_code,
         "created_at": datetime.now(timezone.utc),
         "terms_accepted": True,

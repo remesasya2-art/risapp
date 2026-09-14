@@ -17,7 +17,7 @@ from typing import Optional
 
 from database import db
 from services.limits import validate_pix_amount
-from services import bancos, kyc_quota, pagos_una_sola_vez, saldos
+from services import bancos, cpf_de_la_cuenta, kyc_quota, pagos_una_sola_vez, saldos
 from models.user import User
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
@@ -45,7 +45,17 @@ class CreatePixRequest(BaseModel):
     amount_ris: float
     client_name: Optional[str] = None
     client_email: Optional[str] = "cliente@risapp.com"
-    client_cpf: Optional[str] = "00000000000"
+    # SIN VALOR POR OMISION, A PROPOSITO.
+    #
+    # Decía «00000000000», que no es el CPF de nadie —no pasa la cuenta de los
+    # dígitos verificadores— y que igual se le mandaba a Mercado Pago. O sea
+    # que el campo se podía omitir y el pago salía lo mismo: el control vivía
+    # sólo en el navegador, donde se salta con la consola abierta.
+    #
+    # Ahora es obligatorio y lo comprueba el servidor contra el CPF de la
+    # cuenta. Un valor por omisión acá volvería a apagar esa comprobación sin
+    # que nadie lo note.
+    client_cpf: str
 
 class PixPaymentResponse(BaseModel):
     payment_id: str
@@ -77,6 +87,21 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
     _kq_error = await kyc_quota.check_amount(db, _kq_user, request.amount_ris)
     if _kq_error:
         raise HTTPException(status_code=403, detail=_kq_error)
+
+    # ─── Quien paga tiene que ser el titular de la cuenta ─────────────────
+    #
+    # Es el control que ata cada real que entra a una persona. Si la cuenta ya
+    # tiene un CPF —lo declaró al registrarse— el del pago tiene que ser ése.
+    # Si no lo tiene, porque se registró antes de que el registro lo pidiera,
+    # se ata acá, en su primera recarga, y de ahí en adelante rige.
+    try:
+        cpf_del_pago = await cpf_de_la_cuenta.exigir_para_pagar(
+            db, _kq_user or {}, request.client_cpf)
+    except cpf_de_la_cuenta.CpfInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (cpf_de_la_cuenta.CpfDeOtro, cpf_de_la_cuenta.CpfVetado,
+            cpf_de_la_cuenta.CpfEnUso) as e:
+        raise HTTPException(status_code=403, detail=str(e))
     
     # Get current rate
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
@@ -107,7 +132,10 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
                 payer_email=request.client_email or "cliente@risapp.com",
                 payer_first_name=request.client_name.split()[0] if request.client_name else "Cliente",
                 payer_last_name=request.client_name.split()[-1] if request.client_name and len(request.client_name.split()) > 1 else "RIS",
-                payer_cpf=request.client_cpf or "00000000000",
+                # El comprobado contra la cuenta, no el que vino en el
+                # pedido: si se mandara el crudo, el control de arriba no
+                # cambiaría lo que llega a Mercado Pago.
+                payer_cpf=cpf_del_pago,
                 external_reference=internal_id
             )
             

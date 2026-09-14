@@ -65,7 +65,10 @@ async def lifespan(app):
     # Startup
     try:
         await db.users.create_index("email", unique=True, sparse=True)
-        await db.users.create_index("cpf_number", sparse=True)
+        # ÚNICO: un CPF, una cuenta. El motivo y la trampa de reemplazar un
+        # índice que ya existe con otras opciones están en el módulo.
+        from services import cpf_de_la_cuenta
+        await cpf_de_la_cuenta.asegurar_el_indice(db)
         await db.user_sessions.create_index("session_token", unique=True)
         # El índice sobre `expires_at` lo crea ensure_security_indexes(), CON
         # expireAfterSeconds. Crearlo acá sin TTL le ganaba de mano —esto corre

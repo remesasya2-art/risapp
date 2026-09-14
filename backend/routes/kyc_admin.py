@@ -112,6 +112,10 @@ def _serialize_verification(v: dict, user: dict = None, include_images: bool = T
         "document_type_label":  DOCUMENT_TYPE_MAP.get(v.get("document_type") or "rg", {}).get("label", "Documento"),
         "document_number":      v.get("document_number"),
         "cpf_number":           v.get("cpf_number"),
+        # Cuando el CPF de la verificación no es el que la persona declaró al
+        # registrarse. Vacío es lo normal; con contenido, hay que mirar la foto
+        # con más cuidado. No lo decide el sistema: lo decide quien revisa.
+        "cpf_discrepa":         v.get("cpf_discrepa"),
         "phone_number":         v.get("phone_number") or (user.get("phone_number") if user else None),
         "status":               v.get("status", "pending"),
         "submitted_at":         v.get("submitted_at"),

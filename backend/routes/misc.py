@@ -16,7 +16,7 @@ from routes.dependencies import get_current_user, get_super_admin
 from services.limits import limits_payload
 from services.kyc_quota import quota_payload
 from models.user import User
-from services import cofre
+from services import cofre, cpf_de_la_cuenta
 from services.notifications import avisar_al_personal
 from services.imagen_recibida import (ImagenInvalida, limpiar_imagen,
                                       limpiar_imagen_opcional)
@@ -178,6 +178,22 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
         # la peor de las tres situaciones, porque no se nota nunca.
         raise HTTPException(status_code=503, detail=str(e))
 
+    # ─── El CPF, contra el que ya declaró al registrarse ──────────────────
+    #
+    # La pantalla se lo muestra puesto y editable: un dedo se equivoca, y el
+    # KYC es justo donde ese número se coteja contra la foto. Si lo cambió, la
+    # diferencia queda anotada en la verificación para quien la revise.
+    #
+    # NO SE CORTA EL KYC POR ESTO. Rechazarlo automáticamente dejaría a alguien
+    # sin poder verificarse por un error de tipeo, que es el caso frecuente. Lo
+    # raro —que sea el documento de otra persona— lo ve el que mira la foto,
+    # que es el único que puede decidirlo.
+    discrepancia = await cpf_de_la_cuenta.anotar_si_el_kyc_discrepa(
+        db, current_user.user_id, data.cpf_number)
+    if discrepancia.get("discrepa"):
+        logger.warning("KYC de %s: CPF declarado y CPF del KYC no coinciden",
+                       current_user.user_id)
+
     verification = {
         "verification_id": f"ver_{uuid.uuid4().hex[:12]}",
         "user_id": current_user.user_id,
@@ -191,7 +207,9 @@ async def submit_verification(data: VerificationSubmit, current_user: User = Dep
         "cpf_image": cpf_img,
         "selfie_image": selfie,
         "status": "pending",
-        "submitted_at": datetime.now(timezone.utc)
+        "submitted_at": datetime.now(timezone.utc),
+        # Vacío cuando coinciden. Lo lee el panel para marcar la ficha.
+        "cpf_discrepa": discrepancia if discrepancia.get("discrepa") else None,
     }
     await db.verifications.insert_one(verification)
     await db.users.update_one(

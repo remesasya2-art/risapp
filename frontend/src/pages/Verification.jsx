@@ -7,11 +7,15 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { formatearCpf, normalizarCpf } from '../utils/cpf';
 import NotificationBell from '../components/NotificationBell';
 
 export default function Verification() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
+  // El CPF que ya declaró al registrarse. Vacío sólo en las cuentas creadas
+  // antes de que el registro lo pidiera.
+  const cpfDeLaCuenta = normalizarCpf(user?.cpf_number);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const videoRef = useRef(null);
@@ -147,6 +151,17 @@ export default function Verification() {
   // Conecta el stream al <video> en cuanto ambos existen. Esto corrige la
   // carrera por la que en el primer intento el <video> aún no estaba montado
   // cuando se pedía la cámara (y por eso no se veía nada hasta el 2º intento).
+  // El CPF llega puesto desde el registro. Va en un efecto y no en el valor
+  // inicial del formulario porque `user` llega después del primer dibujo, y
+  // sólo escribe si el campo está vacío: si la persona ya lo corrigió, no se
+  // le pisa lo que escribió.
+  useEffect(() => {
+    if (!cpfDeLaCuenta) return;
+    setFormData((antes) => (antes.cpf_number
+      ? antes
+      : { ...antes, cpf_number: formatearCpf(cpfDeLaCuenta) }));
+  }, [cpfDeLaCuenta]);
+
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
@@ -404,15 +419,31 @@ export default function Verification() {
                 />
               </div>
 
+              {/* LLEGA PUESTO, PERO SE PUEDE CORREGIR.
+                  Puesto, porque ya lo declaró al registrarse y hacerle tipear
+                  el mismo número dos veces sólo agrega chances de equivocarse.
+                  Corregible, porque ésta es justo la pantalla donde ese número
+                  se coteja contra la foto: con candado, un dedo equivocado al
+                  registrarse se volvería un pedido a soporte. Si lo cambia, la
+                  diferencia queda anotada para quien revisa
+                  (`services/cpf_de_la_cuenta.anotar_si_el_kyc_discrepa`). */}
               <div>
                 <label style={labelStyle}>CPF</label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={formData.cpf_number}
-                  onChange={(e) => setFormData({...formData, cpf_number: e.target.value})}
+                  onChange={(e) => setFormData({...formData, cpf_number: formatearCpf(e.target.value)})}
                   style={inputStyle}
                   placeholder="000.000.000-00"
                 />
+                {cpfDeLaCuenta && normalizarCpf(formData.cpf_number) !== cpfDeLaCuenta && (
+                  <p style={{ fontSize: '12px', color: '#b45309', margin: '6px 0 0 0' }}>
+                    Cambiaste el CPF que registraste al crear tu cuenta. Está
+                    bien si te habías equivocado: lo vamos a revisar contra tu
+                    documento.
+                  </p>
+                )}
               </div>
 
               <div>
