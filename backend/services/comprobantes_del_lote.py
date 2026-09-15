@@ -123,10 +123,11 @@ LISTOS_PARA_REGISTRAR = (SEGURO, A_MANO)
 # menos, «DE» y «LA» harían coincidir a cualquiera con cualquiera.
 LETRAS_DE_UNA_PALABRA = 4
 
-# El motivo con el que se descarta una foto. Un mínimo para que «x» o «no» no
-# pasen por explicación, y un tope para que la pantalla no reviente.
-LETRAS_DEL_MOTIVO = 4
-LARGO_DEL_MOTIVO = 200
+# El motivo con el que se descarta una foto. Los números viven en
+# `lotes_de_pago` porque devolver una orden a la cola exige exactamente lo
+# mismo, y dos copias del mismo mínimo se separan en cuanto alguien toca una.
+LETRAS_DEL_MOTIVO = lotes_de_pago.LETRAS_DEL_MOTIVO
+LARGO_DEL_MOTIVO = lotes_de_pago.LARGO_DEL_MOTIVO
 
 # Cuántas palabras del nombre tienen que aparecer para dar el nombre por
 # encontrado. Dos, porque un apellido solo se repite: en un lote con dos

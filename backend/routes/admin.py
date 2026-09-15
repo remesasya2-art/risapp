@@ -23,7 +23,8 @@ from routes.dependencies import (get_admin_user, get_current_user,
                                  get_super_admin, get_crm_user)
 from services.notifications import create_notification, ROLES_DEL_PERSONAL
 from services import pendientes as pendientes_svc
-from services import auditoria, comprobantes_del_lote, kyc_quota, lotes_de_pago
+from services import (auditoria, comprobantes_del_lote, kyc_quota,
+                      lotes_de_pago, registro_del_pago)
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -753,6 +754,7 @@ async def get_all_withdrawals(
 @router.post("/withdrawals/process")
 async def process_withdrawal(
     request: dict,
+    peticion: Request,
     admin: User = Depends(get_super_admin)
 ):
     """Process a withdrawal (approve/reject)"""
@@ -784,58 +786,21 @@ async def process_withdrawal(
         # La contabilidad de bancos se lleva en la app externa. Aquí ya NO se
         # descuenta de bancos internos ni se exige seleccionar banco: el admin
         # solo registra el pago y su comprobante. El banco es opcional.
-        update_data = {
-            "status": "completed",
-            "completed_at": datetime.now(timezone.utc),
-            "processed_by": admin.user_id,
-        }
-        if bank_id:
-            update_data["paid_from_bank"] = bank_id
-        if proof_images:
-            update_data["proof_images"] = proof_images
-        await db.transactions.update_one(
-            {"transaction_id": transaction_id},
-            {"$set": update_data}
-        )
+        #
+        # Todo el trabajo vive en `services/registro_del_pago.py` y no acá,
+        # porque ahora hay DOS caminos que asientan un pago: este botón y
+        # «Cerrar el lote». Escrito dos veces, la primera corrección en uno no
+        # llegaría al otro y lo que se pierde no se nota: el aviso al cliente,
+        # o el cupo.
+        asentado = await registro_del_pago.registrar(
+            db, transaction, quien=admin, banco=bank_id,
+            comprobantes=proof_images, request=peticion)
+        if not asentado:
+            raise HTTPException(
+                status_code=409,
+                detail="Esa orden ya se procesó desde otro lado. Actualizá la "
+                       "pantalla para ver cómo quedó.")
 
-        # Cupo sin KYC: el saldo de un envio se debita al crearlo, asi que aca no
-        # hay ningun $inc de saldo donde colgarse y el consumo va en su propia
-        # escritura. Si fallara, el pago igual queda hecho.
-        try:
-            # amount_input es RIS en los envios de reales y de bolivares, pero USDT
-            # o USDC en los de cripto, con el mismo type "withdrawal". Sumar eso al
-            # contador mezclaria monedas, asi que del envio en cripto se cuenta la
-            # operacion y no el monto.
-            _kq_moneda = (transaction.get("currency_input") or "RIS").upper()
-            _kq_monto = transaction.get("amount_input", 0) if _kq_moneda == "RIS" else 0
-            _kq_after = await db.users.find_one_and_update(
-                {"user_id": transaction["user_id"]},
-                {"$inc": kyc_quota.consume_inc(_kq_monto)},
-                return_document=True,
-            )
-            await kyc_quota.notify_if_exhausted(_kq_after)
-        except Exception as _kq_e:
-            logger.warning(f"kyc_quota: no se pudo consumir cupo en {transaction_id}: {_kq_e}")
-
-        # Notify user
-        await create_notification(
-            user_id=transaction["user_id"],
-            title="Tu retiro se completó",
-            message=f"Ya enviamos {para_mostrar(transaction.get('amount_output'), 'VES')} a tu beneficiario.",
-            notification_type="withdrawal_completed",
-            # El número de la operación viaja en el aviso para que el correo
-            # pueda armar el comprobante con forma de pasaje, en vez de mandar
-            # un párrafo. Ver `services/pasaje.py`.
-            data={"transaction_id": transaction_id},
-        )
-        
-        # Update gestor transaction if applicable
-        if transaction.get("gestor_transaction_id"):
-            await db.gestor_transactions.update_one(
-                {"transaction_id": transaction["gestor_transaction_id"]},
-                {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc)}}
-            )
-        
         message = "Retiro aprobado"
         
     elif action == "reject":
@@ -1290,6 +1255,40 @@ async def archivo_del_lote(lote_id: str, admin: User = Depends(get_super_admin))
         return await lotes_de_pago.archivo(db, lote_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+class DevolverOrdenRequest(BaseModel):
+    # El motivo se valida en el servicio, donde viven el mínimo y el tope.
+    motivo: str
+
+
+@router.get("/lotes/cerrados")
+async def listar_lotes_cerrados(admin: User = Depends(get_super_admin)):
+    """Los últimos lotes cerrados. Adentro viven el archivo y las fotos."""
+    return {"lotes": await lotes_de_pago.cerrados(db)}
+
+
+@router.post("/lotes/{lote_id}/cerrar")
+async def cerrar_lote(lote_id: str, request: Request,
+                      admin: User = Depends(get_super_admin)):
+    """Asienta de una vez el pago de todas las órdenes del lote y lo cierra."""
+    try:
+        return await lotes_de_pago.cerrar(db, lote_id, quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.post("/lotes/{lote_id}/ordenes/{orden_id}/devolver")
+async def devolver_orden_del_lote(lote_id: str, orden_id: str,
+                                  cuerpo: DevolverOrdenRequest,
+                                  request: Request,
+                                  admin: User = Depends(get_super_admin)):
+    """Saca una orden del lote y la manda de vuelta a la cola de pendientes."""
+    try:
+        return await lotes_de_pago.devolver_una(
+            db, lote_id, orden_id, cuerpo.motivo, quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
 
 
 @router.post("/lotes/{lote_id}/cancelar")
