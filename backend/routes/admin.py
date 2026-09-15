@@ -1328,6 +1328,12 @@ class AsignarComprobanteRequest(BaseModel):
     orden_id: Optional[str] = None
 
 
+class DescartarComprobanteRequest(BaseModel):
+    # El motivo es obligatorio y se valida en el servicio, no acá: el mínimo de
+    # letras y el tope viven al lado de la regla que los usa.
+    motivo: str
+
+
 @router.post("/lotes/{lote_id}/comprobantes")
 async def cargar_comprobantes_del_lote(
     lote_id: str,
@@ -1377,6 +1383,22 @@ async def asignar_comprobante_del_lote(
     try:
         return await comprobantes_del_lote.asignar(
             db, lote_id, comprobante_id, cuerpo.orden_id,
+            quien=admin, request=request)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/descartar")
+async def descartar_comprobante_del_lote(
+    lote_id: str, comprobante_id: str,
+    cuerpo: DescartarComprobanteRequest,
+    request: Request,
+    admin: User = Depends(get_super_admin),
+):
+    """Saca una foto de la pantalla, con el motivo escrito."""
+    try:
+        return await comprobantes_del_lote.descartar(
+            db, lote_id, comprobante_id, cuerpo.motivo,
             quien=admin, request=request)
     except ValueError as e:
         raise HTTPException(409, str(e))

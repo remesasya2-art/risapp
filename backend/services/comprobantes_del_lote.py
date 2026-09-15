@@ -96,15 +96,37 @@ REPETIDO = "repetido"          # más de una foto encaja con la misma orden
 SIN_ADJUDICAR = "sin_adjudicar"  # no encaja con ninguna
 SIN_LECTOR = "sin_lector"      # no hay lector en el servidor
 A_MANO = "a_mano"              # lo adjudicó una persona
+DESCARTADO = "descartado"      # una persona dijo que esta foto no va
 
 # Los estados en los que la foto quedó colgada de una orden. No se usa para
 # DECIDIR si colgarla —eso lo dice el `orden_id`, ver `_colgar_de_las_ordenes`—
 # sino para que la pantalla sepa cuáles pintar en verde.
 ADJUDICADOS = (SEGURO, REVISAR, A_MANO)
 
+# Con cuáles alcanza para asentar el pago sin que nadie mire la foto.
+#
+# POR QUE «REVISAR» NO ESTA ACA, AUNQUE LA FOTO ESTE COLGADA DE LA ORDEN
+#
+#     `REVISAR` quiere decir que el beneficiario coincide pero EL MONTO NO: la
+#     foto es de esa persona y el importe no es el de la orden. Puede ser un
+#     cobro por otra cifra, un pago parcial, o una orden mal cargada.
+#
+#     Asentar eso solo sería dar por pagado un importe que nadie comparó. Va a
+#     la lista de lo que mira una persona, que es lo que se decidió.
+#
+#     Por eso son dos listas y no una: `ADJUDICADOS` dice de quién es la foto,
+#     esta dice si alcanza para registrar. Juntarlas fue la primera idea y
+#     mezclaba dos preguntas distintas.
+LISTOS_PARA_REGISTRAR = (SEGURO, A_MANO)
+
 # Cuántas letras tiene que tener una palabra del nombre para que cuente. Con
 # menos, «DE» y «LA» harían coincidir a cualquiera con cualquiera.
 LETRAS_DE_UNA_PALABRA = 4
+
+# El motivo con el que se descarta una foto. Un mínimo para que «x» o «no» no
+# pasen por explicación, y un tope para que la pantalla no reviente.
+LETRAS_DEL_MOTIVO = 4
+LARGO_DEL_MOTIVO = 200
 
 # Cuántas palabras del nombre tienen que aparecer para dar el nombre por
 # encontrado. Dos, porque un apellido solo se repite: en un lote con dos
@@ -288,9 +310,18 @@ async def cargar(db, lote_id: str, imagenes: list, *, quien=None, request=None) 
     ordenes = lote.get("ordenes") or []
     leidas = await _leer_todas(limpias)
     if leidas is None:
+        # El renglón NO repite por qué falló el lector. Este texto decía «el
+        # servidor no tiene el lector instalado», que era una conjetura —la
+        # primera vez que falló de verdad, el lector estaba y lo que faltaba
+        # era una pieza del sistema— y salía repetido en cada foto: doce
+        # renglones diciendo doce veces lo mismo, y encima equivocado.
+        #
+        # El motivo real lo da `lector.por_que_no_hay_lector()` una sola vez,
+        # arriba de la pantalla. Acá va lo único que le importa a este renglón:
+        # que a esta foto hay que darle dueño a mano.
         fallos = [{"orden_id": None, "estado": SIN_LECTOR, "candidatas": [],
-                   "motivo": "El servidor no tiene el lector instalado. "
-                             "Asigná las fotos a mano."} for _ in limpias]
+                   "motivo": "El lector no pudo leer esta foto. El motivo "
+                             "está arriba."} for _ in limpias]
         leidas = [lector.vacio() for _ in limpias]
     else:
         fallos = adjudicar(leidas, ordenes)
@@ -465,6 +496,82 @@ async def asignar(db, lote_id: str, comprobante_id: str, orden_id, *,
     return _para_la_pantalla(actualizado, ordenes)
 
 
+async def descartar(db, lote_id: str, comprobante_id: str, motivo: str, *,
+                    quien=None, request=None) -> dict:
+    """Saca una foto de la pantalla, con el motivo escrito.
+
+    PARA QUE HACE FALTA
+
+        Una foto puede no ser de nadie: un comprobante errado, un cobro que no
+        corresponde, o la misma captura subida dos veces porque el lector no
+        andaba y el agente reintentó. Hasta ahora no había salida: se quedaba
+        en la lista para siempre y el lote no terminaba de resolverse nunca.
+
+    POR QUE SE BORRAN LOS BYTES DE LA FOTO Y NO EL RENGLON
+
+        El renglón queda —con quién la descartó, cuándo y por qué—, porque en
+        una pantalla de pagos lo que se saca tiene que poder explicarse después.
+
+        Lo que sí se borra es la imagen. Las fotos viven adentro del documento
+        del lote, y un documento de MongoDB no puede pasar de 16 MB: cada foto
+        que se queda sin usar le come lugar a las que faltan. Borrar el renglón
+        entero escondería el descarte; guardar la imagen de algo que ya se dijo
+        que no va, ocupa por nada.
+
+    POR QUE EL MOTIVO ES OBLIGATORIO
+
+        Descartar un comprobante es decir «este pago no está probado por esta
+        foto». Sin motivo escrito, el que mire dentro de seis meses no puede
+        distinguir un duplicado de un cobro indebido.
+    """
+    motivo = " ".join(str(motivo or "").split())
+    if len(motivo) < LETRAS_DEL_MOTIVO:
+        raise ValueError(
+            f"Escribí por qué se descarta esta foto (al menos "
+            f"{LETRAS_DEL_MOTIVO} letras): duplicada, comprobante errado, "
+            "cobro que no corresponde…")
+    motivo = motivo[:LARGO_DEL_MOTIVO]
+
+    lote = await db[lotes_de_pago.COLECCION].find_one({"lote_id": lote_id})
+    if not lote:
+        raise ValueError("Ese lote no existe")
+    if lote.get("estado") != lotes_de_pago.ABIERTO:
+        raise ValueError("Ese lote ya está cerrado o cancelado")
+
+    comprobantes = lote.get("comprobantes") or []
+    actual = next((c for c in comprobantes
+                   if c.get("comprobante_id") == comprobante_id), None)
+    if not actual:
+        raise ValueError("Esa foto no es de este lote")
+    if actual.get("estado") == DESCARTADO:
+        raise ValueError("Esa foto ya estaba descartada")
+
+    # Si estaba colgada de una orden, se despega: dejarla sería dar por probado
+    # un pago con una foto que acaba de decirse que no sirve.
+    por_id = {o.get("orden_id"): o for o in lote.get("ordenes") or []}
+    if actual.get("orden_id") and por_id.get(actual["orden_id"]):
+        await _quitar_imagen(db, por_id[actual["orden_id"]], actual["imagen"])
+
+    await db[lotes_de_pago.COLECCION].update_one(
+        {"lote_id": lote_id, "comprobantes.comprobante_id": comprobante_id},
+        {"$set": {"comprobantes.$.estado": DESCARTADO,
+                  "comprobantes.$.orden_id": None,
+                  "comprobantes.$.motivo": motivo,
+                  "comprobantes.$.imagen": "",
+                  "comprobantes.$.descartado_por": getattr(quien, "user_id", None),
+                  "comprobantes.$.descartado_en": datetime.now(timezone.utc)}})
+
+    await auditoria.registrar(
+        db, "dinero.lote_comprobante_descartado", quien=quien, request=request,
+        objetivo_tipo="lote", objetivo_id=lote_id,
+        objetivo_desc=f"{lote.get('numero')}: foto {comprobante_id} descartada",
+        detalle={"comprobante_id": comprobante_id,
+                 "estaba_en": actual.get("orden_id"), "motivo": motivo})
+
+    return {"comprobante_id": comprobante_id, "estado": DESCARTADO,
+            "motivo": motivo}
+
+
 async def listar(db, lote_id: str) -> dict:
     """Las fotos de un lote y las órdenes a las que se pueden asignar."""
     lote = await db[lotes_de_pago.COLECCION].find_one(
@@ -478,9 +585,20 @@ async def listar(db, lote_id: str) -> dict:
         raise ValueError("Ese lote no existe")
     ordenes = lote.get("ordenes") or []
     por_que_no = lector.por_que_no_hay_lector()
-    comprobantes = [_para_la_pantalla(c, ordenes)
-                    for c in (lote.get("comprobantes") or [])]
-    con_foto = {c["orden_id"] for c in comprobantes if c["orden_id"]}
+
+    # Las descartadas no vuelven a la pantalla. Es el punto de descartarlas: el
+    # agente dijo que esa foto no va, y verla de nuevo en cada recarga es
+    # trabajo que ya hizo. Quedan contadas —y enteras en la auditoría— porque
+    # esconder cuántas se sacaron sería otra cosa.
+    todas = lote.get("comprobantes") or []
+    vivas = [c for c in todas if c.get("estado") != DESCARTADO]
+    comprobantes = [_para_la_pantalla(c, ordenes) for c in vivas]
+
+    # De qué orden es cada foto y en qué estado quedó. La pantalla necesita las
+    # dos cosas juntas para separar «listas para registrar» de «las mira una
+    # persona», y sin esto tendría que cruzarlas a mano y repetir la regla.
+    estado_por_orden = {c["orden_id"]: c["estado"]
+                        for c in comprobantes if c["orden_id"]}
     return {
         "lote_id": lote["lote_id"],
         "numero": lote.get("numero"),
@@ -492,13 +610,21 @@ async def listar(db, lote_id: str) -> dict:
         "por_que_no_hay_lector": por_que_no,
         "idiomas_del_lector": lector.idiomas_instalados() if not por_que_no else [],
         "comprobantes": comprobantes,
+        "descartadas": len(todas) - len(vivas),
         "ordenes": [{"orden_id": o.get("orden_id"),
                      "display_id": o.get("display_id"),
                      "beneficiario": (o.get("beneficiario") or {}).get("nombre"),
                      "monto": o.get("monto"),
-                     "tiene_comprobante": o.get("orden_id") in con_foto}
+                     "tiene_comprobante": o.get("orden_id") in estado_por_orden,
+                     "estado_comprobante": estado_por_orden.get(o.get("orden_id")),
+                     # La regla de qué alcanza para registrar vive acá, al lado
+                     # de los estados, y no en la pantalla. Si mañana aparece un
+                     # estado nuevo, se agrega en un solo lugar; repartida, la
+                     # pantalla lo daría por bueno sin que nadie se entere.
+                     "listo_para_registrar": estado_por_orden.get(o.get("orden_id"))
+                     in LISTOS_PARA_REGISTRAR}
                     for o in ordenes],
-        "resumen": _resumen(lote.get("comprobantes") or []),
+        "resumen": _resumen(vivas),
     }
 
 

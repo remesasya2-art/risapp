@@ -104,6 +104,7 @@ ACCIONES = {
     # expediente de un cliente tiene la foto del pago de otro.
     "dinero.lote_comprobantes": (Cat.DINERO, "Comprobantes cargados a un lote"),
     "dinero.lote_comprobante_asignado": (Cat.DINERO, "Comprobante asignado a mano"),
+    "dinero.lote_comprobante_descartado": (Cat.DINERO, "Comprobante descartado"),
     # Usuarios
     "usuario.suspendido":       (Cat.USUARIOS, "Usuario suspendido"),
     "usuario.reactivado":       (Cat.USUARIOS, "Usuario reactivado"),
