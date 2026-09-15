@@ -138,7 +138,7 @@ async def cargar(usuario, envio_id: str, *, codigo_objeto, posteado_at, foto: by
             "hayas copiado el comprobante equivocado.", http=409)
 
     ficha = await envios_archivos.guardar(
-        foto, envio_id=envio_id, user_id=user_id, clase="comprobante",
+        foto, dueno_id=envio_id, user_id=user_id, clase="comprobante",
         db=base, ahora=ahora)
     repetida = await envios_archivos.ya_usado(ficha["sha256"], envio_id, db=base)
 

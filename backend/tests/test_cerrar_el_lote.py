@@ -87,7 +87,12 @@ async def _lote_listo(base, monkeypatch, cuantas=2):
     await _con_dueno(base)
     _con_lector(monkeypatch, [_senales(cuentas=[c], montos=["100,00"])
                               for c in cuentas])
-    await cmp.cargar(base, lote_id, [_foto() for _ in cuentas], quien=Jefe())
+    # Cada foto de un color distinto A PROPOSITO: son imágenes distintas y el
+    # sistema descarta las repetidas por su contenido. Con `_foto()` dos veces,
+    # la segunda se saltea —bien— y el lote queda con una orden sin comprobante.
+    await cmp.cargar(base, lote_id,
+                     [_foto((30 + i * 40, 30, 30)) for i in range(len(cuentas))],
+                     quien=Jefe())
     return lote_id
 
 

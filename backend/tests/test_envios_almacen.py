@@ -267,14 +267,14 @@ def sin_almacen(monkeypatch):
 
 def test_sin_variables_los_bytes_van_a_mongo(base, sin_almacen):
     datos = _jpg()
-    ficha = corre(archivos.guardar(datos, envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(datos, dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     assert ficha["almacen"] == "mongo"
     assert ficha["clave"] is None
     fila = base.envios_archivos.filas[0]
     assert fila["contenido"] == datos
 
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["contenido"] == datos
 
 
@@ -293,7 +293,7 @@ def test_configurado_es_falso_si_falta_una_sola_variable(monkeypatch):
 
 def test_con_almacen_los_bytes_no_quedan_en_mongo(base, s3):
     datos = _jpg()
-    ficha = corre(archivos.guardar(datos, envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(datos, dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     assert ficha["almacen"] == "r2"
     assert ficha["clave"] == f"envios/env_1/{ficha['asset_id']}.jpg"
@@ -306,9 +306,9 @@ def test_con_almacen_los_bytes_no_quedan_en_mongo(base, s3):
 
 def test_leer_trae_los_bytes_del_almacen(base, s3):
     datos = _jpg(b"comprobante")
-    ficha = corre(archivos.guardar(datos, envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(datos, dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["contenido"] == datos
     assert not leida.get("error")
     assert all(c.cerrado for c in s3.cuerpos), "el cuerpo del objeto queda abierto"
@@ -316,7 +316,7 @@ def test_leer_trae_los_bytes_del_almacen(base, s3):
 
 def test_el_prefijo_se_puede_cambiar(base, s3, monkeypatch):
     monkeypatch.setenv(almacen.VAR_PREFIJO, "fotos/prod")
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_9", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_9", user_id="u1",
                                    clase="comprobante"))
     assert ficha["clave"].startswith("fotos/prod/env_9/")
 
@@ -331,11 +331,11 @@ def test_un_prefijo_con_salto_de_directorio_se_ignora(s3, monkeypatch):
 def test_si_el_almacen_no_escribe_el_archivo_va_a_mongo(base, s3):
     s3.falla_al_escribir = True
     datos = _jpg()
-    ficha = corre(archivos.guardar(datos, envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(datos, dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     assert ficha["almacen"] == "mongo"
     assert base.envios_archivos.filas[0]["contenido"] == datos
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["contenido"] == datos
 
 
@@ -343,7 +343,7 @@ def test_el_objeto_se_escribe_antes_que_la_ficha(base, s3):
     """Si Mongo falla, queda un objeto huérfano — no una ficha que apunta a nada."""
     base.envios_archivos.rota = True
     with pytest.raises(archivos.ArchivoRechazado) as e:
-        corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+        corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                clase="comprobante"))
     assert e.value.http == 503
     assert s3.escrituras == 1, "el objeto tiene que haberse escrito primero"
@@ -353,45 +353,45 @@ def test_el_objeto_se_escribe_antes_que_la_ficha(base, s3):
 # --- 4. los dos almacenes conviven ------------------------------------------
 
 def test_la_misma_base_sirve_fotos_de_los_dos_lados(base, s3, monkeypatch):
-    en_almacen = corre(archivos.guardar(_jpg(b"nueva"), envio_id="env_1",
+    en_almacen = corre(archivos.guardar(_jpg(b"nueva"), dueno_id="env_1",
                                         user_id="u1", clase="comprobante"))
     for nombre in almacen.OBLIGATORIAS:
         monkeypatch.delenv(nombre)
     almacen.olvidar_cliente()
-    en_mongo = corre(archivos.guardar(_jpg(b"vieja"), envio_id="env_2",
+    en_mongo = corre(archivos.guardar(_jpg(b"vieja"), dueno_id="env_2",
                                       user_id="u1", clase="comprobante"))
     assert en_mongo["almacen"] == "mongo"
 
     # Con el almacén apagado, la de Mongo se sirve igual.
-    assert corre(archivos.leer(en_mongo["asset_id"], envio_id="env_2"))["contenido"] == _jpg(b"vieja")
+    assert corre(archivos.leer(en_mongo["asset_id"], dueno_id="env_2"))["contenido"] == _jpg(b"vieja")
 
     for nombre, valor in VARIABLES.items():
         monkeypatch.setenv(nombre, valor)
     almacen.olvidar_cliente()
-    assert corre(archivos.leer(en_almacen["asset_id"], envio_id="env_1"))["contenido"] == _jpg(b"nueva")
+    assert corre(archivos.leer(en_almacen["asset_id"], dueno_id="env_1"))["contenido"] == _jpg(b"nueva")
 
 
 # --- 5. lo que no se puede traer, y lo que no coincide ----------------------
 
 def test_una_falla_de_lectura_no_es_un_404(base, s3):
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     s3.falla_al_leer = True
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida is not None, "la ficha existe: no puede contestarse 'no existe'"
     assert leida.get("contenido") is None
     assert leida["error"] == "almacen"
 
 
 def test_un_asset_inexistente_sigue_siendo_none(base, s3):
-    assert corre(archivos.leer("ast_no_existe", envio_id="env_1")) is None
+    assert corre(archivos.leer("ast_no_existe", dueno_id="env_1")) is None
 
 
 def test_bytes_que_no_coinciden_con_el_hash_no_se_sirven(base, s3):
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     s3.objetos[(BUCKET, ficha["clave"])] = (_jpg(b"otra cosa"), "image/jpeg")
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["error"] == "integridad"
     assert leida.get("contenido") is None
 
@@ -403,33 +403,33 @@ def test_el_objeto_se_pide_acotado_no_entero(base, s3):
     medir, los bytes ya están en la memoria del proceso. Se pide un byte más que
     el tope, que es lo mínimo que alcanza para detectar el exceso.
     """
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
-    corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert s3.cuerpos[-1].pedido == archivos.TAMANO_MAX_BYTES + 1
 
 
 def test_un_objeto_mas_grande_que_el_tope_no_se_sirve(base, s3):
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     s3.devuelve_de_mas = True
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     # "grande", no "almacen": un objeto de 9 MB no se va a achicar por esperar un
     # minuto, y ese es el mensaje que decide qué se le dice a la persona.
     assert leida["error"] == "grande"
 
 
 def test_una_foto_no_se_lee_desde_otro_envio(base, s3):
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
-    assert corre(archivos.leer(ficha["asset_id"], envio_id="env_2")) is None
+    assert corre(archivos.leer(ficha["asset_id"], dueno_id="env_2")) is None
 
 
 # --- 6. la migracion --------------------------------------------------------
 
 def _tres_en_mongo(sin_variables=True):
     return [
-        corre(archivos.guardar(_jpg(bytes(f"n{i}", "ascii")), envio_id=f"env_{i}",
+        corre(archivos.guardar(_jpg(bytes(f"n{i}", "ascii")), dueno_id=f"env_{i}",
                                user_id="u1", clase="comprobante"))
         for i in range(3)
     ]
@@ -461,7 +461,7 @@ def test_la_migracion_mueve_y_borra_de_mongo(base, monkeypatch):
         assert fila["almacen"] == "r2"
         assert fila["migrado_at"] is not None
         # Y se sigue leyendo, que es lo único que le importa a quien la pide.
-        assert corre(archivos.leer(f["asset_id"], envio_id=f["envio_id"]))[
+        assert corre(archivos.leer(f["asset_id"], dueno_id=f["envio_id"]))[
             "contenido"] == falso.objetos[(BUCKET, fila["clave"])][0]
     almacen.olvidar_cliente()
 
@@ -471,7 +471,7 @@ def _preparar_migracion(monkeypatch, cantidad=1):
         monkeypatch.delenv(nombre, raising=False)
     almacen.olvidar_cliente()
     fichas = [corre(archivos.guardar(_jpg(bytes(f"n{i}", "ascii")),
-                                     envio_id=f"env_{i}", user_id="u1",
+                                     dueno_id=f"env_{i}", user_id="u1",
                                      clase="comprobante"))
               for i in range(cantidad)]
     falso = _S3Falso()
@@ -564,7 +564,7 @@ def test_el_limite_se_acota_antes_de_pedirle_nada_a_mongo(base, monkeypatch,
 
 
 def test_sin_almacen_la_migracion_no_hace_nada(base, sin_almacen):
-    corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                            clase="comprobante"))
     salida = corre(archivos.migrar_lote())
     assert salida["activo"] is False
@@ -589,7 +589,7 @@ def test_un_endpoint_que_no_es_https_desactiva_el_almacen(monkeypatch, endpoint)
 
 def test_con_el_endpoint_en_http_los_bytes_van_a_mongo(base, s3, monkeypatch):
     monkeypatch.setenv(almacen.VAR_ENDPOINT, ENDPOINT.replace("https", "http"))
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     assert ficha["almacen"] == "mongo"
     assert s3.escrituras == 0
@@ -653,7 +653,7 @@ def test_una_clave_con_componentes_raros_se_rechaza(s3, envio_id):
 def test_un_envio_con_id_raro_no_bloquea_el_despacho(base, s3):
     """La clave la arma este sistema. Si no valida es un defecto nuestro, y el
     usuario no se puede quedar sin poder despachar por eso: va a Mongo."""
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env/1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env/1", user_id="u1",
                                    clase="comprobante"))
     assert ficha["almacen"] == "mongo"
     assert s3.escrituras == 0
@@ -793,9 +793,9 @@ def test_boto3_no_corre_en_el_bucle_de_eventos(base, s3):
     y la cola del operador por lo que tarde la red. Sin este test, sacar los dos
     saltos a un hilo dejaba la suite entera en verde.
     """
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
-    corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert s3.hilos, "no se llamó al bucket"
     assert not any(s3.hilos), "hay llamadas de boto3 en el hilo del bucle de eventos"
 
@@ -814,7 +814,7 @@ def test_una_caida_de_mongo_no_es_una_foto_que_no_existe(base, s3):
     class _BaseRota:
         envios_archivos = _Rota()
 
-    ficha = corre(archivos.leer("ast_1", envio_id="env_1", db=_BaseRota()))
+    ficha = corre(archivos.leer("ast_1", dueno_id="env_1", db=_BaseRota()))
     assert ficha is not None
     assert ficha["error"] == "base"
     with pytest.raises(archivos.ArchivoRechazado) as e:
@@ -830,16 +830,16 @@ def test_la_ficha_guarda_el_bucket_y_lee_de_ese(base, s3, monkeypatch):
     único guardado, todo lo migrado quedaría ilegible — y los bytes de Mongo ya
     se borraron.
     """
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     assert ficha["bucket"] == BUCKET
     monkeypatch.setenv(almacen.VAR_BUCKET, "risapp-envios-nuevo")
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["contenido"] == _jpg(), "se leyó del bucket configurado, no del suyo"
 
 
 def test_un_objeto_que_no_existe_se_distingue_de_una_caida(base, s3):
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     s3.objetos.clear()
 
@@ -850,16 +850,16 @@ def test_un_objeto_que_no_existe_se_distingue_de_una_caida(base, s3):
         raise _NoSuchKey("no está")
 
     s3.get_object = _explota
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["error"] == "ausente"
 
 
 def test_una_lectura_parcial_no_se_sirve(base, s3):
     """El otro caso que la verificación de hash existe para atrapar."""
-    ficha = corre(archivos.guardar(_jpg(b"un comprobante largo"), envio_id="env_1",
+    ficha = corre(archivos.guardar(_jpg(b"un comprobante largo"), dueno_id="env_1",
                                    user_id="u1", clase="comprobante"))
     s3.devuelve_parcial = True
-    leida = corre(archivos.leer(ficha["asset_id"], envio_id="env_1"))
+    leida = corre(archivos.leer(ficha["asset_id"], dueno_id="env_1"))
     assert leida["error"] == "integridad"
 
 
@@ -925,11 +925,11 @@ def test_estado_no_revienta_con_un_endpoint_mal_escrito(monkeypatch):
 
 def test_leer_exige_el_envio(base, s3):
     """Antes tenía default `None`, y con `None` el filtro se relajaba solo."""
-    ficha = corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    ficha = corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                                    clase="comprobante"))
     with pytest.raises(TypeError):
         corre(archivos.leer(ficha["asset_id"]))
-    assert corre(archivos.leer(ficha["asset_id"], envio_id="")) is None
+    assert corre(archivos.leer(ficha["asset_id"], dueno_id="")) is None
 
 
 def test_ya_estaba_no_cuenta_como_migrado(base, monkeypatch):
@@ -965,7 +965,7 @@ def test_pil_tampoco_corre_en_el_bucle_de_eventos(base, s3, monkeypatch):
         return original(datos, tipo)
 
     monkeypatch.setattr(archivos, "sin_exif", _espia)
-    corre(archivos.guardar(_jpg(), envio_id="env_1", user_id="u1",
+    corre(archivos.guardar(_jpg(), dueno_id="env_1", user_id="u1",
                            clase="comprobante"))
     assert hilos == [False], "sin_exif corrió en el hilo del bucle de eventos"
 

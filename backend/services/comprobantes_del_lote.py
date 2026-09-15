@@ -51,12 +51,14 @@ LO QUE ESTO NO HACE
     toma una persona mirando la primera.
 """
 import asyncio
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
 
-from services import (archivo_de_pagos, auditoria, imagen_recibida,
-                      lector_de_comprobantes as lector, lotes_de_pago)
+from services import (archivo_de_pagos, auditoria, envios_archivos,
+                      imagen_recibida, lector_de_comprobantes as lector,
+                      lotes_de_pago)
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +289,43 @@ async def _leer_todas(imagenes: list) -> list:
         return None
 
 
+def _bytes_de(data_url: str) -> bytes:
+    """Los bytes de una foto que ya pasó por `limpiar_foto_del_chat`."""
+    import base64
+    return base64.b64decode(data_url.split(",", 1)[1])
+
+
+def _data_url(datos: bytes, content_type: str) -> str:
+    import base64
+    return (f"data:{content_type or 'image/jpeg'};base64,"
+            + base64.b64encode(bytes(datos)).decode("ascii"))
+
+
+async def _foto_de(db, lote_id: str, comprobante: dict) -> str:
+    """La foto de un comprobante, venga de donde venga.
+
+    DOS LUGARES A LA VEZ, Y NO ES TRANSITORIO
+
+        Las fotos nuevas viven en el almacén de archivos y el lote guarda sólo
+        su `asset_id`. Las de los lotes que ya existen están adentro del
+        documento, en `imagen`, porque se guardaron antes de esto.
+
+        Migrarlas de golpe es lo que deja un lote sin sus comprobantes si algo
+        sale mal a mitad de camino. Leer de los dos lados no cuesta nada y no
+        hay fecha en la que haya que apurarse.
+    """
+    asset_id = comprobante.get("asset_id")
+    if not asset_id:
+        return comprobante.get("imagen") or ""
+    ficha = await envios_archivos.leer(asset_id, dueno_id=lote_id, db=db)
+    if not ficha or ficha.get("contenido") is None:
+        motivo = (ficha or {}).get("error") or "no está"
+        logger.warning("comprobantes_del_lote: no se pudo traer %s (%s)",
+                       asset_id, motivo)
+        return ""
+    return _data_url(ficha["contenido"], ficha.get("content_type"))
+
+
 async def cargar(db, lote_id: str, imagenes: list, *, quien=None, request=None) -> dict:
     """Sube varias fotos de una vez y las reparte entre las órdenes del lote."""
     if not imagenes:
@@ -328,11 +367,48 @@ async def cargar(db, lote_id: str, imagenes: list, *, quien=None, request=None) 
         fallos = adjudicar(leidas, ordenes)
 
     ahora = datetime.now(timezone.utc)
-    comprobantes = []
+
+    # Las que ya están en este lote, por su huella. Subir la misma tanda dos
+    # veces es lo que pasó de verdad: el lector no andaba, el agente reintentó,
+    # y quedaron doce fotos para cuatro órdenes. Comparar el contenido es la
+    # única forma de saberlo — el nombre del archivo no dice nada.
+    ya_estan = {c.get("sha256") for c in (lote.get("comprobantes") or [])
+                if c.get("sha256") and c.get("estado") != DESCARTADO}
+
+    # `fotos` guarda el texto de cada foto por comprobante: se usa para colgarla
+    # de la orden sin volver a pedirla al almacén. Va aparte de `comprobantes`
+    # porque el texto NO se guarda en el lote.
+    comprobantes, fotos, repetidas = [], {}, 0
     for imagen, senales, fallo in zip(limpias, leidas, fallos):
+        crudos = _bytes_de(imagen)
+        huella = hashlib.sha256(crudos).hexdigest()
+        if huella in ya_estan:
+            repetidas += 1
+            continue
+        ya_estan.add(huella)
+
+        # LA FOTO NO VA ADENTRO DEL LOTE, VA AL ALMACEN DE ARCHIVOS
+        #
+        #     Antes se guardaba el base64 acá mismo. Un documento de MongoDB no
+        #     puede pasar de 16 MB, y con capturas de teléfono de medio mega
+        #     entran unas veinticuatro: un lote admite trescientas órdenes. Al
+        #     pasarse, el `$push` falla y el agente pierde la tanda entera.
+        #
+        #     `services/envios_archivos.py` ya resolvía esto para las fotos de
+        #     los envíos, por el mismo motivo y escrito en su encabezado. El
+        #     lote guarda el `asset_id` y nada más.
+        try:
+            ficha = await envios_archivos.guardar(
+                crudos, dueno_id=lote_id,
+                user_id=getattr(quien, "user_id", None) or "",
+                clase="comprobante_lote", db=db)
+        except envios_archivos.ArchivoRechazado as e:
+            raise ValueError(f"Una de las fotos no se pudo guardar: {e.mensaje}")
+
         comprobantes.append({
             "comprobante_id": f"cmp_{uuid.uuid4().hex[:12]}",
-            "imagen": imagen,
+            "asset_id": ficha["asset_id"],
+            "sha256": huella,
             "subido_en": ahora,
             "subido_por": getattr(quien, "user_id", None),
             # Lo que se leyó se guarda. Cuando una adjudicación salga mal, la
@@ -344,12 +420,17 @@ async def cargar(db, lote_id: str, imagenes: list, *, quien=None, request=None) 
             "motivo": fallo["motivo"],
             "candidatas": fallo["candidatas"],
         })
+        fotos[comprobantes[-1]["comprobante_id"]] = imagen
 
-    await db[lotes_de_pago.COLECCION].update_one(
-        {"lote_id": lote_id},
-        {"$push": {"comprobantes": {"$each": comprobantes}}})
+    if comprobantes:
+        await db[lotes_de_pago.COLECCION].update_one(
+            {"lote_id": lote_id},
+            {"$push": {"comprobantes": {"$each": comprobantes}}})
 
-    await _colgar_de_las_ordenes(db, lote, comprobantes)
+    # Las fotos se cuelgan de la orden con el texto que ya está en memoria: es
+    # el mismo campo `proof_images` de siempre, para que ninguna pantalla vieja
+    # tenga que aprender el almacén.
+    await _colgar_de_las_ordenes(db, lote, comprobantes, fotos=fotos)
 
     resumen = _resumen(comprobantes)
     await auditoria.registrar(
@@ -359,9 +440,13 @@ async def cargar(db, lote_id: str, imagenes: list, *, quien=None, request=None) 
         detalle={"resumen": resumen,
                  "adjudicados": [c["orden_id"] for c in comprobantes if c["orden_id"]]})
 
-    logger.info("lote %s: %s comprobante(s) cargados, %s", lote.get("numero"),
-                len(comprobantes), resumen)
+    logger.info("lote %s: %s comprobante(s) cargados, %s repetida(s), %s",
+                lote.get("numero"), len(comprobantes), repetidas, resumen)
     return {"lote_id": lote_id, "resumen": resumen,
+            # Cuántas se saltearon por estar ya subidas. Se devuelve para que la
+            # pantalla lo diga: al agente que sube once y ve nueve le tiene que
+            # quedar claro POR QUE, o va a pensar que se perdieron dos.
+            "repetidas": repetidas,
             "comprobantes": [_para_la_pantalla(c, ordenes) for c in comprobantes]}
 
 
@@ -393,7 +478,7 @@ def _para_la_pantalla(comprobante: dict, ordenes: list) -> dict:
     }
 
 
-async def _colgar_de_las_ordenes(db, lote: dict, comprobantes: list):
+async def _colgar_de_las_ordenes(db, lote: dict, comprobantes: list, *, fotos: dict):
     """Le agrega a cada orden la foto que le tocó.
 
     Se agrega a `proof_images`, que es donde ya viven los comprobantes de un
@@ -415,7 +500,9 @@ async def _colgar_de_las_ordenes(db, lote: dict, comprobantes: list):
         orden = por_id.get(c["orden_id"])
         if not orden:
             continue
-        await _agregar_imagen(db, orden, c["imagen"])
+        foto = fotos.get(c["comprobante_id"])
+        if foto:
+            await _agregar_imagen(db, orden, foto)
 
 
 async def _agregar_imagen(db, orden: dict, imagen: str) -> bool:
@@ -470,10 +557,13 @@ async def asignar(db, lote_id: str, comprobante_id: str, orden_id, *,
         raise ValueError(
             "Esa orden ya tiene una foto asignada. Soltá la otra primero.")
 
-    if actual.get("orden_id") and por_id.get(actual["orden_id"]):
-        await _quitar_imagen(db, por_id[actual["orden_id"]], actual["imagen"])
-    if orden_id:
-        await _agregar_imagen(db, por_id[orden_id], actual["imagen"])
+    # La foto se trae una sola vez: puede estar en el almacén o adentro del
+    # lote si es de antes. Ver `_foto_de`.
+    foto = await _foto_de(db, lote_id, actual)
+    if actual.get("orden_id") and por_id.get(actual["orden_id"]) and foto:
+        await _quitar_imagen(db, por_id[actual["orden_id"]], foto)
+    if orden_id and foto:
+        await _agregar_imagen(db, por_id[orden_id], foto)
 
     estado = A_MANO if orden_id else SIN_ADJUDICAR
     motivo = "" if orden_id else "La soltó el operador."
@@ -551,14 +641,21 @@ async def descartar(db, lote_id: str, comprobante_id: str, motivo: str, *,
     # un pago con una foto que acaba de decirse que no sirve.
     por_id = {o.get("orden_id"): o for o in lote.get("ordenes") or []}
     if actual.get("orden_id") and por_id.get(actual["orden_id"]):
-        await _quitar_imagen(db, por_id[actual["orden_id"]], actual["imagen"])
+        foto = await _foto_de(db, lote_id, actual)
+        if foto:
+            await _quitar_imagen(db, por_id[actual["orden_id"]], foto)
 
     await db[lotes_de_pago.COLECCION].update_one(
         {"lote_id": lote_id, "comprobantes.comprobante_id": comprobante_id},
         {"$set": {"comprobantes.$.estado": DESCARTADO,
                   "comprobantes.$.orden_id": None,
                   "comprobantes.$.motivo": motivo,
+                  # Se suelta la foto de las dos formas: `imagen` es donde
+                  # vivía antes y `asset_id` donde vive ahora. El objeto en el
+                  # almacén queda huérfano —basura barata, como dice
+                  # `envios_archivos` de los suyos— y ya no lo alcanza nadie.
                   "comprobantes.$.imagen": "",
+                  "comprobantes.$.asset_id": None,
                   "comprobantes.$.descartado_por": getattr(quien, "user_id", None),
                   "comprobantes.$.descartado_en": datetime.now(timezone.utc)}})
 
@@ -581,7 +678,9 @@ async def listar(db, lote_id: str) -> dict:
         {"_id": 0, "lote_id": 1, "numero": 1, "estado": 1, "ordenes": 1,
          "comprobantes.comprobante_id": 1, "comprobantes.estado": 1,
          "comprobantes.motivo": 1, "comprobantes.orden_id": 1,
-         "comprobantes.candidatas": 1, "comprobantes.leido": 1})
+         "comprobantes.candidatas": 1, "comprobantes.leido": 1,
+         # Sin los bytes, igual que antes: lo que viaja es la REFERENCIA.
+         "comprobantes.asset_id": 1, "comprobantes.sha256": 1})
     if not lote:
         raise ValueError("Ese lote no existe")
     ordenes = lote.get("ordenes") or []
@@ -637,5 +736,5 @@ async def imagen(db, lote_id: str, comprobante_id: str) -> str:
         raise ValueError("Ese lote no existe")
     for c in lote.get("comprobantes") or []:
         if c.get("comprobante_id") == comprobante_id:
-            return c.get("imagen") or ""
+            return await _foto_de(db, lote_id, c)
     raise ValueError("Esa foto no es de este lote")

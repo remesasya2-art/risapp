@@ -249,7 +249,7 @@ async def ver_foto(envio_id: str, asset_id: str,
     except envios_cobros.CobroImposible as e:
         raise HTTPException(e.http, e.mensaje)
 
-    ficha = await envios_archivos.leer(asset_id, envio_id=envio.get("envio_id"))
+    ficha = await envios_archivos.leer(asset_id, dueno_id=envio.get("envio_id"))
     try:
         envios_archivos.exigir_bytes(ficha)
     except envios_archivos.ArchivoRechazado as e:
