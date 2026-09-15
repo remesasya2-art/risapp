@@ -559,3 +559,185 @@ def test_LA_TABLA_DICE_QUE_ORDENES_SIGUEN_SIN_FOTO(base, monkeypatch):
         con_foto = {o["orden_id"]: o["tiene_comprobante"] for o in tabla["ordenes"]}
         assert con_foto == {"tx_0000": True, "tx_0001": False}
     _correr(caso())
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9. Separar lo que ya está de lo que mira una persona, y sacar lo que no va
+#
+# La pantalla era UNA tabla con todo mezclado: lo resuelto, lo dudoso y lo que
+# no es de nadie, junto y del mismo tamaño. Con dieciséis fotos, las dos que
+# había que mirar quedaban enterradas.
+#
+# Y no había forma de sacar una foto: un comprobante errado, un cobro que no
+# corresponde o la misma captura subida dos veces se quedaban en la lista para
+# siempre, y el lote no terminaba de resolverse nunca.
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_UNA_ORDEN_CON_EL_MONTO_DISTINTO_NO_ESTA_LISTA_PARA_REGISTRAR(base, monkeypatch):
+    """`revisar` quiere decir que el beneficiario coincide y el importe NO.
+
+    Asentarlo solo sería dar por pagada una cifra que nadie comparó. Es lo que
+    se decidió: esa la mira una persona.
+    """
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516",
+                                                monto="100.00")])
+        # La cuenta da, el monto no: 999,00 contra los 100,00 de la orden.
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["999,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        orden = (await cmp.listar(base, lote_id))["ordenes"][0]
+        assert orden["tiene_comprobante"] is True, "la foto SI es de esa orden"
+        assert orden["estado_comprobante"] == cmp.REVISAR
+        assert orden["listo_para_registrar"] is False, (
+            "el monto no coincide: no se registra sin que alguien mire")
+    _correr(caso())
+
+
+def test_UNA_ORDEN_CON_TODO_COINCIDIENDO_SI_ESTA_LISTA(base, monkeypatch):
+    """El otro lado de la guarda. Sin esto, «no está lista» podría ser siempre
+    y el test de arriba pasaría sin probar nada."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516",
+                                                monto="100.00")])
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        orden = (await cmp.listar(base, lote_id))["ordenes"][0]
+        assert orden["estado_comprobante"] == cmp.SEGURO
+        assert orden["listo_para_registrar"] is True
+    _correr(caso())
+
+
+def test_UNA_ORDEN_SIN_FOTO_NO_ESTA_LISTA(base, monkeypatch):
+    """Sin comprobante no hay nada que registrar, y tiene que decirlo."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0), _orden(1, cuenta="01020121710106529080")])
+        _con_lector(monkeypatch, [_senales(cuentas=["01340219112191046516"],
+                                           montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        listas = {o["orden_id"]: o["listo_para_registrar"]
+                  for o in (await cmp.listar(base, lote_id))["ordenes"]}
+        assert listas == {"tx_0000": True, "tx_0001": False}
+    _correr(caso())
+
+
+def test_DESCARTAR_SACA_LA_FOTO_DE_LA_PANTALLA(base, monkeypatch):
+    """Es el punto de descartarla: no volver a verla en cada recarga."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0)])
+        _con_lector(monkeypatch, [_senales(cuentas=["00000000000000000000"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        antes = await cmp.listar(base, lote_id)
+        assert len(antes["comprobantes"]) == 1
+        cid = antes["comprobantes"][0]["comprobante_id"]
+
+        await cmp.descartar(base, lote_id, cid, "repetida", quien=Jefe())
+
+        despues = await cmp.listar(base, lote_id)
+        assert despues["comprobantes"] == []
+        assert despues["descartadas"] == 1, (
+            "se sacan de la lista, pero cuántas se sacaron no se esconde")
+    _correr(caso())
+
+
+def test_DESCARTAR_BORRA_LOS_BYTES_PERO_DEJA_EL_RENGLON(base, monkeypatch):
+    """Las fotos viven adentro del documento del lote y MongoDB no pasa de
+    16 MB: una foto que ya se dijo que no va, ocupa por nada.
+
+    El renglón queda —quién, cuándo y por qué—, porque en una pantalla de pagos
+    lo que se saca tiene que poder explicarse después.
+    """
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0)])
+        _con_lector(monkeypatch, [_senales(cuentas=["00000000000000000000"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+
+        await cmp.descartar(base, lote_id, cid, "comprobante errado", quien=Jefe())
+
+        lote = await base[lotes.COLECCION].find_one({"lote_id": lote_id})
+        guardado = lote["comprobantes"][0]
+        assert guardado["imagen"] == "", "los bytes se van"
+        assert guardado["estado"] == cmp.DESCARTADO
+        assert guardado["motivo"] == "comprobante errado", "el porqué queda"
+        assert guardado["descartado_por"] == Jefe().user_id
+    _correr(caso())
+
+
+def test_DESCARTAR_DESPEGA_LA_FOTO_DE_LA_ORDEN(base, monkeypatch):
+    """Dejarla colgada sería dar por probado un pago con una foto que acaba de
+    decirse que no sirve."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516")])
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        tx = await base.transactions.find_one({"transaction_id": "tx_0000"})
+        assert len(tx.get("proof_images") or []) == 1
+
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+        await cmp.descartar(base, lote_id, cid, "no corresponde", quien=Jefe())
+
+        tx = await base.transactions.find_one({"transaction_id": "tx_0000"})
+        assert (tx.get("proof_images") or []) == []
+        orden = (await cmp.listar(base, lote_id))["ordenes"][0]
+        assert orden["tiene_comprobante"] is False
+    _correr(caso())
+
+
+def test_DESCARTAR_SIN_MOTIVO_NO_SE_PUEDE(base, monkeypatch):
+    """Sin motivo escrito, el que mire dentro de seis meses no puede
+    distinguir un duplicado de un cobro indebido."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0)])
+        _con_lector(monkeypatch, [_senales(cuentas=["00000000000000000000"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+
+        for vacio in ("", "   ", "no"):
+            with pytest.raises(ValueError):
+                await cmp.descartar(base, lote_id, cid, vacio, quien=Jefe())
+
+        assert len((await cmp.listar(base, lote_id))["comprobantes"]) == 1, (
+            "si el motivo no sirve, la foto no se toca")
+    _correr(caso())
+
+
+def test_DESCARTAR_QUEDA_EN_LA_AUDITORIA(base, monkeypatch):
+    """Sacar un comprobante es sacar la prueba de un pago. Tiene que asentarse."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0)])
+        _con_lector(monkeypatch, [_senales(cuentas=["00000000000000000000"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+
+        await cmp.descartar(base, lote_id, cid, "cobro que no corresponde", quien=Jefe())
+
+        linea = await base.auditoria.find_one(
+            {"accion": "dinero.lote_comprobante_descartado"})
+        assert linea is not None
+        assert linea["detalle"]["motivo"] == "cobro que no corresponde"
+    _correr(caso())
+
+
+def test_UNA_FOTO_DESCARTADA_NO_SE_DESCARTA_DOS_VECES(base, monkeypatch):
+    """La segunda vez sobreescribiría el motivo de la primera con otro."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0)])
+        _con_lector(monkeypatch, [_senales(cuentas=["00000000000000000000"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+
+        await cmp.descartar(base, lote_id, cid, "la primera vez", quien=Jefe())
+        with pytest.raises(ValueError):
+            await cmp.descartar(base, lote_id, cid, "la segunda vez", quien=Jefe())
+
+        lote = await base[lotes.COLECCION].find_one({"lote_id": lote_id})
+        assert lote["comprobantes"][0]["motivo"] == "la primera vez"
+    _correr(caso())
