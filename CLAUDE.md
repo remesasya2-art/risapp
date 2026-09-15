@@ -36,6 +36,48 @@ Este es el flujo pedido, y **no se salta ningún paso**:
 El paso 3 es el que más se salta y el que más molesta cuando se salta. Encontrar
 un defecto no autoriza a arreglarlo sin preguntar.
 
+## Un pull request por lote, y no uno por cambio
+
+El paso 6 dice «abrir el pull request». **Abrir uno nuevo por cada cosa
+terminada, no.** Se junta lo que se pueda en uno solo.
+
+### Por qué
+
+GitHub no cuenta pull requests: cuenta **peticiones a su interfaz por hora**, y
+la cuenta del proyecto llega al tope. Ya frenó dos fusiones —la del #120 y la
+del #123—, las dos con el código listo y los tests en verde:
+
+    API rate limit already exceeded for user ID ...
+
+Cada pull request arrastra su propia tanda: las comprobaciones de CI, los
+comentarios de Railway y de Cloudflare, y las consultas de estado de quien lo
+está mirando. Cuatro cambios en cuatro pull requests son cuatro tandas; en uno
+solo, una.
+
+### Cómo se trabaja
+
+- **Una rama abierta que va acumulando.** Cada cosa terminada entra como **un
+  commit propio**, nunca todo mezclado en uno.
+
+  Esto no es prolijidad: cada fusión de este repositorio despliega a
+  producción. Si de cuatro cambios uno rompe algo, con un commit por cambio se
+  revierte ése solo; con todo en un commit hay que elegir entre volver atrás
+  los cuatro o arreglar a las apuradas.
+
+- **El pull request se abre UNA vez, en borrador**, y su cuerpo va creciendo con
+  una sección por cambio.
+- **Las capturas y los tests siguen saliendo por cambio**, en la conversación, a
+  medida que cada cosa se termina. Eso no gasta ninguna petición a GitHub.
+- **Consultar el estado del pull request, poco.** Una vez al final alcanza;
+  mirarlo cada vuelta es parte de lo que llena el cupo.
+
+### La excepción
+
+Si algo le está costando plata, datos o trabajo a alguien **ahora mismo** —como
+el lector de comprobantes, que tuvo al agente asignando cada foto a mano— va
+solo y se despliega enseguida. Hacerlo esperar a que el lote esté completo sale
+más caro que las peticiones que ahorra.
+
 ## Las capturas de pantalla
 
 Hacen falta un backend y un frontend levantados. No hay MongoDB en el entorno de
