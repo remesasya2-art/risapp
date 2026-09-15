@@ -419,6 +419,25 @@ async def cargar(db, lote_id: str, imagenes: list, *, quien=None, request=None) 
             "estado": fallo["estado"],
             "motivo": fallo["motivo"],
             "candidatas": fallo["candidatas"],
+            # EL VEREDICTO DEL LECTOR, QUE NO LO PISA NADIE
+            #
+            #     `estado` y `orden_id` cuentan CÓMO QUEDÓ la foto, y una
+            #     persona los cambia: asigna, suelta o descarta. Estos dos
+            #     cuentan QUÉ DIJO LA MÁQUINA, y se escriben una sola vez.
+            #
+            #     Hacían falta porque sin ellos el sistema borraba la prueba de
+            #     sus propios errores. Cuando el lector daba una foto por
+            #     segura y estaba mal, el agente la soltaba y `estado` pasaba a
+            #     `sin_adjudicar` — el MISMO estado que cuando el lector no
+            #     supo decidir. O sea que el peor error quedaba registrado como
+            #     una abstención honesta, y cualquier cuenta que se hiciera
+            #     después le daba la razón al lector justo donde se equivocó.
+            #
+            #     Con estos dos campos, comparar `orden_id` contra
+            #     `orden_del_lector` dice si una persona tuvo que corregirlo.
+            #     Ver `services/desempeno_del_lector.py`.
+            "estado_del_lector": fallo["estado"],
+            "orden_del_lector": fallo["orden_id"],
         })
         fotos[comprobantes[-1]["comprobante_id"]] = imagen
 
