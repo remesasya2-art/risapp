@@ -660,8 +660,8 @@ def test_una_foto_no_se_puede_leer_desde_otro_envio():
     base = db_completa()
     cargar(base)
     asset = envio_de(base)["origen"]["comprobante_asset_id"]
-    assert corre(archivos.leer(asset, envio_id="env_aaa111", db=base)) is not None
-    assert corre(archivos.leer(asset, envio_id="env_bbb222", db=base)) is None
+    assert corre(archivos.leer(asset, dueno_id="env_aaa111", db=base)) is not None
+    assert corre(archivos.leer(asset, dueno_id="env_bbb222", db=base)) is None
 
 
 def test_el_modulo_no_menciona_ninguna_marca():

@@ -1611,7 +1611,7 @@ async def ver_foto_admin(envio_id: str, asset_id: str,
     archivos exigía ser el dueño del envío.
     """
     from services import envios_archivos
-    ficha = await envios_archivos.leer(asset_id, envio_id=envio_id)
+    ficha = await envios_archivos.leer(asset_id, dueno_id=envio_id)
     try:
         envios_archivos.exigir_bytes(ficha)
     except envios_archivos.ArchivoRechazado as e:

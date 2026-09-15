@@ -741,3 +741,148 @@ def test_UNA_FOTO_DESCARTADA_NO_SE_DESCARTA_DOS_VECES(base, monkeypatch):
         lote = await base[lotes.COLECCION].find_one({"lote_id": lote_id})
         assert lote["comprobantes"][0]["motivo"] == "la primera vez"
     _correr(caso())
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 10. La foto no vive adentro del lote
+#
+# Se guardaba en base64 en el documento del lote. Un documento de MongoDB no
+# puede pasar de 16 MB, y con capturas de teléfono de medio mega entran unas
+# veinticuatro — un lote admite trescientas órdenes. Al pasarse, el `$push`
+# falla y el agente pierde la tanda entera.
+#
+# `services/envios_archivos.py` ya resolvía esto para las fotos de los envíos,
+# por el mismo motivo y escrito en su encabezado.
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_EL_LOTE_GUARDA_LA_REFERENCIA_Y_NO_LOS_BYTES(base, monkeypatch):
+    """Es todo el punto del cambio: el documento del lote se queda chico."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516")])
+        _con_lector(monkeypatch, [_senales(cuentas=["01340219112191046516"],
+                                           montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        lote = await base[lotes.COLECCION].find_one({"lote_id": lote_id})
+        guardado = lote["comprobantes"][0]
+        assert guardado.get("asset_id"), "tiene que quedar la referencia"
+        assert not guardado.get("imagen"), (
+            "los bytes NO van adentro del lote: es lo que rompía el tope de 16 MB")
+
+        ficha = await base.envios_archivos.find_one(
+            {"asset_id": guardado["asset_id"]})
+        assert ficha is not None, "y tienen que estar en el almacén"
+        assert ficha["clase"] == "comprobante_lote"
+        assert ficha["dueno_id"] == lote_id
+    _correr(caso())
+
+
+def test_LA_FOTO_SE_SIGUE_PUDIENDO_MIRAR(base, monkeypatch):
+    """Guardarla afuera no sirve si después no se puede abrir."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516")])
+        _con_lector(monkeypatch, [_senales(cuentas=["01340219112191046516"],
+                                           montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+
+        assert (await cmp.imagen(base, lote_id, cid)).startswith("data:image/")
+    _correr(caso())
+
+
+def test_UNA_FOTO_DE_UN_LOTE_VIEJO_SE_SIGUE_LEYENDO(base, monkeypatch):
+    """Los lotes que ya existen tienen los bytes adentro, en `imagen`.
+
+    Migrarlos de golpe es lo que deja un lote sin sus comprobantes si algo sale
+    mal a mitad de camino. Se leen de los dos lados y no hay apuro.
+    """
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0)])
+        vieja = _foto()
+        await base[lotes.COLECCION].update_one(
+            {"lote_id": lote_id},
+            {"$push": {"comprobantes": {
+                "comprobante_id": "cmp_vieja", "imagen": vieja,
+                "estado": cmp.SIN_ADJUDICAR, "motivo": "", "orden_id": None,
+                "candidatas": [], "leido": {}}}})
+
+        assert await cmp.imagen(base, lote_id, "cmp_vieja") == vieja
+    _correr(caso())
+
+
+def test_LA_FOTO_SE_CUELGA_IGUAL_DE_LA_ORDEN(base, monkeypatch):
+    """`proof_images` sigue siendo el campo de siempre: ninguna pantalla vieja
+    tiene que aprender el almacén."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516")])
+        _con_lector(monkeypatch, [_senales(cuentas=["01340219112191046516"],
+                                           montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        tx = await base.transactions.find_one({"transaction_id": "tx_0000"})
+        assert len(tx.get("proof_images") or []) == 1
+        assert tx["proof_images"][0].startswith("data:image/")
+    _correr(caso())
+
+
+def test_LA_MISMA_FOTO_DOS_VECES_NO_ENTRA_DOS_VECES(base, monkeypatch):
+    """Lo que pasó de verdad: el lector no andaba, el agente reintentó, y
+    quedaron doce fotos para cuatro órdenes.
+
+    Se compara el CONTENIDO. El nombre del archivo no dice nada.
+    """
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516")])
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        # La misma tanda otra vez, como el reintento del agente.
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"])])
+        resultado = await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        assert resultado["repetidas"] == 1
+        assert len((await cmp.listar(base, lote_id))["comprobantes"]) == 1, (
+            "una sola foto, no dos")
+    _correr(caso())
+
+
+def test_DOS_FOTOS_DISTINTAS_SI_ENTRAN_LAS_DOS(base, monkeypatch):
+    """El otro lado de la guarda. Sin esto, «se descarta» podría ser siempre."""
+    async def caso():
+        ordenes = [_orden(0, cuenta="01340219112191046516"),
+                   _orden(1, cuenta="01020121710106529080")]
+        lote_id = await _lote_con(base, ordenes)
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"]),
+            _senales(cuentas=["01020121710106529080"], montos=["100,00"])])
+
+        resultado = await cmp.cargar(
+            base, lote_id, [_foto((10, 10, 10)), _foto((200, 200, 200))],
+            quien=Jefe())
+
+        assert resultado["repetidas"] == 0
+        assert len((await cmp.listar(base, lote_id))["comprobantes"]) == 2
+    _correr(caso())
+
+
+def test_UNA_FOTO_DESCARTADA_SE_PUEDE_VOLVER_A_SUBIR(base, monkeypatch):
+    """Descartarla fue decir «esta no va». Si el agente se equivocó al
+    descartarla, tiene que poder subirla de nuevo — si no, la huella la
+    dejaría afuera para siempre."""
+    async def caso():
+        lote_id = await _lote_con(base, [_orden(0, cuenta="01340219112191046516")])
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"])])
+        await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+        cid = (await cmp.listar(base, lote_id))["comprobantes"][0]["comprobante_id"]
+        await cmp.descartar(base, lote_id, cid, "me confundí", quien=Jefe())
+
+        _con_lector(monkeypatch, [
+            _senales(cuentas=["01340219112191046516"], montos=["100,00"])])
+        resultado = await cmp.cargar(base, lote_id, [_foto()], quien=Jefe())
+
+        assert resultado["repetidas"] == 0
+        assert len((await cmp.listar(base, lote_id))["comprobantes"]) == 1
+    _correr(caso())

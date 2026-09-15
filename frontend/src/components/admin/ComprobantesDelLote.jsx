@@ -79,13 +79,24 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
         `/admin/lotes/${lote.lote_id}/comprobantes`, { imagenes });
       const r = data.resumen || {};
       const asignadas = (r.seguro || 0);
-      const aMirar = fotos.length - asignadas;
+      const repetidas = data.repetidas || 0;
+      const entraron = fotos.length - repetidas;
+      const aMirar = entraron - asignadas;
       // El número que importa no es «se subieron once»: es cuántas quedaron
       // para mirar. Si el aviso dijera sólo que salió bien, las que quedaron
       // colgadas no se mirarían hasta que el cliente reclame.
-      toast.success(aMirar
-        ? `${asignadas} de ${fotos.length} asignadas. ${aMirar} para revisar.`
-        : `Las ${fotos.length} quedaron asignadas.`);
+      //
+      // Y las repetidas se nombran. Al agente que sube once y ve nueve le tiene
+      // que quedar claro POR QUE, o va a pensar que se perdieron dos.
+      const yaEstaban = repetidas
+        ? ` ${repetidas} ya estaba(n) subida(s).` : '';
+      if (!entraron) {
+        toast.success(`Esas ${fotos.length} ya estaban subidas. No se duplicó ninguna.`);
+      } else {
+        toast.success(aMirar
+          ? `${asignadas} de ${entraron} asignadas. ${aMirar} para revisar.${yaEstaban}`
+          : `Las ${entraron} quedaron asignadas.${yaEstaban}`);
+      }
       await cargar();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudieron subir los comprobantes');

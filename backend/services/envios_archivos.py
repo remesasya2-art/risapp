@@ -84,6 +84,44 @@ class ArchivoRechazado(Exception):
         self.http = http
 
 
+# ─── DE QUIEN ES UN ARCHIVO ────────────────────────────────────────────────
+#
+# El campo se llamaba `envio_id` porque cuando este módulo se escribió lo único
+# que guardaba eran fotos de envíos. Después los comprobantes de los LOTES DE
+# PAGO necesitaron lo mismo —salir de adentro del documento que los nombraba, y
+# por el mismo motivo escrito arriba: el límite de 16 MB de Mongo— y un lote no
+# es un envío.
+#
+# Así que el dueño pasó a llamarse `dueno_id`, y `clase` dice de qué es la foto.
+#
+# POR QUE SE LEEN LOS DOS NOMBRES Y NO SE MIGRA NADA
+#
+#     Las fichas viejas tienen `envio_id` y son los comprobantes de los envíos
+#     de clientes. Renombrar el campo en la base pide una migración, y un
+#     despliegue donde el código busca el nombre nuevo y los datos tienen el
+#     viejo deja a cada envío sin su comprobante.
+#
+#     Es el mismo razonamiento que el de los dos almacenes, unas líneas más
+#     arriba: dos formas a la vez no es un estado transitorio, es el estado.
+#
+# POR QUE SE ESCRIBEN LOS DOS Y SE BUSCA POR EL VIEJO
+#
+#     La primera versión buscaba con `$or` sobre los dos nombres. Eso obliga a
+#     Mongo a recorrer la colección: el índice está sobre `envio_id`, y un `$or`
+#     no lo puede usar para las dos ramas. En una colección de comprobantes que
+#     sólo crece, eso empeora solo.
+#
+#     Escribiendo los dos, toda ficha —vieja o nueva— tiene `envio_id`, así que
+#     buscar por ahí encuentra todo con el índice que ya existe. El nombre nuevo
+#     es el que usa el código; el viejo queda como columna de compatibilidad, y
+#     se puede borrar el día que alguien rellene las fichas viejas.
+
+
+def del_dueno(ficha: dict) -> str:
+    """De quién es esta ficha, se llame como se llame su campo."""
+    return (ficha or {}).get("dueno_id") or (ficha or {}).get("envio_id") or ""
+
+
 async def _db(db=None):
     if db is not None:
         return db
@@ -133,7 +171,7 @@ def sin_exif(datos: bytes, tipo: str) -> bytes:
         return datos
 
 
-async def guardar(datos: bytes, *, envio_id: str, user_id: str, clase: str,
+async def guardar(datos: bytes, *, dueno_id: str, user_id: str, clase: str,
                   db=None, ahora=None) -> dict:
     """Guarda un archivo y devuelve su ficha. Lanza ArchivoRechazado."""
     ahora = ahora or datetime.now(timezone.utc)
@@ -158,7 +196,11 @@ async def guardar(datos: bytes, *, envio_id: str, user_id: str, clase: str,
     limpios = await asyncio.to_thread(sin_exif, datos, tipo)
     ficha = {
         "asset_id": f"ast_{uuid.uuid4().hex}",
-        "envio_id": envio_id,
+        # De quién es. `dueno_id` es el nombre que usa el código; `envio_id` se
+        # escribe igual y es por lo que se busca, porque lo tienen también las
+        # fichas viejas. Ver el bloque «DE QUIEN ES UN ARCHIVO».
+        "dueno_id": dueno_id,
+        "envio_id": dueno_id,
         "user_id": user_id,
         "clase": clase,
         "content_type": tipo,
@@ -181,12 +223,12 @@ async def guardar(datos: bytes, *, envio_id: str, user_id: str, clase: str,
     documento = {**ficha, "contenido": limpios}
     if envios_almacen.configurado():
         try:
-            clave = envios_almacen.clave_de(envio_id, ficha["asset_id"], extension)
+            clave = envios_almacen.clave_de(dueno_id, ficha["asset_id"], extension)
         except ValueError as e:
             # Los tres componentes los genera este sistema. Que uno no valide es
             # un defecto nuestro, no del usuario: se anota y se guarda en Mongo,
             # que siempre puede.
-            logger.error(f"envios: clave de almacén inválida para {envio_id}: {e}")
+            logger.error(f"envios: clave de almacén inválida para {dueno_id}: {e}")
             clave = None
         if clave and await envios_almacen.poner(clave, limpios, tipo):
             ficha["almacen"] = "r2"
@@ -200,17 +242,17 @@ async def guardar(datos: bytes, *, envio_id: str, user_id: str, clase: str,
         base = await _db(db)
         await base.envios_archivos.insert_one(documento)
     except Exception as e:
-        logger.error(f"envios: no se pudo guardar el archivo de {envio_id}: {e}")
+        logger.error(f"envios: no se pudo guardar el archivo de {dueno_id}: {e}")
         raise ArchivoRechazado(
             "No se pudo guardar el archivo. Probá de nuevo en un momento.",
             http=503) from e
     return ficha
 
 
-async def leer(asset_id: str, *, envio_id: str, db=None) -> dict | None:
+async def leer(asset_id: str, *, dueno_id: str, db=None) -> dict | None:
     """El archivo con su contenido, o None si no existe la ficha.
 
-    `envio_id` es OBLIGATORIO. Antes tenía default `None`, y con `None` el filtro
+    `dueno_id` es OBLIGATORIO. Antes tenía default `None`, y con `None` el filtro
     se relajaba solo: el `asset_id` se servía desde cualquier envío. Un control
     que se apaga cuando le falta su insumo no es un control.
 
@@ -224,9 +266,11 @@ async def leer(asset_id: str, *, envio_id: str, db=None) -> dict | None:
     una ruta filtraría esa ruta. Las dos que existen sirven `contenido` y nada
     más.
     """
-    if not asset_id or not envio_id:
+    if not asset_id or not dueno_id:
         return None
-    filtro = {"asset_id": asset_id, "envio_id": envio_id}
+    # Por `envio_id`: lo tienen TODAS las fichas y es el campo indexado.
+    # Ver «por qué se escriben los dos» arriba.
+    filtro = {"asset_id": asset_id, "envio_id": dueno_id}
     try:
         base = await _db(db)
         ficha = await base.envios_archivos.find_one(filtro, {"_id": 0})
@@ -307,7 +351,7 @@ def exigir_bytes(ficha):
     return ficha
 
 
-async def ya_usado(sha256: str, envio_id: str, db=None) -> str | None:
+async def ya_usado(sha256: str, dueno_id: str, db=None) -> str | None:
     """El envío en el que ya se subió este mismo archivo, si hay otro.
 
     Subir el comprobante de un envío en otro es la forma barata de intentar que
@@ -322,13 +366,13 @@ async def ya_usado(sha256: str, envio_id: str, db=None) -> str | None:
         # perdia en silencio. Depender del orden natural para una senal de fraude
         # es no tener la senal.
         otro = await base.envios_archivos.find_one(
-            {"sha256": sha256, "envio_id": {"$ne": envio_id}},
-            {"_id": 0, "envio_id": 1})
+            {"sha256": sha256, "envio_id": {"$ne": dueno_id}},
+            {"_id": 0, "envio_id": 1, "dueno_id": 1})
     except Exception as e:                                    # pragma: no cover
         logger.warning(f"envios: no se pudo chequear duplicados de archivo: {e}")
         return None
-    if otro and otro.get("envio_id") and otro["envio_id"] != envio_id:
-        return otro["envio_id"]
+    if otro and del_dueno(otro) and del_dueno(otro) != dueno_id:
+        return del_dueno(otro)
     return None
 
 
@@ -372,7 +416,8 @@ MIGRACION_SEGUNDOS_MAX = 45
 # y la migración no avanza nunca más.
 _PENDIENTES = {"almacen": {"$ne": "r2"}, "migracion_error": {"$exists": False}}
 
-_PROYECCION_MIGRACION = {"_id": 0, "asset_id": 1, "envio_id": 1, "extension": 1,
+_PROYECCION_MIGRACION = {"_id": 0, "asset_id": 1, "envio_id": 1, "dueno_id": 1,
+                         "extension": 1,
                          "sha256": 1, "content_type": 1}
 
 
@@ -507,7 +552,7 @@ async def _migrar_una(base, ficha: dict, ahora) -> str:
 
     try:
         clave = envios_almacen.clave_de(
-            ficha.get("envio_id"), asset_id, ficha.get("extension"))
+            del_dueno(ficha), asset_id, ficha.get("extension"))
     except ValueError as e:
         logger.error(f"envios: no se pudo armar la clave de {asset_id}: {e}")
         # Permanente: la clave se arma con campos de la ficha, que no cambian

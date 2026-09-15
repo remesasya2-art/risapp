@@ -578,7 +578,7 @@ async def entregar(operador, envio_id: str, *, guia: str, foto: bytes = None,
               "entrega.por": getattr(operador, "user_id", None)}
     if foto:
         ficha = await envios_archivos.guardar(
-            foto, envio_id=envio_id, user_id=envio.get("user_id"), clase="entrega",
+            foto, dueno_id=envio_id, user_id=envio.get("user_id"), clase="entrega",
             db=base, ahora=ahora)
         parche["entrega.foto_asset_id"] = ficha["asset_id"]
 
