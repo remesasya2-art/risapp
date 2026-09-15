@@ -5,7 +5,7 @@ import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, Paperclip, CheckCircle, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2, Images } from 'lucide-react';
+import { RefreshCw, Paperclip, CheckCircle, CheckCircle2, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2, Images, Archive } from 'lucide-react';
 import ComprobantesDelLote from './ComprobantesDelLote';
 
 // ---- Paleta profesional / corporativa (plana, sin sombras decorativas) ----
@@ -87,6 +87,9 @@ export default function OrdenesPorProcesar() {
   const [resumen, setResumen] = useState(null);
   const [bajando, setBajando] = useState(false);
   const [lotes, setLotes] = useState([]);
+  // Los cerrados se traen aparte y sólo cuando alguien los pide: son los de
+  // todos los días los que importan, y la lista de cerrados crece sola.
+  const [cerrados, setCerrados] = useState(null);
   // Cuál lote tiene abierto el panel de comprobantes. Uno por vez: la
   // tabla es ancha y dos abiertas obligan a buscar cuál es cuál.
   const [verComprobantesDe, setVerComprobantesDe] = useState(null);
@@ -119,6 +122,7 @@ export default function OrdenesPorProcesar() {
         const { data } = await api.get('/admin/lotes');
         setLotes(data?.lotes || []);
       } catch { /* la cola se muestra igual aunque los lotes fallen */ }
+      if (cerrados !== null) await traerCerrados();
     } catch (e) {
       if (!opts.silent) toast.error('No se pudieron cargar las órdenes');
     } finally {
@@ -183,6 +187,42 @@ export default function OrdenesPorProcesar() {
       guardarComoArchivo(data);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo bajar el archivo');
+    }
+  };
+
+  const traerCerrados = async () => {
+    try {
+      const { data } = await api.get('/admin/lotes/cerrados');
+      setCerrados(data?.lotes || []);
+    } catch {
+      setCerrados([]);
+    }
+  };
+
+  const cerrarLote = async (lote) => {
+    if (!await confirmar({
+      titulo: `¿Cerrar el lote ${lote.numero}?`,
+      // Se dice lo que PASA, no lo que se hace: el agente tiene que saber que
+      // desde acá se le avisa a cada cliente, porque eso no se deshace.
+      detalle: `Sus ${lote.total} orden(es) quedan como pagadas, cada cliente `
+        + 'recibe su aviso, y el lote se va de esta lista. Hacelo cuando ya '
+        + 'pagaste todo en el banco.',
+      accion: 'Cerrar el lote',
+      cancelar: 'Todavía no',
+    })) return;
+    try {
+      const { data } = await api.post(`/admin/lotes/${lote.lote_id}/cerrar`);
+      const sobrantes = data.ya_estaban?.length
+        ? ` (${data.ya_estaban.length} ya estaban asentadas)` : '';
+      toast.success(`${lote.numero} cerrado: ${data.asentadas} pago(s)${sobrantes}`);
+      if (verComprobantesDe?.lote_id === lote.lote_id) setVerComprobantesDe(null);
+      if (cerrados !== null) await traerCerrados();
+      await cargar({ fromAction: true });
+    } catch (e) {
+      // El mensaje del servidor dice CUALES faltan resolver. Recortarlo dejaría
+      // al agente sin saber a cuál ir.
+      toast.error(e?.response?.data?.detail || 'No se pudo cerrar el lote',
+                  { duration: 8000 });
     }
   };
 
@@ -586,6 +626,11 @@ export default function OrdenesPorProcesar() {
                     title="Subir todos los comprobantes de este lote de una vez">
                     <Images size={13} /> Comprobantes
                   </button>
+                  <button onClick={() => cerrarLote(l)}
+                    style={{ ...chip, color: C.green, borderColor: C.green + '55' }}
+                    title="Asentar el pago de todas sus órdenes y sacar el lote de la lista">
+                    <CheckCircle2 size={13} /> Cerrar el lote
+                  </button>
                   <button onClick={() => cancelarLote(l)} style={{ ...chip, color: C.red, borderColor: C.red + '55' }}
                     title="Devolver sus órdenes a la cola">
                     <Undo2 size={13} /> Cancelar
@@ -597,10 +642,67 @@ export default function OrdenesPorProcesar() {
         </div>
       )}
 
+      {/* LOS LOTES CERRADOS.
+          Plegados y traídos recién cuando alguien los abre: lo que se mira
+          todos los días son los abiertos.
+          Pero tienen que estar. Adentro del lote viven el ARCHIVO que se le
+          mandó al banco y las FOTOS de los comprobantes, y si al cerrarlo
+          desapareciera, esas dos cosas quedarían sin ninguna puerta — que es
+          justo lo que se pregunta meses después. */}
+      <div style={{ marginBottom: '10px' }}>
+        <button
+          onClick={() => (cerrados === null ? traerCerrados() : setCerrados(null))}
+          style={{ ...chip, color: C.soft }}>
+          <Archive size={13} />
+          {cerrados === null ? 'Ver lotes cerrados' : 'Ocultar los cerrados'}
+        </button>
+        {cerrados !== null && (
+          <div style={{ marginTop: '8px' }}>
+            {cerrados.length === 0 ? (
+              <div style={{ fontSize: '12.5px', color: C.faint, padding: '6px 2px' }}>
+                Todavía no se cerró ningún lote.
+              </div>
+            ) : cerrados.map((l) => (
+              <div key={l.lote_id} style={{
+                display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+                padding: '8px 11px', marginBottom: '5px', borderRadius: '8px',
+                border: '1px solid ' + C.borderLight, backgroundColor: '#fff',
+                fontSize: '12.5px',
+              }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: C.soft }}>
+                  <Package size={13} /> {l.numero}
+                </span>
+                <span><b>{l.total}</b> orden(es) · {l.banco_pagador?.nombre}</span>
+                <span style={{ color: C.soft }}>
+                  Cerrado por {l.cerrado_por_nombre || '—'} · {formatDate(l.cerrado_en)}
+                </span>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                  <button onClick={() => bajarDeNuevo(l)} style={chip} title="El archivo que se le mandó al banco">
+                    <Download size={13} /> Archivo
+                  </button>
+                  <button
+                    onClick={() => setVerComprobantesDe(
+                      verComprobantesDe?.lote_id === l.lote_id ? null : l)}
+                    style={{ ...chip, ...(verComprobantesDe?.lote_id === l.lote_id
+                      ? { color: C.primary, borderColor: C.primary } : {}) }}
+                    title="Las fotos de este lote">
+                    <Images size={13} /> Comprobantes
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {verComprobantesDe && (
         <ComprobantesDelLote
           lote={verComprobantesDe}
           onCerrar={() => setVerComprobantesDe(null)}
+          // Devolver una orden a la cola la saca del lote y la pone de nuevo en
+          // la lista de abajo. Sin avisar acá, el agente ve la orden en los dos
+          // lugares hasta que recarga.
+          onCambio={() => cargar({ fromAction: true })}
         />
       )}
 

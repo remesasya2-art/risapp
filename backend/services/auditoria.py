@@ -105,6 +105,11 @@ ACCIONES = {
     "dinero.lote_comprobantes": (Cat.DINERO, "Comprobantes cargados a un lote"),
     "dinero.lote_comprobante_asignado": (Cat.DINERO, "Comprobante asignado a mano"),
     "dinero.lote_comprobante_descartado": (Cat.DINERO, "Comprobante descartado"),
+    # Cerrar un lote asienta de una vez el pago de todas sus órdenes, y
+    # devolver una a la cola dice que ESA no se pagó. Las dos cambian lo que
+    # el cliente ve de su envío.
+    "dinero.lote_cerrado":      (Cat.DINERO, "Lote de pagos cerrado"),
+    "dinero.lote_orden_devuelta": (Cat.DINERO, "Orden devuelta a la cola"),
     # Usuarios
     "usuario.suspendido":       (Cat.USUARIOS, "Usuario suspendido"),
     "usuario.reactivado":       (Cat.USUARIOS, "Usuario reactivado"),

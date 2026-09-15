@@ -5,6 +5,7 @@ import { fmt } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import {
   Upload, CheckCircle, AlertTriangle, XCircle, Eye, X, Loader2, HelpCircle, Trash2,
+  Undo2,
 } from 'lucide-react';
 
 // Una sola carga para todo el lote. Es la razón de ser de esta pantalla: el
@@ -49,7 +50,7 @@ function leerComoDataUrl(file) {
   });
 }
 
-export default function ComprobantesDelLote({ lote, onCerrar }) {
+export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
   const [datos, setDatos] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
   const [mirando, setMirando] = useState(null);
@@ -115,6 +116,18 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
     }
   };
 
+  const devolver = async (ordenId, motivo) => {
+    try {
+      await api.post(
+        `/admin/lotes/${lote.lote_id}/ordenes/${ordenId}/devolver`, { motivo });
+      toast.success('La orden volvió a la cola de pendientes');
+      await cargar();
+      onCambio?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo devolver la orden');
+    }
+  };
+
   const descartar = async (comprobanteId, motivo) => {
     try {
       await api.post(
@@ -151,6 +164,9 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
   const listas = ordenes.filter((o) => o.listo_para_registrar);
   const porResolver = ordenes.filter((o) => !o.listo_para_registrar);
   const sinDueno = comprobantes.filter((c) => !c.orden_id);
+  // Un lote cerrado se mira y no se toca: el servidor rechaza cualquier cambio,
+  // y ofrecer botones que van a fallar es peor que no ofrecerlos.
+  const abiertoElLote = (datos?.estado || 'abierto') === 'abierto';
 
   const tituloBloque = (texto, cuanto, color) => (
     <div style={{
@@ -232,6 +248,7 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
         </button>
       </div>
 
+      {abiertoElLote && (
       <div style={{
         display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
         padding: '12px', borderRadius: '9px', border: '1px dashed ' + C.border,
@@ -254,6 +271,7 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
           comparando cuenta, teléfono y cédula contra cada orden.
         </span>
       </div>
+      )}
 
       {/* ① LISTAS — no hay nada que hacerles. Van plegadas: ocupan lugar y no
           piden atención. El número basta para saber cómo viene el lote. */}
@@ -321,10 +339,45 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
                   {c && (
                     <>
                       <span style={{ color: C.soft }}>Leído: {loQueSeLeyo(c)}</span>
-                      <button onClick={() => ver(c.comprobante_id)} style={{ ...chip, marginLeft: 'auto' }}>
-                        <Eye size={13} /> Ver la foto
-                      </button>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px',
+                        alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <button onClick={() => ver(c.comprobante_id)} style={chip}>
+                          <Eye size={13} /> Ver la foto
+                        </button>
+                        {/* LAS DOS SALIDAS DE UNA ORDEN CON EL MONTO DISTINTO.
+                            Sin ellas esta orden no se podía resolver y el lote
+                            no cerraba nunca: la foto es de esa persona, así que
+                            tampoco entraba en el bloque de las que no son de
+                            nadie, donde están el desplegable y el descarte.
+
+                            Mirada la foto, la respuesta es una de dos: el monto
+                            está bien y la orden estaba mal cargada, o la foto no
+                            corresponde. */}
+                        {abiertoElLote && (
+                          <button onClick={() => asignar(c.comprobante_id, o.orden_id)}
+                            style={{ ...chip, color: C.green, borderColor: C.green + '55' }}
+                            title="La miré y el comprobante es de esta orden">
+                            <CheckCircle size={13} /> Confirmar el monto
+                          </button>
+                        )}
+                        {abiertoElLote && (
+                          <ConMotivo etiqueta="Descartar la foto" color={C.red} icono={Trash2}
+                            marcador="¿Por qué? No corresponde, es de otro pago…"
+                            onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} />
+                        )}
+                      </div>
                     </>
+                  )}
+                  {/* La salida de la orden que el banco NO pagó. Sólo para las
+                      que no tienen foto: una con comprobante tiene la prueba de
+                      que se pagó, y devolverla la haría pagar dos veces. Si esa
+                      foto está mal, primero se descarta la foto. */}
+                  {!c && abiertoElLote && (
+                    <div style={{ marginLeft: 'auto' }}>
+                      <ConMotivo etiqueta="Vuelve a la cola" color={C.red} icono={Undo2}
+                        marcador="¿Por qué? El banco la rechazó, la cuenta no existe…"
+                        onConfirmar={(motivo) => devolver(o.orden_id, motivo)} />
+                    </div>
                   )}
                 </div>
               );
@@ -366,8 +419,14 @@ export default function ComprobantesDelLote({ lote, onCerrar }) {
                     <div style={{ marginTop: '4px', color: C.soft }}>
                       Leído: {loQueSeLeyo(c)}
                     </div>
-                    <div style={{ marginTop: '8px' }}>{selectDeOrden(c)}</div>
-                    <Descartar onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} />
+                    {abiertoElLote && (
+                      <div style={{ marginTop: '8px' }}>{selectDeOrden(c)}</div>
+                    )}
+                    {abiertoElLote && (
+                      <ConMotivo etiqueta="Descartar" color={C.red} icono={Trash2}
+                        marcador="¿Por qué? Repetida, comprobante errado…"
+                        onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} />
+                    )}
                   </div>
                 </div>
               );
@@ -443,30 +502,34 @@ function Miniatura({ loteId, comprobanteId, onAmpliar }) {
 }
 
 
-// ─── DESCARTAR UNA FOTO ────────────────────────────────────────────────────
+// ─── UNA ACCION QUE EXIGE ESCRIBIR POR QUE ─────────────────────────────────
 //
-// Dos toques y con el motivo escrito, a propósito. Descartar un comprobante es
-// decir «este pago no está probado por esta foto»: un botón suelto que lo hace
-// de una es un clic de más en una pantalla de pagos.
+// Dos toques y con el motivo escrito, a propósito. La usan las dos salidas de
+// esta pantalla, y las dos dicen algo fuerte:
 //
-// El motivo no es trámite. Sin él, quien mire dentro de seis meses no puede
-// distinguir una foto repetida de un cobro que no correspondía.
-function Descartar({ onConfirmar }) {
+//   · descartar una foto es decir «este pago no está probado por esta foto»;
+//   · devolver una orden a la cola es decir «esta se vuelve a pagar» — y si
+//     resulta que sí se había pagado, se paga dos veces.
+//
+// Un botón suelto que lo hace de una es un clic de más en una pantalla de
+// pagos. Y el motivo no es trámite: sin él, quien mire dentro de seis meses no
+// puede distinguir una foto repetida de un cobro que no correspondía.
+function ConMotivo({ etiqueta, marcador, color, icono: Icono, onConfirmar }) {
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState('');
 
   if (!abierto) {
     return (
       <button onClick={() => setAbierto(true)}
-        style={{ ...chip, marginTop: '8px', color: C.red, borderColor: C.red + '55' }}>
-        <Trash2 size={13} /> Descartar
+        style={{ ...chip, marginTop: '8px', color, borderColor: color + '55' }}>
+        <Icono size={13} /> {etiqueta}
       </button>
     );
   }
   return (
     <div style={{ marginTop: '8px' }}>
       <input value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus
-        placeholder="¿Por qué? Repetida, comprobante errado…"
+        placeholder={marcador}
         style={{
           width: '100%', padding: '7px 9px', borderRadius: '7px', fontSize: '12.5px',
           border: '1px solid ' + C.border, boxSizing: 'border-box',
@@ -475,11 +538,11 @@ function Descartar({ onConfirmar }) {
         <button disabled={motivo.trim().length < 4}
           onClick={() => onConfirmar(motivo)}
           style={{
-            ...chip, backgroundColor: C.red, color: '#fff', borderColor: C.red,
+            ...chip, backgroundColor: color, color: '#fff', borderColor: color,
             opacity: motivo.trim().length < 4 ? 0.5 : 1,
             cursor: motivo.trim().length < 4 ? 'not-allowed' : 'pointer',
           }}>
-          Descartar
+          {etiqueta}
         </button>
         <button onClick={() => { setAbierto(false); setMotivo(''); }} style={chip}>
           Cancelar
