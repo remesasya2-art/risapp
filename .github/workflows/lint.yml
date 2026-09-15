@@ -1,6 +1,46 @@
 name: Lint Python
 
-on: [push, pull_request]
+# POR QUE EL EMPUJON SOLO MIRA `main`, Y EL RESTO LO MIRA EL PULL REQUEST
+#
+#   Acá decía `on: [push, pull_request]`, y eso corría TODO DOS VECES. Un
+#   empujón a una rama con su pull request abierto disparaba las dos tandas
+#   completas —lint, la suite del backend y el frontend, seis trabajos— para
+#   un solo cambio. Se vio con un commit que tocaba un único archivo de texto:
+#
+#       run 35015575149 -> lint · Suite del backend · Frontend   (el empujón)
+#       run 35015598326 -> lint · Suite del backend · Frontend   (el PR)
+#
+#   Y eso importa más de lo que parece: la cuenta del proyecto llega al tope
+#   de peticiones por hora de GitHub, y ya frenó dos fusiones con el código
+#   listo y los tests en verde. Cada trabajo de CI habla con GitHub.
+#
+#   LAS DOS TANDAS NO PROBABAN LO MISMO, Y POR ESO SE QUEDA LA DEL PR
+#
+#       La del empujón prueba la rama sola. La del pull request prueba la
+#       rama YA MEZCLADA con `main`, que es lo que de verdad va a quedar
+#       cuando se fusione. Si `main` se movió mientras el pull request estaba
+#       abierto, la primera dice que todo anda y la segunda es la única que
+#       ve el choque.
+#
+#       Así que la que se saca es la del empujón, no la del pull request.
+#
+#   `main` SIGUE CUBIERTO, Y ES EL QUE DESPLIEGA
+#
+#       Por eso el empujón se conserva para `main`: cada fusión acá sale a
+#       producción, y dejar esa rama sin suite sería cambiar un gasto por un
+#       agujero.
+#
+#   LO QUE SE PIERDE, DICHO
+#
+#       Una rama SIN pull request abierto ya no corre nada. En este proyecto
+#       toda rama termina en un pull request —y el primer empujón queda
+#       cubierto en cuanto se abre—, así que la ventana es de minutos. Si
+#       algún día se trabaja en ramas sueltas sin abrir pull request, esto hay
+#       que volver a mirarlo.
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 jobs:
   lint:
