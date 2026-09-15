@@ -175,6 +175,37 @@ const [searchParams, setSearchParams] = useSearchParams();
     if (isAgent && !['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion'].includes(activeTab)) setActiveTab('chat');
   }, [isAgent]);
   const [loading, setLoading] = useState(true);
+  // EL BOTON DE REFRESCAR, Y POR QUE ES UN NUMERO
+  //
+  //   Este botón llamaba sólo a `loadData`, que conoce CINCO pestañas
+  //   (`overview`, `users`, `kyc`, `support`, `ratings`). El panel tiene
+  //   veintidós. En las otras diecisiete el botón giraba un segundo y NO PEDIA
+  //   NADA — comprobado en el navegador mirando la red: de siete pestañas
+  //   probadas, seis no hacían un solo pedido.
+  //
+  //   Ahora el número se le pone de `key` al `<main>` que envuelve todas las
+  //   secciones. Cambiarlo hace que React vuelva a montar la que estés viendo,
+  //   y cada sección vuelve a pedir sus datos sola, igual que cuando entrás.
+  //
+  //   Se eligió así sobre las dos alternativas obvias:
+  //
+  //     Recargar la página entera anda, pero parpadea y borra lo que hubiera
+  //     escrito sin guardar en un formulario.
+  //
+  //     Que cada sección se suscriba a un aviso de recarga obliga a tocar los
+  //     veinticuatro componentes, y el día que alguien agregue la pestaña
+  //     veintitrés y se olvide, el botón vuelve a mentir en esa pestaña: el
+  //     mismo defecto de hoy con ropa nueva. Esta línea no se puede
+  //     desactualizar.
+  //
+  //   Lo que sí cuesta: volver a montar cierra lo que estuviera abierto dentro
+  //   de la sección. Es lo que significa refrescar.
+  const [recarga, setRecarga] = useState(0);
+
+  const refrescarTodo = () => {
+    loadData();                      // las pestañas que se dibujan acá mismo
+    setRecarga((n) => n + 1);        // y las que son un componente aparte
+  };
   // Cuánto trabajo espera en cada pestaña, y cuántos usuarios hay.
   //
   // Antes esto se calculaba descargando CUATRO LISTAS COMPLETAS y midiendo su
@@ -689,7 +720,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                   del panel a una pantalla de cliente. */}
               <CampanaDelEquipo onIrA={setActiveTab} />
               <RestoreButton userRole={user?.role} onSuccess={loadData} size="sm" />
-              <button onClick={loadData} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
+              <button onClick={refrescarTodo} title="Actualizar esta sección" style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
                 <RefreshCw style={{ width: '20px', height: '20px', color: '#374151', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               </button>
             </div>
@@ -717,7 +748,11 @@ const [searchParams, setSearchParams] = useSearchParams();
         </div>
       </div>
 
-      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
+      {/* `key={recarga}`: el botón de refrescar del encabezado cambia ese
+          número y React vuelve a montar todo lo de adentro, así que cada
+          sección vuelve a pedir sus datos sin que haya que enseñarle nada.
+          El motivo largo está donde se declara `recarga`. */}
+      <main key={recarga} style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
         {CRM_KEYS.includes(activeTab) && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #eef0f4', paddingBottom: '14px' }}>
             {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support', 'users', 'kyc', 'blacklist'].includes(st.key)) : CRM_SUBTABS.filter(st => st.key !== 'ratings' || user?.role === 'super_admin')).map((st) => (

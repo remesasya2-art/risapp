@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RotateCcw, AlertCircle } from 'lucide-react';
+import { ArchiveRestore, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { fmt } from '../../utils/format';
@@ -90,7 +90,14 @@ export const RestoreButton = ({ userRole, onSuccess, size = 'md' }) => {
         }}
         data-testid="restore-btn"
       >
-        <RotateCcw style={{ width: '14px', height: '14px' }} /> Restaurar
+        {/* EL ICONO NO ES UNA FLECHA CIRCULAR, Y ES A PROPOSITO.
+            Acá había un `RotateCcw`, el mismo dibujo que el botón de
+            refrescar que está al lado en el encabezado del panel. Con dos
+            flechas circulares pegadas, este botón se leía como un segundo
+            refrescar y nadie lo apretaba: lo que hace es DEVOLVER las
+            transacciones que se ocultaron del panel, que no tiene nada que
+            ver con volver a pedir los datos. */}
+        <ArchiveRestore style={{ width: '14px', height: '14px' }} /> Restaurar
       </button>
 
       {open && (
@@ -114,7 +121,7 @@ export const RestoreButton = ({ userRole, onSuccess, size = 'md' }) => {
                 backgroundColor: '#ecfeff', display: 'flex',
                 alignItems: 'center', justifyContent: 'center'
               }}>
-                <RotateCcw style={{ width: '22px', height: '22px', color: '#0891b2' }} />
+                <ArchiveRestore style={{ width: '22px', height: '22px', color: '#0891b2' }} />
               </div>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
