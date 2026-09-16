@@ -30,9 +30,24 @@ ESTA RUTA ES PUBLICA, Y ESO OBLIGA A CUIDARLA
 
 QUE SE GUARDA
 
-    Qué directiva se violó y de qué dirección venía el recurso, recortados. Con
-    eso alcanza para completar la política. El resto —la URL donde pasó, la
-    línea del script— identifica a quien estaba navegando y no hace falta.
+    Qué directiva se violó, de qué dirección venía el recurso, DE QUE DOMINIO
+    era el script culpable y los primeros caracteres de su código. Todo
+    recortado.
+
+    Los dos últimos se agregaron porque sin ellos los avisos no tenían nombre.
+    Aparecieron tres seguidos —un script en línea, uno que usa WebAssembly y el
+    medidor de Cloudflare— y se comprobó que NINGUNO era nuestro: el HTML que
+    construimos no lleva un solo script en línea y la palabra `WebAssembly` no
+    aparece en el paquete. Pero saber de quién SI eran —¿el SDK de pagos?, ¿el
+    anti-bots de Cloudflare?, ¿una extensión del navegador de un visitante?—
+    era imposible con lo que se guardaba, y de esa respuesta depende si un
+    origen se permite o no.
+
+    LO QUE SIGUE SIN GUARDARSE ES LA RUTA. Del `source-file` va el dominio y
+    nada más: el dominio dice de quién es el script, y la ruta, cuando el
+    script es de la propia aplicación, es la PANTALLA que estaba mirando una
+    persona concreta. La muestra del código identifica al culpable por lo que
+    hace, que no señala a nadie.
 """
 import logging
 
@@ -50,13 +65,48 @@ TOPE_BYTES = 8 * 1024
 CAMPOS = (("effective-directive", "violated-directive", "effectiveDirective"),
           ("blocked-uri", "blockedURL", "blockedURI"))
 
+# De dónde salió el script culpable. Se guarda SOLO EL DOMINIO (ver abajo).
+CAMPO_ARCHIVO = ("source-file", "sourceFile", "sourceURL")
+
+# Los primeros caracteres del código bloqueado. Es lo único que identifica a un
+# script EN LINEA, que por definición no tiene dirección propia.
+CAMPO_MUESTRA = ("script-sample", "sample", "scriptSample")
+
 
 def _primero(datos: dict, nombres) -> str:
     for nombre in nombres:
         valor = datos.get(nombre)
         if valor:
-            # Recortado: lo que llega lo escribe quien hace el pedido.
-            return str(valor)[:120]
+            # Recortado, y en UNA SOLA LINEA. Lo que llega acá lo escribe quien
+            # hace el pedido: si se copiara tal cual, un salto de línea metido a
+            # propósito parte el aviso en dos y la segunda mitad se lee como una
+            # línea de registro más, escrita por un desconocido.
+            return " ".join(str(valor).split())[:120] or "?"
+    return "?"
+
+
+def _solo_el_dominio(valor: str) -> str:
+    """De una dirección, el esquema y el dominio. Nunca la ruta.
+
+        https://sdk.mercadopago.com/v2/security.js  ->  https://sdk.mercadopago.com
+
+    El dominio dice de quién es el script, que es lo que hace falta para
+    completar la política. La ruta no aporta nada a esa decisión y sí cuenta,
+    cuando el script es de la propia aplicación, qué pantalla estaba mirando
+    alguien.
+
+    Lo que no es una dirección —un `inline`, un `eval`, un `?`— vuelve tal cual:
+    son justamente los casos que esto viene a poder nombrar.
+    """
+    if "://" not in valor:
+        return valor
+    try:
+        from urllib.parse import urlsplit
+        partes = urlsplit(valor)
+        if partes.scheme and partes.netloc:
+            return f"{partes.scheme}://{partes.netloc}"[:120]
+    except ValueError:
+        pass
     return "?"
 
 
@@ -88,8 +138,11 @@ async def recibir_reporte(request: Request):
             if not isinstance(reporte, dict):
                 continue
             logger.warning(
-                "CSP habría bloqueado: directiva=%s origen=%s",
-                _primero(reporte, CAMPOS[0]), _primero(reporte, CAMPOS[1]))
+                "CSP habría bloqueado: directiva=%s origen=%s desde=%s "
+                "muestra=%s",
+                _primero(reporte, CAMPOS[0]), _primero(reporte, CAMPOS[1]),
+                _solo_el_dominio(_primero(reporte, CAMPO_ARCHIVO)),
+                _primero(reporte, CAMPO_MUESTRA))
     except Exception:
         # Un aviso mal formado no es un problema nuestro y no vale una línea de
         # error: quien manda basura acá busca justamente eso.

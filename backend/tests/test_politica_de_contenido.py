@@ -329,3 +329,89 @@ def test_el_buzon_tiene_tope_de_intentos():
     fuente = open(os.path.join(_BACKEND, "routes", "csp_reporte.py"),
                   encoding="utf-8").read()
     assert 'frenar(request, "csp.reporte"' in fuente
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. El medidor de Cloudflare, y los avisos que ahora tienen nombre
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Aparecieron tres avisos seguidos —un script en línea, uno que usa
+# WebAssembly, y el medidor de visitas de Cloudflare— y ninguno era nuestro:
+# se comprobó construyendo el frontend, que no produce ni un solo script en
+# línea y no menciona `WebAssembly` en todo el paquete.
+#
+# El medidor se puede nombrar y se nombra. Los otros dos no tenían de dónde
+# agarrarse, y de saber de quién son depende si se permiten o no: si el
+# WebAssembly es del SDK de pagos, el día que la política pase a bloquear se
+# rompen los cobros con tarjeta; si es de una extensión del navegador de un
+# visitante, no hay que permitir nada.
+
+def test_el_medidor_de_cloudflare_esta_permitido():
+    """No está en nuestro HTML: lo inyecta Cloudflare al servir la página, y no
+    hay forma de firmarlo con un `nonce` porque el HTML es un archivo estático
+    de Cloudflare Pages. O se permite, o se apaga en el panel de Cloudflare."""
+    assert "https://static.cloudflareinsights.com" in directiva("script-src")
+
+
+def test_el_medidor_tambien_puede_mandar_sus_datos():
+    """Permitir que el script CARGUE y no que hable deja el aviso igual de
+    roto, sólo que ahora en `connect-src` y más difícil de encontrar."""
+    assert "https://cloudflareinsights.com" in directiva("connect-src")
+
+
+def test_SE_REGISTRA_DE_QUE_DOMINIO_ERA_EL_SCRIPT_CULPABLE(cliente, caplog):
+    """Sin esto, un aviso de un script de terceros no se puede atribuir a
+    nadie, y la política no se puede completar sin adivinar."""
+    import logging
+    reporte = {"csp-report": {
+        "effective-directive": "script-src",
+        "blocked-uri": "wasm-eval",
+        "source-file": "https://sdk.mercadopago.com/v2/security.js"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    assert "sdk.mercadopago.com" in caplog.text
+
+
+def test_DEL_ARCHIVO_CULPABLE_NO_SE_GUARDA_LA_RUTA(cliente, caplog):
+    """Cuando el script es de la propia aplicación, la ruta es la PANTALLA que
+    estaba mirando una persona concreta. Es lo mismo que este archivo ya evita
+    con el `document-uri`, y se escapaba por la puerta de al lado."""
+    import logging
+    reporte = {"csp-report": {
+        "effective-directive": "script-src-elem",
+        "blocked-uri": "inline",
+        "source-file": "https://www.risappbr.com/verificacion/documento"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    assert "risappbr.com" in caplog.text
+    assert "/verificacion" not in caplog.text, \
+        "se registró qué pantalla estaba mirando"
+
+
+def test_SE_REGISTRA_UNA_MUESTRA_DEL_CODIGO_BLOQUEADO(cliente, caplog):
+    """Un script EN LINEA no tiene dirección propia: los primeros caracteres de
+    su código son lo único que lo identifica. Y señalan al script, no a quien
+    estaba navegando."""
+    import logging
+    reporte = {"csp-report": {"effective-directive": "script-src-elem",
+                              "blocked-uri": "inline",
+                              "script-sample": "window.__cfRLUnblockHandlers"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    assert "cfRLUnblockHandlers" in caplog.text
+
+
+def test_UN_SALTO_DE_LINEA_NO_FABRICA_UNA_LINEA_DE_REGISTRO(cliente, caplog):
+    """A esta dirección le escribe cualquiera. Un salto de línea puesto a
+    propósito parte el aviso en dos, y la segunda mitad se lee después como una
+    línea de registro más — escrita por un desconocido, con la forma que él
+    quiera."""
+    import logging
+    reporte = {"csp-report": {
+        "effective-directive": "script-src",
+        "blocked-uri": "https://x.test/a\nERROR:banco:transferencia aprobada"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    for linea in caplog.text.splitlines():
+        if "transferencia aprobada" in linea:
+            assert "CSP habría bloqueado" in linea, linea
