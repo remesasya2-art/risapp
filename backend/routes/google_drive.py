@@ -280,7 +280,10 @@ def generate_client_pdf(user_data: dict) -> str:
     for f in tmp_files:
         try:
             os.unlink(f)
-        except:
+        except OSError:
+            # Un temporal que no se pudo borrar no vale tumbar el PDF que ya
+            # está armado. `except:` pelado atrapaba hasta un Ctrl-C y un
+            # KeyboardInterrupt, que no son «el archivo no se pudo borrar».
             pass
     
     return pdf_path
