@@ -12,6 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from database import db
 from services import sesiones
@@ -117,7 +118,7 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
     # llegar puesto desde acá.
     try:
         cpf_normalizado = await cpf_de_la_cuenta.revisar_para_registrar(
-            db, request.cpf_number)
+            db, request.cpf_number, correo=email_lower)
     except (cpf_de_la_cuenta.CpfInvalido, cpf_de_la_cuenta.CpfVetado,
             cpf_de_la_cuenta.CpfEnUso) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -130,6 +131,12 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
         else:
             await db.users.delete_one({"email": email_lower})
             await db.pending_verifications.delete_many({"email": email_lower})
+            # La cuenta sin verificar que se acaba de borrar podía tener su CPF
+            # anclado. Si no se suelta acá, ese CPF queda anclado a una cuenta
+            # que ya no existe: bloqueado para todos, sin dueño que lo use, y
+            # sin nadie que sepa que hay que limpiarlo.
+            await cpf_de_la_cuenta.soltar_el_ancla(
+                db, existing.get("cpf_number"), existing.get("user_id") or "")
     
     # Validate passwords
     if request.password != request.confirm_password:
@@ -190,6 +197,26 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
         "cpf_number": cpf_normalizado,
     }
     
+    # ─── Se toma el CPF ──────────────────────────────────────────────────
+    #
+    # ACA, y no cuando confirme el correo. Entre una cosa y la otra pasan hasta
+    # quince minutos, y durante esos quince minutos el CPF no estaba en ninguna
+    # cuenta: otra persona se registraba con el mismo y pasaba igual. Así
+    # aparecieron los CPF repetidos que hoy hay en la base.
+    #
+    # Va después de todas las comprobaciones —contraseña, código de invitación—
+    # para no tomarle el CPF a nadie por un registro que igual iba a fallar.
+    # Lo primero, soltar lo que este mismo correo hubiera tomado antes: quien se
+    # equivocó de CPF y vuelve a empezar no puede dejar el equivocado tomado
+    # quince minutos por nada. `salvo` deja en pie el que está por tomar de
+    # nuevo, para no soltarlo un instante y que otro se lo lleve en el medio.
+    await cpf_de_la_cuenta.soltar_las_del_correo(
+        db, email_lower, salvo=cpf_normalizado)
+    try:
+        await cpf_de_la_cuenta.tomar(db, cpf_normalizado, correo=email_lower)
+    except (cpf_de_la_cuenta.CpfInvalido, cpf_de_la_cuenta.CpfEnUso) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     await db.pending_verifications.delete_many({"email": email_lower})
     await db.pending_verifications.insert_one(pending)
     
@@ -230,11 +257,16 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
     
     if datetime.now(timezone.utc) > expires_at:
         await db.pending_verifications.delete_one({"email": email_lower})
+        # El registro murió, así que el CPF vuelve a estar libre en el acto. La
+        # caducidad de la base haría lo mismo sola, pero hasta un minuto
+        # después: no hay motivo para que el dueño del CPF espere eso.
+        await cpf_de_la_cuenta.soltar_las_del_correo(db, email_lower)
         raise HTTPException(status_code=400, detail="El código ha expirado")
     
     # Check attempts
     if pending.get("attempts", 0) >= 5:
         await db.pending_verifications.delete_one({"email": email_lower})
+        await cpf_de_la_cuenta.soltar_las_del_correo(db, email_lower)
         raise HTTPException(status_code=400, detail="Demasiados intentos fallidos")
     
     # Verify code
@@ -280,7 +312,33 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
         "terms_version": "2026-06-29"
     }
     
-    await db.users.insert_one(user)
+    # ─── El CPF queda anclado a esta cuenta ──────────────────────────────
+    #
+    # Va ANTES del insert y no después: si el CPF resultara ser de otro, esto
+    # levanta y la cuenta no llega a crearse. Al revés quedaría una cuenta
+    # creada con un CPF que es de otra persona, que es exactamente lo que se
+    # está tratando de que no pase.
+    cpf_del_registro = pending.get("cpf_number")
+    if cpf_del_registro:
+        try:
+            await cpf_de_la_cuenta.anclar(db, cpf_del_registro, user_id,
+                                          correo=email_lower)
+        except (cpf_de_la_cuenta.CpfInvalido, cpf_de_la_cuenta.CpfEnUso) as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        await db.users.insert_one(user)
+    except DuplicateKeyError:
+        # El índice único de `users.cpf_number`, cuando exista, puede rechazar
+        # este insert. Sin este `except` el cliente recibía un 500 —«error del
+        # servidor»— en vez del motivo, y encima con la reserva ya anclada.
+        logger.warning("registro rechazado por la base: el CPF ya es de otra cuenta")
+        await cpf_de_la_cuenta.soltar_el_ancla(db, cpf_del_registro, user_id)
+        raise HTTPException(
+            status_code=400,
+            detail="Ese CPF ya tiene una cuenta en RIS App. Iniciá sesión con "
+                   "ella, o recuperá tu contraseña si no la recordás.")
+
     await db.pending_verifications.delete_one({"email": email_lower})
 
     # El bono de bienvenida, si se registró con el código de alguien. Va DESPUES
@@ -345,6 +403,11 @@ async def resend_verification_code(request: Request, body: ResendVerificationCod
                 }
             }
         )
+
+        # Si la reserva del CPF no acompañara estos minutos nuevos, el CPF
+        # quedaría libre mientras el código todavía sirve, y otro podría
+        # tomarlo justo antes de que el dueño confirme.
+        await cpf_de_la_cuenta.renovar_las_del_correo(db, email_lower)
 
         email_sent = await send_verification_email(email_lower, verification_code, pending["name"])
 
