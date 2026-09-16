@@ -56,10 +56,21 @@ import os
 PAGOS = ("https://sdk.mercadopago.com https://*.mercadopago.com "
          "https://*.mlstatic.com")
 
-# El medidor de visitas de Cloudflare. NO ESTA EN NUESTRO HTML y no se puede
-# sacar desde acá: lo inyecta Cloudflare al servir la página, mientras «Web
-# Analytics» esté prendido en su panel. El HTML lo sirve Cloudflare Pages como
-# archivo estático, así que tampoco hay forma de firmarlo con un `nonce`.
+# El medidor de visitas de Cloudflare. NO ESTA EN NUESTRO HTML: lo inyecta
+# Cloudflare al servir la página, mientras «Web Analytics» esté prendido.
+#
+# ACA DECIA QUE NO SE PODIA FIRMAR CON UN `nonce` PORQUE EL HTML LO SERVIA
+# CLOUDFLARE PAGES. Era falso, y se comprobó: `nixpacks.toml` compila el
+# frontend y `server.py` lo sirve desde `frontend/dist`, o sea que lo sirve
+# ESTA aplicación. La prueba de que la cabecera sale de acá es que los avisos
+# de CSP existen: no hay archivo `_headers` en Pages, así que si la página la
+# sirviera Pages el navegador no tendría ninguna política que reportar.
+#
+# Como la cabecera sale de acá, ahora lleva un `nonce` y Cloudflare lo copia a
+# lo que inyecta. Se deja el dominio igual: firmar el medidor depende de que
+# Cloudflare lo trate como script inyectado, y eso no está comprobado con
+# tráfico real. Sacarlo sin comprobarlo rompería los únicos números de visitas
+# que hay.
 #
 # Se permite en vez de apagarlo porque son los únicos números de visitas que
 # hay, y porque Cloudflare ya sirve la página entera: si fuera hostil, esta
@@ -116,13 +127,81 @@ DIRECTIVAS = {
 RUTA_DE_REPORTE = "/api/csp-reporte"
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# EL NONCE, Y QUE PROBLEMA CONCRETO VINO A RESOLVER
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Cloudflare inyecta en la página un script EN LINEA para su detección de bots
+# («JavaScript Detections»). Se reconoce por `__CF$cv$params` y por el camino
+# `/cdn-cgi/challenge-platform/`. No es nuestro y no se puede sacar del HTML,
+# porque no está en el HTML: lo mete Cloudflare al pasar la respuesta.
+#
+# Con `script-src` sin `'unsafe-inline'` —que es como tiene que estar— el día
+# que la política pase a bloquear, la aplicación frenaría ese script. Apareció
+# en los avisos del modo reporte, que es exactamente para lo que ese modo está.
+#
+# POR QUE NO SE ARREGLA CON UN HASH
+#
+#     El contenido de ese script cambia en cada respuesta, así que su hash
+#     también. Un hash fijo en la política no serviría ni una vez.
+#
+# COMO SE ARREGLA
+#
+#     Cloudflare LEE la cabecera `Content-Security-Policy` de la respuesta del
+#     origen y, si encuentra un `nonce`, se lo copia al script que inyecta. O
+#     sea que alcanza con mandar uno distinto por respuesta desde acá.
+#
+#     Tres condiciones, las tres cumplidas:
+#       · la política viaja como cabecera HTTP y no en un `<meta>`  → `cabecera()`
+#       · `script-src 'self'` cubre `/cdn-cgi/challenge-platform/`  → ya estaba
+#       · el origen no manda `Cache-Control: no-transform`          → no lo manda
+#
+# UNO NUEVO POR RESPUESTA, Y NO UNO FIJO
+#
+#     Un nonce fijo es lo mismo que `'unsafe-inline'` con pasos de más: quien
+#     lo lea una vez puede firmar el script que quiera inyectar. Todo su valor
+#     está en que sea impredecible y en que no sirva dos veces.
+#
+# LOS SCRIPTS DE LA APLICACION NO LO USAN
+#
+#     El build no genera ninguno en línea: el `index.html` tiene un solo
+#     `<script>` y va con `src=`, que `'self'` ya permite. El nonce está para
+#     lo que inyecta Cloudflare, no para nosotros. Si algún día el build empieza
+#     a generar scripts en línea, habrá que ponérselo también — y hay una guarda
+#     que avisa si eso pasa.
+_BYTES_DEL_NONCE = 16
+
+
+def nuevo_nonce() -> str:
+    """Un nonce distinto por respuesta.
+
+    `secrets` y no `random`: el segundo es predecible desde unas pocas salidas,
+    y un nonce que se puede adivinar no es un nonce.
+    """
+    import base64
+    import secrets
+
+    return base64.b64encode(secrets.token_bytes(_BYTES_DEL_NONCE)).decode("ascii")
+
+
 def modo() -> str:
     valor = (os.getenv("CSP_MODO", "reporte") or "").strip().lower()
     return valor if valor in ("exigir", "reporte", "apagado") else "reporte"
 
 
-def politica(*, con_reporte: bool = True) -> str:
-    partes = [f"{nombre} {valor}" for nombre, valor in DIRECTIVAS.items()]
+def politica(*, con_reporte: bool = True, nonce: str | None = None) -> str:
+    """La política armada. Con `nonce`, se lo agrega a `script-src`.
+
+    Se agrega SOLO a `script-src`. En `style-src` no haría nada bueno: esa
+    directiva lleva `'unsafe-inline'` por los 4500 estilos de React, y un nonce
+    junto a `'unsafe-inline'` hace que los navegadores IGNOREN el
+    `'unsafe-inline'` — o sea que romperíamos todos los estilos de la
+    aplicación para no ganar nada.
+    """
+    directivas = dict(DIRECTIVAS)
+    if nonce:
+        directivas["script-src"] = f"{directivas['script-src']} 'nonce-{nonce}'"
+    partes = [f"{nombre} {valor}" for nombre, valor in directivas.items()]
     if con_reporte:
         # `report-uri` está en desuso pero es lo que entienden casi todos los
         # navegadores hoy; `report-to` es el reemplazo. Se mandan los dos.
@@ -131,15 +210,20 @@ def politica(*, con_reporte: bool = True) -> str:
     return "; ".join(partes)
 
 
-def cabecera():
+def cabecera(nonce: str | None = None):
     """El nombre de la cabecera y su valor, o `None` si está apagada.
 
     En modo reporte el navegador NO bloquea nada: sólo avisa lo que habría
     bloqueado. Es el mismo texto de política, en la otra cabecera.
+
+    EL NONCE VA TAMBIEN EN MODO REPORTE, y eso importa: si sólo fuera al
+    bloquear, los avisos seguirían mostrando el script de Cloudflare como si
+    fuera a romperse, y no habría forma de saber —antes de bloquear— que la
+    firma funciona. El modo reporte tiene que ensayar la política de verdad.
     """
     actual = modo()
     if actual == "apagado":
         return None
     if actual == "exigir":
-        return ("Content-Security-Policy", politica())
-    return ("Content-Security-Policy-Report-Only", politica())
+        return ("Content-Security-Policy", politica(nonce=nonce))
+    return ("Content-Security-Policy-Report-Only", politica(nonce=nonce))

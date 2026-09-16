@@ -415,3 +415,146 @@ def test_UN_SALTO_DE_LINEA_NO_FABRICA_UNA_LINEA_DE_REGISTRO(cliente, caplog):
     for linea in caplog.text.splitlines():
         if "transferencia aprobada" in linea:
             assert "CSP habría bloqueado" in linea, linea
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. EL NONCE, PARA EL SCRIPT QUE INYECTA CLOUDFLARE
+# ══════════════════════════════════════════════════════════════════════════
+#
+# QUE APARECIO EN LOS AVISOS
+#
+#     Con el modo reporte andando, apareció esto:
+#
+#         directiva=script-src-elem origen=inline desde=https://www.risappbr.com
+#
+#     Un script EN LINEA desde nuestro propio dominio. Leyendo el HTML servido
+#     resultó ser de Cloudflare —`__CF$cv$params` y
+#     `/cdn-cgi/challenge-platform/`—, su detección de bots. No está en nuestro
+#     build: lo mete Cloudflare al pasar la respuesta.
+#
+#     Con `script-src` sin `'unsafe-inline'`, el día que la política pase a
+#     bloquear ese script se frena. Y su contenido cambia en cada respuesta,
+#     así que un hash no sirve ni una vez.
+#
+# LA SALIDA
+#
+#     Cloudflare lee la cabecera `Content-Security-Policy` del origen y, si
+#     encuentra un `nonce`, se lo copia al script que inyecta. O sea que
+#     alcanza con mandar uno distinto por respuesta.
+#
+#     Eso exige que la cabecera salga de NUESTRO servidor, y sale: se comprobó
+#     que `nixpacks.toml` compila el frontend y que `server.py` lo sirve. El
+#     comentario del código decía lo contrario y estaba equivocado.
+
+def _script_src(politica: str) -> str:
+    for parte in politica.split(";"):
+        parte = parte.strip()
+        if parte.startswith("script-src "):
+            return parte
+    raise AssertionError("la política no tiene script-src")
+
+
+def test_LA_POLITICA_LLEVA_EL_NONCE_EN_SCRIPT_SRC():
+    """Sin esto, el script de Cloudflare se frena el día que se bloquee."""
+    politica = csp.politica(nonce="ABC123")
+    assert "'nonce-ABC123'" in _script_src(politica)
+
+
+def test_EL_NONCE_NO_VA_EN_STYLE_SRC():
+    """Y no es un detalle: `style-src` lleva `'unsafe-inline'` por los 4500
+    estilos de React, y los navegadores IGNORAN `'unsafe-inline'` cuando hay un
+    nonce en la misma directiva.
+
+    O sea que ponerlo ahí rompería TODOS los estilos de la aplicación a la vez,
+    para no ganar nada. Esta guarda existe porque el error es fácil de cometer
+    y su síntoma —la aplicación sin estilos— no se parece a su causa.
+    """
+    politica = csp.politica(nonce="ABC123")
+    for parte in politica.split(";"):
+        parte = parte.strip()
+        if parte.startswith("style-src"):
+            assert "nonce" not in parte, (
+                "el nonce se coló en style-src: eso anula el 'unsafe-inline' "
+                "y deja la aplicación sin estilos")
+
+
+def test_CADA_RESPUESTA_LLEVA_UN_NONCE_DISTINTO(cliente):
+    """El que importa, y el que prueba que esto sirve de algo.
+
+    Un nonce fijo es `'unsafe-inline'` con pasos de más: quien lo lea una vez
+    puede firmar el script que quiera. Todo su valor está en no repetirse.
+    """
+    import re
+
+    vistos = set()
+    for _ in range(5):
+        r = cliente.get("/api/health")
+        cabecera = (r.headers.get("Content-Security-Policy")
+                    or r.headers.get("Content-Security-Policy-Report-Only") or "")
+        encontrados = re.findall(r"'nonce-([^']+)'", cabecera)
+        assert encontrados, f"esta respuesta salió sin nonce: {cabecera[:120]}"
+        vistos.update(encontrados)
+
+    assert len(vistos) == 5, (
+        f"cinco respuestas trajeron {len(vistos)} nonce(s) distintos. Si se "
+        "repite, no protege nada.")
+
+
+def test_EL_NONCE_NO_SE_PUEDE_ADIVINAR():
+    """Largo suficiente y de una fuente criptográfica.
+
+    Se mira el código además del valor: `random` produce valores que se pueden
+    predecir desde unas pocas salidas, y eso no se nota mirando UN nonce.
+    """
+    import ast
+    import base64
+    import os as _os
+
+    # SE LEE CON `ast`, Y NO BUSCANDO LA PALABRA EN EL TEXTO.
+    #
+    # La primera versión de esta guarda hacía `"secrets" in fuente` y SOBREVIVIO
+    # a cambiar `secrets` por `random`: la palabra seguía estando… en el
+    # comentario que explica por qué se usa `secrets`. O sea que la guarda
+    # comprobaba la documentación y no el código, y habría dado por buena una
+    # fuente predecible mientras el comentario dijera lo correcto.
+    ruta = _os.path.join(_BACKEND, "services", "csp.py")
+    fuente = open(ruta, encoding="utf-8").read()
+    arbol = ast.parse(fuente, ruta)
+    funcion = next(n for n in ast.walk(arbol)
+                   if isinstance(n, ast.FunctionDef) and n.name == "nuevo_nonce")
+
+    llamadas = {ast.unparse(n.func) for n in ast.walk(funcion)
+                if isinstance(n, ast.Call)}
+    assert "secrets.token_bytes" in llamadas, (
+        f"el nonce no sale de `secrets.token_bytes`; llama a {sorted(llamadas)}. "
+        "Con `random` los valores se predicen desde unas pocas salidas, y un "
+        "nonce que se adivina no es un nonce.")
+
+    crudo = base64.b64decode(csp.nuevo_nonce())
+    assert len(crudo) >= 16, (
+        f"el nonce tiene {len(crudo)} bytes. Menos de 16 se puede probar a "
+        "fuerza bruta dentro de la vida de una página.")
+
+
+def test_EL_NONCE_VA_TAMBIEN_EN_MODO_REPORTE(monkeypatch):
+    """Si sólo fuera al bloquear, no habría forma de ensayarlo.
+
+    El modo reporte existe para probar la política de verdad antes de que corte
+    algo. Una política que en reporte es distinta de la que va a bloquear no
+    está ensayando nada — y el aviso del script de Cloudflare seguiría
+    apareciendo como si fuera a romperse.
+    """
+    monkeypatch.setenv("CSP_MODO", "reporte")
+    nombre, valor = csp.cabecera("ABC123")
+    assert nombre == "Content-Security-Policy-Report-Only"
+    assert "'nonce-ABC123'" in valor
+
+
+def test_SIN_NONCE_LA_POLITICA_SIGUE_SIENDO_VALIDA():
+    """Que no haya nonce no puede dejar la política rota.
+
+    Lo llama así la suite y cualquier lugar que arme la política para mirarla.
+    """
+    politica = csp.politica()
+    assert "nonce" not in politica
+    assert "'self'" in _script_src(politica)
