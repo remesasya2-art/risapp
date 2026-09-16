@@ -317,7 +317,17 @@ async def security_headers_middleware(request, call_next):
     # Arranca en modo REPORTE: el navegador no bloquea nada y avisa lo que
     # habría bloqueado, para poder completarla con tráfico real antes de que
     # corte un pago. `CSP_MODO=exigir` la pasa a bloquear.
-    cabecera_csp = csp.cabecera()
+    # UN NONCE NUEVO POR RESPUESTA.
+    #
+    # Es lo que deja que Cloudflare firme el script en línea que inyecta para
+    # su detección de bots: lee esta cabecera y le copia el nonce. Sin esto, el
+    # día que la política pase a bloquear, la aplicación frenaría ese script.
+    # El motivo largo está en `services/csp.py`.
+    #
+    # Se genera ACA y no adentro de `csp.cabecera()` sin argumento, para que
+    # quede a la vista que hay uno por respuesta y no uno por proceso. Un nonce
+    # que se repite no protege nada.
+    cabecera_csp = csp.cabecera(csp.nuevo_nonce())
     if cabecera_csp:
         nombre, valor = cabecera_csp
         response.headers[nombre] = valor
