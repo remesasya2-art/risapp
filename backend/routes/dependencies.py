@@ -15,6 +15,40 @@ SESSION_COOKIE_NAME = "session_token"
 SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 días (coincide con la sesión de usuario más larga)
 
 
+# ─── Lo que se trae de la base en CADA pedido ─────────────────────────────
+#
+# ESTO CORRE MAS QUE NINGUNA OTRA CONSULTA DE LA APLICACION
+#
+#     Dos lecturas por cada pedido autenticado, y los pedidos los generan los
+#     relojes: la campana cada 30 segundos, los pendientes cada 60, las órdenes
+#     cada 15. Con dos mil personas con la aplicación abierta son unos 67
+#     pedidos por segundo, o sea 134 documentos por segundo cruzando la red.
+#
+#     Las dos consultas venían SIN proyección: traían el documento entero de la
+#     sesión y el documento entero del usuario, con todo lo que tenga adentro.
+#
+# LISTA DE LO PERMITIDO, que es la regla del proyecto y acá faltaba
+#
+#     Una lista de lo prohibido deja pasar cada campo nuevo hasta que alguien
+#     se acuerde de agregarlo.
+#
+# Y SE ARMA SOLA A PARTIR DEL MODELO
+#
+#     Una lista escrita a mano se desincroniza el día que alguien le agrega un
+#     campo a `User`: el campo nuevo llega vacío, con su valor por omisión, y
+#     el defecto aparece lejos de acá —en la pantalla que lo usa— sin nada que
+#     apunte a esta línea. Derivándola del modelo, agregar un campo al modelo
+#     lo agrega a la consulta y no hay nada que recordar.
+DEL_USUARIO = {campo: 1 for campo in User.model_fields}
+DEL_USUARIO["_id"] = 0
+# El único que mira ESTA función y no está en el modelo. Sin él, una cuenta
+# suspendida entraría igual: `user.get("is_banned")` daría None siempre.
+DEL_USUARIO["is_banned"] = 1
+
+# De la sesión sólo se usan dos cosas: de quién es y cuándo vence.
+DE_LA_SESION = {"_id": 0, "user_id": 1, "expires_at": 1}
+
+
 def set_session_cookie(response: Response, token: str) -> None:
     """Setea el token de sesión como cookie httpOnly + Secure + SameSite=Lax."""
     response.set_cookie(
@@ -54,7 +88,7 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     # Find session (use user_sessions collection like server.py)
     session = await db.user_sessions.find_one(
         {"session_token": session_token},
-        {"_id": 0}
+        DE_LA_SESION
     )
     
     if not session:
@@ -72,7 +106,7 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     # Get user
     user = await db.users.find_one(
         {"user_id": session["user_id"]},
-        {"_id": 0}
+        DEL_USUARIO
     )
     
     if not user:
