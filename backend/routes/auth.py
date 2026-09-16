@@ -516,8 +516,21 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         except Exception as e:
             logger.warning(f"Failed to send login notification: {e}")
 
-        for f in ("balance_ris", "balance_ves", "balance_ris_terceros", "balance_personal", "balance_terceros", "balance_usdt", "balance_usdc"):
-            if f in user and user[f] is not None:
+        # LOS SALDOS SE RECORREN POR PREFIJO, NO POR UNA LISTA DE NOMBRES.
+        #
+        # Acá había una lista escrita a mano de siete nombres, y le faltaba
+        # `balance_ris_bono`. El registro escribe ese campo en Decimal128 desde
+        # que existe el bono de bienvenida, y un Decimal128 NO SE PUEDE
+        # CONVERTIR A JSON: esta ruta devolvía 500 a toda persona registrada
+        # desde entonces, que es la puerta principal de la aplicación.
+        #
+        # El defecto no se vio antes porque una lista de nombres no avisa
+        # cuando le falta uno: sigue andando para los seis que sí están. Es el
+        # mismo problema que `/auth/me` ya había resuelto recorriendo por
+        # prefijo, y por eso se hace igual acá. Olvidarse de un nombre ahora es
+        # imposible: el próximo saldo que se invente se convierte solo.
+        for f in [k for k in user if k.startswith("balance_")]:
+            if user[f] is not None:
                 user[f] = to_float(from_db(user[f]))
         user_response = {
             k: v for k, v in user.items()
