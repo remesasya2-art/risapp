@@ -868,12 +868,27 @@ def test_auth_me_devuelve_el_saldo_del_bono_SIN_ROMPERSE(base, monkeypatch):
     corre(caso())
 
 
-def test_auth_me_convierte_CUALQUIER_saldo_y_no_una_lista_escrita_a_mano(base):
-    """La guarda de fondo: que el próximo saldo nuevo no repita el problema.
+def test_auth_me_convierte_TODOS_los_saldos_que_deja_salir(base):
+    """La guarda de fondo, y por qué cambió de forma.
 
-    Se inventa un campo `balance_` que no existe en ninguna parte del código y
-    se exige que salga convertido igual. Si alguien vuelve a poner una lista
-    de nombres, este test se pone rojo.
+    ANTES pedía lo contrario que hoy: inventaba un campo `balance_` que no
+    existe en ninguna parte del código y exigía que `/auth/me` lo devolviera
+    convertido. Tenía sentido mientras esa ruta mandaba el documento entero.
+
+    HOY `/auth/me` proyecta por lista de lo permitido —`LO_QUE_VE_SU_DUENO`—
+    porque devolvía la semilla del segundo factor y un token de reseteo vivo.
+    Con una lista de lo permitido, un saldo que nadie agregue a `LOS_SALDOS`
+    no sale, y ESO ES LO BUSCADO: el precio de no filtrar es que hay que
+    nombrar lo que se muestra.
+
+    Así que la guarda quedó dada vuelta, y prueba las dos mitades: cada saldo
+    permitido sale convertido a número —ninguno se queda en Decimal128, que es
+    lo que rompía— y uno que no está en la lista no sale. El aviso de qué
+    hacer cuando aparezca un saldo nuevo está en el mensaje del assert.
+
+    La guarda vieja no se perdió: vive en
+    `tests/test_entrar_con_el_bono_puesto.py`, sobre la ruta de login, que sí
+    devuelve el documento y donde la lista escrita a mano SI causó un 500.
     """
     from fastapi.encoders import jsonable_encoder
     from models.user import User
@@ -882,15 +897,49 @@ def test_auth_me_convierte_CUALQUIER_saldo_y_no_una_lista_escrita_a_mano(base):
     async def caso():
         await _sembrar(base)
         await base.users.update_one({"user_id": "u_referido"}, {"$set": {
-            "balance_de_algo_que_todavia_no_existe": to_decimal128(Decimal("7"))}})
+            **{c: to_decimal128(Decimal("7")) for c in rutas_auth.LOS_SALDOS},
+            "balance_de_algo_que_todavia_no_existe": to_decimal128(Decimal("9")),
+        }})
         quien = User(user_id="u_referido", name="Quien",
                      email="referido@example.com", role="user")
         devuelto = await rutas_auth.get_me(current_user=quien)
         jsonable_encoder(devuelto)
-        assert devuelto["balance_de_algo_que_todavia_no_existe"] == 7.0, (
-            "el saldo inventado no se convirtió. Si volvió una lista de "
-            "nombres escrita a mano, al próximo saldo nuevo le va a pasar lo "
-            "mismo que casi le pasó al bono.")
+
+        for campo in rutas_auth.LOS_SALDOS:
+            assert devuelto.get(campo) == 7.0, (
+                f"'{campo}' no salió convertido. Un Decimal128 no se convierte "
+                "a JSON: la ruta más llamada de la aplicación devuelve 500.")
+
+        assert "balance_de_algo_que_todavia_no_existe" not in devuelto, (
+            "salió un saldo que no está en LO_QUE_VE_SU_DUENO. Si esto se "
+            "pone rojo, la proyección volvió a ser una lista de lo prohibido.")
+
+    corre(caso())
+
+
+def test_un_saldo_nuevo_que_nadie_agregue_a_LOS_SALDOS_no_se_ve(base):
+    """El costo de la lista de lo permitido, escrito donde se lee.
+
+    Es su modo de fallar silencioso: la ruta contesta 200, nadie ve un error,
+    y la pantalla muestra cero. Este test existe para que el día que alguien
+    agregue `balance_loquesea` y no lo vea en pantalla, busque «LOS_SALDOS» y
+    encuentre en un minuto lo que si no le lleva una tarde.
+    """
+    from models.user import User
+    from routes import auth as rutas_auth
+
+    async def caso():
+        await _sembrar(base)
+        await base.users.update_one({"user_id": "u_referido"}, {"$set": {
+            "balance_recien_inventado": to_decimal128(Decimal("500"))}})
+        quien = User(user_id="u_referido", name="Quien",
+                     email="referido@example.com", role="user")
+        devuelto = await rutas_auth.get_me(current_user=quien)
+
+        assert "balance_recien_inventado" not in devuelto
+        assert "balance_recien_inventado" not in rutas_auth.LOS_SALDOS, (
+            "si lo agregaste a LOS_SALDOS, este test sobra: borralo")
+
     corre(caso())
 
 
