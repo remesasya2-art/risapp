@@ -2,6 +2,7 @@
 Gestor PIX routes - PIX payment generation and webhook handling for Gestor flow
 Integrates with Mercado Pago for real PIX payments
 """
+import asyncio
 import uuid
 import json
 import logging
@@ -126,7 +127,16 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
     
     if MP_AVAILABLE and mercadopago_service:
         try:
-            mp_result = mercadopago_service.create_pix_payment(
+            # EN OTRO HILO. El SDK de Mercado Pago es SINCRONO: mientras
+            # espera la respuesta no suelta el hilo, y este servicio corre en
+            # UN SOLO proceso con UN SOLO hilo (`railway.toml`, una réplica).
+            # O sea que esta espera no la paga sólo quien está recargando: la
+            # paga TODA la aplicación, incluido el que sólo mira su saldo.
+            #
+            # Y el backend vive en Oregón mientras Mercado Pago está en Brasil,
+            # así que la ida y vuelta arranca en unos 200 ms de pura red.
+            mp_result = await asyncio.to_thread(
+                mercadopago_service.create_pix_payment,
                 amount=amount_brl,
                 description=f"Recarga Gestor {gestor_name} - {internal_id}",
                 payer_email=request.client_email or "cliente@risapp.com",
@@ -289,7 +299,19 @@ async def get_pix_status(payment_id: str, current_user: User = Depends(require_a
     # If pending and has MP payment, check status with Mercado Pago
     if current_status == "pending" and payment.get("mp_payment_id") and MP_AVAILABLE:
         try:
-            mp_status = mercadopago_service.get_payment_status(payment["mp_payment_id"])
+            # ESTA ES LA MAS CARA DE LAS CUATRO, y por lejos. La pantalla
+            # de recarga pregunta CADA CINCO SEGUNDOS por cada persona que
+            # está esperando su PIX. Con el hilo agarrado, la cuenta es:
+            #
+            #     una consulta cada 5 s por persona × lo que tarde Mercado Pago
+            #
+            # A medio segundo la ida y vuelta, DIEZ personas esperando a la vez
+            # consumen todo el segundo que el hilo tiene por segundo, y la cola
+            # empieza a crecer sin recuperarse. Railway ve la aplicación
+            # colgada, no le contesta la comprobación de salud, y la reinicia
+            # en plena hora pico.
+            mp_status = await asyncio.to_thread(
+                mercadopago_service.get_payment_status, payment["mp_payment_id"])
             logger.info(f"MP status check for {payment_id}: {mp_status}")
             
             if mp_status and mp_status.get("status") == "approved":
@@ -704,7 +726,8 @@ async def mercadopago_webhook(request: Request):
             logger.error("Mercado Pago service not available for verification")
             return {"received": True, "error": "mp_service_unavailable"}
         
-        mp_status = mercadopago_service.get_payment_status(mp_payment_id)
+        mp_status = await asyncio.to_thread(
+            mercadopago_service.get_payment_status, mp_payment_id)
         
         if not mp_status:
             logger.error(f"Could not verify payment {mp_payment_id} with MP API")
@@ -780,7 +803,8 @@ async def _handle_card_webhook(card_payment: dict, mp_payment_id: str) -> dict:
         logger.warning(f"MP service unavailable, cannot verify card webhook {mp_payment_id}")
         return {"received": True, "error": "mp_service_unavailable"}
     
-    mp_status_data = mercadopago_service.get_payment_status(mp_payment_id)
+    mp_status_data = await asyncio.to_thread(
+        mercadopago_service.get_payment_status, mp_payment_id)
     if not mp_status_data:
         return {"received": True, "error": "verification_failed"}
     

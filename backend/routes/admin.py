@@ -28,7 +28,7 @@ from services import (auditoria, comprobantes_del_lote,
                       registro_del_pago)
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
-from utils.security import generate_temp_password, hash_password
+from utils.security import generate_temp_password, hash_password_async
 from services.imagen_recibida import ImagenInvalida, limpiar_lista
 
 logger = logging.getLogger(__name__)
@@ -665,7 +665,7 @@ async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User =
         {"user_id": request.user_id},
         {
             "$set": {
-                "password_hash": hash_password(temp_password),
+                "password_hash": await hash_password_async(temp_password),
                 "password_set": True,
                 "must_change_password": True
             }
