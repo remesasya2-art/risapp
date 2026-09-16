@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal
+  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -108,6 +108,45 @@ const TABS = [
   { key: 'configuracion', label: 'Configuración', icon: SlidersHorizontal, superAdminOnly: true },
 ];
 
+// LOS SEIS GRUPOS DEL PANEL
+//
+//   Antes esto era una tira plana de dieciocho pestañas que envolvía en tres
+//   filas, ordenadas por el momento en que se fueron agregando. El propio
+//   archivo lo estaba peleando a mano: había comentarios pidiendo que una
+//   pestaña quedara «antes del Libro mayor a propósito» y otra «al lado de
+//   Seguridad financiera», que es agrupar sin tener con qué.
+//
+//   El criterio no es el tema, es QUE VINISTE A HACER:
+//
+//     Operación      trabajo que espera a que alguien lo haga
+//     Clientes       la gente y lo que manda
+//     Encomiendas    las cajas y lo que cuesta mandarlas
+//     Contabilidad   dinero que ya se movió, para cuadrarlo o explicarlo
+//     Administración lo que cambia cómo se comporta el sistema
+//
+//   `hijas` son claves de `TABS` y `CRM_SUBTABS`, no secciones nuevas: los
+//   nombres internos no cambian, así que los enlaces con `?tab=` y el salto de
+//   la campana del equipo siguen andando igual.
+const GRUPOS = [
+  { key: 'g_resumen', label: 'Resumen', icon: Activity, hijas: ['overview'] },
+  { key: 'g_operacion', label: 'Operación', icon: CheckCircle,
+    hijas: ['ordenes', 'withdrawals', 'recharges', 'diferencias', 'btc',
+            'credits', 'rates'] },
+  { key: 'g_clientes', label: 'Clientes', icon: UserCog,
+    hijas: ['users', 'kyc', 'blacklist', 'chat', 'support', 'ratings'] },
+  { key: 'g_envios', label: 'Encomiendas', icon: Boxes,
+    hijas: ['operacion', 'envios'] },
+  { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
+    hijas: ['ledger', 'seguridad', 'cobros', 'reportes'] },
+  { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
+    hijas: ['configuracion', 'rrhh', 'auditoria'] },
+];
+
+// La ficha de cada sección, venga de donde venga. `crm` no entra: era el
+// contenedor de las subpestañas y ahora ese trabajo lo hace el grupo.
+const POR_CLAVE = Object.fromEntries(
+  [...TABS.filter((t) => t.key !== 'crm'), ...CRM_SUBTABS].map((s) => [s.key, s]));
+
 // El número que dice cuánto espera en una pestaña.
 //
 // Se pinta SOLO si hay algo. Un «0» permanente en nueve pestañas es ruido que
@@ -201,6 +240,72 @@ const [searchParams, setSearchParams] = useSearchParams();
   //   Lo que sí cuesta: volver a montar cierra lo que estuviera abierto dentro
   //   de la sección. Es lo que significa refrescar.
   const [recarga, setRecarga] = useState(0);
+
+  // EL MENU EN EL TELEFONO
+  //
+  //   En pantalla ancha el menú va fijo al costado y todo queda a un clic. En
+  //   el teléfono no entra, así que se pliega detrás de un botón y se abre
+  //   encima del contenido.
+  //
+  //   No es un invento para el panel: `pages/Dashboard.jsx` —la aplicación del
+  //   cliente— ya funciona exactamente así desde antes. El panel era el único
+  //   que no seguía ese patrón.
+  //
+  //   El corte va en 1024 y no en los 768 del Dashboard a propósito: acá el
+  //   menú tiene veinte secciones y el contenido son tablas anchas. En una
+  //   tableta de 800 los dos juntos quedan apretados, y prefiero el menú
+  //   plegado antes que una tabla que se corta.
+  const [esAncho, setEsAncho] = useState(window.innerWidth >= 1024);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+
+  useEffect(() => {
+    const alRedimensionar = () => {
+      const ancho = window.innerWidth >= 1024;
+      setEsAncho(ancho);
+      // Al volver a pantalla ancha el menú se muestra fijo: dejar abierto el
+      // de teléfono taparía el contenido con una copia del mismo menú.
+      if (ancho) setMenuAbierto(false);
+    };
+    window.addEventListener('resize', alRedimensionar);
+    return () => window.removeEventListener('resize', alRedimensionar);
+  }, []);
+
+  // Elegir una sección cierra el menú del teléfono. Sin esto queda tapando lo
+  // que la persona acaba de pedir.
+  // QUE GRUPOS ESTAN DESPLEGADOS
+  //
+  //   Arrancan TODOS CERRADOS. Es una decisión del dueño del proyecto y va
+  //   anotada porque la primera versión hacía lo contrario: los abría todos,
+  //   con el argumento de que el menú existe para ver las veinte secciones sin
+  //   tocar nada.
+  //
+  //   Lo que ese argumento no miraba: veinte renglones abiertos no se leen de
+  //   un vistazo, se recorren. Con los grupos cerrados, el menú entero son
+  //   SEIS renglones que entran juntos en cualquier pantalla —teléfono
+  //   incluido—, y se despliega el que se necesita. Eso es lo que hace que
+  //   agrupar sirva de algo en vez de ser sólo un título encima de una lista
+  //   igual de larga.
+  //
+  //   Cada grupo se abre y se cierra por su cuenta: se pueden tener dos
+  //   abiertos a la vez. Cerrar los otros al abrir uno es la otra forma
+  //   posible, y se descartó porque obliga a reabrir el de al lado cada vez
+  //   que se va y se vuelve.
+  //
+  //   El grupo de la sección abierta se despliega solo y no se puede cerrar:
+  //   esconder justo lo que estás mirando deja el menú sin poder indicar dónde
+  //   estás parada.
+  const [desplegados, setDesplegados] = useState(() => new Set());
+
+  const desplegar = (clave) => setDesplegados((antes) => {
+    const ahora = new Set(antes);
+    if (ahora.has(clave)) ahora.delete(clave); else ahora.add(clave);
+    return ahora;
+  });
+
+  const irA = (clave) => {
+    setActiveTab(clave);
+    if (!esAncho) setMenuAbierto(false);
+  };
 
   const refrescarTodo = () => {
     loadData();                      // las pestañas que se dibujan acá mismo
@@ -302,12 +407,38 @@ const [searchParams, setSearchParams] = useSearchParams();
   // CRM no tiene trabajo propio: es la puerta a KYC, Soporte y las demás. Su
   // número es la suma de lo que hay adentro, o la pestaña se ve vacía mientras
   // hay ocho KYC esperando a un clic de distancia.
-  const pendientesDe = (clave) => {
-    if (clave === 'crm') {
-      return CRM_SUBTABS.reduce((suma, s) => suma + (pendientes[s.key] || 0), 0);
+  // Las mismas reglas de siempre, en un solo lugar en vez de repartidas entre
+  // la tira de arriba y la de las subpestañas.
+  const puedeVerSeccion = (clave) => {
+    if (isAgent) {
+      return ['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion']
+        .includes(clave);
     }
-    return pendientes[clave] || 0;
+    if (clave === 'ratings') return user?.role === 'super_admin';
+    return !POR_CLAVE[clave]?.superAdminOnly || user?.role === 'super_admin';
   };
+
+  const gruposVisibles = GRUPOS
+    .map((g) => ({ ...g, hijas: g.hijas.filter(puedeVerSeccion) }))
+    .filter((g) => g.hijas.length > 0);
+
+  const grupoActivo = gruposVisibles.find((g) => g.hijas.includes(activeTab))
+    || gruposVisibles[0];
+
+  // EL CONTADOR SUBE AL GRUPO, Y NO ES UN ADORNO
+  //
+  //   El número que dice cuánto espera vivía en la pestaña de cada sección, y
+  //   eso se hizo a propósito: quien entra al panel tiene que ver DESDE AFUERA
+  //   dónde hay cola. Al agrupar, ese número queda un nivel más adentro.
+  //
+  //   Así que el grupo muestra la suma y cada sección conserva el suyo:
+  //   «Operación 7» se ve de entrada, y al abrirlo se ve que son 4 de Órdenes
+  //   y 3 de Retiros. Sin esto, agrupar escondería justo la señal que dice por
+  //   dónde empezar.
+  const pendientesDe = (clave) => pendientes[clave] || 0;
+
+  const pendientesDelGrupo = (grupo) =>
+    grupo.hijas.reduce((suma, clave) => suma + pendientesDe(clave), 0);
 
   const loadData = async () => {
     setLoading(true);
@@ -706,6 +837,13 @@ const [searchParams, setSearchParams] = useSearchParams();
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {!esAncho && (
+                <button onClick={() => setMenuAbierto((a) => !a)}
+                  data-testid="boton-menu"
+                  style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Menu style={{ width: '20px', height: '20px', color: '#374151' }} />
+                </button>
+              )}
               <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="back-button">
                 <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
               </button>
@@ -719,7 +857,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                   existía acá: para enterarse de un KYC nuevo había que salirse
                   del panel a una pantalla de cliente. */}
               <CampanaDelEquipo onIrA={setActiveTab} />
-              <RestoreButton userRole={user?.role} onSuccess={loadData} size="sm" />
+              <RestoreButton userRole={user?.role} onSuccess={loadData} size="sm"
+                soloIcono={!esAncho} />
               <button onClick={refrescarTodo} title="Actualizar esta sección" style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
                 <RefreshCw style={{ width: '20px', height: '20px', color: '#374151', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               </button>
@@ -728,43 +867,90 @@ const [searchParams, setSearchParams] = useSearchParams();
         </div>
       </header>
 
-      {/* Tabs */}
-      <div style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 24px' }}>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', rowGap: '8px' }}>
-            {(isAgent ? TABS.filter(t => t.key === 'crm' || t.key === 'operacion') : TABS.filter(t => !t.superAdminOnly || user?.role === 'super_admin')).map((tab) => {
-              const activa = activeTab === tab.key || (tab.key === 'crm' && CRM_KEYS.includes(activeTab));
-              return (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key === 'crm' ? (isAgent ? 'chat' : 'users') : tab.key)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: '500',
-                  backgroundColor: activa ? '#6366f1' : 'transparent', color: activa ? '#ffffff' : '#6b7280' }}
-                data-testid={`tab-${tab.key}`}
-              >
-                <tab.icon style={{ width: '18px', height: '18px' }} /> {tab.label}
-                <Pendiente cuantos={pendientesDe(tab.key)} activa={activa} />
-              </button>
-            );})}
-          </div>
-        </div>
-      </div>
-
-      {/* `key={recarga}`: el botón de refrescar del encabezado cambia ese
-          número y React vuelve a montar todo lo de adentro, así que cada
-          sección vuelve a pedir sus datos sin que haya que enseñarle nada.
-          El motivo largo está donde se declara `recarga`. */}
-      <main key={recarga} style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px' }}>
-        {CRM_KEYS.includes(activeTab) && (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #eef0f4', paddingBottom: '14px' }}>
-            {(isAgent ? CRM_SUBTABS.filter(st => ['chat', 'support', 'users', 'kyc', 'blacklist'].includes(st.key)) : CRM_SUBTABS.filter(st => st.key !== 'ratings' || user?.role === 'super_admin')).map((st) => (
-              <button key={st.key} onClick={() => setActiveTab(st.key)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', border: activeTab === st.key ? '1px solid #6366f1' : '1px solid #e5e7eb', backgroundColor: activeTab === st.key ? '#eef2ff' : '#fff', color: activeTab === st.key ? '#4F46E5' : '#6b7280', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
-              >
-                <st.icon style={{ width: '16px', height: '16px' }} /> {st.label}
-                <Pendiente cuantos={pendientes[st.key] || 0} activa={false} />
-              </button>
-            ))}
-          </div>
+      {/* El menú de las secciones: fijo al costado en pantalla ancha, y
+          plegado detrás del botón del encabezado en el teléfono. */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', maxWidth: '1440px', margin: '0 auto' }}>
+        {/* La sombra que tapa el contenido mientras el menú está abierto. Se
+            toca y se cierra: en un teléfono es más fácil que buscar la X. */}
+        {!esAncho && menuAbierto && (
+          <div onClick={() => setMenuAbierto(false)}
+            style={{ position: 'fixed', inset: '64px 0 0 0', zIndex: 45,
+                     backgroundColor: 'rgba(17,24,39,0.45)' }} />
         )}
+        <aside style={{
+          width: '236px', flexShrink: 0, backgroundColor: '#ffffff',
+          borderRight: '1px solid #e5e7eb', padding: '18px 12px',
+          overflowY: 'auto',
+          ...(esAncho ? {
+            minHeight: 'calc(100vh - 64px)', position: 'sticky', top: '64px',
+            maxHeight: 'calc(100vh - 64px)',
+          } : {
+            position: 'fixed', top: '64px', bottom: 0, left: 0, zIndex: 50,
+            boxShadow: '2px 0 16px rgba(0,0,0,0.12)',
+            transform: menuAbierto ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.2s ease',
+          }),
+        }}>
+          {gruposVisibles.map((grupo) => {
+            // El grupo de la sección abierta no se pliega, aunque se haya
+            // pedido: el menú tiene que poder mostrar dónde estás parada.
+            const tieneLoAbierto = grupo.hijas.includes(activeTab);
+            const abierto = tieneLoAbierto || desplegados.has(grupo.key);
+            return (
+            <div key={grupo.key} style={{
+              marginBottom: '10px', paddingBottom: '10px',
+              // La línea entre grupos. Antes la separación era sólo aire, y el
+              // aire no se lee como una división: los títulos en gris chiquito
+              // se veían como espacio sobrante y el menú parecía una lista
+              // larga y plana de veinte cosas sueltas.
+              borderBottom: '1px solid #f1f2f6',
+            }}>
+              <button onClick={() => desplegar(grupo.key)}
+                data-testid={`grupo-${grupo.key}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                  padding: '7px 10px', marginBottom: '3px', borderRadius: '8px',
+                  border: 'none', backgroundColor: 'transparent', cursor: 'pointer',
+                  fontSize: '11.5px', fontWeight: 800, color: '#111827',
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                }}>
+                <grupo.icon style={{ width: '14px', height: '14px', color: '#6366f1' }} />
+                <span style={{ flex: 1, textAlign: 'left' }}>{grupo.label}</span>
+                <Pendiente cuantos={pendientesDelGrupo(grupo)} activa={false} />
+                <ChevronRight style={{
+                  width: '14px', height: '14px', color: '#c2c6d0',
+                  transform: abierto ? 'rotate(90deg)' : 'none',
+                  transition: 'transform 0.15s',
+                }} />
+              </button>
+              {abierto && grupo.hijas.map((clave) => {
+                const s = POR_CLAVE[clave];
+                if (!s) return null;
+                const activa = activeTab === clave;
+                return (
+                  <button key={clave} onClick={() => irA(clave)}
+                    data-testid={`tab-${clave}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '9px', width: '100%',
+                      padding: '8px 10px', marginBottom: '2px', borderRadius: '9px',
+                      border: 'none', cursor: 'pointer', textAlign: 'left',
+                      fontSize: '13.5px', fontWeight: activa ? 600 : 500,
+                      backgroundColor: activa ? '#eef2ff' : 'transparent',
+                      color: activa ? '#4338ca' : '#4b5563',
+                    }}
+                  >
+                    <s.icon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden',
+                                   textOverflow: 'ellipsis' }}>{s.label}</span>
+                    <Pendiente cuantos={pendientesDe(clave)} activa={false} />
+                  </button>
+                );
+              })}
+            </div>
+          );})}
+        </aside>
+
+      <main key={recarga} style={{ flex: 1, minWidth: 0, padding: esAncho ? '24px' : '16px' }}>
         {/* Overview Tab */}
         {activeTab === 'ordenes' && (
           <OrdenesPorProcesar />
@@ -1562,6 +1748,7 @@ const [searchParams, setSearchParams] = useSearchParams();
         </div>
       )}
 </main>
+      </div>
 
       {/* Process Withdrawal Modal */}
 

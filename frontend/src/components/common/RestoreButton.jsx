@@ -11,7 +11,8 @@ import { fmt } from '../../utils/format';
  *  - onSuccess: callback after restore
  *  - size: 'sm' | 'md'
  */
-export const RestoreButton = ({ userRole, onSuccess, size = 'md' }) => {
+export const RestoreButton = ({ userRole, onSuccess, size = 'md',
+                                soloIcono = false }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
@@ -97,7 +98,11 @@ export const RestoreButton = ({ userRole, onSuccess, size = 'md' }) => {
             refrescar y nadie lo apretaba: lo que hace es DEVOLVER las
             transacciones que se ocultaron del panel, que no tiene nada que
             ver con volver a pedir los datos. */}
-        <ArchiveRestore style={{ width: '14px', height: '14px' }} /> Restaurar
+        <ArchiveRestore style={{ width: '14px', height: '14px' }} />
+        {/* En el teléfono va sólo el ícono: la palabra es lo más ancho de esa
+            fila del encabezado, y con el botón del menú al lado son cinco
+            botones donde antes había cuatro. */}
+        {!soloIcono && 'Restaurar'}
       </button>
 
       {open && (
