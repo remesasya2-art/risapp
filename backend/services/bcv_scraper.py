@@ -328,6 +328,24 @@ TURNO = "bcv"
 # aprieta justo después de una raspada automática no tiene que esperar.
 SEGUNDOS_DEL_TURNO = 120
 
+# CADA VUELTA DEJA UNA LINEA, PASE LO QUE PASE.
+#
+# Antes la vuelta sin novedad escribía un `logger.debug`, y el registro corre en
+# INFO: no salía. O sea que «raspé y la tasa no cambió» y «el reloj está muerto»
+# se veían EXACTAMENTE IGUAL — los dos, silencio.
+#
+# Y eso pasó de verdad: cinco horas sin una sola línea del raspador, sin forma
+# de saber desde el registro si la tasa estaba fresca o congelada. Hubo que
+# preguntarle a `/api/rate` por la antigüedad para salir de la duda.
+#
+# Ahora TODAS las salidas de la vuelta escriben, y todas empiezan con esta
+# marca: buscándola en el registro se ve el pulso del reloj. Si no aparece cada
+# hora, está muerto, y eso ya no se confunde con «no había nada que contar».
+#
+# Cuesta 24 líneas por día. Un reloj que late es barato; uno que no se sabe si
+# late cuesta una tarde cada vez que alguien se lo pregunta.
+LATIDO = "BCV|"
+
 
 async def _scheduler_loop(db, interval_seconds: int):
     """Background loop: fetches BCV rates periodically.
@@ -352,6 +370,8 @@ async def _scheduler_loop(db, interval_seconds: int):
         if not await turnos.me_toca(db, TURNO, segundos=SEGUNDOS_DEL_TURNO):
             # Otro proceso está raspando ahora mismo, o acaba de hacerlo. No
             # hay nada que hacer en esta vuelta.
+            logger.info("%s me salteé la vuelta: el turno lo tiene otro proceso",
+                        LATIDO)
             await asyncio.sleep(interval_seconds)
             continue
 
@@ -359,11 +379,11 @@ async def _scheduler_loop(db, interval_seconds: int):
             snap = await fetch_bcv_rates()
             saved = await save_snapshot(db, snap)
             if saved:
-                logger.info(f"BCV rates updated: {snap['rates']}")
+                logger.info("%s tasa nueva guardada: %s", LATIDO, snap["rates"])
             else:
-                logger.debug("BCV rates unchanged, skipped")
+                logger.info("%s raspé y la tasa no cambió", LATIDO)
         except Exception as e:
-            logger.warning(f"BCV fetch failed: {e}")
+            logger.warning("%s no pude raspar: %s", LATIDO, e)
 
         # PASE LO QUE PASE ARRIBA, se mira la antigüedad y se avisa si hace
         # falta. Está afuera del `try` a propósito: el caso que importa avisar
@@ -372,7 +392,7 @@ async def _scheduler_loop(db, interval_seconds: int):
             from services import aviso_de_bcv
             await aviso_de_bcv.avisar_si_vencio(db, await vigencia(db))
         except Exception as e:
-            logger.warning(f"BCV: no se pudo revisar la antigüedad: {e}")
+            logger.warning("%s no pude revisar la antigüedad: %s", LATIDO, e)
 
         await asyncio.sleep(interval_seconds)
 

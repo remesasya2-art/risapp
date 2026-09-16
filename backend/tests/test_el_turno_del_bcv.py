@@ -182,3 +182,156 @@ def test_EL_BOTON_DEL_PANEL_PIDE_EL_MISMO_TURNO():
         "el botón de refrescar no pide el turno del raspador")
     assert "turnos.soltar(db, TURNO)" in cuerpo, (
         "el botón no suelta el turno al terminar")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# EL LATIDO
+# ══════════════════════════════════════════════════════════════════════════
+#
+# QUE PASO
+#
+#     Cinco horas de registro sin una sola línea del raspador. Desde afuera eso
+#     significaba dos cosas a la vez y no había cómo distinguirlas:
+#
+#         · raspó cada hora, la tasa no cambió, todo bien
+#         · el reloj está muerto y la tasa está congelada
+#
+#     Porque la vuelta sin novedad escribía un `logger.debug` y el registro
+#     corre en INFO. El caso normal era, literalmente, invisible.
+#
+#     Hubo que preguntarle la antigüedad a `/api/rate` para salir de la duda.
+#     Un reloj que sólo habla cuando pasa algo no se puede vigilar.
+
+def _la_vuelta():
+    """El árbol de `_scheduler_loop` y su fuente, para mirarlo por dentro."""
+    import ast
+
+    ruta = os.path.join(_BACKEND, "services", "bcv_scraper.py")
+    fuente = open(ruta, encoding="utf-8").read()
+    arbol = ast.parse(fuente, ruta)
+    vuelta = next(n for n in ast.walk(arbol)
+                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                  and n.name == "_scheduler_loop")
+    return vuelta, fuente
+
+
+def _escribe(nodos):
+    """¿Hay alguna llamada a `logger.info/warning/error` acá adentro?"""
+    import ast
+
+    for raiz in nodos:
+        for n in ast.walk(raiz):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and n.func.attr in ("info", "warning", "error")
+                    and isinstance(n.func.value, ast.Name)
+                    and n.func.value.id == "logger"):
+                return True
+    return False
+
+
+def test_NINGUNA_RAMA_DE_LA_VUELTA_SE_QUEDA_CALLADA():
+    """Cada forma de terminar una vuelta deja su línea.
+
+    SE MIRA RAMA POR RAMA, Y NO SE CUENTAN LAS ESCRITURAS. La primera versión
+    de esta guarda contaba: exigía cuatro o más. Y sobrevivió a borrarle la
+    línea a la rama del turno salteado, porque quedaban cuatro igual.
+
+    Justamente esa rama es la que más importa con varios procesos: con dos
+    workers, la mitad de las vueltas termina ahí. Si se calla, el reloj parece
+    muerto cuando está sano — el mismo susto que motivó todo esto, al revés.
+    """
+    import ast
+
+    vuelta, _ = _la_vuelta()
+
+    assert not any(isinstance(n, ast.Attribute) and n.attr == "debug"
+                   for n in ast.walk(vuelta)), (
+        "la vuelta escribe un `debug`, y el registro corre en INFO: esa línea "
+        "no se ve. Es exactamente lo que hacía invisible al caso normal.")
+
+    # 1. El turno se lo llevó otro proceso.
+    salteada = [n for n in ast.walk(vuelta)
+                if isinstance(n, ast.If)
+                and any(isinstance(c, ast.Attribute) and c.attr == "me_toca"
+                        for c in ast.walk(n.test))]
+    assert salteada, "no se encontró la rama del turno en la vuelta"
+    assert _escribe(salteada[0].body), (
+        "la vuelta se saltea sin escribir nada. Con varios procesos ésta es la "
+        "rama más frecuente: callada, un reloj sano parece muerto.")
+
+    # 2. y 3. Raspó: la tasa cambió, o no cambió.
+    guardo = [n for n in ast.walk(vuelta)
+              if isinstance(n, ast.If) and isinstance(n.test, ast.Name)
+              and n.test.id == "saved"]
+    assert guardo, "no se encontró la rama de «se guardó la tasa»"
+    assert _escribe(guardo[0].body), "no dice nada cuando la tasa cambió"
+    assert _escribe(guardo[0].orelse), (
+        "no dice nada cuando la tasa NO cambió, que es el caso normal y el que "
+        "estuvo invisible cinco horas")
+
+    # 4. Se cayó la raspada.
+    fallos = [n for n in ast.walk(vuelta) if isinstance(n, ast.ExceptHandler)]
+    assert fallos, "la vuelta no atrapa fallos"
+    for f in fallos:
+        assert _escribe(f.body), "un fallo de la vuelta se traga sin escribir"
+
+
+def test_TODAS_LAS_LINEAS_DE_LA_VUELTA_LLEVAN_LA_MISMA_MARCA():
+    """Que el pulso se pueda buscar con UN solo término.
+
+    Sin una marca común hay que acordarse de cuatro frases distintas para
+    comprobar si el reloj late, y quien mira el registro a las dos de la mañana
+    no se acuerda de ninguna.
+
+    Se lee con `ast` y no con una expresión regular: la primera versión de esta
+    guarda usaba una, se quedaba con el primer renglón de cada llamada, y daba
+    por «sin marca» a las que la tenían en la línea siguiente. Una guarda que
+    grita en falso es una guarda que alguien apaga.
+    """
+    import ast
+    from services import bcv_scraper
+
+    ruta = os.path.join(_BACKEND, "services", "bcv_scraper.py")
+    fuente = open(ruta, encoding="utf-8").read()
+    arbol = ast.parse(fuente, ruta)
+
+    vuelta = next(n for n in ast.walk(arbol)
+                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                  and n.name == "_scheduler_loop")
+
+    sin_marca = []
+    for n in ast.walk(vuelta):
+        if not isinstance(n, ast.Call):
+            continue
+        f = n.func
+        if not (isinstance(f, ast.Attribute)
+                and f.attr in ("info", "warning", "error")
+                and isinstance(f.value, ast.Name) and f.value.id == "logger"):
+            continue
+        texto = ast.get_source_segment(fuente, n) or ""
+        if "LATIDO" not in texto:
+            sin_marca.append(" ".join(texto.split())[:70])
+
+    assert not sin_marca, (
+        f"estas líneas de la vuelta no llevan la marca del latido: {sin_marca}. "
+        f"Buscar «{bcv_scraper.LATIDO}» en el registro tiene que mostrar el "
+        "pulso completo del reloj.")
+
+    assert bcv_scraper.LATIDO, "la marca quedó vacía: no se puede buscar"
+
+
+def test_EL_LATIDO_ES_MAS_SEGUIDO_QUE_LA_PACIENCIA_DE_QUIEN_MIRA():
+    """Un pulso que late cada seis horas no sirve para saber si está vivo.
+
+    Se lee el intervalo de verdad desde `server.py`, igual que la guarda del
+    turno: si alguien lo sube a seis horas, el latido deja de ser útil como
+    señal de vida y esto lo dice.
+    """
+    import re
+
+    arranque = open(os.path.join(_BACKEND, "server.py"), encoding="utf-8").read()
+    horas = re.search(r"start_scheduler\(db,\s*interval_hours=([\d.]+)\)", arranque)
+    assert horas, "no se encontró cómo arranca el reloj del BCV"
+    assert float(horas.group(1)) <= 2, (
+        f"el reloj late cada {horas.group(1)}h. Más de dos horas de silencio "
+        "normal vuelve a hacer indistinguible «tranquilo» de «muerto».")
