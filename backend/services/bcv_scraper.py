@@ -315,10 +315,46 @@ async def get_history(db, limit: int = 50) -> list[dict]:
 _scheduler_task: asyncio.Task | None = None
 DEFAULT_INTERVAL_HOURS = 3  # Check every 3 hours
 
+# El nombre del turno. Lo comparten el reloj de acá y el botón de refrescar del
+# panel: son los dos únicos que raspan, y no tienen por qué hacerlo a la vez.
+TURNO = "bcv"
+
+# Cuánto dura el turno. Tiene que alcanzar para una raspada completa —el pedido
+# al BCV espera hasta 30 segundos, y hay un reintento que completa la cadena de
+# certificados— y ser MUCHO menos que cada cuánto corre el reloj, o el turno
+# nunca estaría caducado y la tasa dejaría de actualizarse.
+#
+# Dos minutos también deja el botón del panel casi siempre libre: quien lo
+# aprieta justo después de una raspada automática no tiene que esperar.
+SEGUNDOS_DEL_TURNO = 120
+
 
 async def _scheduler_loop(db, interval_seconds: int):
-    """Background loop: fetches BCV rates periodically."""
+    """Background loop: fetches BCV rates periodically.
+
+    UN SOLO PROCESO RASPA, AUNQUE HAYA VARIOS
+
+        Este reloj vive adentro del proceso de la aplicación. Hoy hay uno solo
+        —`railway.toml` arranca sin `--workers`— así que corre una vez porque
+        no hay más procesos, no porque nadie lo haya frenado.
+
+        Con cuatro procesos serían cuatro raspadas por hora al sitio del BCV
+        —lento, del gobierno venezolano, y que puede bloquear por exceso—, más
+        filas duplicadas en el historial y avisos de vencimiento repetidos a
+        cada super administrador.
+
+        El turno lo resuelve sin infraestructura nueva: se lo lleva uno y los
+        demás se saltan la vuelta. Ver `services/turnos.py`.
+    """
+    from services import turnos
+
     while True:
+        if not await turnos.me_toca(db, TURNO, segundos=SEGUNDOS_DEL_TURNO):
+            # Otro proceso está raspando ahora mismo, o acaba de hacerlo. No
+            # hay nada que hacer en esta vuelta.
+            await asyncio.sleep(interval_seconds)
+            continue
+
         try:
             snap = await fetch_bcv_rates()
             saved = await save_snapshot(db, snap)

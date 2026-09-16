@@ -2404,8 +2404,28 @@ async def get_bcv_rates_history(limit: int = 50, admin: User = Depends(get_admin
 
 @router.post("/bcv-rates/refresh")
 async def refresh_bcv_rates(admin: User = Depends(get_admin_user)):
-    """Force fetch BCV rates right now."""
-    from services.bcv_scraper import fetch_bcv_rates, save_snapshot, get_latest
+    """Force fetch BCV rates right now.
+
+    PIDE EL MISMO TURNO QUE EL RELOJ DE FONDO
+
+        Son los dos únicos que raspan, y `save_snapshot` mira la última fila y
+        DESPUES escribe: si este botón se aprieta justo cuando el reloj de la
+        hora está corriendo, los dos leen lo mismo y entran dos filas iguales
+        al historial. No hace falta que haya varios procesos para que pase —
+        alcanza con el reloj y una persona apretando el botón.
+
+        Si el turno no está libre es porque se está raspando AHORA, o sea que
+        el dato que esta persona quiere va a estar en unos segundos.
+    """
+    from services import turnos
+    from services.bcv_scraper import (SEGUNDOS_DEL_TURNO, TURNO,
+                                      fetch_bcv_rates, get_latest, save_snapshot)
+
+    if not await turnos.me_toca(db, TURNO, segundos=SEGUNDOS_DEL_TURNO):
+        raise HTTPException(
+            status_code=409,
+            detail="La tasa se está actualizando en este momento. Probá de "
+                   "nuevo en unos segundos.")
     try:
         snap = await fetch_bcv_rates()
         saved = await save_snapshot(db, snap)
@@ -2414,6 +2434,11 @@ async def refresh_bcv_rates(admin: User = Depends(get_admin_user)):
     except Exception as e:
         logger.error(f"BCV refresh failed: {e}")
         raise HTTPException(status_code=502, detail=f"No se pudo contactar BCV: {e}")
+    finally:
+        # Se suelta enseguida: el turno dura dos minutos por si la raspada
+        # tarda, pero ésta ya terminó y no hay motivo para hacer esperar al
+        # reloj de fondo ni a quien vuelva a apretar el botón.
+        await turnos.soltar(db, TURNO)
 
 
 class AutoRateConfigRequest(BaseModel):
