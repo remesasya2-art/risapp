@@ -56,6 +56,58 @@ import os
 PAGOS = ("https://sdk.mercadopago.com https://*.mercadopago.com "
          "https://*.mlstatic.com")
 
+# LOS DOMINIOS DE MERCADO LIBRE, Y POR QUE ESTAN APARTE.
+#
+# El SDK de pagos es de Mercado Pago, pero su antifraude corre bajo dominios de
+# MERCADO LIBRE, que es otra cosa. No se ve leyendo el código: aparece recién
+# cuando alguien abre el formulario de tarjeta. Medido en producción, con la
+# política en modo reporte, los avisos fueron éstos:
+#
+#     frame-src       https://www.mercadolibre.com
+#     connect-src     https://api.mercadolibre.com/tracks
+#     connect-src     https://www.mercadolibre.com/jms/lgz/fingerprint/...
+#     connect-src     https://www.mercadolibre.com/jms/lgz/background/etid
+#
+# ESTO ES EXACTAMENTE PARA LO QUE SE PUSO EL MODO REPORTE. El comentario de más
+# arriba, escrito el día que se armó la política, decía: «lo que un SDK de
+# terceros pide en tiempo de ejecución —otro dominio para un iframe de tarjeta,
+# un endpoint de telemetría— no se ve leyendo el código». Era eso, literal.
+#
+# Si se hubiera pasado a bloquear sin esto, el cobro con tarjeta se rompía. Y no
+# con un error claro: el formulario de Mercado Pago habría fallado por dentro y
+# el cliente habría visto «Pago no aprobado», que le echa la culpa a su tarjeta.
+#
+# Van los dominios enteros y no un comodín: son de un tercero grande, con muchos
+# subdominios que no tienen nada que ver con cobrar.
+ANTIFRAUDE = "https://www.mercadolibre.com https://api.mercadolibre.com"
+
+# LO QUE TODAVIA IMPIDE PASAR A `exigir`, Y NO LO ARREGLAN LOS DOMINIOS.
+#
+# En la misma tanda de avisos apareció éste:
+#
+#     directiva=script-src-elem origen=inline desde=https://sdk.mercadopago.com
+#
+# `desde` es el archivo que INYECTO el script (`source-file`). O sea: el SDK de
+# pagos crea un `<script>` EN LINEA dentro de NUESTRA página. No es un dominio
+# que falte —es código sin dirección propia— así que no se permite agregando
+# nada a estas listas.
+#
+# Las tres salidas posibles, ninguna gratis:
+#
+#   · `'unsafe-inline'` en `script-src`. Deja la directiva decorativa: un XSS
+#     inyectado en la página corre igual. Es lo que esta política vino a
+#     evitar, así que no.
+#   · El hash del script. No sirve si el contenido cambia entre versiones del
+#     SDK, y habría que perseguirlo en cada actualización de ellos.
+#   · `'strict-dynamic'`: un script ya confiado puede crear otros. Cubre este
+#     caso, pero cambia cómo se evalúa la directiva entera —las listas de
+#     dominios dejan de mirarse en los navegadores que lo soportan— y eso hay
+#     que medirlo con tráfico antes, no decidirlo de una.
+#
+# MIENTRAS TANTO LA POLITICA SIGUE EN `reporte`, y este comentario está acá
+# para que nadie prenda `CSP_MODO=exigir` creyendo que con los dominios
+# alcanzaba. Si se prende hoy, el cobro con tarjeta se rompe.
+
 # El medidor de visitas de Cloudflare. NO ESTA EN NUESTRO HTML: lo inyecta
 # Cloudflare al servir la página, mientras «Web Analytics» esté prendido.
 #
@@ -104,10 +156,11 @@ DIRECTIVAS = {
     "media-src": "'self' data: blob:",
 
     # A dónde puede hablar la aplicación. Nuestra API es del mismo origen.
-    "connect-src": f"'self' {PAGOS} https://api.qrserver.com {MEDIDOR_DATOS}",
+    "connect-src": f"'self' {PAGOS} {ANTIFRAUDE} https://api.qrserver.com {MEDIDOR_DATOS}",
 
-    # El formulario de tarjeta del proveedor va en un iframe suyo.
-    "frame-src": PAGOS,
+    # El formulario de tarjeta del proveedor va en un iframe suyo, y su
+    # antifraude abre otro bajo el dominio de Mercado Libre.
+    "frame-src": f"{PAGOS} {ANTIFRAUDE}",
 
     # No hay plugins. Es un camino clásico para ejecutar código con un archivo
     # que subió un usuario.

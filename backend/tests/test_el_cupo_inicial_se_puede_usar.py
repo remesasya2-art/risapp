@@ -64,15 +64,37 @@ def base():
     return b
 
 
+class _MercadoPagoDeMentira:
+    """Contesta como Mercado Pago cuando todo sale bien, sin red ni credencial."""
+
+    def create_pix_payment(self, **kwargs):
+        return {
+            "success": True,
+            "payment_id": 178336825747,
+            "qr_code": "00020126580014BR.GOV.BCB.PIX-DE-MENTIRA",
+            "qr_code_base64": "iVBORw0KGgo=",
+        }
+
+
 @pytest.fixture
 def cliente(base, monkeypatch):
-    """La ruta de PIX montada sola, sin hablar con Mercado Pago.
+    """La ruta de PIX montada sola, con un Mercado Pago de mentira.
 
-    Mercado Pago se apaga porque acá no se prueba que el QR salga: se prueba
-    QUIEN puede pedirlo y con qué CPF. Con la integración prendida, el test
-    dependería de la red y de una credencial.
+    ACA SE APAGABA MERCADO PAGO (`MP_AVAILABLE = False`), con este motivo:
+    «no se prueba que el QR salga, se prueba QUIEN puede pedirlo y con qué
+    CPF». El motivo sigue siendo bueno —no queremos depender de la red ni de
+    una credencial— pero apagarlo dejó de servir.
+
+    Desde que un cobro sin código devuelve 503 en vez de guardarse vacío, con
+    Mercado Pago apagado la ruta falla SIEMPRE, y estos tests pasaban a probar
+    el fallo en vez del cupo.
+
+    Y mirándolo bien, apagarlo nunca fue lo correcto: hacía que estos tests
+    recorrieran un camino que producción no recorre nunca. Un doble que
+    contesta bien prueba lo mismo, sin red, y por el camino de verdad.
     """
-    monkeypatch.setattr(gestor_pix, "MP_AVAILABLE", False)
+    monkeypatch.setattr(gestor_pix, "MP_AVAILABLE", True)
+    monkeypatch.setattr(gestor_pix, "mercadopago_service", _MercadoPagoDeMentira())
 
     app = FastAPI()
     app.include_router(gestor_pix.router, prefix="/api")

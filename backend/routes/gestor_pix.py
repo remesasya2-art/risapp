@@ -159,10 +159,37 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
         except Exception as e:
             logger.error(f"Error creating Mercado Pago PIX: {e}")
     
-    # Only use fallback if MP truly didn't return a qr_code
+    # SIN CODIGO NO HAY COBRO, Y HAY QUE DECIRLO.
+    #
+    # Acá se escribía un aviso en el registro y se seguía de largo: la ruta
+    # guardaba el cobro con el código VACIO y contestaba 200.
+    #
+    # QUE VEIA LA PERSONA
+    #
+    #   La pantalla de pago, con «Código no disponible» donde va el código
+    #   para copiar. O sea: pidió recargar, la aplicación le dijo que sí, y le
+    #   dio algo que no se puede pagar. Y en la base quedaba un cobro
+    #   `pending` que nadie iba a pagar nunca, ocupando lugar en la lista de
+    #   pendientes hasta vencer.
+    #
+    #   Pasó de verdad: el token de Mercado Pago quedó inválido al cambiar de
+    #   aplicación, y durante ese rato cada intento de recarga se vio como una
+    #   pantalla rota en vez de como un error. Buscar el problema costó el
+    #   doble porque el síntoma no decía nada.
+    #
+    # AHORA FALLA, Y NO GUARDA NADA. Un 503 dice lo que es —el proveedor no
+    # está disponible ahora— y deja la base limpia. El mensaje nombra PIX y
+    # tarjeta como alternativas porque casi siempre falla uno solo de los dos.
     if not qr_code_data:
-        logger.warning(f"No real PIX QR code for {internal_id} - MP not available or failed")
-    
+        logger.error(
+            "COBRO PIX SIN CODIGO para %s: Mercado Pago no devolvió nada "
+            "utilizable. No se guarda el cobro y se le dice al cliente.",
+            internal_id)
+        raise HTTPException(
+            status_code=503,
+            detail="No pudimos generar el cobro con PIX en este momento. "
+                   "Probá de nuevo en unos minutos, o pagá con tarjeta.")
+
     # Create pending PIX payment record
     pix_payment = {
         "payment_id": internal_id,

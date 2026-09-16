@@ -558,3 +558,173 @@ def test_SIN_NONCE_LA_POLITICA_SIGUE_SIENDO_VALIDA():
     politica = csp.politica()
     assert "nonce" not in politica
     assert "'self'" in _script_src(politica)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. LOS DOMINIOS DEL ANTIFRAUDE DEL SDK DE PAGOS
+# ══════════════════════════════════════════════════════════════════════════
+#
+# QUE APARECIO, Y CUANDO
+#
+#     Al abrir el formulario de tarjeta en producción, con la política en modo
+#     reporte:
+#
+#         frame-src    https://www.mercadolibre.com
+#         connect-src  https://api.mercadolibre.com/tracks
+#         connect-src  https://www.mercadolibre.com/jms/lgz/fingerprint/...
+#         connect-src  https://www.mercadolibre.com/jms/lgz/background/etid
+#
+#     El SDK es de Mercado Pago, pero su antifraude corre bajo dominios de
+#     MERCADO LIBRE, que no estaban permitidos.
+#
+#     Si la política hubiera estado en `exigir`, el cobro con tarjeta se
+#     rompía — y no con un error claro: el formulario habría fallado por dentro
+#     y el cliente habría visto «Pago no aprobado», que le echa la culpa a su
+#     tarjeta.
+#
+#     Es exactamente lo que el modo reporte vino a hacer, y lo que el
+#     comentario del módulo anticipó el día que se armó la política.
+
+@pytest.mark.parametrize("directiva", ["connect-src", "frame-src"])
+@pytest.mark.parametrize("dominio", ["https://www.mercadolibre.com",
+                                     "https://api.mercadolibre.com"])
+def test_EL_ANTIFRAUDE_DEL_SDK_ESTA_PERMITIDO(directiva, dominio):
+    """Uno por dominio y por directiva: si falta alguno, el nombre del test en
+    rojo dice cuál, sin tener que leer la política entera."""
+    for parte in csp.politica().split(";"):
+        parte = parte.strip()
+        if parte.startswith(directiva + " "):
+            assert dominio in parte, (
+                f"{dominio} no está en {directiva}. El formulario de tarjeta "
+                "lo necesita: sin él, al pasar a bloquear el cobro se rompe y "
+                "el cliente ve «Pago no aprobado».")
+            return
+    raise AssertionError(f"la política no tiene {directiva}")
+
+
+def test_EL_ANTIFRAUDE_NO_ENTRA_POR_UN_COMODIN():
+    """Son dominios de un tercero grande, con muchos subdominios que no tienen
+    nada que ver con cobrar. `*.mercadolibre.com` dejaría entrar a todos."""
+    assert "*.mercadolibre.com" not in csp.politica(), (
+        "el antifraude entró por comodín: nombrá los dominios que hacen falta")
+
+
+def test_EL_ANTIFRAUDE_NO_PUEDE_EJECUTAR_SCRIPTS():
+    """Está permitido para hablar y para abrir un iframe, no para traer código.
+
+    El script del SDK viene de `sdk.mercadopago.com`, que ya está en
+    `script-src`. Sumar los dominios del antifraude ahí sería darles algo que
+    no piden.
+    """
+    for parte in csp.politica().split(";"):
+        parte = parte.strip()
+        if parte.startswith("script-src "):
+            assert "mercadolibre.com" not in parte, (
+                "los dominios del antifraude se colaron en script-src")
+
+
+def test_SIGUE_SIN_PODER_PASAR_A_EXIGIR_Y_ESTA_DICHO():
+    """La guarda contra prender el bloqueo creyendo que ya está listo.
+
+    Quedó un aviso que los dominios NO arreglan: el SDK crea un `<script>` en
+    línea dentro de nuestra página. Eso no se permite agregando dominios —no
+    tiene dirección propia— y las tres salidas posibles tienen costo.
+
+    Este test no comprueba comportamiento: comprueba que el motivo siga
+    escrito donde alguien lo va a leer antes de prender la variable. Si se
+    resuelve de verdad, se borra el comentario y este test con él.
+    """
+    import os as _os
+
+    fuente = open(_os.path.join(_BACKEND, "services", "csp.py"),
+                  encoding="utf-8").read()
+    assert "LO QUE TODAVIA IMPIDE PASAR A `exigir`" in fuente, (
+        "se borró el aviso de por qué no se puede bloquear todavía. Si el "
+        "script en línea del SDK ya está resuelto, borrá también este test.")
+    assert csp.modo() != "exigir" or _os.getenv("CSP_MODO"), (
+        "la política pasó a bloquear por omisión y el bloqueo del SDK sigue "
+        "sin resolverse")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. UNA SOLA CLAVE PUBLICA
+# ══════════════════════════════════════════════════════════════════════════
+#
+# QUE PASO
+#
+#     La clave pública de Mercado Pago vivía en DOS lados: `VITE_MP_PUBLIC_KEY`,
+#     horneada en el paquete al compilar, y `MERCADOPAGO_PUBLIC_KEY`, que la
+#     API ya servía y nadie usaba para esto.
+#
+#     Al cambiar de aplicación en Mercado Pago se actualizó el token del
+#     servidor y la horneada quedó con la de la aplicación vieja. La tarjeta se
+#     tokenizaba bajo una aplicación y se cobraba con las credenciales de otra:
+#
+#         MP API error 400: {'message': 'Invalid credentials'}
+#
+#     Nadie pudo pagar con tarjeta. Y el cliente veía «Pago no aprobado. Probá
+#     con otra tarjeta», que le echa la culpa a SU tarjeta y manda a buscar el
+#     problema en el lugar equivocado.
+#
+#     Que fuera de COMPILACION es lo que lo hizo peor: cambiarla exigía volver
+#     a compilar, así que no alcanzaba con tocar una variable y reiniciar.
+
+_FRONTEND = os.path.join(os.path.dirname(_BACKEND), "frontend", "src")
+
+
+def test_LA_CLAVE_PUBLICA_NO_SE_HORNEA_EN_EL_PAQUETE():
+    """Que no vuelva a haber una copia de compilación.
+
+    Se busca en TODO el código del frontend, no sólo en los dos archivos que se
+    tocaron: la copia puede reaparecer en cualquier lado, y el síntoma —cobros
+    rechazados con un mensaje que culpa al cliente— no se parece a la causa.
+    """
+    culpables = []
+    for raiz, _, archivos in os.walk(_FRONTEND):
+        for a in archivos:
+            if not a.endswith((".js", ".jsx")):
+                continue
+            ruta = os.path.join(raiz, a)
+            texto = open(ruta, encoding="utf-8").read()
+            for numero, linea in enumerate(texto.splitlines(), 1):
+                if "VITE_MP_PUBLIC_KEY" not in linea:
+                    continue
+                # Los comentarios que cuentan la historia no cuentan.
+                pelada = linea.strip()
+                if pelada.startswith(("//", "*", "/*")):
+                    continue
+                culpables.append(f"{os.path.relpath(ruta, _FRONTEND)}:{numero}")
+
+    assert not culpables, (
+        f"volvió la clave pública de compilación en {culpables}. Se hornea en "
+        "el paquete, así que puede desparejarse del token del servidor sin que "
+        "nadie lo note hasta que un cliente no pueda pagar.")
+
+
+def test_EL_FORMULARIO_DE_TARJETA_LE_PIDE_LA_CLAVE_AL_SERVIDOR():
+    """La otra mitad: que la pida de donde sale el token.
+
+    Sin esto, sacar la de compilación deja el formulario sin ninguna clave y el
+    pago con tarjeta no arranca nunca.
+    """
+    ruta = os.path.join(_FRONTEND, "components", "CardPaymentBrick.jsx")
+    fuente = open(ruta, encoding="utf-8").read()
+
+    assert "initMercadoPago" in fuente, (
+        "el formulario ya no arranca el SDK: sin eso el Brick no se dibuja")
+    assert "/payments/card/config" in fuente, (
+        "el formulario no le pide la clave al servidor. Esa ruta ya la "
+        "devuelve, y es la que sale de la misma variable de entorno que el "
+        "token — por eso no pueden desparejarse.")
+
+
+def test_LA_RUTA_QUE_SIRVE_LA_CLAVE_SIGUE_EXISTIENDO():
+    """Si alguien la borra por parecer sin uso, el pago con tarjeta se cae.
+
+    Antes de este cambio nadie la consumía, así que borrarla parecía gratis.
+    """
+    ruta = os.path.join(_BACKEND, "routes", "payments_card.py")
+    fuente = open(ruta, encoding="utf-8").read()
+    assert '"public_key": os.environ.get("MERCADOPAGO_PUBLIC_KEY")' in fuente, (
+        "la ruta /payments/card/config dejó de servir la clave pública. La "
+        "necesita el formulario de tarjeta para arrancar el SDK.")

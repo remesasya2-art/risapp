@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CardPayment } from '@mercadopago/sdk-react';
+import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
 import api from '../utils/api';
 import { fmt } from '../utils/format';
 import { urlDeArchivoSegura } from '../utils/urlDeArchivo';
@@ -52,8 +52,47 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
   const [paymentType, setPaymentType] = useState('credit_card');
+  const [sdkListo, setSdkListo] = useState(false);
 
   const showBrick = country && (country.risk === 'low' || confirmedIntl);
+
+  // LA CLAVE PUBLICA SE LE PIDE AL SERVIDOR, NO VIENE HORNEADA EN EL PAQUETE.
+  //
+  // Antes el SDK se arrancaba en `main.jsx` con `VITE_MP_PUBLIC_KEY`, que es
+  // una variable de COMPILACION. Al cambiar de aplicación en Mercado Pago, el
+  // token del servidor se actualizó y esta clave quedó con la de la aplicación
+  // vieja: la tarjeta se tokenizaba bajo una y se cobraba con la otra, y
+  // Mercado Pago contestaba «Invalid credentials». Al cliente le aparecía
+  // «Pago no aprobado», que le echa la culpa a SU tarjeta.
+  //
+  // Pidiéndosela al servidor no puede desparejarse del token: las dos salen de
+  // las variables de entorno del mismo servicio, y cambiarlas no exige
+  // recompilar el frontend.
+  //
+  // Se arranca ACA y no al abrir la aplicación porque es lo único que lo
+  // necesita: quien nunca entra a pagar con tarjeta no le pide nada a Mercado
+  // Pago, y una llamada menos en el arranque es una pantalla que abre antes.
+  useEffect(() => {
+    if (!showBrick) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await api.get('/payments/card/config');
+        const clave = res.data?.public_key;
+        if (!clave) {
+          // Sin clave no hay formulario posible. Se dice, en vez de dejar la
+          // pantalla girando para siempre.
+          if (!cancelado) toast.error('El pago con tarjeta no está disponible ahora. Usá PIX.');
+          return;
+        }
+        initMercadoPago(clave, { locale: 'pt-BR' });
+        if (!cancelado) setSdkListo(true);
+      } catch {
+        if (!cancelado) toast.error('El pago con tarjeta no está disponible ahora. Usá PIX.');
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [showBrick]);
 
   // Fetch quote only when we will actually show the Brick
   useEffect(() => {
@@ -277,7 +316,7 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
         >Débito</button>
       </div>
 
-      {quote && (
+      {quote && sdkListo && (
         <CardPayment
           initialization={{
             amount: quote.total_charged_brl,
