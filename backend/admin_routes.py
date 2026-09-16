@@ -39,67 +39,52 @@ db = client[os.environ['DB_NAME']]
 # separaran: se ofrecían permisos que no gobernaban ninguna ruta.
 from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 
-# =======================
-# AUTH DEPENDENCIES
-# =======================
+# ─── La puerta de entrada ─────────────────────────────────────────────────
+#
+# ESTE ARCHIVO TENIA SU PROPIA PUERTA, Y LE FALTABAN TRES CONTROLES
+#
+#     Acá vivían `get_current_user_from_request`, `get_admin_user` y
+#     `get_super_admin`: una copia de las dependencias de
+#     `routes/dependencies.py`, escrita antes y nunca vuelta a mirar. Las 14
+#     rutas de este archivo entraban por esa copia. Las otras 210 rutas de
+#     administración entran por las de `routes/dependencies.py`.
+#
+#     Con el tiempo la copia se quedó atrás en tres cosas, y las tres se
+#     comprobaron corriéndolas:
+#
+#       1. No miraba `is_banned`. Un `super_admin` baneado entraba igual.
+#       2. No miraba `is_deleted`. Una cuenta borrada, también.
+#       3. No consultaba la tabla de `services/permisos.py`. Un colaborador
+#          con CERO permisos tildados pasaba por `PUT /users/{id}/balance`,
+#          que mueve dinero. Por la puerta buena, la misma ruta y el mismo
+#          usuario dan: «Te falta el permiso "Ajustar saldos a mano (MUEVE
+#          DINERO)"».
+#
+#     Lo peor no es que faltaran: es que la tabla de permisos SI declara esas
+#     14 rutas, con su permiso y todo. Estaban escritas para una comprobación
+#     que nunca las alcanzaba.
+#
+# POR QUE SE BORRA LA COPIA EN VEZ DE EMPAREJARLA
+#
+#     Emparejarla deja dos puertas que hay que acordarse de mantener iguales,
+#     que es exactamente lo que falló. Con una sola, una ruta nueva hereda los
+#     controles por usar el guard de siempre, y no hay nada que recordar.
+#
+# POR QUE EL TEST QUE VIGILA ESTO NO LO VIO
+#
+#     `test_permisos_se_aplican.py` recorre la aplicación armada y exige que
+#     toda ruta de administración tenga permiso declarado. Reconocía los
+#     guards POR SU NOMBRE, y la copia de acá se llamaba `get_admin_user`
+#     igual que la buena. O sea que contaba estas 14 rutas como protegidas
+#     mientras no lo estaban. Ahora se reconocen por identidad —el objeto
+#     función, no su nombre—, en `test_una_sola_puerta.py`.
+from models.user import User as Usuario   # noqa: E402
+from routes.dependencies import (        # noqa: E402
+    get_admin_user,
+    get_current_user as get_current_user_from_request,
+    get_super_admin,
+)
 
-async def get_current_user_from_request(request: Request, authorization: Optional[str] = Header(None)):
-    """Get current user from session token"""
-    session_token = None
-    
-    session_token = request.cookies.get('session_token')
-    
-    if not session_token and authorization:
-        if authorization.startswith('Bearer '):
-            session_token = authorization[7:]
-    
-    if not session_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    session = await db.user_sessions.find_one(
-        {"session_token": session_token},
-        {"_id": 0}
-    )
-    
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    expires_at = session["expires_at"]
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-    
-    user_doc = await db.users.find_one(
-        {"user_id": session["user_id"]},
-        {"_id": 0}
-    )
-    
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return user_doc
-
-async def get_admin_user(request: Request, authorization: Optional[str] = Header(None)):
-    """Check if user is admin or super_admin"""
-    user_doc = await get_current_user_from_request(request, authorization)
-    role = user_doc.get('role', 'user')
-    
-    if role not in ['admin', 'super_admin']:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    return user_doc
-
-async def get_super_admin(request: Request, authorization: Optional[str] = Header(None)):
-    """Check if user is super_admin"""
-    user_doc = await get_current_user_from_request(request, authorization)
-    role = user_doc.get('role', 'user')
-    
-    if role != 'super_admin':
-        raise HTTPException(status_code=403, detail="Super admin access required")
-    
-    return user_doc
 
 def has_permission(user: dict, permission: str) -> bool:
     """¿Tiene este permiso? Delega en services/permisos.py.
@@ -222,7 +207,7 @@ class AdjustBalanceRequest(BaseModel):
 # =======================
 
 @admin_router.get("/permissions-list")
-async def get_permissions_list(admin_user: dict = Depends(get_admin_user)):
+async def get_permissions_list(admin_user: Usuario = Depends(get_admin_user)):
     """Get list of all available permissions"""
     return ADMIN_PERMISSIONS
 
@@ -231,7 +216,7 @@ async def get_permissions_list(admin_user: dict = Depends(get_admin_user)):
 # =======================
 
 @admin_router.get("/sub-admins")
-async def get_sub_admins(admin_user: dict = Depends(get_super_admin)):
+async def get_sub_admins(admin_user: Usuario = Depends(get_super_admin)):
     """Get all sub-administrators (super_admin only)"""
     # Lista de lo permitido. Acá había una de lo PROHIBIDO con tres nombres
     # —las fotos del KYC— y por eso devolvía el resto entero: el hash de la
@@ -251,7 +236,7 @@ async def get_sub_admins(admin_user: dict = Depends(get_super_admin)):
     return [perfil.terminar_de_armar(a) for a in admins]
 
 @admin_router.post("/sub-admins")
-async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = Depends(get_super_admin)):
+async def create_sub_admin(request: CreateSubAdminRequest, admin_user: Usuario = Depends(get_super_admin)):
     """Create a new sub-administrator (super_admin only)"""
     
     # Check if user already exists
@@ -264,7 +249,7 @@ async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = De
             {"$set": {
                 "role": "admin",
                 "permissions": request.permissions,
-                "created_by_admin": admin_user.get('user_id'),
+                "created_by_admin": admin_user.user_id,
                 "updated_at": datetime.now(timezone.utc)
             }}
         )
@@ -282,21 +267,21 @@ async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = De
             # tipo del saldo dependía de quién creó al usuario.
             "balance_ris": to_decimal128(0),
             "verification_status": "verified",
-            "created_by_admin": admin_user.get('user_id'),
+            "created_by_admin": admin_user.user_id,
             "created_at": datetime.now(timezone.utc)
         }
         await db.users.insert_one(new_admin)
         return {"message": f"Admin {request.email} creado", "user_id": new_admin['user_id']}
 
 @admin_router.put("/sub-admins/{user_id}")
-async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_user: dict = Depends(get_super_admin)):
+async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_user: Usuario = Depends(get_super_admin)):
     """Update a sub-administrator (super_admin only)"""
     
     target = await db.users.find_one({"user_id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="Admin no encontrado")
     
-    if target.get('role') == 'super_admin' and admin_user.get('user_id') != user_id:
+    if target.get('role') == 'super_admin' and admin_user.user_id != user_id:
         raise HTTPException(status_code=403, detail="No puedes modificar a otro super_admin")
     
     update_data = {"updated_at": datetime.now(timezone.utc)}
@@ -311,7 +296,7 @@ async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_u
     return {"message": "Admin actualizado"}
 
 @admin_router.delete("/sub-admins/{user_id}")
-async def delete_sub_admin(user_id: str, admin_user: dict = Depends(get_super_admin)):
+async def delete_sub_admin(user_id: str, admin_user: Usuario = Depends(get_super_admin)):
     """Remove admin role from user (super_admin only)"""
     
     target = await db.users.find_one({"user_id": user_id})
@@ -336,7 +321,7 @@ async def delete_sub_admin(user_id: str, admin_user: dict = Depends(get_super_ad
 @admin_router.put("/users/{user_id}/balance")
 async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
                               peticion: Request,
-                              admin_user: dict = Depends(get_admin_user)):
+                              admin_user: Usuario = Depends(get_admin_user)):
     """Manually adjust user balance"""
     if not has_permission(admin_user, "users.edit"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -353,8 +338,8 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
             reference_kind="manual",
             reference_id=f"ajuste_{user_id}",
             actor_type="admin",
-            actor_id=admin_user.get("user_id"),
-            actor_email=admin_user.get("email"),
+            actor_id=admin_user.user_id,
+            actor_email=admin_user.email,
             notes="Ajuste manual de saldo desde el panel",
         )
     except saldos.UsuarioInexistente:
@@ -365,7 +350,7 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
         "type": "admin_adjustment",
         "user_id": user_id,
         "amount": request.amount,
-        "admin_id": admin_user.get('user_id'),
+        "admin_id": admin_user.user_id,
         "balance_before": float(movido["saldo_anterior"]),
         "balance_after": float(movido["saldo_nuevo"]),
         "ledger_entry_id": movido["entry_id"],
@@ -422,7 +407,7 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
 # =======================
 
 @admin_router.get("/recharges/pending")
-async def get_pending_recharges(admin_user: dict = Depends(get_admin_user)):
+async def get_pending_recharges(admin_user: Usuario = Depends(get_admin_user)):
     """Get all recharges pending review"""
     if not has_permission(admin_user, "recharges.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -446,7 +431,7 @@ async def get_pending_recharges(admin_user: dict = Depends(get_admin_user)):
     return {"recharges": result}
 
 @admin_router.get("/recharges/{transaction_id}/proof")
-async def get_recharge_proof(transaction_id: str, admin_user: dict = Depends(get_admin_user)):
+async def get_recharge_proof(transaction_id: str, admin_user: Usuario = Depends(get_admin_user)):
     """Get proof image for a specific recharge"""
     if not has_permission(admin_user, "recharges.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -465,7 +450,7 @@ async def get_recharge_proof(transaction_id: str, admin_user: dict = Depends(get
 
 @admin_router.post("/recharges/approve")
 async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
-                           admin_user: dict = Depends(get_admin_user)):
+                           admin_user: Usuario = Depends(get_admin_user)):
     """Approve or reject a recharge with uploaded proof"""
     if not has_permission(admin_user, "recharges.approve"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -496,8 +481,8 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
                 transaction_id=request.transaction_id,
                 display_id=transaction.get("display_id"),
                 actor_type="admin",
-                actor_id=admin_user.get("user_id"),
-                actor_email=admin_user.get("email"),
+                actor_id=admin_user.user_id,
+                actor_email=admin_user.email,
                 amount_output=transaction.get("amount_input", 0),
                 currency_output="BRL",
                 metadata={"verification_method": "admin_manual_approval"},
@@ -513,7 +498,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
                 "status": "completed",
                 "completed_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
-                "approved_by": admin_user.get('user_id'),
+                "approved_by": admin_user.user_id,
                 "verification_method": "admin_manual_approval"
             }}
         )
@@ -529,8 +514,8 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
             "amount_brl": transaction.get("amount_input", 0),
             "amount_ris": amount_ris,
             "proof_image": transaction.get("proof_image"),
-            "approved_by": admin_user.get('user_id'),
-            "approved_by_email": admin_user.get('email'),
+            "approved_by": admin_user.user_id,
+            "approved_by_email": admin_user.email,
             "processed_via": "admin_panel",
             "created_at": transaction.get("created_at"),
             "completed_at": datetime.now(timezone.utc),
@@ -548,7 +533,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
             data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
         )
         
-        logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.get('email')}")
+        logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.email}")
         await auditoria.registrar(
             db, "dinero.recarga_aprobada", quien=admin_user, request=peticion,
             objetivo_tipo="transaccion", objetivo_id=request.transaction_id,
@@ -566,7 +551,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
             {"$set": {
                 "status": "rejected",
                 "updated_at": datetime.now(timezone.utc),
-                "rejected_by": admin_user.get('user_id'),
+                "rejected_by": admin_user.user_id,
                 "rejection_reason": request.rejection_reason or "Comprobante inválido"
             }}
         )
@@ -580,7 +565,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
             data={"transaction_id": request.transaction_id}
         )
         
-        logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.get('email')}")
+        logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.email}")
         await auditoria.registrar(
             db, "dinero.recarga_rechazada", quien=admin_user, request=peticion,
             objetivo_tipo="transaccion", objetivo_id=request.transaction_id,
@@ -598,7 +583,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
 
 @admin_router.get("/transactions")
 async def get_all_transactions(
-    admin_user: dict = Depends(get_admin_user),
+    admin_user: Usuario = Depends(get_admin_user),
     skip: int = 0,
     limit: int = 50,
     type: Optional[str] = None,
@@ -638,7 +623,7 @@ async def get_all_transactions(
 # una transacción con id "export": el endpoint de exportar era inalcanzable.
 # Ver tests/test_rutas_alcanzables.py, que falla si vuelve a pasar.
 @admin_router.get("/transactions/export")
-async def export_transactions(admin_user: dict = Depends(get_admin_user)):
+async def export_transactions(admin_user: Usuario = Depends(get_admin_user)):
     """Export all transactions to Excel"""
     if not has_permission(admin_user, "transactions.export"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -685,7 +670,7 @@ async def export_transactions(admin_user: dict = Depends(get_admin_user)):
     )
 
 @admin_router.get("/transactions/{transaction_id}")
-async def get_transaction_detail(transaction_id: str, admin_user: dict = Depends(get_admin_user)):
+async def get_transaction_detail(transaction_id: str, admin_user: Usuario = Depends(get_admin_user)):
     """Get transaction detail including proof image"""
     if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -707,7 +692,7 @@ async def get_transaction_detail(transaction_id: str, admin_user: dict = Depends
 # =======================
 
 @admin_router.get("/payment-records")
-async def get_admin_payment_records(admin_user: dict = Depends(get_admin_user)):
+async def get_admin_payment_records(admin_user: Usuario = Depends(get_admin_user)):
     """Get all payment records with proof images"""
     if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -723,7 +708,7 @@ async def get_admin_payment_records(admin_user: dict = Depends(get_admin_user)):
     return {"records": records}
 
 @admin_router.get("/payment-records/{record_id}")
-async def get_admin_payment_record_detail(record_id: str, admin_user: dict = Depends(get_admin_user)):
+async def get_admin_payment_record_detail(record_id: str, admin_user: Usuario = Depends(get_admin_user)):
     """Get a specific payment record with full details including proof image"""
     if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
