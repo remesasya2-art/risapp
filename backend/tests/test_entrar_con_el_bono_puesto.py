@@ -160,17 +160,40 @@ def test_CADA_SALDO_SALE_CONVERTIDO(base, campo):
         f"'{campo}' salió sin convertir y el login devuelve 500")
 
 
-def test_UN_SALDO_QUE_TODAVIA_NO_EXISTE_TAMBIEN_SALE_CONVERTIDO(base):
-    """La guarda de fondo, y la razón de que esto no sea otra lista de nombres.
+def test_LA_CONVERSION_ES_POR_PREFIJO_Y_NO_UNA_LISTA_DE_NOMBRES():
+    """La guarda de fondo, probada donde vive: en la funcion que convierte.
 
-    Se inventa un saldo que no está en ninguna parte del código. Si alguien
-    vuelve a escribir la lista a mano, al próximo saldo nuevo le va a pasar
-    exactamente lo que le pasó al bono, y este test se pone rojo primero.
+    Se le pasa un saldo inventado que no esta en ninguna parte del codigo y se
+    exige que salga convertido igual. Si alguien vuelve a escribir una lista de
+    nombres, al proximo saldo nuevo le va a pasar lo mismo que le paso al bono
+    —un 500 en la puerta de entrada— y este test se pone rojo primero.
+
+    NO se prueba a traves del login a proposito. El login recorta antes por
+    lista de lo permitido, asi que un saldo inventado no llega hasta la
+    conversion: el test pasaria en verde con la conversion rota, que es peor
+    que no tenerlo.
+    """
+    from services import perfil
+
+    salida = perfil.terminar_de_armar(
+        {"balance_de_algo_que_todavia_no_existe": to_decimal128(Decimal("7"))})
+    assert salida["balance_de_algo_que_todavia_no_existe"] == 7.0
+
+
+def test_UN_SALDO_QUE_NADIE_AGREGO_A_LA_LISTA_NO_SALE(base):
+    """El precio de la lista de lo permitido, escrito donde se lee.
+
+    Es su modo de fallar silencioso: la ruta contesta 200, nadie ve un error, y
+    la pantalla muestra un hueco. Este test existe para que el dia que alguien
+    agregue `balance_loquesea` y no lo vea, busque «LOS_SALDOS» y lo encuentre
+    en un minuto en vez de en una tarde.
     """
     r = _entrar(base, {"balance_de_algo_que_todavia_no_existe":
                        to_decimal128(Decimal("7"))})
     jsonable_encoder(r)
-    assert r["user"]["balance_de_algo_que_todavia_no_existe"] == 7.0
+    assert "balance_de_algo_que_todavia_no_existe" not in r["user"], (
+        "salio un saldo que no esta en LOS_SALDOS: la puerta volvio a devolver "
+        "el documento entero")
 
 
 def test_UN_SALDO_VIEJO_EN_FLOAT_SIGUE_ENTRANDO(base):

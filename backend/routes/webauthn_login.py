@@ -56,6 +56,7 @@ from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from database import db
 from models.user import User
 from routes.dependencies import get_current_user
+from services.perfil import para_su_dueno
 from services import personal
 
 logger = logging.getLogger(__name__)
@@ -358,13 +359,12 @@ async def login_verify(body: LoginVerifyBody, request: Request):
         {"user_id": user["user_id"]},
         {"$set": {"last_login": _now()}},
     )
-    user_response = {
-        k: v for k, v in user.items()
-        if k not in ["_id", "password_hash", "two_factor_secret",
-                     "two_factor_secret_pending", "two_factor_backup_hashes",
-                     "webauthn_credentials", "webauthn_auth_challenge",
-                     "webauthn_reg_challenge", "pin_hash"]
-    }
+    # Lo que es suyo para ver, y nada más. La lista y el motivo están en
+    # `services/perfil.py`. Acá había una lista de lo PROHIBIDO de nueve
+    # nombres: la más completa de las cinco que había. Era la única que se
+    # acordaba de `pin_hash` —y de las credenciales de la huella—, y eso no
+    # protegía a las otras cuatro puertas ni un poco. De ahí que ahora sea una.
+    user_response = para_su_dueno(user)
     return {
         "message": "Login exitoso",
         "session_token": token,
