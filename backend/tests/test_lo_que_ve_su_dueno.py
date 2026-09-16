@@ -1,24 +1,45 @@
 """
-tests/test_lo_que_ve_su_dueno.py — Lo que `/auth/me` le manda al navegador.
+tests/test_lo_que_ve_su_dueno.py — Lo que las cinco rutas le mandan al navegador.
 
-LO QUE HABIA
+LAS CINCO
 
-    La proyección era `{"_id": 0, "password_hash": 0}` —una lista de lo
-    PROHIBIDO— y el comentario de al lado lo decía: «el documento ya sale
-    entero». Así que cada campo que la aplicación le fue escribiendo al usuario
-    viajaba al navegador, y ésta es LA RUTA MAS LLAMADA DE LA APLICACION.
+    Hay cinco sitios que le mandan al navegador el documento del usuario, y los
+    cinco alimentan el mismo objeto del frontend: `setUser()` en `AuthContext`.
 
-    Comprobado corriendo la ruta, salían la semilla del segundo factor, los
-    códigos de respaldo cifrados, un token de reseteo vivo, el código de
-    verificación de seis dígitos, la suscripción de avisos con su secreto, el
-    correo de una cuenta borrada y el token de notificaciones.
+        GET  /auth/me                     al abrir la aplicación
+        POST /auth/login-password         la puerta principal
+        POST /auth/2fa/verify             la puerta con segundo factor
+        POST /auth/2fa/enroll-confirm     la puerta del alta del segundo factor
+        POST /webauthn/login/verify       la puerta de la huella
 
-POR QUE LA SEMILLA ES LA PEOR
+    Cada uno tenía su lista de lo PROHIBIDO escrita a mano, y las cinco habían
+    quedado distintas.
 
-    No vence. Quien la tenga genera códigos válidos PARA SIEMPRE. Una sesión
-    robada se revoca; una semilla filtrada obliga a darse de alta de nuevo. En
-    una cuenta de administrador es la diferencia entre «entraron un rato» y
-    «tienen la cuenta».
+LO QUE SE MIDIO
+
+    Corriendo las rutas contra un usuario con los campos que la aplicación
+    escribe DE VERDAD en `users` —leídos del código, no inventados—:
+
+        /auth/me                 18 campos que no son de su dueño
+        /auth/login-password     15
+        /webauthn/login/verify   menos, porque su lista tenía cuatro nombres
+                                 más: entre ellos `pin_hash`
+
+    Esa última línea es el argumento entero. Alguien se acordó de `pin_hash` en
+    UNA de las cinco listas, y eso no protegió a las otras cuatro.
+
+    (Una corrección al primer informe de esto: ahí se nombraron
+    `password_reset_token`, `email_verification_code`, `google_id` y
+    `push_token_web` entre lo que salía. NO SALIAN: no existen en ninguna parte
+    del backend — eran campos de la prueba, no del producto. Lo que sí salía es
+    lo que lista `NUNCA_SALE` acá abajo, comprobado campo por campo.)
+
+LO PEOR QUE SALIA
+
+    La semilla del segundo factor. No vence: quien la tenga genera códigos
+    válidos PARA SIEMPRE. Una sesión robada se revoca; una semilla filtrada
+    obliga a darse de alta de nuevo. En una cuenta de administrador es la
+    diferencia entre «entraron un rato» y «tienen la cuenta».
 
     Y no hace falta un atacante remoto: cualquier XSS, o una extensión del
     navegador —que ya vimos inyectando scripts en esta misma aplicación— pasa
@@ -29,7 +50,7 @@ POR QUE ESTE ARCHIVO PRUEBA LAS DOS MITADES
     Una lista de lo permitido falla de dos formas opuestas: deja pasar algo que
     no debía, o se come algo que la pantalla necesita. La segunda no se nota en
     los tests del servidor —la ruta contesta 200 igual— y aparece como una
-    pantalla rota.
+    pantalla con un hueco.
 """
 import asyncio
 import os
@@ -50,19 +71,35 @@ from routes import auth                                     # noqa: E402
 
 # Lo que la aplicación le escribe de verdad a un usuario, y nunca es suyo para
 # ver. Cada nombre está porque alguna parte del código lo escribe en `users`.
+# Lo que la aplicación le escribe DE VERDAD a un usuario y nunca es suyo para
+# ver. Cada nombre se buscó en el código antes de ponerlo acá: los que no
+# aparecían se sacaron, porque un test que vigila un campo inexistente da una
+# sensación de cobertura que no existe.
 NUNCA_SALE = [
+    # Las llaves
     "password_hash",
     "two_factor_secret",
+    "two_factor_secret_pending",
     "two_factor_backup_hashes",
-    "password_reset_token",
-    "password_reset_expires",
-    "email_verification_code",
-    "email_verification_expires",
+    "pin_hash",
+    # El PIN: sus intentos fallidos y su bloqueo dicen cuándo está bloqueado
+    "pin_failed_attempts",
+    "pin_locked_until",
+    # La huella: la credencial y los retos abiertos
+    "webauthn_credentials",
+    "webauthn_auth_challenge",
+    "webauthn_reg_challenge",
+    # Avisos: la suscripción lleva su propio secreto adentro
     "web_push_subscription",
     "push_token",
-    "push_token_web",
+    # Interno de la empresa, no del usuario
     "original_email",
-    "google_id",
+    "permissions",
+    "legajo",
+    "ban_reason",
+    "rejection_reason",
+    "drive_kyc_link",
+    "deleted_by",
 ]
 
 # Lo que el frontend lee de esta respuesta. Salió de recorrer los archivos que

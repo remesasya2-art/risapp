@@ -49,6 +49,7 @@ from services.ip_cliente import ip_del_cliente
 from database import db
 from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
+from services.perfil import para_su_dueno
 from utils.security import hash_password_async, verify_password_async
 
 logger = logging.getLogger(__name__)
@@ -529,11 +530,12 @@ async def twofa_enroll_confirm(request: Request, response: Response, data: TwoFA
     token = await issue_session_token(user, request=request, two_factor_used=True)
     set_session_cookie(response, token)
 
-    user_response = {
-        k: v for k, v in user.items()
-        if k not in ["_id", "password_hash", "two_factor_secret",
-                     "two_factor_secret_pending", "two_factor_backup_hashes"]
-    }
+    # Lo que es suyo para ver, y nada más. La lista y el motivo están en
+    # `services/perfil.py`. Acá había una lista de lo PROHIBIDO de cinco
+    # nombres —una de las cinco que había, todas distintas entre sí— y dejaba
+    # salir el hash del PIN y las credenciales de la huella, que la lista de
+    # `/webauthn/login/verify` sí tapaba.
+    user_response = para_su_dueno(user)
 
     return {
         "message": "2FA activado correctamente",
@@ -691,7 +693,12 @@ async def twofa_verify(request: Request, response: Response, data: TwoFAVerifyRe
         {"$set": {"last_login": datetime.now(timezone.utc)}},
     )
 
-    user_response = {k: v for k, v in user.items() if k not in ["_id", "password_hash", "two_factor_secret", "two_factor_secret_pending", "two_factor_backup_hashes"]}
+    # Lo que es suyo para ver, y nada más. La lista y el motivo están en
+    # `services/perfil.py`. Acá había una lista de lo PROHIBIDO de cinco
+    # nombres —una de las cinco que había, todas distintas entre sí— y dejaba
+    # salir el hash del PIN y las credenciales de la huella, que la lista de
+    # `/webauthn/login/verify` sí tapaba.
+    user_response = para_su_dueno(user)
 
     return {
         "message": "Login exitoso (2FA)",

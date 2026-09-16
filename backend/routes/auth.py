@@ -34,105 +34,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# LO QUE /auth/me LE MANDA AL NAVEGADOR
-# ══════════════════════════════════════════════════════════════════════════
+# La lista de lo que una persona ve de su propia cuenta vive en
+# `services/perfil.py`, y no acá, porque hay CINCO rutas que le mandan ese mismo
+# documento al navegador —ésta y las cuatro puertas de entrada— y las cinco
+# alimentan el mismo `setUser()` del frontend. Con una lista por ruta, acordarse
+# de tapar un campo en una no protegía a las otras cuatro: así fue como
+# `pin_hash` terminó tapado sólo en la de la huella. El motivo largo está allá.
 #
-# LO QUE HABIA, Y QUE SE FILTRABA
-#
-#     La proyección era `{"_id": 0, "password_hash": 0}` — una lista de lo
-#     PROHIBIDO— y el comentario de al lado lo decía sin rodeos: «el documento
-#     ya sale entero». O sea que TODO campo que la aplicación le fue
-#     escribiendo al usuario viajaba al navegador en cada llamada, y ésta es
-#     LA RUTA MAS LLAMADA DE LA APLICACION.
-#
-#     Comprobado corriendo la ruta contra un usuario con los campos que la
-#     aplicación escribe de verdad, salían:
-#
-#         two_factor_secret            la semilla del segundo factor
-#         two_factor_backup_hashes     los diez códigos de respaldo, cifrados
-#         password_reset_token         un token de reseteo vivo
-#         email_verification_code      el código de seis dígitos
-#         web_push_subscription        con su secreto adentro
-#         original_email               el correo de una cuenta borrada
-#         push_token
-#
-#     El peor es el primero. La semilla del segundo factor no vence: quien la
-#     tenga genera códigos válidos PARA SIEMPRE. Una sesión robada se revoca;
-#     una semilla filtrada obliga a que la persona vuelva a darse de alta. Y en
-#     una cuenta de administrador, esa es la diferencia entre «entraron un rato»
-#     y «tienen la cuenta».
-#
-#     No hace falta un atacante remoto para que duela: cualquier XSS en
-#     cualquier pantalla —o una extensión del navegador, que ya vimos
-#     inyectando scripts acá— pasa de robar una sesión a quedarse con el
-#     segundo factor y el token de reseteo.
-#
-# POR QUE LISTA DE LO PERMITIDO
-#
-#     Es la regla del proyecto, y este es exactamente el caso que la motiva:
-#     una lista de lo prohibido deja pasar cada campo nuevo hasta que alguien
-#     se acuerde de agregarlo. Nadie se acordó de `two_factor_secret` el día
-#     que se agregó el segundo factor.
-#
-# DE DONDE SALE CADA NOMBRE
-#
-#     De lo que el frontend lee de verdad. Se recorrieron los archivos que usan
-#     `useAuth()` —que es donde vive esta respuesta, porque `AuthContext` hace
-#     `setUser(response.data)`— y se listó campo por campo.
-#
-#     Los de KYC que aparecían en esa búsqueda (`selfie_image`, `cpf_image`,
-#     `id_document_image`, `document_number`) NO están: se comprobó que salen
-#     de `userHistory.user`, que es otra ruta y sólo la ve un administrador.
-#     Mandar fotos de documentos en la ruta más llamada sería lo contrario de
-#     lo que este bloque viene a hacer.
-# TODOS LOS SALDOS, EN UN SOLO LUGAR
-#
-# Con una lista de lo prohibido el documento salía entero y un bucle convertía
-# cualquier campo que empezara con `balance_`: un saldo nuevo se mostraba solo.
-# Con una lista de lo permitido eso ya no alcanza. Un saldo que nadie agregue
-# acá NO SALE, y la pantalla muestra cero sin avisar de nada: es el otro modo
-# de fallar de una lista de lo permitido, y es el silencioso.
-#
-# Por eso los saldos están juntos y con nombre propio, en vez de sueltos entre
-# los demás campos: el que agregue el próximo saldo tiene que ver esta lista.
-# `tests/test_lo_que_ve_su_dueno.py` exige que cada uno de estos salga
-# convertido a número, uno por uno.
-LOS_SALDOS = (
-    "balance_ris", "balance_ves", "balance_ris_terceros",
-    "balance_usdt", "balance_usdc", "balance_ris_bono",
-    # Nombres viejos. Una cuenta de hace tiempo puede tener la plata guardada
-    # con el nombre anterior —`scripts/verificar_saldo_de_terceros.py` existe
-    # justamente para buscarlas— y la ruta de login los convierte igual. Si no
-    # estuvieran acá, esa plata dejaría de verse en el momento en que esta
-    # proyección pasó a ser de lo permitido, y nadie lo habría notado.
-    "balance_terceros", "balance_personal",
-)
-
-LO_QUE_VE_SU_DUENO = {
-    "_id": 0,
-
-    # Quién es
-    "user_id": 1, "email": 1, "name": 1, "phone": 1, "phone_number": 1,
-    "role": 1, "status": 1, "profile_picture": 1, "picture": 1,
-
-    # Estado de la cuenta. `must_change_password` lo lee `AuthContext` para
-    # mandar a la pantalla de cambio obligado: sin él, esa pantalla no aparece
-    # nunca y alguien se queda con una contraseña temporal para siempre.
-    "verification_status": 1, "email_verified": 1, "password_set": 1,
-    "must_change_password": 1,
-
-    # Plata. Se convierten a número más abajo.
-    **{campo: 1 for campo in LOS_SALDOS},
-    "bono": 1,
-
-    # Lo suyo: su CPF, su código para invitar, sus códigos de rol.
-    "cpf_number": 1, "referral_code": 1, "gestor_code": 1, "partner_code": 1,
-    "is_partner": 1,
-
-    # De dónde despacha, y desde cuándo está.
-    "cep_origen": 1, "created_at": 1, "last_login": 1,
-}
+# Se reexportan los nombres porque los tests y otras rutas los buscan acá.
+from services.perfil import (                                      # noqa: E402
+    LO_QUE_VE_SU_DUENO, LOS_SALDOS, para_su_dueno, terminar_de_armar)
 
 
 @router.get("/me")
@@ -142,32 +53,9 @@ async def get_me(current_user: User = Depends(get_current_user)):
                                    LO_QUE_VE_SU_DUENO)
     if user:
         user['password_set'] = user.get('password_set', False)
-        # Normaliza los montos: la API devuelve números limpios, tolerando
-        # datos viejos (float) y nuevos (Decimal128).
-        #
-        # SE RECORREN LOS CAMPOS QUE EMPIEZAN CON `balance_`, y no una lista
-        # escrita a mano. La lista era eso, y le faltaba el saldo nuevo:
-        # `Decimal128` NO SE PUEDE SERIALIZAR A JSON, así que esta ruta
-        # —la más llamada de la aplicación— habría devuelto 500 a cada
-        # usuario que tuviera un bono, y el defecto habría aparecido recién en
-        # producción, cuando el primero cobrara.
-        #
-        # Una lista escrita a mano de campos a CONVERTIR no es lo mismo que una
-        # lista de campos a EXPONER: acá no se decide qué se muestra —el
-        # documento ya sale entero— sino de qué tipo sale. Olvidarse de un
-        # nombre no filtra nada; rompe la ruta. Así que se recorren todos.
-        for f in [k for k in user if k.startswith("balance_")]:
-            if user[f] is not None:
-                user[f] = to_float(from_db(user[f]))
-        # El bono, ya interpretado: cuánto hay, si está bloqueado y el texto que
-        # lo explica. Reemplaza al subdocumento crudo por dos motivos: la
-        # pantalla no tiene que deducir la regla —el texto lo arma el servidor,
-        # así que el monto y la condición no pueden discrepar— y dejan de
-        # viajar al navegador campos internos como el id de quien refirió, que
-        # es el identificador de OTRA persona.
-        if "bono" in user:
-            from services import bonos
-            user["bono"] = bonos.para_la_pantalla(user)
+        # La proyección ya recortó: acá sólo quedan los saldos a número y el
+        # bono interpretado, que es lo mismo que hacen las cuatro puertas.
+        terminar_de_armar(user)
     return user
 
 @router.post("/logout")
@@ -619,27 +507,11 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         except Exception as e:
             logger.warning(f"Failed to send login notification: {e}")
 
-        # LOS SALDOS SE RECORREN POR PREFIJO, NO POR UNA LISTA DE NOMBRES.
-        #
-        # Acá había una lista escrita a mano de siete nombres, y le faltaba
-        # `balance_ris_bono`. El registro escribe ese campo en Decimal128 desde
-        # que existe el bono de bienvenida, y un Decimal128 NO SE PUEDE
-        # CONVERTIR A JSON: esta ruta devolvía 500 a toda persona registrada
-        # desde entonces, que es la puerta principal de la aplicación.
-        #
-        # El defecto no se vio antes porque una lista de nombres no avisa
-        # cuando le falta uno: sigue andando para los seis que sí están. Es el
-        # mismo problema que `/auth/me` ya había resuelto recorriendo por
-        # prefijo, y por eso se hace igual acá. Olvidarse de un nombre ahora es
-        # imposible: el próximo saldo que se invente se convierte solo.
-        for f in [k for k in user if k.startswith("balance_")]:
-            if user[f] is not None:
-                user[f] = to_float(from_db(user[f]))
-        user_response = {
-            k: v for k, v in user.items()
-            if k not in ["_id", "password_hash", "two_factor_secret",
-                         "two_factor_secret_pending", "two_factor_backup_hashes"]
-        }
+        # Lo que es suyo para ver, y nada más. La lista y el motivo están en
+        # `services/perfil.py`: acá había una lista de lo PROHIBIDO de cinco
+        # nombres, y dejaba salir quince campos que no son de su dueño, entre
+        # ellos el hash del PIN y las credenciales de la huella.
+        user_response = para_su_dueno(user)
 
         return {
             "message": "Login exitoso",
