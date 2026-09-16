@@ -35,7 +35,8 @@ EL KYC NO LO VUELVE A PEDIR, PERO SI DISCREPA SE AVISA
     los documentos sí dice algo, y es lo único que acá se puede detectar solo.
 """
 import logging
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from pymongo.errors import DuplicateKeyError
 
@@ -89,6 +90,375 @@ async def esta_vetado(db, valor) -> bool:
     if not n:
         return False
     return bool(await db.blacklist.find_one({"type": "cpf", "value": n}))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# LA RESERVA DEL CPF: TOMADO DESDE EL PRIMER INSTANTE
+# ══════════════════════════════════════════════════════════════════════════
+#
+# EL AGUJERO QUE CIERRA, QUE NO ERA EL QUE ESTE ARCHIVO CREIA
+#
+#     El archivo decía que la ventana era de milisegundos —«entre contar y
+#     escribir»— y que el índice único de `users` la tapaba. Las dos cosas
+#     eran optimistas.
+#
+#     Al registrarse, el CPF NO SE GUARDA EN LA CUENTA: la cuenta todavía no
+#     existe. Queda en `pending_verifications` esperando que la persona
+#     confirme su correo, y la comprobación sólo mira `users`. O sea que
+#     durante los QUINCE MINUTOS que dura el código de verificación, otra
+#     persona podía registrarse con el mismo CPF y pasar igual. No hacía falta
+#     que fuera simultáneo.
+#
+#     Así aparecieron los CPF repetidos que hoy impiden crear el índice.
+#
+# POR QUE EL CPF ES EL `_id`, Y NO UN CAMPO CON INDICE UNICO
+#
+#     En Mongo el `_id` es único POR CONSTRUCCION: no es un índice que haya
+#     que crear, ni que pueda fallar por datos que ya están. Insertar es
+#     atómico — el primero que llega gana y el segundo se entera en el mismo
+#     instante—, que es exactamente la regla pedida: tomado desde que se
+#     escribe, no quince minutos después.
+#
+#     Y esquiva el problema de hoy: el índice sobre `users.cpf_number` no se
+#     puede crear porque ya hay repetidos. Esta colección nace vacía.
+#
+# LAS DOS VIDAS DE UNA RESERVA
+#
+#     Mientras se registra    tiene `vence_en`: si no confirma el correo, la
+#                             reserva caduca sola y el CPF vuelve a estar libre
+#     Cuando confirma         se le saca `vence_en` y queda anclada a su
+#                             `user_id`, para siempre
+#
+#     La caducidad no es comodidad: sin ella, un dedo equivocado que tipea el
+#     CPF de un tercero le bloquea la cuenta a esa persona PARA SIEMPRE, y sólo
+#     un administrador podría liberarla. Quince minutos es lo que ya dura el
+#     código de verificación: pasado eso el código no sirve, y la reserva
+#     tampoco tiene por qué seguir en pie.
+COLECCION_TOMADOS = "cpf_tomados"
+
+# Lo mismo que dura el código que llega por correo (`routes/auth.py`). Si uno
+# cambia, el otro tiene que acompañarlo: una reserva más corta que el código
+# deja entrar a otro mientras el dueño todavía puede confirmar.
+MINUTOS_DE_LA_RESERVA = 15
+
+# ── Los mensajes ───────────────────────────────────────────────────────────
+#
+# Hay dos porque las dos situaciones se arreglan de forma distinta: si ya hay
+# una cuenta, la persona tiene que entrar a ESA cuenta; si hay un registro a
+# medio confirmar, tiene que ir a su correo. Un mensaje único mandaría a la
+# mitad de la gente al lugar equivocado.
+_YA_TIENE_CUENTA = (
+    "Ese CPF ya tiene una cuenta en RIS App. Iniciá sesión con ella, o "
+    "recuperá tu contraseña si no la recordás.")
+
+_TOMADO_HACE_UN_RATO = (
+    "Ese CPF ya está en un registro empezado hace unos minutos. Si fuiste vos, "
+    "revisá tu correo y confirmá ese registro; si no lo confirmás, el CPF "
+    "vuelve a quedar libre en unos minutos.")
+
+NOMBRE_DE_LA_CADUCIDAD = "cpf_tomados_caducan"
+
+
+def _tapado(n: str) -> str:
+    """El CPF con casi todo tapado, para poder nombrarlo en el registro.
+
+    El registro de la aplicación lo lee más gente de la que tiene por qué ver
+    el documento de un cliente. Con los últimos tres dígitos alcanza para
+    reconocerlo cuando ya se tiene el `user_id` al lado, que es el que sirve
+    para encontrar la cuenta.
+    """
+    return "•••••••" + (n or "")[-3:]
+
+
+def _vencida(reserva: dict, ahora: datetime) -> bool:
+    """¿Esta reserva ya caducó?
+
+    No alcanza con la caducidad de la base, por dos motivos: Mongo pasa el
+    barrendero UNA VEZ POR MINUTO —así que hay hasta un minuto en que el
+    documento sigue ahí, vencido— y en los tests no hay barrendero ninguno. Una
+    reserva vencida tiene que poder tomarse en el acto.
+
+    Sin fecha de vencimiento = anclada a una cuenta = no caduca nunca.
+    """
+    vence = (reserva or {}).get("vence_en")
+    if not isinstance(vence, datetime):
+        return False
+    if vence.tzinfo is None:
+        # El driver devuelve las fechas SIN zona horaria (el cliente no se crea
+        # con `tz_aware`). Comparar una con zona contra una sin zona no devuelve
+        # False: levanta TypeError. Eso ya vació un informe entero en este mismo
+        # repositorio, y acá haría fallar el registro.
+        vence = vence.replace(tzinfo=timezone.utc)
+    return vence <= ahora
+
+
+def _como_queda(ahora: datetime, user_id: str, correo: str) -> dict:
+    """La escritura que deja la reserva como corresponde: a prueba, o anclada."""
+    if user_id:
+        cambio = {"$set": {"user_id": user_id, "anclado_en": ahora},
+                  # Sin `vence_en` la caducidad de la base ni la mira. Es
+                  # exactamente así como una reserva pasa a ser para siempre.
+                  "$unset": {"vence_en": "", "marca": ""}}
+    else:
+        cambio = {"$set": {
+            "vence_en": ahora + timedelta(minutes=MINUTOS_DE_LA_RESERVA)}}
+    if correo:
+        cambio["$set"]["correo"] = correo
+    return cambio
+
+
+async def asegurar_la_caducidad(db) -> str:
+    """El índice que suelta solo las reservas sin confirmar. Devuelve qué pasó.
+
+    `expireAfterSeconds=0` no quiere decir «borralo enseguida»: quiere decir
+    «borralo cuando la fecha de `vence_en` ya pasó».
+
+    Y lo que hace que todo el diseño funcione: Mongo IGNORA los documentos que
+    NO tienen ese campo. A la reserva anclada a una cuenta se le saca
+    `vence_en`, y con eso queda fuera del alcance del barrendero para siempre.
+
+    NO LEVANTA NUNCA, por lo mismo que `asegurar_el_indice`: sin caducidad la
+    regla sigue en pie, sólo que un registro abandonado se queda con su CPF
+    hasta que alguien lo suelte a mano. Dejar la plataforma caída es peor.
+    """
+    try:
+        await db[COLECCION_TOMADOS].create_index(
+            "vence_en", expireAfterSeconds=0, name=NOMBRE_DE_LA_CADUCIDAD)
+        return "listo"
+    except Exception as e:
+        logger.error(
+            "SIN CADUCIDAD en %s (%s): un registro que nunca se confirma se "
+            "queda con su CPF hasta que un administrador lo suelte.",
+            COLECCION_TOMADOS, e)
+        return "no se pudo"
+
+
+async def esta_tomado_por_otro(db, valor, *, correo: str = "",
+                               user_id: str = "") -> str:
+    """¿Este CPF ya es de alguien que no es quien pregunta?
+
+    Devuelve "" si está libre, "cuenta" si ya está anclado a una cuenta, y
+    "reserva" si hay un registro empezado que todavía no confirmó el correo.
+
+    ES SOLO PARA EL MENSAJE, NO PARA DECIDIR. Lee y después alguien escribe, y
+    entre esas dos cosas hay una ventana. Lo que de verdad lo impide es `tomar`,
+    que escribe y deja que la base decida.
+    """
+    n = cpf.normalizar(valor)
+    if not n:
+        return ""
+    reserva = await db[COLECCION_TOMADOS].find_one({"_id": n})
+    if not reserva:
+        return ""
+    duena = reserva.get("user_id") or ""
+    if duena:
+        return "" if user_id and duena == user_id else "cuenta"
+    if correo and reserva.get("correo") == correo:
+        return ""
+    if _vencida(reserva, datetime.now(timezone.utc)):
+        return ""
+    return "reserva"
+
+
+async def _sacar_la_vencida(db, n: str, marca) -> bool:
+    """Saca una reserva vencida, pero SOLO si sigue siendo la que se leyó.
+
+    Por qué el filtro lleva la `marca` y no alcanza con el `_id`: dos pedidos
+    pueden leer la misma reserva vencida. El primero la saca y pone la suya; si
+    el segundo borrara por `_id` a secas, borraría LA DEL PRIMERO —que está
+    viva— y pondría la suya encima. Los dos se irían creyendo que tienen el CPF
+    y uno de los dos estaría equivocado, sin enterarse nunca.
+
+    La `marca` es lo que distingue «la vencida que vi» de «otra que entró
+    recién». Si ya no coincide, este borrado no hace nada, y el `insert` de
+    arriba se choca como corresponde.
+    """
+    resultado = await db[COLECCION_TOMADOS].delete_one(
+        {"_id": n, "marca": marca, "user_id": {"$exists": False}})
+    return bool(getattr(resultado, "deleted_count", 0))
+
+
+async def tomar(db, valor, *, correo: str = "", user_id: str = "") -> str:
+    """Toma el CPF. Levanta `CpfEnUso` si ya es de otro.
+
+    ESTA ES LA GUARDA DE VERDAD, no el mensaje amable. El CPF es el `_id`, así
+    que de dos pedidos simultáneos la base acepta UNO y al otro le contesta
+    `DuplicateKeyError` en el mismo instante. No hay «contar y después
+    escribir», que es la ventana por la que se colaron los repetidos que hoy
+    están en la base.
+
+    Sin `user_id` la reserva nace a prueba, con fecha de vencimiento: es un
+    registro que todavía tiene que confirmar el correo. Con `user_id` nace —o
+    queda— anclada, que es lo que pasa cuando el correo ya está confirmado.
+
+    Es IDEMPOTENTE para el mismo correo: quien manda el formulario de nuevo
+    —porque se equivocó la contraseña, o porque pidió otro código— no se choca
+    consigo mismo.
+    """
+    n = exigir_valido(valor)
+    ahora = datetime.now(timezone.utc)
+
+    nueva = {"_id": n, "correo": correo, "tomado_en": ahora}
+    if user_id:
+        nueva["user_id"] = user_id
+        nueva["anclado_en"] = ahora
+    else:
+        nueva["vence_en"] = ahora + timedelta(minutes=MINUTOS_DE_LA_RESERVA)
+        # Para distinguir «la reserva vencida que acabo de leer» de «otra que
+        # entró recién». Ver más abajo, donde se saca una vencida.
+        nueva["marca"] = uuid.uuid4().hex
+
+    try:
+        await db[COLECCION_TOMADOS].insert_one(dict(nueva))
+        return n
+    except DuplicateKeyError:
+        pass
+
+    reserva = await db[COLECCION_TOMADOS].find_one({"_id": n}) or {}
+    duena = reserva.get("user_id") or ""
+
+    if duena:
+        # Ya está anclada. Sólo sirve si es de quien pregunta.
+        if user_id and duena == user_id:
+            return n
+        raise CpfEnUso(_YA_TIENE_CUENTA)
+
+    if correo and reserva.get("correo") == correo:
+        # Es de este mismo registro: se le renuevan los minutos, o se la ancla
+        # si el correo ya quedó confirmado.
+        await db[COLECCION_TOMADOS].update_one(
+            {"_id": n, "correo": correo, "user_id": {"$exists": False}},
+            _como_queda(ahora, user_id, correo))
+        return n
+
+    if _vencida(reserva, ahora):
+        # Caducó y el barrendero de Mongo todavía no pasó. Se la saca y se
+        # vuelve a intentar.
+        await _sacar_la_vencida(db, n, reserva.get("marca"))
+        try:
+            await db[COLECCION_TOMADOS].insert_one(dict(nueva))
+            return n
+        except DuplicateKeyError:
+            # Otro llegó primero a la que quedó libre. Es de él.
+            raise CpfEnUso(_TOMADO_HACE_UN_RATO)
+
+    raise CpfEnUso(_TOMADO_HACE_UN_RATO)
+
+
+async def anclar(db, valor, user_id: str, *, correo: str = "") -> str:
+    """Deja el CPF atado a esta cuenta para siempre.
+
+    Es `tomar` con dueño: la misma escritura atómica, y de paso resuelve solo
+    el caso de la reserva que ya no está —la caducidad se la comió porque el
+    correo se confirmó tarde— volviéndola a crear, ya anclada.
+
+    NO PISA la reserva de otro. Si en el medio alguien más tomó ese CPF, esto
+    levanta `CpfEnUso` en vez de robárselo.
+    """
+    return await tomar(db, valor, correo=correo, user_id=user_id)
+
+
+async def soltar_las_del_correo(db, correo: str, *, salvo: str = "") -> int:
+    """Suelta las reservas de un registro que no se va a confirmar.
+
+    El filtro lleva `user_id: {$exists: False}` y no es un detalle: sin esa
+    condición, un registro abandonado con el mismo correo que una cuenta que ya
+    existe le soltaría el CPF a esa cuenta.
+
+    `salvo` es el CPF que este mismo registro está por tomar de nuevo. Sin él,
+    volver a mandar el formulario con el MISMO CPF lo soltaría un instante antes
+    de volver a tomarlo, y en ese instante otro puede llevárselo.
+    """
+    if not correo:
+        return 0
+    filtro = {"correo": correo, "user_id": {"$exists": False}}
+    if salvo:
+        filtro["_id"] = {"$ne": salvo}
+    resultado = await db[COLECCION_TOMADOS].delete_many(filtro)
+    return getattr(resultado, "deleted_count", 0) or 0
+
+
+async def renovar_las_del_correo(db, correo: str) -> int:
+    """Le corre el vencimiento a las reservas de este registro.
+
+    Va de la mano de `/auth/resend-verification-code`, que le da minutos nuevos
+    al código. Si la reserva no lo acompañara, el CPF quedaría libre mientras el
+    código todavía sirve, y otro podría tomarlo justo antes de que el dueño
+    confirme.
+    """
+    if not correo:
+        return 0
+    resultado = await db[COLECCION_TOMADOS].update_many(
+        {"correo": correo, "user_id": {"$exists": False}},
+        {"$set": {"vence_en": datetime.now(timezone.utc)
+                  + timedelta(minutes=MINUTOS_DE_LA_RESERVA)}})
+    return getattr(resultado, "modified_count", 0) or 0
+
+
+async def soltar_el_ancla(db, valor, user_id: str) -> bool:
+    """Deshace un anclaje que no llegó a escribirse en la cuenta.
+
+    Pasa cuando se ancla el CPF y enseguida se descubre que la cuenta ya tenía
+    otro. Sin esto, ese CPF quedaría anclado a una cuenta que no lo tiene, o
+    sea bloqueado para todos y sin dueño que lo use.
+    """
+    n = cpf.normalizar(valor)
+    if not n or not user_id:
+        return False
+    resultado = await db[COLECCION_TOMADOS].delete_one(
+        {"_id": n, "user_id": user_id})
+    return bool(getattr(resultado, "deleted_count", 0))
+
+
+async def sembrar(db) -> dict:
+    """Crea la reserva de cada CPF que ya está en una cuenta. Devuelve el resumen.
+
+    HACE FALTA. La colección nace vacía, y una colección vacía quiere decir
+    «todos los CPF están libres»: sin sembrarla, el CPF de cada cuenta que ya
+    existe podría ser tomado por un registro nuevo.
+
+    Y DE PASO DICE CUALES ESTAN REPETIDOS. Los repetidos son justamente los que
+    impiden crear el índice único de `users.cpf_number`, y hasta ahora saber
+    cuáles eran obligaba a consultar la base a mano. Acá el arranque los deja
+    escritos, con el `user_id` de cada cuenta al lado.
+
+    NO BORRA NI ARREGLA NADA. Qué hacer con dos cuentas que comparten un CPF
+    —cuál se queda, qué pasa con el saldo de la otra— no lo puede decidir un
+    arranque: lo decide una persona mirando las dos cuentas.
+    """
+    creadas, ya_estaban, repetidos = 0, 0, []
+
+    cursor = db.users.find({"cpf_number": {"$nin": [None, ""]}},
+                           {"_id": 0, "user_id": 1, "cpf_number": 1})
+    async for usuario in cursor:
+        n = cpf.normalizar(usuario.get("cpf_number"))
+        user_id = usuario.get("user_id") or ""
+        if not n or not user_id:
+            continue
+        ahora = datetime.now(timezone.utc)
+        try:
+            await db[COLECCION_TOMADOS].insert_one(
+                {"_id": n, "user_id": user_id, "tomado_en": ahora,
+                 "anclado_en": ahora, "sembrada": True})
+            creadas += 1
+            continue
+        except DuplicateKeyError:
+            pass
+        otra = await db[COLECCION_TOMADOS].find_one({"_id": n}) or {}
+        if otra.get("user_id") == user_id:
+            ya_estaban += 1
+            continue
+        repetidos.append({"cpf": _tapado(n), "lo_tiene": otra.get("user_id"),
+                          "tambien": user_id})
+
+    if repetidos:
+        logger.error(
+            "CPF REPETIDOS: %s cuenta(s) comparten el CPF de otra. Hasta que se "
+            "resuelvan, el índice único de users.cpf_number no se puede crear. "
+            "Son: %s", len(repetidos), repetidos)
+
+    return {"creadas": creadas, "ya_estaban": ya_estaban,
+            "repetidos": repetidos}
 
 
 NOMBRE_DEL_INDICE = "cpf_number_unico"
@@ -157,8 +527,16 @@ async def asegurar_el_indice(db) -> str:
         return "no se pudo"
 
 
-async def revisar_para_registrar(db, valor) -> str:
-    """El CPF con el que se puede abrir una cuenta. Levanta si no se puede."""
+async def revisar_para_registrar(db, valor, *, correo: str = "") -> str:
+    """El CPF con el que se puede abrir una cuenta. Levanta si no se puede.
+
+    Esto es el MENSAJE, y por eso mira las dos formas de estar tomado: la
+    cuenta que ya existe y el registro que todavía no confirmó su correo. La
+    segunda es la que faltaba, y es la que dejó entrar a los repetidos: durante
+    los quince minutos del código, el CPF no estaba en ninguna cuenta.
+
+    Quien decide es `tomar`, unas líneas más adelante en el registro.
+    """
     n = exigir_valido(valor)
     if await esta_vetado(db, n):
         # No se le dice al visitante que su CPF está vetado: eso convierte el
@@ -167,9 +545,12 @@ async def revisar_para_registrar(db, valor) -> str:
         logger.warning("registro rechazado: el CPF está en la lista negra")
         raise CpfVetado("Esta cuenta no puede registrarse. Contactá a soporte.")
     if await ya_es_de_otra_cuenta(db, n):
-        raise CpfEnUso(
-            "Ese CPF ya tiene una cuenta en RIS App. Iniciá sesión con ella, o "
-            "recuperá tu contraseña si no la recordás.")
+        raise CpfEnUso(_YA_TIENE_CUENTA)
+    tomado = await esta_tomado_por_otro(db, n, correo=correo)
+    if tomado == "cuenta":
+        raise CpfEnUso(_YA_TIENE_CUENTA)
+    if tomado:
+        raise CpfEnUso(_TOMADO_HACE_UN_RATO)
     return n
 
 
@@ -214,6 +595,10 @@ async def atar(db, user_id: str, valor) -> str:
             "Ese CPF ya está registrado en otra cuenta. Un CPF puede tener una "
             "sola cuenta en RIS App.")
 
+    # El anclaje va ANTES de escribir la cuenta, porque es lo único atómico de
+    # los dos. Si algo sale mal después, se suelta más abajo.
+    await anclar(db, n, user_id)
+
     try:
         resultado = await db.users.update_one(
             {"user_id": user_id,
@@ -240,6 +625,12 @@ async def atar(db, user_id: str, valor) -> str:
     ya = el_de(usuario or {})
     if ya == n:
         return n
+
+    # La cuenta se quedó con OTRO CPF (o no existe), así que el que se acaba de
+    # anclar no es de nadie. Hay que soltarlo: un CPF anclado a una cuenta que
+    # no lo tiene queda bloqueado para todos y sin dueño que lo use.
+    await soltar_el_ancla(db, n, user_id)
+
     if ya:
         raise CpfDeOtro(
             "Esta cuenta ya tiene un CPF registrado y no coincide con el que "

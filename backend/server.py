@@ -69,6 +69,13 @@ async def lifespan(app):
         # índice que ya existe con otras opciones están en el módulo.
         from services import cpf_de_la_cuenta
         await cpf_de_la_cuenta.asegurar_el_indice(db)
+        # La reserva del CPF: tomado desde que se escribe, no quince minutos
+        # después. La caducidad suelta sola las reservas sin confirmar, y la
+        # siembra le da su reserva a cada cuenta que ya existe —y deja escrito
+        # en el registro cuáles son los CPF repetidos, con su `user_id`, que
+        # son los que impiden crear el índice único de arriba.
+        await cpf_de_la_cuenta.asegurar_la_caducidad(db)
+        await cpf_de_la_cuenta.sembrar(db)
         await db.user_sessions.create_index("session_token", unique=True)
         # El índice sobre `expires_at` lo crea ensure_security_indexes(), CON
         # expireAfterSeconds. Crearlo acá sin TTL le ganaba de mano —esto corre
