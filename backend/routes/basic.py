@@ -4,8 +4,6 @@ Basic routes - Health check, rates, etc.
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse
-import os
 
 from database import db
 from models.user import User
@@ -85,17 +83,15 @@ async def get_current_rate():
 
     return effective
 
-@router.get("/download-build")
-async def download_build():
-    """Download the latest build"""
-    build_path = "/app/backend/dist.zip"
-    if os.path.exists(build_path):
-        return FileResponse(
-            build_path,
-            media_type="application/zip",
-            filename="ris-app-build.zip"
-        )
-    return {"error": "Build not available"}
+# `GET /download-build` vivía acá y se sacó.
+#
+# Era PUBLICA y SIN AUTENTICAR, y servía `/app/backend/dist.zip` a cualquiera
+# que la pidiera. Hoy ese archivo no se genera —el build del frontend va a
+# `frontend/dist`, no ahí— así que en la práctica devolvía «no disponible».
+#
+# O sea que era una puerta abierta cuya inocencia dependía de que un archivo NO
+# existiera. El día que alguien deje un zip en esa ruta, se lo lleva medio
+# mundo. No la usaba el frontend ni ningún proceso.
 
 @router.get("/withdrawal/queue-stats")
 async def get_withdrawal_queue_stats(admin=Depends(get_super_admin)):

@@ -224,7 +224,10 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
     # Send email
     email_sent = await send_verification_email(email_lower, verification_code, request.name.strip())
     
-    logger.info(f"Registration initiated for {email_lower}")
+    # Sin el correo: el registro lo lee más gente de la que tiene por qué
+    # saber quién se está registrando, y queda escrito en un servicio de
+    # terceros. Que hubo un registro es lo que hace falta para operar.
+    logger.info("Registro iniciado")
     
     return {
         "message": "Código de verificación enviado a tu correo",
@@ -363,7 +366,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
     await db.user_sessions.insert_one(session)
     set_session_cookie(response, session_token)
     
-    logger.info(f"User {email_lower} registered successfully")
+    logger.info("Registro completado: %s", user_id)
     
     return {
         "message": "Registro completado exitosamente",

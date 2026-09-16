@@ -58,7 +58,6 @@ SIN_TOPE_A_PROPOSITO = {
     ("GET", "/api/ves-payment-info"): "los datos de pago publicados",
     ("GET", "/api/btc/precio"): "el precio publicado",
     ("GET", "/api/push/web/vapid-public-key"): "una clave pública",
-    ("GET", "/api/download-build"): "un archivo estático",
     ("GET", "/{full_path:path}"): "el frontend, no es una API",
 
     # ── El comodín de lo que NINGUNA ruta quiso. Contesta 404 y nada más: no
