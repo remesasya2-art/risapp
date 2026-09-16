@@ -15,6 +15,36 @@ import NotificationBell from '../components/NotificationBell';
 import CardPaymentBrick from '../components/CardPaymentBrick';
 import { fmt } from '../utils/format';
 
+// ─── Cada cuánto se pregunta si el pago PIX entró ─────────────────────────
+//
+// ANTES ERAN CINCO SEGUNDOS FIJOS, LOS QUINCE MINUTOS QUE DURA EL CODIGO
+//
+//     Son 180 preguntas por persona, y cada una cruza a Mercado Pago desde el
+//     servidor. Con esta escalera son 48: **un 73% menos**, sin que nadie
+//     espere más de lo que ya esperaba.
+//
+// POR QUE UNA ESCALERA Y NO UN NUMERO MAS GRANDE
+//
+//     La gente paga en el primer minuto: abre la app del banco, escanea y
+//     confirma. Ahí los cinco segundos valen, porque es cuando el aviso de
+//     «listo» tiene que llegar rápido. El que a los diez minutos no pagó no es
+//     alguien a punto de pagar: es alguien que se fue a hacer otra cosa y
+//     dejó la pantalla abierta.
+//
+//     Y del otro lado está el aviso de Mercado Pago, que acredita solo. Esto
+//     es la red de seguridad, no el camino principal.
+const RITMO = [
+  { hasta: 60, cada: 5000 },      // el primer minuto: cuando de verdad se paga
+  { hasta: 300, cada: 15000 },    // hasta los cinco minutos
+  { cada: 30000 },                // de ahí en adelante
+];
+
+/** Cuántos milisegundos esperar, según hace cuánto que la persona está mirando. */
+function cadaCuanto(segundosEsperando) {
+  const tramo = RITMO.find((t) => t.hasta === undefined || segundosEsperando < t.hasta);
+  return (tramo || RITMO[RITMO.length - 1]).cada;
+}
+
 export default function Recharge() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
@@ -46,6 +76,15 @@ export default function Recharge() {
   const consultaEnVuelo = useRef(false);
   const timerRef = useRef(null);
   const pollRef = useRef(null);
+  const desdeCuandoEspera = useRef(0);
+
+  // Corta la cadena de preguntas. Deja la ref en NULL a propósito: es lo que
+  // mira `preguntarYVolver` para no reprogramarse después de que el pago ya se
+  // resolvió mientras ella estaba esperando la respuesta.
+  const pararDePreguntar = () => {
+    clearTimeout(pollRef.current);
+    pollRef.current = null;
+  };
 
   // Limites de monto: vienen del servidor (GET /limits) para que el cartel que ve
   // el usuario y el 400 que devuelve el backend salgan del mismo numero.
@@ -117,17 +156,26 @@ export default function Recharge() {
         });
       }, 1000);
 
-      // Poll payment status every 5 seconds for faster detection
-      pollRef.current = setInterval(() => {
-        checkPaymentStatus();
-      }, 5000);
+      // Se pregunta si el pago entró, cada vez más espaciado. Ver RITMO.
+      desdeCuandoEspera.current = Date.now();
 
-      // Also check immediately
+      const preguntarYVolver = async () => {
+        await checkPaymentStatus();
+        // Si mientras se preguntaba el pago se confirmó, venció o se canceló,
+        // `pararDePreguntar` dejó esto en null y no hay que reprogramar nada.
+        if (pollRef.current === null) return;
+        const esperando = (Date.now() - desdeCuandoEspera.current) / 1000;
+        pollRef.current = setTimeout(preguntarYVolver, cadaCuanto(esperando));
+      };
+
+      pollRef.current = setTimeout(preguntarYVolver, cadaCuanto(0));
+
+      // Y una primera vez enseguida, sin esperar.
       checkPaymentStatus();
 
       return () => {
         clearInterval(timerRef.current);
-        clearInterval(pollRef.current);
+        pararDePreguntar();
       };
     }
   }, [step, pixData, paymentStatus]);
@@ -144,18 +192,18 @@ export default function Recharge() {
       if (status === 'completed' || status === 'approved' || status === 'paid') {
         setPaymentStatus('completed');
         clearInterval(timerRef.current);
-        clearInterval(pollRef.current);
+        pararDePreguntar();
         toast.success('¡Pago PIX confirmado! Tu saldo ha sido actualizado.');
         await refreshUser();
       } else if (status === 'expired') {
         setPaymentStatus('expired');
         clearInterval(timerRef.current);
-        clearInterval(pollRef.current);
+        pararDePreguntar();
         toast.error('El código PIX ha expirado');
       } else if (status === 'cancelled') {
         setPaymentStatus('cancelled');
         clearInterval(timerRef.current);
-        clearInterval(pollRef.current);
+        pararDePreguntar();
       }
     } catch (error) {
       console.error('Error checking payment status:', error);
@@ -290,7 +338,7 @@ export default function Recharge() {
       await api.post(`/gestor/pix/cancel/${pixData.payment_id}`);
       setPaymentStatus('cancelled');
       clearInterval(timerRef.current);
-      clearInterval(pollRef.current);
+      pararDePreguntar();
       toast.success('Pago PIX cancelado');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al cancelar');
