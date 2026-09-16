@@ -23,8 +23,9 @@ from routes.dependencies import (get_admin_user, get_current_user,
                                  get_super_admin, get_crm_user)
 from services.notifications import create_notification, ROLES_DEL_PERSONAL
 from services import pendientes as pendientes_svc
-from services import (auditoria, comprobantes_del_lote, kyc_quota,
-                      lotes_de_pago, registro_del_pago)
+from services import (auditoria, comprobantes_del_lote,
+                      desempeno_del_lector, kyc_quota, lotes_de_pago,
+                      registro_del_pago)
 from services.email import send_admin_password_reset_email
 from services.email_notifications import send_email
 from utils.security import generate_temp_password, hash_password
@@ -1241,6 +1242,19 @@ async def armar_lote(
 async def listar_lotes_abiertos(admin: User = Depends(get_super_admin)):
     """Los lotes que todavía están en la calle, con sus órdenes reservadas."""
     return {"lotes": await lotes_de_pago.abiertos(db)}
+
+
+# NO CUELGA DE `/lotes/...`, Y ES A PROPOSITO
+#
+#   El informe es de TODOS los lotes cerrados, no de uno. Colgarlo de
+#   `/lotes/algo` lo pondría a competir por el orden de registro con
+#   `/lotes/{lote_id}/...`, que es el choque que ya pasó dos veces en este
+#   repositorio y que vigila `tests/test_rutas_alcanzables.py`.
+@router.get("/lector/desempeno")
+async def desempeno_del_lector_de_comprobantes(
+        admin: User = Depends(get_super_admin)):
+    """Cómo viene adjudicando el lector, sobre los últimos lotes cerrados."""
+    return await desempeno_del_lector.medir(db)
 
 
 @router.get("/lotes/{lote_id}/archivo")

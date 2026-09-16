@@ -41,6 +41,77 @@ const chip = {
   fontWeight: 600, color: '#374151', cursor: 'pointer', backgroundColor: '#fff',
 };
 
+// COMO VIENE EL LECTOR
+//
+// El lector estuvo roto en producción y nadie se enteró hasta que el agente
+// venía asignando cada foto a mano y lo mencionó al pasar. Esto es el número
+// que lo habría dicho el mismo día.
+//
+// Los cuatro renglones son los cuatro finales posibles de una foto, y están
+// separados porque significan cosas distintas: «avisó del monto» es el lector
+// trabajando BIEN —encontró a la persona y avisó que el importe no coincide—,
+// mientras que «hubo que corregir» es el lector equivocándose con seguridad,
+// que es el único que impediría confiarle el cierre de un lote.
+//
+// Los porcentajes y el denominador los decide el servidor
+// (`services/desempeno_del_lector.py`): sólo cuenta lotes CERRADOS, porque en
+// uno abierto las fotos todavía no las revisó nadie.
+function ComoVieneElLector({ d }) {
+  if (!d || !d.miradas) return null;
+
+  const pct = (n) => Math.round((n / d.miradas) * 100);
+  const pctDeLasSeguras = d.resueltas
+    ? Math.round((d.corregidas / d.resueltas) * 100) : 0;
+
+  const celda = (numero, texto, color, aclaracion) => (
+    <div style={{ minWidth: '108px' }}>
+      <div style={{ fontSize: '17px', fontWeight: 700, color, lineHeight: 1.2 }}>
+        {numero}
+        {aclaracion && (
+          <span style={{ fontSize: '12px', fontWeight: 600, marginLeft: '5px' }}>
+            {aclaracion}
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: '11.5px', color: C.soft, marginTop: '1px' }}>
+        {texto}
+      </div>
+    </div>
+  );
+
+  // Lo que NO entra en la cuenta se dice, en vez de esconderlo: un informe que
+  // calla lo que dejó afuera se lee como si lo incluyera.
+  const afuera = [
+    d.sin_lector ? `${d.sin_lector} se subieron sin lector` : null,
+    d.de_antes ? `${d.de_antes} son anteriores a esta medición` : null,
+  ].filter(Boolean);
+
+  return (
+    <div style={{
+      padding: '10px 12px', marginBottom: '12px', borderRadius: '8px',
+      border: '1px solid ' + C.border, backgroundColor: C.bgSubtle,
+    }} data-testid="desempeno-del-lector">
+      <div style={{ fontSize: '11.5px', color: C.soft, marginBottom: '7px' }}>
+        <b style={{ color: C.ink, fontSize: '12.5px' }}>Cómo viene el lector</b>
+        {' · '}últimas {d.miradas} fotos de {d.lotes} lote(s) ya cerrado(s)
+      </div>
+      <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+        {celda(d.resueltas, 'las asignó solo', C.green, `${pct(d.resueltas)}%`)}
+        {celda(d.corregidas, 'de ésas hubo que corregir',
+          d.corregidas ? C.red : C.soft,
+          d.resueltas ? `${pctDeLasSeguras}%` : null)}
+        {celda(d.avisadas, 'avisó que el monto no coincide', C.amber)}
+        {celda(d.no_pudo, 'no pudo decidir', C.soft)}
+      </div>
+      {afuera.length > 0 && (
+        <div style={{ fontSize: '11px', color: C.faint, marginTop: '7px' }}>
+          Fuera de la cuenta: {afuera.join(' · ')}.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function leerComoDataUrl(file) {
   return new Promise((resolve, reject) => {
     const lector = new FileReader();
@@ -52,6 +123,7 @@ function leerComoDataUrl(file) {
 
 export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
   const [datos, setDatos] = useState(null);
+  const [lector, setLector] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
   const [mirando, setMirando] = useState(null);
   const entrada = useRef(null);
@@ -68,6 +140,16 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
   // Se recarga al cambiar de lote. `cargar` no va en las dependencias a
   // propósito: se redefine en cada render y volvería a pedir todo cada vez.
   useEffect(() => { cargar(); }, [lote.lote_id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // El informe del lector es de TODOS los lotes cerrados, no de éste: se pide
+  // una sola vez y no se vuelve a pedir al cambiar de lote. Y si falla, no se
+  // avisa: es un número de contexto, y un cartel rojo por no poder mostrarlo
+  // sería peor que no mostrarlo.
+  useEffect(() => {
+    api.get('/admin/lector/desempeno')
+      .then(({ data }) => setLector(data))
+      .catch(() => setLector(null));
+  }, []);
 
   const subir = async (archivos) => {
     const fotos = [...(archivos || [])];
@@ -258,6 +340,8 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
           <X size={13} /> Cerrar
         </button>
       </div>
+
+      <ComoVieneElLector d={lector} />
 
       {abiertoElLote && (
       <div style={{
