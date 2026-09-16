@@ -35,6 +35,11 @@ load_dotenv(ROOT_DIR / '.env')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+
+# Cada línea del registro sale con el rastro del pedido que la produjo. Sin
+# esto, «me dio error a las tres» no se puede buscar. Ver services/rastro.py.
+from services import rastro                                           # noqa: E402
+rastro.configurar_el_registro()
 logger = logging.getLogger(__name__)
 
 # MongoDB connection
@@ -350,6 +355,32 @@ app.add_middleware(PuertaDelBorde)
 # Ver services/limite_de_cuerpo.py.
 from services.limite_de_cuerpo import LimiteDeCuerpo
 app.add_middleware(LimiteDeCuerpo)
+
+# Y EL RASTRO VA DESPUES DE TODOS, que es lo que lo deja por fuera de todos.
+#
+# Tiene que ver el pedido antes que nadie para que hasta el que rechaza el tope
+# de cuerpo, o la puerta del borde, salga con su rastro. Justamente los
+# rechazados son los que después hay que poder encontrar en el registro.
+app.add_middleware(rastro.Rastro)
+
+
+@app.exception_handler(Exception)
+async def _error_no_previsto(request, exc):
+    """Lo que ve el usuario cuando algo se rompe de verdad.
+
+    Se registra el error ENTERO —con su traza— y se le devuelve al usuario el
+    rastro y nada más. El texto de una excepción nombra tablas, rutas y a veces
+    cadenas de conexión: no es para el cliente. El rastro sí, porque es lo
+    único que le sirve a soporte para encontrar esta línea.
+    """
+    logger.exception("error no previsto en %s %s", request.method,
+                     request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Hubo un error inesperado. Si escribís a soporte, "
+                           f"pasales este código: {rastro.actual()}",
+                 "request_id": rastro.actual()},
+    )
 security = HTTPBearer()
 
 # ============================================================================
