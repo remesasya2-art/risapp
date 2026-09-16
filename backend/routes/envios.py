@@ -278,7 +278,7 @@ async def seguimiento(token: str, request: Request):
     y muy corto para recorrer un espacio de tokens.
     """
     from routes.security_2fa import frenar
-    frenar(request, "envios.seguimiento", "60/15minutes")
+    await frenar(request, "envios.seguimiento", "60/15minutes")
 
     datos = await envios_seguimiento.seguir(token)
     if not datos:

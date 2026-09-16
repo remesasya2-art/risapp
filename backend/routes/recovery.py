@@ -53,7 +53,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
     async def _do_verify(request: Request, data: VerifyIdentityRequest):
         # 5/15min por IP: evita que se use este endpoint como oráculo para
         # fuerza-brutear CPF/teléfono/documento de una víctima campo por campo.
-        frenar(request, "recovery.verify_identity", "5/15minutes")
+        await frenar(request, "recovery.verify_identity", "5/15minutes")
         GENERIC_ERROR = "Los datos no coinciden con nuestros registros"
 
         # Find user by email
@@ -155,7 +155,7 @@ async def verify_code(data: VerifyCodeRequest, request: Request):
     # 20/15min. Adentro hay un contador de intentos por solicitud, pero se lleva
     # en el documento: pedir una solicitud nueva lo reinicia. El tope por IP es
     # el que cuenta las pruebas sin importar cuántas solicitudes se abran.
-    frenar(request, "recovery.verify_code", "20/15minutes")
+    await frenar(request, "recovery.verify_code", "20/15minutes")
     
     # Find recovery attempt
     recovery = await db.password_recovery.find_one({
@@ -216,7 +216,7 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
 
     # 10/15min. El `recovery_token` son 128 bits al azar y no se adivina; lo que
     # se frena es el costo de hashear una contraseña nueva en cada llamada.
-    frenar(request, "recovery.reset_password", "10/15minutes")
+    await frenar(request, "recovery.reset_password", "10/15minutes")
 
     # Validate password strength
     password = data.new_password
@@ -310,7 +310,7 @@ async def support_contact(data: SupportContactRequest, request: Request):
     # 5/hora. Cada llamada manda un mensaje a soporte con texto que escribe
     # quien llama. Sin tope, es una vía para llenar la bandeja de soporte y
     # tapar los pedidos reales, que es donde termina doliendo.
-    frenar(request, "recovery.support_contact", "5/hour")
+    await frenar(request, "recovery.support_contact", "5/hour")
 
     # Validate message length
     if len(data.message) > 200:

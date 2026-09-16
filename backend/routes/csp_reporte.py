@@ -118,7 +118,7 @@ async def recibir_reporte(request: Request):
     # 60/15min. Una página con un recurso bloqueado manda un aviso por carga, no
     # cientos; el tope corta el uso de esta dirección como generador de ruido
     # sin perder los avisos de un problema real.
-    frenar(request, "csp.reporte", "60/15minutes")
+    await frenar(request, "csp.reporte", "60/15minutes")
 
     try:
         crudo = await request.body()

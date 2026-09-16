@@ -233,7 +233,7 @@ def cliente(base, monkeypatch):
     monkeypatch.setattr(rutas_auth, "send_verification_email", sin_correo)
 
     try:
-        security_2fa.limiter.limiter.storage.reset()
+        security_2fa.reiniciar_la_cuenta()
     except Exception:
         # No todas las versiones de `limits` traen `reset` en su almacenamiento
         # en memoria. Si no está, los pocos registros de este archivo entran

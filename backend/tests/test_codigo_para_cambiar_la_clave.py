@@ -179,7 +179,13 @@ def base(monkeypatch):
         "name": "Quien Sea", "password_hash": hash_password(LA_DE_ANTES)}))
     # El freno por dirección de internet no es lo que se prueba acá.
     from routes import security_2fa
-    monkeypatch.setattr(security_2fa, "frenar", lambda *a, **k: None)
+    # `frenar` es `async` desde que la cuenta de intentos se lleva afuera de la
+    # memoria del proceso, así que el doble también tiene que serlo: uno normal
+    # devuelve None y el `await` del endpoint revienta con un 500.
+    async def sin_limite(*a, **k):
+        return None
+
+    monkeypatch.setattr(security_2fa, "frenar", sin_limite)
     return b
 
 

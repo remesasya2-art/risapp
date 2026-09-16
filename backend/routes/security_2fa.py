@@ -26,6 +26,7 @@ Login flow for super_admin:
    so frontend redirects to setup
 """
 import logging
+import os
 import secrets as py_secrets
 import string
 import uuid
@@ -98,9 +99,59 @@ def get_real_client_ip(request: Request) -> str:
     ip = ip_del_cliente(request)
     return ip or get_remote_address(request)
 
+# Se conserva por su `key_func` y porque `server.py` se lo pasa a la aplicación
+# para el manejador de errores de slowapi. La CUENTA ya no sale de acá: ver el
+# bloque de abajo.
 limiter = Limiter(key_func=get_real_client_ip, default_limits=[])
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# DONDE SE LLEVA LA CUENTA DE INTENTOS
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Son dieciocho límites y casi todos protegen lo mismo: contraseñas, códigos de
+# verificación y recuperación de cuenta. O sea que esta cuenta ES la defensa
+# contra quien prueba de a miles.
+#
+# EN MEMORIA —lo que había— TIENE DOS COSTOS
+#
+#     · CADA DESPLIEGUE LA PONE EN CERO. Quien está frenado por haber probado
+#       veinte contraseñas arranca limpio con el despliegue siguiente, y en
+#       este repositorio se despliega seguido.
+#     · CON VARIOS PROCESOS SE MULTIPLICA. Cada proceso lleva su propia cuenta,
+#       así que «20 intentos cada 15 minutos» pasa a ser 20 POR PROCESO. Es lo
+#       que impedía prender `--workers`.
+#
+# EN LA BASE, CUANDO SE PRENDE
+#
+#     `LIMITES_EN_LA_BASE=si` lleva la cuenta a Mongo, que ya está ahí: sin
+#     servicio nuevo y sin costo. Los contadores se borran solos (la librería
+#     les pone caducidad), así que no hay nada que limpiar.
+#
+#     ARRANCA APAGADO, igual que la política de contenido y el cofre. Un
+#     mecanismo nuevo en el camino del login que se despliega solo un viernes
+#     es peor que el problema que viene a resolver. Se prende con una variable
+#     de entorno en Railway, sin tocar una línea de código.
+#
+# SI LA BASE NO CONTESTA, EL PEDIDO NO PASA
+#
+#     Comprobado contra el almacén de verdad apuntado a una dirección muerta:
+#     levanta. O sea que un problema de base devuelve error en vez de dejar
+#     entrar a cualquiera sin contarlo. Es la dirección correcta — lo contrario
+#     sería que la defensa contra la fuerza bruta desapareciera justo cuando la
+#     base está en problemas.
+#
+#     Y no cuesta nada en la práctica: con Mongo caído no funciona ninguna
+#     pantalla, porque todas leen de ahí.
+#
+# POR QUE NO SE USA EL ALMACEN DE SLOWAPI
+#
+#     Porque no se puede. slowapi 0.1.9 sólo acepta almacenes SINCRONOS
+#     —construirlo con uno asíncrono levanta `AssertionError`— y el de Mongo
+#     síncrono se queda esperando la respuesta ADENTRO DEL HILO, que es
+#     exactamente lo que se sacó de toda la aplicación. Así que la cuenta se le
+#     pide directo a `limits`, que es la librería que slowapi usa por dentro.
+#
 # ─── Cómo se pide el límite, y por qué no con el decorador ────────────────
 #
 # `@limiter.limit(...)` sobre una función definida ADENTRO de un handler se
@@ -115,21 +166,64 @@ limiter = Limiter(key_func=get_real_client_ip, default_limits=[])
 # Medido: el ingreso número 21 desde una IP nueva se rechazaba. Y la lista
 # crecía sin techo mientras el servidor vivía.
 #
-# `frenar()` hace lo mismo que el decorador —una consulta al mismo
-# contador, con la misma clave por IP— pero sin registrar nada. Se llama, no
-# se decora, así que no hay nada que se acumule.
-#
-# Para un handler de ruta común el decorador está bien: FastAPI lo aplica una
-# sola vez, al importar. Así se usa abajo en /verify.
+# Ahora NO QUEDA NINGUN decorador: el último, el de `/verify`, también pasó a
+# `frenar()`. Con la cuenta afuera de slowapi, el decorador ya no tenía de
+# dónde sacarla.
 
 _REGLAS: dict = {}
+_CONTADOR = None
 
 
-def frenar(request: Request, alcance: str, regla: str) -> None:
+def _en_la_base() -> bool:
+    """¿La cuenta va a Mongo? Se decide por variable de entorno, no por código."""
+    return (os.getenv("LIMITES_EN_LA_BASE", "no") or "").strip().lower() in (
+        "si", "sí", "1", "true", "on")
+
+
+def _armar_el_contador():
+    """El contador, con el almacén que corresponda.
+
+    Los dos son ASINCRONOS, también el de memoria. Tener un solo camino evita
+    que el de producción sea uno que los tests nunca recorren.
+    """
+    from limits.aio.strategies import FixedWindowRateLimiter
+    from limits.storage import storage_from_string
+
+    if _en_la_base():
+        from config import MONGO_URL
+        # `async+` delante sirve para `mongodb://` y para `mongodb+srv://`:
+        # los dos esquemas existen con ese prefijo.
+        almacen = storage_from_string("async+" + MONGO_URL)
+        logger.info("Los límites de intentos se cuentan en la base")
+    else:
+        almacen = storage_from_string("async+memory://")
+    return FixedWindowRateLimiter(almacen)
+
+
+def el_contador():
+    """El contador, armado una sola vez."""
+    global _CONTADOR
+    if _CONTADOR is None:
+        _CONTADOR = _armar_el_contador()
+    return _CONTADOR
+
+
+def reiniciar_la_cuenta() -> None:
+    """Olvida todo lo contado. Para los tests, que arrancan de cero cada uno."""
+    global _CONTADOR
+    _CONTADOR = None
+
+
+async def frenar(request: Request, alcance: str, regla: str) -> None:
     """Descuenta una unidad del cupo de esta IP. Levanta 429 si se pasó.
 
     `alcance` separa los contadores entre endpoints: sin él, gastar el cupo
     de "olvidé mi contraseña" dejaría a esa IP sin poder iniciar sesión.
+
+    ES `async`, Y HAY QUE ESPERARLA. Llamarla sin `await` no falla: devuelve
+    una corrutina, Python tira un aviso que nadie lee, y ESE ENDPOINT SE QUEDA
+    SIN LIMITE. Un login sin límite es fuerza bruta libre. Hay una guarda que
+    recorre el código exigiendo el `await` (`tests/test_limite_por_ip.py`).
     """
     from limits import parse
 
@@ -138,7 +232,7 @@ def frenar(request: Request, alcance: str, regla: str) -> None:
         parsed = _REGLAS[regla] = parse(regla)
 
     clave = get_real_client_ip(request)
-    if not limiter.limiter.hit(parsed, clave, alcance):
+    if not await el_contador().hit(parsed, clave, alcance):
         logger.warning("Límite %s alcanzado por %s en %s", regla, clave, alcance)
         raise HTTPException(
             status_code=429,
@@ -547,9 +641,10 @@ async def twofa_disable(
 # Endpoints — Login Verify (post-password)
 # ============================================================
 @router.post("/verify")
-@limiter.limit("10/15minutes")
 async def twofa_verify(request: Request, response: Response, data: TwoFAVerifyRequest):
     """Exchange pending_token + TOTP/backup code for a real session_token."""
+    await frenar(request, "auth.2fa_verify", "10/15minutes")
+
     pending = await _consume_pending_token(data.pending_token)
     if not pending:
         raise HTTPException(status_code=401, detail="Token de verificación expirado o inválido")

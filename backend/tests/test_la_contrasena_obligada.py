@@ -75,7 +75,7 @@ def cliente(base, monkeypatch):
         return True
     monkeypatch.setattr(rutas_auth, "notify_password_change", sin_correo)
     try:
-        security_2fa.limiter.limiter.storage.reset()
+        security_2fa.reiniciar_la_cuenta()
     except Exception:
         pass
 

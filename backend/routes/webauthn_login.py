@@ -252,7 +252,7 @@ async def login_options(body: LoginOptionsBody, request: Request):
     # así que sin tope es una lista de correos: se prueban de a miles y quedan
     # los que existen. El mensaje genérico no alcanza cuando el 404 y el 200 ya
     # dicen cosas distintas.
-    frenar(request, "webauthn.login_options", "20/15minutes")
+    await frenar(request, "webauthn.login_options", "20/15minutes")
 
     email = (body.email or "").lower().strip()
     user = await db.users.find_one({"email": email})
@@ -288,7 +288,7 @@ async def login_verify(body: LoginVerifyBody, request: Request):
 
     # 20/15min, el mismo tope que el ingreso con contraseña: es la otra puerta
     # de la misma casa y no tiene por qué ser más floja.
-    frenar(request, "webauthn.login_verify", "20/15minutes")
+    await frenar(request, "webauthn.login_verify", "20/15minutes")
 
     email = (body.email or "").lower().strip()
     user = await db.users.find_one({"email": email})

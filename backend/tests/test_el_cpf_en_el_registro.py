@@ -61,7 +61,7 @@ def cliente(base, monkeypatch):
         return True
     monkeypatch.setattr(rutas_auth, "send_verification_email", sin_correo)
     try:
-        security_2fa.limiter.limiter.storage.reset()
+        security_2fa.reiniciar_la_cuenta()
     except Exception:
         pass
 

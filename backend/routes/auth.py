@@ -94,7 +94,7 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
     # NUESTRO dominio: sin tope, una IP puede fabricar cuentas en volumen y, de
     # paso, usar el servidor para bombardear una casilla ajena. Diez por hora es
     # holgado para una persona y cierra las dos cosas.
-    frenar(pedido, "auth.register", "10/hour")
+    await frenar(pedido, "auth.register", "10/hour")
 
     # Validate email
     email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
@@ -243,7 +243,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
     # `resend-verification-code` lo devuelve a cero. Ese reenvío ya está frenado
     # a 5/15min, así que el techo era 25 pruebas cada 15 minutos contra un código
     # de seis dígitos; ahora hay además un tope que no depende de esa cadena.
-    frenar(pedido, "auth.verify_email", "20/15minutes")
+    await frenar(pedido, "auth.verify_email", "20/15minutes")
 
     email_lower = request.email.lower().strip()
     
@@ -385,7 +385,7 @@ async def resend_verification_code(request: Request, body: ResendVerificationCod
         # 5/15min: sin esto, resend resetea el contador de intentos de
         # /verify-email a 0 cada vez, permitiendo fuerza bruta indefinida del
         # código de 6 dígitos.
-        frenar(request, "auth.resend_verification", "5/15minutes")
+        await frenar(request, "auth.resend_verification", "5/15minutes")
         email_lower = body.email.lower().strip()
 
         pending = await db.pending_verifications.find_one({"email": email_lower})
@@ -437,7 +437,7 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         # 20/15min por IP — bloquea fuerza bruta pero NO penaliza a usuarios
         # reales detrás de NAT/oficina/wifi compartido. La defensa fuerte
         # contra ataques a cuentas privilegiadas es el 2FA obligatorio.
-        frenar(request, "auth.login", "20/15minutes")
+        await frenar(request, "auth.login", "20/15minutes")
         email_lower = body.email.lower().strip()
 
         user = await db.users.find_one({"email": email_lower})
@@ -574,7 +574,7 @@ async def pedir_codigo_de_cambio(request: PedirCodigoDeCambioRequest, pedido: Re
 
     # 5/15min. Esta ruta comprueba la contraseña actual, así que sin freno se
     # puede usar para adivinarla desde una sesión robada, de a una por pedido.
-    frenar(pedido, "auth.pedir_codigo_de_cambio", "5/15minutes")
+    await frenar(pedido, "auth.pedir_codigo_de_cambio", "5/15minutes")
 
     user = await db.users.find_one({"user_id": current_user.user_id})
     if not await verify_password_async(request.current_password, user.get("password_hash", "")):
@@ -752,7 +752,7 @@ async def set_new_password(request: SetNewPasswordRequest, pedido: Request,
     # 10/15min. La ruta no adivina nada —no hay secreto que probar acá— pero
     # cada llamada hashea una contraseña, que cuesta a propósito. Diez es
     # holgado para alguien que se equivoca tipeando y corta el abuso.
-    frenar(pedido, "auth.set_new_password", "10/15minutes")
+    await frenar(pedido, "auth.set_new_password", "10/15minutes")
 
     user = await db.users.find_one({"user_id": current_user.user_id})
     if not user:
@@ -917,7 +917,7 @@ async def verificar_invitacion(request: Request, body: VerificarInvitacionReques
     async def _verificar(request: Request, body: VerificarInvitacionRequest):
         # 10/15min: es un token de 32 bytes, no se adivina a fuerza bruta,
         # pero tampoco hace falta dejar que alguien pruebe sin límite.
-        frenar(request, "auth.invitacion_verificar", "10/15minutes")
+        await frenar(request, "auth.invitacion_verificar", "10/15minutes")
         try:
             inv = await invitaciones.mirar(db, body.token)
         except invitaciones.InvitacionInvalida:
@@ -949,7 +949,7 @@ async def activar_personal(request: Request, body: ActivarPersonalRequest):
     from services import auditoria, invitaciones
 
     async def _activar(request: Request, body: ActivarPersonalRequest):
-        frenar(request, "auth.personal_activar", "10/15minutes")
+        await frenar(request, "auth.personal_activar", "10/15minutes")
         # La contraseña se valida ANTES de tocar el token. Al revés, un error
         # de tipeo quemaría la invitación y habría que pedir otra.
         if body.password != body.confirm_password:
