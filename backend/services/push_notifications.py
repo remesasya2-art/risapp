@@ -1,6 +1,7 @@
 """
 Push notification service (Firebase FCM and Web Push)
 """
+import asyncio
 import logging
 import json
 import httpx
@@ -62,7 +63,19 @@ async def send_web_push_notification(subscription: dict, title: str, body: str, 
             "badge": "/icon-192.png"
         })
         
-        webpush(
+        # EN OTRO HILO. `pywebpush` es SINCRONO: cada aviso es una ida y vuelta
+        # al servidor de avisos del navegador —Google o Mozilla— y mientras
+        # espera no suelta el hilo. El servicio corre en UN SOLO proceso con UN
+        # SOLO hilo, así que esa espera la paga toda la aplicación.
+        #
+        # Y no es un aviso: `avisar_al_personal` dispara UNO POR PERSONA del
+        # equipo. Ese reparto ya usa `asyncio.gather` para hacerlos a la vez,
+        # pero con una llamada bloqueante adentro el `gather` no sirve de nada:
+        # se hacen en fila igual. Con ocho personas en el equipo y medio segundo
+        # cada uno, cada KYC nuevo congelaba la aplicación unos cuatro segundos.
+        # Desde otro hilo, el `gather` por fin hace lo que dice.
+        await asyncio.to_thread(
+            webpush,
             subscription_info=subscription,
             data=payload,
             vapid_private_key=VAPID_PRIVATE_KEY,

@@ -27,7 +27,8 @@ from routes.dependencies import get_current_user, set_session_cookie, clear_sess
 from services import codigos, correo, cpf_de_la_cuenta
 from services.email import send_verification_email
 from services.email_notifications import notify_login, notify_password_change
-from utils.security import hash_password, verify_password, validate_password
+from utils.security import (hash_password_async, validate_password,
+                            verify_password_async)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -183,7 +184,7 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
     pending = {
         "email": email_lower,
         "name": request.name.strip(),
-        "password_hash": hash_password(request.password),
+        "password_hash": await hash_password_async(request.password),
         "verification_code": verification_code,
         "code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
         "created_at": datetime.now(timezone.utc),
@@ -452,7 +453,7 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         if user.get("status") == "suspended":
             raise HTTPException(status_code=403, detail="Tu cuenta ha sido suspendida. Contacta al administrador.")
 
-        if not verify_password(body.password, user["password_hash"]):
+        if not await verify_password_async(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
         from services import personal as _personal
@@ -576,7 +577,7 @@ async def pedir_codigo_de_cambio(request: PedirCodigoDeCambioRequest, pedido: Re
     frenar(pedido, "auth.pedir_codigo_de_cambio", "5/15minutes")
 
     user = await db.users.find_one({"user_id": current_user.user_id})
-    if not verify_password(request.current_password, user.get("password_hash", "")):
+    if not await verify_password_async(request.current_password, user.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
 
     codigo = codigos.nuevo()
@@ -628,7 +629,7 @@ async def change_password(request: ChangePasswordRequest, pedido: Request,
     """Cambia la contraseña. Pide la actual Y el código que llegó al correo."""
     user = await db.users.find_one({"user_id": current_user.user_id})
 
-    if not verify_password(request.current_password, user.get("password_hash", "")):
+    if not await verify_password_async(request.current_password, user.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
 
     # El código se comprueba ANTES de tocar nada. Y el contador de intentos se
@@ -676,7 +677,7 @@ async def change_password(request: ChangePasswordRequest, pedido: Request,
         {"user_id": current_user.user_id},
         {
             "$set": {
-                "password_hash": hash_password(request.new_password),
+                "password_hash": await hash_password_async(request.new_password),
                 "must_change_password": False
             }
         }
@@ -774,7 +775,7 @@ async def set_new_password(request: SetNewPasswordRequest, pedido: Request,
     if not es_valida:
         raise HTTPException(status_code=400, detail=mensaje)
 
-    if verify_password(request.new_password, user.get("password_hash", "")):
+    if await verify_password_async(request.new_password, user.get("password_hash", "")):
         raise HTTPException(
             status_code=400,
             detail="Esa es la contraseña temporal que te dieron. Elegí una "
@@ -785,7 +786,7 @@ async def set_new_password(request: SetNewPasswordRequest, pedido: Request,
     # —otra pestaña lo hizo, un admin la tocó— acá no se escribe nada.
     resultado = await db.users.update_one(
         {"user_id": current_user.user_id, "must_change_password": True},
-        {"$set": {"password_hash": hash_password(request.new_password),
+        {"$set": {"password_hash": await hash_password_async(request.new_password),
                   "password_set": True,
                   "must_change_password": False,
                   "password_cambiada_en": datetime.now(timezone.utc)}},
@@ -980,7 +981,7 @@ async def activar_personal(request: Request, body: ActivarPersonalRequest):
         await db.users.update_one(
             {"user_id": user["user_id"]},
             {"$set": {
-                "password_hash": hash_password(body.password),
+                "password_hash": await hash_password_async(body.password),
                 "password_set": True,
                 # El token viajó por correo a esta casilla y sólo su dueño
                 # pudo traerlo de vuelta: eso ES la verificación del correo.

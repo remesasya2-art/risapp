@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from database import db
 from models.user import User
 from routes.dependencies import get_current_user, get_verified_user
-from utils.security import hash_password, verify_password
+from utils.security import hash_password_async, verify_password_async
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -83,13 +83,13 @@ async def pin_set(data: PinSetRequest, current_user: User = Depends(get_verified
         raise HTTPException(status_code=400, detail="El PIN debe ser de 4 dígitos")
 
     doc = await _get_user_doc(current_user.user_id)
-    if not verify_password(data.password, doc.get("password_hash", "")):
+    if not await verify_password_async(data.password, doc.get("password_hash", "")):
         raise HTTPException(status_code=403, detail="Contraseña incorrecta")
 
     await db.users.update_one(
         {"user_id": current_user.user_id},
         {"$set": {
-            "pin_hash": hash_password(data.pin),
+            "pin_hash": await hash_password_async(data.pin),
             "pin_set_at": _now(),
             "pin_failed_attempts": 0,
             "pin_locked_until": None,
@@ -127,7 +127,7 @@ async def pin_verify(data: PinVerifyRequest, current_user: User = Depends(get_ve
             detail=f"PIN bloqueado temporalmente. Intenta de nuevo en {remaining // 60 + 1} min"
         )
 
-    if verify_password(data.pin, doc.get("pin_hash", "")):
+    if await verify_password_async(data.pin, doc.get("pin_hash", "")):
         await db.users.update_one(
             {"user_id": current_user.user_id},
             {"$set": {"pin_failed_attempts": 0, "pin_locked_until": None}}
@@ -203,7 +203,7 @@ async def pin_hint_check(current_user: User = Depends(get_verified_user)):
 async def pin_disable(data: PinDisableRequest, current_user: User = Depends(get_verified_user)):
     """Desactiva el PIN. Requiere la contraseña de la cuenta."""
     doc = await _get_user_doc(current_user.user_id)
-    if not verify_password(data.password, doc.get("password_hash", "")):
+    if not await verify_password_async(data.password, doc.get("password_hash", "")):
         raise HTTPException(status_code=403, detail="Contraseña incorrecta")
 
     await db.users.update_one(
