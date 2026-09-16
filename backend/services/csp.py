@@ -56,6 +56,18 @@ import os
 PAGOS = ("https://sdk.mercadopago.com https://*.mercadopago.com "
          "https://*.mlstatic.com")
 
+# El medidor de visitas de Cloudflare. NO ESTA EN NUESTRO HTML y no se puede
+# sacar desde acá: lo inyecta Cloudflare al servir la página, mientras «Web
+# Analytics» esté prendido en su panel. El HTML lo sirve Cloudflare Pages como
+# archivo estático, así que tampoco hay forma de firmarlo con un `nonce`.
+#
+# Se permite en vez de apagarlo porque son los únicos números de visitas que
+# hay, y porque Cloudflare ya sirve la página entera: si fuera hostil, esta
+# política no cambiaría nada. Van los dos dominios porque son distintos y hacen
+# cosas distintas: de uno viene el script, al otro le manda los datos.
+MEDIDOR_SCRIPT = "https://static.cloudflareinsights.com"
+MEDIDOR_DATOS = "https://cloudflareinsights.com"
+
 DIRECTIVAS = {
     # Lo que no esté nombrado abajo, sólo desde nuestro origen.
     "default-src": "'self'",
@@ -64,7 +76,7 @@ DIRECTIVAS = {
     # genera scripts en línea ni usa `eval`, así que no hacen falta — y con
     # cualquiera de los dos puesto, un XSS inyectado en la página corre igual y
     # la directiva no sirve para nada.
-    "script-src": f"'self' {PAGOS}",
+    "script-src": f"'self' {PAGOS} {MEDIDOR_SCRIPT}",
 
     # Los estilos SI llevan `'unsafe-inline'`: la aplicación tiene más de 4500
     # `style={{...}}` de React. Un estilo no ejecuta código; sacarlo sería
@@ -81,7 +93,7 @@ DIRECTIVAS = {
     "media-src": "'self' data: blob:",
 
     # A dónde puede hablar la aplicación. Nuestra API es del mismo origen.
-    "connect-src": f"'self' {PAGOS} https://api.qrserver.com",
+    "connect-src": f"'self' {PAGOS} https://api.qrserver.com {MEDIDOR_DATOS}",
 
     # El formulario de tarjeta del proveedor va en un iframe suyo.
     "frame-src": PAGOS,
