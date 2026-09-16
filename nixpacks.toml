@@ -38,9 +38,28 @@ nixLibs = ["stdenv.cc.cc.lib"]
 #   sin tocar este archivo.
 aptPkgs = ["tesseract-ocr", "tesseract-ocr-spa"]
 
+# EL FRONTEND SE INSTALA CON `npm ci`, Y CON UN CANDADO DE VERSIONES
+#
+#   Acá decía `npm install --legacy-peer-deps`, sin candado en el repositorio.
+#   Eso significa que CADA DESPLIEGUE volvía a resolver las versiones contra lo
+#   último que hubiera publicado npm ese minuto. Y se cayó: el despliegue murió
+#   pidiendo un archivo que el registro contestó 404 en ese momento —
+#
+#       npm error 404 Not Found - GET .../@types/node/-/node-26.6.0.tgz
+#
+#   — por una dependencia que pedía `"@types/node": "*"`, o sea, literalmente
+#   «la que se haya publicado más recientemente». No cambió nada del lado de
+#   acá: el despliegue dependía de que npm tuviera un buen minuto.
+#
+#   `npm ci` instala EXACTAMENTE lo que dice `frontend/package-lock.json`, y
+#   falla si el candado y el `package.json` no coinciden. Dos despliegues del
+#   mismo commit instalan lo mismo.
+#
+#   La bandera `--legacy-peer-deps` se fue con `expo`: existía para tapar un
+#   conflicto que arrastraba ese paquete. Ver `frontend/package.json`.
 [phases.build]
 cmds = [
-  "cd frontend && npm install --legacy-peer-deps && npm run build",
+  "cd frontend && npm ci && npm run build",
     "python3 -m venv /app/venv && /app/venv/bin/pip install -r backend/requirements.txt"
     ]
 
