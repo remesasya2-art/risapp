@@ -119,6 +119,79 @@ LO_QUE_VE_SU_DUENO = {
 LO_PERMITIDO = frozenset(c for c, v in LO_QUE_VE_SU_DUENO.items() if v == 1)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# LO QUE EL PANEL VE DE UN USUARIO
+# ══════════════════════════════════════════════════════════════════════════
+#
+# QUE PASABA
+#
+#     `/api/admin/users` devolvía CADA usuario con la proyección
+#     `{"_id": 0, "password_hash": 0}` — otra lista de lo prohibido— o sea el
+#     documento entero menos la contraseña. Comprobado corriendo la ruta con un
+#     `agent`, que es el rol más bajo con acceso al panel:
+#
+#         jefe@ejemplo.com   rol=super_admin   two_factor_secret, pin_hash,
+#                                              webauthn_credentials
+#         ana@ejemplo.com    rol=user          pin_hash, push_token,
+#                                              web_push_subscription
+#
+#     Y no hacía falta saber ningún identificador: venían todos en una sola
+#     respuesta.
+#
+# POR QUE ES PEOR QUE LA FUGA DE `/auth/me`
+#
+#     Ahí cada persona veía cosas SUYAS. Acá se ve la semilla del segundo factor
+#     de OTRO, y la del dueño de la empresa entre ellas. Quien la tenga genera
+#     los códigos del jefe para siempre: es la diferencia entre ver de más y
+#     poder entrar como otro.
+#
+#     El hash del PIN es el mismo problema en chico. Son cuatro dígitos: diez
+#     mil combinaciones. Contra un hash que ya se tiene en la mano, eso no es
+#     una barrera, es un rato.
+#
+#     La ruta pide el permiso `users.view`, que es el de atención al cliente.
+#     No es un permiso de administración de seguridad: es el que se le da a
+#     quien atiende. Ese permiso tiene que servir para ver a un cliente, no para
+#     quedarse con su llave.
+#
+# POR QUE ESTA LISTA ES MAS ANCHA QUE LA DEL DUEÑO
+#
+#     Porque el trabajo es otro. Quien atiende necesita ver el estado del KYC,
+#     los saldos, el rol y las fechas de alguien que no es él. Lo que no
+#     necesita —ni debería poder— es su forma de entrar.
+#
+#     Los nombres salieron de recorrer `AdminPanel.jsx`, que es el único
+#     consumidor de estas rutas en todo el frontend.
+#
+#     Las fotos del KYC no están y no hacen falta: no viven en `users` sino en
+#     `verifications`, y la ruta `/complete` las agrega DESPUES de esta
+#     proyección, sacándolas del cofre.
+LO_QUE_VE_EL_PANEL = {
+    "_id": 0,
+
+    # Quién es
+    "user_id": 1, "name": 1, "email": 1, "phone": 1, "phone_number": 1,
+    "profile_picture": 1, "picture": 1,
+
+    # Para atenderlo: en qué estado está su cuenta y su verificación
+    "role": 1, "status": 1, "verification_status": 1, "email_verified": 1,
+    "password_set": 1,
+
+    # Su plata, que es de lo que más se pregunta
+    **{campo: 1 for campo in LOS_SALDOS},
+
+    # Sus códigos y su CPF
+    "cpf_number": 1, "referral_code": 1, "gestor_code": 1, "partner_code": 1,
+    "is_partner": 1, "is_agent": 1,
+
+    # Desde cuándo está y cuándo entró por última vez
+    "cep_origen": 1, "created_at": 1, "last_login": 1,
+}
+
+LO_PERMITIDO_AL_PANEL = frozenset(
+    c for c, v in LO_QUE_VE_EL_PANEL.items() if v == 1)
+
+
 def para_su_dueno(documento: dict | None) -> dict | None:
     """Deja el documento del usuario listo para mandárselo a su dueño.
 

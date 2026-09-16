@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
 from services.money import to_decimal128
+from services import perfil
 from services import auditoria
 import logging
 import uuid
@@ -232,15 +233,22 @@ async def get_permissions_list(admin_user: dict = Depends(get_admin_user)):
 @admin_router.get("/sub-admins")
 async def get_sub_admins(admin_user: dict = Depends(get_super_admin)):
     """Get all sub-administrators (super_admin only)"""
+    # Lista de lo permitido. Acá había una de lo PROHIBIDO con tres nombres
+    # —las fotos del KYC— y por eso devolvía el resto entero: el hash de la
+    # contraseña de cada administrador, su semilla del segundo factor y su hash
+    # de PIN. Lo ve sólo el super administrador, pero un hash en el cable es un
+    # hash en el cable, y las tres fotos ni siquiera viven en `users`: están en
+    # `verifications`, así que esa lista tapaba campos que no estaban.
+    #
+    # El `_id` sale en la proyección, así que ya no hay que convertirlo.
     admins = await db.users.find(
         {"role": {"$in": ["admin", "super_admin"]}},
-        {"id_document_image": 0, "cpf_image": 0, "selfie_image": 0}
+        perfil.LO_QUE_VE_EL_PANEL
     ).to_list(100)
-    
-    for a in admins:
-        a['_id'] = str(a['_id'])
-    
-    return admins
+
+    # Los saldos a número: un Decimal128 no se convierte a JSON y la ruta
+    # devolvería 500, que es lo que le pasaba a la lista de usuarios.
+    return [perfil.terminar_de_armar(a) for a in admins]
 
 @admin_router.post("/sub-admins")
 async def create_sub_admin(request: CreateSubAdminRequest, admin_user: dict = Depends(get_super_admin)):

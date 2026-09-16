@@ -14,6 +14,7 @@ from database import db
 from services import sesiones
 from services import registro
 from services import cofre
+from services import perfil
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
@@ -492,15 +493,29 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
 @router.get("/users")
 async def get_all_users(admin: User = Depends(get_crm_user)):
     """Get all users"""
-    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
-    return {"users": users}
+    # Lista de lo permitido. Acá había `{"_id": 0, "password_hash": 0}`, o sea
+    # el documento entero de CADA usuario: la semilla del segundo factor del
+    # jefe y el hash del PIN de cada cliente, todos en una sola respuesta, a
+    # quien tuviera el permiso de atención al cliente. El motivo largo está en
+    # `services/perfil.py`.
+    users = await db.users.find({}, perfil.LO_QUE_VE_EL_PANEL).to_list(1000)
+    # Los saldos a número. ESTA RUTA DEVOLVIA 500 —comprobado corriéndola— para
+    # cualquier usuario con el saldo en Decimal128, que son todos desde que la
+    # plata se guarda así. O sea que la pestaña «Usuarios» del panel no abría.
+    #
+    # Es el mismo defecto que tenía la puerta de entrada, y por el mismo motivo:
+    # un Decimal128 no se convierte a JSON y nadie lo convirtió. Se recorre por
+    # prefijo, no por una lista de nombres, para que el próximo saldo que se
+    # invente no repita la historia.
+    return {"users": [perfil.terminar_de_armar(u) for u in users]}
 
 @router.get("/users/{user_id}")
 async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
     """Get user details"""
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    user = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    perfil.terminar_de_armar(user)
     
     # Get transactions
     transactions = await db.transactions.find({"user_id": user_id, "hidden_from_admin": {"$ne": True}}).sort("created_at", -1).to_list(100)
@@ -524,9 +539,10 @@ async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
 @router.get("/users/{user_id}/complete")
 async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_user)):
     """Get complete user history including profile, KYC, stats, transactions, and beneficiaries"""
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    user = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    perfil.terminar_de_armar(user)
     
     # Get KYC/verification data
     kyc = await db.verifications.find_one({"user_id": user_id}, {"_id": 0}, sort=[("submitted_at", -1)])
