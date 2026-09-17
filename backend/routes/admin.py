@@ -15,6 +15,7 @@ from services import sesiones
 from services import registro
 from services import cofre
 from services import perfil
+from services import quien_es
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
@@ -33,6 +34,19 @@ from utils.security import generate_temp_password, hash_password_async
 from services.imagen_recibida import ImagenInvalida, limpiar_lista
 
 logger = logging.getLogger(__name__)
+# ─── El tope de las colas de trabajo ───────────────────────────────────────
+#
+# Dos bandejas —retiros pendientes y diferencias de pago— traían TODAS las
+# filas, sin tope. No las acota el historial sino el trabajo sin procesar, así
+# que mientras el equipo esté al día son chicas y nadie lo nota. El día que se
+# atrase, la pantalla tarda proporcionalmente y no avisa antes de hacerlo.
+#
+# Mil es alto a propósito: una bandeja que de verdad tenga mil pendientes ya
+# es un problema de operación, y recortarla a cien escondería ese problema
+# justo en la pantalla donde hay que verlo.
+TOPE_DE_UNA_COLA = 1000
+
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # ============== MAINTENANCE ==============
@@ -297,14 +311,18 @@ async def get_hidden_transactions(
     admin: User = Depends(get_super_admin)
 ):
     """List all transactions currently hidden from admin view (for restore UI)."""
-    cursor = db.transactions.find(
+    tope = min(limit, 2000)
+    filas = await db.transactions.find(
         {"hidden_from_admin": True},
         {"_id": 0}
-    ).sort("created_at", -1).limit(min(limit, 2000))
+    ).sort("created_at", -1).limit(tope).to_list(tope)
+
+    # UNA consulta para los clientes de las 2000 filas, no una por fila.
+    quien = await quien_es.de_las_filas(db, filas)
 
     items = []
-    async for tx in cursor:
-        user = await db.users.find_one({"user_id": tx.get("user_id")}, {"_id": 0, "name": 1, "email": 1})
+    for tx in filas:
+        user = quien.ya_conocido(tx.get("user_id"))
         items.append({
             "transaction_id": tx.get("transaction_id"),
             "display_id": tx.get("display_id"),
@@ -709,15 +727,23 @@ async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User =
 @router.get("/withdrawals/pending")
 async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     """Get pending withdrawals"""
-    cursor = db.transactions.find({
+    # EL TOPE, que no estaba.
+    #
+    # Esta cola la acota el trabajo sin procesar, no el historial, así que
+    # mientras el equipo esté al día son pocas filas. El día que se atrase
+    # —o que alguien meta mil pedidos de retiro— la pantalla tarda
+    # proporcionalmente y no avisa antes de hacerlo.
+    filas = await db.transactions.find({
         "type": "withdrawal",
         "status": "pending",
         "hidden_from_admin": {"$ne": True}
-    }).sort("created_at", 1)
-    
+    }).sort("created_at", 1).limit(TOPE_DE_UNA_COLA).to_list(TOPE_DE_UNA_COLA)
+
+    quien = await quien_es.de_las_filas(db, filas)
+
     withdrawals = []
-    async for tx in cursor:
-        user = await db.users.find_one({"user_id": tx.get("user_id")})
+    for tx in filas:
+        user = quien.ya_conocido(tx.get("user_id"))
         withdrawals.append({
             "transaction_id": tx.get("transaction_id"),
             "display_id": tx.get("display_id"),
@@ -931,15 +957,17 @@ async def process_withdrawal(
 @router.get("/recharges/ves/pending")
 async def get_pending_ves_recharges(admin: User = Depends(get_super_admin)):
     """Get pending VES recharge requests"""
-    cursor = db.transactions.find({
+    filas = await db.transactions.find({
         "type": "recharge_ves",
         "status": "pending",
         "hidden_from_admin": {"$ne": True}
-    }).sort("created_at", -1).limit(100)
-    
+    }).sort("created_at", -1).limit(100).to_list(100)
+
+    quien = await quien_es.de_las_filas(db, filas)
+
     recharges = []
-    async for tx in cursor:
-        user = await db.users.find_one({"user_id": tx.get("user_id")})
+    for tx in filas:
+        user = quien.ya_conocido(tx.get("user_id"))
         recharges.append({
             "transaction_id": tx.get("transaction_id"),
             "user_id": tx.get("user_id"),
@@ -1052,14 +1080,14 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     se lleva en la app externa. La info completa queda disponible aquí.
     """
     ordenes = []
-    user_cache = {}
-
-    async def _user(uid):
-        if not uid:
-            return {}
-        if uid not in user_cache:
-            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
-        return user_cache[uid]
+    # Este diccionario estaba escrito a mano acá, y copiado igual en otras dos
+    # pantallas. Las tres copias pedían el usuario ENTERO para leerle el
+    # nombre. Ahora es uno solo, con lista de lo permitido.
+    #
+    # Sigue siendo una consulta por cliente DISTINTO y no por fila, que es lo
+    # que la caché ya lograba: acá se recorren varios cursores distintos y no
+    # hay una lista sola que se pueda precargar de una.
+    quien = quien_es.Directorio(db)
 
     # 1) RIS → VES y RIS → Reais (retiros): el admin paga y sube comprobante.
     #    Se distinguen por currency_output (VES vs BRL).
@@ -1070,7 +1098,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
         {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True},
          "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
     ).sort("created_at", 1):
-        u = await _user(tx.get("user_id"))
+        u = await quien.de(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
         cur_in = str(tx.get("currency_input") or "RIS").upper()
         cur_out = str(tx.get("currency_output") or "VES").upper()
@@ -1137,7 +1165,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     async for r in db.btc_remesas.find(
         {"estado": "pagado", "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}},
         {"_id": 0}).sort("pagado_en", 1):
-        u = await _user(r.get("user_id"))
+        u = await quien.de(r.get("user_id"))
         b = r.get("beneficiario_data", {}) or {}
         ordenes.append({
             "orden_id": r.get("remesa_id"),
@@ -1170,7 +1198,7 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
         {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True},
          "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
     ).sort("created_at", 1):
-        u = await _user(tx.get("user_id"))
+        u = await quien.de(tx.get("user_id"))
         ordenes.append({
             "orden_id": tx.get("transaction_id"),
             "flujo": "ves_ris",
@@ -1473,15 +1501,18 @@ async def get_ordenes_revision_pago(admin: User = Depends(get_super_admin)):
     vencidas = await _barrer_topups_vencidos()
 
     ordenes = []
-    user_cache = {}
 
-    async for tx in db.transactions.find(
+    # El tope no estaba. Como la cola de retiros, la acota el trabajo sin
+    # procesar y no el historial: chica mientras el equipo esté al día, y sin
+    # techo el día que no lo esté.
+    filas = await db.transactions.find(
         {"status": "underpaid_review", "hidden_from_admin": {"$ne": True}}
-    ).sort("created_at", 1):
-        uid = tx.get("user_id")
-        if uid and uid not in user_cache:
-            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
-        u = user_cache.get(uid, {})
+    ).sort("created_at", 1).limit(TOPE_DE_UNA_COLA).to_list(TOPE_DE_UNA_COLA)
+
+    quien = await quien_es.de_las_filas(db, filas)
+
+    for tx in filas:
+        u = quien.ya_conocido(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
 
         pagado_original = float(tx.get("actually_paid") or 0)
@@ -1715,14 +1746,14 @@ async def reporte_merma_nowpayments(
     if rango:
         base["created_at"] = rango
 
-    user_cache = {}
-
-    async def _user(uid):
-        if not uid:
-            return {}
-        if uid not in user_cache:
-            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
-        return user_cache[uid]
+    # Este diccionario estaba escrito a mano acá, y copiado igual en otras dos
+    # pantallas. Las tres copias pedían el usuario ENTERO para leerle el
+    # nombre. Ahora es uno solo, con lista de lo permitido.
+    #
+    # Sigue siendo una consulta por cliente DISTINTO y no por fila, que es lo
+    # que la caché ya lograba: acá se recorren varios cursores distintos y no
+    # hay una lista sola que se pueda precargar de una.
+    quien = quien_es.Directorio(db)
 
     ordenes = []
     total_merma = 0.0
@@ -1731,7 +1762,7 @@ async def reporte_merma_nowpayments(
     total_prometido = 0.0
 
     async for tx in db.transactions.find({**base, "merma_ves": {"$ne": None}}).sort("created_at", 1):
-        u = await _user(tx.get("user_id"))
+        u = await quien.de(tx.get("user_id"))
         merma = to_float(from_db(tx.get("merma_ves"))) or 0.0
         prometido = to_float(from_db(tx.get("amount_output"))) or 0.0
 
@@ -1903,20 +1934,21 @@ async def reporte_procesados(
     except ValueError:
         raise HTTPException(status_code=400, detail="Fecha inválida (use YYYY-MM-DD)")
 
-    user_cache = {}
-    async def _user(uid):
-        if not uid:
-            return {}
-        if uid not in user_cache:
-            user_cache[uid] = await db.users.find_one({"user_id": uid}) or {}
-        return user_cache[uid]
+    # Este diccionario estaba escrito a mano acá, y copiado igual en otras dos
+    # pantallas. Las tres copias pedían el usuario ENTERO para leerle el
+    # nombre. Ahora es uno solo, con lista de lo permitido.
+    #
+    # Sigue siendo una consulta por cliente DISTINTO y no por fila, que es lo
+    # que la caché ya lograba: acá se recorren varios cursores distintos y no
+    # hay una lista sola que se pueda precargar de una.
+    quien = quien_es.Directorio(db)
 
     rows = []
     # Retiros completados (RIS→VES y RIS→Reais)
     async for tx in db.transactions.find(
         {"type": "withdrawal", "status": "completed", "completed_at": {"$gte": start, "$lt": end}}
     ):
-        u = await _user(tx.get("user_id"))
+        u = await quien.de(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
         es_brl = str(tx.get("currency_output") or "VES").upper() in ("BRL", "REAIS", "REAL")
         rows.append({
@@ -1942,7 +1974,7 @@ async def reporte_procesados(
     async for tx in db.transactions.find(
         {"type": "recharge_ves", "status": "approved", "processed_at": {"$gte": start, "$lt": end}}
     ):
-        u = await _user(tx.get("user_id"))
+        u = await quien.de(tx.get("user_id"))
         rows.append({
             "fecha_procesado": tx.get("processed_at"),
             "flujo": "VES → RIS",
@@ -1966,7 +1998,7 @@ async def reporte_procesados(
     async for r in db.btc_remesas.find(
         {"estado": "enviado", "enviado_en": {"$gte": start, "$lt": end}}, {"_id": 0}
     ):
-        u = await _user(r.get("user_id"))
+        u = await quien.de(r.get("user_id"))
         b = r.get("beneficiario_data", {}) or {}
         rows.append({
             "fecha_procesado": r.get("enviado_en"),
@@ -2097,11 +2129,10 @@ async def check_ves_reference(
     if exclude_transaction_id:
         q["transaction_id"] = {"$ne": exclude_transaction_id}
     matches = []
-    cursor = db.transactions.find(q).sort("created_at", 1).limit(20)
-    async for t in cursor:
-        u = await db.users.find_one(
-            {"user_id": t.get("user_id")}, {"email": 1, "full_name": 1, "name": 1}
-        ) or {}
+    filas = await db.transactions.find(q).sort("created_at", 1).limit(20).to_list(20)
+    quien = await quien_es.de_las_filas(db, filas)
+    for t in filas:
+        u = quien.ya_conocido(t.get("user_id"))
         matches.append({
             "transaction_id": t.get("transaction_id"),
             "user_id": t.get("user_id"),

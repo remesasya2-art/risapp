@@ -12,6 +12,7 @@ from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
 from services.money import to_decimal128
 from services import perfil
+from services import quien_es
 from services import auditoria
 import logging
 import uuid
@@ -420,9 +421,14 @@ async def get_pending_recharges(admin_user: Usuario = Depends(get_admin_user)):
         {"proof_image": 0}
     ).sort("created_at", -1).to_list(1000)
     
+    # UNA consulta para los clientes de las mil filas, no una por fila.
+    # Y con proyección: antes esto pedía el usuario entero —hash de la
+    # contraseña incluido— para leerle el nombre.
+    quien = await quien_es.de_las_filas(db, recharges)
+
     result = []
     for r in recharges:
-        user = await db.users.find_one({"user_id": r.get("user_id")})
+        user = quien.ya_conocido(r.get("user_id"))
         r['_id'] = str(r['_id'])
         r['user_name'] = user.get('name', 'N/A') if user else 'N/A'
         r['user_email'] = user.get('email', 'N/A') if user else 'N/A'
@@ -607,9 +613,11 @@ async def get_all_transactions(
     total = await db.transactions.count_documents(query)
     
     # Get user info for each transaction
+    quien = await quien_es.de_las_filas(db, transactions)
+
     for tx in transactions:
         tx['_id'] = str(tx['_id'])
-        user = await db.users.find_one({"user_id": tx.get('user_id')}, {"name": 1, "email": 1})
+        user = quien.ya_conocido(tx.get('user_id'))
         tx['user_name'] = user.get('name', 'N/A') if user else 'N/A'
         tx['user_email'] = user.get('email', 'N/A') if user else 'N/A'
     

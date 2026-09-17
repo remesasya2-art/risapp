@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
 from services import bancos
+from services import quien_es
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -456,6 +457,11 @@ async def get_accounting_report(
     # Build sell rate lookup: for each date, accumulate sell ops in order
     sell_ops_queue = list(all_sell_ops)
 
+    # UNA consulta para los clientes de todo el reporte, no una por fila.
+    # (La otra consulta por fila que queda acá es la de la tasa del día, más
+    #  abajo: ésa no se tocó en este cambio.)
+    quien = await quien_es.de_las_filas(db, transactions)
+
     # Build report rows
     report_rows = []
     total_ganancia = 0
@@ -475,10 +481,7 @@ async def get_accounting_report(
             tx_date_display = tx_date_str
 
         # Get user info
-        user = await db.users.find_one(
-            {"user_id": tx.get("user_id")},
-            {"_id": 0, "full_name": 1, "display_id": 1, "name": 1}
-        )
+        user = quien.ya_conocido(tx.get("user_id"))
         client_name = user.get("full_name", user.get("name", "")) if user else ""
 
         # Lectura tolerante (float viejo / Decimal128 nuevo) de los montos del reporte
