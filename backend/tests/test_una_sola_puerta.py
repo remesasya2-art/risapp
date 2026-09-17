@@ -160,10 +160,11 @@ def test_toda_ruta_de_admin_entra_por_la_misma_puerta(app_armada):
     sueltas, revisadas = [], 0
     for ruta in app_armada.routes:
         camino = getattr(ruta, "path", "")
-        # `/api/adminbrl/...` queda afuera a propósito: es el puente entre
-        # máquinas, no lo usa ninguna persona y no entra con sesión sino con
-        # una clave compartida en la cabecera (`_check_api_key`). Mirarle
-        # `is_banned` a una llave no significa nada.
+        # El filtro es `/api/admin/` con la barra, y no `/api/admin` a secas,
+        # porque así escrito también agarraba `/api/adminbrl/...` —el puente
+        # entre máquinas, que no entraba con sesión sino con una clave—. Ese
+        # puente ya no existe, pero el filtro queda preciso: la próxima ruta
+        # que empiece con «admin» y no sea del panel no tiene por qué contarse.
         if not (camino == "/api/admin" or camino.startswith("/api/admin/")):
             continue
         metodos = sorted(m for m in (getattr(ruta, "methods", None) or set())

@@ -10,8 +10,8 @@ Tipos de eventos registrados:
   - recarga_ves      : Recarga en bolivares
   - pago_tarjeta     : Pago con tarjeta via Mercado Pago
   - remesa_btc       : Remesa via Bitcoin Lightning
-  - retiro_aprobado  : Retiro procesado/aprobado por adminbrl
-  - retiro_rechazado : Retiro rechazado por adminbrl
+  - retiro_aprobado  : Retiro procesado/aprobado desde el panel
+  - retiro_rechazado : Retiro rechazado desde el panel
 """
 import logging
 from datetime import datetime, timezone

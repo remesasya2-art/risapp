@@ -140,8 +140,6 @@ GET /api/admin/verifications/pending
 GET /api/admin/wipe-all/preview
 GET /api/admin/withdrawals/all
 GET /api/admin/withdrawals/pending
-GET /api/adminbrl/btc/pending
-GET /api/adminbrl/withdrawals/pending
 GET /api/auth/2fa/admin-access-log
 GET /api/auth/2fa/status
 GET /api/auth/me
@@ -297,9 +295,6 @@ POST /api/admin/verifications/decide
 POST /api/admin/verifications/process
 POST /api/admin/wipe-all
 POST /api/admin/withdrawals/process
-POST /api/adminbrl/btc/process
-POST /api/adminbrl/rates/sync
-POST /api/adminbrl/withdrawals/process
 POST /api/auth/2fa/disable
 POST /api/auth/2fa/enroll-confirm
 POST /api/auth/2fa/enroll-init

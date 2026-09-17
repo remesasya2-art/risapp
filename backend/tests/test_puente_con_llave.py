@@ -3,22 +3,22 @@ tests/test_puente_con_llave.py — Que la clave se pida en TODAS, no en casi tod
 
 DE QUE SE TRATA
 
-    Dos módulos de la aplicación no usan sesión: el puente con adminbrl
-    (`/api/adminbrl/*`) y el centro de gestión (`/api/centro-gestion/*`). Entran
-    con una clave compartida en una cabecera, y esa clave es lo único que los
-    separa de internet.
+    Un módulo de la aplicación no usa sesión: el centro de gestión
+    (`/api/centro-gestion/*`). Entra con una clave compartida en una cabecera,
+    y esa clave es lo único que lo separa de internet.
 
-    `test_puente_adminbrl.py` ya prueba que la clave funciona: sin ella 401, con
-    una equivocada 401, sin clave configurada en el servidor 503, y que después
-    de varios intentos fallidos se bloquea. Pero lo prueba sobre UNA ruta.
+    Eran dos. El otro era el puente con adminbrl (`/api/adminbrl/*`), que se
+    quitó: el panel hace las cinco cosas que hacía el puente. Este archivo
+    queda igual —recorre lo que haya en `PUENTES`— porque el día que aparezca
+    otro sistema que entre con clave, la guardia ya está escrita.
 
 LA FORMA EN QUE ESTO SE ROMPE
 
     No es que alguien saque el chequeo. Es que alguien agrega la ruta número
     seis y se olvida de las dos líneas:
 
-        x_adminbrl_key: Optional[str] = Header(None)
-        _check_api_key(x_adminbrl_key)
+        x_centrogestion_key: Optional[str] = Header(None)
+        _check_api_key(x_centrogestion_key)
 
     La ruta anda perfecto en las pruebas manuales —contesta lo que tiene que
     contestar— y queda abierta. Ya pasó una vez en esta aplicación, con
@@ -46,7 +46,6 @@ os.environ.setdefault("DB_NAME", "ris_test")
 from conftest import usar_base                                      # noqa: E402,F401
 
 PUENTES = [
-    ("routes/adminbrl_bridge.py", "_check_api_key", "x_adminbrl_key"),
     ("routes/centro_gestion.py", None, "x_centrogestion_key"),
 ]
 
@@ -162,8 +161,9 @@ def test_sin_clave_configurada_el_puente_NO_se_abre(archivo, _guardia, cabecera)
         f"{archivo}: sin la clave configurada, {guardia}() no se planta")
 
 
-def test_ninguno_de_los_dos_puentes_quedo_sin_rutas():
+def test_ningun_puente_quedo_sin_rutas():
     """Si el barrido no encuentra ninguna ruta, todos los tests de arriba pasan
     sin haber mirado nada. Es la forma en que un test de barrido miente."""
+    assert PUENTES, "la lista de puentes quedó vacía: esto no está probando nada"
     for archivo, _, _ in PUENTES:
         assert len(list(_rutas_de(archivo))) >= 3, f"{archivo}: el barrido no vio rutas"

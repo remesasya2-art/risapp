@@ -59,10 +59,11 @@ def base():
 # 1. Que no vuelva a aparecer una consulta por fila
 # ══════════════════════════════════════════════════════════════════════════
 
-# `adminbrl` queda afuera a propósito: es el puente entre máquinas, no lo usa
-# ninguna persona y no es una dependencia de risappbr.com. Sus dos rutas
-# tienen el mismo problema y se dejaron anotadas, no arregladas.
-FUERA = {"routes/adminbrl_bridge.py"}
+# Vacío, y así tiene que quedar. Acá estuvo `routes/adminbrl_bridge.py`, que
+# era el único con el problema sin arreglar; ese puente se quitó del todo.
+# Agregar un archivo a esta lista es decir «esta pantalla puede consultar fila
+# por fila», y eso hay que justificarlo al lado.
+FUERA: set[str] = set()
 
 
 def _consultas_de_usuarios_en_bucles():

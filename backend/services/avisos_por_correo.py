@@ -67,7 +67,6 @@ POR_CORREO = {
     "crypto_send_awaiting_topup":    "Falta completar el pago de tu envío",
     "crypto_send_underpaid_review":  "Tu pago quedó incompleto",
     "btc_enviado":                   "Tu envío con Bitcoin se completó",
-    "btc_remesa_enviada":            "Tu remesa con Bitcoin se envió",
     # Acá vivían `gestor_transaction` y `partner_bonus`. Los dos salieron al
     # eliminarse el área de socios y gestores: ya no los emite nadie. Se sacan
     # y no se dejan «por las dudas» —una tabla con clases que nadie manda no

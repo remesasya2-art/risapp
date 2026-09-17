@@ -23,7 +23,7 @@ POR QUE EXISTE ESTE MODULO
         routes/admin.py:1821          bank["balance"] + amount_ves
         routes/accounting.py:266      bank["balance"] + total_fiat
         routes/accounting.py:296      bank["balance"] - total_fiat
-        routes/adminbrl_bridge.py:191 bank["balance"] - amount_output
+        (era routes/adminbrl_bridge.py:191, antes de quitar ese puente)
         routes/gestor_pix.py:407      float(bank.get("balance", 0)) + ...
         routes/payments_card.py:97    float(bank.get("balance", 0)) + ...
 
