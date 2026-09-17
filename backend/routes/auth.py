@@ -444,11 +444,61 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         if not user.get("password_set") or not user.get("password_hash"):
             raise HTTPException(status_code=401, detail="No tienes contraseña configurada")
 
-        if user.get("status") == "suspended":
-            raise HTTPException(status_code=403, detail="Tu cuenta ha sido suspendida. Contacta al administrador.")
-
         if not await verify_password_async(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+        # ─── Las tres guardas, y por que van DESPUES de la contraseña ─────
+        #
+        # LO QUE FALTABA
+        #
+        #     Acá se miraba SOLO `status == "suspended"`, y el botón de banear
+        #     del panel no escribe ese campo: escribe `is_banned`
+        #     (`/admin/ban`, en routes/admin.py). O sea que banear no cerraba
+        #     esta puerta.
+        #
+        #     Comprobado corriéndolo antes de tocar nada: una cuenta con
+        #     `is_banned: True` recibía «Login exitoso» y una sesión nueva. Lo
+        #     mismo una con `is_deleted: True`.
+        #
+        #     Para un usuario común el daño quedaba contenido —entraba, y
+        #     después `get_current_user` le daba 403 en cada pantalla—, pero
+        #     eso no es una defensa: es una casualidad de por dónde pasa cada
+        #     ruta. Para un colaborador baneado no quedaba contenido en
+        #     absoluto, porque las 14 rutas de `admin_routes.py` entraban por
+        #     una puerta que tampoco miraba `is_banned`.
+        #
+        #     Y el correo en la lista negra se miraba sólo en el registro. Una
+        #     cuenta vieja cuyo correo se agrega a mano a la lista seguía
+        #     entrando: la puerta del registro no la alcanza, ya está creada.
+        #
+        # POR QUE ACA Y NO ARRIBA
+        #
+        #     Puestas antes de comprobar la contraseña, estas tres guardas
+        #     contestan preguntas que nadie debería poder hacer sin la clave:
+        #     «¿esta cuenta está baneada?», «¿este correo está en la lista
+        #     negra?». Cualquiera con una lista de correos las averigua.
+        #     Detrás de la contraseña, para contestarlas hay que ser el dueño.
+        #
+        #     (Las de arriba —correo sin verificar, sin contraseña puesta— ya
+        #     estaban antes y filtran lo mismo. No se mueven en este cambio
+        #     porque la pantalla de entrada usa esas dos respuestas para
+        #     mandar a verificar o a poner contraseña; moverlas es otro cambio
+        #     con otra pantalla que mirar.)
+        #
+        # POR QUE LA LISTA NEGRA CONTESTA LO MISMO QUE EL BANEO
+        #
+        #     Decir «tu correo está vetado» le confirma a quien prueba correos
+        #     ajenos cuáles están en la lista. Y lo borrado contesta lo mismo
+        #     que una contraseña equivocada, por la misma razón: que no se
+        #     pueda distinguir una cuenta que existió de una que nunca existió.
+        if user.get("is_deleted"):
+            raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+        if user.get("is_banned") or user.get("status") == "suspended":
+            raise HTTPException(status_code=403, detail="Tu cuenta ha sido suspendida. Contacta al administrador.")
+
+        if await db.blacklist.find_one({"type": "email", "value": email_lower}):
+            raise HTTPException(status_code=403, detail="Tu cuenta ha sido suspendida. Contacta al administrador.")
 
         from services import personal as _personal
 

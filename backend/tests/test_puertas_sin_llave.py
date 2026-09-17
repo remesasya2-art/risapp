@@ -88,16 +88,11 @@ SIN_TOPE_A_PROPOSITO = {
     ("POST", "/api/credits/webhook"): "webhook: lo protege la firma",
     ("POST", "/api/crypto-send/webhook"): "webhook: lo protege la firma",
 
-    # ── El puente con adminbrl y el centro de gestión. No usan sesión: entran
+    # ── El centro de gestión. No usa sesión: entra
     #    con una clave compartida en una cabecera, y esa clave es lo que los
     #    protege. Que la clave se exija SIEMPRE lo prueba
     #    `test_puente_con_llave.py`; un tope por IP acá cortaría a la aplicación
     #    externa, que llama desde una sola dirección.
-    ("GET", "/api/adminbrl/btc/pending"): "entra con clave, no con sesión",
-    ("POST", "/api/adminbrl/btc/process"): "entra con clave, no con sesión",
-    ("POST", "/api/adminbrl/rates/sync"): "entra con clave, no con sesión",
-    ("GET", "/api/adminbrl/withdrawals/pending"): "entra con clave, no con sesión",
-    ("POST", "/api/adminbrl/withdrawals/process"): "entra con clave, no con sesión",
     ("GET", "/api/centro-gestion/health"): "entra con clave, no con sesión",
     ("GET", "/api/centro-gestion/log"): "entra con clave, no con sesión",
     ("GET", "/api/centro-gestion/log/{transaction_id}"): "entra con clave, no con sesión",

@@ -182,7 +182,6 @@ PUNTOS_DE_ENTRADA = [
     ("routes/misc.py", "limpiar_imagen"),           # los documentos del KYC
     ("routes/transactions.py", "limpiar_imagen_opcional"),   # recarga en VES
     ("routes/admin.py", "limpiar_lista"),           # comprobantes de un retiro
-    ("routes/adminbrl_bridge.py", "limpiar_lista"),  # el puente con adminbrl
 ]
 
 

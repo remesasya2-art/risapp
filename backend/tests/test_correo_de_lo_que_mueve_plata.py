@@ -196,7 +196,7 @@ MUEVEN_PLATA = {
     "pix_received", "card_received", "credit_deposit", "btc_payment",
     "crypto_send_paid", "crypto_send_refunded", "crypto_send_awaiting_topup",
     "crypto_send_underpaid_review",
-    "btc_enviado", "btc_remesa_enviada",
+    "btc_enviado",
     # ── El bono de referidos ──────────────────────────────────────────────
     # `bono_liberado` no mueve el saldo de una cuenta a otra: lo que cambia es
     # el estado del bono, de bloqueado a gastable. Va igual, y por el motivo de

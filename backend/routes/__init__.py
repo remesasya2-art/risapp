@@ -29,7 +29,6 @@ from routes.payments_card import router as payments_card_router
 from routes.kyc_admin import router as kyc_admin_router
 from routes.btc_lightning import router as btc_lightning_router
 from routes.btc_admin import router as btc_admin_router
-from routes.adminbrl_bridge import router as adminbrl_bridge_router
 from routes.centro_gestion import router as centro_gestion_router
 from routes.pin import router as pin_router
 from routes.webauthn_login import router as webauthn_router
@@ -76,7 +75,6 @@ api_router.include_router(kyc_admin_router)
 api_router.include_router(btc_lightning_router)
 api_router.include_router(credits_router)
 api_router.include_router(btc_admin_router)
-api_router.include_router(adminbrl_bridge_router)
 api_router.include_router(centro_gestion_router)
 api_router.include_router(pin_router)
 api_router.include_router(webauthn_router)

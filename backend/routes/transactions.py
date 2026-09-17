@@ -468,7 +468,7 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
 #   función debita con un `find_one_and_update` directo sobre `db.users`, no
 #   pasa por `services/saldos.mover`.
 #
-#   El alias no lo usa nadie —ni el frontend, ni el puente de adminbrl— pero se
+#   El alias no lo usa nadie —el frontend no lo llama— pero se
 #   conserva por si algún cliente viejo lo llama, ahora con el mismo candado.
 #   Hay un test que recorre la aplicación armada y falla si una ruta de envío
 #   queda sin él.

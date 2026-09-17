@@ -279,7 +279,7 @@ async def lifespan(app):
 #
 # FastAPI publica `/docs`, `/redoc` y `/openapi.json` sin pedir nada. Eso es el
 # mapa completo de la API: las 337 rutas, con sus parámetros, sus tipos y sus
-# nombres — incluidas las de administración, las del puente con adminbrl y las
+# nombres — incluidas las de administración, las del centro de gestión y las
 # de mantenimiento. Ninguna deja de estar protegida por eso, pero saber que
 # `/api/admin/fix-media-urls` existe y qué recibe es la mitad del trabajo de
 # quien está buscando por dónde entrar, y no hay una sola razón para regalarlo.
