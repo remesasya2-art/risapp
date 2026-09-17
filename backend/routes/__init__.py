@@ -20,7 +20,6 @@ from routes.misc import router as misc_router
 from routes.webhooks import router as webhooks_router
 from routes.recovery import router as recovery_router
 from routes.media import router as media_router
-from routes.google_drive import router as google_drive_router
 from routes.accounting import router as accounting_router
 from routes.accounting_v2 import router as accounting_v2_router
 from routes.configuracion import router as configuracion_router
@@ -65,7 +64,6 @@ api_router.include_router(push_router)
 api_router.include_router(webhooks_router)
 api_router.include_router(recovery_router)
 api_router.include_router(media_router)
-api_router.include_router(google_drive_router)
 api_router.include_router(accounting_router)
 api_router.include_router(accounting_v2_router)
 api_router.include_router(configuracion_router)

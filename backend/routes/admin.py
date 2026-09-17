@@ -550,6 +550,60 @@ async def get_all_users(admin: User = Depends(get_crm_user)):
         "resumen": await estado_de_la_cuenta.resumen(db),
     }
 
+@router.get("/users/{user_id}/ficha")
+async def descargar_ficha_del_cliente(
+    user_id: str,
+    peticion: Request,
+    admin: User = Depends(get_crm_user),
+):
+    """La ficha del cliente en PDF, para descargar.
+
+    ANTES ESTO SUBIA EL PDF A GOOGLE DRIVE
+
+        Había un botón que armaba esta misma ficha y la subía a la cuenta de
+        Google del administrador que lo apretaba —con un `refresh_token` que
+        no vence guardado en la base, y con la primera cuenta que se conectó
+        como destino por omisión de todo el equipo—. Los datos de los clientes
+        de una app financiera no tienen por qué vivir ahí.
+
+        Ahora el PDF se arma acá, se devuelve como descarga y no se guarda en
+        ningún lado. En Railway el disco del contenedor se borra en cada
+        despliegue, así que guardarlo sería, además, inútil.
+
+    Y QUEDA ASENTADO QUIEN SE LO LLEVO
+
+        Es lo que más cambia respecto de antes. Subir la ficha a Drive no
+        dejaba rastro en ningún lado: no había forma de saber quién se llevó
+        los datos de quién, ni cuándo. Acá cada descarga escribe una línea en
+        el libro de auditoría, con el actor, el cliente y la IP.
+
+        La línea se escribe ANTES de devolver el archivo. Al revés —asentar
+        después de mandarlo— una descarga que se corta a la mitad se lleva los
+        datos igual y no queda anotada.
+    """
+    usuario = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    await auditoria.registrar(
+        db, "kyc.ficha_descargada", quien=admin, request=peticion,
+        objetivo_tipo="usuario", objetivo_id=user_id,
+        objetivo_desc=usuario.get("full_name") or usuario.get("name") or usuario.get("email"),
+    )
+
+    from fastapi.responses import Response as _Respuesta
+    from services import ficha_del_cliente
+
+    crudo = ficha_del_cliente.armar(usuario)
+    nombre = (usuario.get("full_name") or usuario.get("name") or "cliente").replace(" ", "_")
+    documento = usuario.get("cpf_number") or usuario.get("document_number") or "sin_id"
+    return _Respuesta(
+        content=crudo,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Ficha_{nombre}_{documento}.pdf"'},
+    )
+
+
 @router.get("/users/{user_id}")
 async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
     """Get user details"""

@@ -369,8 +369,7 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [showCleanupModal, setShowCleanupModal] = useState(false);
   const [pendingToClean, setPendingToClean] = useState([]);
   const [cleaningUp, setCleaningUp] = useState(false);
-  const [driveConnected, setDriveConnected] = useState(false);
-  const [uploadingKyc, setUploadingKyc] = useState(false);
+  const [bajandoFicha, setBajandoFicha] = useState(false);
   // Partner/Gestor management states
   const [partnerSearchQuery, setPartnerSearchQuery] = useState('');
   // Support requests state
@@ -404,7 +403,6 @@ const [searchParams, setSearchParams] = useSearchParams();
   }, []);
 
   useEffect(() => {
-    api.get('/oauth/drive/status').then(res => setDriveConnected(res.data.connected)).catch(() => {});
   }, []);
 
   // Un solo pedido para las nueve secciones. El servidor devuelve únicamente
@@ -2062,33 +2060,39 @@ const [searchParams, setSearchParams] = useSearchParams();
                           <Download style={{ width: '14px', height: '14px' }} />
                           Descargar Todo
                         </button>
+                        {/* ESTE BOTON SUBIA LA FICHA A GOOGLE DRIVE.
+                            Ahora la descarga desde nuestro servidor. Se fue
+                            todo lo de Google: el OAuth, el token permanente
+                            que quedaba guardado en la base, y la cuenta
+                            personal que oficiaba de destino por omisión.
+                            Cada descarga queda asentada en la auditoría. */}
                         <button
                           onClick={async () => {
-                            if (!driveConnected) {
-                              try {
-                                const res = await api.get('/oauth/drive/connect');
-                                window.location.href = res.data.authorization_url;
-                              } catch (e) {
-                                toast.error('Error al conectar Drive');
-                              }
-                              return;
-                            }
-                            setUploadingKyc(true);
+                            setBajandoFicha(true);
                             try {
-                              const res = await api.post(`/oauth/drive/upload-kyc/${selectedUser.user_id}`);
-                              toast.success(res.data.message);
+                              const res = await api.get(
+                                `/admin/users/${selectedUser.user_id}/ficha`,
+                                { responseType: 'blob' });
+                              const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `Ficha_${(selectedUser.full_name || selectedUser.name || 'cliente').replace(/ /g, '_')}.pdf`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              URL.revokeObjectURL(url);
                             } catch (e) {
-                              toast.error(e.response?.data?.detail || 'Error al subir a Drive');
+                              toast.error(e.response?.data?.detail || 'No se pudo generar la ficha');
                             } finally {
-                              setUploadingKyc(false);
+                              setBajandoFicha(false);
                             }
                           }}
-                          disabled={uploadingKyc}
-                          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: driveConnected ? '#16a34a' : '#4285f4', color: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: uploadingKyc ? 0.6 : 1 }}
-                          data-testid="upload-drive-btn"
+                          disabled={bajandoFicha}
+                          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: '#4f46e5', color: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: bajandoFicha ? 0.6 : 1 }}
+                          data-testid="descargar-ficha-btn"
                         >
-                          <Upload style={{ width: '14px', height: '14px' }} />
-                          {uploadingKyc ? 'Subiendo...' : driveConnected ? 'Subir a Drive' : 'Conectar Drive'}
+                          <Download style={{ width: '14px', height: '14px' }} />
+                          {bajandoFicha ? 'Armando...' : 'Descargar ficha'}
                         </button>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>

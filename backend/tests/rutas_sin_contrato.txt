@@ -134,6 +134,7 @@ GET /api/admin/transactions
 GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
 GET /api/admin/users
+GET /api/admin/users/{user_id}/ficha
 GET /api/admin/users/{user_id}
 GET /api/admin/users/{user_id}/complete
 GET /api/admin/verifications/pending
@@ -177,8 +178,6 @@ GET /api/limits/me
 GET /api/media/twilio/{path:path}
 GET /api/notifications
 GET /api/notifications/unread-count
-GET /api/oauth/drive/connect
-GET /api/oauth/drive/status
 GET /api/payments/card/config
 GET /api/pin/status
 GET /api/policies
@@ -334,8 +333,6 @@ POST /api/gestor/pix/create
 POST /api/gestor/pix/simulate-payment/{payment_id}
 POST /api/notifications/mark-all-read
 POST /api/notifications/{notification_id}/read
-POST /api/oauth/drive/exchange-code
-POST /api/oauth/drive/upload-kyc/{user_id}
 POST /api/payments/card/process
 POST /api/payments/card/quote
 POST /api/pin/disable
