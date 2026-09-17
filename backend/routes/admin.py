@@ -16,6 +16,7 @@ from services import registro
 from services import cofre
 from services import perfil
 from services import estado_de_la_cuenta
+from services import las_fotos
 from services import quien_es
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
@@ -315,7 +316,9 @@ async def get_hidden_transactions(
     tope = min(limit, 2000)
     filas = await db.transactions.find(
         {"hidden_from_admin": True},
-        {"_id": 0}
+        las_fotos.solo("transaction_id", "display_id", "type", "status",
+                       "amount_input", "amount_output", "amount_ris", "amount_ves",
+                       "currency", "route", "user_id", "created_at"),
     ).sort("created_at", -1).limit(tope).to_list(tope)
 
     # UNA consulta para los clientes de las 2000 filas, no una por fila.
@@ -434,12 +437,17 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
     from routes.media import bajar_medio, url_de_medio
 
     # Find all transactions with non-base64 proof images (Twilio URLs or proxy URLs)
-    transactions = await db.transactions.find({
-        "$or": [
+    # EL UNICO LUGAR DONDE LAS FOTOS TIENEN QUE VIAJAR, porque este trabajo
+    # las reescribe. Aun así va con lista de lo permitido: tres campos y no el
+    # documento entero. Lo que acota el peso es el tope de mil, que se deja
+    # como estaba: es un trabajo que se corre a mano, no una pantalla.
+    transactions = await db.transactions.find(
+        {"$or": [
             {"proof_images": {"$exists": True, "$ne": []}},
-            {"proof_image": {"$exists": True, "$ne": None}}
-        ]
-    }).to_list(1000)
+            {"proof_image": {"$exists": True, "$ne": None}},
+        ]},
+        las_fotos.solo("transaction_id", "proof_image", "proof_images"),
+    ).to_list(1000)
     
     fixed_count = 0
     errors = []
@@ -551,7 +559,11 @@ async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
     perfil.terminar_de_armar(user)
     
     # Get transactions
-    transactions = await db.transactions.find({"user_id": user_id, "hidden_from_admin": {"$ne": True}}).sort("created_at", -1).to_list(100)
+    transactions = await db.transactions.find(
+        {"user_id": user_id, "hidden_from_admin": {"$ne": True}},
+        las_fotos.solo("transaction_id", "display_id", "type", "status",
+                       "amount_input", "amount_output", "created_at"),
+    ).sort("created_at", -1).to_list(100)
     
     return {
         "user": user,
@@ -589,7 +601,12 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
         user["selfie_image"] = kyc.get("selfie_image")
     
     # Get all transactions
-    all_transactions = await db.transactions.find({"user_id": user_id, "hidden_from_admin": {"$ne": True}}).sort("created_at", -1).to_list(500)
+    all_transactions = await db.transactions.find(
+        {"user_id": user_id, "hidden_from_admin": {"$ne": True}},
+        las_fotos.solo("transaction_id", "display_id", "type", "status",
+                       "amount_input", "amount_output", "amount_ris", "amount_ves",
+                       "amount_brl", "beneficiary", "created_at", "completed_at"),
+    ).sort("created_at", -1).to_list(500)
     
     # Separate recharges and withdrawals
     recharges = [t for t in all_transactions if t.get("type") == "recharge"]
@@ -748,11 +765,14 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     # mientras el equipo esté al día son pocas filas. El día que se atrase
     # —o que alguien meta mil pedidos de retiro— la pantalla tarda
     # proporcionalmente y no avisa antes de hacerlo.
-    filas = await db.transactions.find({
-        "type": "withdrawal",
-        "status": "pending",
-        "hidden_from_admin": {"$ne": True}
-    }).sort("created_at", 1).limit(TOPE_DE_UNA_COLA).to_list(TOPE_DE_UNA_COLA)
+    filas = await db.transactions.find(
+        {"type": "withdrawal", "status": "pending",
+         "hidden_from_admin": {"$ne": True}},
+        las_fotos.solo("transaction_id", "display_id", "user_id", "status",
+                       "amount_input", "amount_output", "currency_input",
+                       "beneficiary_data", "payment_type", "client_name",
+                       "is_gestor_transaction", "pending_images", "created_at"),
+    ).sort("created_at", 1).limit(TOPE_DE_UNA_COLA).to_list(TOPE_DE_UNA_COLA)
 
     quien = await quien_es.de_las_filas(db, filas)
 
@@ -972,11 +992,17 @@ async def process_withdrawal(
 @router.get("/recharges/ves/pending")
 async def get_pending_ves_recharges(admin: User = Depends(get_super_admin)):
     """Get pending VES recharge requests"""
-    filas = await db.transactions.find({
-        "type": "recharge_ves",
-        "status": "pending",
-        "hidden_from_admin": {"$ne": True}
-    }).sort("created_at", -1).limit(100).to_list(100)
+    # `proof_image` SI se pide acá: es la foto que el operador viene a mirar
+    # para aprobar la recarga. Lo que no se pide es `proof_images`, que en esta
+    # cola no existe —se escribe al completar un retiro— y venía igual.
+    filas = await db.transactions.find(
+        {"type": "recharge_ves", "status": "pending",
+         "hidden_from_admin": {"$ne": True}},
+        las_fotos.solo("transaction_id", "user_id", "status",
+                       "amount_ves", "amount_ris", "rate_used",
+                       "destination_bank", "destination_bank_id",
+                       "destination_bank_name", "proof_image", "created_at"),
+    ).sort("created_at", -1).limit(100).to_list(100)
 
     quien = await quien_es.de_las_filas(db, filas)
 
@@ -1111,7 +1137,12 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     # estuvieran en ningún lado, para el operador habrían desaparecido.
     async for tx in db.transactions.find(
         {"type": "withdrawal", "status": "pending", "hidden_from_admin": {"$ne": True},
-         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
+         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}},
+        las_fotos.solo("transaction_id", "display_id", "user_id",
+                       "amount_input", "amount_output", "amount_ris", "amount_ves",
+                       "currency_input", "currency_output", "beneficiary_data",
+                       "payment_type", "estado_admin", "assigned_to",
+                       "assigned_to_name", "created_at"),
     ).sort("created_at", 1):
         u = await quien.de(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
@@ -1209,9 +1240,17 @@ async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
         })
 
     # 3) VES → RIS (recargas): el admin REVISA el comprobante del usuario y aprueba
+    # `proof_image` SI se pide acá: es la foto que el operador viene a mirar
+    # para aprobar la recarga. Lo que no viaja es `proof_images`, que en esta
+    # cola no existe —se escribe al completar un retiro— y venía igual.
     async for tx in db.transactions.find(
         {"type": "recharge_ves", "status": "pending", "hidden_from_admin": {"$ne": True},
-         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}}
+         "estado_admin": {"$ne": lotes_de_pago.EN_LOTE}},
+        las_fotos.solo("transaction_id", "display_id", "user_id",
+                       "amount_input", "amount_output", "amount_ris", "amount_ves",
+                       "currency_input", "currency_output", "payment_type",
+                       "estado_admin", "assigned_to", "assigned_to_name",
+                       "proof_image", "created_at"),
     ).sort("created_at", 1):
         u = await quien.de(tx.get("user_id"))
         ordenes.append({
@@ -1521,7 +1560,13 @@ async def get_ordenes_revision_pago(admin: User = Depends(get_super_admin)):
     # procesar y no el historial: chica mientras el equipo esté al día, y sin
     # techo el día que no lo esté.
     filas = await db.transactions.find(
-        {"status": "underpaid_review", "hidden_from_admin": {"$ne": True}}
+        {"status": "underpaid_review", "hidden_from_admin": {"$ne": True}},
+        las_fotos.solo("transaction_id", "display_id", "user_id",
+                       "amount_input", "amount_output", "currency_input",
+                       "currency_output", "beneficiary_data", "payment_type",
+                       "actually_paid", "paid_ratio", "pay_amount", "pay_currency",
+                       "network", "topup_actually_paid", "topup_expired",
+                       "topup_network", "created_at"),
     ).sort("created_at", 1).limit(TOPE_DE_UNA_COLA).to_list(TOPE_DE_UNA_COLA)
 
     quien = await quien_es.de_las_filas(db, filas)
@@ -1776,7 +1821,15 @@ async def reporte_merma_nowpayments(
     total_merma_negativa = 0.0
     total_prometido = 0.0
 
-    async for tx in db.transactions.find({**base, "merma_ves": {"$ne": None}}).sort("created_at", 1):
+    async for tx in db.transactions.find(
+        {**base, "merma_ves": {"$ne": None}},
+        las_fotos.solo("transaction_id", "display_id", "user_id", "status",
+                       "amount_input", "amount_output", "currency_input", "rate",
+                       "merma_ves", "merma_calculada_at", "paid_at", "created_at",
+                       "actually_paid", "outcome_amount", "outcome_currency",
+                       "paid_ratio", "pay_amount", "pay_currency", "network",
+                       "topup_actually_paid", "topup_outcome_amount", "underpaid"),
+    ).sort("created_at", 1):
         u = await quien.de(tx.get("user_id"))
         merma = to_float(from_db(tx.get("merma_ves"))) or 0.0
         prometido = to_float(from_db(tx.get("amount_output"))) or 0.0
@@ -1959,9 +2012,25 @@ async def reporte_procesados(
     quien = quien_es.Directorio(db)
 
     rows = []
+
+    # LA COLUMNA «comprobante» DICE «sí» O «no», Y ESO COSTABA MEGABYTES.
+    #
+    # Para escribir esas dos letras, este reporte se traía el documento entero
+    # de cada fila —con la lista de fotos del comprobante en base64 adentro— y
+    # después preguntaba si estaba vacía. Ahora la pregunta la contesta la
+    # base y lo que vuelve es un booleano por fila. Es el problema que
+    # `services/reportes.py` ya documenta en su encabezado, punto 1.
+    filtro_retiros = {"type": "withdrawal", "status": "completed", "completed_at": {"$gte": start, "$lt": end}}
+    filtro_recargas = {"type": "recharge_ves", "status": "approved", "processed_at": {"$gte": start, "$lt": end}}
+    con_foto = await las_fotos.cuales_tienen_foto(db, filtro_retiros)
+    con_foto |= await las_fotos.cuales_tienen_foto(db, filtro_recargas)
+
     # Retiros completados (RIS→VES y RIS→Reais)
     async for tx in db.transactions.find(
-        {"type": "withdrawal", "status": "completed", "completed_at": {"$gte": start, "$lt": end}}
+        filtro_retiros,
+        las_fotos.solo("transaction_id", "display_id", "user_id",
+                       "amount_input", "amount_output", "currency_output",
+                       "beneficiary_data", "rate", "processed_by", "completed_at"),
     ):
         u = await quien.de(tx.get("user_id"))
         b = tx.get("beneficiary_data", {}) or {}
@@ -1982,12 +2051,15 @@ async def reporte_procesados(
             "unidad_destino": "BRL" if es_brl else "VES",
             "tasa": tx.get("rate", ""),
             "procesado_por": tx.get("processed_by", ""),
-            "comprobante": "sí" if (tx.get("proof_images") or tx.get("proof_image")) else "no",
+            "comprobante": "sí" if tx.get("transaction_id") in con_foto else "no",
         })
 
     # Recargas VES aprobadas (VES→RIS)
     async for tx in db.transactions.find(
-        {"type": "recharge_ves", "status": "approved", "processed_at": {"$gte": start, "$lt": end}}
+        filtro_recargas,
+        las_fotos.solo("transaction_id", "display_id", "user_id",
+                       "amount_ves", "amount_ris", "rate_used",
+                       "processed_by", "processed_at"),
     ):
         u = await quien.de(tx.get("user_id"))
         rows.append({
@@ -2006,7 +2078,7 @@ async def reporte_procesados(
             "unidad_destino": "RIS",
             "tasa": tx.get("rate_used", ""),
             "procesado_por": tx.get("processed_by", ""),
-            "comprobante": "sí" if tx.get("proof_image") else "no",
+            "comprobante": "sí" if tx.get("transaction_id") in con_foto else "no",
         })
 
     # Remesas BTC enviadas (BTC→VES)
@@ -2144,7 +2216,10 @@ async def check_ves_reference(
     if exclude_transaction_id:
         q["transaction_id"] = {"$ne": exclude_transaction_id}
     matches = []
-    filas = await db.transactions.find(q).sort("created_at", 1).limit(20).to_list(20)
+    filas = await db.transactions.find(
+        q, las_fotos.solo("transaction_id", "user_id", "status",
+                          "amount_input", "amount_ves", "created_at"),
+    ).sort("created_at", 1).limit(20).to_list(20)
     quien = await quien_es.de_las_filas(db, filas)
     for t in filas:
         u = quien.ya_conocido(t.get("user_id"))

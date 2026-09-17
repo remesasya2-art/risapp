@@ -12,6 +12,7 @@ from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
 from services.money import to_decimal128
 from services import perfil
+from services import las_fotos
 from services import quien_es
 from services import auditoria
 import logging
@@ -418,7 +419,9 @@ async def get_pending_recharges(admin_user: Usuario = Depends(get_admin_user)):
             "type": {"$in": ["recharge", "recharge_ves"]},
             "status": {"$in": ["pending", "pending_review"]}
         },
-        {"proof_image": 0}
+        # Lista de lo prohibido, y se tolera sólo porque el test obliga a que
+        # las nombre a TODAS. Acá el documento se le pasa entero a la pantalla.
+        las_fotos.SIN_LAS_FOTOS
     ).sort("created_at", -1).to_list(1000)
     
     # UNA consulta para los clientes de las mil filas, no una por fila.
@@ -607,7 +610,7 @@ async def get_all_transactions(
     
     transactions = await db.transactions.find(
         query,
-        {"proof_image": 0}
+        las_fotos.SIN_LAS_FOTOS
     ).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
     
     total = await db.transactions.count_documents(query)
@@ -636,7 +639,19 @@ async def export_transactions(admin_user: Usuario = Depends(get_admin_user)):
     if not has_permission(admin_user, "transactions.export"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    transactions = await db.transactions.find({}, {"_id": 0, "proof_image": 0}).to_list(10000)
+    # LISTA DE LO PERMITIDO: los nueve campos que este Excel escribe.
+    #
+    # Acá había `{"_id": 0, "proof_image": 0}`, una lista de lo prohibido que
+    # nombraba el campo viejo y no el nuevo (`proof_images`, en plural, que es
+    # una LISTA de fotos). Medido corriéndolo: cincuenta filas eran 64 MB en
+    # memoria para escribir nueve columnas; al tope de diez mil filas, unos
+    # 12 GB. El proceso de Railway muere antes de terminar y se lleva puesta
+    # la app para todos mientras se reinicia.
+    transactions = await db.transactions.find({}, las_fotos.solo(
+        "transaction_id", "user_id", "type", "status",
+        "amount_input", "amount_output", "created_at", "completed_at",
+        "beneficiary_data",
+    )).to_list(10000)
     
     # Create workbook
     wb = Workbook()
@@ -707,7 +722,7 @@ async def get_admin_payment_records(admin_user: Usuario = Depends(get_admin_user
     
     records = await db.admin_payment_records.find(
         {},
-        {"proof_image": 0}
+        las_fotos.SIN_LAS_FOTOS
     ).sort("recorded_at", -1).to_list(1000)
     
     for r in records:
