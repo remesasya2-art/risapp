@@ -176,6 +176,11 @@ LO_QUE_VE_EL_PANEL = {
     # Para atenderlo: en qué estado está su cuenta y su verificación
     "role": 1, "status": 1, "verification_status": 1, "email_verified": 1,
     "password_set": 1,
+    # Y por qué no puede entrar, si no puede. Sin estos dos, la tabla del
+    # panel no tenía cómo marcar una cuenta borrada ni una vetada: las
+    # mostraba como cualquier otra, o —peor, en el caso de las vetadas— las
+    # escondía. Ver `services/estado_de_la_cuenta.py`.
+    "is_deleted": 1, "is_banned": 1,
 
     # Su plata, que es de lo que más se pregunta
     **{campo: 1 for campo in LOS_SALDOS},

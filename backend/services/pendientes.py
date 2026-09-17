@@ -179,10 +179,18 @@ async def contar_para(usuario) -> dict:
 
 
 async def total_de_usuarios() -> int:
-    """Los usuarios que hay, contados en la base.
+    """Las cuentas ACTIVAS. El número que la tarjeta del Resumen muestra.
 
     El Resumen los contaba midiendo el largo de la lista que trae
     `GET /admin/users`, que corta en 1000. Con 1200 usuarios seguía diciendo
     1000, y nadie tenía cómo darse cuenta.
+
+    Y después contaba `is_deleted != True`, o sea que metía adentro a los
+    vetados y a los suspendidos: gente que no puede entrar, contada como si
+    pudiera. Mientras tanto la tabla de al lado escondía a los vetados, así
+    que la tarjeta y la tabla nunca coincidían y no había forma de saber por
+    qué. Ahora las dos salen del mismo lugar.
     """
-    return await _contar("users", {"is_deleted": {"$ne": True}})
+    from database import db
+    from services import estado_de_la_cuenta
+    return (await estado_de_la_cuenta.resumen(db))[estado_de_la_cuenta.ACTIVA]

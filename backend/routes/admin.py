@@ -15,6 +15,7 @@ from services import sesiones
 from services import registro
 from services import cofre
 from services import perfil
+from services import estado_de_la_cuenta
 from services import quien_es
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
@@ -517,6 +518,17 @@ async def get_all_users(admin: User = Depends(get_crm_user)):
     # quien tuviera el permiso de atención al cliente. El motivo largo está en
     # `services/perfil.py`.
     users = await db.users.find({}, perfil.LO_QUE_VE_EL_PANEL).to_list(1000)
+
+    # EL ESTADO DE CADA CUENTA, Y EL RESUMEN, DECIDIDOS EN UN SOLO LUGAR.
+    #
+    # Esta ruta devolvía la lista y nada más, así que la pantalla tenía que
+    # deducir sola quién estaba vetado — y lo hacía escondiéndolo. El resumen
+    # viaja con la lista para que el número de la pantalla y las filas que se
+    # ven salgan de la misma consulta y no puedan discrepar.
+    vetados = await estado_de_la_cuenta.los_correos_vetados(db)
+    for u in users:
+        u["estado"] = estado_de_la_cuenta.de(u, vetados)
+
     # Los saldos a número. ESTA RUTA DEVOLVIA 500 —comprobado corriéndola— para
     # cualquier usuario con el saldo en Decimal128, que son todos desde que la
     # plata se guarda así. O sea que la pestaña «Usuarios» del panel no abría.
@@ -525,7 +537,10 @@ async def get_all_users(admin: User = Depends(get_crm_user)):
     # un Decimal128 no se convierte a JSON y nadie lo convirtió. Se recorre por
     # prefijo, no por una lista de nombres, para que el próximo saldo que se
     # invente no repita la historia.
-    return {"users": [perfil.terminar_de_armar(u) for u in users]}
+    return {
+        "users": [perfil.terminar_de_armar(u) for u in users],
+        "resumen": await estado_de_la_cuenta.resumen(db),
+    }
 
 @router.get("/users/{user_id}")
 async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):

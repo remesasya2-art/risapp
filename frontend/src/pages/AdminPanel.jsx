@@ -169,6 +169,39 @@ function Pendiente({ cuantos, activa }) {
   );
 }
 
+// Cómo se llama cada rol en pantalla.
+//
+// La columna hacía `role === 'super_admin' ? 'Administrador' : 'Usuario'`, o
+// sea que un `admin` y un `agent` —gente que aprueba KYC y mueve saldos— se
+// veían idénticos a un cliente. Comprobado corriéndolo antes de tocarlo.
+const NOMBRE_DEL_ROL = {
+  super_admin: 'Administrador',
+  admin: 'Colaborador',
+  agent: 'Agente',
+  user: 'Usuario',
+};
+
+const COLOR_DEL_ROL = {
+  super_admin: { fondo: '#fee2e2', letra: '#b91c1c' },
+  admin:       { fondo: '#ffedd5', letra: '#c2410c' },
+  agent:       { fondo: '#e0e7ff', letra: '#4338ca' },
+  user:        { fondo: '#f3f4f6', letra: '#6b7280' },
+};
+
+// Por qué esta cuenta no puede entrar, si no puede. Lo decide el servidor en
+// `services/estado_de_la_cuenta.py`; acá sólo se le pone nombre y color.
+const NOMBRE_DEL_ESTADO = {
+  borrada: 'Borrada',
+  vetada: 'En lista negra',
+  suspendida: 'Suspendida',
+};
+
+const COLOR_DEL_ESTADO = {
+  borrada:    { fondo: '#e5e7eb', letra: '#4b5563' },
+  vetada:     { fondo: '#fee2e2', letra: '#b91c1c' },
+  suspendida: { fondo: '#fef3c7', letra: '#b45309' },
+};
+
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
 
 export default function AdminPanel() {
@@ -322,13 +355,13 @@ const [searchParams, setSearchParams] = useSearchParams();
   // El banco que el operador elige a mano para una recarga que nacio sin el.
   const [users, setUsers] = useState([]);
 
-  const [bannedEmails, setBannedEmails] = useState(() => new Set());
   const [newRate, setNewRate] = useState('');
   const [newRateVesToRis, setNewRateVesToRis] = useState('');
   const [newRateBrlToRis, setNewRateBrlToRis] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [userHistory, setUserHistory] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
+  const [resumenDeCuentas, setResumenDeCuentas] = useState(null);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedUserForRole, setSelectedUserForRole] = useState(null);
@@ -450,8 +483,7 @@ const [searchParams, setSearchParams] = useSearchParams();
         case 'users':
           const usersRes = await api.get('/admin/users');
           setUsers(usersRes.data?.users || []);
-          const blRes = await api.get('/admin/blacklist').catch(() => ({ data: { items: [] } }));
-          setBannedEmails(new Set((blRes.data?.items || []).filter((it) => it.type === 'email').map((it) => String(it.value || '').toLowerCase().trim())));
+          setResumenDeCuentas(usersRes.data?.resumen || null);
           break;
         case 'kyc':
           // Handled fully by <KycPanel/> (it fetches its own data via /admin/kyc/list)
@@ -501,14 +533,17 @@ const [searchParams, setSearchParams] = useSearchParams();
     if (!u?.email) { toast.error('Este usuario no tiene correo'); return; }
     if (!await confirmar({
       titulo: `¿Agregar a ${u.name || u.email} a la lista negra?`,
-      detalle: `El correo ${u.email} queda bloqueado para registrarse de nuevo.`,
+      detalle: `El correo ${u.email} no va a poder registrarse de nuevo NI ENTRAR con la cuenta que ya tiene. La cuenta sigue visible acá, marcada.`,
       accion: 'Agregar a la lista negra',
       tono: 'peligro',
     })) return;
     try {
       await api.post('/admin/blacklist', { type: 'email', value: u.email, reason: 'Agregado desde Usuarios' });
       toast.success('Usuario agregado a la lista negra');
-      setBannedEmails((prev) => new Set(prev).add(String(u.email || '').toLowerCase().trim()));
+      // Se marca la fila, no se la esconde. Antes acá se agregaba el correo
+      // a un conjunto que el filtro usaba para sacarla de la tabla.
+      setUsers((prev) => prev.map((x) =>
+        x.user_id === u.user_id ? { ...x, estado: 'vetada' } : x));
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo agregar a la lista negra');
     }
@@ -653,12 +688,23 @@ const [searchParams, setSearchParams] = useSearchParams();
     setUserHistory(null);
   };
 
-  // Filtrar usuarios por búsqueda
-  const filteredUsers = users.filter(u => 
-    !bannedEmails.has(String(u.email || '').toLowerCase().trim()) &&
-    (userSearchQuery === '' || 
+  // Filtrar usuarios por búsqueda.
+  //
+  // ACA SE ESCONDIA A QUIEN ESTUVIERA EN LA LISTA NEGRA, Y ESO ESTABA MAL.
+  //
+  // El filtro tenía además `!bannedEmails.has(...)`: vetabas a alguien y
+  // desaparecía de la tabla. No lo veías, no le mirabas el saldo, no lo
+  // sacabas de la lista desde acá. Y desde que el login también los frena,
+  // quedaba una cuenta sobre la que acabás de actuar y que ya no podés mirar.
+  //
+  // Ahora se muestran, marcados con su estado. El estado lo decide el
+  // servidor en un solo lugar (`services/estado_de_la_cuenta.py`), no esta
+  // pantalla: si lo dedujera acá, volvería a discrepar con el número del
+  // Resumen, que es de donde salió todo esto.
+  const filteredUsers = users.filter(u =>
+    userSearchQuery === '' ||
     u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase()))
+    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
   );
 
   const supportCounts = {
@@ -995,7 +1041,7 @@ const [searchParams, setSearchParams] = useSearchParams();
               {[
                 { icon: ArrowUpRight, value: pendientes.withdrawals ?? 0, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
                 { icon: ArrowDownLeft, value: pendientes.recharges ?? 0, label: 'Recargas pendientes', bg: '#dcfce7', iconColor: '#16a34a' },
-                { icon: Users, value: usuariosTotales ?? 0, label: 'Usuarios totales', bg: '#dbeafe', iconColor: '#2563eb' },
+                { icon: Users, value: usuariosTotales ?? 0, label: 'Usuarios activos', bg: '#dbeafe', iconColor: '#2563eb' },
                 { icon: Shield, value: pendientes.kyc ?? 0, label: 'KYC pendientes', bg: '#f3e8ff', iconColor: '#9333ea' },
               ].map((item, i) => (
                 <div key={i} style={{ ...cardStyle, padding: '20px' }}>
@@ -1106,6 +1152,24 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
             </div>
 
+            {/* De qué está hecho ese total.
+                Sin esto, la tarjeta del Resumen dice un número y la tabla
+                muestra otra cantidad de filas, y no hay forma de saber por
+                qué. Los grupos son excluyentes y suman el total: eso es lo
+                que los hace conciliables. Lo decide el servidor, en
+                `services/estado_de_la_cuenta.py`. */}
+            {resumenDeCuentas && (
+              <div style={{ ...cardStyle, padding: '12px 16px', display: 'flex', flexWrap: 'wrap',
+                            gap: '16px', fontSize: '13px', color: '#6b7280' }}
+                   data-testid="resumen-de-cuentas">
+                <span><strong style={{ color: '#111827' }}>{resumenDeCuentas.total}</strong> cuentas</span>
+                <span><strong style={{ color: '#111827' }}>{resumenDeCuentas.activa}</strong> activas</span>
+                {resumenDeCuentas.vetada > 0 && <span>{resumenDeCuentas.vetada} en lista negra</span>}
+                {resumenDeCuentas.suspendida > 0 && <span>{resumenDeCuentas.suspendida} suspendidas</span>}
+                {resumenDeCuentas.borrada > 0 && <span>{resumenDeCuentas.borrada} borradas</span>}
+              </div>
+            )}
+
             {/* Users List */}
             <div style={{ ...cardStyle, overflow: 'hidden' }}>
               {loading ? (
@@ -1129,7 +1193,23 @@ const [searchParams, setSearchParams] = useSearchParams();
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             data-testid={`user-${u.user_id}`}>
                           <td style={{ padding: '16px' }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{u.name}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{u.name}</p>
+                              {/* Por qué esta cuenta no puede entrar. Antes las vetadas
+                                  no aparecían y las borradas se veían como cualquiera. */}
+                              {NOMBRE_DEL_ESTADO[u.estado] && (
+                                <span
+                                  data-testid={`estado-${u.user_id}`}
+                                  style={{
+                                    padding: '2px 8px', borderRadius: '8px', fontSize: '11px',
+                                    fontWeight: '600', whiteSpace: 'nowrap',
+                                    backgroundColor: COLOR_DEL_ESTADO[u.estado]?.fondo,
+                                    color: COLOR_DEL_ESTADO[u.estado]?.letra,
+                                  }}>
+                                  {NOMBRE_DEL_ESTADO[u.estado]}
+                                </span>
+                              )}
+                            </div>
                             <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{u.email}</p>
                           </td>
                           <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>{fmt(u.balance_ris)} RIS</td>
@@ -1146,13 +1226,33 @@ const [searchParams, setSearchParams] = useSearchParams();
                               borderRadius: '8px', 
                               fontSize: '12px', 
                               fontWeight: '600',
-                              backgroundColor: u.role === 'super_admin' ? '#fee2e2' : '#f3f4f6',
-                              color: u.role === 'super_admin' ? '#b91c1c' : '#6b7280'
+                              backgroundColor: COLOR_DEL_ROL[u.role]?.fondo || '#f3f4f6',
+                              color: COLOR_DEL_ROL[u.role]?.letra || '#6b7280'
                             }}>
-                              {u.role === 'super_admin' ? 'Administrador' : 'Usuario'}
+                              {NOMBRE_DEL_ROL[u.role] || 'Usuario'}
                             </span>
                           </td>
                           <td style={{ padding: '16px', display: 'flex', gap: '8px' }}>
+                            {/* Una cuenta borrada se ve, pero no se opera.
+                                Se muestra —sus transacciones viejas tienen que
+                                seguir teniendo dueño visible— y los botones que
+                                la tocarían no tienen sentido: cambiarle el rol o
+                                la clave a alguien que ya no existe sólo sirve
+                                para confundir a quien lo aprieta. */}
+                            {u.estado === 'borrada' ? (
+                              <button
+                                onClick={() => loadUserHistory(u.user_id)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+                                  backgroundColor: '#f3f4f6', color: '#6b7280', border: 'none',
+                                  borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
+                                }}
+                                data-testid={`view-user-${u.user_id}`}
+                              >
+                                <Eye style={{ width: '14px', height: '14px' }} />
+                                Ver
+                              </button>
+                            ) : (<>
                             <button 
                               onClick={() => loadUserHistory(u.user_id)}
                               style={{ 
@@ -1221,6 +1321,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                 {u.role === 'agent' ? 'Quitar agente' : 'Hacer agente'}
                               </button>
                             )}
+                            </>)}
                           </td>
                         </tr>
                       ))}
@@ -2210,10 +2311,15 @@ const [searchParams, setSearchParams] = useSearchParams();
                 <div style={{ marginTop: '8px' }}>
                   <span style={{ 
                     padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600',
-                    backgroundColor: selectedUserForRole.role === 'super_admin' ? '#fee2e2' : '#f3f4f6',
-                    color: selectedUserForRole.role === 'super_admin' ? '#b91c1c' : '#6b7280'
+                    backgroundColor: COLOR_DEL_ROL[selectedUserForRole.role]?.fondo || '#f3f4f6',
+                    color: COLOR_DEL_ROL[selectedUserForRole.role]?.letra || '#6b7280'
                   }}>
-                    Rol actual: {selectedUserForRole.role === 'super_admin' ? 'Administrador' : 'Usuario'}
+                    {/* Acá también aplastaba `admin` y `agent` en «Usuario», y
+                        acá es peor que en la tabla: esta es LA VENTANA DONDE SE
+                        CAMBIA EL ROL. Abrías la de un colaborador y decía «Rol
+                        actual: Usuario». Lo encontró la guarda de
+                        `test_el_panel_dice_la_verdad.py`, no yo. */}
+                    Rol actual: {NOMBRE_DEL_ROL[selectedUserForRole.role] || 'Usuario'}
                   </span>
                 </div>
               </div>
