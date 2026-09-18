@@ -42,6 +42,10 @@ logging.basicConfig(level=logging.INFO)
 # esto, «me dio error a las tres» no se puede buscar. Ver services/rastro.py.
 from services import rastro                                           # noqa: E402
 rastro.configurar_el_registro()
+# El contador de uso. Se importa ACA arriba porque el middleware se registra
+# a mitad del archivo, antes de los otros imports de servicios: importarlo
+# abajo dejaba `uso.Contador` sin definir y el servidor no arrancaba.
+from services import uso                                              # noqa: E402
 logger = logging.getLogger(__name__)
 
 # MongoDB connection
@@ -99,6 +103,8 @@ async def lifespan(app):
         await db.transactions.create_index([("created_at", -1)])
         # El registro de errores del panel: se borra solo a los 30 días.
         await errores.preparar_indices(db)
+        # El contador de uso: una fila por día y ruta, 90 días.
+        await uso.preparar_indices(db)
         await db.transactions.create_index("transaction_id", sparse=True)
         await db.support_requests.create_index([("status", 1), ("created_at", -1)])
         await db.support_requests.create_index("support_id", sparse=True)
@@ -267,8 +273,17 @@ async def lifespan(app):
         start_scheduler(db, interval_hours=1)
     except Exception as e:
         logger.warning(f"BCV scheduler failed to start: {e}")
+    # El contador de uso vuelca a la base cada 30 segundos, en una tarea de
+    # fondo. Si no arranca, la aplicación sigue: es estadística, no operación.
+    try:
+        uso.arrancar(db)
+    except Exception as e:
+        logger.warning(f"Uso: no se pudo arrancar el volcado: {e}")
     yield
     # Shutdown
+    # Lo que el contador tiene en memoria, a la base antes de cerrarla. No
+    # levanta: ver services/uso.py.
+    await uso.parar(db)
     try:
         from services.bcv_scraper import stop_scheduler
         stop_scheduler()
@@ -343,6 +358,12 @@ async def security_headers_middleware(request, call_next):
 raworigins = os.getenv("ALLOWED_ORIGINS", "https://risappbr.com,https://www.risappbr.com")
 ALLOWED_ORIGINS = [o.strip() for o in raworigins.split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# El contador de uso (services/uso.py). Cuenta DESPUES de que la ruta atendió,
+# así que su lugar en la cadena no cambia lo que cuenta; va acá, pegado a la
+# aplicación, para no correr sobre lo que el tope de cuerpo o la puerta del
+# borde ya rechazaron: esos ni llegan a tener ruta.
+app.add_middleware(uso.Contador)
 
 # LA PUERTA DEL BORDE VA ACA, Y EL ORDEN NO ES CASUAL.
 #

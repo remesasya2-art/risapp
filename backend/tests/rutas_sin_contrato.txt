@@ -138,6 +138,7 @@ GET /api/admin/users
 GET /api/admin/users/{user_id}
 GET /api/admin/users/{user_id}/complete
 GET /api/admin/users/{user_id}/ficha
+GET /api/admin/uso
 GET /api/admin/verifications/pending
 GET /api/admin/wipe-all/preview
 GET /api/admin/withdrawals/all

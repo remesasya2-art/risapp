@@ -126,6 +126,9 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     estado = getattr(request, "state", None)
     if estado is not None:
         estado.user_id = user.get("user_id")
+        # Y el rol, para el contador de uso (services/uso.py): cuenta a los
+        # clientes y a nadie más, y lo decide con esto sin volver a la base.
+        estado.rol = user.get("role")
 
     # Convert BSON Decimal128 fields to float for Pydantic compatibility
     for _k, _v in list(user.items()):
