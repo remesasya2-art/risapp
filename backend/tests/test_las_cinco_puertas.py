@@ -194,8 +194,33 @@ def por_la_huella(base):
     return para_su_dueno(doc)
 
 
+def por_google(base):
+    """POST /auth/google — la puerta de Google, con la credencial ya
+    verificada: la firma la comprueba la librería de Google y eso no se
+    puede fingir acá, así que se reemplaza SOLO la lectura del token. Todo
+    lo demás —guardas, sesión, lo que se devuelve— es el código real."""
+    import os
+    from routes import google_ingreso as rutas_google
+    from services import google_ingreso as servicio_google
+    original = servicio_google.leer_las_afirmaciones
+    os.environ["GOOGLE_CLIENT_ID"] = "cliente-de-prueba"
+    servicio_google.leer_las_afirmaciones = lambda cred: {
+        "iss": "https://accounts.google.com", "aud": "cliente-de-prueba",
+        "email": CORREO, "email_verified": True, "sub": "sub-1", "name": "Ana"}
+    try:
+        r = corre(rutas_google.entrar(
+            pedido(), _RespuestaDeMentira(),
+            rutas_google.EntrarConGoogleRequest(credential="una-credencial")))
+    finally:
+        servicio_google.leer_las_afirmaciones = original
+        os.environ.pop("GOOGLE_CLIENT_ID", None)
+    return r["user"]
+
+
+# Eran cinco; la de Google es la sexta y alimenta el mismo `setUser()`.
 LAS_PUERTAS = {
     "login con contraseña": por_la_contrasena,
+    "login con Google": por_google,
     "login con segundo factor": por_el_segundo_factor,
     "alta del segundo factor": por_el_alta_del_segundo_factor,
     "login con huella": por_la_huella,

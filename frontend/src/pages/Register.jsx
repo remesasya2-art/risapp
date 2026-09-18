@@ -5,6 +5,9 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { validarPassword, PASSWORD_HELP_TEXT } from '../utils/passwordPolicy';
 import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
+import EntrarConGoogle from '../components/auth/EntrarConGoogle';
+import CompletarRegistroGoogle from '../components/auth/CompletarRegistroGoogle';
+import TwoFactorFlow from '../components/auth/TwoFactorFlow';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -24,6 +27,22 @@ export default function Register() {
   
   // Verification step
   const [step, setStep] = useState(1); // 1 = form, 2 = verification
+  // Con Google: sin cuenta todavía (falta CPF y términos), o una cuenta de
+  // personal que tiene que pasar por el segundo factor.
+  const [googlePendiente, setGooglePendiente] = useState(null);
+  const [twoFactorState, setTwoFactorState] = useState(null);
+
+  const entrarConSesion = () => {
+    // Ya tenía cuenta: entra. Recarga entera, como al confirmar el código.
+    localStorage.setItem('has_session', '1');
+    localStorage.setItem('last_activity', Date.now().toString());
+    toast.success('¡Bienvenido!');
+    window.location.href = '/';
+  };
+  const pedirDosPasos = (data) => setTwoFactorState({
+    mode: data.two_factor_required ? 'verify' : 'enroll',
+    pendingToken: data.pending_token, email: data.email,
+  });
   const [verificationCode, setVerificationCode] = useState('');
   const [resending, setResending] = useState(false);
 
@@ -192,6 +211,25 @@ export default function Register() {
     marginBottom: '8px'
   };
 
+  if (twoFactorState) {
+    return (
+      <div style={pageStyle}>
+        <TwoFactorFlow mode={twoFactorState.mode} pendingToken={twoFactorState.pendingToken} email={twoFactorState.email}
+          onSuccess={() => { toast.success('¡Bienvenido!'); navigate('/'); }} />
+      </div>
+    );
+  }
+
+  if (googlePendiente) {
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <CompletarRegistroGoogle pendiente={googlePendiente} referralInicial={referralCode} onVolver={() => setGooglePendiente(null)} />
+        </div>
+      </div>
+    );
+  }
+
   // Verification Code Step (Step 2)
   if (step === 2) {
     return (
@@ -332,6 +370,9 @@ export default function Register() {
         <p style={{ fontSize: '16px', color: '#9ca3af', textAlign: 'center', margin: '0 0 32px 0' }}>
           Comienza con tu billetera digital
         </p>
+
+        {/* Con Google: sólo aparece si el servidor tiene id de cliente. */}
+        <EntrarConGoogle texto="signup_with" onSesion={entrarConSesion} onDosPasos={pedirDosPasos} onRegistroIncompleto={setGooglePendiente} />
 
         {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>

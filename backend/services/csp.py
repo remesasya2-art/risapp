@@ -131,6 +131,14 @@ ANTIFRAUDE = "https://www.mercadolibre.com https://api.mercadolibre.com"
 MEDIDOR_SCRIPT = "https://static.cloudflareinsights.com"
 MEDIDOR_DATOS = "https://cloudflareinsights.com"
 
+# Entrar con Google. El script viene de su dominio, el botón lo dibuja Google
+# adentro de un iframe suyo, sus estilos vienen de ahí, y la credencial vuelve
+# por una conexión al mismo sitio. Se nombran las rutas exactas que documenta
+# Google y no el dominio entero: `accounts.google.com` sirve muchas cosas.
+GOOGLE_INGRESO_SCRIPT = "https://accounts.google.com/gsi/client"
+GOOGLE_INGRESO = "https://accounts.google.com/gsi/"
+GOOGLE_INGRESO_ESTILO = "https://accounts.google.com/gsi/style"
+
 DIRECTIVAS = {
     # Lo que no esté nombrado abajo, sólo desde nuestro origen.
     "default-src": "'self'",
@@ -139,12 +147,12 @@ DIRECTIVAS = {
     # genera scripts en línea ni usa `eval`, así que no hacen falta — y con
     # cualquiera de los dos puesto, un XSS inyectado en la página corre igual y
     # la directiva no sirve para nada.
-    "script-src": f"'self' {PAGOS} {MEDIDOR_SCRIPT}",
+    "script-src": f"'self' {PAGOS} {MEDIDOR_SCRIPT} {GOOGLE_INGRESO_SCRIPT}",
 
     # Los estilos SI llevan `'unsafe-inline'`: la aplicación tiene más de 4500
     # `style={{...}}` de React. Un estilo no ejecuta código; sacarlo sería
     # reescribir toda la interfaz para ganar muy poco.
-    "style-src": "'self' 'unsafe-inline'",
+    "style-src": f"'self' 'unsafe-inline' {GOOGLE_INGRESO_ESTILO}",
 
     # Las imágenes vienen de todos lados: `data:` para los base64 que ya están
     # guardados, `blob:` para la vista previa de un archivo recién elegido, y
@@ -156,11 +164,11 @@ DIRECTIVAS = {
     "media-src": "'self' data: blob:",
 
     # A dónde puede hablar la aplicación. Nuestra API es del mismo origen.
-    "connect-src": f"'self' {PAGOS} {ANTIFRAUDE} https://api.qrserver.com {MEDIDOR_DATOS}",
+    "connect-src": f"'self' {PAGOS} {ANTIFRAUDE} https://api.qrserver.com {MEDIDOR_DATOS} {GOOGLE_INGRESO}",
 
     # El formulario de tarjeta del proveedor va en un iframe suyo, y su
     # antifraude abre otro bajo el dominio de Mercado Libre.
-    "frame-src": f"{PAGOS} {ANTIFRAUDE}",
+    "frame-src": f"{PAGOS} {ANTIFRAUDE} {GOOGLE_INGRESO}",
 
     # No hay plugins. Es un camino clásico para ejecutar código con un archivo
     # que subió un usuario.

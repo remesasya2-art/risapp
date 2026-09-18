@@ -58,6 +58,9 @@ SIN_TOPE_A_PROPOSITO = {
     ("GET", "/api/ves-payment-info"): "los datos de pago publicados",
     ("GET", "/api/btc/precio"): "el precio publicado",
     ("GET", "/api/push/web/vapid-public-key"): "una clave pública",
+    # El id de cliente de Google es público por diseño: va en el HTML de
+    # cualquier sitio que use el botón. No lee la base ni mira la sesión.
+    ("GET", "/api/auth/google/config"): "una clave pública",
     ("GET", "/{full_path:path}"): "el frontend, no es una API",
 
     # ── El comodín de lo que NINGUNA ruta quiso. Contesta 404 y nada más: no
@@ -241,6 +244,8 @@ TOPES_ESPERADOS = [
     ("routes/webauthn_login.py", "webauthn.login_options", "distingue si la cuenta existe"),
     ("routes/webauthn_login.py", "webauthn.login_verify", "la otra puerta del ingreso"),
     ("routes/envios.py", "envios.seguimiento", "adivinar un token de seguimiento"),
+    ("routes/google_ingreso.py", "auth.google", "la puerta de Google: cada llamada es un viaje a Google"),
+    ("routes/google_ingreso.py", "auth.google.completar", "cada llamada puede crear una cuenta"),
 ]
 
 
