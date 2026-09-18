@@ -43,6 +43,26 @@ QUE SE GUARDA
     era imposible con lo que se guardaba, y de esa respuesta depende si un
     origen se permite o no.
 
+    LO QUE NO SE ESCRIBE: LOS AVISOS QUE NO SON NUESTROS
+
+    Dos clases, y las dos por el mismo motivo. Este buzón existe para ver UNA
+    cosa: un script cargándose desde un dominio que no elegimos. Todo lo demás
+    que entre lo tapa, y un registro tapado es un registro que nadie mira.
+
+      * LOS DE UNA EXTENSION DEL NAVEGADOR. Un bloqueador de publicidad, un
+        traductor, un gestor de contraseñas: meten su código en cada página
+        que abren, el navegador lo mira contra nuestra política, no lo
+        encuentra en la lista y avisa. No hay nada roto ni nada que decidir:
+        `chrome-extension://...` no es un origen que podamos permitir.
+      * EL MISMO AVISO REPETIDO. Un recurso bloqueado avisa una vez POR CARGA
+        DE PAGINA, y la página la cargan todos. El primer aviso de algo
+        aparece idéntico cientos de veces por día; el que importa es el
+        NUEVO. Cada aviso distinto se escribe una vez y se calla un rato.
+
+    Los dos descartes se cuentan, y el primero de cada clase deja dicho en el
+    registro que el filtro está funcionando: un filtro invisible es un filtro
+    del que nadie sospecha cuando esconde de más.
+
     LO QUE SIGUE SIN GUARDARSE ES LA RUTA. Del `source-file` va el dominio y
     nada más: el dominio dice de quién es el script, y la ruta, cuando el
     script es de la propia aplicación, es la PANTALLA que estaba mirando una
@@ -50,6 +70,7 @@ QUE SE GUARDA
     hace, que no señala a nadie.
 """
 import logging
+import time
 
 from fastapi import APIRouter, Request, Response
 
@@ -71,6 +92,70 @@ CAMPO_ARCHIVO = ("source-file", "sourceFile", "sourceURL")
 # Los primeros caracteres del código bloqueado. Es lo único que identifica a un
 # script EN LINEA, que por definición no tiene dirección propia.
 CAMPO_MUESTRA = ("script-sample", "sample", "scriptSample")
+
+
+# ── Los avisos de una extensión del navegador ─────────────────────────────
+#
+# Los navegadores TAPAN la dirección real de la extensión, para no delatar qué
+# tiene instalado la persona: mandan el esquema a secas (`chrome-extension`) o
+# el esquema con un identificador (`chrome-extension://abcdef`). Por eso se
+# compara por prefijo y no por igualdad.
+#
+# Un dominio de verdad nunca empieza con estos nombres: empieza con `https`.
+ESQUEMAS_DE_EXTENSION = (
+    "chrome-extension",        # Chrome, Edge, Brave, Opera
+    "moz-extension",           # Firefox
+    "safari-web-extension",    # Safari
+    "safari-extension",        # Safari, versiones viejas
+    "ms-browser-extension",    # Edge viejo
+)
+
+# ── El mismo aviso, una sola vez ──────────────────────────────────────────
+#
+# Se recuerda en la memoria del proceso y no en la base: con dos workers el
+# mismo aviso puede salir dos veces, y está bien. Lo que esto tiene que evitar
+# son los cientos, no los dos, y un buzón de diagnóstico no vale una escritura
+# en la base por pedido.
+MINUTOS_SIN_REPETIR = 30
+
+# Y un techo, porque lo que llega acá lo elige quien hace el pedido: con una
+# muestra distinta en cada aviso, cada uno es un aviso «nuevo» y esto crecería
+# sin fin. Llegado el techo se olvida todo y se vuelve a empezar: se repite un
+# aviso viejo, que es mucho más barato que quedarse sin memoria.
+TOPE_DE_AVISOS_RECORDADOS = 500
+
+_ya_dicho: dict = {}
+
+# Cuántos se descartaron, por clase. Lo miran los tests, y sostienen la
+# promesa del encabezado: lo que se tira se cuenta.
+descartados = {"extensiones": 0, "repetidos": 0}
+
+
+def _olvidar() -> None:
+    """Para los tests: los avisos vuelven a ser nuevos y las cuentas a cero."""
+    _ya_dicho.clear()
+    descartados.update({"extensiones": 0, "repetidos": 0})
+
+
+def es_de_una_extension(*valores) -> bool:
+    """¿Este aviso lo produjo una extensión del navegador del visitante?"""
+    for valor in valores:
+        if (valor or "").strip().lower().startswith(ESQUEMAS_DE_EXTENSION):
+            return True
+    return False
+
+
+def _es_la_primera_vez(aviso: tuple, ahora=None) -> bool:
+    ahora = time.monotonic() if ahora is None else ahora
+    for viejo, cuando in list(_ya_dicho.items()):
+        if ahora - cuando > MINUTOS_SIN_REPETIR * 60:
+            _ya_dicho.pop(viejo, None)
+    if aviso in _ya_dicho:
+        return False
+    if len(_ya_dicho) >= TOPE_DE_AVISOS_RECORDADOS:
+        _ya_dicho.clear()
+    _ya_dicho[aviso] = ahora
+    return True
 
 
 def _primero(datos: dict, nombres) -> str:
@@ -137,12 +222,31 @@ async def recibir_reporte(request: Request):
         for reporte in reportes[:10]:
             if not isinstance(reporte, dict):
                 continue
+            directiva = _primero(reporte, CAMPOS[0])
+            origen = _primero(reporte, CAMPOS[1])
+            desde = _solo_el_dominio(_primero(reporte, CAMPO_ARCHIVO))
+            muestra = _primero(reporte, CAMPO_MUESTRA)
+
+            # Ver el encabezado: ni los de una extensión ni el mismo dos veces.
+            if es_de_una_extension(origen, desde):
+                descartados["extensiones"] += 1
+                if descartados["extensiones"] == 1:
+                    logger.info(
+                        "CSP: los avisos de extensiones del navegador se "
+                        "descartan (el primero fue %s). No son de la "
+                        "aplicación y tapan los que sí.", desde)
+                continue
+            if not _es_la_primera_vez((directiva, origen, desde, muestra)):
+                descartados["repetidos"] += 1
+                if descartados["repetidos"] == 1:
+                    logger.info(
+                        "CSP: un aviso ya escrito no se repite por %s minutos.",
+                        MINUTOS_SIN_REPETIR)
+                continue
+
             logger.warning(
                 "CSP habría bloqueado: directiva=%s origen=%s desde=%s "
-                "muestra=%s",
-                _primero(reporte, CAMPOS[0]), _primero(reporte, CAMPOS[1]),
-                _solo_el_dominio(_primero(reporte, CAMPO_ARCHIVO)),
-                _primero(reporte, CAMPO_MUESTRA))
+                "muestra=%s", directiva, origen, desde, muestra)
     except Exception:
         # Un aviso mal formado no es un problema nuestro y no vale una línea de
         # error: quien manda basura acá busca justamente eso.
