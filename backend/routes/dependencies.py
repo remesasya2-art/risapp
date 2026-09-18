@@ -117,6 +117,16 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     if user.get("is_banned"):
         raise HTTPException(status_code=403, detail="Esta cuenta ha sido suspendida")
 
+    # Colgado del pedido para el manejador de errores: cuando algo se rompe
+    # más adelante, la línea del registro dice a QUIEN le pasó. Sin esto un
+    # 500 es anónimo y soporte no tiene por dónde empezar.
+    # `getattr` y no `request.state` a secas: los tests arman pedidos falsos
+    # sin `state`, y autenticar no puede depender de una comodidad del
+    # registro de errores. Si no hay dónde colgarlo, no se cuelga.
+    estado = getattr(request, "state", None)
+    if estado is not None:
+        estado.user_id = user.get("user_id")
+
     # Convert BSON Decimal128 fields to float for Pydantic compatibility
     for _k, _v in list(user.items()):
         if isinstance(_v, Decimal128):

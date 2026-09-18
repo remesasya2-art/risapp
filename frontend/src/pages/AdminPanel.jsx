@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
-} from 'lucide-react';
+, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { confirmar } from '../components/flujo/confirmar.js';
@@ -18,6 +18,7 @@ import CobrosSinAcreditar from '../components/admin/CobrosSinAcreditar';
 import LibroMayor from '../components/admin/LibroMayor';
 import RecursosHumanos from '../components/admin/RecursosHumanos';
 import LibroAuditoria from '../components/admin/LibroAuditoria';
+import Errores from '../components/admin/Errores';
 import Configuracion from '../components/admin/Configuracion';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
@@ -101,6 +102,9 @@ const TABS = [
   // pudieran delegar, quien las tuviera podría darse a sí mismo el resto.
   { key: 'rrhh', label: 'Recursos Humanos', icon: UserCog, superAdminOnly: true },
   { key: 'auditoria', label: 'Auditoría', icon: ScrollText, superAdminOnly: true },
+  // Los errores del servidor. Sólo super administrador, como la auditoría: una
+  // línea trae la ruta, el usuario que lo sufrió y el texto de una excepción.
+  { key: 'errores', label: 'Errores', icon: AlertTriangle, superAdminOnly: true },
   // Los números configurables del panel. `superAdminOnly` por el mismo motivo
   // que Recursos Humanos: uno de esos números decide cuánta plata se le regala
   // a cada cuenta que se registra, y quien pudiera cambiarlo podría subirlo,
@@ -139,7 +143,7 @@ const GRUPOS = [
   { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
     hijas: ['ledger', 'seguridad', 'cobros', 'reportes'] },
   { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
-    hijas: ['configuracion', 'rrhh', 'auditoria'] },
+    hijas: ['configuracion', 'rrhh', 'auditoria', 'errores'] },
 ];
 
 // La ficha de cada sección, venga de donde venga. `crm` no entra: era el
@@ -1026,6 +1030,11 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'auditoria' && (
           <ErrorBoundary clave="auditoria" donde="Libro de auditoría">
             <LibroAuditoria />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'errores' && (
+          <ErrorBoundary clave="errores" donde="Errores del servidor">
+            <Errores />
           </ErrorBoundary>
         )}
         {activeTab === 'configuracion' && (
