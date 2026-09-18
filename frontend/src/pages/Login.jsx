@@ -7,6 +7,8 @@ import PasswordRecovery from './PasswordRecovery';
 import TwoFactorFlow from '../components/auth/TwoFactorFlow';
 import Footer from '../components/Footer';
 import { loginConHuella, webauthnSupported } from '../utils/webauthn';
+import EntrarConGoogle from '../components/auth/EntrarConGoogle';
+import CompletarRegistroGoogle from '../components/auth/CompletarRegistroGoogle';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -20,6 +22,23 @@ export default function Login() {
   const emailRef = useRef(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const [twoFactorState, setTwoFactorState] = useState(null); // { mode, pendingToken, email }
+  // Entró con Google y no tenía cuenta: falta CPF y términos.
+  const [googlePendiente, setGooglePendiente] = useState(null);
+
+  const entrarConSesion = (data) => {
+    completeTwoFactorLogin(data.session_token, data.user);
+    if (data.must_change_password) {
+      toast.success('Por favor establece una nueva contraseña');
+      navigate('/force-change-password');
+    } else {
+      toast.success('¡Bienvenido!');
+      navigate('/');
+    }
+  };
+  const pedirDosPasos = (data) => setTwoFactorState({
+    mode: data.two_factor_required ? 'verify' : 'enroll',
+    pendingToken: data.pending_token, email: data.email,
+  });
 
   const handleHuella = async () => {
     if (!email) {
@@ -114,6 +133,16 @@ export default function Login() {
     height: '56px'
   };
 
+  if (googlePendiente) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: '#f9fafb' }}>
+        <div className="w-full max-w-md bg-white" style={{ borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08)', padding: '40px 32px' }}>
+          <CompletarRegistroGoogle pendiente={googlePendiente} onVolver={() => setGooglePendiente(null)} />
+        </div>
+      </div>
+    );
+  }
+
   // Show password recovery flow
   if (showRecovery) {
     return (
@@ -173,6 +202,9 @@ export default function Login() {
             <Fingerprint size={18} /> {huellaLoading ? 'Verificando huella…' : 'Entrar con huella'}
           </button>
         )}
+
+        {/* Con Google: sólo aparece si el servidor tiene id de cliente. */}
+        <EntrarConGoogle texto="signin_with" onSesion={entrarConSesion} onDosPasos={pedirDosPasos} onRegistroIncompleto={setGooglePendiente} />
 
         {/* Divider */}
         <div className="flex items-center gap-4 mb-6">

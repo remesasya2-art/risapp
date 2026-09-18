@@ -138,12 +138,14 @@ GET /api/admin/users
 GET /api/admin/users/{user_id}
 GET /api/admin/users/{user_id}/complete
 GET /api/admin/users/{user_id}/ficha
+GET /api/admin/uso
 GET /api/admin/verifications/pending
 GET /api/admin/wipe-all/preview
 GET /api/admin/withdrawals/all
 GET /api/admin/withdrawals/pending
 GET /api/auth/2fa/admin-access-log
 GET /api/auth/2fa/status
+GET /api/auth/google/config
 GET /api/auth/me
 GET /api/auth/password-status
 GET /api/beneficiaries
@@ -183,6 +185,7 @@ GET /api/payments/card/config
 GET /api/pin/status
 GET /api/policies
 GET /api/policies/status
+GET /api/primeros-pasos
 GET /api/push/web/status
 GET /api/push/web/vapid-public-key
 GET /api/rate
@@ -304,6 +307,8 @@ POST /api/auth/2fa/setup-init
 POST /api/auth/2fa/verify
 POST /api/auth/change-password
 POST /api/auth/change-password/pedir-codigo
+POST /api/auth/google
+POST /api/auth/google/completar
 POST /api/auth/heartbeat
 POST /api/auth/login-password
 POST /api/auth/logout

@@ -24,7 +24,7 @@ from models.requests import (
     ChangePasswordRequest, PedirCodigoDeCambioRequest, SetNewPasswordRequest
 )
 from routes.dependencies import get_current_user, set_session_cookie, clear_session_cookie
-from services import codigos, correo, cpf_de_la_cuenta
+from services import alta_de_cuenta, codigos, correo, cpf_de_la_cuenta
 from services.email import send_verification_email
 from services.email_notifications import notify_login, notify_password_change
 from utils.security import (hash_password_async, validate_password,
@@ -272,77 +272,21 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
         )
         raise HTTPException(status_code=400, detail="Código incorrecto")
     
-    # Create user
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    
-    # Generate referral code
-    referral_code = f"REF{uuid.uuid4().hex[:8].upper()}"
-    
-    user = {
-        "user_id": user_id,
-        "email": email_lower,
-        "name": pending["name"],
-        "password_hash": pending["password_hash"],
-        "password_set": True,
-        "email_verified": True,
-        # En Decimal128, como el resto de la app. Naciendo en float, el
-        # tipo del saldo dependía de quién creó al usuario.
-        "balance_ris": to_decimal128(0),
-        "balance_ves": to_decimal128(0),
-        # El bono de bienvenida vive en su propia cuenta y nace en cero, con
-        # el tipo correcto. Naciendo ausente, el primer `$inc` lo crearía con
-        # el tipo que trajera ese `$inc`.
-        "balance_ris_bono": to_decimal128(0),
-        "role": "user",
-        "verification_status": "unverified",
-        "referred_by": pending.get("referred_by"),
-        # El CPF que declaró al registrarse. Es el único con el que esta cuenta
-        # puede pagar, y el que le va a llegar puesto en la verificación.
-        "cpf_number": pending.get("cpf_number"),
-        "cpf_declarado_en": datetime.now(timezone.utc),
-        "referral_code": referral_code,
-        "created_at": datetime.now(timezone.utc),
-        "terms_accepted": True,
-        "terms_accepted_at": datetime.now(timezone.utc),
-        "terms_version": "2026-06-29"
-    }
-    
-    # ─── El CPF queda anclado a esta cuenta ──────────────────────────────
-    #
-    # Va ANTES del insert y no después: si el CPF resultara ser de otro, esto
-    # levanta y la cuenta no llega a crearse. Al revés quedaría una cuenta
-    # creada con un CPF que es de otra persona, que es exactamente lo que se
-    # está tratando de que no pase.
-    cpf_del_registro = pending.get("cpf_number")
-    if cpf_del_registro:
-        try:
-            await cpf_de_la_cuenta.anclar(db, cpf_del_registro, user_id,
-                                          correo=email_lower)
-        except (cpf_de_la_cuenta.CpfInvalido, cpf_de_la_cuenta.CpfEnUso) as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
+    # LA CUENTA NACE EN `services/alta_de_cuenta.py`, que es el mismo lugar
+    # por el que nace una cuenta con Google: un solo sitio decide con qué
+    # campos nace una cuenta, ancla el CPF antes del insert y libera el bono.
+    # Acá vivían esos treinta renglones; se fueron para no tener dos copias.
     try:
-        await db.users.insert_one(user)
-    except DuplicateKeyError:
-        # El índice único de `users.cpf_number`, cuando exista, puede rechazar
-        # este insert. Sin este `except` el cliente recibía un 500 —«error del
-        # servidor»— en vez del motivo, y encima con la reserva ya anclada.
-        logger.warning("registro rechazado por la base: el CPF ya es de otra cuenta")
-        await cpf_de_la_cuenta.soltar_el_ancla(db, cpf_del_registro, user_id)
-        raise HTTPException(
-            status_code=400,
-            detail="Ese CPF ya tiene una cuenta en RIS App. Iniciá sesión con "
-                   "ella, o recuperá tu contraseña si no la recordás.")
+        user = await alta_de_cuenta.crear(
+            db, email=email_lower, name=pending["name"],
+            password_hash=pending["password_hash"],
+            referred_by=pending.get("referred_by"),
+            cpf_number=pending.get("cpf_number"))
+    except alta_de_cuenta.NoSePudoCrear as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    user_id = user["user_id"]
 
     await db.pending_verifications.delete_one({"email": email_lower})
-
-    # El bono de bienvenida, si se registró con el código de alguien. Va DESPUES
-    # del insert porque necesita que la cuenta exista, y en su propio try
-    # adentro del servicio: que el bono falle no puede dejar a medias un
-    # registro que ya creó la cuenta y ya mandó el correo.
-    if user.get("referred_by"):
-        from services import bonos
-        await bonos.al_registrarse(db, user_id, user["referred_by"])
     
     # Create session
     session_token = secrets.token_urlsafe(32)

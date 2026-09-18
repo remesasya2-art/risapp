@@ -739,8 +739,10 @@ QUIEN_PUEDE_TOCAR_LA_CUENTA_DEL_BONO = {
     "services/contabilidad.py",
     # La ÚNICA ruta que puede gastarlo: el envío a Venezuela.
     "routes/transactions.py",
-    # La cuenta nace en cero al crearse el usuario.
-    "routes/auth.py",
+    # La cuenta nace en cero al crearse el usuario. Vivía en `routes/auth.py`
+    # (verify-email); ahora las dos puertas —correo y Google— crean la cuenta
+    # por este único lugar.
+    "services/alta_de_cuenta.py",
 }
 
 

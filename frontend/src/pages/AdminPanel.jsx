@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
-, AlertTriangle } from 'lucide-react';
+, AlertTriangle, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { confirmar } from '../components/flujo/confirmar.js';
@@ -19,6 +19,7 @@ import LibroMayor from '../components/admin/LibroMayor';
 import RecursosHumanos from '../components/admin/RecursosHumanos';
 import LibroAuditoria from '../components/admin/LibroAuditoria';
 import Errores from '../components/admin/Errores';
+import Uso from '../components/admin/Uso';
 import Configuracion from '../components/admin/Configuracion';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
@@ -65,6 +66,9 @@ const CRM_SUBTABS = [
 
 const TABS = [
   { key: 'overview', label: 'Resumen', icon: Activity },
+  // Qué usa la gente. `superAdminOnly`: es el cuadro de mando del negocio
+  // —altas, embudo, funciones más usadas—, no una tarea que se delegue.
+  { key: 'uso', label: 'Uso', icon: BarChart3, superAdminOnly: true },
   { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
   { key: 'diferencias', label: 'Diferencias de pago', icon: AlertCircle, superAdminOnly: true },
   { key: 'reportes', label: 'Reportes', icon: Download },
@@ -132,7 +136,7 @@ const TABS = [
 //   nombres internos no cambian, así que los enlaces con `?tab=` y el salto de
 //   la campana del equipo siguen andando igual.
 const GRUPOS = [
-  { key: 'g_resumen', label: 'Resumen', icon: Activity, hijas: ['overview'] },
+  { key: 'g_resumen', label: 'Resumen', icon: Activity, hijas: ['overview', 'uso'] },
   { key: 'g_operacion', label: 'Operación', icon: CheckCircle,
     hijas: ['ordenes', 'withdrawals', 'recharges', 'diferencias', 'btc',
             'credits', 'rates'] },
@@ -1121,6 +1125,12 @@ const [searchParams, setSearchParams] = useSearchParams();
 
             <BcvRatesCard />
           </div>
+        )}
+
+        {activeTab === 'uso' && (
+          <ErrorBoundary clave="uso" donde="Uso de la aplicación">
+            <Uso />
+          </ErrorBoundary>
         )}
 
         {/* Withdrawals Tab */}
