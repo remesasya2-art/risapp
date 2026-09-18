@@ -302,8 +302,6 @@ POST /api/auth/2fa/disable
 POST /api/auth/2fa/enroll-confirm
 POST /api/auth/2fa/enroll-init
 POST /api/auth/2fa/regenerate-backup-codes
-POST /api/auth/2fa/setup-confirm
-POST /api/auth/2fa/setup-init
 POST /api/auth/2fa/verify
 POST /api/auth/change-password
 POST /api/auth/change-password/pedir-codigo
