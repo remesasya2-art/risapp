@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from database import db
 
 from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
-from services import bonos, saldos
+from services import bonos, comisiones, saldos
 from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
 from services.min_amount import effective_min_amount
@@ -533,6 +533,23 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         "beneficiary_data": beneficiary_data,
         "created_at": datetime.now(timezone.utc),
     }
+
+    # ─── 2 bis) Lo que te queda a vos ────────────────────────────────────
+    #
+    # VA ANTES DEL DEBITO, y ése es todo el punto. Si la tasa de costo falta,
+    # la operación se rechaza acá, con el saldo intacto. Calculado después del
+    # débito, un rechazo dejaría plata movida y habría que devolverla.
+    #
+    # De fábrica esto devuelve `{}` y no cambia absolutamente nada: el registro
+    # de comisiones viene apagado. Ver `services/comisiones.py`.
+    try:
+        transaction.update(await comisiones.campos_de(
+            db, via="ris_to_ves", monto_cliente=request.amount,
+            tasa_cliente=ris_to_ves))
+    except comisiones.FaltaLaTasaDeCosto:
+        raise HTTPException(
+            status_code=503,
+            detail="El envío no está disponible en este momento. Intenta más tarde.")
 
     # ─── 3) El débito, que ahora puede salir de DOS cuentas ──────────────
     #
