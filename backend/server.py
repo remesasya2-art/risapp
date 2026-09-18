@@ -332,6 +332,24 @@ app.add_middleware(SlowAPIMiddleware)
 @app.middleware("http")
 async def security_headers_middleware(request, call_next):
     response = await call_next(request)
+    # OJO: ESTA LINEA NO ES LO QUE RECIBE EL VISITANTE. CLOUDFLARE LA PISA.
+    #
+    # Cloudflare tiene su propia función de HSTS y gana. Medido sobre la
+    # respuesta real de https://risappbr.com el 18/09/2026, lo que llega es:
+    #
+    #     strict-transport-security: max-age=15552000
+    #
+    # Ciento ochenta días, SIN `includeSubDomains`. O sea que los subdominios
+    # no están cubiertos, por más que acá diga que sí.
+    #
+    # La línea se deja igual, y a propósito: es lo que corresponde mandar
+    # desde el origen, y es lo que valdría si un día se sirviera sin
+    # Cloudflare en el medio. Lo que NO se puede hacer es leerla y creerle.
+    # Para cambiar lo que llega de verdad hay que tocar el panel de
+    # Cloudflare (SSL/TLS → Edge Certificates → HSTS), y antes de prender
+    # `includeSubDomains` hay que saber qué subdominios existen: obliga a
+    # HTTPS en todos, y se rompe para quien ya visitó durante lo que dure el
+    # `max-age`. Ver la sección 8.2 del dossier.
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"

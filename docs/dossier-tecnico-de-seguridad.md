@@ -769,12 +769,28 @@ igual. Buscarla sola no caduca.
 
 Toda respuesta —incluidas las de error— lleva:
 
-| Cabecera | Valor | Qué evita |
+| Cabecera | Valor que ENVIA la aplicación | Qué evita |
 |---|---|---|
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Que el navegador vuelva a hablar en claro con el dominio |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` — **pero no es lo que llega; ver abajo** | Que el navegador vuelva a hablar en claro con el dominio |
 | `X-Frame-Options` | `DENY` | Que la aplicación se embeba en un iframe ajeno (*clickjacking*) |
 | `X-Content-Type-Options` | `nosniff` | Que el navegador adivine el tipo de un archivo subido por un usuario |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Que una dirección con identificadores se filtre al salir del sitio |
+
+**CUIDADO CON LA PRIMERA FILA: CLOUDFLARE LA PISA.**
+
+Esa columna dice lo que la aplicación **envía**, no lo que el visitante
+**recibe**. Cloudflare tiene su propia función de HSTS y gana. Medido sobre la
+respuesta real de `https://risappbr.com` el 18/09/2026, lo que llega es:
+
+    strict-transport-security: max-age=15552000
+
+Ciento ochenta días, **sin `includeSubDomains` y sin `preload`**. O sea que los
+subdominios NO están cubiertos, aunque el código diga que sí y aunque
+`tests/test_cabeceras_de_seguridad.py` esté en verde: ese test comprueba
+correctamente lo que la aplicación manda, y no puede ver lo que Cloudflare hace
+después.
+
+Se comprueba leyendo la cabecera de una respuesta de producción, no el código.
 
 **Política de contenido (CSP), incluida `script-src`.** Un XSS es código ajeno
 corriendo en el origen de la aplicación con la sesión de quien mira; las
@@ -1044,8 +1060,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **Ofrecerle el segundo factor al cliente** | No implementado, y la trampa cerrada | El segundo factor es del personal: las tres puertas que emiten sesión lo exigen sólo si el rol llega al panel o si Recursos Humanos marcó la cuenta como personal, con una sola definición (`services/personal.exige_dos_pasos`). Para el cliente, el factor extra es la huella, que sí tiene pantalla y sí se respeta. **Había una trampa y se sacó:** `/auth/2fa/setup-init` y `/auth/2fa/setup-confirm` encendían el segundo factor con sólo tener sesión, o sea para cualquier cliente, y el ingreso no lo miraba; no las llamaba ningún código del repositorio, así que se retiraron. `test_segundo_factor_sin_trampas.py` se pone rojo si vuelve a aparecer un alta fuera del login. Ofrecérselo de verdad pide tres cosas, en este orden: que las tres puertas respeten la marca, que la regla siga viviendo en un solo lugar, y la fila de abajo. |
 | **Quien pierde el teléfono Y los códigos de respaldo queda afuera** | Resuelto | Recursos Humanos tiene un botón que le reinicia el segundo factor a otra cuenta: borra los cinco campos, le cierra las sesiones, exige un motivo escrito, lo asienta en el libro de auditoría y le avisa por correo al dueño diciendo quién lo hizo. **A un super administrador no se le puede hacer**, y es la decisión central: una ruta que le saca un factor a otra cuenta es, ella misma, una forma de tomar esa cuenta, así que una sola sesión de super administrador tomada bajaría a todas las demás a un solo factor. Ese caso se resuelve entrando a la base a mano, que es lento a propósito. Ver `routes/recursos_humanos.py` y `tests/test_reiniciar_dos_pasos.py`. |
 | **Piso de pedidos por IP en modo aviso** | Implementado, no corta | Cuenta cada pedido a la API por IP, con un techo para clientes y otro aparte para el panel, y de fábrica sólo anota en la pestaña «Errores» qué conexión se pasó. Los techos salen de medir los sondeos que hace la propia aplicación, no de tráfico real, y un techo mal elegido deja afuera a una oficina entera detrás de una sola IP. Una o dos semanas de avisos, y el ajuste «cortar de verdad» del panel lo pasa a devolver 429 sin desplegar código. Ver `services/piso_de_peticiones.py`. |
-| **Modo TLS entre Cloudflare y el servidor de aplicación** | Sin verificar | No se puede leer desde el código: es un ajuste del panel de Cloudflare. El certificado del borde y la cabecera HSTS están puestos (8.2), pero si ese modo no es «Full (strict)», el tramo entre Cloudflare y la aplicación admite un certificado que nadie valida, y la cadena queda cerrada sólo hasta el borde. Verificarlo es un clic del operador. |
-| **`preload` en la cabecera HSTS** | No incluido | Hoy va con `max-age` e `includeSubDomains` y sin `preload` (8.2). Agregarlo mete el dominio en la lista que los navegadores traen de fábrica, que es la única forma de cubrir la PRIMERA visita de alguien que nunca entró. El costo es que salir de esa lista lleva meses: conviene tomarla cuando el dominio y todos sus subdominios estén definitivamente en HTTPS y no antes. Decisión del operador. |
+| **Modo TLS entre Cloudflare y el servidor de aplicación** | Verificado | **Está en «Full (strict)»**, comprobado en el panel de Cloudflare el 18/09/2026; el panel indica que el modo se fijó unos 109 días antes. El tramo entre Cloudflare y la aplicación va cifrado Y con el certificado del origen validado, así que la cadena cierra de punta a punta. Confirmado además que `https://risappbr.com/api/health` responde `{"status":"healthy"}` con ese modo puesto. Esto no se puede leer desde el código: es un ajuste del panel, y por eso la fila decía «Sin verificar» y no «mal configurado». |
+| **`preload` en la cabecera HSTS** | No alcanzable todavía | La fila anterior de este dossier decía que «hoy va con `max-age` e `includeSubDomains`». **Era falso**: eso es lo que envía la aplicación, y Cloudflare lo pisa. Lo que recibe el visitante es `max-age=15552000` a secas (ver 8.2). `preload` exige las TRES cosas juntas —`max-age` de al menos un año, `includeSubDomains`, y la palabra `preload`— y hoy no hay ninguna. **El inventario ya está hecho** (18/09/2026): de los nueve registros de la zona, sólo tres reciben tráfico de navegador —`api`, `www` y un `_domainconnect` residual de una mudanza vieja— y los tres van proxeados por Cloudflare, o sea HTTPS. Los otros cinco son un MX y cuatro TXT de correo y de verificación, que HSTS no toca: es una regla del navegador sobre pedidos HTTP, no sobre el correo ni el DNS. **Así que no hay ningún subdominio sirviendo HTTP que se rompa**, y el riesgo de más abajo no se materializa en esta zona; queda escrito igual porque vuelve a existir el día que se agregue un subdominio web nuevo. **El orden seguro, y no se salta:**  prender `includeSubDomains` en Cloudflare con un `max-age` corto; comprobar unos días; subir a doce meses; y `preload` al final. `includeSubDomains` obliga a HTTPS en TODO subdominio, y si alguno sirve HTTP se rompe para quien ya visitó el sitio **durante lo que dure el `max-age`**: el navegador ya se lo anotó y no hay vuelta atrás inmediata. Decisión del operador. |
 
 ---
 
