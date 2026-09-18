@@ -255,6 +255,18 @@ def cliente():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def buzon_sin_memoria():
+    """El buzón no repite un aviso ya escrito (ver routes/csp_reporte.py), y
+    varios tests de acá mandan el MISMO. Sin esto, el primero en correr deja
+    al resto mirando un registro vacío: un orden de tests decidiría si la
+    suite pasa."""
+    from routes import csp_reporte
+    csp_reporte._olvidar()
+    yield
+    csp_reporte._olvidar()
+
+
 REPORTE = {"csp-report": {"effective-directive": "script-src",
                           "blocked-uri": "https://un-dominio.test/x.js",
                           "document-uri": "https://risappbr.com/send"}}
@@ -728,3 +740,170 @@ def test_LA_RUTA_QUE_SIRVE_LA_CLAVE_SIGUE_EXISTIENDO():
     assert '"public_key": os.environ.get("MERCADOPAGO_PUBLIC_KEY")' in fuente, (
         "la ruta /payments/card/config dejó de servir la clave pública. La "
         "necesita el formulario de tarjeta para arrancar el SDK.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. Lo que el buzón NO escribe
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Este buzón existe para ver UNA cosa: un script cargándose desde un dominio
+# que no elegimos. Lo que aparece en producción y NO es eso —las extensiones
+# del navegador de cada visitante, y el mismo aviso una vez por carga de
+# página— tapa esa señal. Un registro tapado es un registro que nadie mira, y
+# entonces la política no se completa nunca.
+
+
+def de_una_extension(esquema="chrome-extension", **cambios):
+    reporte = {"effective-directive": "script-src", "blocked-uri": "wasm-eval",
+               "source-file": esquema}
+    reporte.update(cambios)
+    return {"csp-report": reporte}
+
+
+@pytest.mark.parametrize("esquema", [
+    "chrome-extension",                      # Chrome tapa la dirección real
+    "chrome-extension://abcdefghijklmnop",   # y a veces manda el identificador
+    "moz-extension://1234-5678",             # Firefox
+    "safari-web-extension://AAAA",           # Safari
+    "safari-extension://BBBB",
+    "ms-browser-extension://CCCC",
+])
+def test_UN_AVISO_DE_UNA_EXTENSION_NO_SE_ESCRIBE(cliente, caplog, esquema):
+    """Es el aviso que de verdad aparece en producción. No hay nada roto ni
+    nada que decidir: `chrome-extension://...` no es un origen que podamos
+    permitir, ni querríamos."""
+    import logging
+    from routes import csp_reporte
+    with caplog.at_level(logging.WARNING):
+        r = cliente.post(csp.RUTA_DE_REPORTE, json=de_una_extension(esquema))
+    assert r.status_code == 204
+    assert "CSP habría bloqueado" not in caplog.text, caplog.text
+    assert csp_reporte.descartados["extensiones"] == 1
+
+
+@pytest.mark.parametrize("bloqueado", [
+    "chrome-extension://abcd/inyectado.js",
+    # LA MAYUSCULA SE PRUEBA ACA Y NO EN `source-file`, y eso es a propósito.
+    # Al sacarle el dominio, una dirección pasa por `urlsplit`, que baja el
+    # esquema a minúsculas sola: puesta allá, esta comprobación pasa con el
+    # `.lower()` y sin él, o sea que no prueba nada. `blocked-uri` se compara
+    # tal como llega, y es el único camino donde la minúscula hace falta.
+    # (Comprobado rompiéndolo: con la mayúscula del otro lado, quitar el
+    # `.lower()` no ponía ningún test en rojo.)
+    "CHROME-EXTENSION://ABCD/INYECTADO.JS",
+])
+def test_TAMBIEN_CUANDO_LA_EXTENSION_ES_EL_ORIGEN_BLOQUEADO(cliente, caplog, bloqueado):
+    """El navegador nombra la extensión en `source-file` o en `blocked-uri`
+    según el caso. Mirar uno solo deja pasar la mitad."""
+    import logging
+    reporte = {"csp-report": {"effective-directive": "script-src-elem",
+                              "blocked-uri": bloqueado,
+                              "source-file": "https://www.risappbr.com/"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    assert "CSP habría bloqueado" not in caplog.text, caplog.text
+
+
+def test_EL_DESCARTE_DE_EXTENSIONES_QUEDA_DICHO_UNA_VEZ(cliente, caplog):
+    """Un filtro invisible es un filtro del que nadie sospecha cuando esconde
+    de más. Lo dice una vez y después se calla."""
+    import logging
+    with caplog.at_level(logging.INFO):
+        for _ in range(4):
+            cliente.post(csp.RUTA_DE_REPORTE, json=de_una_extension())
+    avisos = [l for l in caplog.text.splitlines() if "se descartan" in l]
+    assert len(avisos) == 1, avisos
+    from routes import csp_reporte
+    assert csp_reporte.descartados["extensiones"] == 4
+
+
+def test_UN_SCRIPT_DE_UN_DOMINIO_QUE_NO_ELEGIMOS_SI_SE_ESCRIBE(cliente, caplog):
+    """La contracara, y el motivo de todo esto: el aviso que importa tiene que
+    seguir llegando. Un filtro que se come éste no sirve de nada."""
+    import logging
+    reporte = {"csp-report": {"effective-directive": "script-src",
+                              "blocked-uri": "https://mineria-de-cripto.test/m.js",
+                              "source-file": "https://www.risappbr.com/"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    assert "CSP habría bloqueado" in caplog.text
+    assert "mineria-de-cripto.test" in caplog.text
+
+
+def test_UN_DOMINIO_QUE_SE_PARECE_A_UNA_EXTENSION_NO_SE_DESCARTA(cliente, caplog):
+    """La comparación es por prefijo, y un dominio de verdad empieza con
+    `https`. Si algún día se compara «contiene», esto se pone rojo."""
+    import logging
+    reporte = {"csp-report": {"effective-directive": "script-src",
+                              "blocked-uri": "https://chrome-extension-store.test/x.js"}}
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    assert "chrome-extension-store.test" in caplog.text
+
+
+def test_EL_MISMO_AVISO_SE_ESCRIBE_UNA_SOLA_VEZ(cliente, caplog):
+    """Un recurso bloqueado avisa una vez POR CARGA DE PAGINA, y la página la
+    cargan todos: el primer aviso de algo aparece idéntico cientos de veces por
+    día y el que importa es el NUEVO."""
+    import logging
+    from routes import csp_reporte
+    reporte = {"csp-report": {"effective-directive": "script-src",
+                              "blocked-uri": "https://repetido.test/x.js"}}
+    with caplog.at_level(logging.WARNING):
+        for _ in range(5):
+            cliente.post(csp.RUTA_DE_REPORTE, json=reporte)
+    escritos = [l for l in caplog.text.splitlines() if "repetido.test" in l]
+    assert len(escritos) == 1, escritos
+    assert csp_reporte.descartados["repetidos"] == 4
+
+
+def test_UN_AVISO_DISTINTO_SI_SE_ESCRIBE(cliente, caplog):
+    """Callar el repetido no puede callar al que cambió: la directiva, el
+    origen, el dominio o la muestra distintos son un aviso nuevo."""
+    import logging
+    base = {"effective-directive": "script-src", "blocked-uri": "https://a.test/x.js",
+            "source-file": "https://www.risappbr.com/", "script-sample": "uno"}
+    distintos = [
+        dict(base, **{"effective-directive": "style-src"}),
+        dict(base, **{"blocked-uri": "https://b.test/x.js"}),
+        dict(base, **{"source-file": "https://otro.test/y.js"}),
+        dict(base, **{"script-sample": "dos"}),
+    ]
+    with caplog.at_level(logging.WARNING):
+        cliente.post(csp.RUTA_DE_REPORTE, json={"csp-report": base})
+        for reporte in distintos:
+            cliente.post(csp.RUTA_DE_REPORTE, json={"csp-report": reporte})
+    escritos = [l for l in caplog.text.splitlines() if "CSP habría bloqueado" in l]
+    assert len(escritos) == 5, escritos
+
+
+def test_PASADO_EL_RATO_EL_AVISO_VUELVE_A_ESCRIBIRSE():
+    """Que no se repita no es que se olvide para siempre: si algo sigue pasando
+    media hora después, hay que volver a verlo."""
+    from routes import csp_reporte
+    aviso = ("script-src", "https://x.test", "?", "?")
+    assert csp_reporte._es_la_primera_vez(aviso, ahora=1000.0) is True
+    assert csp_reporte._es_la_primera_vez(aviso, ahora=1500.0) is False
+    tarde = 1000.0 + csp_reporte.MINUTOS_SIN_REPETIR * 60 + 1
+    assert csp_reporte._es_la_primera_vez(aviso, ahora=tarde) is True
+
+
+def test_LA_MEMORIA_DE_AVISOS_NO_CRECE_SIN_FIN():
+    """Lo que llega acá lo elige quien hace el pedido: con una muestra distinta
+    en cada aviso, cada uno es «nuevo» y esto crecería hasta quedarse sin
+    memoria."""
+    from routes import csp_reporte
+    for i in range(csp_reporte.TOPE_DE_AVISOS_RECORDADOS * 2 + 5):
+        csp_reporte._es_la_primera_vez(("script-src", f"https://{i}.test", "?", "?"),
+                                       ahora=2000.0)
+    assert len(csp_reporte._ya_dicho) <= csp_reporte.TOPE_DE_AVISOS_RECORDADOS
+
+
+def test_EL_TOPE_DE_CUERPO_Y_EL_DE_INTENTOS_SIGUEN_PUESTOS():
+    """Los descartes de arriba ahorran líneas de registro, no protegen la
+    dirección: sigue siendo un buzón abierto en internet."""
+    import inspect
+    from routes import csp_reporte
+    fuente = inspect.getsource(csp_reporte.recibir_reporte)
+    assert 'frenar(request, "csp.reporte"' in fuente
+    assert "TOPE_BYTES" in fuente
