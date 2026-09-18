@@ -46,6 +46,7 @@ rastro.configurar_el_registro()
 # a mitad del archivo, antes de los otros imports de servicios: importarlo
 # abajo dejaba `uso.Contador` sin definir y el servidor no arrancaba.
 from services import uso                                              # noqa: E402
+from services import piso_de_peticiones                               # noqa: E402
 logger = logging.getLogger(__name__)
 
 # MongoDB connection
@@ -364,6 +365,11 @@ app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credenti
 # aplicación, para no correr sobre lo que el tope de cuerpo o la puerta del
 # borde ya rechazaron: esos ni llegan a tener ruta.
 app.add_middleware(uso.Contador)
+
+# El piso de pedidos por IP para toda la API (services/piso_de_peticiones.py).
+# Por fuera del contador de uso: un pedido cortado por el piso no es uso de
+# nadie. Arranca en modo reporte: no corta hasta que Configuración lo diga.
+app.add_middleware(piso_de_peticiones.Piso)
 
 # LA PUERTA DEL BORDE VA ACA, Y EL ORDEN NO ES CASUAL.
 #

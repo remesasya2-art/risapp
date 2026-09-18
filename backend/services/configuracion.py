@@ -172,6 +172,37 @@ AJUSTES = {
               "una misma IP puede haber una oficina o un wifi compartido: a ellos "
               "no hay que frenarlos, a un programa que abre cuentas sí."),
 
+    # ── El piso de pedidos por IP para toda la API ─────────────────────────
+    #
+    # Ver services/piso_de_peticiones.py: por qué dos techos, y por qué
+    # arranca sólo avisando. Los tres se leen ahí con una caché de 30
+    # segundos, así que un cambio acá tarda como mucho eso en aplicarse.
+    "piso_peticiones_clientes_por_ip_por_minuto": Ajuste(
+        tipo=ENTERO, defecto=300, minimo=30, maximo=100000,
+        unidad="por minuto",
+        etiqueta="Piso de pedidos por conexión (IP), clientes, por minuto",
+        ayuda="Cuántos pedidos puede hacer una misma conexión por minuto a "
+              "cualquier parte de la aplicación que no sea el panel. Un cliente "
+              "con la pantalla abierta hace unos 6; esperando un pago, hasta 30. "
+              "Trescientos no molesta a nadie y corta a un programa."),
+
+    "piso_peticiones_panel_por_ip_por_minuto": Ajuste(
+        tipo=ENTERO, defecto=1500, minimo=60, maximo=1000000,
+        unidad="por minuto",
+        etiqueta="Piso de pedidos por conexión (IP), panel, por minuto",
+        ayuda="Lo mismo para el panel de administración, aparte y mucho más "
+              "alto: la mesa de ayuda sondea cada pocos segundos, y una oficina "
+              "de cinco personas detrás de una sola IP hace unos 175 por minuto."),
+
+    "piso_peticiones_exigir": Ajuste(
+        tipo=ENTERO, defecto=0, minimo=0, maximo=1,
+        unidad="0 = sólo avisa, 1 = corta",
+        etiqueta="Piso de pedidos: cortar de verdad",
+        ayuda="En 0 (fábrica) no se corta nada: cada conexión que se pasa "
+              "queda anotada en la pestaña Errores, una vez por minuto, con su "
+              "cuenta. Cuando el registro muestre que sólo se pasan programas y "
+              "no personas, ponelo en 1 y los pedidos de más reciben un 429."),
+
     # ── Los límites de cada vía de dinero ──────────────────────────────────
     #
     # Vivían escritos a mano en tres archivos distintos —`services/limits.py`,
