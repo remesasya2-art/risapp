@@ -238,6 +238,39 @@ async def frenar(request: Request, alcance: str, regla: str) -> None:
         raise HTTPException(
             status_code=429,
             detail="Demasiados intentos. Esperá unos minutos y volvé a probar.")
+async def frenar_por_cuenta(user_id: str, alcance: str, regla: str) -> None:
+    """Como `frenar`, pero el cupo es de la CUENTA y no de la IP.
+
+    POR QUE HACE FALTA UN SEGUNDO CONTADOR
+
+        Todos los límites de esta aplicación eran por IP, y eso protege la
+        puerta de entrada: quien no tiene sesión sólo tiene su IP. Pero quien
+        YA tiene sesión tiene además una cuenta, y una cuenta que cambia de
+        red —datos del celular, wifi, un VPN— cambia de IP y arranca de cero.
+        Para las rutas que mueven plata, eso era no tener límite.
+
+        El contador es el mismo de siempre (`el_contador()`), así que vive en
+        la base y lo comparten los workers. Sólo cambia la clave: `cuenta:` y
+        el id, en vez de la IP. El prefijo evita que un user_id que casualmente
+        se parezca a una IP pise el contador de una IP.
+
+    ES `async`, Y HAY QUE ESPERARLA, por el mismo motivo que `frenar`: la
+    guarda de `tests/test_limite_por_ip.py` también la recorre a ella.
+    """
+    from limits import parse
+
+    parsed = _REGLAS.get(regla)
+    if parsed is None:
+        parsed = _REGLAS[regla] = parse(regla)
+
+    clave = f"cuenta:{user_id}"
+    if not await el_contador().hit(parsed, clave, alcance):
+        logger.warning("Límite %s alcanzado por la cuenta %s en %s", regla, user_id, alcance)
+        raise HTTPException(
+            status_code=429,
+            detail="Hiciste demasiadas operaciones seguidas. Esperá un rato y volvé a probar.")
+
+
 # ============================================================
 # Router
 # ============================================================

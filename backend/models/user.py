@@ -34,6 +34,20 @@ class User(BaseModel):
         return v
     role: str = "user"  # user, agent, admin, super_admin
     permissions: List[str] = []
+    # ¿Es una cuenta del personal? Lo marca Recursos Humanos.
+    #
+    # NO ESTABA DECLARADO, Y ESO DEJABA UNA PUERTA ABIERTA. Pydantic descarta
+    # lo que el modelo no declara, y `get_current_user` arma un `User` con el
+    # documento de la base: el campo llegaba de la base y se perdía al armar
+    # el modelo. Peor: la proyección de esa consulta se deriva de estos
+    # campos, así que ni siquiera se lo pedía a la base.
+    #
+    # Resultado, comprobado corriéndolo: `sin_transacciones_personales` —la
+    # puerta que impide que una cuenta del personal mueva plata a título
+    # personal— recibía siempre `es_personal=False` y nunca frenaba a nadie.
+    # El candado de fondo en `saldos.mover` seguía cerrado porque lee el
+    # documento crudo; la puerta con el mensaje claro, no.
+    es_personal: bool = False
     verification_status: str = "unverified"  # unverified, pending, verified
     kyc_documents: List[str] = []
     is_admin: bool = False

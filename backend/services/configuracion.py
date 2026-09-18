@@ -144,6 +144,34 @@ AJUSTES = {
               "adelante hace falta además que esa cuenta haga su primer "
               "envío."),
 
+    # ── Cuántas operaciones de dinero seguidas ─────────────────────────────
+    #
+    # No es cuánta plata: es cuántas VECES. Un pedido de retiro, un envío,
+    # una recarga, un cobro PIX, cada uno cuenta uno. Son los frenos de
+    # `routes/dependencies.py::sin_transacciones_personales`, la única puerta
+    # por la que pasan todas las rutas que mueven plata.
+    #
+    # Antes no había ninguno: una cuenta con sesión podía crear pedidos de
+    # retiro sin parar. Y los límites de la aplicación eran todos por IP, que
+    # para quien ya tiene sesión y cambia de red es no tener límite.
+    "dinero_operaciones_por_cuenta_por_hora": Ajuste(
+        tipo=ENTERO, defecto=30, minimo=1, maximo=10000,
+        unidad="por hora",
+        etiqueta="Operaciones de dinero por cuenta, por hora",
+        ayuda="Cuántas veces una misma cuenta puede pedir un retiro, un envío, "
+              "una recarga o un cobro en una hora, sumando todas. Al pasarse "
+              "recibe «Hiciste demasiadas operaciones seguidas». Treinta es "
+              "holgado para una persona y corta a un programa."),
+
+    "dinero_operaciones_por_ip_por_hora": Ajuste(
+        tipo=ENTERO, defecto=120, minimo=1, maximo=100000,
+        unidad="por hora",
+        etiqueta="Operaciones de dinero por conexión (IP), por hora",
+        ayuda="Lo mismo, pero por la conexión desde la que se pide, sin importar "
+              "la cuenta. Va bastante más alto que el de cuenta porque detrás de "
+              "una misma IP puede haber una oficina o un wifi compartido: a ellos "
+              "no hay que frenarlos, a un programa que abre cuentas sí."),
+
     # ── Los límites de cada vía de dinero ──────────────────────────────────
     #
     # Vivían escritos a mano en tres archivos distintos —`services/limits.py`,

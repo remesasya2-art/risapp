@@ -216,8 +216,11 @@ def test_LLAMAR_A_FRENAR_SIN_AWAIT_DEJA_EL_ENDPOINT_SIN_LIMITE():
         esperadas = {n.value.lineno for n in ast.walk(arbol)
                      if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)}
         for n in ast.walk(arbol):
+            # `frenar_por_cuenta` también: es `async` por el mismo motivo y
+            # llamarla sin `await` deja la ruta de dinero sin límite por cuenta.
             if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-                    and n.func.id == "frenar" and n.lineno not in esperadas):
+                    and n.func.id in ("frenar", "frenar_por_cuenta")
+                    and n.lineno not in esperadas):
                 culpables.append(f"{archivo.relative_to(raiz)}:{n.lineno}")
 
     assert not culpables, (

@@ -4,6 +4,8 @@ Main FastAPI application entry point.
 All endpoints are now in modular routers under /routes/
 """
 from fastapi import FastAPI, Request, Header
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
@@ -95,6 +97,8 @@ async def lifespan(app):
         # --- Índices adicionales (rendimiento al escalar) ---
         await db.transactions.create_index([("user_id", 1), ("created_at", -1)])
         await db.transactions.create_index([("created_at", -1)])
+        # El registro de errores del panel: se borra solo a los 30 días.
+        await errores.preparar_indices(db)
         await db.transactions.create_index("transaction_id", sparse=True)
         await db.support_requests.create_index([("status", 1), ("created_at", -1)])
         await db.support_requests.create_index("support_id", sparse=True)
@@ -363,6 +367,8 @@ app.add_middleware(PuertaDelBorde)
 # nadie lo cortara.
 #
 # Ver services/limite_de_cuerpo.py.
+from services import errores
+from services.ip_cliente import ip_del_cliente
 from services.limite_de_cuerpo import LimiteDeCuerpo
 app.add_middleware(LimiteDeCuerpo)
 
@@ -385,12 +391,50 @@ async def _error_no_previsto(request, exc):
     """
     logger.exception("error no previsto en %s %s", request.method,
                      request.url.path)
+    # Y AL REGISTRO QUE EL PANEL MUESTRA. Antes esto iba al log de Railway y
+    # ahí se quedaba: el super administrador no sabía que algo fallaba hasta
+    # que un cliente escribía. Ver services/errores.py. Nunca levanta.
+    import traceback as _tb
+    await errores.anotar(
+        db, rastro=rastro.actual(), metodo=request.method,
+        ruta=_plantilla_de(request), status=500,
+        tipo=type(exc).__name__, mensaje=str(exc),
+        traza="".join(_tb.format_exception(type(exc), exc, exc.__traceback__)),
+        user_id=getattr(request.state, "user_id", None),
+        ip=ip_del_cliente(request))
     return JSONResponse(
         status_code=500,
         content={"detail": "Hubo un error inesperado. Si escribís a soporte, "
                            f"pasales este código: {rastro.actual()}",
                  "request_id": rastro.actual()},
     )
+
+
+def _plantilla_de(request) -> str:
+    """`/api/admin/users/{user_id}` y no `/api/admin/users/u_123`: la
+    pantalla agrupa por ruta, y con el id adentro cada error sería su propia
+    ruta y no se agruparía nada."""
+    ruta = request.scope.get("route")
+    return getattr(ruta, "path", None) or request.url.path
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _error_levantado_a_proposito(request, exc):
+    """Los 5xx que el código levanta con intención —el 503 de «no pudimos
+    generar el cobro», por ejemplo— también son errores que el panel tiene
+    que mostrar: son justo los que un cliente sufre antes de quejarse.
+
+    Los 4xx no: un 404 o un 403 es el sistema diciendo que no, no algo roto.
+    Se delega en el manejador de siempre para que la respuesta sea idéntica.
+    """
+    if exc.status_code >= 500:
+        await errores.anotar(
+            db, rastro=rastro.actual(), metodo=request.method,
+            ruta=_plantilla_de(request), status=exc.status_code,
+            tipo="HTTPException", mensaje=str(exc.detail),
+            user_id=getattr(request.state, "user_id", None),
+            ip=ip_del_cliente(request))
+    return await http_exception_handler(request, exc)
 security = HTTPBearer()
 
 # ============================================================================

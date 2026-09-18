@@ -1,24 +1,23 @@
-# Las rutas que NO declaran contrato de salida (`response_model`), congeladas.
 #
-# POR QUE ESTA LISTA EXISTE
 #
-#     El día que se escribió, NINGUNA de las 364 rutas declaraba contrato.
-#     Ponerlos todos de una no es una buena idea en una aplicación en
-#     producción: un modelo mal escrito se come campos EN SILENCIO —la ruta
-#     contesta 200 y la pantalla queda vacía— y eso es peor que no tenerlo.
 #
-#     Así que esta lista congela lo que había, y el test exige contrato sólo en
-#     TODA RUTA NUEVA. El número no puede crecer; sí puede bajar.
 #
-# COMO SE USA
 #
-#     - Ruta nueva sin `response_model`  -> el test se pone rojo. Poneselo.
-#     - Le ponés contrato a una de acá   -> el test se pone rojo. Borrala de
+#
 #                                            esta lista: es una menos.
 #     - Borrás una ruta                  -> el test se pone rojo. Borrala de acá.
-#
+#     - Le ponés contrato a una de acá   -> el test se pone rojo. Borrala de
+#     - Ruta nueva sin `response_model`  -> el test se pone rojo. Poneselo.
+#     Así que esta lista congela lo que había, y el test exige contrato sólo en
+#     El día que se escribió, NINGUNA de las 364 rutas declaraba contrato.
 #     No se agregan líneas a mano nunca. Esta lista sólo se achica.
-
+#     Ponerlos todos de una no es una buena idea en una aplicación en
+#     TODA RUTA NUEVA. El número no puede crecer; sí puede bajar.
+#     contesta 200 y la pantalla queda vacía— y eso es peor que no tenerlo.
+#     producción: un modelo mal escrito se come campos EN SILENCIO —la ruta
+# COMO SE USA
+# Las rutas que NO declaran contrato de salida (`response_model`), congeladas.
+# POR QUE ESTA LISTA EXISTE
 DELETE /api/admin/accounting/banks/{bank_id}
 DELETE /api/admin/blacklist/{blacklist_id}
 DELETE /api/admin/quick-replies/{qr_id}
@@ -75,6 +74,8 @@ GET /api/admin/envios/retiro
 GET /api/admin/envios/tarifas
 GET /api/admin/envios/transportistas
 GET /api/admin/envios/transportistas/{transportista_id}/agencias
+GET /api/admin/errores
+GET /api/admin/errores/resumen
 GET /api/admin/hidden-transactions
 GET /api/admin/kyc/document-types
 GET /api/admin/kyc/export.csv
@@ -134,9 +135,9 @@ GET /api/admin/transactions
 GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
 GET /api/admin/users
-GET /api/admin/users/{user_id}/ficha
 GET /api/admin/users/{user_id}
 GET /api/admin/users/{user_id}/complete
+GET /api/admin/users/{user_id}/ficha
 GET /api/admin/verifications/pending
 GET /api/admin/wipe-all/preview
 GET /api/admin/withdrawals/all
