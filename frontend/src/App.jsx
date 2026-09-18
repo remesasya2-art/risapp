@@ -21,7 +21,6 @@ import Notifications from './pages/Notifications';
 import Support from './pages/Support';
 import ForceChangePassword from './pages/ForceChangePassword';
 import GestorFlowMockup from './pages/GestorFlowMockup';
-import DriveCallback from './pages/DriveCallback';
 import BTCLightning from './pages/BTCLightning';
 import SendReais from './pages/SendReais';
 import SendCrypto from './pages/SendCrypto';
@@ -143,7 +142,6 @@ function AppRoutes() {
       
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
-      <Route path="/admin/drive-callback" element={<ProtectedRoute adminOnly><DriveCallback /></ProtectedRoute>} />
       
       {/* Force Change Password Route */}
       <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />

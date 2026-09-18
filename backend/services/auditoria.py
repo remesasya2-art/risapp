@@ -88,6 +88,10 @@ ACCIONES = {
     "kyc.rechazado":            (Cat.KYC, "Verificación rechazada"),
     "kyc.re_revision":          (Cat.KYC, "Verificación devuelta a revisión"),
     "kyc.riesgo":               (Cat.KYC, "Nivel de riesgo asignado"),
+    # Sacar los datos de un cliente del sistema deja rastro. Antes esto se
+    # hacía subiendo un PDF a Google Drive y no se asentaba en ningún lado:
+    # no había forma de saber quién se llevó la ficha de quién, ni cuándo.
+    "kyc.ficha_descargada":     (Cat.KYC, "Ficha de cliente descargada"),
     # Dinero
     "dinero.ajuste_manual":     (Cat.DINERO, "Ajuste manual de saldo"),
     "dinero.recarga_aprobada":  (Cat.DINERO, "Recarga aprobada"),

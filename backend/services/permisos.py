@@ -72,6 +72,11 @@ CATALOGO = {
 
     "kyc.view":              "Ver verificaciones de identidad",
     "kyc.approve":           "Aprobar, rechazar y calificar KYC",
+    # Permiso PROPIO, y no `kyc.view`, a propósito: ver la ficha de alguien en
+    # pantalla y LLEVARSELA en un archivo son dos cosas distintas. Lo primero
+    # lo necesita cualquiera que atienda; lo segundo saca los datos del
+    # sistema, y quien lo pueda hacer conviene elegirlo aparte.
+    "kyc.ficha":             "Descargar la ficha de un cliente (SE LLEVA SUS DATOS)",
 
     "recharges.view":        "Ver recargas",
     "recharges.approve":     "Aprobar recargas (MUEVE DINERO)",
@@ -120,6 +125,7 @@ MAPA = {
     ("DELETE", "/api/admin/blacklist/{blacklist_id}"):       "users.blacklist",
 
     # ── KYC ───────────────────────────────────────────────────────────────
+    ("GET",    "/api/admin/users/{user_id}/ficha"):           "kyc.ficha",
     ("GET",    "/api/admin/kyc/list"):                       "kyc.view",
     ("GET",    "/api/admin/kyc/document-types"):             "kyc.view",
     ("GET",    "/api/admin/kyc/rejection-reasons"):          "kyc.view",

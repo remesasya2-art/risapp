@@ -406,7 +406,11 @@ PUNTOS = [
     ("routes/misc.py", "guardar"),          # el envío del KYC
     ("routes/kyc_admin.py", "abrir"),       # el panel de revisión
     ("routes/admin.py", "abrir_varios"),    # la ficha del usuario
-    ("routes/google_drive.py", "abrir"),    # el PDF que se sube a Drive
+    # La ficha del cliente. Estaba en `routes/google_drive.py`, que subía el
+    # PDF a Google Drive; ese camino se quitó y ahora la ficha se descarga
+    # desde el servidor. El cofre sigue en el medio: si las imágenes
+    # estuvieran cifradas, hay que abrirlas para dibujarlas en el PDF.
+    ("services/ficha_del_cliente.py", "abrir"),
 ]
 
 
