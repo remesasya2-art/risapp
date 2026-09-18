@@ -15,8 +15,9 @@ LO QUE SE PRUEBA
     4. Que se guarde sólo la lista de lo permitido: jamás cuerpo, consulta
        ni cabeceras.
     5. Que se borre solo (TTL) y que el servidor lo arranque y lo pare.
-    6. Que el resumen cuente cuentas distintas de verdad, y que los números
-       de la base (altas, embudo, activos, operaciones) salgan bien.
+    6. Que el resumen cuente cuentas distintas de verdad, que las funciones
+       que nadie usó salgan agrupadas por nombre, y que los números de la
+       base (altas, embudo, activos, operaciones) salgan bien.
     7. Que la ruta sea sólo del super administrador y la pantalla exista.
     8. Que cada nombre y cada latido apunten a una ruta que existe.
 """
@@ -347,6 +348,69 @@ def test_el_resumen_deja_afuera_lo_de_antes_de_la_ventana(base):
     corre(cuerpo())
 
 
+def test_las_funciones_con_nombre_que_nadie_uso_salen_aparte(base):
+    """La pregunta que sirve para decidir qué sacar. Una función en cero no
+    aparecía en cero: no aparecía, y no se distinguía de una que no existe."""
+    async def cuerpo():
+        cliente(ruta="/api/transactions", metodo="GET")
+        await uso.volcar(base)
+        r = await uso.resumen(base, dias=7, hoy=HOY)
+        assert "Movimientos (inicio e historial)" not in r["sin_uso"], \
+            "la usó alguien y salió como que no"
+        assert "Referidos" in r["sin_uso"]
+        assert "Cotización de encomienda" in r["sin_uso"]
+        assert r["sin_uso"] == sorted(r["sin_uso"]), "sale ordenada, para poder leerla"
+    corre(cuerpo())
+
+
+def test_un_nombre_con_dos_rutas_no_sale_como_que_nadie_lo_uso(base):
+    """Mandar bolívares se pide por dos caminos y los dos se llaman igual. Con
+    las rutas crudas, usar uno dejaba al otro en la lista de «nadie la usó», o
+    sea el mismo nombre arriba con tráfico y abajo en cero."""
+    async def cuerpo():
+        cliente(ruta="/api/withdraw", metodo="POST")
+        await uso.volcar(base)
+        r = await uso.resumen(base, dias=7, hoy=HOY)
+        assert "Envío a Venezuela (bolívares)" not in r["sin_uso"]
+        # Y el otro camino, el que nadie tocó, tampoco arrastra el nombre.
+        assert r["sin_uso"].count("Envío a Venezuela (bolívares)") == 0
+    corre(cuerpo())
+
+
+def test_sin_nada_contado_estan_TODAS_las_funciones_con_nombre(base):
+    async def cuerpo():
+        r = await uso.resumen(base, dias=7, hoy=HOY)
+        assert r["funciones"] == []
+        assert sorted(set(uso.NOMBRES.values())) == r["sin_uso"]
+    corre(cuerpo())
+
+
+def test_una_ruta_sin_nombre_NO_ensucia_la_lista_de_las_que_nadie_uso(base):
+    """La lista es de funciones CON nombre. Una plantilla cruda no es una
+    función que alguien decidió ofrecer: es una ruta que todavía no se nombró,
+    y meterla acá convierte la lista en una lista de rutas."""
+    async def cuerpo():
+        cliente(ruta="/api/algo/nuevo", metodo="POST")
+        await uso.volcar(base)
+        r = await uso.resumen(base, dias=7, hoy=HOY)
+        assert "/api/algo/nuevo" not in r["sin_uso"]
+        assert all(n in set(uso.NOMBRES.values()) for n in r["sin_uso"])
+    corre(cuerpo())
+
+
+def test_lo_de_afuera_de_la_ventana_no_salva_a_una_funcion(base):
+    """Si se usó hace un mes y la ventana es de una semana, en esta ventana
+    nadie la usó. Mirar toda la colección en vez de la ventana la escondería
+    para siempre."""
+    async def cuerpo():
+        cliente(ruta="/api/referidos/mis-referidos", metodo="GET",
+                ahora=HOY - timedelta(days=10))
+        await uso.volcar(base)
+        r = await uso.resumen(base, dias=7, hoy=HOY)
+        assert "Referidos" in r["sin_uso"]
+    corre(cuerpo())
+
+
 def test_una_ruta_sin_nombre_sale_igual_con_su_plantilla(base):
     async def cuerpo():
         cliente(ruta="/api/algo/nuevo", metodo="POST")
@@ -438,8 +502,10 @@ def test_todo_junta_las_dos_fuentes(base):
         cliente()
         await uso.volcar(base)
         t = await uso.todo(base, dias=7)
-        assert set(t) == {"dias", "desde", "hasta", "funciones", "por_dia", "base"}
+        assert set(t) == {"dias", "desde", "hasta", "funciones", "sin_uso",
+                          "por_dia", "base"}
         assert t["funciones"][0]["pedidos"] == 1
+        assert "Referidos" in t["sin_uso"], "la lista de las que nadie usó no llegó"
         assert "embudo" in t["base"] and "operaciones" in t["base"]
     corre(cuerpo())
 
@@ -487,6 +553,20 @@ def test_la_pantalla_pega_a_la_ruta_y_ofrece_los_tres_periodos():
         assert f'data-testid="{testid}"' in fuente, testid
 
 
+def test_la_pantalla_dibuja_las_que_nadie_uso_CON_la_advertencia():
+    """La advertencia no es decoración: sin ella la lista se lee como «esto
+    sobra», y el número no dice eso. Un botón escondido da el mismo cero."""
+    fuente = _COMPONENTE.read_text(encoding="utf-8")
+    assert 'datos?.sin_uso' in fuente, "la pantalla no lee la lista"
+    assert 'data-testid="uso-sin-uso"' in fuente
+    # La condición, y no sólo que el bloque exista. Escrito sin esta línea, el
+    # test quedaba en verde con el bloque colgado de un `false`: estaba en el
+    # archivo y no se dibujaba nunca. Se vio rompiéndolo a propósito.
+    assert '{sinUso.length > 0 ? (' in fuente, "el bloque no se dibuja aunque haya lista"
+    assert "Nadie las usó en" in fuente
+    assert "o una a la que no se" in fuente and "botón quedó escondido" in fuente
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 8. Los nombres y los latidos apuntan a rutas que existen
 # ══════════════════════════════════════════════════════════════════════════
@@ -522,5 +602,15 @@ def test_cada_latido_apunta_a_una_ruta_que_existe(rutas_vivas):
 
 
 def test_ningun_latido_lleva_nombre():
-    """Serían dos listas diciendo cosas contrarias de la misma ruta."""
-    assert not (set(uso.NOMBRES) & uso.LATIDOS)
+    """Serían dos listas diciendo cosas contrarias de la misma ruta.
+
+    Se pregunta con `es_latido` y NO cruzando contra `LATIDOS`, que es como
+    estaba escrita antes. Cruzar los dos conjuntos deja afuera la mitad de la
+    regla: además de la lista explícita, cualquier `GET` con `/status` adentro
+    es latido. Escrita de la forma obvia, esta guarda estaba en verde con
+    «Estado de la verificación» nombrado y descartado al mismo tiempo, y
+    recién se vio cuando la pantalla empezó a dibujar las funciones en cero:
+    esa iba a salir como «nadie la usa» sin que nadie la hubiera podido usar.
+    """
+    mal = sorted(k for k in uso.NOMBRES if uso.es_latido(*k))
+    assert not mal, mal

@@ -27,21 +27,6 @@ una sola cuenta puede ser alguien probando contraseñas.
 los 4xx»: es nombrar los tres o cuatro que valen. Ver
 `backend/services/errores.py`.
 
-## Mostrar en «Uso» las funciones que nadie toca
-
-Hoy la pestaña muestra lo que se usó, ordenado por uso. Una función que nadie
-tocó no aparece en cero: simplemente no está, y no se distingue de una que no
-existe.
-
-Justamente esa es la pregunta que más sirve para decidir qué sacar. El
-servicio ya tiene la lista de funciones con nombre (`NOMBRES` en
-`backend/services/uso.py`), así que es cruzar esa lista con lo contado y
-dibujar las que faltan en cero.
-
-**Ojo con una cosa:** una función en cero puede ser una función que nadie
-necesita, o una a la que no se llega porque el botón quedó escondido. El
-número no distingue las dos, y la pantalla no debería sugerir que sí.
-
 ## Prender el botón de Google
 
 El código está desplegado y probado. No se ve porque falta la variable

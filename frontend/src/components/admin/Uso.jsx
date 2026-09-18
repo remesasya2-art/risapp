@@ -74,6 +74,7 @@ export default function Uso() {
   const semanas = base.altas_por_semana || [];
   const operaciones = base.operaciones || [];
   const funciones = datos?.funciones || [];
+  const sinUso = datos?.sin_uso || [];
   const porDia = datos?.por_dia || [];
 
   const maxSemana = Math.max(0, ...semanas.map((s) => s.cuantos));
@@ -206,6 +207,34 @@ export default function Uso() {
                   <Barra valor={f.pedidos} maximo={maxFuncion} />
                 </div>
               ))}
+
+              {sinUso.length > 0 ? (
+                <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 14, paddingTop: 12 }} data-testid="uso-sin-uso">
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 4 }}>
+                    Nadie las usó en {dias} días
+                  </div>
+                  {/* El aviso va ARRIBA de la lista y no debajo: leído después,
+                      la lista ya se interpretó como «esto sobra». */}
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                    Una función en cero puede ser una que nadie necesita, o una a la que no se
+                    llega porque el botón quedó escondido. El número no distingue las dos.
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {sinUso.map((n) => (
+                      <span
+                        key={n}
+                        data-testid={`uso-sin-uso-${n}`}
+                        style={{
+                          fontSize: 12, color: '#6b7280', background: '#f9fafb',
+                          border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 8px',
+                        }}
+                      >
+                        {n}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div style={tarjeta} data-testid="uso-por-dia">

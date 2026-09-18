@@ -108,7 +108,12 @@ NOMBRES = {
     ("GET", "/api/envios/{envio_id}"): "Detalle de una encomienda",
     ("GET", "/api/envios/catalogo"): "Catálogo de encomiendas",
     ("POST", "/api/verification/submit"): "Documentos de verificación enviados",
-    ("GET", "/api/verification/status"): "Estado de la verificación",
+    # No está «Estado de la verificación» (`GET /api/verification/status`), y
+    # no es un olvido: la regla de arriba lo toma como latido porque termina
+    # en `/status`, así que nunca se cuenta. Tenía nombre igual, y el día que
+    # la pantalla empezó a dibujar las funciones en cero ese nombre iba a
+    # aparecer entre las que nadie usa diciendo algo falso: no es que nadie
+    # mire su verificación, es que este contador no la mira.
     ("GET", "/api/referidos/mis-referidos"): "Referidos",
     ("GET", "/api/referidos/mi-codigo"): "Código de invitación",
     ("GET", "/api/soporte/casos"): "Soporte: mis casos",
@@ -129,6 +134,33 @@ NOMBRES = {
 
 def nombre_de(metodo: str, ruta: str):
     return NOMBRES.get((metodo, ruta))
+
+
+def rutas_por_nombre() -> dict:
+    """Cada nombre con TODAS las rutas que lo llevan.
+
+    Hay nombres con más de una ruta: mandar bolívares se puede pedir por dos
+    caminos distintos y los dos se llaman igual en la pantalla. Quien
+    pregunte «¿alguien usó esto?» tiene que mirar el conjunto, no una sola.
+    """
+    salida: dict = {}
+    for clave, nombre in NOMBRES.items():
+        salida.setdefault(nombre, []).append(clave)
+    return salida
+
+
+def sin_uso(con_trafico) -> list:
+    """Los nombres de las funciones que no aparecieron ni una vez.
+
+    Se agrupa POR NOMBRE y no por ruta a propósito. Con las rutas crudas, un
+    nombre de dos rutas —el de los bolívares— salía en la lista de «nadie la
+    usó» al mismo tiempo que salía arriba con tráfico, porque la ruta vieja
+    estaba quieta y la nueva no. Un nombre entra acá sólo si TODAS sus rutas
+    están en cero.
+    """
+    con_trafico = set(con_trafico)
+    return sorted(nombre for nombre, rutas in rutas_por_nombre().items()
+                  if not any(r in con_trafico for r in rutas))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -332,6 +364,8 @@ async def resumen(db, *, dias: int = 30, hoy=None) -> dict:
             "pedidos": f["pedidos"], "cuentas": cuentas_de.get((metodo, ruta), 0),
         })
     funciones.sort(key=lambda f: (-f["pedidos"], f["ruta"]))
+    nadie_las_uso = sin_uso(
+        (f["metodo"], f["ruta"]) for f in funciones if f["pedidos"])
 
     pedidos_por_dia = await col.aggregate([
         {"$match": filtro},
@@ -349,7 +383,7 @@ async def resumen(db, *, dias: int = 30, hoy=None) -> dict:
                for d in ventana]
 
     return {"dias": dias, "desde": ventana[0], "hasta": ventana[-1],
-            "funciones": funciones, "por_dia": por_dia}
+            "funciones": funciones, "sin_uso": nadie_las_uso, "por_dia": por_dia}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -482,5 +516,5 @@ async def todo(db, *, dias: int = 30) -> dict:
     contado = await resumen(db, dias=dias)
     base = await numeros_de_la_base(db, dias=dias)
     return {"dias": dias, "desde": contado["desde"], "hasta": contado["hasta"],
-            "funciones": contado["funciones"], "por_dia": contado["por_dia"],
-            "base": base}
+            "funciones": contado["funciones"], "sin_uso": contado["sin_uso"],
+            "por_dia": contado["por_dia"], "base": base}
