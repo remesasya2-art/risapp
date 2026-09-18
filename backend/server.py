@@ -322,7 +322,10 @@ app = FastAPI(
 from services import csp
 from routes.security_2fa import limiter as security_limiter
 app.state.limiter = security_limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# El manejador del 429 se registra más abajo, junto a los otros dos, y no
+# acá: envuelve al de `slowapi` para anotar el rechazo en «Errores» antes de
+# devolver la misma respuesta de siempre. Registrarlo también acá dejaría una
+# línea muerta —la de abajo la pisa— y la próxima persona no sabría cuál manda.
 app.add_middleware(SlowAPIMiddleware)
 
 # Security HTTP headers middleware
@@ -394,7 +397,7 @@ app.add_middleware(PuertaDelBorde)
 # nadie lo cortara.
 #
 # Ver services/limite_de_cuerpo.py.
-from services import errores
+from services import errores, rechazos
 from services.ip_cliente import ip_del_cliente
 from services.limite_de_cuerpo import LimiteDeCuerpo
 app.add_middleware(LimiteDeCuerpo)
@@ -451,17 +454,54 @@ async def _error_levantado_a_proposito(request, exc):
     generar el cobro», por ejemplo— también son errores que el panel tiene
     que mostrar: son justo los que un cliente sufre antes de quejarse.
 
-    Los 4xx no: un 404 o un 403 es el sistema diciendo que no, no algo roto.
-    Se delega en el manejador de siempre para que la respuesta sea idéntica.
+    Los 4xx, casi ninguno: un 404 o un 403 de cliente es el sistema diciendo
+    que no, no algo roto. Los cuatro que sí cuentan una historia los elige
+    `services/rechazos.py`, con su umbral y su ventana para que un solo
+    programa no llene el registro. Se delega en el manejador de siempre para
+    que la respuesta sea idéntica.
     """
+    ruta = _plantilla_de(request)
+    user_id = getattr(request.state, "user_id", None)
+    ip = ip_del_cliente(request)
     if exc.status_code >= 500:
         await errores.anotar(
             db, rastro=rastro.actual(), metodo=request.method,
-            ruta=_plantilla_de(request), status=exc.status_code,
+            ruta=ruta, status=exc.status_code,
             tipo="HTTPException", mensaje=str(exc.detail),
-            user_id=getattr(request.state, "user_id", None),
-            ip=ip_del_cliente(request))
+            user_id=user_id, ip=ip)
+    else:
+        situacion = rechazos.que_situacion(exc.status_code, ruta)
+        if situacion:
+            # La clave del freno es la cuenta cuando la hay, y la conexión
+            # cuando no: en las puertas de ingreso todavía no hay sesión, así
+            # que agrupar por cuenta no agruparía nada.
+            await rechazos.anotar_si_importa(
+                db, situacion=situacion, clave=user_id or ip,
+                rastro=rastro.actual(), metodo=request.method, ruta=ruta,
+                status=exc.status_code, detalle=str(exc.detail),
+                user_id=user_id, ip=ip)
     return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _paso_del_limite(request, exc):
+    """El 429 de los límites de dinero, que antes no se veía en ningún lado.
+
+    `RateLimitExceeded` ES una excepción HTTP, pero Starlette elige siempre
+    el manejador MAS ESPECIFICO, así que el de `slowapi` se lo llevaba y el
+    de arriba no lo veía pasar nunca. Quedaban dos limitadores en la misma
+    aplicación, el piso de peticiones visible en «Errores» y éste invisible.
+
+    La respuesta la sigue armando `slowapi`: acá sólo se anota.
+    """
+    await rechazos.anotar_si_importa(
+        db, situacion="limite_de_dinero",
+        clave=getattr(request.state, "user_id", None) or ip_del_cliente(request),
+        rastro=rastro.actual(), metodo=request.method,
+        ruta=_plantilla_de(request), status=429, detalle=str(exc.detail),
+        user_id=getattr(request.state, "user_id", None),
+        ip=ip_del_cliente(request))
+    return _rate_limit_exceeded_handler(request, exc)
 security = HTTPBearer()
 
 # ============================================================================
