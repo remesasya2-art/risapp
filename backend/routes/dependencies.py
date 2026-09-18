@@ -173,19 +173,44 @@ async def get_verified_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 async def sin_transacciones_personales(
+        request: Request,
         current_user: User = Depends(get_current_user)) -> User:
-    """Frena a una cuenta de personal en las rutas donde un usuario mueve plata.
+    """La puerta de las rutas donde un usuario mueve plata.
 
-    Es la puerta, y da el mensaje claro. El candado de fondo está en
-    `saldos.mover`, porque nueve de las diez formas de mover plata liquidan
-    después por un webhook que no pasa por acá. Ver services/personal.py.
+    Hace dos cosas, y las dos acá porque ésta es la ÚNICA dependencia por la
+    que pasan todas esas rutas —retiros, envíos, recargas, PIX, tarjeta,
+    cripto, BTC—. Una ruta nueva que la use hereda las dos.
+
+    1. FRENA A UNA CUENTA DE PERSONAL. Da el mensaje claro. El candado de
+       fondo está en `saldos.mover`, porque nueve de las diez formas de mover
+       plata liquidan después por un webhook que no pasa por acá. Ver
+       services/personal.py.
+
+    2. FRENA A QUIEN OPERA DEMASIADO SEGUIDO. Por cuenta y por IP.
+
+       Ninguna ruta de dinero tenía límite. De 157 rutas POST frenaban 17, y
+       las 17 eran de entrada y recuperación: una cuenta con sesión podía
+       crear pedidos de retiro sin parar. Y todos los límites eran por IP,
+       que para quien ya tiene sesión y cambia de red —datos, wifi, VPN— es
+       no tener límite. Por eso acá hay dos contadores y no uno.
+
+       Los dos números se cambian desde el panel (Configuración), no acá.
+       Van holgados para una persona y cortos para un programa: nadie hace
+       treinta retiros en una hora con las manos.
     """
-    from services import personal
+    from services import configuracion, personal
+    from routes.security_2fa import frenar, frenar_por_cuenta
+
     if personal.es_personal(current_user):
         raise HTTPException(
             status_code=403,
             detail="Las cuentas del personal no pueden hacer transacciones a "
                    "título personal. Usá una cuenta propia, no la del trabajo.")
+
+    por_cuenta = await configuracion.leer(db, "dinero_operaciones_por_cuenta_por_hora")
+    por_ip = await configuracion.leer(db, "dinero_operaciones_por_ip_por_hora")
+    await frenar_por_cuenta(current_user.user_id, "dinero.cuenta", f"{por_cuenta}/hour")
+    await frenar(request, "dinero.ip", f"{por_ip}/hour")
     return current_user
 
 
