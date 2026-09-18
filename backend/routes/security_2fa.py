@@ -12,8 +12,8 @@ Phase 1 quick wins:
 - Security HTTP headers middleware
 
 Strategy: ADDITIVE. We do NOT replace the existing login endpoint.
-- /api/auth/2fa/setup-init    → start enrollment (generates secret + QR)
-- /api/auth/2fa/setup-confirm → verify first TOTP code + enable + return backup codes
+- /api/auth/2fa/enroll-init    → alta del segundo factor, DURANTE el login
+- /api/auth/2fa/enroll-confirm → confirma el primer código, lo enciende y emite sesión
 - /api/auth/2fa/verify        → after password login, verify TOTP and issue full session
 - /api/auth/2fa/status        → check if 2FA is enabled for current user
 - /api/auth/2fa/disable       → super-admin can disable for themselves with TOTP confirmation
@@ -47,6 +47,7 @@ from slowapi.util import get_remote_address
 from services.ip_cliente import ip_del_cliente
 
 from database import db
+from services import personal as _personal
 from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
 from services.perfil import para_su_dueno
@@ -285,10 +286,6 @@ class TwoFAVerifyRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=12)
 
 
-class TwoFASetupConfirmRequest(BaseModel):
-    code: str = Field(..., min_length=6, max_length=6)
-
-
 class TwoFADisableRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
@@ -471,7 +468,11 @@ async def twofa_status(current_user: User = Depends(get_current_user)):
     return {
         "enabled": enabled,
         "role": user.get("role", "user"),
-        "is_required": user.get("role") == SUPER_ADMIN_ROLE,
+        # LA MISMA REGLA QUE APLICA EL INGRESO, Y DE LA MISMA FUENTE. Acá
+        # decía `role == super_admin` por su cuenta, y a un `admin` o a un
+        # `agent` le contestaba que no era obligatorio justo antes de que el
+        # login se lo exigiera. Dos respuestas para la misma pregunta.
+        "is_required": _personal.exige_dos_pasos(user),
         "backup_codes_remaining": len(user.get("two_factor_backup_hashes", [])),
     }
 
@@ -579,64 +580,37 @@ async def twofa_enroll_confirm(request: Request, response: Response, data: TwoFA
     }
 
 
-@router.post("/setup-init")
-async def twofa_setup_init(current_user: User = Depends(get_current_user)):
-    """Start 2FA enrollment: generate secret + QR. Does NOT enable yet."""
-    user = await db.users.find_one({"user_id": current_user.user_id})
-    if user.get("two_factor_enabled"):
-        raise HTTPException(status_code=400, detail="2FA ya está activo")
-
-    secret = pyotp.random_base32()
-    otpauth_url = pyotp.TOTP(secret).provisioning_uri(
-        name=user["email"], issuer_name=ISSUER_NAME
-    )
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {"two_factor_secret_pending": secret}},
-    )
-    return {
-        "secret": secret,  # show as fallback for manual entry
-        "otpauth_url": otpauth_url,
-        "qr_code_data_url": _make_qr_data_url(otpauth_url),
-        "issuer": ISSUER_NAME,
-        "account": user["email"],
-    }
-
-
-@router.post("/setup-confirm")
-async def twofa_setup_confirm(
-    data: TwoFASetupConfirmRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Confirm enrollment with first TOTP code, generate backup codes."""
-    user = await db.users.find_one({"user_id": current_user.user_id})
-    secret = user.get("two_factor_secret_pending")
-    if not secret:
-        raise HTTPException(status_code=400, detail="Inicia el proceso de configuración primero")
-
-    if not pyotp.TOTP(secret).verify(data.code, valid_window=1):
-        raise HTTPException(status_code=400, detail="Código incorrecto")
-
-    plain_codes, hashed_codes = await _generate_backup_codes()
-
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {
-            "$set": {
-                "two_factor_enabled": True,
-                "two_factor_secret": secret,
-                "two_factor_backup_hashes": hashed_codes,
-                "two_factor_enabled_at": datetime.now(timezone.utc),
-            },
-            "$unset": {"two_factor_secret_pending": ""},
-        },
-    )
-    return {
-        "message": "2FA activado correctamente",
-        "backup_codes": plain_codes,
-        "important": "Guarda estos códigos en un lugar seguro. NO se mostrarán de nuevo.",
-    }
-
+# ══════════════════════════════════════════════════════════════════════════
+# ACA VIVIAN `/setup-init` Y `/setup-confirm`, Y SE FUERON
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Eran el alta del segundo factor CON SESION YA ABIERTA: el camino del
+# perfil. Sólo exigían estar logueado, así que cualquier cliente podía
+# llamarlas, encender `two_factor_enabled` y recibir sus códigos de
+# respaldo.
+#
+# EL PROBLEMA NO ERA QUE FALTARA UNA PANTALLA. Era que las puertas de
+# entrada NO MIRAN esa marca cuando la cuenta es un cliente: la exigen sólo
+# al personal y a los administradores (`services/personal.exige_dos_pasos`,
+# usada por `routes/auth.py`, `routes/google_ingreso.py` y
+# `routes/webauthn_login.py`). O sea que quien las usara quedaba con el
+# segundo factor «activado», la ruta de estado se lo confirmaba, el ingreso
+# lo ignoraba, y encima no podía apagarlo sin un código del teléfono.
+# Protección que no protege y de la que no se puede salir.
+#
+# Se comprobó antes de sacarlas: NINGUN código del repositorio las llamaba.
+# Ni una pantalla, ni un test. Estaban vivas, alcanzables por HTTP y sin
+# dueño.
+#
+# El factor extra del cliente es la HUELLA (`routes/webauthn_login.py`), que
+# sí tiene pantalla en el perfil y sí se respeta al entrar.
+#
+# SI ALGUN DIA SE QUIERE OFRECER EL SEGUNDO FACTOR AL CLIENTE, el camino no
+# es volver a poner esto: es que las tres puertas respeten la marca, que la
+# regla siga viviendo en un solo lugar, y que un super administrador pueda
+# apagárselo a quien perdió el teléfono. Está anotado en la sección 11 del
+# dossier de seguridad. La guarda de `test_segundo_factor_sin_trampas.py` se
+# pone roja si alguien agrega un alta sin lo demás.
 
 @router.post("/disable")
 async def twofa_disable(
