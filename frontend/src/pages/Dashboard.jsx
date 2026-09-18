@@ -13,6 +13,7 @@ import KycQuotaModal from '../components/KycQuotaModal';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
 import BonoCard from '../components/dashboard/BonoCard';
+import PrimerosPasos from '../components/dashboard/PrimerosPasos';
 import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
 import TransactionItem from '../components/dashboard/TransactionItem';
 import api from '../utils/api';
@@ -479,6 +480,11 @@ const normalized = { ...tx };
             </p>
           </div>
         )}
+
+        {/* Lo que le falta a una cuenta nueva para andar. Se dibuja sólo
+            mientras falte algo, y el estado lo dice el servidor. Ver
+            components/dashboard/PrimerosPasos.jsx. */}
+        <PrimerosPasos user={user} isMobile={isMobile} />
 
         {/* Indicadores de mercado (BCV) — solo post-login */}
         <div style={{ marginBottom: '20px' }}>

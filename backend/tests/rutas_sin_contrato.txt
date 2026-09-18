@@ -184,6 +184,7 @@ GET /api/payments/card/config
 GET /api/pin/status
 GET /api/policies
 GET /api/policies/status
+GET /api/primeros-pasos
 GET /api/push/web/status
 GET /api/push/web/vapid-public-key
 GET /api/rate

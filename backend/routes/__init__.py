@@ -39,6 +39,7 @@ from routes.envios_admin import router as envios_admin_router
 from routes.recursos_humanos import router as rrhh_router
 from routes.errores_admin import router as errores_router
 from routes.uso_admin import router as uso_router
+from routes.primeros_pasos import router as primeros_pasos_router
 
 # Include sub-routers
 api_router.include_router(basic_router)
@@ -85,6 +86,7 @@ api_router.include_router(envios_admin_router)
 api_router.include_router(rrhh_router)
 api_router.include_router(errores_router)
 api_router.include_router(uso_router)
+api_router.include_router(primeros_pasos_router)
 # El buzón donde el navegador avisa lo que la política de contenido habría
 # bloqueado. Ver services/csp.py.
 from routes.csp_reporte import router as csp_reporte_router  # noqa: E402
