@@ -221,6 +221,39 @@ async def notify_transfer_sent(email: str, user_name: str, amount_ves: float, be
     await send_email(email, f"📤 {APP_NAME} - Transferencia de {amount_ves:.2f} VES enviada", html)
 
 
+async def notify_dos_pasos_reiniciado(email: str, user_name: str, quien: str = ""):
+    """Alguien del equipo le reinició la verificación en dos pasos.
+
+    ESTE AVISO ES LA MITAD DE LA DEFENSA, no una cortesía. La ruta que lo
+    dispara le saca a una cuenta uno de sus dos factores, y la deja entrando
+    sólo con contraseña hasta que su dueño vuelva a configurarla. Si un día
+    lo hace quien no debía, el único que puede darse cuenta enseguida es el
+    dueño de la cuenta — el libro de auditoría lo mira alguien, algún día.
+
+    Por eso dice QUIEN lo hizo: «te lo reiniciaron» sin nombre no se puede
+    ni confirmar ni desmentir por teléfono.
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+    por_quien = (f"<tr><td style=\"padding: 8px 0;\"><strong>Lo hizo:</strong></td>"
+                 f"<td>{quien}</td></tr>") if quien else ""
+    content = f"""
+    <p>Hola <strong>{user_name}</strong>,</p>
+    <p>Un administrador reinició la verificación en dos pasos de tu cuenta.
+       La próxima vez que entres te vamos a pedir que la configures de nuevo,
+       con un código nuevo.</p>
+    <table style="background-color: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0; width: 100%;">
+        <tr><td style="padding: 8px 0;"><strong>Fecha y hora:</strong></td><td>{timestamp}</td></tr>
+        {por_quien}
+    </table>
+    <p>También se cerraron tus sesiones abiertas, así que vas a tener que
+       volver a entrar.</p>
+    <p style="color: #dc2626; font-weight: 500;">⚠️ Si no pediste esto, avisá
+       ahora mismo: alguien con acceso al panel le sacó un factor a tu cuenta.</p>
+    """
+    html = get_email_template("Se reinició tu verificación en dos pasos", content)
+    _cortesia(email, f"🔐 {APP_NAME} - Se reinició tu verificación en dos pasos", html)
+
+
 async def notify_suspicious_activity(email: str, user_name: str, activity: str):
     """Notify user of suspicious activity"""
     timestamp = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")

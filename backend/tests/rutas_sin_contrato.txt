@@ -277,6 +277,7 @@ POST /api/admin/reset-password
 POST /api/admin/restore-transactions
 POST /api/admin/rrhh
 POST /api/admin/rrhh/{user_id}/reenviar-invitacion
+POST /api/admin/rrhh/{user_id}/reiniciar-dos-pasos
 POST /api/admin/soporte/casos/{caso_id}/escalar
 POST /api/admin/soporte/casos/{caso_id}/estado
 POST /api/admin/soporte/casos/{caso_id}/mensajes

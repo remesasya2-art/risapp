@@ -83,6 +83,7 @@ ACCIONES = {
     "personal.datos":           (Cat.PERSONAL, "Cambio de datos del legajo"),
     "personal.invitacion":      (Cat.PERSONAL, "Invitación de acceso enviada"),
     "personal.activacion":      (Cat.PERSONAL, "Personal activó su acceso"),
+    "personal.dos_pasos_reiniciado": (Cat.PERSONAL, "Verificación en dos pasos reiniciada"),
     # KYC
     "kyc.aprobado":             (Cat.KYC, "Verificación aprobada"),
     "kyc.rechazado":            (Cat.KYC, "Verificación rechazada"),

@@ -43,6 +43,7 @@ from models.user import User
 from routes.dependencies import get_super_admin
 from services import auditoria, invitaciones, personal
 from services.email import send_staff_invitation_email
+from services.email_notifications import notify_dos_pasos_reiniciado
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,10 @@ class CambioDeLegajo(BaseModel):
 
 
 class Baja(BaseModel):
+    motivo: str = Field(..., min_length=3, max_length=300)
+
+
+class ReinicioDeDosPasos(BaseModel):
     motivo: str = Field(..., min_length=3, max_length=300)
 
 
@@ -425,6 +430,108 @@ async def cambiar_legajo(user_id: str, datos: CambioDeLegajo, request: Request,
         antes={k: antes.get(k) for k in cambios}, despues=cambios)
 
     return {"mensaje": "Legajo actualizado", "cambios": cambios}
+
+
+# Lo que se borra para que el segundo factor vuelva a cero. La lista está
+# acá, entera y escrita: dejar uno solo —la semilla a medias, por ejemplo—
+# significa que el alta siguiente lo reutiliza, y el teléfono perdido sigue
+# generando códigos válidos.
+_LO_DEL_SEGUNDO_FACTOR = ("two_factor_enabled", "two_factor_secret",
+                          "two_factor_secret_pending", "two_factor_backup_hashes",
+                          "two_factor_enabled_at")
+
+
+@router.post("/{user_id}/reiniciar-dos-pasos")
+async def reiniciar_dos_pasos(user_id: str, datos: ReinicioDeDosPasos,
+                              request: Request,
+                              admin: User = Depends(get_super_admin)):
+    """La salida para quien perdió el teléfono Y los códigos de respaldo.
+
+    POR QUE HACIA FALTA
+
+        Apagar el segundo factor exige un código del teléfono (`/auth/2fa/
+        disable`). Quien lo perdió, y perdió también sus códigos de respaldo,
+        no podía entrar ni podía apagarlo, y nadie podía ayudarlo: no existía
+        ninguna ruta para limpiárselo. Para el personal el segundo factor es
+        OBLIGATORIO, así que ese caso no es hipotético; era cuestión de tiempo.
+
+    ESTO NO DEJA A NADIE SIN SEGUNDO FACTOR
+
+        Lo devuelve a cero. La próxima vez que esa persona entre, el ingreso
+        ve personal sin segundo factor y la obliga a darse de alta de nuevo,
+        con un código nuevo. Esa condición ya existía y no se toca acá.
+
+    A UN SUPER ADMINISTRADOR NO, Y ES LA DECISION MAS IMPORTANTE DE LA RUTA
+
+        Una ruta que le saca un factor a otra cuenta es, ella misma, una
+        forma de tomar esa cuenta. Si alcanzara contra un super administrador,
+        UNA sola sesión de super administrador tomada bajaría a todos los
+        demás a un solo factor de una sentada. El costo de la decisión está
+        asumido y dicho: un super administrador que pierde teléfono y códigos
+        se resuelve entrando a la base a mano, que es lento a propósito.
+
+        Tampoco contra uno mismo: quien se apaga su propio segundo factor no
+        está recuperando un acceso, lo está bajando.
+    """
+    doc = await db.users.find_one({"user_id": user_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="No existe esa persona")
+
+    # NO HAY UNA GUARDA APARTE PARA «NI CONTRA UNO MISMO», y es a propósito.
+    # A esta ruta sólo llega un super administrador, así que su propia cuenta
+    # cae en la guarda de abajo. Escrita aparte, no se podía poner en rojo
+    # rompiéndola: dos guardas donde una tapa a la otra son dos guardas de las
+    # que ninguna está probada de verdad.
+    #
+    # Si algún día se permite reiniciar a un super administrador —ver la
+    # sección 11 del dossier—, la de uno mismo VUELVE A HACER FALTA y hay que
+    # escribirla junto con su test.
+    if doc.get("role") == "super_admin":
+        raise HTTPException(
+            status_code=403,
+            detail="No se puede reiniciar la verificación en dos pasos de un "
+                   "super administrador desde el panel. Tampoco la tuya.")
+
+    if not doc.get("two_factor_enabled"):
+        raise HTTPException(
+            status_code=400,
+            detail="Esa cuenta no tiene la verificación en dos pasos activa.")
+
+    ahora = datetime.now(timezone.utc)
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$unset": {campo: "" for campo in _LO_DEL_SEGUNDO_FACTOR}})
+
+    # Las sesiones abiertas se cierran, y no es un extra. El motivo más
+    # probable para llamar a esto es un teléfono perdido o robado: una sesión
+    # suya viva en ese teléfono es justamente lo que no hay que dejar. Y sin
+    # esto, reiniciarle el segundo factor a alguien con sesión abierta deja esa
+    # sesión usable sin volver a pasar por ninguna puerta.
+    cerradas = await db.user_sessions.delete_many({"user_id": user_id})
+
+    await auditoria.registrar(
+        db, "personal.dos_pasos_reiniciado", quien=admin, request=request,
+        objetivo_tipo="usuario", objetivo_id=user_id,
+        objetivo_desc=doc.get("email"),
+        antes={"dos_pasos": True},
+        despues={"dos_pasos": False},
+        detalle={"motivo": datos.motivo,
+                 "sesiones_cerradas": cerradas.deleted_count,
+                 "cuando": ahora})
+
+    # Y se le avisa al dueño de la cuenta. Es la mitad de la defensa: el libro
+    # de auditoría lo mira alguien algún día, y el dueño se entera ahora. Va
+    # DESPUES de todo lo demás y en su propio try: que el correo falle no
+    # puede dejar el reinicio a medias.
+    try:
+        await notify_dos_pasos_reiniciado(
+            email=doc.get("email"), user_name=doc.get("name") or "Hola",
+            quien=admin.email or admin.user_id)
+    except Exception as e:                                # pragma: no cover
+        logger.warning("no se pudo avisar del reinicio de dos pasos: %s", e)
+
+    return {"mensaje": "Verificación en dos pasos reiniciada",
+            "sesiones_cerradas": cerradas.deleted_count}
 
 
 @router.delete("/{user_id}")
