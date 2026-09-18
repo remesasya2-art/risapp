@@ -203,6 +203,31 @@ AJUSTES = {
               "cuenta. Cuando el registro muestre que sólo se pasan programas y "
               "no personas, ponelo en 1 y los pedidos de más reciben un 429."),
 
+    # ── Lo que te queda a vos en cada operación ────────────────────────────
+    #
+    # Ver `services/comisiones.py`. De fábrica está apagado y la aplicación se
+    # comporta igual que siempre; prenderlo empieza a guardar en cada envío la
+    # tasa de costo y la comisión, y exige que la tasa de costo esté cargada.
+
+    "comision_registrar": Ajuste(
+        tipo=ENTERO, defecto=0, minimo=0, maximo=1,
+        unidad="0 = no anota, 1 = anota",
+        etiqueta="Guardar la comisión de cada operación",
+        ayuda="En 0 (fábrica) no se anota nada y no cambia nada. En 1, cada "
+              "envío guarda con qué tasa se le cobró al cliente, cuánto costó "
+              "y cuánto quedó. Ojo: en 1, un envío sin tasa de costo cargada "
+              "se rechaza, así que cargá primero el número de abajo."),
+
+    "costo_ris_to_ves": Ajuste(
+        tipo=DINERO, defecto="0", minimo="0", maximo="10000000",
+        unidad="VES por RIS",
+        etiqueta="Lo que te cuesta a vos el envío a Venezuela",
+        ayuda="Cuántos bolívares te cuesta conseguir, por cada RIS. Es el "
+              "número contra el que se mide tu ganancia: la diferencia con la "
+              "tasa que ve el cliente es la comisión. En 0 se considera que no "
+              "está cargado. El día que haya un proveedor con API, este número "
+              "sale de ahí y este campo deja de usarse."),
+
     # ── Los límites de cada vía de dinero ──────────────────────────────────
     #
     # Vivían escritos a mano en tres archivos distintos —`services/limits.py`,
