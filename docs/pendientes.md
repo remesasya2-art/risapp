@@ -13,20 +13,6 @@ política de contenido a bloquear.
 
 Acá queda lo de producto.
 
-## Qué errores 4xx vale la pena guardar
-
-La pestaña «Errores» guarda los 500 y los 5xx que el código levanta a
-propósito. Los 4xx no: un 404 o un 403 es el sistema diciendo que no, no algo
-roto, y guardarlos llena el registro de cosas que funcionan bien.
-
-Pero algunos 4xx sí cuentan una historia. Un 400 repetido en la misma pantalla
-puede ser un formulario que pide algo que nadie entiende; una tanda de 401 en
-una sola cuenta puede ser alguien probando contraseñas.
-
-**Qué falta:** elegir cuáles, de a uno y con el motivo al lado. No es «prender
-los 4xx»: es nombrar los tres o cuatro que valen. Ver
-`backend/services/errores.py`.
-
 ## Prender el botón de Google
 
 El código está desplegado y probado. No se ve porque falta la variable
