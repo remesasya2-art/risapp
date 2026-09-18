@@ -39,6 +39,22 @@ os.environ.setdefault("DB_NAME", "ris_test")
 
 from conftest import usar_base                                      # noqa: E402,F401
 
+# LO QUE ESTE ARCHIVO PRUEBA ES LO QUE LA APLICACION ENVIA, NO LO QUE LLEGA.
+#
+# La distinción importa sobre todo en la primera línea. Cloudflare tiene su
+# propia función de HSTS y PISA la de la aplicación: medido sobre la respuesta
+# real de https://risappbr.com el 18/09/2026, lo que recibe el visitante es
+# `max-age=15552000` a secas —ciento ochenta días, SIN `includeSubDomains`—.
+#
+# O sea que este test puede estar en verde, y estarlo con razón, mientras los
+# subdominios no están cubiertos. Es exactamente el tipo de test que da
+# confianza de más: verdadero sobre el código y falso sobre producción.
+#
+# No se cambia el valor esperado: el origen tiene que seguir mandando el
+# correcto, y es lo que valdría si un día se sirviera sin Cloudflare delante.
+# Lo que se agrega es este aviso, para que nadie lea el verde y concluya lo
+# que no dice. Lo que llega de verdad se comprueba leyendo la cabecera de una
+# respuesta de producción, y está anotado en la sección 8.2 del dossier.
 ESPERADAS = {
     "strict-transport-security": "max-age=31536000; includeSubDomains",
     "x-frame-options": "DENY",
