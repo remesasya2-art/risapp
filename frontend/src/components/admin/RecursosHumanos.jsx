@@ -23,7 +23,7 @@ import api from '../../utils/api';
 import { confirmar, pedirTexto } from '../flujo/confirmar.js';
 import {
   RefreshCw, UserPlus, Users, ShieldCheck, X, Trash2, History, Save,
-  Mail, AlertTriangle,
+  Mail, AlertTriangle, KeyRound,
 } from 'lucide-react';
 
 function fmtFecha(d) {
@@ -186,6 +186,29 @@ export default function RecursosHumanos() {
     }
   };
 
+  const reiniciarDosPasos = async (ficha) => {
+    // El motivo NO es opcional, por lo mismo que en la baja: es lo único que
+    // explica meses después por qué a alguien le sacaron un factor.
+    const motivo = await pedirTexto({
+      titulo: `¿Reiniciar la verificación en dos pasos de ${ficha.email}?`,
+      detalle: 'Se borra su configuración actual, se cierran sus sesiones y se le '
+        + 'avisa por correo. La próxima vez que entre va a tener que configurarla '
+        + 'de nuevo. Usalo cuando perdió el teléfono Y los códigos de respaldo.',
+      etiqueta: 'Motivo del reinicio',
+      placeholder: 'Queda asentado en el libro de auditoría',
+      accion: 'Reiniciar',
+      tono: 'peligro',
+    });
+    if (motivo === null) return;
+    try {
+      const r = await api.post(`/admin/rrhh/${ficha.user_id}/reiniciar-dos-pasos`, { motivo });
+      toast.success(`Reiniciada · ${r.data?.sesiones_cerradas ?? 0} sesiones cerradas`);
+      cargar();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo reiniciar');
+    }
+  };
+
   const cajaPermisos = (seleccion, alTocar) => (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
@@ -323,6 +346,24 @@ export default function RecursosHumanos() {
                         {!p.acceso?.clave_configurada && (
                           <button onClick={() => reenviar(p)} style={btnChico}>
                             <Mail size={13} /> Reenviar
+                          </button>
+                        )}
+                        {/* Sólo si tiene algo que reiniciar, y nunca contra un
+                            super administrador. El servidor lo rechaza igual,
+                            pero un botón que siempre falla enseña a desconfiar
+                            de la pantalla.
+
+                            No hace falta una condición aparte para «ni contra
+                            uno mismo»: a esta pantalla sólo entra un super
+                            administrador, así que su propia fila ya queda
+                            afuera por la del rol. (La primera versión miraba
+                            un `user` que este componente no recibe, o sea que
+                            era siempre verdadera y no filtraba nada.) */}
+                        {p.acceso?.dos_pasos && p.rol !== 'super_admin' && (
+                          <button onClick={() => reiniciarDosPasos(p)}
+                                  style={{ ...btnChico, color: '#b45309' }}
+                                  data-testid={`reiniciar-2fa-${p.user_id}`}>
+                            <KeyRound size={13} /> Reiniciar 2FA
                           </button>
                         )}
                         <button onClick={() => darDeBaja(p)}
