@@ -30,6 +30,7 @@ import { ShieldCheck, Copy } from 'lucide-react';
 import api from '../utils/api';
 import { Boton, Aviso } from './flujo';
 import { C, tarjeta, etiqueta, campo, ayuda } from './flujo/estilos';
+import { enlaceDeAutenticador } from '../utils/urlDeArchivo';
 
 function Encabezado({ activo }) {
   return (
@@ -156,13 +157,21 @@ export default function DosPasosSettings() {
               mismo teléfono, hacé cualquiera de estas tres:
             </span>
 
-            <a href={alta.otpauth_url} data-testid="dos-pasos-abrir-app"
-              style={{
-                display: 'inline-block', fontSize: '13.5px', fontWeight: 600,
-                color: C.marca, textDecoration: 'none', marginBottom: '10px',
-              }}>
-              1 · Abrir mi aplicación de autenticación →
-            </a>
+            {/* El enlace pasa por el filtro, y no es ceremonia: una guarda del
+                repositorio exige que ningún `href` reciba un valor sin filtrar,
+                por la FORMA y no por el caso. Si el esquema no es `otpauth://`,
+                `enlaceDeAutenticador` devuelve null y acá no se dibuja nada:
+                quedan las otras dos salidas, que no dependen de ningún enlace. */}
+            {enlaceDeAutenticador(alta.otpauth_url) ? (
+              <a href={enlaceDeAutenticador(alta.otpauth_url)}
+                data-testid="dos-pasos-abrir-app"
+                style={{
+                  display: 'inline-block', fontSize: '13.5px', fontWeight: 600,
+                  color: C.marca, textDecoration: 'none', marginBottom: '10px',
+                }}>
+                1 · Abrir mi aplicación de autenticación →
+              </a>
+            ) : null}
 
             <span style={{ display: 'block', ...ayuda, marginTop: 0, marginBottom: '4px' }}>
               2 · O copiá esta clave y pegala a mano en tu aplicación, con la

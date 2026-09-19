@@ -365,3 +365,30 @@ def test_la_pantalla_resuelve_el_caso_DESDE_EL_TELEFONO():
     assert 'data-testid="dos-pasos-clave"' in fuente and "alta.secret" in fuente
     # 3 · la captura de pantalla
     assert "captura" in fuente and "galería" in fuente
+
+
+def test_el_enlace_del_autenticador_pasa_por_un_filtro():
+    """Un `href` que recibe un campo de una respuesta es la forma exacta en que
+    vuelve un `javascript:` el día que ese campo venga de otro lado.
+
+    Lo atajó una guarda del repositorio cuando esta pantalla se escribió sin
+    filtro: `test_url_de_archivo.py` lo exige por la FORMA, no por el caso. Y
+    la respuesta correcta no fue eximirlo sino comprobar el esquema.
+    """
+    import pathlib
+    raiz = pathlib.Path(_BACKEND, "..", "frontend", "src").resolve()
+    pantalla = (raiz / "components" / "DosPasosSettings.jsx").read_text(encoding="utf-8")
+    assert "href={enlaceDeAutenticador(" in pantalla
+    assert "href={alta.otpauth_url}" not in pantalla
+
+    filtro = (raiz / "utils" / "urlDeArchivo.js").read_text(encoding="utf-8")
+    assert "export function enlaceDeAutenticador" in filtro
+    assert "startsWith('otpauth://')" in filtro
+    # No se ensanchó el filtro de los archivos para meter este esquema. Se
+    # recorta el CUERPO de la función y no hasta la siguiente: el comentario
+    # que explica el filtro nuevo también dice «otpauth», y la primera versión
+    # de este test se encontraba a sí misma.
+    ini = filtro.index("export function urlDeArchivoSegura")
+    cuerpo = filtro[ini:filtro.index("\n}", ini)]
+    assert "otpauth" not in cuerpo, \
+        "el esquema se coló en el filtro de archivos, que cubre todo lo demás"
