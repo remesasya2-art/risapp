@@ -3249,3 +3249,82 @@ async def get_pendientes(current_user: User = Depends(get_current_user)):
         pendientes_svc.total_de_usuarios(),
     )
     return {"pendientes": pendientes, "usuarios": usuarios}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Verificar el pago en bolívares de un envío a Brasil
+# ══════════════════════════════════════════════════════════════════════════
+#
+# El cliente cotizó, transfirió en bolívares y subió el comprobante. Acá
+# alguien lo abre y dice si esa plata entró.
+#
+# POR QUE NO REUSA `process_ves_recharge`
+#
+#   Aquélla acredita SALDO y trabaja sobre `type: "recharge_ves"`. Esto no
+#   acredita nada: hace avanzar una orden que ya existe hacia la cola de
+#   despacho. Meterlas en la misma función obligaría a un `if` que decide si
+#   mueve plata o no, en el único lugar donde eso no se puede confundir.
+
+class VerificarPagoEnBolivares(BaseModel):
+    action: str                          # "approve" o "reject"
+    motivo: Optional[str] = None         # obligatorio al rechazar
+
+
+@router.post("/envios-reais/{transaction_id}/verificar")
+async def verificar_pago_en_bolivares(
+    transaction_id: str,
+    body: VerificarPagoEnBolivares,
+    admin: User = Depends(get_super_admin),
+):
+    """Confirma o rechaza el comprobante de un envío pagado en bolívares."""
+    from services import pago_al_final
+    from services.notifications import create_notification
+
+    if body.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="Acción inválida")
+
+    if body.action == "approve":
+        orden = await pago_al_final.verificar_el_pago(
+            db, transaction_id, admin.user_id)
+        await auditoria.registrar(
+            db, "envio_brl.verificado", quien=admin,
+            objetivo_tipo="transaction", objetivo_id=transaction_id,
+            objetivo_desc=f"Envío {orden.get('display_id')}",
+            detalle={"amount_ves": orden.get("amount_input"),
+                     "amount_brl": orden.get("amount_output"),
+                     "banco": orden.get("destination_bank")})
+        await create_notification(
+            user_id=orden.get("user_id"),
+            title="Confirmamos tu pago",
+            message="Tu envío ya está en la cola para despacharse.",
+            notification_type="withdrawal_pending",
+            data={"transaction_id": transaction_id})
+        return {"message": "Pago verificado. La orden pasó a la cola.",
+                "status": orden.get("status")}
+
+    # RECHAZAR EXIGE UN MOTIVO ESCRITO.
+    #
+    #   Sin él, el cliente recibe un «no» sin saber qué corregir y termina en
+    #   soporte. Y queda en el libro de auditoría: rechazar el comprobante de
+    #   alguien que sí pagó es el error caro de esta pantalla.
+    motivo = (body.motivo or "").strip()
+    if not motivo:
+        raise HTTPException(
+            status_code=400,
+            detail="Escribí por qué no sirve el comprobante. El cliente lo va a "
+                   "leer para mandarte el correcto.")
+
+    orden = await pago_al_final.rechazar_el_comprobante(
+        db, transaction_id, admin.user_id, motivo)
+    await auditoria.registrar(
+        db, "envio_brl.rechazado", quien=admin,
+        objetivo_tipo="transaction", objetivo_id=transaction_id,
+        objetivo_desc=f"Envío {orden.get('display_id')}",
+        detalle={"motivo": motivo})
+    await create_notification(
+        user_id=orden.get("user_id"),
+        title="Necesitamos otro comprobante",
+        message=motivo,
+        notification_type="warning",
+        data={"transaction_id": transaction_id})
+    return {"message": "Comprobante rechazado.", "status": orden.get("status")}

@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { useRate } from '../contexts/RateContext';
 import NotificationBell from '../components/NotificationBell';
 import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
@@ -167,7 +168,18 @@ export default function SendReais() {
   const [nuevo, setNuevo] = useState({ full_name: '', cpf: '', pix_key: '' });
   const [limites, setLimites] = useState(null);
   const [cupo, setCupo] = useState(null);
+  const { rates } = useRate();
   const [hecho, setHecho] = useState(null);
+  // EL FLUJO QUE COBRA AL FINAL, leído de `/limits`.
+  //
+  //   Acá el cliente no gasta saldo: transfiere en bolívares y sube el
+  //   comprobante, y alguien lo verifica antes de que el envío entre en la
+  //   cola. Con el ajuste apagado, la ruta contesta 503, así que la pantalla
+  //   lee el MISMO dato que el servidor hace cumplir.
+  const [pagoAlFinal, setPagoAlFinal] = useState(false);
+  const [cotizacion, setCotizacion] = useState(null);   // lo que devolvió cotizar
+  const [bancoElegido, setBancoElegido] = useState('');
+  const [comprobante, setComprobante] = useState('');
 
   const saldo = user?.balance_ris || 0;
   const montoNum = aNumero(monto);
@@ -248,6 +260,86 @@ export default function SendReais() {
     }
   };
 
+  useEffect(() => {
+    let vigente = true;
+    api.get('/limits')
+      .then((r) => { if (vigente) setPagoAlFinal(Boolean(r.data?.pago_al_final)); })
+      .catch(() => { if (vigente) setPagoAlFinal(false); });
+    return () => { vigente = false; };
+  }, []);
+
+  // Cotizar: deja la orden esperando el pago y reserva la tasa 7 minutos.
+  const cotizarEnBolivares = async () => {
+    if (!elegido) return toast.error('Elegí a quién le enviás');
+    if (problemaDelMonto) return toast.error(problemaDelMonto);
+    if (!idemRef.current) idemRef.current = nuevaClaveDeEnvio();
+    try {
+      setEnviando(true);
+      // El servidor cotiza sobre BOLIVARES, que es lo que el cliente va a
+      // transferir. Se manda el monto en reales convertido con la tasa que la
+      // pantalla ya tiene, y el servidor RECALCULA: si difiere, manda el suyo.
+      const r = await api.post('/enviar-reais/cotizar', {
+        // LA TASA SALE DE `RateContext`, Y EL SERVIDOR LA RECALCULA IGUAL.
+        //
+        //   La primera versión leía `limites?.ves_to_ris`, que NO EXISTE:
+        //   `/limits` no publica tasas. Mandaba cero y el servidor rechazaba
+        //   con «el monto debe ser mayor a 0», sin decir por qué.
+        //
+        //   Este número es sólo para convertir lo que el cliente escribió en
+        //   reales a los bolívares que va a transferir. El servidor vuelve a
+        //   calcular con SU tasa y devuelve los dos montos, y la pantalla de
+        //   abajo muestra los suyos, no éstos. Si difieren, gana el servidor.
+        amount_ves: Number((montoNum * (rates?.ves_to_ris_rate || 0)).toFixed(2)),
+        beneficiary_id: elegido.beneficiary_id,
+        idempotency_key: idemRef.current,
+      });
+      idemRef.current = null;
+      setCotizacion(r.data);
+      setPaso(5);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo cotizar');
+    } finally {
+      setEnviando(false);
+    }
+    return undefined;
+  };
+
+  const leerComprobante = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen no debe superar 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => setComprobante(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  // Subir el comprobante. NO acredita nada: deja la orden esperando que
+  // alguien lo mire. Por eso la pantalla dice «lo estamos revisando» y no
+  // «listo».
+  const mandarComprobante = async () => {
+    if (!bancoElegido) return toast.error('Elegí a qué banco transferiste');
+    if (!comprobante) return toast.error('Subí el comprobante');
+    try {
+      setEnviando(true);
+      await api.post('/enviar-reais/comprobante', {
+        transaction_id: cotizacion.transaction_id,
+        destination_bank: bancoElegido,
+        proof_image: comprobante,
+      });
+      setHecho({ monto: cotizacion.amount_brl, nombre: elegido.full_name,
+                 revisando: true });
+      setPaso(4);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo enviar el comprobante');
+    } finally {
+      setEnviando(false);
+    }
+    return undefined;
+  };
+
   const pedirConfirmacion = () => {
     if (!elegido) return toast.error('Elegí a quién le enviás');
     if (problemaDelMonto) return toast.error(problemaDelMonto);
@@ -299,13 +391,29 @@ export default function SendReais() {
           }}>
             <Check size={28} color={C.exito} strokeWidth={2.5} />
           </span>
+          {/* LO QUE DICE ACA DEPENDE DE COMO SE PAGO, Y NO ES UN DETALLE.
+              Pagando con saldo, el envío está cobrado y sólo falta
+              despacharlo. Pagando en bolívares, todavía NO SABEMOS si la plata
+              entró: alguien tiene que abrir el comprobante. Decirle «listo» a
+              quien está en el segundo caso es prometerle algo que nadie
+              comprobó. */}
           <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 700, color: C.tinta }}>
-            Envío registrado
+            {hecho.revisando ? 'Recibimos tu comprobante' : 'Envío registrado'}
           </h2>
           <p style={{ margin: '0 0 22px 0', fontSize: '14.5px', color: C.suave, lineHeight: 1.6 }}>
-            <strong style={{ color: C.tinta }}>R$ {fmt(hecho.monto)}</strong> para{' '}
-            <strong style={{ color: C.tinta }}>{hecho.nombre}</strong>. El equipo lo paga
-            por PIX y te avisamos cuando esté hecho.
+            {hecho.revisando ? (
+              <>
+                Lo estamos revisando. En cuanto confirmemos el pago,
+                despachamos <strong style={{ color: C.tinta }}>R$ {fmt(hecho.monto)}</strong>{' '}
+                para <strong style={{ color: C.tinta }}>{hecho.nombre}</strong> y te avisamos.
+              </>
+            ) : (
+              <>
+                <strong style={{ color: C.tinta }}>R$ {fmt(hecho.monto)}</strong> para{' '}
+                <strong style={{ color: C.tinta }}>{hecho.nombre}</strong>. El equipo lo paga
+                por PIX y te avisamos cuando esté hecho.
+              </>
+            )}
           </p>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Boton onClick={() => navigate('/history')}>Ver mis operaciones</Boton>
@@ -597,11 +705,24 @@ export default function SendReais() {
             </Aviso>
           </div>
 
+          {/* DOS FORMAS DE PAGARLO. La de bolívares va primero porque no
+              pide tener saldo cargado de antes; la de siempre se queda al
+              lado mientras los dos flujos convivan. */}
+          {pagoAlFinal ? (
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+              <Boton onClick={() => setPaso(2)} Icono={ArrowLeft}>Atrás</Boton>
+              <Boton tipo="primario" ancho onClick={cotizarEnBolivares}
+                disabled={enviando || !montoOk} testid="br-pagar-bolivares">
+                {enviando ? 'Cotizando…' : 'Pagar en bolívares'}
+              </Boton>
+            </div>
+          ) : null}
+
           <div style={{ display: 'flex', gap: '10px' }}>
-            <Boton onClick={() => setPaso(2)} Icono={ArrowLeft}>Atrás</Boton>
+            {pagoAlFinal ? null : <Boton onClick={() => setPaso(2)} Icono={ArrowLeft}>Atrás</Boton>}
             <Boton tipo="exito" ancho onClick={pedirConfirmacion}
               disabled={enviando || !montoOk} Icono={ShieldCheck} testid="br-enviar">
-              {enviando ? 'Enviando…' : 'Confirmar envío'}
+              {enviando ? 'Enviando…' : (pagoAlFinal ? 'Usar mi saldo' : 'Confirmar envío')}
             </Boton>
           </div>
 
@@ -609,6 +730,94 @@ export default function SendReais() {
             Sin comisión adicional · El pago lo procesa el equipo por PIX
           </p>
         </>
+      )}
+
+      {/* PASO 5 — TRANSFERI Y SUBI EL COMPROBANTE.
+          No hay botón de «ya pagué» suelto: subir el comprobante ES decir que
+          pagó, y lo que sigue es que alguien lo mire. La pantalla no promete
+          que el envío salió, porque todavía no lo sabe nadie. */}
+      {paso === 5 && cotizacion && (
+        <section style={{ ...tarjeta, padding: '22px' }} data-testid="br-comprobante">
+          <h2 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: C.tinta }}>
+            Transferí y subí el comprobante
+          </h2>
+          <p style={{ ...ayuda, marginTop: 0, marginBottom: '16px' }}>
+            Hacé la transferencia en bolívares y subí la captura. La revisamos
+            y despachamos tus reales.
+          </p>
+
+          <dl style={{ margin: '0 0 16px 0', display: 'grid', gap: '9px' }}>
+            {[
+              ['Transferís', `${fmt(cotizacion.amount_ves)} Bs`],
+              ['Recibe', `R$ ${fmt(cotizacion.amount_brl)}`],
+              ['Tasa', fmt(cotizacion.rate)],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between',
+                gap: '12px', alignItems: 'baseline' }}>
+                <dt style={{ fontSize: '13px', color: C.suave }}>{k}</dt>
+                <dd style={{ margin: 0, fontSize: '13.5px', fontWeight: 600, color: C.tinta }}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div style={{ marginBottom: '16px' }}>
+            <Aviso tono="alerta" testid="br-vence">
+              Tenés 7 minutos para subir el comprobante. La tasa de arriba te la
+              respetamos aunque la verificación demore.
+            </Aviso>
+          </div>
+
+          <label htmlFor="br-banco" style={{ display: 'block', fontSize: '13px',
+            fontWeight: 600, color: C.tinta, marginBottom: '6px' }}>
+            ¿A qué banco transferiste?
+          </label>
+          <select id="br-banco" data-testid="br-banco" value={bancoElegido}
+            onChange={(e) => setBancoElegido(e.target.value)}
+            style={{ width: '100%', padding: '11px 12px', fontSize: '14px',
+              borderRadius: '10px', border: `1px solid ${C.linea}`,
+              background: '#fff', color: C.tinta, marginBottom: '14px' }}>
+            <option value="">Elegí el banco</option>
+            {(cotizacion.bancos || []).map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+
+          {/* EL SELECTOR NATIVO VA ESCONDIDO DETRAS DE UNA ETIQUETA.
+              Visible dice «Choose File / No file chosen», en inglés y sin
+              forma de traducirlo: el navegador dibuja ese texto y no se puede
+              cambiar. En una aplicación en español es la única palabra en
+              inglés de la pantalla, justo en el paso donde la persona ya
+              transfirió y está nerviosa. */}
+          <span style={{ display: 'block', fontSize: '13px', fontWeight: 600,
+            color: C.tinta, marginBottom: '6px' }}>
+            El comprobante
+          </span>
+          <label htmlFor="br-archivo" style={{
+            display: 'block', padding: '11px 12px', textAlign: 'center',
+            fontSize: '13.5px', fontWeight: 600, cursor: 'pointer',
+            borderRadius: '10px', border: `1px dashed ${C.lineaFuerte}`,
+            color: comprobante ? C.exito : C.suave, background: '#fff',
+            marginBottom: '16px',
+          }}>
+            {comprobante ? '✓ Comprobante cargado — tocá para cambiarlo'
+                         : 'Elegí la captura de la transferencia'}
+          </label>
+          <input id="br-archivo" data-testid="br-archivo" type="file" accept="image/*"
+            onChange={leerComprobante}
+            style={{ position: 'absolute', width: '1px', height: '1px',
+              opacity: 0, pointerEvents: 'none' }} />
+
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <Boton onClick={() => { setCotizacion(null); setPaso(3); }} Icono={ArrowLeft}>
+              Atrás
+            </Boton>
+            <Boton tipo="primario" ancho onClick={mandarComprobante}
+              disabled={enviando || !bancoElegido || !comprobante}
+              testid="br-mandar-comprobante">
+              {enviando ? 'Enviando…' : 'Enviar el comprobante'}
+            </Boton>
+          </div>
+        </section>
       )}
 
       <PinConfirm open={mostrarPin} onClose={() => setMostrarPin(false)} onVerified={enviar} />

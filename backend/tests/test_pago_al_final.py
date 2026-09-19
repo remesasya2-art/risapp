@@ -608,3 +608,282 @@ def test_una_orden_PAGADA_no_devuelve_el_bono(base):
               payment_expires_at=datetime.now(timezone.utc) - timedelta(hours=1))
     corre(paf.vencer_las_viejas(base))
     assert _bono_de(base) == __import__("decimal").Decimal("0")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9. El corredor inverso: se paga en bolívares y se liquida en reais
+# ══════════════════════════════════════════════════════════════════════════
+#
+# LAS TRES COSAS QUE ESTE BLOQUE NO DEJA QUE SE ROMPAN
+#
+#   1. QUE SUBIR EL COMPROBANTE NO ACREDITE NADA.
+#
+#      Decir «pagué» no es haber pagado. Entre el comprobante y la cola de
+#      despacho tiene que estar la persona que lo abre. Si alguien conecta el
+#      comprobante directo a «pendiente», la aplicación despacha reales contra
+#      la palabra del que los pide.
+#
+#   2. QUE EL ESTADO DEL MEDIO EXISTA.
+#
+#      Sin él, la orden queda en «esperando pago» —y el cliente ve «pagá»
+#      después de haber pagado, y paga dos veces— o en «pendiente», que acá
+#      significa «cobrada», sin que nadie haya comprobado nada.
+#
+#   3. QUE RECHAZAR DEVUELVA A «ESPERANDO PAGO» Y NO A UN ESTADO TERMINAL.
+#
+#      El cliente no tiene saldo comprometido: si la foto salió mal, lo que
+#      necesita es poder mandar la buena, no cotizar de nuevo.
+
+def una_orden_reais(base, estado=None, **extra):
+    doc = {
+        "transaction_id": "tx_br",
+        "display_id": 2001,
+        "user_id": "u_1",
+        "type": "withdrawal",
+        "amount_input": 5500.0,            # bolívares que pone
+        "amount_output": 100.0,            # reales que recibe
+        "currency_input": "VES",
+        "currency_output": "BRL",
+        "rate": 55.0,
+        "status": estado or paf.ESPERANDO_PAGO,
+        "funded_from": "payment",
+        "payment_order_id": paf.nuevo_id_de_cobro_reais(),
+        "payment_expires_at": paf.vence_en(),
+        "created_at": datetime.now(timezone.utc),
+    }
+    doc.update(extra)
+    corre(base.transactions.insert_one(dict(doc)))
+    return doc
+
+
+def _subir(base, **k):
+    return corre(paf.recibir_comprobante(
+        base, k.pop("tx", "tx_br"), k.pop("uid", "u_1"),
+        comprobante=k.pop("comprobante", "data:image/png;base64,AAAA"),
+        banco_id=k.pop("banco_id", "bk_1"),
+        banco_nombre=k.pop("banco_nombre", "Banesco")))
+
+
+def test_EL_COMPROBANTE_NO_MANDA_LA_ORDEN_A_LA_COLA(base):
+    """El test más importante de este bloque.
+
+    Subir el comprobante deja la orden EN REVISION, no en «pendiente». Decir
+    «pagué» no es haber pagado: entre las dos cosas va la persona que abre el
+    comprobante. Si esto se pone en verde con «pending», la aplicación
+    despacha reales contra la palabra de quien los pide.
+    """
+    una_orden_reais(base)
+    orden = _subir(base)
+    assert orden["status"] == paf.REVISANDO
+    assert orden["status"] != paf.PENDIENTE
+    assert orden.get("proof_image")
+
+
+def test_el_mismo_comprobante_dos_veces_da_409(base):
+    """Doble clic. El reclamo lleva el estado dentro del filtro, así que el
+    segundo no encuentra la orden esperando el pago."""
+    una_orden_reais(base)
+    _subir(base)
+    with pytest.raises(HTTPException) as e:
+        _subir(base)
+    assert e.value.status_code == 409
+    assert "revisando" in e.value.detail.lower()
+
+
+def test_una_cotizacion_vencida_NO_acepta_comprobante(base):
+    """Los siete minutos son para pagar. Pasado ese rato la tasa ya no se
+    respeta, y aceptar el comprobante en silencio sería despachar con una tasa
+    que nadie decidió."""
+    una_orden_reais(base,
+                    payment_expires_at=datetime.now(timezone.utc) - timedelta(minutes=1))
+    with pytest.raises(HTTPException) as e:
+        _subir(base)
+    assert e.value.status_code == 409
+    assert "venció" in e.value.detail or "vencio" in e.value.detail
+
+
+def test_la_cotizacion_vencida_le_dice_que_hacer_si_ya_transfirio(base):
+    """El caso caro: transfirió y llegó tarde. Si el mensaje sólo dice
+    «venció», esa persona pierde la plata sin saber a quién escribirle."""
+    una_orden_reais(base,
+                    payment_expires_at=datetime.now(timezone.utc) - timedelta(minutes=1))
+    with pytest.raises(HTTPException) as e:
+        _subir(base)
+    assert "escribinos" in e.value.detail.lower()
+
+
+def test_no_se_puede_subir_el_comprobante_de_otro(base):
+    """El `user_id` va dentro del filtro del reclamo, no comprobado aparte."""
+    una_orden_reais(base)
+    with pytest.raises(HTTPException) as e:
+        _subir(base, uid="otro")
+    assert e.value.status_code == 404
+
+
+# ── La verificación del administrador ────────────────────────────────────
+
+def test_verificar_manda_la_orden_a_la_cola(base):
+    una_orden_reais(base, estado=paf.REVISANDO)
+    orden = corre(paf.verificar_el_pago(base, "tx_br", "admin_1"))
+    assert orden["status"] == paf.PENDIENTE
+    assert orden.get("verificado_por") == "admin_1"
+
+
+def test_DOS_OPERADORES_NO_VERIFICAN_LA_MISMA_ORDEN(base):
+    """Dos personas con la misma pantalla abierta. El reclamo lleva
+    `REVISANDO` en el filtro, así que el segundo se va con un 409 en vez de
+    despachar dos veces."""
+    una_orden_reais(base, estado=paf.REVISANDO)
+    corre(paf.verificar_el_pago(base, "tx_br", "admin_1"))
+    with pytest.raises(HTTPException) as e:
+        corre(paf.verificar_el_pago(base, "tx_br", "admin_2"))
+    assert e.value.status_code == 409
+
+
+def test_no_se_puede_verificar_una_orden_que_nadie_pago(base):
+    """Una orden en «esperando pago» no tiene comprobante. Verificarla sería
+    mandar a despachar algo que nadie dijo siquiera haber pagado."""
+    una_orden_reais(base)
+    with pytest.raises(HTTPException) as e:
+        corre(paf.verificar_el_pago(base, "tx_br", "admin_1"))
+    assert e.value.status_code == 409
+
+
+def test_RECHAZAR_DEVUELVE_A_ESPERANDO_PAGO(base):
+    """Y no a un estado terminal: el cliente no tiene saldo comprometido, y si
+    la foto salió mal lo que necesita es mandar la buena."""
+    una_orden_reais(base, estado=paf.REVISANDO)
+    orden = corre(paf.rechazar_el_comprobante(
+        base, "tx_br", "admin_1", "La foto está cortada"))
+    assert orden["status"] == paf.ESPERANDO_PAGO
+    assert orden.get("motivo_del_rechazo") == "La foto está cortada"
+
+
+def test_al_rechazar_se_borra_el_comprobante_viejo(base):
+    """Si quedara, el próximo que abra la orden vería la foto mala y el
+    comprobante nuevo al lado, sin saber cuál es cuál."""
+    una_orden_reais(base, estado=paf.REVISANDO,
+                    proof_image="data:image/png;base64,VIEJA")
+    orden = corre(paf.rechazar_el_comprobante(base, "tx_br", "a", "no se lee"))
+    assert not orden.get("proof_image")
+
+
+def test_despues_de_un_rechazo_se_puede_volver_a_subir(base):
+    """La vuelta completa: rechazado, corrige la foto, la manda de nuevo."""
+    una_orden_reais(base, estado=paf.REVISANDO)
+    corre(paf.rechazar_el_comprobante(base, "tx_br", "a", "no se lee"))
+    orden = _subir(base, comprobante="data:image/png;base64,BUENA")
+    assert orden["status"] == paf.REVISANDO
+
+
+# ── La forma de las rutas ────────────────────────────────────────────────
+
+def _cuerpo(nombre, archivo="routes/transactions.py"):
+    fuente = (_BACKEND / archivo).read_text(encoding="utf-8")
+    i = fuente.index(f"async def {nombre}(")
+    resto = fuente[i:]
+    fin = resto.find("\n@router")
+    return resto if fin < 0 else resto[:fin]
+
+
+def test_el_beneficiario_TIENE_que_ser_de_brasil():
+    """Sin esto, un `beneficiary_id` de Venezuela crea una orden que promete
+    reales a una cuenta en bolívares, y el operador lo descubre al ir a
+    pagarla."""
+    cuerpo = _cuerpo("cotizar_envio_reais")
+    assert 'beneficiary.get("pais") != "BR"' in cuerpo, (
+        "la cotización no comprueba que el beneficiario sea de Brasil")
+
+
+def test_el_banco_se_resuelve_ANTES_de_aceptar_el_comprobante():
+    """Aceptar un banco que no resuelve contra contabilidad deja una orden que
+    nadie va a poder procesar, y el cliente se entera días después."""
+    cuerpo = _cuerpo("comprobante_del_envio_reais")
+    assert "resolve_ves_bank" in cuerpo
+    assert cuerpo.index("resolve_ves_bank") < cuerpo.index("recibir_comprobante")
+
+
+def test_la_cotizacion_inversa_no_toca_ningun_saldo():
+    """La propiedad que hace seguro a todo este flujo. Si aparece un débito,
+    volvieron las dos escrituras."""
+    cuerpo = _cuerpo("cotizar_envio_reais")
+    for prohibido in ("balance_ris", "saldos.mover", "$inc"):
+        assert prohibido not in cuerpo, (
+            f"la cotización inversa toca «{prohibido}»: tiene que ser sin saldo")
+
+
+def test_rechazar_un_comprobante_EXIGE_un_motivo_escrito():
+    """Sin motivo, el cliente recibe un «no» sin saber qué corregir y termina
+    en soporte."""
+    cuerpo = _cuerpo("verificar_pago_en_bolivares", "routes/admin.py")
+    assert "if not motivo:" in cuerpo
+
+
+def test_las_dos_acciones_estan_declaradas_en_el_libro():
+    """`auditoria.registrar` revienta con una acción no declarada, y lo hace a
+    propósito: una acción mal escrita es una línea que después nadie encuentra
+    al filtrar."""
+    from services import auditoria
+    assert "envio_brl.verificado" in auditoria.ACCIONES
+    assert "envio_brl.rechazado" in auditoria.ACCIONES
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 10. La pantalla del corredor inverso no promete lo que nadie comprobó
+# ══════════════════════════════════════════════════════════════════════════
+
+_SENDREAIS = _REPO / "frontend" / "src" / "pages" / "SendReais.jsx"
+
+
+def test_la_pantalla_de_brasil_lee_el_estado_del_flujo():
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    assert "r.data?.pago_al_final" in jsx
+    assert "{pagoAlFinal ? (" in jsx, (
+        "el botón de pagar en bolívares no está condicionado al estado")
+
+
+def test_los_dos_flujos_conviven_en_la_pantalla_de_brasil():
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    assert "'/enviar-reais/cotizar'" in jsx
+    assert "'/reais/send'" in jsx, (
+        "se perdió el envío con saldo: los dos flujos tienen que convivir")
+
+
+def test_LA_PANTALLA_NO_DICE_LISTO_CUANDO_FALTA_VERIFICAR():
+    """El error caro de esta pantalla.
+
+    Pagando con saldo, el envío está cobrado y sólo falta despacharlo.
+    Pagando en bolívares, NADIE sabe todavía si la plata entró: alguien tiene
+    que abrir el comprobante. Decirle «envío registrado» a quien está en el
+    segundo caso es prometerle algo que no comprobó nadie, y el día que el
+    comprobante se rechace va a decir —con razón— que la aplicación le dijo
+    que estaba hecho.
+    """
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    assert "hecho.revisando ? 'Recibimos tu comprobante' : 'Envío registrado'" in jsx, (
+        "la pantalla de cerrado dejó de distinguir entre «cobrado» y "
+        "«esperando que lo verifiquemos»")
+
+
+def test_la_pantalla_del_comprobante_no_tiene_boton_de_ya_pague():
+    """Subir el comprobante ES decir que pagó. Un botón aparte de «ya pagué»
+    sería una forma de avanzar la orden sin adjuntar nada que mirar."""
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    i = jsx.index('data-testid="br-comprobante"')
+    bloque = jsx[i:i + 4000]
+    for prohibido in ("ya pagué", "ya pague", "Ya pagué", "marcar-pagado"):
+        assert prohibido not in bloque
+
+
+def test_la_pantalla_muestra_los_montos_DEL_SERVIDOR():
+    """La pantalla convierte a bolívares con la tasa que tiene a mano sólo
+    para pedir la cotización. Lo que muestra después son los montos que
+    devolvió el servidor: si difieren, gana el servidor."""
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    i = jsx.index('data-testid="br-comprobante"')
+    bloque = jsx[i:i + 4000]
+    assert "cotizacion.amount_ves" in bloque
+    assert "cotizacion.amount_brl" in bloque
+    assert "montoNum" not in bloque, (
+        "la pantalla del comprobante muestra su propio cálculo en vez del "
+        "que devolvió el servidor")
