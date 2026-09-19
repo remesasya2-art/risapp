@@ -61,6 +61,26 @@ PROHIBIDAS = [
     "casa de cambio",
     "envio de dinero",
     "giro internacional",
+    # EL SUSTANTIVO NO ALCANZABA: FALTABA EL VERBO.
+    #
+    #   La lista tenía «envio de dinero» y nada más, así que «envía dinero a
+    #   Venezuela» —escrito en la portada al apagar la vía cripto— entró sin
+    #   que este test dijera nada. Compila igual, se ve igual, y la regla de
+    #   negocio quedaba rota en la única pantalla que ve alguien de afuera.
+    #
+    #   Se listan las formas verbales y no una expresión regular con raíces
+    #   porque «envi» solo tomaría «envío de paquetes», que es exactamente lo
+    #   que esta empresa SI hace y sí puede decir.
+    "envia dinero",
+    "enviar dinero",
+    "enviamos dinero",
+    "envian dinero",
+    "enviando dinero",
+    "manda dinero",
+    "mandar dinero",
+    "mandamos dinero",
+    "gira dinero",
+    "girar dinero",
 ]
 
 

@@ -68,10 +68,20 @@ ABIERTA = 2
 
 # Lo que ve el usuario. No dice «configuración» ni «ajuste»: dice qué pasa y
 # qué puede hacer, que es lo único que le sirve.
+# EL VOCABULARIO ES EL DE LA APLICACION: «gastar», no «enviar dinero».
+#
+#   La primera versión decía «podés seguir enviando dinero». El menú del
+#   panel del cliente dice «Gastar en Venezuela» y «Gastar en Brasil», así que
+#   «enviar dinero» era la palabra suelta que no usa ninguna otra pantalla.
+#
+#   La regla escrita en `Landing.jsx` —no describir el servicio como envío de
+#   dinero— vale para las páginas públicas y no para acá adentro, donde el
+#   usuario ya sabe qué contrató. Igual se alinea: dos vocabularios para la
+#   misma acción es como se termina llamándola de tres formas.
 SIN_DEPOSITOS = ("Los depósitos en cripto no están disponibles por ahora. "
-                 "Podés seguir enviando dinero pagando con PIX.")
-CERRADA_DEL_TODO = ("La vía cripto no está disponible por ahora. Podés seguir "
-                    "enviando dinero pagando con PIX.")
+                 "Podés recargar tu saldo con PIX y gastarlo como siempre.")
+CERRADA_DEL_TODO = ("La vía cripto no está disponible por ahora. Podés "
+                    "recargar tu saldo con PIX y gastarlo como siempre.")
 
 
 async def _estado(db) -> int:

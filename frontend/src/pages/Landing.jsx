@@ -283,7 +283,7 @@ export default function Landing() {
               ? ('Recarga tu saldo, opera con Bitcoin y activa créditos '
                  + 'digitales USDT y USDC. Cada movimiento se procesa de forma '
                  + 'automática y queda registrado.')
-              : ('Recarga tu saldo con PIX y envía dinero a Venezuela. Cada '
+              : ('Recarga tu saldo con PIX y opera desde tu cuenta. Cada '
                  + 'movimiento se procesa de forma automática y queda '
                  + 'registrado.')}
           </p>
