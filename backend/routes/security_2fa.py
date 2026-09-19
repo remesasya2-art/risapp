@@ -48,6 +48,7 @@ from services.ip_cliente import ip_del_cliente
 
 from database import db
 from services import personal as _personal
+from services.email_notifications import notify_dos_pasos_activado
 from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
 from services.perfil import para_su_dueno
@@ -608,9 +609,109 @@ async def twofa_enroll_confirm(request: Request, response: Response, data: TwoFA
 # SI ALGUN DIA SE QUIERE OFRECER EL SEGUNDO FACTOR AL CLIENTE, el camino no
 # es volver a poner esto: es que las tres puertas respeten la marca, que la
 # regla siga viviendo en un solo lugar, y que un super administrador pueda
-# apagárselo a quien perdió el teléfono. Está anotado en la sección 11 del
-# dossier de seguridad. La guarda de `test_segundo_factor_sin_trampas.py` se
-# pone roja si alguien agrega un alta sin lo demás.
+# apagárselo a quien perdió el teléfono.
+#
+# ESE DIA LLEGO, Y LAS TRES CONDICIONES ESTAN:
+#
+#   · Las puertas la respetan. `personal.pide_dos_pasos` decide, y la miran
+#     el ingreso con contraseña y el de Google. Las otras dos que emiten
+#     sesión están exentas con motivo escrito, y hay un test que exige que
+#     toda puerta nueva declare el suyo.
+#   · La regla vive en un solo lugar. Antes estaba copiada palabra por
+#     palabra en dos rutas de ingreso.
+#   · El reinicio existe. Recursos Humanos puede limpiárselo a quien perdió
+#     el teléfono Y los códigos de respaldo.
+#
+# Así que abajo vuelve el alta con sesión, que es el camino del perfil. La
+# diferencia con las rutas que se fueron no está en estas funciones: está en
+# que ahora el ingreso mira lo que encienden.
+
+
+class ActivarDosPasosConfirm(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+@router.post("/activar-init")
+async def activar_dos_pasos_init(current_user: User = Depends(get_current_user)):
+    """Le muestra el código QR a quien quiere activarlo desde su perfil.
+
+    No enciende nada: sólo deja un secreto PENDIENTE. Mientras no llegue el
+    primer código correcto, la cuenta sigue exactamente como estaba. Así,
+    alguien que abre la pantalla y se arrepiente no queda a medio camino.
+    """
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    if user.get("two_factor_enabled"):
+        raise HTTPException(status_code=400, detail="Ya tenés la verificación en dos pasos activada")
+
+    secret = pyotp.random_base32()
+    otpauth_url = pyotp.TOTP(secret).provisioning_uri(
+        name=user["email"], issuer_name=ISSUER_NAME)
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"two_factor_secret_pending": secret}})
+    return {
+        "secret": secret,
+        "otpauth_url": otpauth_url,
+        "qr_code_data_url": _make_qr_data_url(otpauth_url),
+        "issuer": ISSUER_NAME,
+        "account": user["email"],
+    }
+
+
+@router.post("/activar-confirm")
+async def activar_dos_pasos_confirm(request: Request, datos: ActivarDosPasosConfirm,
+                                    current_user: User = Depends(get_current_user)):
+    """Confirma con el primer código y lo enciende. Devuelve los de respaldo.
+
+    NO EMITE SESION, a diferencia de `enroll-confirm`: quien llega acá ya
+    tiene una. Devolver otra sería darle dos sesiones vivas por activar una
+    protección.
+    """
+    # El mismo freno que `/verify`, y por lo mismo: acá se prueba un código
+    # de seis dígitos. Sin freno, mil intentos lo adivinan.
+    await frenar(request, "auth.2fa_activar", "10/15minutes")
+
+    user = await db.users.find_one({"user_id": current_user.user_id})
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    if user.get("two_factor_enabled"):
+        raise HTTPException(status_code=400, detail="Ya tenés la verificación en dos pasos activada")
+
+    secret = user.get("two_factor_secret_pending")
+    if not secret:
+        raise HTTPException(status_code=400, detail="Primero pedí el código QR")
+
+    if not pyotp.TOTP(secret).verify(datos.code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Código incorrecto")
+
+    plain_codes, hashed_codes = await _generate_backup_codes()
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"two_factor_enabled": True,
+                  "two_factor_secret": secret,
+                  "two_factor_backup_hashes": hashed_codes,
+                  "two_factor_enabled_at": datetime.now(timezone.utc)},
+         "$unset": {"two_factor_secret_pending": ""}})
+
+    # El aviso es la mitad de la defensa, igual que en el reinicio desde
+    # Recursos Humanos: si alguien con la sesión tomada activa el segundo
+    # factor, el dueño de la cuenta se entera AHORA y no cuando no pueda
+    # entrar. Va en su propio `try`: que el correo falle no puede dejar la
+    # activación a medias, con los códigos de respaldo ya mostrados una vez
+    # y sin forma de volver a verlos.
+    try:
+        await notify_dos_pasos_activado(user.get("email"), user.get("name") or "")
+    except Exception as e:                                # pragma: no cover
+        logger.warning("no se pudo avisar la activación de dos pasos: %s", e)
+
+    return {
+        "message": "Verificación en dos pasos activada",
+        "backup_codes": plain_codes,
+        "important": "Guardá estos códigos en un lugar seguro. NO se muestran de nuevo.",
+    }
+
 
 @router.post("/disable")
 async def twofa_disable(

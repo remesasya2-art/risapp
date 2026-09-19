@@ -212,10 +212,17 @@ def _linea(texto, pos):
     return texto.count("\n", 0, pos) + 1
 
 
-# Lo que se acepta adentro de un `href` o de un `window.open`: una llamada al
-# filtro, una constante del propio archivo, o un literal escrito a mano.
+# Lo que se acepta adentro de un `href` o de un `window.open`: una llamada a
+# alguno de los filtros, una constante del propio archivo, o un literal.
+#
+# `enlaceDeAutenticador` se sumó con la pantalla de la verificación en dos
+# pasos. No sirve para archivos: comprueba que el esquema sea `otpauth://` y
+# devuelve `null` para cualquier otra cosa. Es un filtro aparte a propósito —
+# ensanchar `urlDeArchivoSegura` con un esquema que no es un archivo aflojaría
+# la guarda de TODOS los archivos por un caso que no tiene nada que ver.
 _LIMPIO = re.compile(
-    r"^\s*(rutaDeArchivo|urlDeArchivoSegura|abrirArchivo|bajarArchivo)\s*\(|"
+    r"^\s*(rutaDeArchivo|urlDeArchivoSegura|abrirArchivo|bajarArchivo"
+    r"|enlaceDeAutenticador)\s*\(|"
     r"^\s*['\"`]|"                     # un literal
     r"^\s*[A-Z_][A-Z0-9_]*\s*$|"       # una constante del archivo
     r"^\s*$"

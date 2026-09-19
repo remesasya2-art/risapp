@@ -96,6 +96,37 @@ export function urlDeArchivoSegura(valor) {
   return null;
 }
 
+/**
+ * El enlace que abre la aplicación de autenticación del teléfono.
+ *
+ * POR QUE NO ALCANZA CON `urlDeArchivoSegura`
+ *
+ *   Aquélla acepta rutas nuestras, http(s), imágenes en data: y blob:. El
+ *   esquema `otpauth://` no entra en ninguna, y con razón: no es un archivo.
+ *   Meterlo ahí ensancharía el filtro de TODOS los archivos por un caso que
+ *   no tiene nada que ver.
+ *
+ * POR QUE EXISTE ESTA FUNCION EN VEZ DE PONER EL VALOR DIRECTO
+ *
+ *   El valor lo arma nuestro propio servidor, así que hoy es seguro. Pero un
+ *   `href` que recibe un campo de una respuesta es exactamente la forma en
+ *   que vuelve un `javascript:` el día que ese campo venga de otro lado, y
+ *   hay una guarda del repositorio que lo exige por la FORMA y no por el
+ *   caso: `tests/test_url_de_archivo.py`.
+ *
+ *   Así que se comprueba el esquema. Cualquier otra cosa devuelve `null` y la
+ *   pantalla no dibuja el enlace.
+ *
+ * @returns {string|null}
+ */
+export function enlaceDeAutenticador(valor) {
+  if (typeof valor !== 'string') return null;
+  const limpio = valor.trim();
+  // Sin ignorar mayúsculas y con el `//` incluido: `otpauth:algo` no es un
+  // enlace de estos, y `OTPAUTH://` tampoco lo emite nadie que conozcamos.
+  return limpio.startsWith('otpauth://') ? limpio : null;
+}
+
 /** ¿Se puede mostrar? Para decidir entre dibujar el bloque o el «no disponible». */
 export function sePuedeAbrir(valor) {
   return urlDeArchivoSegura(valor) !== null;

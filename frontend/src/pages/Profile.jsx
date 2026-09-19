@@ -73,6 +73,7 @@ import { passwordRules } from '../utils/passwordPolicy';
 import pushService from '../utils/pushService';
 import PinSettings from '../components/PinSettings';
 import WebAuthnSettings from '../components/WebAuthnSettings';
+import DosPasosSettings from '../components/DosPasosSettings';
 import MiCodigoDeReferido from '../components/MiCodigoDeReferido';
 import { Boton, Aviso } from '../components/flujo';
 import {
@@ -563,6 +564,9 @@ export default function Profile() {
             cada componente decide si se dibuja. */}
         <PinSettings user={user} />
         <WebAuthnSettings />
+        {/* La verificación en dos pasos. Se dibuja sola sólo para quien NO
+            está obligado: al personal se la exige el ingreso. */}
+        <DosPasosSettings />
 
         {/* ── Códigos de respaldo 2FA (sólo super_admin) ────────────── */}
         {esSuperAdmin ? (

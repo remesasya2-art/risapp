@@ -254,6 +254,38 @@ async def notify_dos_pasos_reiniciado(email: str, user_name: str, quien: str = "
     _cortesia(email, f"🔐 {APP_NAME} - Se reinició tu verificación en dos pasos", html)
 
 
+async def notify_dos_pasos_activado(email: str, user_name: str):
+    """La cuenta activó la verificación en dos pasos desde su perfil.
+
+    ES LA MITAD DE LA DEFENSA, igual que el aviso del reinicio, y por el
+    motivo espejo: quien tenga la sesión de alguien tomada puede activarle el
+    segundo factor con SU teléfono, y a partir de ahí el dueño legítimo no
+    entra más —le van a pedir un código que no tiene—. Visto desde afuera
+    parece «me olvidé la contraseña»; visto desde adentro es una cuenta
+    secuestrada con una protección puesta al revés.
+
+    El correo es lo único que llega al dueño en el momento. Por eso dice qué
+    hacer si no fue él, y lo dice primero.
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+    content = f"""
+    <p>Hola <strong>{user_name}</strong>,</p>
+    <p>Se activó la verificación en dos pasos en tu cuenta. A partir de ahora,
+       cada vez que entres te vamos a pedir el código de seis dígitos de tu
+       aplicación de autenticación, además de tu contraseña.</p>
+    <table style="background-color: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0; width: 100%;">
+        <tr><td style="padding: 8px 0;"><strong>Fecha y hora:</strong></td><td>{timestamp}</td></tr>
+    </table>
+    <p>Guardá tus códigos de respaldo en un lugar seguro: son la única forma
+       de entrar si perdés el teléfono.</p>
+    <p style="color: #dc2626; font-weight: 500;">⚠️ Si no fuiste vos, escribinos
+       ahora mismo. Significa que alguien entró a tu cuenta, y con esto puesto
+       vas a dejar de poder entrar vos.</p>
+    """
+    html = get_email_template("Se activó tu verificación en dos pasos", content)
+    _cortesia(email, f"🔐 {APP_NAME} - Se activó tu verificación en dos pasos", html)
+
+
 async def notify_suspicious_activity(email: str, user_name: str, activity: str):
     """Notify user of suspicious activity"""
     timestamp = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
