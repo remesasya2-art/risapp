@@ -10,6 +10,7 @@ import os
 
 import httpx
 from database import db
+from services import cripto_abierta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.user import User
 from pydantic import BaseModel
@@ -277,6 +278,12 @@ def _blink_rechazo_el_vencimiento(respuesta):
 
 @router.post("/generar-invoice", dependencies=[Depends(sin_transacciones_personales)])
 async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depends(get_current_user)):
+    # Generar una factura Lightning es ENTRADA de cripto nueva, aunque la
+    # remesa se despache en bolivares: el usuario va a pagar en BTC. Con la via
+    # apagada no se genera ninguna factura nueva, y las remesas que ya estaban
+    # en curso siguen su camino — el webhook de Blink no pregunta por esto y el
+    # operador puede seguir despachandolas. Ver `services/cripto_abierta.py`.
+    await cripto_abierta.exigir_deposito(db)
     if current_user.verification_status != "verified":
         raise HTTPException(status_code=403, detail="Debes completar la verificacion KYC para realizar envios con BTC Lightning.")
     if body.usd_cliente <= 0:

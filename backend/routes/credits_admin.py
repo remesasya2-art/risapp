@@ -29,6 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from database import db
+from services import cripto_abierta
 from models.user import User
 from routes.dependencies import get_super_admin
 from services.credits import normalize_currency, credit_user
@@ -234,6 +235,13 @@ async def manual_credit(data: ManualCreditRequest, admin: User = Depends(get_sup
     Queda registrado en crypto_deposits (source=admin_manual) con el admin que lo hizo,
     y como linea de auditoria en el ledger cripto.
     """
+    # Tambien pasa por la guarda, y no es burocracia: con la via apagada, una
+    # acreditacion manual crea exactamente la custodia que el apagado evita.
+    # Que la haga un super administrador no la vuelve legal.
+    # Tambien pasa por la guarda, y no es burocracia: con la via apagada, una
+    # acreditacion manual crea exactamente la custodia que el apagado evita.
+    # Que la haga un super administrador no la vuelve legal.
+    await cripto_abierta.exigir_deposito(db)
     currency = normalize_currency(data.currency)
     if not currency:
         raise HTTPException(status_code=400, detail="Moneda no soportada. Usa USDT o USDC.")

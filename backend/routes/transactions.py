@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from database import db
+from services import cripto_abierta
 
 from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from services import bonos, comisiones, saldos
@@ -738,6 +739,21 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
     Ordenes por procesar, con el mismo pipeline de claim/process/approve/reject.
     """
     from services.credits import normalize_currency
+
+    # ESTA RUTA ES LAS DOS COSAS SEGUN `use_balance`, Y POR ESO SON DOS GUARDAS.
+    #
+    #   use_balance=True  gasta saldo que ya existe. Es SALIDA, y en el estado
+    #                     de apagado (1) tiene que seguir funcionando: es
+    #                     justamente por donde la plata de alguien puede salir.
+    #   use_balance=False genera un pago cripto NUEVO por NOWPayments. Eso es
+    #                     ENTRADA, aunque el nombre de la ruta diga «withdraw»:
+    #                     entra cripto que antes no estaba.
+    #
+    # Mirar sólo el nombre de la ruta y ponerle una sola guarda dejaría abierta
+    # la mitad que crea custodia nueva.
+    await cripto_abierta.exigir_envio(db)
+    if not request.use_balance:
+        await cripto_abierta.exigir_deposito(db)
 
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")

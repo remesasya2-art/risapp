@@ -312,6 +312,53 @@ AJUSTES = {
         etiqueta="Cuántas operaciones puede hacer una cuenta sin verificar",
         ayuda="Se agota con lo que llegue primero: estas operaciones o el monto "
               "de arriba. También se publica."),
+
+    # ── La vía cripto: un solo número con tres estados ─────────────────────
+    #
+    # POR QUE UN NUMERO CON TRES ESTADOS Y NO DOS INTERRUPTORES
+    #
+    #   Lo natural sería dos: «acepta depósitos» y «acepta envíos». Pero dos
+    #   interruptores permiten CUATRO combinaciones, y una de ellas —entrada
+    #   abierta y salida cerrada— le atrapa la plata a quien deposite: entra y
+    #   no puede salir. Con un solo número esa combinación no se puede
+    #   configurar, ni siquiera por error de tipeo.
+    #
+    #   Es la misma regla que ya está escrita en `services/personal.py` sobre
+    #   por qué no se vuelve personal a alguien con saldo: «atrapar la plata de
+    #   alguien para cumplir una regla interna sería peor que la regla».
+    #
+    # POR QUE DE FABRICA VIENE EN 1 Y NO EN 0
+    #
+    #   Porque 0 cierra la salida, y el día del despliegue puede haber saldo de
+    #   alguien adentro. En 1 no nace custodia nueva —que es lo que apura— y
+    #   quien tenga saldo lo puede sacar. Pasar a 0 es un clic del panel
+    #   DESPUES de comprobar que las cuentas 2.1.03 y 2.1.04 del libro mayor, y
+    #   la colección `btc_ves_wallets`, están en cero.
+    #
+    # LO QUE ESTE AJUSTE NO APAGA NUNCA, Y ES A PROPOSITO
+    #
+    #   Los webhooks que acreditan (`/api/credits/webhook`,
+    #   `/api/crypto-send/webhook`, `/api/btc/webhook/blink`) siguen abiertos en
+    #   los tres estados. Alguien puede haber pagado en la blockchain cinco
+    #   minutos antes del apagado: esa plata ya salió de su billetera y no
+    #   vuelve. Si el webhook estuviera cerrado, el pago existiría y el saldo
+    #   no. No abre nada, porque la ruta que CREA el pago sí está cerrada: el
+    #   webhook sólo puede terminar de acreditar lo que ya existía.
+    #
+    #   Las lecturas tampoco se cierran. La historia de lo ya operado tiene que
+    #   seguir visible para conciliar y para el libro mayor; esconder la
+    #   contabilidad no es apagar una vía, es perderla de vista.
+    "cripto_abierta": Ajuste(
+        tipo=ENTERO, defecto=1, minimo=0, maximo=2,
+        unidad="0 = cerrada, 1 = sólo salida, 2 = abierta",
+        etiqueta="Vía cripto (USDT, USDC y BTC Lightning)",
+        ayuda="En 2 funciona como siempre. En 1 (fábrica) no entran depósitos "
+              "nuevos y no nace saldo nuevo, pero quien ya tiene saldo lo puede "
+              "sacar: es el estado para apagar sin atrapar la plata de nadie. "
+              "En 0 no entra ni sale nada y las pantallas desaparecen; poné 0 "
+              "recién cuando los saldos cripto estén en cero. Los avisos de "
+              "pago siguen entrando en los tres estados, para no perder un "
+              "depósito que ya se pagó."),
 }
 
 

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import useCripto from '../hooks/useCripto';
 import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 import { confirmar } from '../components/flujo/confirmar.js';
 import { QRCodeSVG } from 'qrcode.react';
@@ -49,6 +50,8 @@ export default function Recharge() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const { rates } = useRate();
+  // El estado de la vía cripto, de `/limits`.
+  const cripto = useCripto();
   const [method, setMethod] = useState(null);
   const idemRef = useRef(null);
   const [amount, setAmount] = useState('');
@@ -601,7 +604,12 @@ export default function Recharge() {
                 </div>
               </button>
 
-              {/* Cripto Option (USDT/USDC) */}
+              {/* Cripto Option (USDT/USDC) — sólo con la vía visible.
+                  Va con `deposito` y no con `visible`: en el estado de apagado
+                  la vía se sigue viendo para poder SACAR saldo, pero esta
+                  tarjeta es para METER, y el servidor la rechaza con 503. Un
+                  botón que lleva a un error no es una opción, es una trampa. */}
+              {cripto.deposito ? (
               <button
                 onClick={() => navigate('/credits/deposit')}
                 style={{
@@ -627,6 +635,7 @@ export default function Recharge() {
                   <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
                 </div>
               </button>
+              ) : null}
             </div>
           </div>
         )}

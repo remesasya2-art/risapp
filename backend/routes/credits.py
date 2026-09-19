@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from database import db
+from services import cripto_abierta
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from models.user import User
 from services.geo_restrictions import assert_payment_allowed
@@ -173,6 +174,21 @@ async def create_deposit(
     current_user: User = Depends(get_current_user),
 ):
     assert_payment_allowed(request, declared_not_restricted=data.declared_not_restricted)
+    # LA VIA CRIPTO VA DESPUES DEL GUARDIA DE JURISDICCION, Y NO ANTES.
+    #
+    #   La primera versión la puso primero, por la idea razonable de «si está
+    #   apagada, no hace falta validar nada más». Rompió dos pruebas, y tenían
+    #   razón: el control de jurisdicción corre ANTES QUE NADA a propósito, y
+    #   moverlo fue una de las ocho mutaciones deliberadas que se hicieron para
+    #   validar este dossier. Un control de cumplimiento no se corre de lugar
+    #   para ahorrar una consulta.
+    #
+    #   Y no se pierde nada poniéndolo acá: esta guarda no tiene efectos, y que
+    #   la vía esté apagada ya es público —viaja en `/api/limits`—.
+    #
+    #   La regla vive en `services/cripto_abierta.py`, no acá: son 35 rutas, y
+    #   la condición copiada en cada una es la que un día se actualiza en 34.
+    await cripto_abierta.exigir_deposito(db)
     key = normalize_currency(data.currency)
     if key not in DEFAULT_NETWORK_TICKER:
         raise HTTPException(status_code=400, detail="Moneda no soportada. Usa USDT o USDC.")
