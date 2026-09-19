@@ -40,12 +40,30 @@ function friendlyReject(detail) {
 }
 
 /**
- * Card Payment Brick wrapper with country gate and international advisory.
+ * El formulario de la tarjeta, con el filtro de país y el aviso de
+ * internacionales.
+ *
+ * DOS COSAS DISTINTAS SE PAGAN CON EL MISMO FORMULARIO
+ *
+ *   · Sin `envio`: carga saldo. Es lo de siempre, y hoy está cerrado —la
+ *     empresa no custodia dinero de terceros, ver `services/recarga_abierta.py`.
+ *   · Con `envio`: paga UN envío ya cotizado, que no es custodia: la plata
+ *     entra y sale en la misma operación.
+ *
+ *   Lo que cambia es a qué ruta se manda la tarjeta y de dónde sale el monto.
+ *   El filtro de país, el aviso de internacionales, los quince mensajes de
+ *   rechazo traducidos y el pedido de la clave pública al servidor son los
+ *   mismos, y por eso no se duplican en otro componente: son la parte que
+ *   costó hacer bien.
  *
  * Props:
  *  - amountRis, userEmail, userCpf, onSuccess, onBack
+ *  - envio: { payment_order_id, credit_card, debit_card } — el desglose lo
+ *    calculó el SERVIDOR al cotizar. Acá no se saca ninguna cuenta de dinero:
+ *    dos implementaciones de la misma fórmula es ver un número y que te
+ *    cobren otro.
  */
-export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSuccess, onBack }) {
+export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSuccess, onBack, envio }) {
   const [country, setCountry] = useState(null);     // selected country
   const [confirmedIntl, setConfirmedIntl] = useState(false); // user clicked "intentar igual"
   const [quote, setQuote] = useState(null);
@@ -94,9 +112,11 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
     return () => { cancelado = true; };
   }, [showBrick]);
 
-  // Fetch quote only when we will actually show the Brick
+  // Pagando un envío no se cotiza: el desglose ya vino del servidor al
+  // cotizar el envío, y volver a pedirlo abriría la puerta a que los dos
+  // números no coincidan.
   useEffect(() => {
-    if (!showBrick) return;
+    if (!showBrick || envio) return;
     let cancelled = false;
     (async () => {
       try {
@@ -109,15 +129,19 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
       }
     })();
     return () => { cancelled = true; };
-  }, [amountRis, paymentType, showBrick]);
+  }, [amountRis, paymentType, showBrick, envio]);
+
+  // El desglose que manda: el del envío si lo hay, si no el de la recarga.
+  const desglose = envio ? envio[paymentType] : null;
+  const totalAPagar = envio ? desglose?.total_brl : quote?.total_charged_brl;
+  const listoParaCobrar = envio ? Boolean(desglose) : Boolean(quote);
 
   const handleSubmit = async (cardFormData) => {
-    if (!quote) { toast.error('Aguarda el cálculo de comisión'); return; }
+    if (!listoParaCobrar) { toast.error('Aguarda el cálculo de comisión'); return; }
     setProcessing(true);
     try {
-      const payload = {
+      const comun = {
         token: cardFormData.token,
-        amount_ris: amountRis,
         payment_method_id: cardFormData.payment_method_id,
         payment_type_id: cardFormData.payment_type_id || paymentType,
         payer_email: cardFormData.payer?.email || userEmail,
@@ -127,10 +151,18 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
         },
         issuer_id: cardFormData.issuer_id || null,
       };
-      const res = await api.post('/payments/card/process', payload);
+      // EL MONTO NO VIAJA CUANDO SE PAGA UN ENVIO. El servidor lo saca de la
+      // orden: si lo mandara la pantalla, el cliente elegiría cuánto pagar por
+      // su propio envío.
+      const payload = envio
+        ? { ...comun, payment_order_id: envio.payment_order_id }
+        : { ...comun, amount_ris: amountRis };
+      const res = await api.post(
+        envio ? '/payments/card/envio' : '/payments/card/process', payload);
       setResult(res.data);
       if (res.data.status === 'approved') {
-        toast.success('¡Pago aprobado! Saldo acreditado.');
+        toast.success(envio ? '¡Pago aprobado! Tu envío ya está en camino.'
+                            : '¡Pago aprobado! Saldo acreditado.');
         onSuccess && onSuccess(res.data);
       } else {
         toast.error(friendlyReject(res.data.status_detail), { duration: 6000 });
@@ -149,8 +181,13 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
       <div style={{ padding: 24, textAlign: 'center' }}>
         <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px' }} />
         <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>¡Pago aprobado!</h2>
-        <p style={{ color: '#6b7280', marginTop: 8 }}>
-          Se acreditaron <b>{fmt(amountRis)} RIS</b> a tu saldo.
+        {/* Decirle «se acreditaron X a tu saldo» a quien pagó un envío es
+            mandarlo a buscar un saldo que nunca existió: la plata entró y
+            salió en la misma operación. */}
+        <p style={{ color: '#6b7280', marginTop: 8 }} data-testid="card-aprobado-texto">
+          {envio
+            ? <>Cobramos <b>{fmt(totalAPagar)} BRL</b> y tu envío ya está en camino.</>
+            : <>Se acreditaron <b>{fmt(amountRis)} RIS</b> a tu saldo.</>}
         </p>
         <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>ID: {result.payment_id}</p>
       </div>
@@ -278,18 +315,35 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
           <CreditCard size={20} color="#6366f1" />
           <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Resumen del pago</span>
         </div>
+        {/* «Recibirás X RIS» es verdad cargando saldo y mentira pagando un
+            envío: ahí no recibe nada, paga lo que ya cotizó. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
-          <span style={{ color: '#6b7280' }}>Recibirás</span>
-          <span style={{ fontWeight: 600 }}>{fmt(amountRis)} RIS</span>
+          <span style={{ color: '#6b7280' }}>{envio ? 'Tu envío' : 'Recibirás'}</span>
+          <span style={{ fontWeight: 600 }}>
+            {envio ? `R$ ${fmt(desglose?.envio_brl ?? 0)}` : `${fmt(amountRis)} RIS`}
+          </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
           <span style={{ color: '#6b7280' }}>Comisión Mercado Pago</span>
-          <span style={{ color: '#dc2626' }}>+R$ {fmt(quote?.fee_brl ?? 0)}</span>
+          <span style={{ color: '#dc2626' }} data-testid="card-comision">
+            +R$ {fmt(envio ? (desglose?.comision_brl ?? 0) : (quote?.fee_brl ?? 0))}
+          </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 16 }}>
           <span style={{ fontWeight: 700 }}>Total a cobrar</span>
-          <span style={{ fontWeight: 700, color: '#111827' }}>R$ {fmt(quote?.total_charged_brl ?? amountRis)}</span>
+          <span style={{ fontWeight: 700, color: '#111827' }} data-testid="card-total">
+            R$ {fmt(totalAPagar ?? amountRis)}
+          </span>
         </div>
+        {/* Con PIX no hay comisión. Decirlo acá, con el número al lado, es lo
+            que evita el «me cobraron de más» que llega después por soporte. */}
+        {envio ? (
+          <p style={{ fontSize: 12, color: '#6b7280', margin: '10px 0 0 0', lineHeight: 1.5 }}
+             data-testid="card-vs-pix">
+            Con PIX este envío sale R$ {fmt(desglose?.envio_brl ?? 0)}, sin
+            comisión. La tarjeta la cobra Mercado Pago, no nosotros.
+          </p>
+        ) : null}
       </div>
 
       {/* Payment type toggle */}
@@ -316,10 +370,10 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
         >Débito</button>
       </div>
 
-      {quote && sdkListo && (
+      {listoParaCobrar && sdkListo && (
         <CardPayment
           initialization={{
-            amount: quote.total_charged_brl,
+            amount: totalAPagar,
             payer: { email: userEmail },
           }}
           customization={{

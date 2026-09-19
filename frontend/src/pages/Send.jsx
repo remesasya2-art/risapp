@@ -54,11 +54,13 @@ import { useRate } from '../contexts/RateContext';
 import { FormattedNumberInput } from '../components/common/FormattedNumberInput';
 import {
   ArrowLeft, ArrowRight, AlertCircle, AlertTriangle, Building2, Check,
-  CheckCircle2, Info, Plus, RefreshCw, Search, ShieldCheck, Smartphone, User, X,
+  CheckCircle2, CreditCard, Info, Plus, RefreshCw, Search, ShieldCheck,
+  Smartphone, User, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 import api from '../utils/api';
+import CardPaymentBrick from '../components/CardPaymentBrick';
 import NotificationBell from '../components/NotificationBell';
 import PinConfirm from '../components/PinConfirm';
 import { fmt } from '../utils/format';
@@ -283,6 +285,13 @@ export default function Send() {
   const validacion = validarMonto({ ris, saldo, tasaDisponible, escribioAlgo,
     saldoEsLaUnicaVia: !pagoAlFinal });
   const elSaldoAlcanza = alcanzaElSaldo({ ris, saldo });
+  // LA TARJETA ES SOLO PARA VERIFICADOS, y el motivo es el contracargo: se
+  // puede pedir hasta ciento veinte días después del cobro, cosa que con PIX
+  // no pasa. Si para entonces el envío ya salió, la pérdida es nuestra.
+  //
+  // El servidor lo rechaza igual —en la cotización y otra vez al cobrar—; esto
+  // es para que no complete el formulario entero para nada.
+  const estaVerificado = user?.verification_status === 'verified';
 
   const alcanzable = ultimoPasoAlcanzable({
     montoOk: validacion.ok, metodo: paymentType, beneficiario: selectedBeneficiary });
@@ -411,7 +420,7 @@ export default function Send() {
 
   // Cotizar y pagar al final: la orden nace esperando el pago y el cliente
   // paga ESE envío. No toca el saldo.
-  const cotizarYPagar = async () => {
+  const cotizarYPagar = async (metodo = 'pix') => {
     if (!validacion.ok || !selectedBeneficiary || !paymentType) {
       return toast.error('Revisá los datos del envío');
     }
@@ -431,6 +440,10 @@ export default function Send() {
         beneficiary_id: selectedBeneficiary.beneficiary_id,
         client_cpf: normalizarCpf(cpfEfectivo),
         idempotency_key: idemRef.current,
+        // CON QUE SE VA A PAGAR, Y SE DICE ACA. Con tarjeta el servidor no
+        // genera ningún código de PIX: una orden pagable por las dos vías es
+        // una orden que el cliente puede pagar dos veces.
+        metodo,
       });
       idemRef.current = null;
       setCobro(r.data);
@@ -888,7 +901,7 @@ export default function Send() {
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="cpf-pago" style={{ display: 'block', fontSize: '13px',
                   fontWeight: 600, color: C.tinta, marginBottom: '6px' }}>
-                  Tu CPF, para pagar con PIX
+                  Tu CPF, para pagar
                 </label>
                 <input id="cpf-pago" data-testid="cpf-pago" inputMode="numeric"
                   value={cpfPago} placeholder="000.000.000-00"
@@ -924,10 +937,34 @@ export default function Send() {
             {pagoAlFinal ? (
               <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                 <Boton onClick={() => setStep(3)}>Atrás</Boton>
-                <Boton tipo="primario" ancho onClick={cotizarYPagar}
+                <Boton tipo="primario" ancho onClick={() => cotizarYPagar('pix')}
                   disabled={loading || !validacion.ok} testid="pagar-con-pix">
                   {loading ? 'Generando el cobro…' : 'Pagar con PIX'}
                 </Boton>
+              </div>
+            ) : null}
+
+            {/* LA TARJETA, Y SOLO PARA VERIFICADOS.
+                El motivo es el contracargo: se puede pedir hasta ciento veinte
+                días después, cosa que con PIX no pasa, y si para entonces el
+                envío ya salió la pérdida es nuestra. El servidor lo rechaza
+                igual; esconder el botón es para que no complete todo el
+                formulario de la tarjeta para nada.
+
+                Debajo dice que cuesta más, ANTES de apretar: es la única
+                diferencia que importa contra el PIX, y descubrirla recién en
+                el resumen es descubrirla tarde. */}
+            {pagoAlFinal && estaVerificado ? (
+              <div style={{ marginBottom: '10px' }}>
+                <Boton ancho onClick={() => cotizarYPagar('tarjeta')}
+                  disabled={loading || !validacion.ok} testid="pagar-con-tarjeta"
+                  Icono={CreditCard}>
+                  {loading ? 'Generando el cobro…' : 'Pagar con tarjeta'}
+                </Boton>
+                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: C.suave,
+                  textAlign: 'center' }} data-testid="tarjeta-cuesta-mas">
+                  La tarjeta suma la comisión de Mercado Pago. Con PIX no.
+                </p>
               </div>
             ) : null}
 
@@ -953,7 +990,25 @@ export default function Send() {
             no es quien confirma que se pagó. La orden avanza cuando Mercado
             Pago avisa, con su firma verificada. Un botón acá sería una forma
             de decirle a la aplicación algo que no puede comprobar. */}
-        {step === 5 && cobro ? (
+        {/* EL FORMULARIO DE LA TARJETA, cuando se cotizó para tarjeta.
+            No hay código de PIX que mostrar: el servidor no generó ninguno, a
+            propósito. */}
+        {step === 5 && cobro && cobro.metodo === 'tarjeta' ? (
+          <div style={{ ...tarjeta, padding: '22px' }} data-testid="cobro-tarjeta">
+            <CardPaymentBrick
+              envio={cobro}
+              userEmail={user?.email}
+              userCpf={normalizarCpf(cpfEfectivo)}
+              onSuccess={() => {
+                refreshUser?.();
+                navigate('/history');
+              }}
+              onBack={() => { setCobro(null); setStep(4); }}
+            />
+          </div>
+        ) : null}
+
+        {step === 5 && cobro && cobro.metodo !== 'tarjeta' ? (
           <div style={{ ...tarjeta, padding: '22px' }} data-testid="cobro-pix">
             <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: '0 0 4px 0' }}>
               Pagá para que salga
