@@ -287,7 +287,22 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
     user_id = user["user_id"]
 
     await db.pending_verifications.delete_one({"email": email_lower})
-    
+
+    # ESTA PUERTA NO MIRA EL SEGUNDO FACTOR, Y ES CORRECTO. POR QUE:
+    #
+    #   La cuenta se acaba de crear tres líneas más arriba, y `crear` rechaza
+    #   un correo repetido. O sea que la sesión que sale de acá es siempre de
+    #   una cuenta nacida hace segundos, y una cuenta recién nacida no puede
+    #   tener el segundo factor activado: no hubo cuándo.
+    #
+    #   QUE LA VOLVERIA UN AGUJERO: que algún día esta ruta sirva para que
+    #   una cuenta que YA EXISTE vuelva a entrar —por ejemplo, reverificando
+    #   el correo—. Ahí sí habría que preguntar `personal.pide_dos_pasos` y
+    #   devolver un `pending_token`, como hacen el ingreso con contraseña y
+    #   el de Google. `tests/test_segundo_factor_del_cliente.py` tiene la
+    #   lista de puertas exentas con su motivo, y se pone rojo si aparece una
+    #   puerta nueva que emite sesión sin declarar por qué no mira.
+    #
     # Create session
     session_token = secrets.token_urlsafe(32)
     session = {
@@ -473,7 +488,13 @@ async def login_with_password(request: Request, response: Response, body: LoginW
             }
 
         # Ya lo tiene puesto → se le pide el código.
-        if (is_admin or obliga_dos_pasos) and twofa_enabled:
+        #
+        # LA CONDICION VIVE EN `services/personal.py` Y NO ACA. Estaba escrita
+        # a mano —`(is_admin or obliga_dos_pasos) and twofa_enabled`— y
+        # copiada igual en la puerta de Google: dos copias de la misma regla.
+        # Y dejaba afuera al cliente que lo activaba por su cuenta, que no
+        # entraba por ninguna de las dos ramas.
+        if _personal.pide_dos_pasos(user):
             pending = await _create_pending_token(user["user_id"], purpose="2fa_login")
             return {
                 "message": "Ingresa tu código 2FA para continuar",

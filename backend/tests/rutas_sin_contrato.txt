@@ -299,6 +299,8 @@ POST /api/admin/verifications/decide
 POST /api/admin/verifications/process
 POST /api/admin/wipe-all
 POST /api/admin/withdrawals/process
+POST /api/auth/2fa/activar-confirm
+POST /api/auth/2fa/activar-init
 POST /api/auth/2fa/disable
 POST /api/auth/2fa/enroll-confirm
 POST /api/auth/2fa/enroll-init

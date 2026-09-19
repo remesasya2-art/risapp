@@ -138,7 +138,9 @@ async def _entrar_a_la_cuenta(request: Request, user: dict, quien: dict) -> dict
             "email": user["email"],
             "user_id": user["user_id"],
         }
-    if (is_admin or obliga_dos_pasos) and twofa_enabled:
+    # La condición vive en `services/personal.py`: acá estaba copiada de
+    # `routes/auth.py`, palabra por palabra. Ver el comentario de allá.
+    if _personal.pide_dos_pasos(user):
         pending = await _create_pending_token(user["user_id"], purpose="2fa_login")
         return {
             "message": "Ingresa tu código 2FA para continuar",

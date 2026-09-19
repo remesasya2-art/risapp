@@ -70,14 +70,51 @@ def exige_dos_pasos(usuario) -> bool:
     personal. Con los dos, degradarle el rol a alguien no le saca la
     obligación mientras siga siendo personal de la empresa.
 
-    Al usuario común NO lo alcanza: para él los dos pasos siguen siendo un
-    botón que activa si quiere, en su perfil.
+    Al usuario común NO lo alcanza: para él los dos pasos son un botón que
+    activa si quiere, desde su perfil. Que lo haya activado no se pregunta
+    acá sino en `pide_dos_pasos`, que es lo que miran las puertas.
     """
     if not usuario:
         return False
-    leer = usuario.get if isinstance(usuario, dict) else \
+    return _leer(usuario)("role", "user") in ROLES_CON_PANEL or es_personal(usuario)
+
+
+def _leer(usuario):
+    """Lee un campo, venga como diccionario de la base o como modelo."""
+    return usuario.get if isinstance(usuario, dict) else \
         (lambda k, d=None: getattr(usuario, k, d))
-    return (leer("role", "user") in ROLES_CON_PANEL) or es_personal(usuario)
+
+
+def lo_tiene_puesto(usuario) -> bool:
+    """¿Esta cuenta tiene la verificación en dos pasos activada?"""
+    if not usuario:
+        return False
+    return bool(_leer(usuario)("two_factor_enabled", False))
+
+
+def pide_dos_pasos(usuario) -> bool:
+    """¿Hay que pedirle el código de seis dígitos al entrar?
+
+    ESTA ES LA QUE MIRAN LAS PUERTAS, y por eso está acá y no escrita en cada
+    una. Antes la condición vivía copiada en dos rutas de ingreso:
+
+        if (is_admin or obliga_dos_pasos) and twofa_enabled:
+
+    Dos copias de la misma regla es una que se olvida de actualizar. Y esa
+    condición además dejaba afuera al cliente: alguien que activara el
+    segundo factor no entraba por ninguna de las dos ramas, así que la marca
+    quedaba puesta y el ingreso no la miraba. Esa trampa se retiró entera en
+    su momento; esto la reemplaza por la versión que sí funciona.
+
+    Son dos motivos, y sirve cualquiera:
+
+      · La cuenta está OBLIGADA —personal o rol con panel—. Para ella el
+        segundo factor no es opcional y el ingreso además la manda a darse
+        de alta si no lo tiene.
+      · La cuenta lo ACTIVO por su cuenta. Un cliente que lo prendió espera
+        que se lo pidan, y si no se lo piden la función es decorativa.
+    """
+    return exige_dos_pasos(usuario) or lo_tiene_puesto(usuario)
 
 
 class TieneSaldo(Exception):

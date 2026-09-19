@@ -51,10 +51,53 @@ from conftest import usar_base                                      # noqa: E402
 from routes import security_2fa                                     # noqa: E402
 from services import personal                                       # noqa: E402
 
-# La ÚNICA función que puede encender el segundo factor, y el motivo: corre
-# en medio del login, con un token pendiente que el login mismo emitió, así
-# que por definición el ingreso ya sabe que esa cuenta lo tiene que usar.
-QUIEN_PUEDE_ENCENDERLO = {("security_2fa.py", "twofa_enroll_confirm")}
+# Quién puede encender el segundo factor, y por qué cada uno.
+#
+# LA LISTA CRECIO, Y ESTA VEZ CON LAS PUERTAS DE SU LADO. Cuando este archivo
+# se escribió, el alta desde el perfil estaba retirada: encendía la marca y el
+# ingreso no la miraba, así que dejaba a la persona con una protección falsa y
+# sin forma de apagarla. Volvió recién cuando las puertas empezaron a mirarla,
+# que es lo que vigila la segunda guarda de más abajo. Una sin la otra es
+# exactamente el agujero anterior.
+QUIEN_PUEDE_ENCENDERLO = {
+    # Corre en medio del login, con un token pendiente que el login mismo
+    # emitió: por definición el ingreso ya sabe que esa cuenta lo va a usar.
+    ("routes/security_2fa.py", "twofa_enroll_confirm"),
+    # El camino del perfil, para quien lo activa porque quiere. Vale porque
+    # `personal.pide_dos_pasos` hace que las puertas se lo pidan, y porque
+    # Recursos Humanos puede reiniciárselo si pierde el teléfono.
+    ("routes/security_2fa.py", "activar_dos_pasos_confirm"),
+}
+
+# Las puertas que emiten sesión SIN preguntar `pide_dos_pasos`, con el motivo.
+#
+# No alcanza con que el motivo exista: tiene que ser verdad. Cada una está
+# comprobada, y si mañana deja de serlo, la puerta tiene que salir de acá y
+# empezar a preguntar.
+PUERTAS_EXENTAS = {
+    ("routes/auth.py", "verify_email_code"):
+        "Crea la cuenta en ese mismo pedido y rechaza un correo repetido, así "
+        "que la sesión que emite es siempre de una cuenta nacida hace "
+        "segundos: no pudo activar nada todavía.",
+    ("routes/google_ingreso.py", "completar"):
+        "Igual que el registro por correo: crea la cuenta en ese mismo pedido, "
+        "así que la sesión que emite es de una cuenta nacida hace segundos y "
+        "sin nada activado. Entrar con una cuenta de Google que YA EXISTE es "
+        "otra función, `_entrar_a_la_cuenta`, y ésa sí pregunta la regla.",
+    ("routes/security_2fa.py", "twofa_enroll_confirm"):
+        "Es el alta misma: la persona acaba de escribir su primer código "
+        "correcto. Pedírselo otra vez sería pedir dos.",
+    ("routes/security_2fa.py", "twofa_verify"):
+        "Es la puerta donde se escribe el código. Preguntar ahí si hay que "
+        "pedirlo sería preguntarlo después de haberlo pedido.",
+    ("routes/webauthn_login.py", "login_verify"):
+        "La huella es posesión más biometría: ya son dos factores. Sumarle el "
+        "código de seis dígitos es tres, y el costo es que la gente deje de "
+        "usar la huella y vuelva a la contraseña sola, que es peor. Decisión "
+        "tomada a propósito; si algún día se quiere revisar, se revisa acá.",
+}
+
+REGLA = "pide_dos_pasos"
 
 MARCA = "two_factor_enabled"
 
@@ -99,13 +142,117 @@ def _quien_enciende_la_marca():
                 for k, v in zip(hijo.keys, hijo.values):
                     if (isinstance(k, ast.Constant) and k.value == MARCA
                             and isinstance(v, ast.Constant) and v.value is True):
-                        encontradas.add((ruta.name, nodo.name))
+                        encontradas.add((ruta.relative_to(_BACKEND).as_posix(), nodo.name))
     return encontradas
+
+
+def _puertas_que_emiten_sesion():
+    """`{(archivo, funcion)}` de todo lo que deja a alguien adentro.
+
+    Dos formas, y hay que mirar las dos: llamar a `issue_session_token`, o
+    insertar a mano en `user_sessions`. La segunda existe —el alta de cuenta
+    arma la sesión ella misma— y una guarda que sólo mirara la primera la
+    dejaría pasar.
+    """
+    emiten = set()
+    for ruta in sorted(_BACKEND.rglob("*.py")):
+        if set(ruta.relative_to(_BACKEND).parts) & {
+                "tests", "scripts", "__pycache__", "venv"}:
+            continue
+        texto = ruta.read_text(encoding="utf-8")
+        if "issue_session_token" not in texto and "user_sessions.insert_one" not in texto:
+            continue
+        try:
+            arbol = ast.parse(texto)
+        except SyntaxError:                                  # pragma: no cover
+            continue
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            # `issue_session_token` es la función que EMITE, no una puerta:
+            # es el ayudante que todas las puertas llaman. Contarla sería
+            # pedirle que se pregunte a sí misma si hay que pedir el código.
+            if nodo.name == "issue_session_token":
+                continue
+            for hijo in ast.walk(nodo):
+                if not isinstance(hijo, ast.Call):
+                    continue
+                f = hijo.func
+                nombre = getattr(f, "id", None) or getattr(f, "attr", None)
+                if nombre == "issue_session_token":
+                    emiten.add((ruta.relative_to(_BACKEND).as_posix(), nodo.name))
+                if (nombre == "insert_one" and isinstance(f, ast.Attribute)
+                        and getattr(f.value, "attr", None) == "user_sessions"):
+                    emiten.add((ruta.relative_to(_BACKEND).as_posix(), nodo.name))
+    return emiten
+
+
+def _pregunta_la_regla(archivo: str, funcion: str) -> bool:
+    """Si esa función llama a `personal.pide_dos_pasos`.
+
+    `archivo` es la ruta relativa —`routes/google_ingreso.py`— y no el nombre
+    a secas. HAY DOS `google_ingreso.py` en el repositorio, uno en `routes` y
+    otro en `services`, y buscar por nombre encontraba el que no era: el test
+    daba rojo diciendo que la puerta no preguntaba la regla cuando sí lo
+    hacía. Lo encontró esta misma guarda al estrenarse.
+    """
+    ruta = _BACKEND / archivo
+    if not ruta.is_file():                                   # pragma: no cover
+        return False
+    arbol = ast.parse(ruta.read_text(encoding="utf-8"))
+    for nodo in ast.walk(arbol):
+        if (isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and nodo.name == funcion):
+            for hijo in ast.walk(nodo):
+                if isinstance(hijo, ast.Call):
+                    f = hijo.func
+                    if (getattr(f, "id", None) or getattr(f, "attr", None)) == REGLA:
+                        return True
+    return False
 
 
 # ══════════════════════════════════════════════════════════════════════════
 # 1. La guarda que importa
 # ══════════════════════════════════════════════════════════════════════════
+
+def test_TODA_PUERTA_QUE_EMITE_SESION_MIRA_LA_REGLA_O_DICE_POR_QUE_NO():
+    """LA OTRA MITAD, y la que hace que encender el segundo factor sirva.
+
+    Encenderlo no protege nada si la puerta por la que se entra no lo mira.
+    Eso es exactamente lo que pasó la primera vez: había alta, no había
+    puertas, y quedaba una protección que el ingreso ignoraba.
+
+    Por eso esta guarda no pregunta «¿está bien?» sino «¿alguien lo pensó?».
+    Una puerta nueva que emita sesión tiene dos salidas: preguntar la regla, o
+    entrar en `PUERTAS_EXENTAS` con un motivo escrito. Las dos obligan a mirar
+    el problema; ninguna se cumple sola.
+    """
+    sin_declarar = sorted(
+        p for p in _puertas_que_emiten_sesion()
+        if p not in PUERTAS_EXENTAS and not _pregunta_la_regla(*p))
+    assert not sin_declarar, (
+        f"{sin_declarar} emite(n) sesión sin preguntar `personal.{REGLA}` y sin "
+        "motivo escrito.\n\n"
+        "Una cuenta que activó el segundo factor y entra por ahí lo saltea: la "
+        "protección queda de adorno. Si esa puerta de verdad no tiene que "
+        "pedirlo, agregala a PUERTAS_EXENTAS con el motivo, y que el motivo "
+        "sea cierto.")
+
+
+def test_LOS_MOTIVOS_DE_LAS_EXENTAS_NO_PUEDEN_ESTAR_VACIOS():
+    """Una exención sin motivo es una exención que nadie pensó."""
+    for puerta, motivo in PUERTAS_EXENTAS.items():
+        assert motivo and len(motivo) > 40, puerta
+
+
+def test_LAS_PUERTAS_EXENTAS_EXISTEN_DE_VERDAD():
+    """Una exención sobre una función que se renombró no exime nada, y encima
+    tapa que la función nueva quedó sin declarar."""
+    emiten = _puertas_que_emiten_sesion()
+    fantasmas = sorted(p for p in PUERTAS_EXENTAS if p not in emiten)
+    assert not fantasmas, f"{fantasmas} ya no emite(n) sesión: sacalas de PUERTAS_EXENTAS."
+
+
 
 def test_SOLO_EL_ALTA_DEL_LOGIN_PUEDE_ENCENDER_EL_SEGUNDO_FACTOR():
     """LA GUARDA. Quien agregue otra forma de encenderlo se encuentra con
