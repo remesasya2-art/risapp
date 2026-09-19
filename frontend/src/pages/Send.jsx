@@ -67,7 +67,7 @@ import {
   C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
 } from '../components/flujo/estilos';
 import {
-  MENSAJE_DEL_MOTIVO, MOTIVO, PASOS, cuentaAbreviada, nombreDelBanco,
+  MENSAJE_DEL_MOTIVO, MOTIVO, PASOS, alcanzaElSaldo, cuentaAbreviada, nombreDelBanco,
   risAEnviar, tasaSeMovio, telefonoLegible, ultimoPasoAlcanzable, validarMonto,
   vesARecibir,
 } from '../utils/envioAVenezuela';
@@ -275,7 +275,14 @@ export default function Send() {
     [ris, tasa, tasaDisponible]);
 
   const escribioAlgo = Boolean(ultimoCampo === 'ris' ? risEscrito : vesEscrito);
-  const validacion = validarMonto({ ris, saldo, tasaDisponible, escribioAlgo });
+  // `pagoAlFinal` arranca en false y se prende cuando contesta `/limits`.
+  // Mientras tanto el saldo es la única vía, que es el lado seguro de
+  // equivocarse: se frena un instante de más y se destraba solo. Al revés
+  // —dejar pasar y después frenar— le sacaría la pantalla de abajo de los pies
+  // a alguien que ya empezó a escribir.
+  const validacion = validarMonto({ ris, saldo, tasaDisponible, escribioAlgo,
+    saldoEsLaUnicaVia: !pagoAlFinal });
+  const elSaldoAlcanza = alcanzaElSaldo({ ris, saldo });
 
   const alcanzable = ultimoPasoAlcanzable({
     montoOk: validacion.ok, metodo: paymentType, beneficiario: selectedBeneficiary });
@@ -900,6 +907,20 @@ export default function Send() {
                 tener saldo cargado de antes. La de siempre —gastar el saldo—
                 se queda al lado mientras los dos convivan: quien ya tiene
                 saldo no tiene por qué recargar de nuevo. */}
+            {/* DECIRLE QUE NO LE ALCANZA, Y QUE IGUAL PUEDE PAGARLO.
+                Un botón apagado sin explicación es alguien mirando la pantalla
+                sin saber qué le falta. Y como «Pagar con PIX» sí funciona, el
+                aviso tiene que nombrarlo: si no, se va creyendo que no puede
+                enviar. */}
+            {pagoAlFinal && !elSaldoAlcanza && validacion.ok ? (
+              <div style={{ marginBottom: '10px' }}>
+                <Aviso tono="info" testid="saldo-no-alcanza">
+                  Tu saldo no cubre este envío. Pagalo con PIX y listo: no hace
+                  falta tener saldo cargado.
+                </Aviso>
+              </div>
+            ) : null}
+
             {pagoAlFinal ? (
               <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                 <Boton onClick={() => setStep(3)}>Atrás</Boton>
@@ -912,8 +933,13 @@ export default function Send() {
 
             <div style={{ display: 'flex', gap: '10px' }}>
               {pagoAlFinal ? null : <Boton onClick={() => setStep(3)}>Atrás</Boton>}
+              {/* EL SALDO SE PREGUNTA ACA, NO EN EL PRIMER PASO.
+                  Apagar este botón no apaga «Pagar con PIX», que es la vía que
+                  no necesita saldo. Antes los dos miraban el mismo `ok` y el
+                  que no tenía saldo no llegaba nunca hasta acá. */}
               <Boton tipo="exito" ancho onClick={pedirConfirmacion}
-                disabled={loading || !validacion.ok} testid="confirm-send" Icono={ShieldCheck}>
+                disabled={loading || !validacion.ok || (pagoAlFinal && !elSaldoAlcanza)}
+                testid="confirm-send" Icono={ShieldCheck}>
                 {loading ? 'Procesando…' : (pagoAlFinal ? 'Usar mi saldo' : 'Confirmar envío')}
               </Boton>
             </div>

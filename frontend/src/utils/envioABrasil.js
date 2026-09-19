@@ -170,7 +170,13 @@ export function aNumero(valor) {
  * servidor usa para rechazar. Si no llegaron, no se inventa un límite: se
  * deja pasar y el servidor decide, que es lo que hacía antes de todos modos.
  */
-export function validarMonto({ monto, saldo, limites, cupo }) {
+export function validarMonto({ monto, saldo, limites, cupo, saldoEsLaUnicaVia }) {
+  if (saldoEsLaUnicaVia === undefined) {
+    throw new Error(
+      'validarMonto necesita que le digan si el saldo es la única forma de '
+      + 'pagar. Sin eso, el que no tiene saldo queda trabado en el paso del '
+      + 'monto aunque el pago al final esté prendido.');
+  }
   if (!monto || monto <= 0) return 'Escribí cuánto querés enviar.';
 
   const min = limites?.pix?.min_brl;
@@ -178,7 +184,14 @@ export function validarMonto({ monto, saldo, limites, cupo }) {
   if (min != null && monto < min) return `El mínimo por envío es R$ ${min}.`;
   if (max != null && monto > max) return `El máximo por envío es R$ ${max}.`;
 
-  if (monto > saldo) return 'No te alcanza el saldo para este envío.';
+  // El saldo frena acá SOLO si es lo único con lo que se puede pagar. Con el
+  // pago al final prendido, esta pregunta es del último paso —al lado del
+  // botón «Usar mi saldo»— y no de éste. Ver el comentario largo en
+  // `envioAVenezuela.validarMonto`: el mismo defecto estaba en las dos
+  // pantallas, y en las dos apagaba justamente el botón que no necesita saldo.
+  if (saldoEsLaUnicaVia && monto > saldo) {
+    return 'No te alcanza el saldo para este envío.';
+  }
 
   if (cupo?.aplica) {
     if (cupo.ops_restantes === 0) {
@@ -189,6 +202,17 @@ export function validarMonto({ monto, saldo, limites, cupo }) {
     }
   }
   return null;
+}
+
+/**
+ * ¿Le alcanza el saldo para pagar este envío?
+ *
+ * La otra mitad de lo que `validarMonto` hacía junto. La usa el último paso
+ * para apagar «Usar mi saldo» sin apagar «Pagar en bolívares».
+ */
+export function alcanzaElSaldo({ monto, saldo }) {
+  if (!monto || monto <= 0) return false;
+  return aNumero(saldo) >= monto;
 }
 
 /* ─── Los pasos ────────────────────────────────────────────────────────── */
