@@ -4,6 +4,7 @@ import {
   ArrowRight, CheckCircle2, TrendingUp, QrCode, Lock, FileText, Zap,
 } from 'lucide-react';
 import Footer from '../components/Footer';
+import useCripto from '../hooks/useCripto';
 
 /**
  * Landing.jsx — Página pública de risappbr.com, para visitantes SIN sesión.
@@ -61,15 +62,23 @@ const SERVICIOS = [
     titulo: 'Recargas digitales',
     desc: 'Distintos métodos de pago para acreditar saldo en tu cuenta.',
   },
+  // LAS DOS DE CRIPTO VAN MARCADAS, NO BORRADAS.
+  //
+  //   `cripto: true` es lo que las saca de la lista cuando la vía está
+  //   apagada, y lo que las devuelve el día que se vuelva a prender desde el
+  //   panel. Marcarlas es mejor que una lista aparte de «las que se esconden»:
+  //   esa lista se desactualiza el día que alguien agregue una tarjeta nueva.
   {
     icon: Bitcoin,
     color: '#f59e0b',
+    cripto: true,
     titulo: 'Operaciones con Bitcoin',
     desc: 'Opera por la red Lightning, con confirmación casi inmediata.',
   },
   {
     icon: TrendingUp,
     color: '#2775CA',
+    cripto: true,
     titulo: 'Créditos digitales USDT y USDC',
     desc: 'Convierte tus depósitos en créditos para usar dentro de la plataforma.',
   },
@@ -180,6 +189,13 @@ function Titulo({ eyebrow, children, sub, centrado = true }) {
 }
 
 export default function Landing() {
+  // LA PORTADA MIRA `deposito`, NO `visible`.
+  //
+  //   Quien llega acá no tiene cuenta, así que no puede tener saldo cripto que
+  //   sacar. Ofrecerle depositar en una vía que sólo acepta retiros sería
+  //   prometerle algo que el servidor le va a negar con un 503 después de
+  //   registrarse. `/limits` es pública, así que esto no pide sesión.
+  const { deposito: ofreceCripto } = useCripto();
   const seccion = { padding: '76px 20px' };
   const contenedor = { maxWidth: ANCHO, margin: '0 auto' };
 
@@ -263,9 +279,13 @@ export default function Landing() {
             maxWidth: 560,
           }}
           >
-            Recarga tu saldo, opera con Bitcoin y activa créditos digitales USDT
-            y USDC. Cada movimiento se procesa de forma automática y queda
-            registrado.
+            {ofreceCripto
+              ? ('Recarga tu saldo, opera con Bitcoin y activa créditos '
+                 + 'digitales USDT y USDC. Cada movimiento se procesa de forma '
+                 + 'automática y queda registrado.')
+              : ('Recarga tu saldo con PIX y opera desde tu cuenta. Cada '
+                 + 'movimiento se procesa de forma automática y queda '
+                 + 'registrado.')}
           </p>
 
           <div style={{
@@ -391,7 +411,7 @@ export default function Landing() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
           }}
           >
-            {SERVICIOS.map((f) => (
+            {SERVICIOS.filter((f) => ofreceCripto || !f.cripto).map((f) => (
               <Link
                 key={f.titulo}
                 to="/register"

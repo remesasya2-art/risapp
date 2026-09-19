@@ -173,7 +173,7 @@ async def limits_payload(db) -> dict:
     `"10.00" > "5"` es falso—. Son topes de tres cifras, no saldos: no hay nada
     que redondear mal.
     """
-    from services import configuracion
+    from services import configuracion, cripto_abierta
     from services.money import to_float
 
     ajustes = await configuracion.leer_todo(db)
@@ -192,4 +192,16 @@ async def limits_payload(db) -> dict:
             "max_ris": to_float(ajustes["cupo_sin_verificar_ris"]),
             "max_operaciones": int(ajustes["cupo_sin_verificar_operaciones"]),
         },
+        # EL ESTADO DE LA VIA CRIPTO VIAJA ACA, Y NO EN UNA RUTA NUEVA.
+        #
+        #   Por el motivo del docstring de arriba: la pantalla y el servidor
+        #   tienen que leer lo mismo. Si la pantalla preguntara aparte, habría
+        #   un momento —y un despliegue a medias— en el que dibuja un botón que
+        #   el servidor ya rechaza. Y esta ruta la consulta toda pantalla que
+        #   muestre un monto, así que no agrega ni un pedido.
+        #
+        #   Se publican las respuestas resueltas y no sólo el número: ver
+        #   `cripto_abierta.para_el_frontend`.
+        "cripto": cripto_abierta.para_el_frontend(
+            int(ajustes[cripto_abierta.CLAVE])),
     }

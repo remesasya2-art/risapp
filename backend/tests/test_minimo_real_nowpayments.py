@@ -210,6 +210,23 @@ class _DBFalsa:
         self.beneficiaries = _ColeccionFalsa([beneficiario])
         self.rates = _ColeccionFalsa([tasa])
         self.transactions = _ColeccionFalsa()
+        # LA VIA CRIPTO, ABIERTA, Y NO ES DECORADO.
+        #
+        #   Este archivo prueba los MINIMOS de NOWPayments, no el interruptor
+        #   de la vía. Pero `/withdraw-crypto` con `use_balance=False` genera
+        #   un pago cripto nuevo, así que pasa por la guarda de entrada de
+        #   `services/cripto_abierta.py`, que de fábrica está cerrada.
+        #
+        #   Se escribe el estado en la base falsa en vez de sustituir la
+        #   guarda: así estos tests siguen corriendo por el código de verdad,
+        #   y si alguien cambia cómo se lee el ajuste, se enteran acá también.
+        self.config = _ColeccionFalsa([{"clave": "cripto_abierta", "valor": 2}])
+
+    def __getitem__(self, nombre):
+        """`services/configuracion.py` entra por `db["config"]`, no por
+        atributo. Sin esto la lectura explota y la guarda —que falla cerrada a
+        propósito— cierra la entrada en un test que no habla de eso."""
+        return getattr(self, nombre)
 
 
 @pytest.fixture

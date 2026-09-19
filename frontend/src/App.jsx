@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import ConfirmacionHost from './components/flujo/ConfirmacionHost';
+import PuertaCripto from './components/PuertaCripto';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
 
@@ -126,10 +127,10 @@ function AppRoutes() {
       <Route path="/" element={<HomeGate />} />
       <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
       <Route path="/send-reais" element={<ProtectedRoute><SendReais /></ProtectedRoute>} />
-      <Route path="/send-crypto" element={<ProtectedRoute><SendCrypto /></ProtectedRoute>} />
+      <Route path="/send-crypto" element={<ProtectedRoute><PuertaCripto tipo="envio"><SendCrypto /></PuertaCripto></ProtectedRoute>} />
       <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
       <Route path="/recharge-ves" element={<ProtectedRoute><RechargeVES /></ProtectedRoute>} />
-      <Route path="/credits/deposit" element={<ProtectedRoute><CreditsDeposit /></ProtectedRoute>} />
+      <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/referidos" element={<ProtectedRoute><Referidos /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
@@ -147,7 +148,7 @@ function AppRoutes() {
       <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
 
       {/* BTC Lightning Route */}
-              <Route path="/btc-lightning" element={<ProtectedRoute><BTCLightning /></ProtectedRoute>} />
+              <Route path="/btc-lightning" element={<ProtectedRoute><PuertaCripto tipo="deposito"><BTCLightning /></PuertaCripto></ProtectedRoute>} />
       {/* Mockup Route - Temporal */}
       <Route path="/mockup-gestor" element={<ProtectedRoute><GestorFlowMockup /></ProtectedRoute>} />
       

@@ -12,6 +12,7 @@ import SupportChat from '../components/SupportChat';
 import KycQuotaModal from '../components/KycQuotaModal';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
+import useCripto from '../hooks/useCripto';
 import BonoCard from '../components/dashboard/BonoCard';
 import PrimerosPasos from '../components/dashboard/PrimerosPasos';
 import MarketRatesStrip from '../components/dashboard/MarketRatesStrip';
@@ -26,6 +27,9 @@ export default function Dashboard() {
   const location = useLocation();
   const { user, logout, refreshUser } = useAuth();
   const { rates } = useRate();
+  // El estado de la vía cripto, leído de `/limits` — la misma ruta de la que
+  // sale lo que el servidor hace cumplir.
+  const cripto = useCripto();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -165,7 +169,6 @@ const normalized = { ...tx };
     { icon: Wallet, label: 'Recargar', path: '/recharge' },
     { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
     { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
-    { icon: Zap, label: 'Bitcoin Lightning', path: '/btc-lightning' },
     { icon: Package, label: 'Enviar un paquete', path: '/envios' },
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
@@ -174,6 +177,23 @@ const normalized = { ...tx };
 
   // Build menu based on user role
   const menuItems = [...baseMenuItems];
+
+  // BITCOIN LIGHTNING SE INSERTA, NO SE FILTRA.
+  //
+  //   Estaba escrito fijo en `baseMenuItems`. Sacarlo de ahí y volverlo a
+  //   poner acá cuesta lo mismo que dejarlo con un `filter` después, y evita
+  //   el defecto de ese `filter`: el día que alguien agregue otra vía cripto
+  //   al menú base se olvida de sumarla a la lista de lo que se filtra, y
+  //   queda a la vista con la vía apagada. Lo que no está no hay que
+  //   acordarse de esconderlo.
+  // `deposito` y no `visible`: BTC Lightning genera una factura para que entre
+  // cripto nueva, así que su pantalla está detrás de la puerta de ENTRADA. Con
+  // `visible`, en el estado de apagado el menú mostraría el enlace y la
+  // pantalla lo devolvería a la portada. Un menú que lleva a ningún lado es
+  // peor que un menú más corto.
+  if (cripto.deposito) {
+    menuItems.splice(4, 0, { icon: Zap, label: 'Bitcoin Lightning', path: '/btc-lightning' });
+  }
   
   // Add role-specific menu items
   if (user?.role === 'admin' || user?.role === 'super_admin') {
@@ -511,14 +531,20 @@ const normalized = { ...tx };
           </div>
         ) : null}
 
-        {/* Créditos cripto (USDT/USDC) — saldo separado del RIS, se refresca solo */}
-        <div style={{ marginBottom: '24px' }}>
-          <CryptoBalanceCard
-            usdt={user?.balance_usdt || 0}
-            usdc={user?.balance_usdc || 0}
-            isMobile={isMobile}
-          />
-        </div>
+        {/* Créditos cripto (USDT/USDC) — saldo separado del RIS, se refresca solo.
+            Se dibuja sólo con la vía cripto visible. En el estado de apagado
+            (1) SIGUE visible a propósito: es por donde quien tenga saldo lo
+            saca, y esconderla lo dejaría sin salida. Desaparece en 0, cuando
+            ya no hay nada que sacar. Ver `hooks/useCripto.js`. */}
+        {cripto.visible ? (
+          <div style={{ marginBottom: '24px' }}>
+            <CryptoBalanceCard
+              usdt={user?.balance_usdt || 0}
+              usdc={user?.balance_usdc || 0}
+              isMobile={isMobile}
+            />
+          </div>
+        ) : null}
 
         {/* Recent Transactions */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: isMobile ? '20px' : '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>

@@ -127,13 +127,22 @@ def test_el_cupo_publicado_coincide_con_el_que_ve_el_usuario(base):
 
 
 def test_el_pago_publicado_no_tiene_agujeros(base):
-    """Las cuatro claves tienen que estar: la página las lee sin preguntar."""
+    """Las cinco claves tienen que estar: la página las lee sin preguntar.
+
+    Se comparan CONJUNTOS EXACTOS y no «que estén»: una lista de lo permitido.
+    Por eso agregar `cripto` puso este test en rojo, que es lo que tenía que
+    pasar — esta ruta es el contrato entre la pantalla y el servidor, y crecerlo
+    sin que nadie mire es cómo se cuelan campos que ninguna pantalla lee.
+    """
     p = corre(limits.limits_payload(base))
-    assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar"}, p
+    assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar", "cripto"}, p
     assert set(p["pix"]) == {"min_brl", "max_brl"}
     assert set(p["tarjeta"]) == {"min_brl", "max_brl"}
     assert set(p["ves"]) == {"min_ves", "max_ves"}
     assert set(p["sin_verificar"]) == {"max_ris", "max_operaciones"}
+    # `estado` viaja además de las tres respuestas resueltas: es lo que el
+    # panel muestra y lo que hace falta para entender un registro viejo.
+    assert set(p["cripto"]) == {"estado", "deposito", "envio", "visible"}
 
 
 @pytest.mark.parametrize("campo", ["min_brl", "max_brl"])
