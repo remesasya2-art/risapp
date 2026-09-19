@@ -281,17 +281,30 @@ async def vencer_las_viejas(db, ahora: datetime = None) -> int:
     return vencidas
 
 
-def exigir_activo(activo: bool) -> None:
+# Lo que no se puede. La segunda mitad —qué SI se puede— la pone
+# `services/la_via_que_funciona.py`, que la calcula mirando la configuración.
+# Acá terminaba en «podés recargar tu saldo y enviar desde ahí», y quedó
+# mintiendo el día que la carga de saldo se pudo cerrar.
+SIN_PAGO_AL_FINAL = "Esta forma de pagar no está disponible por ahora."
+
+
+async def exigir_activo(db) -> None:
     """Frena la ruta si el flujo nuevo está apagado.
 
     503 y no 404: la ruta existe, lo que no está disponible es el servicio.
     Un 404 le haría pensar a un integrador que se equivocó de dirección.
+
+    RECIBE LA BASE Y NO UN BOOLEANO, que es como era antes.
+
+        El mensaje tiene que nombrar la vía que SI funciona, y eso depende de
+        la configuración: sin la base no se puede saber, y por eso la versión
+        anterior tenía la frase escrita fija — la frase que terminó mintiendo.
     """
-    if not activo:
+    if not await esta_activo(db):
+        from services import la_via_que_funciona
         raise HTTPException(
             status_code=503,
-            detail="Esta forma de pagar no está disponible por ahora. "
-                   "Podés recargar tu saldo y enviar desde ahí.")
+            detail=await la_via_que_funciona.con(db, SIN_PAGO_AL_FINAL))
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -139,15 +139,56 @@ def test_apagado_la_ruta_contesta_503_y_no_404(base):
     """503 y no 404: la ruta existe, lo que no está es el servicio. Un 404 le
     haría pensar a un integrador que se equivocó de dirección."""
     with pytest.raises(HTTPException) as e:
-        paf.exigir_activo(False)
+        corre(paf.exigir_activo(base))
     assert e.value.status_code == 503
 
 
 def test_apagado_le_dice_por_donde_si(base):
+    """Un rechazo que no dice qué hacer manda a soporte a preguntar lo que la
+    pantalla podía haber contestado sola.
+
+    Con la carga de saldo abierta —que es lo de fábrica— la salida es cargar
+    saldo, igual que antes.
+    """
     with pytest.raises(HTTPException) as e:
-        paf.exigir_activo(False)
+        corre(paf.exigir_activo(base))
     assert "saldo" in e.value.detail.lower(), (
         "el mensaje no le dice que puede seguir usando el flujo viejo")
+
+
+def test_APAGADO_Y_CON_LA_CARGA_CERRADA_NO_LO_MANDA_A_RECARGAR(base):
+    """El texto que quedó mintiendo, y por lo que existe este bloque.
+
+    El mensaje terminaba en «podés recargar tu saldo y enviar desde ahí»,
+    escrito fijo. El día que la carga de saldo se pudo cerrar
+    (`services/recarga_abierta.py`), esa frase quedó mandando a recargar a
+    alguien que no puede recargar — y la pantalla de recarga, además, lo
+    rebota al panel.
+
+    Este caso no se puede llegar por el panel: el seguro de
+    `revisar_las_parejas` no deja apagar las dos cosas. Se llega escribiendo
+    en la base, que es justo cuando un mensaje honesto más importa.
+    """
+    from services import recarga_abierta
+    corre(cfg_escribir(base, recarga_abierta.CLAVE, recarga_abierta.CERRADA))
+    corre(cfg_escribir(base, paf.CLAVE, 0))
+
+    with pytest.raises(HTTPException) as e:
+        corre(paf.exigir_activo(base))
+    assert "recarg" not in e.value.detail.lower(), (
+        f"con la carga de saldo cerrada, el mensaje sigue mandando a "
+        f"recargar: «{e.value.detail}»")
+    assert "soporte" in e.value.detail.lower(), (
+        "sin ninguna vía abierta, el mensaje tiene que mandar a soporte en "
+        "vez de inventar una salida")
+
+
+def cfg_escribir(base, clave, valor):
+    """Escribe un ajuste como lo escribe el panel, validación incluida."""
+    from services import configuracion
+    normalizado, error = configuracion.normalizar(clave, valor)
+    assert error is None, f"el panel rechazaría {valor}: {error}"
+    return configuracion.escribir(base, clave, normalizado)
 
 
 # ══════════════════════════════════════════════════════════════════════════

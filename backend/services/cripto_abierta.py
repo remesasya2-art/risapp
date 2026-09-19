@@ -78,10 +78,19 @@ ABIERTA = 2
 #   dinero— vale para las páginas públicas y no para acá adentro, donde el
 #   usuario ya sabe qué contrató. Igual se alinea: dos vocabularios para la
 #   misma acción es como se termina llamándola de tres formas.
-SIN_DEPOSITOS = ("Los depósitos en cripto no están disponibles por ahora. "
-                 "Podés recargar tu saldo con PIX y gastarlo como siempre.")
-CERRADA_DEL_TODO = ("La vía cripto no está disponible por ahora. Podés "
-                    "recargar tu saldo con PIX y gastarlo como siempre.")
+# LA SEGUNDA MITAD YA NO SE ESCRIBE ACA, y el motivo es que mintió.
+#
+#   Estas dos frases terminaban en «podés recargar tu saldo con PIX y gastarlo
+#   como siempre». El día que la carga de saldo se pudo cerrar
+#   (`services/recarga_abierta.py`) las dos quedaron mandando a recargar a
+#   alguien que no puede recargar — junto con una tercera igual, en
+#   `pago_al_final`.
+#
+#   Las tres mintieron A LA VEZ porque las tres tenían la misma frase escrita
+#   por separado. Ahora la salida la calcula `services/la_via_que_funciona.py`
+#   mirando la configuración de verdad, y las tres la piden.
+SIN_DEPOSITOS = "Los depósitos en cripto no están disponibles por ahora."
+CERRADA_DEL_TODO = "La vía cripto no está disponible por ahora."
 
 
 async def _estado(db) -> int:
@@ -123,13 +132,19 @@ async def exigir_deposito(db) -> None:
     esta cuenta no tenga permiso, es que el servicio no está dando eso ahora.
     Un 403 le haría pensar que hizo algo mal."""
     if not await acepta_depositos(db):
-        raise HTTPException(status_code=503, detail=SIN_DEPOSITOS)
+        from services import la_via_que_funciona
+        raise HTTPException(
+            status_code=503,
+            detail=await la_via_que_funciona.con(db, SIN_DEPOSITOS))
 
 
 async def exigir_envio(db) -> None:
     """Frena la ruta si no pueden salir envíos cripto."""
     if not await acepta_envios(db):
-        raise HTTPException(status_code=503, detail=CERRADA_DEL_TODO)
+        from services import la_via_que_funciona
+        raise HTTPException(
+            status_code=503,
+            detail=await la_via_que_funciona.con(db, CERRADA_DEL_TODO))
 
 
 def para_el_frontend(estado: int) -> dict:

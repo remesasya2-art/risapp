@@ -1835,7 +1835,7 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
     from services import cpf_de_la_cuenta, pago_al_final, tarjeta_del_envio
     from services.notifications import create_notification
 
-    pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+    await pago_al_final.exigir_activo(db)
 
     metodo = tarjeta_del_envio.normalizar_metodo(request.metodo)
 
@@ -2191,7 +2191,7 @@ async def cotizar_envio_reais(request: CotizarEnvioReaisRequest,
     """
     from services import pago_al_final
 
-    pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+    await pago_al_final.exigir_activo(db)
 
     if request.amount_ves <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
@@ -2305,7 +2305,7 @@ async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
     """
     from services import pago_al_final
 
-    pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+    await pago_al_final.exigir_activo(db)
 
     # El comprobante, con la misma limpieza que la recarga en bolívares: es
     # texto libre elegido por quien paga, y el panel lo va a abrir.
