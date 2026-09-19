@@ -743,6 +743,12 @@ QUIEN_PUEDE_TOCAR_LA_CUENTA_DEL_BONO = {
     # (verify-email); ahora las dos puertas —correo y Google— crean la cuenta
     # por este único lugar.
     "services/alta_de_cuenta.py",
+    # El flujo que cobra al final. DEVUELVE el bono de las órdenes que nadie
+    # pagó: ese flujo lo debita al cotizar —no al confirmarse el pago, para que
+    # la confirmación siga siendo un solo cambio de estado— así que una
+    # cotización abandonada se llevó plata de esta cuenta que hay que
+    # reponer. Sólo suma; gastar el bono lo sigue sabiendo una sola ruta.
+    "services/pago_al_final.py",
 }
 
 

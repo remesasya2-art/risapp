@@ -173,7 +173,7 @@ async def limits_payload(db) -> dict:
     `"10.00" > "5"` es falso—. Son topes de tres cifras, no saldos: no hay nada
     que redondear mal.
     """
-    from services import configuracion, cripto_abierta
+    from services import configuracion, cripto_abierta, pago_al_final
     from services.money import to_float
 
     ajustes = await configuracion.leer_todo(db)
@@ -204,4 +204,9 @@ async def limits_payload(db) -> dict:
         #   `cripto_abierta.para_el_frontend`.
         "cripto": cripto_abierta.para_el_frontend(
             int(ajustes[cripto_abierta.CLAVE])),
+        # El flujo de pago, por el mismo motivo que la línea de arriba: la
+        # pantalla del envío tiene que ofrecer exactamente lo que el servidor
+        # acepta. Con esto apagado, `/withdraw-ves/cotizar` contesta 503, así
+        # que un botón que lo llame sería un botón que lleva a un error.
+        "pago_al_final": bool(int(ajustes[pago_al_final.CLAVE])),
     }

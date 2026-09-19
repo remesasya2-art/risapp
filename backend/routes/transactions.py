@@ -1,6 +1,7 @@
 """
 Transaction routes - Withdrawals, Recharges, Beneficiaries
 """
+import asyncio
 import os
 import json
 import math
@@ -1777,3 +1778,305 @@ async def check_pending_withdrawal(current_user: User = Depends(get_current_user
         "beneficiary_data": withdrawal.get("beneficiary_data"),
         "created_at": withdrawal.get("created_at")
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Pagar al final: cotizar el envío y pagarlo con PIX, sin saldo en el medio
+# ══════════════════════════════════════════════════════════════════════════
+#
+# El por qué entero está en `services/pago_al_final.py`. En una línea: sin
+# saldo en el medio, la confirmación del pago es UN cambio de estado sobre UN
+# documento, y desaparece la ventana en la que el flujo viejo puede cobrar sin
+# acreditar.
+#
+# De fábrica está apagado y convive con el flujo de siempre. Prenderlo no
+# apaga nada.
+
+class CotizarEnvioVesRequest(BaseModel):
+    amount: float                      # en RIS, que es 1:1 con el real
+    beneficiary_id: str
+    client_cpf: Optional[str] = None   # el CPF de quien paga el PIX
+    idempotency_key: Optional[str] = None
+
+
+@router.post("/withdraw-ves/cotizar",
+             dependencies=[Depends(sin_transacciones_personales)])
+async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
+                            current_user: User = Depends(get_current_user)):
+    """Deja una orden esperando el pago, y devuelve el QR para pagarla.
+
+    TODO LO QUE PUEDE FALLAR, FALLA ANTES DE CREAR NADA.
+
+        Es el mismo criterio del envío con saldo: allá las validaciones van
+        antes del débito para que un rechazo no deje plata movida. Acá van
+        antes de pedirle el cobro a Mercado Pago, para que un rechazo no deje
+        un QR huérfano que alguien puede pagar sin que exista el envío.
+    """
+    from services import cpf_de_la_cuenta, pago_al_final
+    from services.notifications import create_notification
+
+    pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+
+    # Idempotencia, igual que el envío con saldo: dos clics no cotizan dos
+    # veces ni dejan dos cobros abiertos por el mismo envío.
+    _idem_new, _idem_existing = await claim_idempotency(
+        current_user.user_id, "cotizar_ves", request.idempotency_key)
+    if not _idem_new:
+        if _idem_existing and _idem_existing.get("result"):
+            return _idem_existing["result"]
+        raise HTTPException(status_code=409,
+                            detail="Esta operación ya se está procesando. Espera un momento.")
+
+    # 1) El beneficiario, antes que nada: un cobro sin destino no sirve.
+    beneficiary = await db.beneficiaries.find_one({
+        "beneficiary_id": request.beneficiary_id,
+        "user_id": current_user.user_id})
+    if not beneficiary:
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+
+    # 2) La tasa, con el mismo ajuste de horario que `/api/rate`, para que lo
+    #    que ve en la pantalla y lo que se guarda sean el mismo número.
+    rate = await db.rates.find_one(sort=[("updated_at", -1)])
+    _base = (rate or {}).get("ris_to_ves")
+    if not _base or _base <= 0:
+        raise HTTPException(status_code=503,
+                            detail="La tasa no está disponible en este momento. Intenta más tarde.")
+    _cfg = await load_auto_rate_config(db)
+    ris_to_ves = apply_rate_adjustment({"ris_to_ves": _base}, _cfg).get("ris_to_ves") or _base
+    amount_ves = round(request.amount * ris_to_ves, 2)
+
+    # 3) EL BONO DESCUENTA DEL COBRO, no del saldo.
+    #
+    #    Acá no hay saldo que debitar, así que el bono se convierte en lo que
+    #    de verdad era: menos plata a poner. El beneficiario recibe los mismos
+    #    bolívares; lo que baja es el real que se cobra por PIX.
+    #
+    #    `disponible_para_enviar` es la única función que decide si el bono se
+    #    puede gastar —mira que esté liberado y no bloqueado—, así que acá no
+    #    se repite ninguna de esas reglas.
+    _usuario = await db.users.find_one({"user_id": current_user.user_id})
+    _total = to_decimal(request.amount)
+    _del_bono = min(_total, await bonos.disponible_para_enviar(db, _usuario or {}))
+    _a_cobrar = _total - _del_bono
+
+    if _a_cobrar <= 0:
+        # El bono cubre el envío entero. No hay nada que cobrar, y un cobro de
+        # cero no lo acepta ninguna pasarela. Se rechaza con el motivo, en vez
+        # de pedirle a Mercado Pago un QR imposible.
+        raise HTTPException(
+            status_code=400,
+            detail="Tu bono cubre este envío entero. Por ahora, para usarlo "
+                   "solo, hacé el envío desde tu saldo.")
+
+    # 4) Tope de PIX y cupo, sobre LO QUE SE VA A COBRAR y no sobre el envío.
+    #    Con bono, esos dos números son distintos, y el que tiene que caber en
+    #    el tope de la pasarela es el que la pasarela va a cobrar.
+    _cobro_float = to_float(_a_cobrar)
+    error_monto = await validate_pix_amount(db, _cobro_float)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
+    _cupo = await kyc_quota.check_amount(db, _usuario, _cobro_float)
+    if _cupo:
+        raise HTTPException(status_code=403, detail=_cupo)
+
+    # 5) El CPF de quien paga tiene que ser el titular de la cuenta. Es el
+    #    control que ata cada real que entra a una persona, y es el mismo que
+    #    aplica la recarga: se llama a la misma función, no se copia la regla.
+    try:
+        cpf_del_pago = await cpf_de_la_cuenta.exigir_para_pagar(
+            db, _usuario or {}, request.client_cpf)
+    except cpf_de_la_cuenta.CpfInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (cpf_de_la_cuenta.CpfDeOtro, cpf_de_la_cuenta.CpfVetado,
+            cpf_de_la_cuenta.CpfEnUso) as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    # 5 bis) EL BONO SE DEBITA ACA, NO AL CONFIRMARSE EL PAGO.
+    #
+    #   La primera versión de esta ruta descontaba el bono del cobro y NUNCA lo
+    #   debitaba: el mismo bono habría servido para envíos infinitos. Lo
+    #   encontró `test_solo_el_envio_a_venezuela_sabe_gastar_el_bono`, la
+    #   guarda que vigila quién puede nombrar esa cuenta.
+    #
+    #   Va acá y no en la confirmación por dos motivos:
+    #
+    #     · Acá se puede fallar. Si el bono ya no está —otra pestaña lo gastó
+    #       hace un segundo— todavía no se le generó un QR a nadie. En la
+    #       confirmación el cliente YA PAGO, y no hay nada que rechazar.
+    #     · La confirmación tiene que seguir siendo UN cambio de estado sobre
+    #       UN documento. Meterle el débito del bono la volvería a partir en
+    #       dos escrituras, que es justo la ventana que este flujo elimina.
+    #
+    #   El `$gte` dentro del filtro es lo que impide gastarlo dos veces: dos
+    #   pedidos simultáneos no pueden pasar los dos. Mismo patrón que el envío
+    #   con saldo.
+    #
+    #   Si nadie paga, `pago_al_final.vencer_las_viejas` lo devuelve.
+    if _del_bono > 0:
+        _con_bono = await db.users.find_one_and_update(
+            {"user_id": current_user.user_id,
+             bonos.CUENTA_DEL_BONO: {"$gte": to_decimal128(_del_bono)}},
+            {"$inc": {bonos.CUENTA_DEL_BONO: to_decimal128(-_del_bono)}})
+        if _con_bono is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Tu bono cambió mientras completabas el envío. "
+                       "Volvé a empezar para ver el monto correcto.")
+
+    async def _devolver_el_bono():
+        """Para cualquier salida por error de acá en adelante. El bono ya salió
+        de su cuenta y el envío no va a existir."""
+        if _del_bono > 0:
+            await db.users.update_one(
+                {"user_id": current_user.user_id},
+                {"$inc": {bonos.CUENTA_DEL_BONO: to_decimal128(_del_bono)}})
+
+    tx_id = f"tx_{uuid.uuid4().hex[:12]}"
+    display_id = await get_next_withdrawal_id()
+    referencia = pago_al_final.nuevo_id_de_cobro()
+    ahora = datetime.now(timezone.utc)
+    vence = pago_al_final.vence_en(ahora)
+
+    beneficiary_data = {
+        "full_name": beneficiary.get("full_name"),
+        "id_document": beneficiary.get("id_document"),
+        "bank": beneficiary.get("bank"),
+        "bank_code": beneficiary.get("bank_code"),
+        "phone_number": beneficiary.get("phone_number"),
+        "account_number": beneficiary.get("account_number"),
+        "payment_type": beneficiary.get("payment_type", "transferencia"),
+    }
+
+    orden = {
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "user_id": current_user.user_id,
+        "type": "withdrawal",
+        "amount_input": request.amount,
+        "amount_output": amount_ves,
+        "currency_input": "RIS",
+        "currency_output": "VES",
+        "rate": ris_to_ves,
+        "status": pago_al_final.ESPERANDO_PAGO,
+        "beneficiary_id": request.beneficiary_id,
+        "beneficiary_data": beneficiary_data,
+        "created_at": ahora,
+        # Lo que distingue a esta orden de una del flujo viejo.
+        "funded_from": "payment",
+        "payment_order_id": referencia,
+        "payment_expires_at": vence,
+        "payment_amount_brl": _cobro_float,
+        "bono_aplicado": to_float(_del_bono),
+    }
+
+    # 6) Lo que te queda a vos, ANTES de pedir el cobro. Si falta la tasa de
+    #    costo la operación se rechaza acá, sin haberle generado un QR a nadie.
+    try:
+        orden.update(await comisiones.campos_de(
+            db, via="ris_to_ves", monto_cliente=request.amount,
+            tasa_cliente=ris_to_ves))
+    except comisiones.FaltaLaTasaDeCosto:
+        await _devolver_el_bono()
+        raise HTTPException(status_code=503,
+                            detail="El envío no está disponible en este momento. Intenta más tarde.")
+
+    # 7) El cobro. Si Mercado Pago no devuelve un código, NO SE GUARDA NADA:
+    #    es la lección escrita en `routes/gestor_pix.py`, donde un cobro sin
+    #    código quedaba guardado y la persona veía una pantalla rota.
+    from routes.gestor_pix import MP_AVAILABLE, mercadopago_service
+    qr = ""
+    qr_b64 = ""
+    mp_id = None
+    if MP_AVAILABLE and mercadopago_service:
+        try:
+            _nombre = (_usuario or {}).get("name") or "Cliente"
+            _partes = _nombre.split()
+            mp = await asyncio.to_thread(
+                mercadopago_service.create_pix_payment,
+                amount=_cobro_float,
+                description=f"Envio {display_id}",
+                payer_email=(_usuario or {}).get("email") or "cliente@risapp.com",
+                payer_first_name=_partes[0],
+                payer_last_name=_partes[-1] if len(_partes) > 1 else "RIS",
+                payer_cpf=cpf_del_pago,
+                external_reference=referencia)
+            if mp and mp.get("success"):
+                mp_id = mp.get("payment_id")
+                qr = mp.get("qr_code", "")
+                qr_b64 = mp.get("qr_code_base64", "")
+        except Exception as e:
+            logger.error("cotizar_envio_ves: Mercado Pago falló para %s: %s",
+                         referencia, e)
+
+    if not qr:
+        await _devolver_el_bono()
+        logger.error("COBRO SIN CODIGO para el envío %s: no se guarda nada.",
+                     referencia)
+        raise HTTPException(
+            status_code=503,
+            detail="No pudimos generar el cobro con PIX en este momento. "
+                   "Probá de nuevo en unos minutos.")
+
+    # 8) La orden PRIMERO y el cobro después.
+    #
+    #    Si falla el segundo, se vence la orden en el acto: queda una orden
+    #    muerta y un QR que nadie va a poder cruzar con nada, y el cliente ve
+    #    un error en vez de un código que no sirve. Al revés —el cobro primero—
+    #    dejaría un cobro pagable sin envío detrás, que es la falla cara.
+    await db.transactions.insert_one(orden)
+    try:
+        await db.gestor_pix_payments.insert_one({
+            "payment_id": referencia,
+            "mp_payment_id": mp_id,
+            "gestor_id": current_user.user_id,
+            "proposito": pago_al_final.PROPOSITO,
+            "transaction_id": tx_id,
+            "amount_ris": _cobro_float,
+            "amount_brl": _cobro_float,
+            "amount_ves": amount_ves,
+            "qr_code": qr,
+            "qr_code_base64": qr_b64,
+            "status": "pending",
+            "created_at": ahora,
+            "expires_at": vence,
+            "is_mp_payment": mp_id is not None,
+        })
+    except Exception as e:
+        await db.transactions.update_one(
+            {"transaction_id": tx_id},
+            {"$set": {"status": pago_al_final.PAGO_VENCIDO, "expired_at": ahora}})
+        await _devolver_el_bono()
+        logger.error("cotizar_envio_ves: no se pudo guardar el cobro %s, la "
+                     "orden %s queda vencida: %s", referencia, tx_id, e)
+        raise HTTPException(status_code=503,
+                            detail="No pudimos generar el cobro en este momento. "
+                                   "Probá de nuevo en unos minutos.")
+
+    await create_notification(
+        user_id=current_user.user_id,
+        title="Tu envío espera el pago",
+        message=f"Pagá {para_mostrar(_cobro_float, 'BRL')} con PIX y salimos a "
+                f"despachar {para_mostrar(amount_ves, 'VES')}.",
+        notification_type="withdrawal_awaiting_payment",
+        data={"transaction_id": tx_id})
+
+    _resp = {
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "amount_ris": request.amount,
+        "amount_ves": amount_ves,
+        "rate": ris_to_ves,
+        "bono_aplicado": to_float(_del_bono),
+        "amount_brl": _cobro_float,
+        "qr_code": qr,
+        "qr_code_base64": qr_b64 or "",
+        "copy_paste_code": qr,
+        "expires_at": vence.isoformat(),
+        "expires_in_seconds": pago_al_final.MINUTOS_DEL_COBRO * 60,
+    }
+    await store_idempotency_result(current_user.user_id, "cotizar_ves",
+                                   request.idempotency_key, _resp)
+    return _resp
