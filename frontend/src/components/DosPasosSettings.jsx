@@ -137,6 +137,56 @@ export default function DosPasosSettings() {
           <img src={alta.qr_code_data_url} alt="Código QR"
             data-testid="dos-pasos-qr"
             style={{ width: '180px', height: '180px', display: 'block', margin: '8px 0 12px' }} />
+
+          {/* ¿Y SI ESTA EN EL TELEFONO? El QR se escanea con la cámara de OTRO
+              aparato. Quien abre esto desde el celular no puede apuntarse a sí
+              mismo, y sin esta parte se queda trabado mirando un código que no
+              tiene cómo leer. Van las tres salidas, de la más cómoda a la más
+              trabajosa: abrir la app directo, copiar la clave a mano, o la
+              captura de pantalla. */}
+          <div style={{
+            background: C.fondo, borderRadius: '10px', padding: '12px',
+            marginBottom: '12px',
+          }} data-testid="dos-pasos-desde-el-telefono">
+            <span style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: C.tinta, marginBottom: '6px' }}>
+              ¿Estás en el teléfono y no podés escanear?
+            </span>
+            <span style={{ display: 'block', ...ayuda, marginTop: 0, marginBottom: '10px' }}>
+              El código QR se lee con la cámara de otro aparato. Si estás en el
+              mismo teléfono, hacé cualquiera de estas tres:
+            </span>
+
+            <a href={alta.otpauth_url} data-testid="dos-pasos-abrir-app"
+              style={{
+                display: 'inline-block', fontSize: '13.5px', fontWeight: 600,
+                color: C.marca, textDecoration: 'none', marginBottom: '10px',
+              }}>
+              1 · Abrir mi aplicación de autenticación →
+            </a>
+
+            <span style={{ display: 'block', ...ayuda, marginTop: 0, marginBottom: '4px' }}>
+              2 · O copiá esta clave y pegala a mano en tu aplicación, con la
+              opción «ingresar clave» o «introducir código de configuración»:
+            </span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <code data-testid="dos-pasos-clave" style={{
+                fontSize: '13px', wordBreak: 'break-all', background: '#fff',
+                border: `1px solid ${C.linea}`, borderRadius: '8px', padding: '6px 8px',
+              }}>{alta.secret}</code>
+              <Boton tono="suave" onClick={() => {
+                navigator.clipboard?.writeText(alta.secret);
+                toast.success('Clave copiada');
+              }} testid="dos-pasos-copiar-clave">
+                <Copy size={14} /> Copiar
+              </Boton>
+            </div>
+
+            <span style={{ display: 'block', ...ayuda, marginTop: 0 }}>
+              3 · O sacá una captura de esta pantalla y, en tu aplicación de
+              autenticación, elegí agregar una cuenta desde una imagen de la
+              galería.
+            </span>
+          </div>
           <label style={etiqueta} htmlFor="dos-pasos-codigo">Código de seis dígitos</label>
           <input id="dos-pasos-codigo" style={campo} inputMode="numeric" maxLength={6}
             value={codigo} data-testid="dos-pasos-codigo"

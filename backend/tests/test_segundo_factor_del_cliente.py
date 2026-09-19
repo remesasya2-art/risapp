@@ -344,3 +344,24 @@ def test_la_tarjeta_esta_enganchada_en_el_perfil():
                           "Profile.jsx").resolve().read_text(encoding="utf-8")
     assert "<DosPasosSettings />" in perfil
     assert "import DosPasosSettings" in perfil
+
+
+def test_la_pantalla_resuelve_el_caso_DESDE_EL_TELEFONO():
+    """El QR se lee con la cámara de OTRO aparato. Quien abre esto desde el
+    mismo celular no puede apuntarse a sí mismo, y sin esta parte se queda
+    trabado mirando un código que no tiene cómo leer.
+
+    Se comprueban las tres salidas porque las tres hacen falta: el enlace
+    `otpauth://` es el más cómodo pero no todas las aplicaciones lo toman; la
+    clave a mano funciona siempre; y la captura es la que la gente ya conoce.
+    """
+    import pathlib
+    fuente = pathlib.Path(_BACKEND, "..", "frontend", "src", "components",
+                          "DosPasosSettings.jsx").resolve().read_text(encoding="utf-8")
+    assert 'data-testid="dos-pasos-desde-el-telefono"' in fuente
+    # 1 · abrir la aplicación directo, con el enlace que devuelve el servidor
+    assert "alta.otpauth_url" in fuente
+    # 2 · la clave, copiable
+    assert 'data-testid="dos-pasos-clave"' in fuente and "alta.secret" in fuente
+    # 3 · la captura de pantalla
+    assert "captura" in fuente and "galería" in fuente
