@@ -136,7 +136,7 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     """
     p = corre(limits.limits_payload(base))
     assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar", "cripto",
-                      "pago_al_final"}, p
+                      "pago_al_final", "recarga"}, p
     assert set(p["pix"]) == {"min_brl", "max_brl"}
     assert set(p["tarjeta"]) == {"min_brl", "max_brl"}
     assert set(p["ves"]) == {"min_ves", "max_ves"}
@@ -147,6 +147,7 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     # Un booleano pelado y no un objeto: acá no hay tres estados que resolver,
     # es «se ofrece o no se ofrece».
     assert isinstance(p["pago_al_final"], bool)
+    assert isinstance(p["recarga"], bool)
 
 
 @pytest.mark.parametrize("campo", ["min_brl", "max_brl"])

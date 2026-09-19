@@ -174,6 +174,7 @@ async def limits_payload(db) -> dict:
     que redondear mal.
     """
     from services import configuracion, cripto_abierta, pago_al_final
+    from services import recarga_abierta
     from services.money import to_float
 
     ajustes = await configuracion.leer_todo(db)
@@ -209,4 +210,8 @@ async def limits_payload(db) -> dict:
         # acepta. Con esto apagado, `/withdraw-ves/cotizar` contesta 503, así
         # que un botón que lo llame sería un botón que lleva a un error.
         "pago_al_final": bool(int(ajustes[pago_al_final.CLAVE])),
+        # Si se puede cargar saldo. Con esto en false las cuatro rutas de
+        # recarga contestan 503, así que la pantalla tiene que esconder sus
+        # ocho puertas: un botón que lleva a un error no es una opción.
+        "recarga": bool(int(ajustes[recarga_abierta.CLAVE])),
     }

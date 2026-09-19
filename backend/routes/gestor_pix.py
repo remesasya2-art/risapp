@@ -19,6 +19,7 @@ from typing import Optional
 from database import db
 from services.limits import validate_pix_amount
 from services import bancos, cpf_de_la_cuenta, kyc_quota, pagos_una_sola_vez, saldos
+from services import recarga_abierta
 from models.user import User
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
@@ -80,6 +81,12 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
     """Create a PIX payment for third-party recharge via Mercado Pago"""
     # Limite de monto validado ANTES de crear el pago en Mercado Pago: si no,
     # la pantalla anuncia un techo que el servidor no hace cumplir.
+    # LA CARGA DE SALDO, ANTES DE CUALQUIER OTRA COSA QUE CUESTE.
+    #
+    #   La empresa no custodia dinero de terceros ni ofrece recarga. La regla
+    #   vive en `services/recarga_abierta.py`, no acá: son cuatro puertas, y la
+    #   condición copiada en cada una es la que un día se actualiza en tres.
+    await recarga_abierta.exigir_abierta(db)
     error_monto = await validate_pix_amount(db, request.amount_ris)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)

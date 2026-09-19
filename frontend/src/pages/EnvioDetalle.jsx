@@ -14,6 +14,7 @@
  *      Pacaraima, y eso se dice con todas las letras.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import useRecarga from '../hooks/useRecarga';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Camera, CheckCircle2, CreditCard, Link2, PackageSearch, RefreshCw,
@@ -447,6 +448,7 @@ function Confirmar({ envio, onListo }) {
 
 
 function Pagar({ envio, partidas, onListo }) {
+  const recarga = useRecarga();
   const [pagando, setPagando] = useState(null);
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
@@ -513,13 +515,24 @@ function Pagar({ envio, partidas, onListo }) {
            solo, sin un botón, es mandarlo a buscar la pantalla de recargas por
            su cuenta — y el que no la encuentra deja el paquete parado. */
         <div style={{ marginTop: '12px' }}>
-          <Boton onClick={() => navigate('/recharge')} data-testid="recargar-saldo">
-            <CreditCard size={14} /> Recargar saldo
-          </Boton>
-          <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#92400e' }}>
-            Cuando la recarga se acredite, volvé acá y pagá. El paquete te espera en
-            Pacaraima mientras tanto.
-          </p>
+          {recarga.abierta ? (
+            <Boton onClick={() => navigate('/recharge')} data-testid="recargar-saldo">
+              <CreditCard size={14} /> Recargar saldo
+            </Boton>
+          ) : null}
+          {recarga.abierta ? (
+            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#92400e' }}>
+              Cuando la recarga se acredite, volvé acá y pagá. El paquete te espera en
+              Pacaraima mientras tanto.
+            </p>
+          ) : (
+            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#92400e' }}
+               data-testid="sin-recarga-escribinos">
+              Cargar saldo no está disponible por ahora. Escribinos por el chat de
+              soporte y coordinamos el pago. El paquete te espera en Pacaraima
+              mientras tanto.
+            </p>
+          )}
         </div>
       ) : null}
 

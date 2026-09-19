@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from database import db
+from services import recarga_abierta
 from models.user import User
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
@@ -157,6 +158,10 @@ async def quote_card_payment(
 ):
     """Preview the total amount that will be charged on the card,
     given the desired RIS recharge amount."""
+    # También la cotización. Dejarla abierta haría que la pantalla dibuje el
+    # total a cobrar y recién al apretar diga que no se puede: el usuario
+    # completa todo el formulario de la tarjeta para nada.
+    await recarga_abierta.exigir_abierta(db)
     error_monto = await validate_card_amount(db, amount_ris)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)
@@ -179,6 +184,12 @@ async def process_card_payment(
 ):
     """Submit the tokenized card to Mercado Pago and credit RIS on approval."""
     # ── Validation ───────────────────────────────────────────────────────
+    # LA CARGA DE SALDO, ANTES DE CUALQUIER OTRA COSA QUE CUESTE.
+    #
+    #   La empresa no custodia dinero de terceros ni ofrece recarga. La regla
+    #   vive en `services/recarga_abierta.py`, no acá: son cuatro puertas, y la
+    #   condición copiada en cada una es la que un día se actualiza en tres.
+    await recarga_abierta.exigir_abierta(db)
     error_monto = await validate_card_amount(db, body.amount_ris)
     if error_monto:
         raise HTTPException(status_code=400, detail=error_monto)

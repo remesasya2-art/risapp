@@ -370,6 +370,24 @@ AJUSTES = {
               "respeta durante los 7 minutos que dura el cobro, así que un "
               "movimiento de tasa en esa ventana lo absorbe la empresa."),
 
+    # ── Cargar saldo ──────────────────────────────────────────────────────
+    #
+    # La empresa no custodia dinero de terceros ni ofrece recarga. El estado al
+    # que se va es 0; viene en 1 de fábrica porque el despliegue no puede ser
+    # el que lo apague —los envíos exigen saldo, y se quedarían sin forma de
+    # financiarse en ese mismo instante—. Hay una regla que impide apagarlo
+    # antes de tiempo: ver `PAREJAS_MINIMO_Y_MAXIMO` y el seguro de
+    # `services/recarga_abierta.py`.
+    "recarga_abierta": Ajuste(
+        tipo=ENTERO, defecto=1, minimo=0, maximo=1,
+        unidad="0 = no se carga saldo, 1 = se puede cargar",
+        etiqueta="Cargar saldo (PIX, tarjeta y bolívares)",
+        ayuda="En 1 (fábrica) todo sigue igual. En 0 no entra saldo nuevo por "
+              "ninguna de las tres vías, pero el saldo que ya está se sigue "
+              "gastando y sigue recibiendo devoluciones. No se puede poner en "
+              "0 mientras «pagar el envío al final» esté apagado: con los dos "
+              "apagados nadie podría enviar nada."),
+
     "cripto_abierta": Ajuste(
         tipo=ENTERO, defecto=1, minimo=0, maximo=2,
         unidad="0 = cerrada, 1 = sólo salida, 2 = abierta",
@@ -600,6 +618,19 @@ async def revisar_las_parejas(db, limpios: dict):
         rechazar las dos cosas.
     """
     queda = {**await leer_todo(db), **limpios}
+
+    # EL SEGURO ENTRE LA RECARGA Y EL PAGO AL FINAL.
+    #
+    #   Va acá y no en un sitio propio porque es exactamente la misma clase de
+    #   problema que las parejas de abajo: una regla ENTRE DOS ajustes, que
+    #   ninguno de los dos puede comprobar mirándose a sí mismo, y que si se
+    #   incumple mata una vía en silencio. Acá las mata todas.
+    from services import recarga_abierta as _recarga
+    _motivo = _recarga.motivo_si_deja_la_app_sin_salida(
+        queda[_recarga.CLAVE], queda["pago_al_final"])
+    if _motivo:
+        return _motivo
+
     for clave_min, clave_max, via in PAREJAS_MINIMO_Y_MAXIMO:
         if queda[clave_min] > queda[clave_max]:
             return (

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from database import db
-from services import cripto_abierta
+from services import cripto_abierta, recarga_abierta
 
 from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from services import bonos, comisiones, saldos
@@ -1489,6 +1489,16 @@ async def bancos_ves_disponibles() -> list[str]:
 @router.post("/recharge/ves", dependencies=[Depends(sin_transacciones_personales)])
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
     """Create a VES recharge request"""
+    # LA CARGA DE SALDO, ANTES DE CUALQUIER OTRA COSA.
+    #
+    #   La empresa no custodia dinero de terceros ni ofrece recarga. La regla
+    #   vive en `services/recarga_abierta.py`, no acá.
+    #
+    #   Ojo con no confundir esta ruta con `/enviar-reais/comprobante`: las dos
+    #   reciben una transferencia en bolívares con su comprobante, pero aquélla
+    #   paga UN ENVIO y ésta carga saldo. La primera sigue funcionando.
+    await recarga_abierta.exigir_abierta(db)
+
     amount_ves = float(request.get("amount_ves", 0))
     payment_method = request.get("payment_method", "transferencia")
 

@@ -47,6 +47,7 @@
  *       significa algo: lo que recibe, un aviso, un error.
  */
 import { useState, useEffect, useMemo, useRef } from 'react';
+import useRecarga from '../hooks/useRecarga';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -218,6 +219,9 @@ export default function Send() {
   //   Con esto apagado, `/withdraw-ves/cotizar` contesta 503. Un botón que lo
   //   llamara sería un botón que lleva a un error, así que la pantalla y el
   //   servidor leen el MISMO dato.
+  // ¿Se puede cargar saldo? Decide si el aviso de saldo insuficiente ofrece
+  // el enlace a recargar o no. Ver `hooks/useRecarga.js`.
+  const recarga = useRecarga();
   const [pagoAlFinal, setPagoAlFinal] = useState(false);
   const [cobro, setCobro] = useState(null);      // el QR, cuando se cotizó
   // EL CPF DE QUIEN PAGA. `cpf_de_la_cuenta.exigir_para_pagar` lo exige
@@ -604,8 +608,9 @@ export default function Send() {
                     <Aviso testid="monto-invalido"
                       tono={validacion.motivo === MOTIVO.SIN_SALDO ? 'info' : 'error'}>
                       {MENSAJE_DEL_MOTIVO[validacion.motivo]}
-                      {validacion.motivo === MOTIVO.SIN_SALDO
-                        || validacion.motivo === MOTIVO.EXCEDE_SALDO ? (
+                      {recarga.abierta
+                        && (validacion.motivo === MOTIVO.SIN_SALDO
+                          || validacion.motivo === MOTIVO.EXCEDE_SALDO) ? (
                           <button type="button" onClick={() => navigate('/recharge')}
                             style={{ background: 'none', border: 'none', padding: '0 0 0 4px',
                               color: C.marca, fontWeight: 700, cursor: 'pointer',
