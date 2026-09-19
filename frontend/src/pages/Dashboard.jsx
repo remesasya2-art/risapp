@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import useRecarga from '../hooks/useRecarga';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -30,6 +31,7 @@ export default function Dashboard() {
   // El estado de la vía cripto, leído de `/limits` — la misma ruta de la que
   // sale lo que el servidor hace cumplir.
   const cripto = useCripto();
+  const recarga = useRecarga();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -166,7 +168,6 @@ const normalized = { ...tx };
   // Base menu items
   const baseMenuItems = [
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
-    { icon: Wallet, label: 'Recargar', path: '/recharge' },
     { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
     { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
     { icon: Package, label: 'Enviar un paquete', path: '/envios' },
@@ -177,6 +178,12 @@ const normalized = { ...tx };
 
   // Build menu based on user role
   const menuItems = [...baseMenuItems];
+
+  // RECARGAR SE INSERTA, IGUAL QUE LIGHTNING Y POR EL MISMO MOTIVO: lo que no
+  // está no hay que acordarse de esconderlo. Va en la posición 1, donde estaba.
+  if (recarga.abierta) {
+    menuItems.splice(1, 0, { icon: Wallet, label: 'Recargar', path: '/recharge' });
+  }
 
   // BITCOIN LIGHTNING SE INSERTA, NO SE FILTRA.
   //
@@ -572,9 +579,15 @@ const normalized = { ...tx };
           ) : recentTransactions.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
               <p style={{ color: '#8E8E9A', fontSize: '14px', margin: '0 0 12px 0', textAlign: 'center' }}>No hay transacciones aún.</p>
-              <Link to="/recharge" style={{ color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
-                Recarga saldo para comenzar
-              </Link>
+              {recarga.abierta ? (
+                <Link to="/recharge" style={{ color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+                  Recarga saldo para comenzar
+                </Link>
+              ) : (
+                <Link to="/send" style={{ color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+                  Hacé tu primer envío
+                </Link>
+              )}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

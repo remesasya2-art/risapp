@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Wallet, Eye, EyeOff, Plus, ArrowUpRight, Clock, Building2, TrendingUp } from 'lucide-react';
+import useRecarga from '../../hooks/useRecarga';
 import { fmt, fmtRelative } from '../../utils/format';
 import useCountUp from '../../hooks/useCountUp';
 
@@ -25,6 +26,7 @@ export default function BalanceCard({
   updatedAt = null,
   isMobile = false,
 }) {
+  const recarga = useRecarga();
   const [hidden, setHidden] = useState(false);
   const animated = useCountUp(balance, 900);
   const accent = '#5B4FE9';
@@ -157,10 +159,15 @@ export default function BalanceCard({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            // Con la recarga cerrada queda UN botón, y una rejilla de dos
+            // columnas lo dejaría ocupando media tarjeta con un hueco al lado.
+            gridTemplateColumns: recarga.abierta ? '1fr 1fr' : '1fr',
             gap: '12px',
           }}
         >
+          {/* El botón de recargar sólo si se puede cargar saldo. Ver
+              `hooks/useRecarga.js`: la empresa no custodia dinero. */}
+          {recarga.abierta ? (
           <Link
             to="/recharge"
             data-testid="recharge-button"
@@ -177,6 +184,7 @@ export default function BalanceCard({
             <Plus size={18} strokeWidth={2.5} />
             {isMobile ? 'Recargar' : 'Recargar Saldo'}
           </Link>
+          ) : null}
           <Link
             to="/send"
             data-testid="send-button"

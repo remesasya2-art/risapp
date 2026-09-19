@@ -29,6 +29,7 @@
  *   ignorar.
  */
 import { useState, useEffect } from 'react';
+import useRecarga from '../../hooks/useRecarga';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Circle, Clock, AlertCircle, ShieldCheck, Wallet, Send, Fingerprint, X } from 'lucide-react';
 import api from '../../utils/api';
@@ -52,6 +53,7 @@ const VERIFICACION = {
 };
 
 export default function PrimerosPasos({ user, isMobile = false }) {
+  const recarga = useRecarga();
   const navigate = useNavigate();
   const [estado, setEstado] = useState(null);
   const [oculto, setOculto] = useState(leerOculto);
@@ -69,7 +71,12 @@ export default function PrimerosPasos({ user, isMobile = false }) {
   const v = VERIFICACION[estado.verificacion] || VERIFICACION.sin_enviar;
   const pasos = [
     { clave: 'verificacion', Icono: ShieldCheck, titulo: 'Verificá tu identidad', ...v, ruta: '/verification', cuenta: true },
-    { clave: 'recarga', Icono: Wallet, titulo: 'Cargá saldo', ruta: '/recharge', cuenta: true,
+    // EL PASO DE CARGAR SALDO DESAPARECE CON LA RECARGA CERRADA.
+    //
+    //   No basta con esconderle el botón: es una lista de «primeros pasos», y
+    //   un paso que no se puede dar deja la cuenta en «1 de 3» para siempre.
+    //   `.filter(Boolean)` lo saca entero, y los otros dos se renumeran solos.
+    recarga.abierta && { clave: 'recarga', Icono: Wallet, titulo: 'Cargá saldo', ruta: '/recharge', cuenta: true,
       estado: estado.recarga ? 'hecho' : 'pendiente',
       texto: estado.recarga ? 'Ya tenés saldo cargado.' : 'Por PIX, con tarjeta o con cripto.',
       boton: estado.recarga ? null : 'Recargar' },
@@ -77,7 +84,7 @@ export default function PrimerosPasos({ user, isMobile = false }) {
       estado: estado.envio ? 'hecho' : 'pendiente',
       texto: estado.envio ? 'Ya hiciste tu primer envío.' : 'A Venezuela en bolívares, o a Brasil en reales.',
       boton: estado.envio ? null : 'Enviar' },
-  ];
+  ].filter(Boolean);
   if (webauthnSupported() && !estado.huella) {
     pasos.push({ clave: 'huella', cuenta: false, Icono: Fingerprint, titulo: 'Entrá con huella la próxima vez',
       ruta: '/profile', estado: 'pendiente', texto: 'Sin contraseña, desde este dispositivo.', boton: 'Activar' });

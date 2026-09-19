@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { Toaster } from 'react-hot-toast';
 import ConfirmacionHost from './components/flujo/ConfirmacionHost';
 import PuertaCripto from './components/PuertaCripto';
+import PuertaRecarga from './components/PuertaRecarga';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
 
@@ -128,8 +129,8 @@ function AppRoutes() {
       <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
       <Route path="/send-reais" element={<ProtectedRoute><SendReais /></ProtectedRoute>} />
       <Route path="/send-crypto" element={<ProtectedRoute><PuertaCripto tipo="envio"><SendCrypto /></PuertaCripto></ProtectedRoute>} />
-      <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
-      <Route path="/recharge-ves" element={<ProtectedRoute><RechargeVES /></ProtectedRoute>} />
+      <Route path="/recharge" element={<ProtectedRoute><PuertaRecarga><Recharge /></PuertaRecarga></ProtectedRoute>} />
+      <Route path="/recharge-ves" element={<ProtectedRoute><PuertaRecarga><RechargeVES /></PuertaRecarga></ProtectedRoute>} />
       <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/referidos" element={<ProtectedRoute><Referidos /></ProtectedRoute>} />

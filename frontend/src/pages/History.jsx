@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import useRecarga from '../hooks/useRecarga';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -14,6 +15,7 @@ import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo
 
 
 export default function History() {
+  const recarga = useRecarga();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { rates } = useRate();
@@ -230,9 +232,11 @@ const normalized = { ...tx };
               {filter !== 'all' ? 'Prueba cambiando el filtro' : 'Realiza tu primera operación para verla aquí'}
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <Link to="/recharge" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#38A169', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
-                <Plus style={{ width: '18px', height: '18px' }} /> Recargar saldo
-              </Link>
+              {recarga.abierta ? (
+                <Link to="/recharge" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#38A169', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
+                  <Plus style={{ width: '18px', height: '18px' }} /> Recargar saldo
+                </Link>
+              ) : null}
               <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#5B4FE9', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
                 <ArrowUpRight style={{ width: '18px', height: '18px' }} /> Nuevo envío
               </Link>

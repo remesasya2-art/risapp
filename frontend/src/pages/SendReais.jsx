@@ -56,7 +56,7 @@ import {
 } from '../components/flujo/estilos';
 import {
   NOMBRE_DE_LA_LLAVE, PASOS, aNumero, cpfAbreviado, cpfLegible, cpfValido, formatearCpf,
-  llaveAbreviada, tipoDeLlave, ultimoPasoAlcanzable, validarMonto,
+  alcanzaElSaldo, llaveAbreviada, tipoDeLlave, ultimoPasoAlcanzable, validarMonto,
 } from '../utils/envioABrasil';
 
 /* ─── Piezas de esta pantalla ─────────────────────────────────────────────
@@ -183,7 +183,12 @@ export default function SendReais() {
 
   const saldo = user?.balance_ris || 0;
   const montoNum = aNumero(monto);
-  const problemaDelMonto = validarMonto({ monto: montoNum, saldo, limites, cupo });
+  // `pagoAlFinal` arranca en false y se prende cuando contesta `/limits`.
+  // Mientras tanto el saldo es la única vía: se frena un instante de más y se
+  // destraba solo, que es el lado barato de equivocarse.
+  const problemaDelMonto = validarMonto({ monto: montoNum, saldo, limites, cupo,
+    saldoEsLaUnicaVia: !pagoAlFinal });
+  const elSaldoAlcanza = alcanzaElSaldo({ monto: montoNum, saldo });
   const montoOk = montoNum > 0 && !problemaDelMonto;
   const alcanzable = ultimoPasoAlcanzable({ beneficiario: elegido, montoOk });
 
@@ -705,6 +710,19 @@ export default function SendReais() {
             </Aviso>
           </div>
 
+          {/* DECIRLE QUE NO LE ALCANZA, Y QUE IGUAL PUEDE PAGARLO.
+              Un botón apagado sin explicación es alguien mirando la pantalla
+              sin saber qué le falta. Y como la vía de bolívares sí funciona,
+              el aviso tiene que nombrarla. */}
+          {pagoAlFinal && !elSaldoAlcanza && montoOk ? (
+            <div style={{ marginBottom: '10px' }}>
+              <Aviso tono="info" testid="br-saldo-no-alcanza">
+                Tu saldo no cubre este envío. Pagalo en bolívares y listo: no
+                hace falta tener saldo cargado.
+              </Aviso>
+            </div>
+          ) : null}
+
           {/* DOS FORMAS DE PAGARLO. La de bolívares va primero porque no
               pide tener saldo cargado de antes; la de siempre se queda al
               lado mientras los dos flujos convivan. */}
@@ -720,8 +738,13 @@ export default function SendReais() {
 
           <div style={{ display: 'flex', gap: '10px' }}>
             {pagoAlFinal ? null : <Boton onClick={() => setPaso(2)} Icono={ArrowLeft}>Atrás</Boton>}
+            {/* EL SALDO SE PREGUNTA ACA, NO EN EL PASO DEL MONTO.
+                Apagar este botón no apaga «Pagar en bolívares», que es la vía
+                que no necesita saldo. Antes los dos miraban el mismo `montoOk`
+                y el que no tenía saldo no llegaba nunca hasta acá. */}
             <Boton tipo="exito" ancho onClick={pedirConfirmacion}
-              disabled={enviando || !montoOk} Icono={ShieldCheck} testid="br-enviar">
+              disabled={enviando || !montoOk || (pagoAlFinal && !elSaldoAlcanza)}
+              Icono={ShieldCheck} testid="br-enviar">
               {enviando ? 'Enviando…' : (pagoAlFinal ? 'Usar mi saldo' : 'Confirmar envío')}
             </Boton>
           </div>

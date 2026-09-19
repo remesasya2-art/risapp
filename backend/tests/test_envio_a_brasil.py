@@ -144,9 +144,10 @@ def test_la_llave_tampoco_se_muestra_entera():
 LIMITES = {"pix": {"min_brl": 10, "max_brl": 5000}}
 
 
-def _validar(monto, saldo=10000, cupo=None):
+def _validar(monto, saldo=10000, cupo=None, saldo_es_la_unica_via=True):
     args = json.dumps({"monto": monto, "saldo": saldo,
-                       "limites": LIMITES, "cupo": cupo})
+                       "limites": LIMITES, "cupo": cupo,
+                       "saldoEsLaUnicaVia": saldo_es_la_unica_via})
     return _js(f"m.validarMonto({args})")
 
 
@@ -190,7 +191,8 @@ def test_sin_limites_del_servidor_no_se_inventa_ninguno():
     temprano, no la protección — y frenar por no haber podido leer los límites
     sería peor: cortaría envíos válidos por una consulta caída.
     """
-    args = json.dumps({"monto": 5, "saldo": 10000, "limites": None, "cupo": None})
+    args = json.dumps({"monto": 5, "saldo": 10000, "limites": None,
+                       "cupo": None, "saldoEsLaUnicaVia": True})
     assert _js(f"m.validarMonto({args})") is None
 
 

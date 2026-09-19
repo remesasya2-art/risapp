@@ -143,7 +143,8 @@ def test_sin_tasa_no_se_convierte():
 
 
 def test_sin_tasa_no_se_puede_continuar():
-    v = js("m.validarMonto({ris: 100, saldo: 1000, tasaDisponible: false, escribioAlgo: true})")
+    v = js("m.validarMonto({ris: 100, saldo: 1000, tasaDisponible: false,"
+           " escribioAlgo: true, saldoEsLaUnicaVia: true})")
     assert v["ok"] is False
     assert v["motivo"] == "sin_tasa"
 
@@ -159,11 +160,16 @@ def test_cada_negativa_trae_su_motivo():
     """Una pantalla que sólo sabe que «no se puede» tiene que inventar el
     mensaje, y termina diciendo «saldo insuficiente» a quien no escribió nada."""
     casos = [
-        ("{ris: null, saldo: 100, tasaDisponible: true, escribioAlgo: false}", "vacio"),
-        ("{ris: 0, saldo: 100, tasaDisponible: true, escribioAlgo: true}", "no_positivo"),
-        ("{ris: -3, saldo: 100, tasaDisponible: true, escribioAlgo: true}", "no_positivo"),
-        ("{ris: 500, saldo: 100, tasaDisponible: true, escribioAlgo: true}", "excede_saldo"),
-        ("{ris: 10, saldo: 0, tasaDisponible: true, escribioAlgo: true}", "sin_saldo"),
+        ("{ris: null, saldo: 100, tasaDisponible: true, escribioAlgo: false,"
+         " saldoEsLaUnicaVia: true}", "vacio"),
+        ("{ris: 0, saldo: 100, tasaDisponible: true, escribioAlgo: true,"
+         " saldoEsLaUnicaVia: true}", "no_positivo"),
+        ("{ris: -3, saldo: 100, tasaDisponible: true, escribioAlgo: true,"
+         " saldoEsLaUnicaVia: true}", "no_positivo"),
+        ("{ris: 500, saldo: 100, tasaDisponible: true, escribioAlgo: true,"
+         " saldoEsLaUnicaVia: true}", "excede_saldo"),
+        ("{ris: 10, saldo: 0, tasaDisponible: true, escribioAlgo: true,"
+         " saldoEsLaUnicaVia: true}", "sin_saldo"),
     ]
     for entrada, esperado in casos:
         v = js(f"m.validarMonto({entrada})")
@@ -172,7 +178,8 @@ def test_cada_negativa_trae_su_motivo():
 
 
 def test_el_monto_justo_del_saldo_se_puede_enviar():
-    v = js("m.validarMonto({ris: 100, saldo: 100, tasaDisponible: true, escribioAlgo: true})")
+    v = js("m.validarMonto({ris: 100, saldo: 100, tasaDisponible: true,"
+           " escribioAlgo: true, saldoEsLaUnicaVia: true})")
     assert v["ok"] is True
 
 

@@ -98,20 +98,68 @@ export const MENSAJE_DEL_MOTIVO = {
  * Devuelve el motivo además del sí o el no. Una pantalla que sólo sabe que
  * «no se puede» tiene que inventar el mensaje, y termina diciendo «saldo
  * insuficiente» a quien todavía no escribió nada.
+ *
+ * DOS PREGUNTAS QUE ESTABAN MEZCLADAS, Y LO QUE COSTO
+ *
+ *   Esta función contestaba «¿el monto es válido?» y «¿tenés con qué pagarlo?»
+ *   de una sola vez. Mientras cargar saldo era la única forma de financiar un
+ *   envío daba igual: sin saldo no había nada que hacer, y frenar en el primer
+ *   paso le ahorraba al usuario completar cuatro pantallas para nada.
+ *
+ *   Con el flujo que cobra al final dejó de dar igual. Corriendo la aplicación
+ *   con saldo cero apareció esto: el botón «Continuar» del primer paso quedaba
+ *   apagado, y el mismo `ok` apagaba «Pagar con PIX» en el cuarto — el botón
+ *   que existe justamente para no necesitar saldo. O sea que la única forma de
+ *   enviar sin saldo era inalcanzable para quien no tenía saldo.
+ *
+ *   El servidor nunca tuvo ese problema: la ruta que cotiza no mira
+ *   `balance_ris`. El bloqueo era sólo de la pantalla.
+ *
+ * `saldoEsLaUnicaVia` NO TIENE VALOR POR OMISION, Y ES A PROPOSITO
+ *
+ *   Un valor por omisión es el que alguien se olvida de pasar en la pantalla
+ *   siguiente, y el olvido no se ve: la pantalla anda, hasta que un usuario sin
+ *   saldo se queda trabado. Es la misma lección que el `tipo` de
+ *   `PuertaCripto`, que arrancó con uno solo para tres pantallas y abrió dos
+ *   que tenían que estar cerradas.
  */
-export function validarMonto({ ris, saldo, tasaDisponible, escribioAlgo }) {
+export function validarMonto({ ris, saldo, tasaDisponible, escribioAlgo,
+                               saldoEsLaUnicaVia }) {
+  if (saldoEsLaUnicaVia === undefined) {
+    throw new Error(
+      'validarMonto necesita que le digan si el saldo es la única forma de '
+      + 'pagar. Ver el comentario de arriba: sin eso, el que no tiene saldo '
+      + 'queda trabado aunque haya otra vía prendida.');
+  }
   if (!tasaDisponible) return { ok: false, motivo: MOTIVO.SIN_TASA };
-
-  const disponible = aNumero(saldo) ?? 0;
-  if (disponible <= 0) return { ok: false, motivo: MOTIVO.SIN_SALDO };
 
   if (ris === null || ris === undefined) {
     return { ok: false, motivo: escribioAlgo ? MOTIVO.NO_POSITIVO : MOTIVO.VACIO };
   }
   if (ris <= 0) return { ok: false, motivo: MOTIVO.NO_POSITIVO };
-  if (ris > disponible) return { ok: false, motivo: MOTIVO.EXCEDE_SALDO };
+
+  // El saldo frena el primer paso SOLO si es lo único con lo que se puede
+  // pagar. Si hay otra vía, la pregunta del saldo es del último paso —al lado
+  // del botón «Usar mi saldo»—, y no de éste.
+  if (saldoEsLaUnicaVia) {
+    const disponible = aNumero(saldo) ?? 0;
+    if (disponible <= 0) return { ok: false, motivo: MOTIVO.SIN_SALDO };
+    if (ris > disponible) return { ok: false, motivo: MOTIVO.EXCEDE_SALDO };
+  }
 
   return { ok: true, motivo: null };
+}
+
+/**
+ * ¿Le alcanza el saldo para pagar este envío?
+ *
+ * La otra mitad de lo que `validarMonto` hacía junto. La usa el último paso
+ * para apagar «Usar mi saldo» sin apagar las demás formas de pagar.
+ */
+export function alcanzaElSaldo({ ris, saldo }) {
+  const disponible = aNumero(saldo) ?? 0;
+  if (ris === null || ris === undefined || ris <= 0) return false;
+  return disponible >= ris;
 }
 
 /* ─── La tasa que se movió mientras el usuario decidía ─────────────────── */
