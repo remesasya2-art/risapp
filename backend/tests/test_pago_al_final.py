@@ -826,3 +826,64 @@ def test_las_dos_acciones_estan_declaradas_en_el_libro():
     from services import auditoria
     assert "envio_brl.verificado" in auditoria.ACCIONES
     assert "envio_brl.rechazado" in auditoria.ACCIONES
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 10. La pantalla del corredor inverso no promete lo que nadie comprobó
+# ══════════════════════════════════════════════════════════════════════════
+
+_SENDREAIS = _REPO / "frontend" / "src" / "pages" / "SendReais.jsx"
+
+
+def test_la_pantalla_de_brasil_lee_el_estado_del_flujo():
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    assert "r.data?.pago_al_final" in jsx
+    assert "{pagoAlFinal ? (" in jsx, (
+        "el botón de pagar en bolívares no está condicionado al estado")
+
+
+def test_los_dos_flujos_conviven_en_la_pantalla_de_brasil():
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    assert "'/enviar-reais/cotizar'" in jsx
+    assert "'/reais/send'" in jsx, (
+        "se perdió el envío con saldo: los dos flujos tienen que convivir")
+
+
+def test_LA_PANTALLA_NO_DICE_LISTO_CUANDO_FALTA_VERIFICAR():
+    """El error caro de esta pantalla.
+
+    Pagando con saldo, el envío está cobrado y sólo falta despacharlo.
+    Pagando en bolívares, NADIE sabe todavía si la plata entró: alguien tiene
+    que abrir el comprobante. Decirle «envío registrado» a quien está en el
+    segundo caso es prometerle algo que no comprobó nadie, y el día que el
+    comprobante se rechace va a decir —con razón— que la aplicación le dijo
+    que estaba hecho.
+    """
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    assert "hecho.revisando ? 'Recibimos tu comprobante' : 'Envío registrado'" in jsx, (
+        "la pantalla de cerrado dejó de distinguir entre «cobrado» y "
+        "«esperando que lo verifiquemos»")
+
+
+def test_la_pantalla_del_comprobante_no_tiene_boton_de_ya_pague():
+    """Subir el comprobante ES decir que pagó. Un botón aparte de «ya pagué»
+    sería una forma de avanzar la orden sin adjuntar nada que mirar."""
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    i = jsx.index('data-testid="br-comprobante"')
+    bloque = jsx[i:i + 4000]
+    for prohibido in ("ya pagué", "ya pague", "Ya pagué", "marcar-pagado"):
+        assert prohibido not in bloque
+
+
+def test_la_pantalla_muestra_los_montos_DEL_SERVIDOR():
+    """La pantalla convierte a bolívares con la tasa que tiene a mano sólo
+    para pedir la cotización. Lo que muestra después son los montos que
+    devolvió el servidor: si difieren, gana el servidor."""
+    jsx = _SENDREAIS.read_text(encoding="utf-8")
+    i = jsx.index('data-testid="br-comprobante"')
+    bloque = jsx[i:i + 4000]
+    assert "cotizacion.amount_ves" in bloque
+    assert "cotizacion.amount_brl" in bloque
+    assert "montoNum" not in bloque, (
+        "la pantalla del comprobante muestra su propio cálculo en vez del "
+        "que devolvió el servidor")
