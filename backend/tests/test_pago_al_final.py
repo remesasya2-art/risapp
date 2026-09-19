@@ -391,12 +391,33 @@ def test_la_ruta_valida_TODO_antes_de_pedirle_el_cobro_a_mercado_pago():
 def test_sin_codigo_de_cobro_NO_se_guarda_nada():
     """La lección ya está escrita en `routes/gestor_pix.py`: un cobro sin
     código guardado deja al cliente mirando una pantalla que no se puede
-    pagar, y una fila muerta en la base."""
+    pagar, y una fila muerta en la base.
+
+    LA GUARDA AHORA PREGUNTA SI SE PIDIO UN CODIGO, y no si lo hay.
+
+        Desde que el envío se puede pagar con tarjeta, hay un caso en que NO
+        tener código es lo correcto: con tarjeta no se le pide ninguno a
+        Mercado Pago, a propósito, porque un código vivo al lado de una
+        tarjeta es el cliente pagando dos veces
+        (`services/tarjeta_del_envio.py`).
+
+        Lo que este test protege no cambió: cuando SI se pidió uno y no vino,
+        no se guarda nada.
+    """
     cuerpo = _cuerpo_de_la_ruta()
-    sin_qr = cuerpo.index("if not qr:")
+    sin_qr = cuerpo.index("and not qr:")
     inserta = cuerpo.index("db.transactions.insert_one")
     assert sin_qr < inserta, (
         "la orden se guarda antes de comprobar que hay código de cobro")
+
+    # Y la guarda sigue midiendo lo que tiene que medir: que falte el código
+    # cuando se pidió uno. Sin la condición del método, la cotización con
+    # tarjeta —que nunca tiene código— fallaría siempre.
+    linea = cuerpo[cuerpo.rindex("\n", 0, sin_qr) + 1:
+                   cuerpo.index(":", sin_qr) + 1]
+    assert "POR_PIX" in linea, (
+        "la guarda del código dejó de mirar el método: con tarjeta no se pide "
+        "ninguno, así que cotizar con tarjeta va a fallar siempre.")
 
 
 def test_EL_TOPE_DE_PIX_SE_MIDE_SOBRE_LO_QUE_SE_COBRA(base):

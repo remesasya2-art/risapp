@@ -346,3 +346,246 @@ async def process_card_payment(
         "total_charged_brl": total_brl_charged,
         "fee_brl": fee_brl,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La tarjeta pagando UN ENVIO, que no es lo mismo que cargar saldo
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Todo lo de arriba carga saldo, y por eso está cerrado: la empresa no custodia
+# dinero de terceros. Esto no carga nada — la plata entra y sale en la misma
+# operación, igual que el PIX que cobra al final—, así que NO lleva la guarda
+# de `recarga_abierta`, y hay un test que exige que no la lleve.
+#
+# El por qué de cada regla está en `services/tarjeta_del_envio.py`. Acá sólo se
+# aplican, en el orden en que le salen más barato al usuario: primero lo que se
+# puede saber sin cobrarle nada.
+
+class PagarEnvioConTarjetaInput(BaseModel):
+    payment_order_id: str
+    token: str
+    payment_method_id: str
+    payment_type_id: str = Field(default="credit_card",
+                                 description="credit_card | debit_card")
+    payer_email: EmailStr
+    identification: PayerIdentification
+    issuer_id: Optional[str] = None
+
+
+class PagoDeEnvioConTarjeta(BaseModel):
+    """Lo que la pantalla necesita saber, y NADA MAS.
+
+    Por lista de lo permitido, como todo lo que ve el usuario: una lista de lo
+    prohibido deja pasar cada campo nuevo hasta que alguien se acuerde. Acá lo
+    que no puede salir es la respuesta cruda de Mercado Pago, que trae los
+    datos del pagador y el detalle interno del emisor.
+    """
+    status: Optional[str] = None
+    status_detail: str = ""
+    payment_id: str = ""
+    envio_pagado: bool = False
+    transaction_id: Optional[str] = None
+    total_charged_brl: float = 0.0
+    fee_brl: float = 0.0
+
+
+@router.post("/envio", response_model=PagoDeEnvioConTarjeta,
+             dependencies=[Depends(sin_transacciones_personales)])
+async def pagar_envio_con_tarjeta(
+    body: PagarEnvioConTarjetaInput,
+    current_user: User = Depends(get_current_user),
+):
+    """Cobra con tarjeta un envío ya cotizado y lo hace avanzar si aprueba."""
+    from services import pago_al_final, tarjeta_del_envio
+    from services.money import to_decimal
+
+    if body.payment_type_id not in ("credit_card", "debit_card"):
+        raise HTTPException(status_code=400, detail="Tipo de tarjeta inválido")
+
+    # 1) VERIFICADO. La cotización ya lo comprobó; se repite porque una guarda
+    #    que vive en otra ruta es una guarda hasta que alguien reordena las
+    #    rutas. El motivo —el contracargo a ciento veinte días— está en
+    #    `services/tarjeta_del_envio.py`.
+    if current_user.verification_status != "verified":
+        raise HTTPException(status_code=403,
+                            detail=tarjeta_del_envio.SIN_VERIFICAR)
+
+    # 2) El cobro tiene que ser de esta persona y de un envío.
+    pago = await db.gestor_pix_payments.find_one({
+        "payment_id": body.payment_order_id,
+        "gestor_id": current_user.user_id,
+        "proposito": pago_al_final.PROPOSITO,
+    })
+    if not pago:
+        raise HTTPException(status_code=404, detail="No encontramos ese envío")
+
+    # 3) LA GUARDA DEL DOBLE COBRO, y es la razón de ser de este bloque.
+    #
+    #    Una orden cotizada para PIX tiene un código vivo que alguien puede
+    #    pagar. Cobrarla ADEMAS con tarjeta le saca la plata dos veces, y sólo
+    #    una avanza el envío: `pago_al_final.confirmar` es atómico sobre la
+    #    orden, pero eso protege la ORDEN, no la billetera del cliente.
+    #
+    #    Son dos preguntas y no una, y no se tapan: la primera mira lo que se
+    #    PIDIO, la segunda lo que QUEDO. Si una orden de tarjeta terminara con
+    #    un QR guardado —una cotización cambiada, una migración a medias— la
+    #    primera la dejaría pasar. Cada una tiene su test.
+    if not tarjeta_del_envio.es_de_tarjeta(pago):
+        raise HTTPException(status_code=409,
+                            detail=tarjeta_del_envio.NO_ES_DE_TARJETA)
+    if tarjeta_del_envio.tiene_qr(pago):
+        logger.error(
+            "El envío %s dice ser de tarjeta y tiene un QR guardado: se "
+            "rechaza el cobro para no cobrarle dos veces a %s.",
+            body.payment_order_id, current_user.user_id)
+        raise HTTPException(status_code=409,
+                            detail=tarjeta_del_envio.NO_ES_DE_TARJETA)
+
+    # 4) La orden, esperando el pago y sin vencer. Se mira la orden y no el
+    #    cobro porque la orden es la que manda: es la que `confirmar` avanza.
+    orden = await db.transactions.find_one({
+        "payment_order_id": body.payment_order_id,
+        "user_id": current_user.user_id,
+    })
+    if not orden:
+        raise HTTPException(status_code=404, detail="No encontramos ese envío")
+    if orden.get("status") != pago_al_final.ESPERANDO_PAGO:
+        raise HTTPException(
+            status_code=409,
+            detail="Este envío ya no está esperando el pago. Miralo en tu "
+                   "historial.")
+    _vence = orden.get("payment_expires_at")
+    if _vence:
+        if _vence.tzinfo is None:
+            _vence = _vence.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= _vence:
+            raise HTTPException(
+                status_code=409,
+                detail="Se venció el tiempo para pagar este envío. Cotizalo de "
+                       "nuevo para ver el monto de ahora.")
+
+    # 5) Cuánto se le cobra. Sale del monto guardado en la orden, no de nada
+    #    que mande la pantalla: el cliente no elige cuánto pagar.
+    tarifas = await _get_card_fees()
+    desglose = tarjeta_del_envio.cuanto_se_le_cobra(
+        to_decimal(orden.get("payment_amount_brl") or 0),
+        body.payment_type_id, tarifas)
+    total_brl = to_float(desglose["total_brl"])
+    fee_brl = to_float(desglose["comision_brl"])
+    if total_brl <= 0:
+        raise HTTPException(status_code=400, detail="Monto inválido")
+
+    access_token = os.environ.get("MERCADOPAGO_ACCESS_TOKEN")
+    if not access_token:
+        raise HTTPException(status_code=500, detail="MP no configurado")
+
+    # 6) El cobro. Misma mecánica que la recarga con tarjeta, incluida la
+    #    clave de idempotencia que evita que un reintento de red cobre dos.
+    idempotency_key = str(uuid.uuid4())
+    payload = {
+        "transaction_amount": total_brl,
+        "token": body.token,
+        "description": f"Envio {orden.get('display_id') or ''}".strip(),
+        "installments": 1,
+        "payment_method_id": body.payment_method_id,
+        "payer": {
+            "email": body.payer_email,
+            "identification": {"type": body.identification.type,
+                               "number": body.identification.number},
+        },
+        "capture": True,
+        "binary_mode": True,
+        "metadata": {
+            "user_id": current_user.user_id,
+            "origin": "card_envio",
+            "payment_order_id": body.payment_order_id,
+            "transaction_id": orden.get("transaction_id"),
+            "fee_brl": fee_brl,
+        },
+        "external_reference": body.payment_order_id,
+    }
+    if body.issuer_id:
+        payload["issuer_id"] = body.issuer_id
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            mp_resp = await client.post(
+                f"{MP_API_BASE}/v1/payments", json=payload,
+                headers={"Authorization": f"Bearer {access_token}",
+                         "Content-Type": "application/json",
+                         "X-Idempotency-Key": idempotency_key})
+    except httpx.HTTPError as exc:
+        logger.error("MP no contestó al cobrar el envío %s: %s",
+                     body.payment_order_id, exc)
+        raise HTTPException(status_code=502,
+                            detail="Error conectando con Mercado Pago")
+
+    try:
+        mp_data = mp_resp.json()
+    except Exception:
+        mp_data = {}
+
+    if mp_resp.status_code >= 400:
+        logger.error("MP rechazó el cobro del envío %s (%s): %s",
+                     body.payment_order_id, mp_resp.status_code, mp_data)
+        raise HTTPException(
+            status_code=400,
+            detail=mp_data.get("message") or "Error procesando el pago")
+
+    payment_id = str(mp_data.get("id") or "")
+    status_mp = mp_data.get("status")
+    status_detail = mp_data.get("status_detail", "")
+
+    # 7) Queda escrito el intento, aprobado o no. Un rechazo que no deja
+    #    rastro es un cliente diciendo «me lo rechazaron» y nadie pudiendo
+    #    mirar por qué.
+    await db.card_payments.insert_one({
+        "payment_id": payment_id,
+        "user_id": current_user.user_id,
+        "proposito": pago_al_final.PROPOSITO,
+        "payment_order_id": body.payment_order_id,
+        "transaction_id": orden.get("transaction_id"),
+        "amount_brl_net": to_float(desglose["envio_brl"]),
+        "fee_brl": fee_brl,
+        "total_charged_brl": total_brl,
+        "payment_method_id": body.payment_method_id,
+        "payment_type_id": body.payment_type_id,
+        "status": status_mp,
+        "status_detail": status_detail,
+        "mp_response": mp_data,
+        "idempotency_key": idempotency_key,
+        "created_at": datetime.now(timezone.utc),
+    })
+
+    # 8) Aprobado: avanza el envío. NO se acredita saldo — ésa es la
+    #    diferencia entera con la recarga de arriba, y es lo que hace que esto
+    #    no sea custodiar plata de nadie.
+    #
+    #    `pago_al_final.confirmar` es el MISMO camino que usa el PIX: un solo
+    #    `find_one_and_update` con el estado en el filtro. Reusarlo es lo que
+    #    hace que las dos vías no puedan divergir.
+    avanzo = False
+    if status_mp == "approved" and payment_id:
+        avanzo = await pago_al_final.confirmar(
+            db, {"payment_id": body.payment_order_id})
+        if avanzo:
+            try:
+                await _credit_mp_bank_card(
+                    payment_id=payment_id,
+                    client_name=current_user.name or "Cliente",
+                    amount_brl_net=to_float(desglose["envio_brl"]))
+                await _register_card_fee(payment_id=payment_id,
+                                         fee_brl=fee_brl, gross_brl=total_brl)
+            except Exception as exc:
+                logger.warning("El envío %s avanzó pero la contabilidad de la "
+                               "tarjeta falló: %s", body.payment_order_id, exc)
+
+    return {
+        "status": status_mp,
+        "status_detail": status_detail,
+        "payment_id": payment_id,
+        "envio_pagado": avanzo,
+        "transaction_id": orden.get("transaction_id"),
+        "total_charged_brl": total_brl,
+        "fee_brl": fee_brl,
+    }

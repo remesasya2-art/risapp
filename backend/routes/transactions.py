@@ -1807,6 +1807,16 @@ class CotizarEnvioVesRequest(BaseModel):
     beneficiary_id: str
     client_cpf: Optional[str] = None   # el CPF de quien paga el PIX
     idempotency_key: Optional[str] = None
+    # CON QUE SE VA A PAGAR, Y POR QUE SE DECIDE ACA Y NO DESPUES.
+    #
+    #   Con «tarjeta» no se genera ningún QR. Si se generara, la orden quedaría
+    #   pagable por las dos vías y el cliente podría pagarla dos veces: sólo
+    #   una avanzaría el envío, y para entonces ya le sacaron la plata dos
+    #   veces. Está contado en `services/tarjeta_del_envio.py`.
+    #
+    #   Si no lo mandan, PIX: es lo que había antes de este campo, y un cliente
+    #   viejo tiene que seguir recibiendo su código.
+    metodo: Optional[str] = None
 
 
 @router.post("/withdraw-ves/cotizar",
@@ -1822,10 +1832,28 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
         antes de pedirle el cobro a Mercado Pago, para que un rechazo no deje
         un QR huérfano que alguien puede pagar sin que exista el envío.
     """
-    from services import cpf_de_la_cuenta, pago_al_final
+    from services import cpf_de_la_cuenta, pago_al_final, tarjeta_del_envio
     from services.notifications import create_notification
 
     pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+
+    metodo = tarjeta_del_envio.normalizar_metodo(request.metodo)
+
+    # CON TARJETA, SOLO VERIFICADOS, Y SE COMPRUEBA ACA.
+    #
+    #   Un contracargo se puede pedir hasta ciento veinte días después del
+    #   cobro, cosa que con PIX no pasa. Si para entonces el envío ya salió,
+    #   la pérdida es de la empresa, así que la plata tiene que estar atada a
+    #   una persona identificada.
+    #
+    #   Va acá, antes de crear nada, y no al cobrar: rechazarlo recién en el
+    #   formulario de la tarjeta es dejarlo completar todo para nada. La ruta
+    #   que cobra lo comprueba igual, porque una guarda que vive en otra ruta
+    #   es una guarda hasta que alguien reordena las rutas.
+    if (metodo == tarjeta_del_envio.POR_TARJETA
+            and current_user.verification_status != "verified"):
+        raise HTTPException(status_code=403,
+                            detail=tarjeta_del_envio.SIN_VERIFICAR)
 
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
@@ -2000,7 +2028,10 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
     qr = ""
     qr_b64 = ""
     mp_id = None
-    if MP_AVAILABLE and mercadopago_service:
+    # CON TARJETA NO SE PIDE NINGUN QR. Ver el comentario del campo `metodo`:
+    # un QR vivo al lado de una tarjeta es el doble cobro.
+    if (metodo == tarjeta_del_envio.POR_PIX
+            and MP_AVAILABLE and mercadopago_service):
         try:
             _nombre = (_usuario or {}).get("name") or "Cliente"
             _partes = _nombre.split()
@@ -2021,7 +2052,8 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
             logger.error("cotizar_envio_ves: Mercado Pago falló para %s: %s",
                          referencia, e)
 
-    if not qr:
+    # El código que falta sólo es un problema cuando se pidió uno.
+    if metodo == tarjeta_del_envio.POR_PIX and not qr:
         await _devolver_el_bono()
         logger.error("COBRO SIN CODIGO para el envío %s: no se guarda nada.",
                      referencia)
@@ -2043,6 +2075,9 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
             "mp_payment_id": mp_id,
             "gestor_id": current_user.user_id,
             "proposito": pago_al_final.PROPOSITO,
+            # Con qué se cotizó. Es lo que mira `tarjeta_del_envio.es_de_tarjeta`
+            # para no dejar que una orden de PIX se cobre además con tarjeta.
+            "metodo": metodo,
             "transaction_id": tx_id,
             "amount_ris": _cobro_float,
             "amount_brl": _cobro_float,
@@ -2086,7 +2121,34 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
         "copy_paste_code": qr,
         "expires_at": vence.isoformat(),
         "expires_in_seconds": pago_al_final.MINUTOS_DEL_COBRO * 60,
+        "metodo": metodo,
     }
+
+    # EL DESGLOSE DE LA TARJETA LO CALCULA EL SERVIDOR, Y SOLO EL SERVIDOR.
+    #
+    #   La pantalla podría sacar la cuenta sola: `/payments/card/config` le
+    #   publica las tarifas. Pero entonces habría dos implementaciones de la
+    #   misma fórmula, y el día que una cambie el cliente vería un número y se
+    #   le cobraría otro. Acá sale UNA vez, del mismo lugar del que sale lo que
+    #   se le va a cobrar de verdad.
+    #
+    #   Van las tres cifras y no sólo el total: quien ve «R$ 104,89» sin saber
+    #   de dónde salen los 4,89 se cree que le están cobrando de más.
+    if metodo == tarjeta_del_envio.POR_TARJETA:
+        # LA REFERENCIA DEL COBRO, que con PIX no hacía falta devolver porque
+        # el código ya lo identifica. Con tarjeta es lo único que ata el
+        # formulario de la tarjeta a esta orden, así que sin esto la vía no
+        # funciona. Conocerla no alcanza para pagar el envío de otro: la ruta
+        # que cobra filtra también por el dueño.
+        _resp["payment_order_id"] = referencia
+
+        from routes.payments_card import _get_card_fees
+        _tarifas = await _get_card_fees()
+        for _tipo in ("credit_card", "debit_card"):
+            _d = tarjeta_del_envio.cuanto_se_le_cobra(
+                _a_cobrar, _tipo, _tarifas)
+            _resp[_tipo] = {k: to_float(v) for k, v in _d.items()}
+
     await store_idempotency_result(current_user.user_id, "cotizar_ves",
                                    request.idempotency_key, _resp)
     return _resp
