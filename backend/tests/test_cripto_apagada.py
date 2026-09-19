@@ -162,11 +162,47 @@ def test_exigir_deposito_frena_con_503_y_no_con_403(base):
 
 
 def test_exigir_deposito_le_dice_por_donde_si(base):
-    """El mensaje no puede ser sólo «no disponible». La vía que sí funciona es
-    PIX, y decirlo es la diferencia entre un usuario que sigue y uno que se va."""
+    """El mensaje no puede ser sólo «no disponible»: decir qué SI se puede es
+    la diferencia entre un usuario que sigue y uno que se va.
+
+    CUAL ES LA VIA YA NO SE ESCRIBE ACA.
+
+        Este test exigía la palabra «PIX», porque la frase estaba escrita fija
+        y decía «podés recargar tu saldo con PIX». Esa frase quedó mintiendo
+        el día que la carga de saldo se pudo cerrar.
+
+        Ahora la salida la calcula `services/la_via_que_funciona.py` mirando la
+        configuración, así que lo que se comprueba es que el mensaje NOMBRE
+        una salida — no cuál, que depende de lo que esté prendido.
+    """
     with pytest.raises(HTTPException) as e:
         corre(ca.exigir_deposito(base))
-    assert "PIX" in e.value.detail
+    assert "no están disponibles" in e.value.detail
+    assert "Podés" in e.value.detail, (
+        "el mensaje quedó en «no disponible» sin decir qué hacer")
+
+
+def test_CON_LA_CARGA_CERRADA_LA_CRIPTO_NO_MANDA_A_RECARGAR(base):
+    """El otro texto que quedó mintiendo, por el mismo motivo y a la vez."""
+    from services import pago_al_final, recarga_abierta
+    from services import configuracion as cfg
+
+    async def poner_ajuste(clave, valor):
+        normalizado, error = cfg.normalizar(clave, valor)
+        assert error is None
+        await cfg.escribir(base, clave, normalizado)
+
+    # En este orden, que es el que el panel obliga.
+    corre(poner_ajuste(pago_al_final.CLAVE, 1))
+    corre(poner_ajuste(recarga_abierta.CLAVE, recarga_abierta.CERRADA))
+
+    with pytest.raises(HTTPException) as e:
+        corre(ca.exigir_deposito(base))
+    assert "recarg" not in e.value.detail.lower(), (
+        f"con la carga de saldo cerrada, la vía cripto sigue mandando a "
+        f"recargar: «{e.value.detail}»")
+    assert "al final" in e.value.detail, (
+        "tenía que ofrecer el pago al final, que es la vía que quedó abierta")
 
 
 def test_exigir_envio_NO_frena_en_el_estado_de_fabrica(base):
