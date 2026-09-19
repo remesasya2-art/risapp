@@ -135,7 +135,8 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     sin que nadie mire es cómo se cuelan campos que ninguna pantalla lee.
     """
     p = corre(limits.limits_payload(base))
-    assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar", "cripto"}, p
+    assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar", "cripto",
+                      "pago_al_final"}, p
     assert set(p["pix"]) == {"min_brl", "max_brl"}
     assert set(p["tarjeta"]) == {"min_brl", "max_brl"}
     assert set(p["ves"]) == {"min_ves", "max_ves"}
@@ -143,6 +144,9 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     # `estado` viaja además de las tres respuestas resueltas: es lo que el
     # panel muestra y lo que hace falta para entender un registro viejo.
     assert set(p["cripto"]) == {"estado", "deposito", "envio", "visible"}
+    # Un booleano pelado y no un objeto: acá no hay tres estados que resolver,
+    # es «se ofrece o no se ofrece».
+    assert isinstance(p["pago_al_final"], bool)
 
 
 @pytest.mark.parametrize("campo", ["min_brl", "max_brl"])

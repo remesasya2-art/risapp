@@ -775,11 +775,31 @@ async def mercadopago_webhook(request: Request):
         
         # Only credit if MP confirms "approved" status
         if mp_status.get("status") == "approved":
-            # Process the confirmation - credit user's balance
-            success = await process_pix_confirmation(
-                payment["payment_id"],
-                payment["gestor_id"]
-            )
+            # ── DOS PROPOSITOS, UN SOLO RECEPTOR ─────────────────────────
+            #
+            # Un cobro de este sistema puede ser una RECARGA —sube el saldo,
+            # como siempre— o el pago de un ENVIO cotizado, del flujo que
+            # cobra al final. Se distinguen por el campo `proposito`, que la
+            # ruta que crea el cobro deja puesto.
+            #
+            # LA RAMA VA ACA Y NO EN UN RECEPTOR NUEVO, y es lo importante de
+            # este bloque: todo lo de arriba —firma HMAC, ventana de frescura,
+            # búsqueda del pago, reverificación contra la API de Mercado Pago
+            # y control de que el monto cobrado sea el esperado— vale igual
+            # para los dos. Un receptor aparte tendría que repetirlo, y la
+            # segunda copia de un control de seguridad es la que sale mal.
+            #
+            # `pago_al_final.confirmar` NO vuelve a comprobar nada de eso: lo
+            # da por hecho porque ya pasó, acá arriba.
+            from services import pago_al_final
+            if payment.get("proposito") == pago_al_final.PROPOSITO:
+                success = await pago_al_final.confirmar(db, payment)
+            else:
+                # Process the confirmation - credit user's balance
+                success = await process_pix_confirmation(
+                    payment["payment_id"],
+                    payment["gestor_id"]
+                )
             
             if success:
                 logger.info(f"Webhook processed successfully: payment {mp_payment_id} approved and credited")

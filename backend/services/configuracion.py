@@ -348,6 +348,28 @@ AJUSTES = {
     #   Las lecturas tampoco se cierran. La historia de lo ya operado tiene que
     #   seguir visible para conciliar y para el libro mayor; esconder la
     #   contabilidad no es apagar una vía, es perderla de vista.
+    # ── El flujo de pago ──────────────────────────────────────────────────
+    #
+    # POR QUE DE FABRICA ESTA APAGADO, AL REVES QUE EL DE LA CRIPTO
+    #
+    #   Aquél apagaba una exposición legal y tenía que actuar el día del
+    #   despliegue. Este PRENDE un camino nuevo para el dinero, y un camino
+    #   nuevo para el dinero no se estrena solo porque alguien fusionó.
+    #
+    #   En 0 no cambia absolutamente nada: el cliente recarga y gasta, como
+    #   siempre. En 1 se le ofrece además cotizar y pagar al final. Los dos
+    #   conviven: prenderlo no apaga el viejo.
+    "pago_al_final": Ajuste(
+        tipo=ENTERO, defecto=0, minimo=0, maximo=1,
+        unidad="0 = recargar y gastar, 1 = también pagar al final",
+        etiqueta="Pagar el envío al final, sin cargar saldo antes",
+        ayuda="En 0 (fábrica) todo sigue igual: para enviar hay que tener "
+              "saldo cargado. En 1 el cliente puede además cotizar el envío, "
+              "elegir el beneficiario y recién entonces pagarlo con PIX, sin "
+              "saldo en el medio. La tasa que se le muestra al cotizar se le "
+              "respeta durante los 7 minutos que dura el cobro, así que un "
+              "movimiento de tasa en esa ventana lo absorbe la empresa."),
+
     "cripto_abierta": Ajuste(
         tipo=ENTERO, defecto=1, minimo=0, maximo=2,
         unidad="0 = cerrada, 1 = sólo salida, 2 = abierta",

@@ -56,6 +56,7 @@ import {
   CheckCircle2, Info, Plus, RefreshCw, Search, ShieldCheck, Smartphone, User, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import PinConfirm from '../components/PinConfirm';
@@ -212,6 +213,19 @@ export default function Send() {
   const { rates, tasaDisponible, lastUpdated, refreshRates } = useRate();
 
   const [step, setStep] = useState(1);
+  // EL FLUJO DE PAGO, LEIDO DE `/limits`.
+  //
+  //   Con esto apagado, `/withdraw-ves/cotizar` contesta 503. Un botón que lo
+  //   llamara sería un botón que lleva a un error, así que la pantalla y el
+  //   servidor leen el MISMO dato.
+  const [pagoAlFinal, setPagoAlFinal] = useState(false);
+  const [cobro, setCobro] = useState(null);      // el QR, cuando se cotizó
+  // EL CPF DE QUIEN PAGA. `cpf_de_la_cuenta.exigir_para_pagar` lo exige
+  // SIEMPRE, incluso cuando la cuenta ya tiene uno atado: primero valida el
+  // declarado y después lo compara. Así que se manda siempre, y sólo se le
+  // pide a quien todavía no tiene ninguno —las cuentas de antes de que el
+  // registro lo pidiera—. Mismo criterio y mismos ayudantes que `Recharge`.
+  const [cpfPago, setCpfPago] = useState('');
   const [loading, setLoading] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const idemRef = useRef(null);
@@ -364,6 +378,58 @@ export default function Send() {
       return toast.error('Revisá los datos del envío');
     }
     return setShowPin(true);
+  };
+
+  const cpfDeLaCuenta = user?.cpf_number?.replace(/\D/g, '') || '';
+  const yaTieneCpf = cpfDeLaCuenta.length === 11;
+  const cpfEfectivo = yaTieneCpf ? formatearCpf(cpfDeLaCuenta) : cpfPago;
+
+  // DERIVADO, NO COPIADO A UN ESTADO CON UN EFECTO.
+  //
+  //   La primera versión prellenaba `cpfPago` desde un `useEffect`, y el lint
+  //   del proyecto lo rechaza con razón: copiar una propiedad a un estado es
+  //   tener el mismo dato en dos lugares, y el día que el de arriba cambie, el
+  //   de abajo se queda viejo. Si la cuenta ya tiene CPF, ése manda siempre.
+  useEffect(() => {
+    let vigente = true;
+    api.get('/limits')
+      .then((r) => { if (vigente) setPagoAlFinal(Boolean(r.data?.pago_al_final)); })
+      .catch(() => { if (vigente) setPagoAlFinal(false); });
+    return () => { vigente = false; };
+  }, []);
+
+  // Cotizar y pagar al final: la orden nace esperando el pago y el cliente
+  // paga ESE envío. No toca el saldo.
+  const cotizarYPagar = async () => {
+    if (!validacion.ok || !selectedBeneficiary || !paymentType) {
+      return toast.error('Revisá los datos del envío');
+    }
+    // Se comprueba ACA y no sólo en el servidor. El servidor igual lo
+    // rechaza; la diferencia es que acá se dice antes de que la persona
+    // apriete y espere.
+    const faltaCpf = queLeFaltaAlCpf(cpfEfectivo);
+    if (faltaCpf) return toast.error(faltaCpf);
+    if (!idemRef.current) {
+      idemRef.current = window.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+    setLoading(true);
+    try {
+      const r = await api.post('/withdraw-ves/cotizar', {
+        amount: ris,
+        beneficiary_id: selectedBeneficiary.beneficiary_id,
+        client_cpf: normalizarCpf(cpfEfectivo),
+        idempotency_key: idemRef.current,
+      });
+      idemRef.current = null;
+      setCobro(r.data);
+      setStep(5);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'No se pudo generar el cobro');
+    } finally {
+      setLoading(false);
+    }
+    return undefined;
   };
 
   const handleSend = async () => {
@@ -724,7 +790,11 @@ export default function Send() {
               <div className="env-dos" style={{ display: 'grid', gap: '16px',
                 gridTemplateColumns: '1fr 1fr' }}>
                 <div>
-                  <p style={microEtiqueta}>Se descuenta de tu saldo</p>
+                  {/* Con los dos flujos prendidos, «se descuenta de tu saldo»
+                      es verdad para uno solo: pagando con PIX no se toca el
+                      saldo. Una etiqueta que sólo vale para la mitad de los
+                      botones de abajo es una etiqueta que engaña. */}
+                  <p style={microEtiqueta}>{pagoAlFinal ? 'Enviás' : 'Se descuenta de tu saldo'}</p>
                   <p style={{ margin: '5px 0 0 0', fontSize: '24px', fontWeight: 700,
                     color: C.tinta }}>
                     {fmt(ris)} <span style={{ fontSize: '13px', color: C.tenue }}>RIS</span>
@@ -788,20 +858,128 @@ export default function Send() {
 
             <div style={{ marginBottom: '18px' }}>
               <Aviso>
-                El envío queda registrado al confirmar y se procesa en breve. Vas
-                a poder seguirlo desde tu historial.
+                {pagoAlFinal
+                  ? ('Con PIX pagás ahora y no se toca tu saldo. Con «Usar mi '
+                     + 'saldo» se descuentan los RIS de arriba. En los dos '
+                     + 'casos lo seguís desde tu historial.')
+                  : ('El envío queda registrado al confirmar y se procesa en '
+                     + 'breve. Vas a poder seguirlo desde tu historial.')}
               </Aviso>
             </div>
 
+            {/* EL CPF, SOLO A QUIEN NO TIENE UNO ATADO.
+                Las cuentas nuevas lo dan al registrarse, así que la mayoría no
+                ve este campo. Las de antes de que el registro lo pidiera lo
+                atan acá, en su primer pago, y de ahí en adelante rige — la
+                misma regla y la misma función que la recarga. */}
+            {pagoAlFinal && !yaTieneCpf ? (
+              <div style={{ marginBottom: '16px' }}>
+                <label htmlFor="cpf-pago" style={{ display: 'block', fontSize: '13px',
+                  fontWeight: 600, color: C.tinta, marginBottom: '6px' }}>
+                  Tu CPF, para pagar con PIX
+                </label>
+                <input id="cpf-pago" data-testid="cpf-pago" inputMode="numeric"
+                  value={cpfPago} placeholder="000.000.000-00"
+                  onChange={(e) => setCpfPago(formatearCpf(e.target.value))}
+                  style={{ width: '100%', padding: '11px 12px', fontSize: '14px',
+                    borderRadius: '10px', border: `1px solid ${C.linea}`,
+                    background: '#fff', color: C.tinta, boxSizing: 'border-box' }} />
+                <p style={{ fontSize: '12.5px', color: C.suave, margin: '6px 0 0 0' }}>
+                  Tiene que ser el tuyo: el pago lo hacés vos, no un tercero.
+                </p>
+              </div>
+            ) : null}
+
+            {/* DOS FORMAS DE PAGARLO, Y LA DE PIX VA PRIMERO.
+                Con el flujo nuevo prendido, pagar el envío con PIX no pide
+                tener saldo cargado de antes. La de siempre —gastar el saldo—
+                se queda al lado mientras los dos convivan: quien ya tiene
+                saldo no tiene por qué recargar de nuevo. */}
+            {pagoAlFinal ? (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                <Boton onClick={() => setStep(3)}>Atrás</Boton>
+                <Boton tipo="primario" ancho onClick={cotizarYPagar}
+                  disabled={loading || !validacion.ok} testid="pagar-con-pix">
+                  {loading ? 'Generando el cobro…' : 'Pagar con PIX'}
+                </Boton>
+              </div>
+            ) : null}
+
             <div style={{ display: 'flex', gap: '10px' }}>
-              <Boton onClick={() => setStep(3)}>Atrás</Boton>
+              {pagoAlFinal ? null : <Boton onClick={() => setStep(3)}>Atrás</Boton>}
               <Boton tipo="exito" ancho onClick={pedirConfirmacion}
                 disabled={loading || !validacion.ok} testid="confirm-send" Icono={ShieldCheck}>
-                {loading ? 'Procesando…' : 'Confirmar envío'}
+                {loading ? 'Procesando…' : (pagoAlFinal ? 'Usar mi saldo' : 'Confirmar envío')}
               </Boton>
             </div>
 
             <PinConfirm open={showPin} onClose={() => setShowPin(false)} onVerified={handleSend} />
+          </div>
+        ) : null}
+
+        {/* EL COBRO. Paso 5, y sólo existe en el flujo que paga al final.
+            NO HAY BOTON DE «YA PAGUE», y es deliberado: quien dice que pagó
+            no es quien confirma que se pagó. La orden avanza cuando Mercado
+            Pago avisa, con su firma verificada. Un botón acá sería una forma
+            de decirle a la aplicación algo que no puede comprobar. */}
+        {step === 5 && cobro ? (
+          <div style={{ ...tarjeta, padding: '22px' }} data-testid="cobro-pix">
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: '0 0 4px 0' }}>
+              Pagá para que salga
+            </h2>
+            <p style={{ fontSize: '13.5px', color: C.suave, margin: '0 0 18px 0', lineHeight: 1.55 }}>
+              Escaneá el código con tu banco, o copiá el texto y pegalo en
+              «PIX Copia e Cola». En cuanto se acredite, despachamos.
+            </p>
+
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              {cobro.qr_code_base64 ? (
+                <img src={`data:image/png;base64,${cobro.qr_code_base64}`}
+                  alt="Código QR para pagar con PIX" data-testid="cobro-qr"
+                  style={{ width: '210px', height: '210px', display: 'block', margin: '0 auto' }} />
+              ) : null}
+            </div>
+
+            <dl style={{ margin: '0 0 16px 0', display: 'grid', gap: '9px' }}>
+              {[
+                // `fmt` y no `toFixed`: es el mismo formateador que usa el
+                // resto de esta pantalla, así que «5.500,00» se lee igual acá
+                // que dos centímetros más arriba. Dos formatos para el mismo
+                // número en la misma pantalla se lee como un error.
+                ['Pagás', `R$ ${fmt(cobro.amount_brl)}`],
+                ...(cobro.bono_aplicado > 0
+                  ? [['Tu bono cubre', `R$ ${fmt(cobro.bono_aplicado)}`]]
+                  : []),
+                ['Recibe', `${fmt(cobro.amount_ves)} VES`],
+                ['Tasa', fmt(cobro.rate)],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: '12px',
+                  justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <dt style={{ fontSize: '13px', color: C.suave }}>{k}</dt>
+                  <dd style={{ margin: 0, fontSize: '13.5px', fontWeight: 600, color: C.tinta }}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <div style={{ marginBottom: '16px' }}>
+              <Aviso tono="alerta" testid="cobro-vence">
+                Este cobro vence en 7 minutos. La tasa que ves te la
+                respetamos hasta entonces, aunque cambie.
+              </Aviso>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <Boton ancho onClick={() => {
+                navigator.clipboard?.writeText(cobro.copy_paste_code || '');
+                toast.success('Código copiado');
+              }} testid="cobro-copiar">
+                Copiar el código
+              </Boton>
+              <Boton tipo="primario" ancho onClick={() => navigate('/history')}
+                testid="cobro-al-historial">
+                Ver en mi historial
+              </Boton>
+            </div>
           </div>
         ) : null}
 

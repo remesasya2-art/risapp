@@ -370,6 +370,7 @@ POST /api/webhooks/twilio/whatsapp
 POST /api/withdraw
 POST /api/withdraw-crypto
 POST /api/withdraw-crypto/{transaction_id}/cancelar
+POST /api/withdraw-ves/cotizar
 POST /api/withdrawal/create
 POST /{full_path:path}
 PUT /api/admin/configuracion
