@@ -227,6 +227,7 @@ POST /api/admin/blacklist
 POST /api/admin/btc/marcar-enviado
 POST /api/admin/change-role
 POST /api/admin/credits/manual-credit
+POST /api/admin/envios-reais/{transaction_id}/verificar
 POST /api/admin/envios/almacen/migrar
 POST /api/admin/envios/almacen/probar
 POST /api/admin/envios/envios/observado/aprobar
@@ -331,6 +332,8 @@ POST /api/credits/deposit
 POST /api/credits/webhook
 POST /api/crypto-send/webhook
 POST /api/csp-reporte
+POST /api/enviar-reais/comprobante
+POST /api/enviar-reais/cotizar
 POST /api/envios/cotizar
 POST /api/envios/crear
 POST /api/envios/{envio_id}/cobros/{partida}/pagar

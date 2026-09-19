@@ -2080,3 +2080,200 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
     await store_idempotency_result(current_user.user_id, "cotizar_ves",
                                    request.idempotency_key, _resp)
     return _resp
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El corredor inverso: se cotiza en bolívares y se liquida en reais
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Mismo flujo que el envío a Venezuela, en el otro sentido y con otra forma de
+# pagar: el cliente transfiere en bolívares y sube el comprobante, y un
+# administrador verifica que la plata entró antes de que la orden entre en la
+# cola de despacho. El por qué de cada estado está en
+# `services/pago_al_final.py`.
+#
+# SIN SALDO EN EL MEDIO, igual que el otro corredor. Esa es la propiedad que
+# hace que cada paso sea un solo cambio de estado sobre un solo documento.
+
+class CotizarEnvioReaisRequest(BaseModel):
+    amount_ves: float                  # lo que el cliente pone, en bolívares
+    beneficiary_id: str                # un beneficiario en Brasil
+    idempotency_key: Optional[str] = None
+
+
+class ComprobanteDelEnvioRequest(BaseModel):
+    transaction_id: str
+    destination_bank: str              # a qué banco transfirió
+    proof_image: str                   # el comprobante
+
+
+@router.post("/enviar-reais/cotizar",
+             dependencies=[Depends(sin_transacciones_personales)])
+async def cotizar_envio_reais(request: CotizarEnvioReaisRequest,
+                              current_user: User = Depends(get_current_user)):
+    """Deja una orden esperando que el cliente pague en bolívares.
+
+    No genera ningún cobro contra una pasarela: acá el cliente transfiere por
+    su cuenta y después sube el comprobante. Así que esta ruta sólo cotiza y
+    reserva la tasa.
+    """
+    from services import pago_al_final
+
+    pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+
+    if request.amount_ves <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+
+    # El piso en bolívares, el mismo que la recarga: es la misma plata
+    # entrando por el mismo lugar.
+    error_monto = await validate_ves_amount(db, request.amount_ves)
+    if error_monto:
+        raise HTTPException(status_code=400, detail=error_monto)
+
+    _idem_new, _idem_existing = await claim_idempotency(
+        current_user.user_id, "cotizar_reais", request.idempotency_key)
+    if not _idem_new:
+        if _idem_existing and _idem_existing.get("result"):
+            return _idem_existing["result"]
+        raise HTTPException(status_code=409,
+                            detail="Esta operación ya se está procesando. Espera un momento.")
+
+    # EL BENEFICIARIO TIENE QUE SER DE BRASIL, y se comprueba.
+    #
+    #   Sin esto, mandar un `beneficiary_id` de Venezuela crearía una orden que
+    #   promete reales a una cuenta en bolívares. El operador lo descubriría
+    #   recién al ir a pagarla.
+    beneficiary = await db.beneficiaries.find_one({
+        "beneficiary_id": request.beneficiary_id,
+        "user_id": current_user.user_id})
+    if not beneficiary:
+        raise HTTPException(status_code=404, detail="Beneficiario no encontrado")
+    if beneficiary.get("pais") != "BR":
+        raise HTTPException(
+            status_code=400,
+            detail="Ese beneficiario no es de Brasil. Elegí uno con clave PIX.")
+
+    # La tasa del sentido inverso, con el mismo ajuste de horario que /api/rate.
+    rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
+    _base = (rate_doc or {}).get("ves_to_ris_rate")
+    if not _base or _base <= 0:
+        raise HTTPException(status_code=503,
+                            detail="La tasa no está disponible en este momento. Intenta más tarde.")
+    _cfg = await load_auto_rate_config(db)
+    ves_to_ris = apply_rate_adjustment({"ves_to_ris_rate": _base}, _cfg).get("ves_to_ris_rate") or _base
+
+    # La fórmula oficial, la misma que la recarga en bolívares:
+    # `ves_to_ris_rate` son los bolívares que vale 1 RIS, así que se divide.
+    amount_ris = round(request.amount_ves / ves_to_ris, 2)
+    if amount_ris <= 0:
+        raise HTTPException(status_code=400,
+                            detail="Ese monto queda en cero reales. Probá con uno mayor.")
+
+    # El cupo de la cuenta sin verificar se mide sobre los REALES, que es la
+    # moneda en la que están escritos los topes de esta aplicación.
+    _usuario = await db.users.find_one({"user_id": current_user.user_id})
+    _cupo = await kyc_quota.check_amount(db, _usuario, amount_ris)
+    if _cupo:
+        raise HTTPException(status_code=403, detail=_cupo)
+
+    tx_id = f"tx_{uuid.uuid4().hex[:12]}"
+    display_id = await get_next_withdrawal_id()
+    ahora = datetime.now(timezone.utc)
+    vence = pago_al_final.vence_en(ahora)
+
+    orden = {
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "user_id": current_user.user_id,
+        "type": "withdrawal",
+        "amount_input": request.amount_ves,
+        "amount_output": amount_ris,
+        "currency_input": "VES",
+        "currency_output": "BRL",
+        "rate": ves_to_ris,
+        "status": pago_al_final.ESPERANDO_PAGO,
+        "beneficiary_id": request.beneficiary_id,
+        "beneficiary_data": {
+            "full_name": beneficiary.get("full_name"),
+            "cpf": beneficiary.get("cpf"),
+            "pix_key": beneficiary.get("pix_key"),
+            "pais": "BR",
+            "payment_type": "pix_br",
+        },
+        "created_at": ahora,
+        "funded_from": "payment",
+        "payment_order_id": pago_al_final.nuevo_id_de_cobro_reais(),
+        "payment_expires_at": vence,
+    }
+    await db.transactions.insert_one(orden)
+
+    _resp = {
+        "transaction_id": tx_id,
+        "display_id": display_id,
+        "amount_ves": request.amount_ves,
+        "amount_brl": amount_ris,
+        "rate": ves_to_ris,
+        "bancos": await bancos_ves_disponibles(),
+        "expires_at": vence.isoformat(),
+        "expires_in_seconds": pago_al_final.MINUTOS_DEL_COBRO * 60,
+    }
+    await store_idempotency_result(current_user.user_id, "cotizar_reais",
+                                   request.idempotency_key, _resp)
+    return _resp
+
+
+@router.post("/enviar-reais/comprobante",
+             dependencies=[Depends(sin_transacciones_personales)])
+async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
+                                      current_user: User = Depends(get_current_user)):
+    """El cliente transfirió en bolívares y sube el comprobante.
+
+    NO ACREDITA NADA. Deja la orden esperando que un administrador mire el
+    comprobante. Quien decide si esa plata entró es la persona que lo abre.
+    """
+    from services import pago_al_final
+
+    pago_al_final.exigir_activo(await pago_al_final.esta_activo(db))
+
+    # El comprobante, con la misma limpieza que la recarga en bolívares: es
+    # texto libre elegido por quien paga, y el panel lo va a abrir.
+    try:
+        comprobante = limpiar_imagen_opcional(request.proof_image,
+                                              campo="El comprobante")
+    except ImagenInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not comprobante:
+        raise HTTPException(
+            status_code=400,
+            detail="Subí el comprobante de la transferencia. Es lo que miramos "
+                   "para despachar tu envío.")
+
+    # El banco tiene que resolver contra contabilidad, y se rechaza ACA.
+    # Aceptar uno que no resuelve deja una orden que nadie va a poder procesar,
+    # y el cliente se entera días después.
+    banco_id, _ = await resolve_ves_bank((request.destination_bank or "").strip())
+    if not banco_id:
+        disponibles = await bancos_ves_disponibles()
+        raise HTTPException(
+            status_code=400,
+            detail=("Ese banco no está disponible en este momento. Probá con otro."
+                    + (f" Disponibles: {', '.join(disponibles)}." if disponibles else "")))
+
+    orden = await pago_al_final.recibir_comprobante(
+        db, request.transaction_id, current_user.user_id,
+        comprobante=comprobante, banco_id=banco_id,
+        banco_nombre=(request.destination_bank or "").strip())
+
+    await create_notification(
+        user_id=current_user.user_id,
+        title="Recibimos tu comprobante",
+        message=f"Lo estamos revisando. En cuanto confirmemos el pago "
+                f"despachamos {para_mostrar(orden.get('amount_output'), 'BRL')}.",
+        notification_type="withdrawal_awaiting_review",
+        data={"transaction_id": orden.get("transaction_id")})
+
+    return {
+        "message": "Recibimos tu comprobante. Lo estamos revisando.",
+        "transaction_id": orden.get("transaction_id"),
+        "status": orden.get("status"),
+    }

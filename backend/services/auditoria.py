@@ -84,6 +84,12 @@ ACCIONES = {
     "personal.invitacion":      (Cat.PERSONAL, "Invitación de acceso enviada"),
     "personal.activacion":      (Cat.PERSONAL, "Personal activó su acceso"),
     "personal.dos_pasos_reiniciado": (Cat.PERSONAL, "Verificación en dos pasos reiniciada"),
+    # Envíos pagados en bolívares. Van al libro porque el que verifica un
+    # comprobante decide si entró plata: aprobar uno falso despacha reales que
+    # nadie pagó, y rechazar uno bueno deja a alguien sin su envío y sin su
+    # transferencia. Las dos cosas hay que poder reconstruirlas después.
+    "envio_brl.verificado":     (Cat.DINERO, "Pago en bolívares verificado"),
+    "envio_brl.rechazado":      (Cat.DINERO, "Comprobante en bolívares rechazado"),
     # KYC
     "kyc.aprobado":             (Cat.KYC, "Verificación aprobada"),
     "kyc.rechazado":            (Cat.KYC, "Verificación rechazada"),

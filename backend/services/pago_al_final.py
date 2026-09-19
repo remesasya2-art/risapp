@@ -99,6 +99,25 @@ ESPERANDO_PAGO = "awaiting_payment"
 PENDIENTE = "pending"
 PAGO_VENCIDO = "payment_expired"
 
+# EL ESTADO DEL MEDIO, Y POR QUE HACE FALTA UNO NUEVO.
+#
+#   El corredor Venezuela → Brasil se paga por transferencia en bolívares, y eso
+#   no lo confirma ninguna pasarela: lo mira un administrador. Entre que el
+#   cliente sube el comprobante y que alguien lo abre pueden pasar horas.
+#
+#   Sin un estado propio, esa orden quedaría o en «esperando pago» —y el
+#   cliente vería «pagá», después de haber pagado— o en «pendiente», que en
+#   este sistema significa «cobrada, lista para despachar», y nadie habría
+#   comprobado nada todavía. Las dos mentiras son caras: la primera hace que
+#   pague dos veces, la segunda despacha plata que quizá no entró.
+REVISANDO = "awaiting_review"
+
+# El propósito del corredor inverso. El de Venezuela es `envio_ves`.
+PROPOSITO_REAIS = "envio_brl"
+
+# El prefijo de sus cobros, para distinguirlos de un vistazo en un registro.
+PREFIJO_REAIS = "brl_"
+
 # Cuánto dura el cobro. Es el mismo número que `routes/gestor_pix.py` le pone
 # al PIX de la recarga: si la orden durara más que el QR, quedaría esperando un
 # pago que ya no se puede hacer.
@@ -273,3 +292,136 @@ def exigir_activo(activo: bool) -> None:
             status_code=503,
             detail="Esta forma de pagar no está disponible por ahora. "
                    "Podés recargar tu saldo y enviar desde ahí.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El corredor inverso: se paga en bolívares y se liquida en reais
+# ══════════════════════════════════════════════════════════════════════════
+#
+# MISMO FLUJO, OTRA FORMA DE CONFIRMAR
+#
+#   El cliente cotiza, elige beneficiario en Brasil, transfiere en bolívares y
+#   sube el comprobante. Un administrador lo verifica y recién ahí la orden
+#   entra en la cola de despacho, para pagarse por PIX en reais.
+#
+#   Lo que NO cambia respecto del corredor de Venezuela, y es lo importante:
+#   no hay saldo en el medio, así que cada paso sigue siendo UN cambio de
+#   estado sobre UN documento, reclamado con el estado dentro del filtro.
+#
+# LOS SIETE MINUTOS SON PARA PAGAR, NO PARA CONFIRMAR
+#
+#   Decisión del dueño del proyecto, y hay que entenderla bien porque es la
+#   diferencia con el corredor de Venezuela.
+#
+#   La cotización vence a los siete minutos: pasado ese rato, el cliente ya no
+#   puede subir el comprobante contra esa tasa. Pero si lo sube a tiempo, la
+#   tasa que vio se le respeta AUNQUE EL ADMINISTRADOR LO VERIFIQUE HORAS
+#   DESPUES.
+#
+#   La exposición de la empresa, entonces, no dura siete minutos: dura hasta
+#   que alguien mire el comprobante. Está escrito acá para que quien lea este
+#   código sepa que el número depende de la rapidez de la mesa, no del reloj
+#   del cobro.
+
+
+def nuevo_id_de_cobro_reais() -> str:
+    return f"{PREFIJO_REAIS}{uuid.uuid4().hex[:12]}"
+
+
+async def recibir_comprobante(db, transaction_id: str, user_id: str,
+                              comprobante: str, banco_id: str,
+                              banco_nombre: str) -> dict:
+    """El cliente dice que pagó y sube el comprobante. Devuelve la orden.
+
+    EL RECLAMO ES CON EL ESTADO DENTRO DEL FILTRO, como todo en este módulo:
+    dos envíos del mismo comprobante no pueden pasar los dos. El segundo
+    encuentra la orden fuera de «esperando pago» y se va con un 409.
+
+    NO SE ACREDITA NADA. Esto sólo dice «hay algo para mirar». Quien decide si
+    esa plata entró es la persona que abre el comprobante.
+    """
+    ahora = datetime.now(timezone.utc)
+    orden = await db.transactions.find_one_and_update(
+        {"transaction_id": transaction_id, "user_id": user_id,
+         "status": ESPERANDO_PAGO,
+         "payment_expires_at": {"$gt": ahora}},
+        {"$set": {"status": REVISANDO,
+                  "proof_image": comprobante,
+                  "destination_bank_id": banco_id,
+                  "destination_bank": banco_nombre,
+                  "proof_sent_at": ahora}},
+        return_document=True,
+    )
+    if not orden:
+        # Se distingue el motivo: vencida y ya enviada no son lo mismo para
+        # quien está del otro lado.
+        actual = await db.transactions.find_one(
+            {"transaction_id": transaction_id, "user_id": user_id},
+            {"_id": 0, "status": 1, "payment_expires_at": 1})
+        if not actual:
+            raise HTTPException(status_code=404, detail="Ese envío no existe.")
+        if actual.get("status") == REVISANDO:
+            raise HTTPException(
+                status_code=409,
+                detail="Ya recibimos tu comprobante. Lo estamos revisando.")
+        if actual.get("status") == ESPERANDO_PAGO:
+            raise HTTPException(
+                status_code=409,
+                detail="La cotización venció. Volvé a cotizar para ver la tasa "
+                       "de ahora; si ya transferiste, escribinos y lo "
+                       "resolvemos a mano.")
+        raise HTTPException(
+            status_code=409,
+            detail="Ese envío ya no está esperando el pago.")
+    return orden
+
+
+async def verificar_el_pago(db, transaction_id: str, admin_id: str) -> dict:
+    """El administrador confirma que la plata entró. La orden pasa a la cola.
+
+    Devuelve la orden, o levanta si ya no estaba para revisar. El reclamo va
+    con `REVISANDO` en el filtro para que dos operadores mirando la misma
+    pantalla no la aprueben dos veces.
+    """
+    ahora = datetime.now(timezone.utc)
+    orden = await db.transactions.find_one_and_update(
+        {"transaction_id": transaction_id, "status": REVISANDO},
+        {"$set": {"status": PENDIENTE, "paid_at": ahora,
+                  "verificado_por": admin_id, "verificado_en": ahora}},
+        return_document=True,
+    )
+    if not orden:
+        raise HTTPException(
+            status_code=409,
+            detail="Esa orden ya no está esperando verificación. Actualizá la "
+                   "pantalla para ver cómo quedó.")
+    return orden
+
+
+async def rechazar_el_comprobante(db, transaction_id: str, admin_id: str,
+                                  motivo: str) -> dict:
+    """El comprobante no sirve: la orden vuelve a esperar el pago.
+
+    POR QUE VUELVE A «ESPERANDO PAGO» Y NO A UN ESTADO DE RECHAZO
+
+        Porque no hay nada que devolver: en este flujo el cliente no tiene
+        saldo comprometido, y si su comprobante no servía, lo que necesita es
+        poder subir el bueno. Un estado terminal lo obligaría a cotizar de
+        nuevo, con otra tasa, por un error de foto.
+
+        La cotización sigue siendo la misma y su vencimiento también: si ya
+        pasó, va a tener que cotizar de nuevo igual, y eso es correcto.
+    """
+    ahora = datetime.now(timezone.utc)
+    orden = await db.transactions.find_one_and_update(
+        {"transaction_id": transaction_id, "status": REVISANDO},
+        {"$set": {"status": ESPERANDO_PAGO, "proof_image": None,
+                  "rechazado_por": admin_id, "rechazado_en": ahora,
+                  "motivo_del_rechazo": (motivo or "").strip()[:500]}},
+        return_document=True,
+    )
+    if not orden:
+        raise HTTPException(
+            status_code=409,
+            detail="Esa orden ya no está esperando verificación.")
+    return orden
