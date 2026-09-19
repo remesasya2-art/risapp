@@ -37,7 +37,9 @@ sys.path.insert(0, _BACKEND)
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "ris_test")
 
-from conftest import usar_base                                      # noqa: E402,F401
+import mongomock_motor                                              # noqa: E402
+
+from conftest import ensenarle_decimal128_a_mongomock, usar_base    # noqa: E402
 
 # LO QUE ESTE ARCHIVO PRUEBA ES LO QUE LA APLICACION ENVIA, NO LO QUE LLEGA.
 #
@@ -63,10 +65,31 @@ ESPERADAS = {
 }
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def cliente():
+    """La app entera, con su propia base vacía.
+
+    LA BASE SE DECLARA ACA, Y NO SE HEREDA DE NADIE
+
+        Este archivo importaba `usar_base` y no lo llamaba —el `# noqa: F401`
+        del import lo decía—. Corriéndolo solo, las dos pruebas que piden
+        `/api/limits` explotaban: esa ruta lee la configuración, y el `db`
+        global es un proxy que sin base declarada levanta la mano.
+
+        En la suite completa pasaban, pero por prestado: el proxy quedaba
+        apuntando a la base del archivo que hubiera corrido antes. Verde que
+        depende del orden alfabético no es verde, es suerte, y se apaga el día
+        que alguien renombra un archivo.
+
+        La base va vacía a propósito: lo que se prueba son las cabeceras, que
+        el middleware pone en TODA respuesta, no el contenido de ninguna.
+    """
     try:
         from fastapi.testclient import TestClient
+
+        ensenarle_decimal128_a_mongomock()
+        usar_base(mongomock_motor.AsyncMongoMockClient()["cabeceras_test"])
+
         from server import app
     except Exception as e:                                # pragma: no cover
         pytest.skip(f"no se pudo armar la app: {type(e).__name__}: {e}")
