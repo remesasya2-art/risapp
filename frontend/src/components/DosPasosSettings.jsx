@@ -136,7 +136,7 @@ export default function DosPasosSettings() {
           </p>
           <img src={alta.qr_code_data_url} alt="Código QR"
             data-testid="dos-pasos-qr"
-            style={{ width: '180px', height: '180px', display: 'block', margin: '8px 0 12px' }} />
+            style={{ width: '180px', height: '180px', display: 'block', margin: '8px auto 12px' }} />
 
           {/* ¿Y SI ESTA EN EL TELEFONO? El QR se escanea con la cámara de OTRO
               aparato. Quien abre esto desde el celular no puede apuntarse a sí
