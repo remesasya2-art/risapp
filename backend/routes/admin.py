@@ -3328,3 +3328,67 @@ async def verificar_pago_en_bolivares(
         notification_type="warning",
         data={"transaction_id": transaction_id})
     return {"message": "Comprobante rechazado.", "status": orden.get("status")}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La hoja de pagos de Mercado Pago
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Qué nos avisó Mercado Pago, cuándo, y en qué terminó. Existe porque el 20 de
+# septiembre de 2026 hubo que averiguar si Mercado Pago había llamado por un
+# pago, y no había dónde mirar: la única huella era el registro del servidor.
+#
+# El por qué de cada cosa está en `services/hoja_de_mercadopago.py`.
+
+class UnaFilaDeLaHoja(BaseModel):
+    """Lo que se muestra de cada aviso, y nada más.
+
+    Por lista de lo permitido: el documento puede crecer —Mercado Pago agrega
+    campos— y lo nuevo no puede salir solo a una pantalla.
+    """
+    anotacion_id: str
+    mp_payment_id: Optional[str] = None
+    referencia: Optional[str] = None
+    transaction_id: Optional[str] = None
+    tipo_de_evento: Optional[str] = None
+    llego_a_las: Optional[datetime] = None
+    termino_a_las: Optional[datetime] = None
+    como_termino: Optional[str] = None
+    motivo: Optional[str] = None
+    monto: Optional[float] = None
+    estado_en_mp: Optional[str] = None
+
+
+class LaHojaDeMercadoPago(BaseModel):
+    total: int
+    pagina: int
+    por_pagina: int
+    filas: List[UnaFilaDeLaHoja]
+
+
+@router.get("/hoja-mercadopago", response_model=LaHojaDeMercadoPago)
+async def la_hoja_de_mercadopago(
+    desde: Optional[datetime] = None,
+    hasta: Optional[datetime] = None,
+    buscar: Optional[str] = None,
+    como_termino: Optional[str] = None,
+    pagina: int = 1,
+    por_pagina: int = 50,
+    admin: User = Depends(get_admin_user),
+):
+    """Los avisos de Mercado Pago, filtrados por fecha y por identificador.
+
+    LA VE UN ADMINISTRADOR, NO SOLO EL SUPER ADMINISTRADOR.
+
+        Quien atiende a un cliente que dice «pagué y no me aparece» tiene que
+        poder mirarlo en el momento. Obligarlo a pedirle a otra persona que
+        abra la hoja convierte una consulta de treinta segundos en una espera
+        de horas, y es exactamente la demora que este lote existe para sacar.
+
+        No hay dinero que mover acá: es una hoja de sólo lectura, y lo que
+        muestra no incluye datos del pagador.
+    """
+    from services import hoja_de_mercadopago
+    return await hoja_de_mercadopago.buscar(
+        db, desde=desde, hasta=hasta, texto=buscar,
+        como_termino=como_termino, pagina=pagina, por_pagina=por_pagina)

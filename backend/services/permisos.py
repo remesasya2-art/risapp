@@ -167,6 +167,11 @@ MAPA = {
     ("GET",    "/api/admin/transactions/export"):            "transactions.export",
     ("GET",    "/api/admin/payment-records"):                "transactions.view",
     ("GET",    "/api/admin/payment-records/{record_id}"):    "transactions.view",
+    # La hoja que alimenta Mercado Pago sola. Mismo permiso que el resto de
+    # las transacciones: es de sólo lectura, no mueve dinero, y quien puede
+    # mirar una orden tiene que poder mirar el aviso de cobro que le
+    # corresponde — si no, la consulta se le traba en otra persona.
+    ("GET",    "/api/admin/hoja-mercadopago"):               "transactions.view",
 
     # ── Soporte ───────────────────────────────────────────────────────────
     ("GET",    "/api/admin/support-requests"):               "support.view",
