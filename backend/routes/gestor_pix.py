@@ -610,6 +610,19 @@ async def get_pix_history(current_user: User = Depends(require_authenticated_use
 
 
 # Mercado Pago Webhook endpoint (public - no auth required)
+async def _sin_acreditar(motivo, mp_payment_id, referencia=None, detalle=""):
+    """Entró un pago y no se pudo acreditar: que alguien se entere.
+
+    Un solo ayudante y no seis copias: el día que cambie cómo se avisa, seis
+    copias son cinco que se quedan como estaban. El por qué de cada motivo
+    está en `services/pago_que_no_se_acredito.py`.
+    """
+    from services import pago_que_no_se_acredito
+    await pago_que_no_se_acredito.avisar(
+        db, motivo=motivo, mp_payment_id=mp_payment_id,
+        referencia=referencia, detalle=detalle)
+
+
 webhook_router = APIRouter(prefix="/webhook", tags=["webhooks"])
 
 @webhook_router.post("/mercadopago")
@@ -737,9 +750,35 @@ async def mercadopago_webhook(request: Request):
             logger.warning("Webhook received without payment ID")
             return {"received": True, "error": "no_payment_id"}
         
-        # Find our payment record by MP payment ID — try PIX first, then card
+        # EL IDENTIFICADOR SE BUSCA SIN QUE EL TIPO IMPORTE, Y ESTO COSTO
+        # UN PAGO DE UN CLIENTE.
+        #
+        #   Al crear el cobro se guarda lo que devuelve el SDK de Mercado Pago
+        #   —`response.get("id")`, un ENTERO— y acá llega lo que manda el
+        #   cuerpo del aviso —`data.get("id")`, una CADENA—.
+        #
+        #   MongoDB no iguala 123456789 con "123456789". La búsqueda no
+        #   encontraba nada, el receptor contestaba «payment_not_found» con un
+        #   200, y la orden no se tocaba. Desde afuera todo se veía bien.
+        #
+        #   El 20 de septiembre de 2026 eso dejó a un cliente con el envío
+        #   frenado después de pagarlo. El historial está en
+        #   `docs/incidentes/2026-09-20-un-pix-pagado-que-no-avanzo-el-envio.md`.
+        #
+        #   No se notaba en las recargas porque su pantalla pregunta sola cada
+        #   pocos segundos y las rescataba. La del envío no pregunta, así que
+        #   ahí el receptor era el único camino — y no funcionaba.
+        #
+        #   Se buscan LOS DOS y no se normaliza al guardar: los cobros que ya
+        #   están en la base tienen el número, y una migración que no corriera
+        #   dejaría el mismo agujero abierto. Doce líneas más abajo, el camino
+        #   de las tarjetas ya convertía con `str()`; alguien se topó con esto
+        #   ahí y el de PIX quedó como estaba.
+        from services import pago_que_no_se_acredito
         payment = await db.gestor_pix_payments.find_one({
-            "mp_payment_id": mp_payment_id
+            "mp_payment_id": {
+                "$in": pago_que_no_se_acredito.identificadores_posibles(
+                    mp_payment_id)}
         })
         
         if not payment:
@@ -747,24 +786,37 @@ async def mercadopago_webhook(request: Request):
             card_payment = await db.card_payments.find_one({"payment_id": str(mp_payment_id)})
             if card_payment:
                 return await _handle_card_webhook(card_payment, str(mp_payment_id))
-            logger.warning(f"Payment {mp_payment_id} not found in our database")
+            await _sin_acreditar("no_encontrado", mp_payment_id)
             return {"received": True, "error": "payment_not_found"}
         
         # Skip if already processed
         if payment.get("status") != "pending":
-            logger.info(f"Payment {mp_payment_id} already processed with status: {payment.get('status')}")
+            # UN AVISO REPETIDO ES NORMAL Y NO SE AVISA. Mercado Pago reintenta,
+            # y un cobro ya pagado recibiendo su segundo aviso no es un
+            # problema. Lo que sí lo es: un cobro que quedó en cualquier otro
+            # estado y recibe plata.
+            _estado = payment.get("status")
+            logger.info(f"Payment {mp_payment_id} already processed with status: {_estado}")
+            if _estado not in ("paid", "approved", "completed"):
+                await _sin_acreditar("no_esta_pendiente", mp_payment_id,
+                                     payment.get("payment_id"),
+                                     f"El cobro está en «{_estado}».")
             return {"received": True, "already_processed": True}
         
         # SECURITY: Double-check status directly with Mercado Pago API
         if not MP_AVAILABLE or not mercadopago_service:
-            logger.error("Mercado Pago service not available for verification")
+            await _sin_acreditar("mercadopago_no_contesta", mp_payment_id,
+                                 payment.get("payment_id"),
+                                 "El servicio de Mercado Pago no está disponible.")
             return {"received": True, "error": "mp_service_unavailable"}
         
         mp_status = await asyncio.to_thread(
             mercadopago_service.get_payment_status, mp_payment_id)
         
         if not mp_status:
-            logger.error(f"Could not verify payment {mp_payment_id} with MP API")
+            await _sin_acreditar("mercadopago_no_contesta", mp_payment_id,
+                                 payment.get("payment_id"),
+                                 "No se pudo reverificar el pago.")
             return {"received": True, "error": "verification_failed"}
         
         # SECURITY: Verify the amount matches
@@ -778,6 +830,9 @@ async def mercadopago_webhook(request: Request):
                 {"payment_id": payment["payment_id"]},
                 {"$set": {"status": "suspicious", "security_note": f"Amount mismatch: expected {expected_amount}, got {actual_amount}"}}
             )
+            await _sin_acreditar(
+                "monto_distinto", mp_payment_id, payment.get("payment_id"),
+                f"Esperábamos {expected_amount} y entró {actual_amount}.")
             return {"received": True, "error": "amount_mismatch"}
         
         # Only credit if MP confirms "approved" status
@@ -812,7 +867,8 @@ async def mercadopago_webhook(request: Request):
                 logger.info(f"Webhook processed successfully: payment {mp_payment_id} approved and credited")
                 return {"received": True, "processed": True, "status": "approved"}
             else:
-                logger.error(f"Failed to process payment confirmation for {mp_payment_id}")
+                await _sin_acreditar("no_se_pudo_confirmar", mp_payment_id,
+                                     payment.get("payment_id"))
                 return {"received": True, "error": "processing_failed"}
         else:
             logger.info(f"Payment {mp_payment_id} status is {mp_status.get('status')}, not approved yet")
