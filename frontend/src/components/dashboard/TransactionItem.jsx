@@ -1,4 +1,5 @@
 import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Eye, Building2, AlertCircle, Hourglass } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { fmt, formatAccountNumber } from '../../utils/format';
 
 /**
@@ -14,6 +15,18 @@ const STATUS_CONFIG = {
   failed:                   { label: 'Fallida',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
   // Envios cripto pagados via NOWPayments: ciclo de vida del pago
   awaiting_payment:         { label: 'Esperando pago',    bg: '#EFF6FF', fg: '#2563EB', Icon: Hourglass },
+  // ESTOS TRES FALTABAN, Y NO ERA UN DETALLE.
+  //
+  //   `StatusBadge` cae a «Pendiente» cuando no encuentra el estado. Así que
+  //   un pedido vencido, uno esperando que alguien mire el comprobante y uno
+  //   con un pago que entró fuera de tiempo se veían los tres igual: como si
+  //   estuvieran en camino.
+  //
+  //   Al primero le decía que espere algo que ya no va a pasar. Al tercero,
+  //   que estaba todo bien cuando hay plata suya esperando una decisión.
+  payment_expired:          { label: 'Expirado',           bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  awaiting_review:          { label: 'Revisando tu pago',  bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
+  payment_late:             { label: 'Pago a revisar',     bg: '#FFF7ED', fg: '#C2410C', Icon: AlertCircle },
   awaiting_topup:           { label: 'Falta completar',   bg: '#FFF7ED', fg: '#C2410C', Icon: AlertCircle },
   underpaid_review:         { label: 'En revisión',       bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
   payment_failed:           { label: 'Pago no completado', bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
@@ -81,6 +94,18 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
 // El ojito aparece en CUALQUIER transacción con un comprobante cargado
   // (el admin lo sube en los envíos; el usuario en las recargas), sin importar el tipo ni el estado.
   const showVoucher = (tx.proof_images && tx.proof_images.length > 0) || tx.proof_image || tx.comprobante_pago;
+
+  // RETOMAR UN PEDIDO QUE QUEDO A MEDIAS.
+  //
+  //   El cliente cotizó, vio el QR y cerró la pantalla. Hasta ahora eso era
+  //   el final: lo que hacía falta para pagarlo venía en la respuesta de la
+  //   cotización y no había cómo volver a pedirlo.
+  //
+  //   Se muestra también cuando ya venció, y a propósito: es la única forma
+  //   de que el cliente sepa POR QUE su pedido no avanza. El servidor decide
+  //   qué texto le corresponde según el corredor.
+  const sePuedeRetomar = ['awaiting_payment', 'payment_expired']
+    .includes(txStatus);
 
   // Monto principal y unidad según el flujo (busca el primer campo con valor)
   let mainAmount, mainUnit;
@@ -252,6 +277,22 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           {/* Bottom row: badge + voucher button */}
           <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <StatusBadge status={txStatus} />
+            {sePuedeRetomar && (
+              <Link
+                to={`/envios/${tx.transaction_id}/pagar`}
+                data-testid={`retomar-${tx.transaction_id}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                  padding: '3px 9px', borderRadius: '20px',
+                  fontSize: '11.5px', fontWeight: 600, textDecoration: 'none',
+                  backgroundColor: '#EEF2FF', color: '#5B4FE9',
+                  lineHeight: 1,
+                }}
+              >
+                <Hourglass size={11} />
+                {txStatus === 'payment_expired' ? 'Ver por qué' : 'Ver cómo pagar'}
+              </Link>
+            )}
             {showVoucher && (
               <button
                 onClick={() => onViewVoucher?.(tx)}
