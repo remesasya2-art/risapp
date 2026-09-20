@@ -59,7 +59,18 @@ def base():
     return b
 
 
-AHORA = datetime.now(timezone.utc)
+# LA HORA SE MIRA AL SEMBRAR, NO AL IMPORTAR.
+#
+#   Estaba congelada en una constante de módulo. En la suite completa pasan
+#   minutos entre que se importa este archivo y que le toca el turno, así que
+#   «vence en 5 minutos» puede ser «ya venció» cuando el test corre.
+#
+#   Acá no llegó a fallar —los márgenes son grandes— pero es la misma trampa
+#   que sí hizo fallar a `test_volver_al_pago`, y un test que sólo pasa cuando
+#   corre primero es un test que un día frena un despliegue por nada.
+def ahora():
+    return datetime.now(timezone.utc)
+
 
 
 def una_orden(base, *, referencia, vence_en_minutos, estado=None, bono=0,
@@ -68,8 +79,8 @@ def una_orden(base, *, referencia, vence_en_minutos, estado=None, bono=0,
         "transaction_id": tx, "display_id": "1001", "user_id": "u1",
         "type": "withdrawal", "status": estado or paf.ESPERANDO_PAGO,
         "payment_order_id": referencia,
-        "payment_expires_at": AHORA + timedelta(minutes=vence_en_minutos),
-        "bono_aplicado": bono, "created_at": AHORA}))
+        "payment_expires_at": ahora() + timedelta(minutes=vence_en_minutos),
+        "bono_aplicado": bono, "created_at": ahora()}))
     corre(base.gestor_pix_payments.insert_one({
         "payment_id": referencia, "gestor_id": "u1",
         "proposito": paf.PROPOSITO, "status": "pending"}))

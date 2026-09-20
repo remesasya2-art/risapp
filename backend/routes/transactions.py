@@ -1746,6 +1746,133 @@ async def get_transactions(
         "transactions": transactions
     }
 
+# ══════════════════════════════════════════════════════════════════════════
+# Volver a la pantalla de pago de un pedido que quedó a medias
+# ══════════════════════════════════════════════════════════════════════════
+#
+# El cliente cotizó, vio el QR, y cerró la pantalla. Hasta ahora eso era el
+# final: lo que hacía falta para dibujar esa pantalla venía en la respuesta de
+# la cotización y no había forma de pedirlo de nuevo.
+#
+# El por qué de cada regla está en `services/volver_al_pago.py`.
+
+class ComoPagarEstePedido(BaseModel):
+    """Lo que la pantalla necesita, y NADA MAS.
+
+    Por lista de lo permitido, como todo lo que ve el usuario. Acá al lado hay
+    una respuesta cruda de Mercado Pago con los datos del pagador, y una lista
+    de lo prohibido la dejaría salir el día que alguien agregue un campo.
+    """
+    transaction_id: str
+    display_id: Optional[str] = None
+    corredor: str                       # "venezuela" | "brasil"
+    metodo: Optional[str] = None        # "pix" | "tarjeta" | None (bolívares)
+    se_puede_pagar: bool
+    motivo: Optional[str] = None        # por qué no, cuando no se puede
+    segundos_restantes: int = 0
+    # Cuánto es
+    amount_input: Optional[float] = None
+    amount_output: Optional[float] = None
+    currency_input: Optional[str] = None
+    currency_output: Optional[str] = None
+    rate: Optional[float] = None
+    monto_a_pagar: Optional[float] = None
+    # Con qué se paga
+    payment_order_id: Optional[str] = None
+    qr_code: str = ""
+    qr_code_base64: str = ""
+    copy_paste_code: str = ""
+    credit_card: Optional[dict] = None
+    debit_card: Optional[dict] = None
+    bancos: Optional[list] = None
+    # A quién
+    beneficiary_data: Optional[dict] = None
+
+
+@router.get("/envios/{transaction_id}/como-pagar",
+            response_model=ComoPagarEstePedido)
+async def como_pagar_este_pedido(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Todo lo que hace falta para volver a dibujar la pantalla de pago."""
+    from services import pago_al_final, tarjeta_del_envio, volver_al_pago
+
+    orden = await db.transactions.find_one(
+        {"transaction_id": transaction_id, "user_id": current_user.user_id})
+    if not orden:
+        raise HTTPException(status_code=404, detail="No encontramos ese envío")
+
+    if not orden.get("payment_order_id"):
+        # Un envío pagado con saldo no tiene pantalla de pago que mostrar.
+        raise HTTPException(
+            status_code=409,
+            detail="Este envío no se paga por separado: se descontó de tu saldo.")
+
+    de_venezuela = volver_al_pago.es_de_venezuela(orden)
+    vencido = volver_al_pago.esta_vencido(orden)
+    # Un pedido que ya avanzó tampoco se paga de nuevo, y eso NO es «vencido»:
+    # decirle «expiró» a quien ya pagó es el peor mensaje posible.
+    ya_avanzo = orden.get("status") not in (pago_al_final.ESPERANDO_PAGO,
+                                            pago_al_final.PAGO_VENCIDO,
+                                            pago_al_final.PAGO_TARDIO)
+
+    _resp = {
+        "transaction_id": transaction_id,
+        "display_id": orden.get("display_id"),
+        "corredor": "venezuela" if de_venezuela else "brasil",
+        "se_puede_pagar": not (vencido or ya_avanzo),
+        "segundos_restantes": volver_al_pago.segundos_que_quedan(orden),
+        "amount_input": to_float(orden.get("amount_input")),
+        "amount_output": to_float(orden.get("amount_output")),
+        "currency_input": orden.get("currency_input"),
+        "currency_output": orden.get("currency_output"),
+        "rate": to_float(orden.get("rate")),
+        "monto_a_pagar": to_float(orden.get("payment_amount_brl")
+                                  or orden.get("amount_input")),
+        "payment_order_id": orden.get("payment_order_id"),
+        "beneficiary_data": orden.get("beneficiary_data"),
+    }
+
+    if ya_avanzo:
+        _resp["motivo"] = ("Este envío ya no está esperando el pago. "
+                           "Miralo en tu historial.")
+        return _resp
+    if vencido:
+        _resp["motivo"] = volver_al_pago.por_que_no_se_puede_pagar(orden)
+        return _resp
+
+    # ── Todavía se puede pagar: con qué ──────────────────────────────────
+    if de_venezuela:
+        cobro = await db.gestor_pix_payments.find_one(
+            {"payment_id": orden["payment_order_id"],
+             "gestor_id": current_user.user_id},
+            {"_id": 0, "metodo": 1, "qr_code": 1, "qr_code_base64": 1})
+        metodo = tarjeta_del_envio.normalizar_metodo((cobro or {}).get("metodo"))
+        _resp["metodo"] = metodo
+        if metodo == tarjeta_del_envio.POR_TARJETA:
+            # El desglose se RECALCULA, no se guardó. Sale del mismo lugar que
+            # cuando se cotizó, así que no puede dar otro número.
+            from routes.payments_card import _get_card_fees
+            _tarifas = await _get_card_fees()
+            for _tipo in ("credit_card", "debit_card"):
+                _d = tarjeta_del_envio.cuanto_se_le_cobra(
+                    to_decimal(orden.get("payment_amount_brl") or 0),
+                    _tipo, _tarifas)
+                _resp[_tipo] = {k: to_float(v) for k, v in _d.items()}
+        else:
+            _resp["qr_code"] = (cobro or {}).get("qr_code") or ""
+            _resp["qr_code_base64"] = (cobro or {}).get("qr_code_base64") or ""
+            _resp["copy_paste_code"] = _resp["qr_code"]
+    else:
+        # Brasil: los bancos a los que puede transferir. Se piden de nuevo
+        # porque la lista se administra y puede haber cambiado desde que
+        # cotizó.
+        _resp["bancos"] = await bancos_ves_disponibles()
+
+    return _resp
+
+
 @router.get("/transactions/{transaction_id}")
 async def get_transaction(transaction_id: str, current_user: User = Depends(get_current_user)):
     """Get a specific transaction"""

@@ -32,6 +32,7 @@ import Landing from './pages/Landing';
 import EnviosMis from './pages/EnviosMis';
 import EnvioNuevo from './pages/EnvioNuevo';
 import EnvioDetalle from './pages/EnvioDetalle';
+import RetomarPago from './pages/RetomarPago';
 import Seguimiento from './pages/Seguimiento';
 
 // Protected Route Component
@@ -137,6 +138,10 @@ function AppRoutes() {
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
       <Route path="/envios" element={<ProtectedRoute><EnviosMis /></ProtectedRoute>} />
       <Route path="/envios/nuevo" element={<ProtectedRoute><EnvioNuevo /></ProtectedRoute>} />
+      {/* VA ANTES QUE `/envios/:envioId`, y el orden importa: si fuera al
+          revés, `:envioId` se comería «tx_xxx/pagar» y abriría el detalle de
+          una encomienda que no existe. */}
+      <Route path="/envios/:transactionId/pagar" element={<ProtectedRoute><RetomarPago /></ProtectedRoute>} />
       <Route path="/envios/:envioId" element={<ProtectedRoute><EnvioDetalle /></ProtectedRoute>} />
       <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
