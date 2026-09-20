@@ -230,12 +230,28 @@ def test_una_orden_que_no_existe_no_rompe_el_webhook(base):
 def test_un_cobro_vencido_que_se_paga_NO_avanza_solo(base):
     """Si la orden ya venció y alguien pagó igual, esto no puede resolverse
     solo: hay que devolverle la plata o despacharlo a mano. Lo que no puede
-    pasar es que avance en silencio con una tasa de hace horas."""
+    pasar es que avance en silencio con una tasa de hace horas.
+
+    LO QUE CAMBIO, Y LO QUE NO.
+
+        Lo que este test protege es lo mismo: no avanza. Lo que cambió es
+        adónde va. Antes se quedaba en «vencida», que es el mismo estado que
+        una orden que NADIE pagó — así que la única diferencia entre «se
+        perdió una venta» y «hay plata de un cliente sin resolver» era una
+        línea en el registro.
+
+        Ahora queda en un estado propio, `PAGO_TARDIO`, que es el que hace que
+        alguien la vea. Decisión del dueño del proyecto.
+    """
     una_orden(base, estado=paf.PAGO_VENCIDO)
     pago = un_cobro(base)
     assert corre(paf.confirmar(base, pago)) is False
     doc = corre(base.transactions.find_one({"transaction_id": "tx_1"}))
-    assert doc["status"] == paf.PAGO_VENCIDO
+    assert doc["status"] == paf.PAGO_TARDIO, (
+        "un pago que entró tarde quedó en un estado que no lo distingue de "
+        "una orden que nadie pagó: nadie va a ir a mirarlo")
+    assert doc["status"] != paf.PENDIENTE, (
+        "la orden avanzó a la cola con una tasa de hace horas")
 
 
 def test_LA_ORDEN_SE_RECLAMA_ANTES_QUE_EL_PAGO(base):

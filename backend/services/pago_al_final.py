@@ -92,6 +92,11 @@ CLAVE = "pago_al_final"
 # sale mal.
 PROPOSITO = "envio_ves"
 
+# El prefijo de la referencia de cobro de este corredor. Tenía el texto suelto
+# dentro del filtro de `vencer_las_viejas` y dentro de `nuevo_id_de_cobro`;
+# dos copias del mismo dato es una que un día se cambia sola.
+PREFIJO_VENEZUELA = "venv_"
+
 # El estado en el que nace la orden. El mismo nombre que usa el envío cripto
 # con pago directo (`routes/transactions.create_crypto_withdrawal`, camino B),
 # para que el panel y el historial no tengan que aprender un estado nuevo.
@@ -111,6 +116,20 @@ PAGO_VENCIDO = "payment_expired"
 #   comprobado nada todavía. Las dos mentiras son caras: la primera hace que
 #   pague dos veces, la segunda despacha plata que quizá no entró.
 REVISANDO = "awaiting_review"
+
+# PAGO QUE LLEGO TARDE, Y QUE NADIE PUEDE DECIDIR SOLO.
+#
+#   Los siete minutos congelan la tasa. Si el pago entra después, el envío
+#   saldría a un precio que ya no existe, y esa diferencia la paga la empresa.
+#
+#   Pero la plata YA SALIO de la cuenta del cliente. Devolverla sola puede
+#   salir peor que despachar: hay comisiones de por medio y una persona que
+#   cree que su familia va a cobrar. Así que la orden no avanza NI se devuelve:
+#   queda apartada para que alguien la mire y decida. Decisión del dueño del
+#   proyecto.
+#
+#   Es un estado terminal para la máquina y de entrada para una persona.
+PAGO_TARDIO = "payment_late"
 
 # El propósito del corredor inverso. El de Venezuela es `envio_ves`.
 PROPOSITO_REAIS = "envio_brl"
@@ -147,43 +166,47 @@ def nuevo_id_de_cobro() -> str:
     """El identificador que viaja a Mercado Pago como `external_reference` y
     que queda en la orden como `payment_order_id`. Prefijo propio para que se
     distinga de un `gpix_` de recarga con sólo mirarlo en un registro."""
-    return f"venv_{uuid.uuid4().hex[:12]}"
+    return f"{PREFIJO_VENEZUELA}{uuid.uuid4().hex[:12]}"
 
 
 async def confirmar(db, pago: dict) -> bool:
     """El pago se aprobó: hacer avanzar la orden. Devuelve si avanzó.
 
-    Se llama DESDE el webhook de Mercado Pago, después de que éste verificó la
-    firma, la frescura, el monto, y le volvió a preguntar a Mercado Pago que el
-    pago está aprobado. Acá no se repite ninguna de esas comprobaciones: se
-    repiten mal.
+    Se llama DESDE el webhook de Mercado Pago —y desde la ruta que cobra con
+    tarjeta—, después de que ésos verificaron la firma, la frescura, el monto,
+    y le volvieron a preguntar a Mercado Pago que el pago está aprobado. Acá no
+    se repite ninguna de esas comprobaciones: se repiten mal.
 
     EL RECLAMO ES LO PRIMERO Y ES UNA SOLA ESCRITURA. Ver el encabezado.
+
+    EL VENCIMIENTO ESTA EN EL FILTRO, Y ANTES NO ESTABA.
+
+        El filtro pedía sólo el estado. Eso dejaba pasar un pago que entra
+        después de los siete minutos: la orden seguía en «esperando pago»
+        —porque nadie la vencía— y avanzaba a la cola con la tasa congelada
+        hace horas. El envío salía a un precio que ya no existía y la
+        diferencia la pagaba la empresa, sin que nada lo dijera.
+
+        El código de acá abajo ya contemplaba ese caso: si la orden estaba en
+        «vencida», anotaba un ERROR pidiendo mirarla a mano. Pero esa rama
+        NUNCA SE ALCANZABA, porque `vencer_las_viejas` no corría en ningún
+        lado y ninguna orden llegaba a estar «vencida».
+
+        Ahora el vencimiento se mira acá, y no se depende de que el barrido
+        haya llegado a tiempo: entre que el cobro muere y que el barrido pasa
+        hay una ventana, y el pago puede entrar justo ahí.
     """
     referencia = pago.get("payment_id")
     ahora = datetime.now(timezone.utc)
 
     orden = await db.transactions.find_one_and_update(
-        {"payment_order_id": referencia, "status": ESPERANDO_PAGO},
+        {"payment_order_id": referencia, "status": ESPERANDO_PAGO,
+         "payment_expires_at": {"$gt": ahora}},
         {"$set": {"status": PENDIENTE, "paid_at": ahora}},
         return_document=True,
     )
     if not orden:
-        # No es un error: es un webhook repetido, o una orden que ya venció y
-        # alguien pagó igual. Lo segundo hay que mirarlo, así que se anota con
-        # el nivel que corresponde y no se traga.
-        existe = await db.transactions.find_one(
-            {"payment_order_id": referencia}, {"_id": 0, "status": 1,
-                                               "transaction_id": 1})
-        if existe and existe.get("status") != PENDIENTE:
-            logger.error(
-                "pago_al_final: llegó el pago de %s y la orden está en «%s». "
-                "Si es «%s», alguien pagó un cobro vencido y hay que "
-                "devolverle la plata o despacharle el envío a mano.",
-                referencia, existe.get("status"), PAGO_VENCIDO)
-        else:
-            logger.info("pago_al_final: %s ya estaba confirmada", referencia)
-        return False
+        return await _pago_que_no_avanzo(db, referencia, ahora)
 
     # Recién ahora el documento del pago, que es contabilidad y no candado.
     # Si esto falla, la orden ya avanzó y el cliente va a cobrar; queda un
@@ -201,6 +224,99 @@ async def confirmar(db, pago: dict) -> bool:
     logger.info("pago_al_final: orden %s pagada y en cola",
                 orden.get("transaction_id"))
     return True
+
+
+async def _pago_que_no_avanzo(db, referencia, ahora) -> bool:
+    """El pago entró y la orden no estaba lista para avanzar. ¿Por qué?
+
+    Tres motivos posibles, y sólo uno de ellos es un problema:
+
+      · Webhook repetido sobre una orden que ya avanzó. Normal, se ignora.
+      · La orden no existe. Tampoco es de este flujo; se ignora.
+      · LLEGO TARDE. La plata salió de la cuenta de alguien por un cobro que
+        ya no valía. Eso no se decide solo.
+
+    NO AVANZA NI DEVUELVE. Queda apartada en `PAGO_TARDIO` para que una
+    persona mire y decida: despachar al precio viejo, o devolver. Es la
+    decisión que tomó el dueño del proyecto, y el motivo está donde se declara
+    ese estado.
+    """
+    existe = await db.transactions.find_one(
+        {"payment_order_id": referencia},
+        {"_id": 0, "status": 1, "transaction_id": 1, "display_id": 1,
+         "user_id": 1, "payment_expires_at": 1, "bono_aplicado": 1})
+
+    if not existe:
+        logger.info("pago_al_final: %s no es una orden de este flujo",
+                    referencia)
+        return False
+
+    if existe.get("status") == PENDIENTE:
+        logger.info("pago_al_final: %s ya estaba confirmada", referencia)
+        return False
+
+    # Sólo queda tarde, si la orden todavía estaba esperando o ya se venció.
+    if existe.get("status") not in (ESPERANDO_PAGO, PAGO_VENCIDO):
+        logger.warning(
+            "pago_al_final: llegó el pago de %s y la orden %s está en «%s». "
+            "No se toca: hay que mirarla a mano.",
+            referencia, existe.get("transaction_id"), existe.get("status"))
+        return False
+
+    # EL ESTADO DE PARTIDA VA EN EL FILTRO, igual que todo en este módulo: dos
+    # webhooks del mismo pago no pueden apartar la orden dos veces ni avisar
+    # dos veces al equipo.
+    apartada = await db.transactions.find_one_and_update(
+        {"transaction_id": existe.get("transaction_id"),
+         "status": existe.get("status")},
+        {"$set": {"status": PAGO_TARDIO, "late_payment_at": ahora,
+                  "late_payment_ref": referencia}},
+        return_document=True)
+    if not apartada:
+        logger.info("pago_al_final: %s ya estaba apartada", referencia)
+        return False
+
+    # SI EL BONO YA SE DEVOLVIO, QUIEN DECIDA TIENE QUE SABERLO.
+    #
+    #   `vencer_las_viejas` devuelve el bono al vencer la orden. Si el pago
+    #   llega después de eso, el cliente tiene el bono de vuelta EN LA MANO y
+    #   además pagó. Despachar sin descontarlo otra vez es regalarlo.
+    bono_devuelto = (existe.get("status") == PAGO_VENCIDO
+                     and float(existe.get("bono_aplicado") or 0) > 0)
+
+    logger.error(
+        "PAGO FUERA DE TIEMPO en el envío %s (%s): entró %s cuando el cobro "
+        "ya había vencido%s. La orden quedó en «%s» y NO se despachó. Hay que "
+        "decidir a mano: despachar a la tasa vieja, o devolver.%s",
+        existe.get("display_id"), existe.get("transaction_id"), referencia,
+        f" el {existe.get('payment_expires_at')}"
+        if existe.get("payment_expires_at") else "",
+        PAGO_TARDIO,
+        f" OJO: el bono de {existe.get('bono_aplicado')} ya se le devolvió al "
+        f"vencer, así que si se despacha hay que volver a descontarlo."
+        if bono_devuelto else "")
+
+    # Y que alguien se entere sin tener que mirar el registro.
+    try:
+        from services.notifications import avisar_al_personal
+        await avisar_al_personal(
+            title="Un pago entró fuera de tiempo",
+            message=(f"El envío {existe.get('display_id')} se pagó después de "
+                     f"que venciera el cobro. No se despachó: hay que decidir "
+                     f"si sale a la tasa vieja o se devuelve."
+                     + (" El bono ya se le devolvió al cliente."
+                        if bono_devuelto else "")),
+            notification_type="pago_tardio",
+            solo_super_admin=True,
+            data={"transaction_id": existe.get("transaction_id"),
+                  "payment_order_id": referencia,
+                  "bono_ya_devuelto": bono_devuelto})
+    except Exception as e:                                    # pragma: no cover
+        # La orden ya quedó apartada, que es lo que protege la plata. Que el
+        # aviso no salga se anota y no se devuelve.
+        logger.error("pago_al_final: no se pudo avisar del pago tardío de "
+                     "%s: %s", referencia, e)
+    return False
 
 
 async def vencer_las_viejas(db, ahora: datetime = None) -> int:
@@ -239,8 +355,21 @@ async def vencer_las_viejas(db, ahora: datetime = None) -> int:
     from services.money import to_decimal, to_decimal128
 
     ahora = ahora or datetime.now(timezone.utc)
+    # LOS DOS CORREDORES, y antes era uno solo.
+    #
+    #   El filtro pedía `^venv_`, o sea sólo los envíos a Venezuela. Las
+    #   órdenes del corredor inverso —`brl_`, las que se pagan en bolívares—
+    #   se quedaban en «esperando pago» para siempre aunque su cobro hubiera
+    #   muerto: `recibir_comprobante` las rechaza por vencidas, pero nadie las
+    #   movía de estado, así que el cliente veía «en curso» un pedido que ya
+    #   no podía pagar.
+    #
+    #   Se agrega el prefijo del otro corredor en vez de sacar la condición.
+    #   El motivo de que el prefijo exista sigue en pie y está abajo: ata la
+    #   limpieza a los flujos que esta función sabe vencer, y deja afuera el
+    #   camino cripto, que también usa «awaiting_payment».
     filtro = {"status": ESPERANDO_PAGO, "payment_expires_at": {"$lt": ahora},
-              "payment_order_id": {"$regex": "^venv_"}}
+              "payment_order_id": {"$regex": f"^({PREFIJO_VENEZUELA}|{PREFIJO_REAIS})"}}
 
     # DE A UNA, Y NO CON UN `update_many`, POR EL BONO.
     #
@@ -279,6 +408,78 @@ async def vencer_las_viejas(db, ahora: datetime = None) -> int:
                     "al vencer %s: %s", bono, orden["user_id"],
                     orden["transaction_id"], e)
     return vencidas
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El barrido, que es lo que hace que «vencida» signifique algo
+# ══════════════════════════════════════════════════════════════════════════
+#
+# POR QUE ESTO EXISTE, Y QUE PASABA SIN ESTO
+#
+#   `vencer_las_viejas` estaba escrita, probada y COMPLETA. Lo único que le
+#   faltaba era que alguien la llamara: sólo la llamaban los tests.
+#
+#   Tres cosas pasaban por eso, todas en producción:
+#
+#     1. Una orden que nadie pagó se quedaba en «esperando pago» PARA SIEMPRE.
+#        El cliente veía «en curso» un pedido que ya no podía pagar.
+#     2. El bono descontado al cotizar NUNCA VOLVIA. Es plata de alguien.
+#     3. Y la cara: un pago que entraba tarde avanzaba igual, porque la orden
+#        nunca llegaba a estar «vencida». El envío salía a la tasa congelada
+#        hacía horas.
+#
+#   El tercero ya no depende de esto —`confirmar` mira la fecha por su
+#   cuenta—, pero los dos primeros sí.
+#
+# CADA CUANTO, Y POR QUE ESE NUMERO
+#
+#   El cobro dura siete minutos. Un minuto de barrido significa que, en el
+#   peor caso, el cliente ve «en curso» sesenta segundos de más. Bajarlo no
+#   compra nada; subirlo empieza a notarse en la pantalla.
+#
+#   Es barato: una consulta sobre estado y fecha, y en el caso normal no
+#   devuelve nada.
+
+import asyncio                                               # noqa: E402
+
+CADA_CUANTO_SE_BARRE = 60
+
+_tarea = None
+
+
+async def _bucle(db):
+    while True:
+        await asyncio.sleep(CADA_CUANTO_SE_BARRE)
+        try:
+            cuantas = await vencer_las_viejas(db)
+            if cuantas:
+                logger.info("pago_al_final: vencieron %d órdenes", cuantas)
+        except Exception as e:                                # pragma: no cover
+            # NO SE CORTA EL BUCLE. Un error de base en una vuelta no puede
+            # dejar la aplicación sin barrido hasta el próximo despliegue: eso
+            # es exactamente el estado del que este bloque saca al sistema.
+            logger.error("pago_al_final: falló el barrido: %s", e)
+
+
+def arrancar(db) -> None:
+    """Deja corriendo el barrido. Se llama una vez, al arrancar."""
+    global _tarea
+    if _tarea is not None and not _tarea.done():
+        return
+    _tarea = asyncio.create_task(_bucle(db))
+
+
+async def parar() -> None:
+    """Corta el barrido. Para el apagado."""
+    global _tarea
+    if _tarea is not None:
+        _tarea.cancel()
+        try:
+            await _tarea
+        except (asyncio.CancelledError, Exception):
+            pass
+        _tarea = None
 
 
 # Lo que no se puede. La segunda mitad —qué SI se puede— la pone

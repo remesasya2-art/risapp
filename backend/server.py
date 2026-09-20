@@ -280,11 +280,28 @@ async def lifespan(app):
         uso.arrancar(db)
     except Exception as e:
         logger.warning(f"Uso: no se pudo arrancar el volcado: {e}")
+    # EL BARRIDO DE COBROS VENCIDOS. Sin esto, las órdenes que nadie paga se
+    # quedan en «esperando pago» para siempre y el bono descontado no vuelve.
+    # El por qué completo está en `services/pago_al_final.py`.
+    #
+    # Va como WARNING y no como ERROR si no arranca, igual que los otros dos:
+    # la aplicación funciona sin barrido —lo hizo hasta ahora—, sólo que deja
+    # basura. Tirar el arranque entero por esto sería peor.
+    try:
+        from services import pago_al_final as _paf
+        _paf.arrancar(db)
+    except Exception as e:
+        logger.warning(f"Pago al final: no se pudo arrancar el barrido: {e}")
     yield
     # Shutdown
     # Lo que el contador tiene en memoria, a la base antes de cerrarla. No
     # levanta: ver services/uso.py.
     await uso.parar(db)
+    try:
+        from services import pago_al_final as _paf
+        await _paf.parar()
+    except Exception:
+        pass
     try:
         from services.bcv_scraper import stop_scheduler
         stop_scheduler()
