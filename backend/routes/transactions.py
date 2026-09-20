@@ -1597,9 +1597,17 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     user = await db.users.find_one({"user_id": current_user.user_id})
 
     tx_id = f"rech_{uuid.uuid4().hex[:12]}"
+    # EL NUMERO CORTO, TAMBIEN ACA
+    #
+    #   Era la unica orden del historial que no llevaba `display_id`: todas
+    #   las demas lo piden al mismo contador. Sin el, el historial mostraba
+    #   nombre, fecha y monto y nada mas, y un cliente que escribia «pagué y
+    #   no me aparece» no tenia numero que dar.
+    display_id = await get_next_withdrawal_id()
 
     transaction = {
         "transaction_id": tx_id,
+        "display_id": display_id,
         "user_id": current_user.user_id,
         "type": "recharge_ves",
         "amount_input": amount_input,
@@ -1643,6 +1651,7 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     _resp_rch = {
         "message": "Recarga VES registrada, pendiente de verificacion",
         "transaction_id": tx_id,
+        "display_id": display_id,
         "amount_ves": amount_ves,
         "amount_ris": amount_ris
     }

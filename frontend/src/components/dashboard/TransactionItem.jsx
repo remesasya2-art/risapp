@@ -126,6 +126,29 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
         ? 'Recarga'
         : (sign === '+' ? 'Recarga' : 'Envío');
 
+  // EL NÚMERO DE LA ORDEN, A LA VISTA
+  //
+  //   El historial mostraba nombre, fecha y monto, y nada que NOMBRARA la
+  //   operación. Cuando alguien escribía «pagué y no me aparece», ni el
+  //   cliente ni quien lo atendía tenían un número que decirse: había que
+  //   adivinar cuál de los envíos del día era, por el monto y la hora.
+  //
+  //   `display_id` es el número corto y correlativo que el backend ya venía
+  //   guardando y mandando —está en `LO_QUE_VE_EL_CLIENTE`—; lo único que
+  //   faltaba era pintarlo.
+  //
+  //   El respaldo corta el identificador largo por el FINAL y no por el
+  //   principio: el principio es el prefijo del tipo (`tx_`, `rech_`) y sale
+  //   igual en todas las órdenes, que es justo lo contrario de un
+  //   identificador.
+  //
+  //   El respaldo NO mira el campo con que los envíos por Bitcoin guardan su
+  //   identificador largo: ese nombre no está en `LO_QUE_VE_EL_CLIENTE`, así
+  //   que al navegador no llega nunca. Leerlo acá sólo serviría para que
+  //   `tests/test_el_historial_no_lleva_el_panel.py` falle —y falló—.
+  const numero = tx.display_id
+    || (String(tx.transaction_id || '').slice(-8).toUpperCase() || null);
+
   if (compact) {
     const statusCfg = STATUS_CONFIG[txStatus] || STATUS_CONFIG.pending;
     return (
@@ -168,6 +191,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '2px' }}>
               <span style={{ fontSize: '11px', color: '#8E8E9A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatShort(tx.created_at)} · <span style={{ color: statusCfg.fg, fontWeight: 600 }}>{statusCfg.label}</span>
+                {numero && <> · <span data-testid={`numero-tx-${tx.transaction_id}`} style={{ userSelect: 'text' }}>#{numero}</span></>}
               </span>
               {showVoucher && (
                 <button
@@ -229,6 +253,12 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
               </div>
               <div style={{ fontSize: '11.5px', color: '#8E8E9A', marginTop: '1px' }}>
                 {formatShort(tx.created_at)}
+                {numero && (
+                  <> · <span
+                    data-testid={`numero-tx-${tx.transaction_id}`}
+                    style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', userSelect: 'text' }}
+                  >#{numero}</span></>
+                )}
               </div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
