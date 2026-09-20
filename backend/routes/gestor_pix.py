@@ -610,6 +610,13 @@ async def get_pix_history(current_user: User = Depends(require_authenticated_use
 
 
 # Mercado Pago Webhook endpoint (public - no auth required)
+async def _cerrar(anotacion, como, **datos):
+    """Cierra la fila de la hoja. Un solo lugar y no ocho copias."""
+    from services import hoja_de_mercadopago
+    await hoja_de_mercadopago.anotar_como_termino(
+        db, anotacion, como=como, **datos)
+
+
 async def _sin_acreditar(motivo, mp_payment_id, referencia=None, detalle=""):
     """Entró un pago y no se pudo acreditar: que alguien se entere.
 
@@ -745,9 +752,25 @@ async def mercadopago_webhook(request: Request):
         if event_type not in ["payment.created", "payment.updated", "payment"]:
             logger.info(f"Ignoring non-payment event: {event_type}")
             return {"received": True, "processed": False}
+
         
+        # LA HOJA SE ABRE ACA: apenas se sabe que el aviso es de Mercado Pago
+        # —o sea, después de la firma— y ANTES de cualquier comprobación.
+        #
+        #   Si se anotara al final, los avisos que revientan en el medio no
+        #   dejarían fila, que son justamente los que hay que investigar. Una
+        #   fila a medias es una pista; una que no existe no es nada.
+        #
+        #   El por qué completo está en `services/hoja_de_mercadopago.py`.
+        from services import hoja_de_mercadopago
+        _anotacion = await hoja_de_mercadopago.anotar_que_llego(
+            db, mp_payment_id=mp_payment_id, tipo_de_evento=event_type)
+
         if not mp_payment_id:
             logger.warning("Webhook received without payment ID")
+            await hoja_de_mercadopago.anotar_como_termino(
+                db, _anotacion, como=hoja_de_mercadopago.IGNORADO,
+                motivo="El aviso no traía identificador de pago.")
             return {"received": True, "error": "no_payment_id"}
         
         # EL IDENTIFICADOR SE BUSCA SIN QUE EL TIPO IMPORTE, Y ESTO COSTO
@@ -787,6 +810,8 @@ async def mercadopago_webhook(request: Request):
             if card_payment:
                 return await _handle_card_webhook(card_payment, str(mp_payment_id))
             await _sin_acreditar("no_encontrado", mp_payment_id)
+            await _cerrar(_anotacion, hoja_de_mercadopago.SIN_ACREDITAR,
+                          motivo="No coincide con ningún cobro nuestro.")
             return {"received": True, "error": "payment_not_found"}
         
         # Skip if already processed
@@ -801,6 +826,14 @@ async def mercadopago_webhook(request: Request):
                 await _sin_acreditar("no_esta_pendiente", mp_payment_id,
                                      payment.get("payment_id"),
                                      f"El cobro está en «{_estado}».")
+            await _cerrar(
+                _anotacion,
+                hoja_de_mercadopago.IGNORADO
+                if _estado in ("paid", "approved", "completed")
+                else hoja_de_mercadopago.SIN_ACREDITAR,
+                referencia=payment.get("payment_id"),
+                transaction_id=payment.get("transaction_id"),
+                motivo=f"El cobro ya estaba en «{_estado}».")
             return {"received": True, "already_processed": True}
         
         # SECURITY: Double-check status directly with Mercado Pago API
@@ -808,6 +841,10 @@ async def mercadopago_webhook(request: Request):
             await _sin_acreditar("mercadopago_no_contesta", mp_payment_id,
                                  payment.get("payment_id"),
                                  "El servicio de Mercado Pago no está disponible.")
+            await _cerrar(_anotacion, hoja_de_mercadopago.SIN_ACREDITAR,
+                          referencia=payment.get("payment_id"),
+                          transaction_id=payment.get("transaction_id"),
+                          motivo="Mercado Pago no estaba disponible.")
             return {"received": True, "error": "mp_service_unavailable"}
         
         mp_status = await asyncio.to_thread(
@@ -817,6 +854,10 @@ async def mercadopago_webhook(request: Request):
             await _sin_acreditar("mercadopago_no_contesta", mp_payment_id,
                                  payment.get("payment_id"),
                                  "No se pudo reverificar el pago.")
+            await _cerrar(_anotacion, hoja_de_mercadopago.SIN_ACREDITAR,
+                          referencia=payment.get("payment_id"),
+                          transaction_id=payment.get("transaction_id"),
+                          motivo="No se pudo reverificar el pago.")
             return {"received": True, "error": "verification_failed"}
         
         # SECURITY: Verify the amount matches
@@ -833,6 +874,11 @@ async def mercadopago_webhook(request: Request):
             await _sin_acreditar(
                 "monto_distinto", mp_payment_id, payment.get("payment_id"),
                 f"Esperábamos {expected_amount} y entró {actual_amount}.")
+            await _cerrar(_anotacion, hoja_de_mercadopago.SIN_ACREDITAR,
+                          referencia=payment.get("payment_id"),
+                          transaction_id=payment.get("transaction_id"),
+                          monto=actual_amount,
+                          motivo=f"Esperábamos {expected_amount}.")
             return {"received": True, "error": "amount_mismatch"}
         
         # Only credit if MP confirms "approved" status
@@ -865,13 +911,27 @@ async def mercadopago_webhook(request: Request):
             
             if success:
                 logger.info(f"Webhook processed successfully: payment {mp_payment_id} approved and credited")
+                await _cerrar(_anotacion, hoja_de_mercadopago.ACREDITADO,
+                              referencia=payment.get("payment_id"),
+                              transaction_id=payment.get("transaction_id"),
+                              monto=actual_amount, estado_en_mp="approved")
                 return {"received": True, "processed": True, "status": "approved"}
             else:
                 await _sin_acreditar("no_se_pudo_confirmar", mp_payment_id,
                                      payment.get("payment_id"))
+                await _cerrar(_anotacion, hoja_de_mercadopago.SIN_ACREDITAR,
+                              referencia=payment.get("payment_id"),
+                              transaction_id=payment.get("transaction_id"),
+                              monto=actual_amount, estado_en_mp="approved",
+                              motivo="La orden no avanzó.")
                 return {"received": True, "error": "processing_failed"}
         else:
             logger.info(f"Payment {mp_payment_id} status is {mp_status.get('status')}, not approved yet")
+            await _cerrar(_anotacion, hoja_de_mercadopago.IGNORADO,
+                          referencia=payment.get("payment_id"),
+                          transaction_id=payment.get("transaction_id"),
+                          estado_en_mp=mp_status.get("status"),
+                          motivo="Todavía no estaba aprobado.")
             return {"received": True, "status": mp_status.get("status")}
         
     except HTTPException:

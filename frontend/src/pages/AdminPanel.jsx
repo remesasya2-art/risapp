@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
-, AlertTriangle, BarChart3 } from 'lucide-react';
+, AlertTriangle, BarChart3, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { confirmar } from '../components/flujo/confirmar.js';
@@ -15,6 +15,7 @@ import Reportes from '../components/admin/Reportes';
 import ReconciliacionLedger from '../components/admin/ReconciliacionLedger';
 import SeguridadFinanciera from '../components/admin/SeguridadFinanciera';
 import CobrosSinAcreditar from '../components/admin/CobrosSinAcreditar';
+import HojaDeMercadoPago from '../components/admin/HojaDeMercadoPago';
 import LibroMayor from '../components/admin/LibroMayor';
 import RecursosHumanos from '../components/admin/RecursosHumanos';
 import LibroAuditoria from '../components/admin/LibroAuditoria';
@@ -82,6 +83,12 @@ const TABS = [
   // y no antes: aquélla se carga sola y contesta de una, ésta hay que pulsarla
   // y le pregunta a Mercado Pago pago por pago.
   { key: 'cobros', label: 'Cobros sin acreditar', icon: Search, superAdminOnly: true },
+  // La hoja que alimenta Mercado Pago sola: una fila por aviso que llega, se
+  // haya podido acreditar o no. SIN `superAdminOnly`, igual que la ruta que
+  // consulta (`get_admin_user`): quien atiende a un cliente que dice «pagué y
+  // no me aparece» tiene que poder mirarlo en el momento, y no hay dinero que
+  // mover acá —es de sólo lectura y no muestra datos del pagador—.
+  { key: 'hoja_mp', label: 'Pagos de Mercado Pago', icon: Receipt },
   { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
@@ -138,8 +145,8 @@ const TABS = [
 const GRUPOS = [
   { key: 'g_resumen', label: 'Resumen', icon: Activity, hijas: ['overview', 'uso'] },
   { key: 'g_operacion', label: 'Operación', icon: CheckCircle,
-    hijas: ['ordenes', 'withdrawals', 'recharges', 'diferencias', 'btc',
-            'credits', 'rates'] },
+    hijas: ['ordenes', 'withdrawals', 'recharges', 'diferencias', 'hoja_mp',
+            'btc', 'credits', 'rates'] },
   { key: 'g_clientes', label: 'Clientes', icon: UserCog,
     hijas: ['users', 'kyc', 'blacklist', 'chat', 'support', 'ratings'] },
   { key: 'g_envios', label: 'Encomiendas', icon: Boxes,
@@ -1021,6 +1028,12 @@ const [searchParams, setSearchParams] = useSearchParams();
 
         {activeTab === 'cobros' && user?.role === 'super_admin' && (
           <CobrosSinAcreditar />
+        )}
+
+        {activeTab === 'hoja_mp' && (
+          <ErrorBoundary clave="hoja_mp" donde="Pagos de Mercado Pago">
+            <HojaDeMercadoPago />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'ledger' && (
