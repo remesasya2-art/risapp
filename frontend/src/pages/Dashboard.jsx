@@ -13,6 +13,7 @@ import NotificationBell from '../components/NotificationBell';
 import SupportChat from '../components/SupportChat';
 import KycQuotaModal from '../components/KycQuotaModal';
 import BalanceCard from '../components/dashboard/BalanceCard';
+import Calculadora from '../components/dashboard/Calculadora';
 import CryptoBalanceCard from '../components/dashboard/CryptoBalanceCard';
 import useCripto from '../hooks/useCripto';
 import BonoCard from '../components/dashboard/BonoCard';
@@ -529,7 +530,7 @@ const normalized = { ...tx };
         </div>
 
         {/* Balance Card (gradient + count-up + dual pills) */}
-        <div style={{ marginBottom: '24px' }}>
+        <div style={{ marginBottom: '24px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px', alignItems: 'stretch' }}>
           <BalanceCard
             balance={user?.balance_ris || 0}
             risToVes={rates?.ris_to_ves || 0}
@@ -537,6 +538,7 @@ const normalized = { ...tx };
             updatedAt={rates?.updated_at || rates?.last_updated || new Date()}
             isMobile={isMobile}
           />
+          <Calculadora isMobile={isMobile} />
         </div>
 
         {/* El bono de bienvenida. Saldo aparte, con reglas propias: bloqueado
