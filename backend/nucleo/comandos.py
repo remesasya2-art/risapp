@@ -64,6 +64,12 @@ def nuevo_id_de_cuenta() -> str:
 
 
 async def crear_cuenta(*, titular_ref: str, moneda: str = "BRL", de_prueba: bool = True) -> dict:
+    """Una cuenta de pago para un titular. `titular_ref` es el id del
+    titular en `identidad`, y SU LEGAJO TIENE QUE ESTAR APROBADO Y VIGENTE:
+    es la guarda que hace que el conocimiento del cliente no se pueda
+    saltear. El motivo completo está en nucleo/identidad/legajos.py."""
+    from nucleo.identidad import legajos
+    await legajos.exigir_apto(titular_ref)
     async with base.sesion() as s:
         await plan.sembrar(s)
         id_ = nuevo_id_de_cuenta()

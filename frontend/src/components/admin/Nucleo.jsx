@@ -15,6 +15,9 @@
  *   Y los rieles: cobrar por PIX (un QR con el BR Code de verdad), pagar a
  *   una clave, devolver, consultar el DICT — contra un simulador con claves
  *   de prueba que se portan distinto (una rechaza, una tarda).
+ *   Y la identidad: el legajo de cada titular (verificar, cruzar con las
+ *   listas, aprobar con un nivel de riesgo), contra un simulador con
+ *   personas de prueba. Sin legajo aprobado no se abre una cuenta.
  *
  * APAGADO DE FABRICA
  *
@@ -24,7 +27,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2 } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -51,11 +54,17 @@ const COLOR_DEL_ESTADO = {
   enviada: { background: '#dbeafe', color: '#1e40af' },
   liquidada: { background: '#dcfce7', color: '#166534' },
   rechazada: { background: '#fee2e2', color: '#991b1b' },
+  // los de un legajo
+  incompleto: { background: '#f3f4f6', color: '#374151' },
+  en_revision: { background: '#fef3c7', color: '#92400e' },
+  aprobado: { background: '#dcfce7', color: '#166534' },
+  rechazado: { background: '#fee2e2', color: '#991b1b' },
+  vencido: { background: '#fee2e2', color: '#991b1b' },
 };
 const DIRECCION = { entrada: 'Cobro', salida: 'Pago', devolucion: 'Devolución' };
 const Etiqueta = ({ valor }) => (
   <span style={{ ...(COLOR_DEL_ESTADO[valor] || {}), padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
-    {valor === 'en_curso' ? 'en curso' : valor}
+    {valor === 'en_curso' ? 'en curso' : valor === 'en_revision' ? 'en revisión' : valor}
   </span>
 );
 
@@ -72,8 +81,13 @@ export default function Nucleo() {
   const [pago, setPago] = useState({ cuenta: '', clave: '', monto: '', descripcion: '' });
   const [titularDeLaClave, setTitularDeLaClave] = useState(null);
   const [devolviendo, setDevolviendo] = useState(null);   // { id, monto } del cobro que se está devolviendo
+  const [identidad, setIdentidad] = useState(null);
+  const [nuevoTitular, setNuevoTitular] = useState({ documento: '', nombre: '', ocupacion: '', renta_declarada: '', origen_de_fondos: 'salario', pep_declarado: false });
+  const [abierto, setAbierto] = useState(null);           // el titular cuyo legajo se está mirando
+  const [nivel, setNivel] = useState('bajo');
+  const [resolucion, setResolucion] = useState('');
   const [vuelta, setVuelta] = useState(0);
-  const [titular, setTitular] = useState('');
+  const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
   const [diaCierre, setDiaCierre] = useState(() => new Date().toISOString().slice(0, 10));
   const [ocupado, setOcupado] = useState(false);
@@ -87,14 +101,15 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl] = await Promise.all([
+        const [c, l, b, z, q, rl, idn] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
+          api.get('/nucleo/laboratorio/identidad'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
-        setCola(q.data || null); setRieles(rl.data || null);
+        setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -105,11 +120,11 @@ export default function Nucleo() {
   }, [vuelta]);
 
   const crearCuenta = async () => {
-    if (!titular.trim()) return toast.error('Poné una referencia del titular (de prueba)');
+    if (!titularDeLaCuenta) return toast.error('Elegí un titular con legajo aprobado');
     setOcupado(true);
     try {
-      await api.post('/nucleo/laboratorio/cuentas', { titular_ref: titular.trim() });
-      setTitular(''); toast.success('Cuenta de prueba creada'); recargar();
+      await api.post('/nucleo/laboratorio/cuentas', { titular: titularDeLaCuenta });
+      setTitularDeLaCuenta(''); toast.success('Cuenta de prueba creada'); recargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo crear'); }
     finally { setOcupado(false); }
   };
@@ -233,6 +248,46 @@ export default function Nucleo() {
     finally { setOcupado(false); }
   };
 
+  const nombreDelTitular = (id) => (identidad?.titulares || []).find((t) => t.id === id)?.nombre || id;
+
+  const crearTitular = async () => {
+    setOcupado(true);
+    try {
+      const cuerpo = { ...nuevoTitular };
+      Object.keys(cuerpo).forEach((k) => { if (cuerpo[k] === '') delete cuerpo[k]; });
+      const r = await api.post('/nucleo/laboratorio/identidad/titulares', cuerpo);
+      toast.success(`Legajo de ${r.data.nombre} creado`); setAbierto(r.data.id);
+      setNuevoTitular({ documento: '', nombre: '', ocupacion: '', renta_declarada: '', origen_de_fondos: 'salario', pep_declarado: false }); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo crear el legajo'); }
+    finally { setOcupado(false); }
+  };
+
+  const accionDeLegajo = async (id, accion, cuerpo) => {
+    setOcupado(true);
+    try {
+      const rutas = {
+        verificar: `/nucleo/laboratorio/identidad/titulares/${id}/verificar`,
+        cruzar: `/nucleo/laboratorio/identidad/titulares/${id}/cruzar`,
+        aprobar: `/nucleo/laboratorio/identidad/titulares/${id}/aprobar`,
+        rechazar: `/nucleo/laboratorio/identidad/titulares/${id}/rechazar`,
+      };
+      await api.post(rutas[accion], cuerpo || {});
+      toast.success({ verificar: 'Verificación hecha', cruzar: 'Listas consultadas', aprobar: 'Legajo aprobado', rechazar: 'Legajo rechazado' }[accion]);
+      setAbierto(id); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo'); }
+    finally { setOcupado(false); }
+  };
+
+  const resolverCruce = async (cruceId) => {
+    if (!resolucion.trim()) return toast.error('Escribí cómo se resuelve el cruce');
+    setOcupado(true);
+    try {
+      await api.post(`/nucleo/laboratorio/identidad/cruces/${cruceId}/resolver`, { resolucion: resolucion.trim() });
+      toast.success('Cruce resuelto'); setResolucion(''); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo resolver'); }
+    finally { setOcupado(false); }
+  };
+
   if (estado === null) return <p style={{ color: '#6b7280' }}>Cargando…</p>;
 
   if (estado.apagado) {
@@ -283,6 +338,121 @@ export default function Nucleo() {
 
       {estado.conectada ? (
         <>
+
+          {/* Identidad */}
+          <div style={tarjeta} data-testid="nucleo-identidad">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><UserCheck size={16} /> Identidad y legajos {identidad ? `· ${identidad.verificador} · ${identidad.listas}` : ''}</strong>
+              {identidad ? (
+                <select style={{ ...campo, width: 'auto' }} value="" data-testid="identidad-persona-de-prueba"
+                  onChange={(e) => { const p = identidad.personas_de_prueba.find((x) => x.documento === e.target.value); if (p) setNuevoTitular((n) => ({ ...n, documento: p.documento, nombre: p.nombre })); }}>
+                  <option value="">Personas de prueba…</option>
+                  {identidad.personas_de_prueba.map((p) => <option key={p.documento} value={p.documento}>{p.nombre} · {p.documento}{p.comportamiento !== 'normal' ? ` (${p.comportamiento.replaceAll('_', ' ')})` : ''}</option>)}
+                </select>
+              ) : null}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginTop: 12 }}>
+              {/* Nuevo legajo */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14 }}>Nuevo legajo</strong>
+                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <input style={campo} placeholder="CPF o CNPJ, sólo dígitos" value={nuevoTitular.documento} inputMode="numeric"
+                    onChange={(e) => setNuevoTitular({ ...nuevoTitular, documento: e.target.value })} data-testid="identidad-documento" />
+                  <input style={campo} placeholder="Nombre completo" value={nuevoTitular.nombre}
+                    onChange={(e) => setNuevoTitular({ ...nuevoTitular, nombre: e.target.value })} data-testid="identidad-nombre" />
+                  <input style={campo} placeholder="Ocupación" value={nuevoTitular.ocupacion}
+                    onChange={(e) => setNuevoTitular({ ...nuevoTitular, ocupacion: e.target.value })} />
+                  <input style={campo} placeholder="Renta declarada por mes, en reales" value={nuevoTitular.renta_declarada} inputMode="decimal"
+                    onChange={(e) => setNuevoTitular({ ...nuevoTitular, renta_declarada: e.target.value })} />
+                  <select style={campo} value={nuevoTitular.origen_de_fondos} onChange={(e) => setNuevoTitular({ ...nuevoTitular, origen_de_fondos: e.target.value })}>
+                    {(identidad?.origenes_de_fondos || ['salario']).map((o) => <option key={o} value={o}>Origen de fondos: {o.replaceAll('_', ' ')}</option>)}
+                  </select>
+                  <label style={{ fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input type="checkbox" checked={nuevoTitular.pep_declarado} onChange={(e) => setNuevoTitular({ ...nuevoTitular, pep_declarado: e.target.checked })} />
+                    Declara ser persona expuesta políticamente (PEP)
+                  </label>
+                  <button type="button" onClick={crearTitular} disabled={ocupado} style={boton} data-testid="identidad-crear">Crear legajo</button>
+                </div>
+              </div>
+
+              {/* El legajo abierto */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }} data-testid="identidad-legajo">
+                {(() => {
+                  const t = (identidad?.titulares || []).find((x) => x.id === abierto);
+                  if (!t) return <p style={{ color: '#6b7280', fontSize: 13, margin: 0 }}>Elegí un legajo de la lista para verlo y decidir.</p>;
+                  const ultima = t.verificaciones?.[0];
+                  return (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ fontSize: 14 }}>{t.nombre} <span style={{ ...mono, color: '#6b7280', fontWeight: 400 }}>{t.documento}</span></strong>
+                        <Etiqueta valor={t.estado} />
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>
+                        {t.ocupacion || 'sin ocupación'} · renta {t.renta_declarada ? `R$ ${t.renta_declarada}` : '—'} · origen {t.origen_de_fondos || '—'}
+                        {t.pep ? <strong style={{ color: '#92400e' }}> · PEP</strong> : null}
+                        {t.nivel_de_riesgo ? <> · riesgo <strong>{t.nivel_de_riesgo}</strong> · vigente hasta {t.vigente_hasta}</> : null}
+                        {t.motivo ? <span style={{ color: '#991b1b' }}> · {t.motivo}</span> : null}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
+                        <button type="button" onClick={() => accionDeLegajo(t.id, 'verificar')} disabled={ocupado || t.estado === 'rechazado'} style={botonSuave} data-testid="identidad-verificar"><Fingerprint size={13} /> Verificar identidad</button>
+                        <button type="button" onClick={() => accionDeLegajo(t.id, 'cruzar')} disabled={ocupado} style={botonSuave} data-testid="identidad-cruzar"><ListChecks size={13} /> Cruzar con listas</button>
+                      </div>
+                      {ultima ? (
+                        <div style={{ fontSize: 12, padding: 8, borderRadius: 8, background: ultima.aprobada ? '#f0fdf4' : '#fef2f2' }} data-testid="identidad-verificacion">
+                          <strong>{ultima.aprobada ? 'Verificación aprobada' : 'Verificación NO aprobada'}</strong> · documento {ultima.puntaje_documento} · vida {ultima.puntaje_vida} · rostro {ultima.puntaje_rostro} · CPF {ultima.situacion_cpf}
+                          {ultima.motivos.length ? <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>{ultima.motivos.map((m, i) => <li key={i}>{m}</li>)}</ul> : null}
+                        </div>
+                      ) : null}
+                      {t.cruzado_en ? (
+                        <div style={{ fontSize: 12, marginTop: 8 }} data-testid="identidad-cruces">
+                          <strong>Listas:</strong> {t.cruces.length === 0 ? 'no aparece en ninguna' : ''}
+                          {t.cruces.map((c) => (
+                            <div key={c.id} style={{ padding: 6, borderRadius: 8, background: c.resuelto ? '#f3f4f6' : '#fef2f2', marginTop: 4 }}>
+                              <strong>{c.lista}</strong> ({c.clase}) · {c.nombre_en_lista} · {c.detalle}
+                              {c.resuelto ? <div style={{ color: '#374151' }}>Resuelto por {c.resuelto_por}: {c.resolucion}</div> : (
+                                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                                  <input style={{ ...campo, padding: '5px 8px' }} placeholder="falso positivo: … / confirmado: …" value={resolucion}
+                                    onChange={(e) => setResolucion(e.target.value)} data-testid="identidad-resolucion" />
+                                  <button type="button" onClick={() => resolverCruce(c.id)} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="identidad-resolver">Resolver</button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {t.estado !== 'aprobado' && t.estado !== 'rechazado' ? (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <select style={{ ...campo, width: 'auto' }} value={nivel} onChange={(e) => setNivel(e.target.value)} data-testid="identidad-nivel">
+                            {(identidad?.niveles_de_riesgo || []).map((n) => <option key={n} value={n}>riesgo {n}</option>)}
+                          </select>
+                          <button type="button" onClick={() => accionDeLegajo(t.id, 'aprobar', { nivel_de_riesgo: nivel })} disabled={ocupado} style={boton} data-testid="identidad-aprobar">Aprobar</button>
+                          <button type="button" onClick={() => accionDeLegajo(t.id, 'rechazar', { motivo: 'Rechazado desde el laboratorio' })} disabled={ocupado} style={{ ...botonSuave, background: '#fee2e2', color: '#991b1b' }} data-testid="identidad-rechazar">Rechazar</button>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Lista de legajos */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }} data-testid="identidad-titulares">
+              <thead><tr><th style={th}>Titular</th><th style={th}>Documento</th><th style={th}>Estado</th><th style={th}>Riesgo</th><th style={th}>Vigente hasta</th><th style={th} /></tr></thead>
+              <tbody>
+                {!identidad || identidad.titulares.length === 0 ? <tr><td style={td} colSpan={6}>Todavía no hay legajos.</td></tr> : identidad.titulares.map((t) => (
+                  <tr key={t.id} data-testid={`identidad-titular-${t.estado}`} style={{ background: abierto === t.id ? '#f5f3ff' : undefined }}>
+                    <td style={td}>{t.nombre}{t.pep ? <span style={{ color: '#92400e', fontSize: 11 }}> · PEP</span> : null}</td>
+                    <td style={{ ...td, ...mono }}>{t.documento}</td>
+                    <td style={td}><Etiqueta valor={t.estado} /></td>
+                    <td style={td}>{t.nivel_de_riesgo || '—'}</td>
+                    <td style={td}>{t.vigente_hasta || '—'}</td>
+                    <td style={td}><button type="button" onClick={() => setAbierto(t.id)} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="identidad-abrir">Ver legajo</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
             {/* Cuentas */}
             <div style={tarjeta}>
@@ -291,15 +461,19 @@ export default function Nucleo() {
                 <button type="button" onClick={recargar} style={{ ...botonSuave, padding: '6px 10px' }}><RefreshCw size={13} /></button>
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                <input style={campo} placeholder="Referencia del titular (p. ej. u_ana)" value={titular}
-                  onChange={(e) => setTitular(e.target.value)} data-testid="nucleo-titular" />
+                <select style={campo} value={titularDeLaCuenta} onChange={(e) => setTitularDeLaCuenta(e.target.value)} data-testid="nucleo-titular">
+                  <option value="">Titular con legajo aprobado…</option>
+                  {(identidad?.titulares || []).filter((t) => t.estado === 'aprobado').map((t) => (
+                    <option key={t.id} value={t.id}>{t.nombre} · {t.documento}</option>
+                  ))}
+                </select>
                 <button type="button" onClick={crearCuenta} disabled={ocupado} style={boton} data-testid="nucleo-crear-cuenta"><Plus size={14} /></button>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr><th style={th}>Cuenta</th><th style={th}>Titular</th><th style={{ ...th, textAlign: 'right' }}>Saldo</th></tr></thead>
                 <tbody>
                   {cuentas.length === 0 ? <tr><td style={td} colSpan={3}>Todavía no hay cuentas.</td></tr> : cuentas.map((c) => (
-                    <tr key={c.id}><td style={{ ...td, ...mono }}>{c.id}</td><td style={td}>{c.titular_ref}</td>
+                    <tr key={c.id}><td style={{ ...td, ...mono }}>{c.id}</td><td style={td}>{nombreDelTitular(c.titular_ref)}</td>
                       <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>R$ {c.saldo.replace('.', ',')}</td></tr>
                   ))}
                 </tbody>

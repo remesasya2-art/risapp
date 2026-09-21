@@ -14,6 +14,7 @@ os.environ.setdefault("DB_NAME", "ris_test")
 
 mongomock_motor = pytest.importorskip("mongomock_motor")
 
+from _nucleo_comun import cuenta_por_http                    # noqa: E402
 from conftest import usar_base                                # noqa: E402
 from models.user import User                                  # noqa: E402
 from nucleo import base as nucleo_base, modo                  # noqa: E402
@@ -43,10 +44,8 @@ def cliente():
 
 
 def test_el_recorrido_del_laboratorio(cliente):
-    r = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"})
-    assert r.status_code == 200, r.text
-    a = r.json()["id"]
-    b = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_beto"}).json()["id"]
+    a = cuenta_por_http(cliente, "u_ana")
+    b = cuenta_por_http(cliente, "u_beto")
 
     r = cliente.post("/api/nucleo/laboratorio/movimientos",
                      json={"tipo": "acreditar", "cuenta": a, "monto": "100.00", "referencia": "in-1"})
@@ -75,7 +74,7 @@ def test_el_recorrido_del_laboratorio(cliente):
 
 
 def test_los_errores_del_libro_llegan_como_mensajes_claros(cliente):
-    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    a = cuenta_por_http(cliente, "u_ana")
     r = cliente.post("/api/nucleo/laboratorio/movimientos",
                      json={"tipo": "debitar", "cuenta": a, "monto": "5.00", "referencia": "d1"})
     assert r.status_code == 400 and "Saldo insuficiente" in r.json()["detail"]
@@ -92,7 +91,7 @@ def test_los_errores_del_libro_llegan_como_mensajes_claros(cliente):
 
 
 def test_LA_MISMA_REFERENCIA_POR_HTTP_NO_DUPLICA(cliente):
-    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    a = cuenta_por_http(cliente, "u_ana")
     cuerpo = {"tipo": "acreditar", "cuenta": a, "monto": "100.00", "referencia": "unica"}
     n1 = cliente.post("/api/nucleo/laboratorio/movimientos", json=cuerpo).json()["numero"]
     n2 = cliente.post("/api/nucleo/laboratorio/movimientos", json=cuerpo).json()["numero"]
@@ -112,7 +111,7 @@ def test_sin_base_configurada_el_laboratorio_dice_que_falta(cliente, monkeypatch
 # ─── la cola por HTTP ─────────────────────────────────────────────────────
 
 def test_la_cola_por_http_encola_procesa_y_revive(cliente):
-    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    a = cuenta_por_http(cliente, "u_ana")
     cliente.post("/api/nucleo/laboratorio/movimientos",
                  json={"tipo": "acreditar", "cuenta": a, "monto": "100.00", "referencia": "in-1"})
     r = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "eco", "carga": {"mensaje": "hola"}})
@@ -156,7 +155,7 @@ def test_DESDE_LA_PESTANA_SOLO_SE_ENCOLAN_LOS_DE_LABORATORIO(cliente):
 # ─── los rieles por HTTP ──────────────────────────────────────────────────
 
 def test_los_rieles_por_http_cobran_pagan_y_devuelven(cliente):
-    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    a = cuenta_por_http(cliente, "u_ana")
     r = cliente.get("/api/nucleo/laboratorio/rieles")
     assert r.status_code == 200, r.text
     assert r.json()["riel"] == "simulador" and any(c["clave"] == "rechaza@ejemplo.test" for c in r.json()["claves_de_prueba"])
@@ -200,7 +199,7 @@ def test_los_rieles_por_http_cobran_pagan_y_devuelven(cliente):
 
 
 def test_LOS_ERRORES_DE_LOS_RIELES_LLEGAN_COMO_MENSAJES_CLAROS(cliente):
-    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    a = cuenta_por_http(cliente, "u_ana")
     r = cliente.get("/api/nucleo/laboratorio/rieles/claves/ana@ejemplo.test")
     assert r.status_code == 200 and r.json()["documento"] == "***.456.789-**"
     assert cliente.get("/api/nucleo/laboratorio/rieles/claves/noexiste@ejemplo.test").status_code == 404
@@ -215,3 +214,47 @@ def test_LOS_ERRORES_DE_LOS_RIELES_LLEGAN_COMO_MENSAJES_CLAROS(cliente):
     r = cliente.post("/api/nucleo/laboratorio/rieles/devoluciones", json={"operacion": "op_nada", "monto": "1.00", "motivo": "ZZ00"})
     assert r.status_code == 422
     assert cliente.get("/api/nucleo/laboratorio/rieles/operaciones/op_nada").status_code == 404
+
+
+# ─── la identidad por HTTP ────────────────────────────────────────────────
+
+def test_la_identidad_por_http_recorre_el_legajo_y_abre_la_cuenta(cliente):
+    r = cliente.get("/api/nucleo/laboratorio/identidad")
+    assert r.status_code == 200, r.text
+    assert r.json()["verificador"].startswith("simulador") and "salario" in r.json()["origenes_de_fondos"]
+    pep = next(p for p in r.json()["personas_de_prueba"] if p["comportamiento"] == "pep")
+
+    r = cliente.post("/api/nucleo/laboratorio/identidad/titulares",
+                     json={"documento": pep["documento"], "nombre": pep["nombre"], "ocupacion": "funcionaria",
+                           "renta_declarada": "12000.00", "origen_de_fondos": "salario"})
+    assert r.status_code == 200, r.text
+    t = r.json()
+    assert t["estado"] == "incompleto" and t["renta_declarada"] == "12000.00"
+    # con el legajo incompleto no hay cuenta: 409, con el motivo
+    r = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular": t["id"]})
+    assert r.status_code == 409 and "incompleto" in r.json()["detail"]
+
+    v = cliente.post(f"/api/nucleo/laboratorio/identidad/titulares/{t['id']}/verificar").json()
+    assert v["aprobada"] is True
+    c = cliente.post(f"/api/nucleo/laboratorio/identidad/titulares/{t['id']}/cruzar").json()
+    assert len(c) == 1 and c[0]["lista"] == "PEP-CGU"
+    d = cliente.get(f"/api/nucleo/laboratorio/identidad/titulares/{t['id']}").json()
+    assert d["pep"] is True and d["estado"] == "en_revision"
+    r = cliente.post(f"/api/nucleo/laboratorio/identidad/titulares/{t['id']}/aprobar", json={"nivel_de_riesgo": "bajo"})
+    assert r.status_code == 400 and "riesgo alto" in r.json()["detail"]
+    r = cliente.post(f"/api/nucleo/laboratorio/identidad/titulares/{t['id']}/aprobar", json={"nivel_de_riesgo": "alto"})
+    assert r.status_code == 200 and r.json()["estado"] == "aprobado"
+    r = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular": t["id"]})
+    assert r.status_code == 200 and r.json()["titular_ref"] == t["id"]
+    assert cliente.get("/api/nucleo/laboratorio/identidad?estado=aprobado").json()["titulares"][0]["id"] == t["id"]
+
+
+def test_LOS_ERRORES_DE_LA_IDENTIDAD_LLEGAN_COMO_MENSAJES_CLAROS(cliente):
+    r = cliente.post("/api/nucleo/laboratorio/identidad/titulares", json={"documento": "12345678900", "nombre": "X"})
+    assert r.status_code == 400 and "CPF" in r.json()["detail"]
+    assert cliente.get("/api/nucleo/laboratorio/identidad/titulares/tit_nadie").status_code == 404
+    r = cliente.post("/api/nucleo/laboratorio/identidad/titulares/tit_nadie/aprobar", json={"nivel_de_riesgo": "raro"})
+    assert r.status_code == 422
+    r = cliente.post("/api/nucleo/laboratorio/identidad/cruces/999/resolver", json={"resolucion": "x"})
+    assert r.status_code == 400
+    assert cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular": "tit_nadie"}).status_code == 409

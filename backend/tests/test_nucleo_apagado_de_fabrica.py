@@ -105,7 +105,7 @@ def test_APAGADO_EL_SUPER_ADMINISTRADOR_RECIBE_404(app_y_base):
                  "/api/nucleo/laboratorio/balance", "/api/nucleo/laboratorio/cadena", "/api/nucleo/laboratorio/cierres"):
         r = c.get(ruta)
         assert r.status_code == 404, (ruta, r.status_code, r.text)
-    r = c.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_1"})
+    r = c.post("/api/nucleo/laboratorio/cuentas", json={"titular": "tit_1"})
     assert r.status_code == 404
 
 
