@@ -2263,6 +2263,15 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
         "expires_at": vence.isoformat(),
         "expires_in_seconds": pago_al_final.MINUTOS_DEL_COBRO * 60,
         "metodo": metodo,
+        # LA REFERENCIA DEL COBRO VA SIEMPRE, TAMBIEN CON PIX.
+        #
+        #   Antes iba sólo con tarjeta —abajo—, con el argumento de que con
+        #   PIX «el código ya lo identifica». Es cierto para pagar, pero no
+        #   para PREGUNTAR si se pagó: la pantalla le pregunta al servidor por
+        #   `/gestor/pix/status/{referencia}`, y sin la referencia no tenía
+        #   por qué preguntar. Ese fue el motivo exacto por el que el cliente
+        #   pagaba con PIX y la pantalla del QR se quedaba igual.
+        "payment_order_id": referencia,
     }
 
     # EL DESGLOSE DE LA TARJETA LO CALCULA EL SERVIDOR, Y SOLO EL SERVIDOR.
@@ -2276,12 +2285,10 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
     #   Van las tres cifras y no sólo el total: quien ve «R$ 104,89» sin saber
     #   de dónde salen los 4,89 se cree que le están cobrando de más.
     if metodo == tarjeta_del_envio.POR_TARJETA:
-        # LA REFERENCIA DEL COBRO, que con PIX no hacía falta devolver porque
-        # el código ya lo identifica. Con tarjeta es lo único que ata el
-        # formulario de la tarjeta a esta orden, así que sin esto la vía no
-        # funciona. Conocerla no alcanza para pagar el envío de otro: la ruta
-        # que cobra filtra también por el dueño.
-        _resp["payment_order_id"] = referencia
+        # La referencia ya va arriba para las dos vías. Con tarjeta es además
+        # lo único que ata el formulario de la tarjeta a esta orden. Conocerla
+        # no alcanza para pagar el envío de otro: la ruta que cobra filtra
+        # también por el dueño.
 
         from routes.payments_card import _get_card_fees
         _tarifas = await _get_card_fees()
