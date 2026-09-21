@@ -151,3 +151,67 @@ def test_DESDE_LA_PESTANA_SOLO_SE_ENCOLAN_LOS_DE_LABORATORIO(cliente):
     r = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "eco", "clave": "misma"})
     r2 = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "eco", "clave": "misma"})
     assert r.json()["nuevo"] is True and r2.json()["nuevo"] is False and r.json()["id"] == r2.json()["id"]
+
+
+# ─── los rieles por HTTP ──────────────────────────────────────────────────
+
+def test_los_rieles_por_http_cobran_pagan_y_devuelven(cliente):
+    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    r = cliente.get("/api/nucleo/laboratorio/rieles")
+    assert r.status_code == 200, r.text
+    assert r.json()["riel"] == "simulador" and any(c["clave"] == "rechaza@ejemplo.test" for c in r.json()["claves_de_prueba"])
+
+    r = cliente.post("/api/nucleo/laboratorio/rieles/cobros", json={"cuenta": a, "monto": "150.00", "descripcion": "prueba"})
+    assert r.status_code == 200, r.text
+    cobro = r.json()
+    assert cobro["estado"] == "activa" and cobro["codigo_br"].startswith("000201")
+    r = cliente.post(f"/api/nucleo/laboratorio/rieles/cobros/{cobro['id']}/simular_pago", json={"pagador_clave": "ana@ejemplo.test"})
+    assert r.status_code == 200 and r.json()["nuevo"] is True
+    cliente.post("/api/nucleo/laboratorio/cola/paso")
+    assert cliente.get("/api/nucleo/laboratorio/cuentas").json()[0]["saldo"] == "150.00"
+
+    r = cliente.post("/api/nucleo/laboratorio/rieles/pagos", json={"cuenta": a, "clave": "rechaza@ejemplo.test", "monto": "30.00"})
+    assert r.status_code == 200, r.text
+    pago = r.json()
+    assert pago["estado"] == "pendiente" and pago["contraparte"]["banco"] == "Banco Cerrado de Prueba"
+    cliente.post("/api/nucleo/laboratorio/cola/paso")
+    d = cliente.get(f"/api/nucleo/laboratorio/rieles/operaciones/{pago['id']}").json()
+    assert d["estado"] == "rechazada" and "AC06" in d["motivo"]
+    assert [h["estado"] for h in d["historial"]] == ["pendiente", "enviada", "rechazada"]
+    assert cliente.get("/api/nucleo/laboratorio/cuentas").json()[0]["saldo"] == "150.00"
+
+    r = cliente.post("/api/nucleo/laboratorio/rieles/pagos", json={"cuenta": a, "clave": "tarda@ejemplo.test", "monto": "30.00"})
+    tarda = r.json()
+    cliente.post("/api/nucleo/laboratorio/cola/paso")
+    assert cliente.get(f"/api/nucleo/laboratorio/rieles/operaciones/{tarda['id']}").json()["estado"] == "enviada"
+    r = cliente.post(f"/api/nucleo/laboratorio/rieles/pagos/{tarda['id']}/simular_resultado", json={"estado": "ACSC"})
+    assert r.status_code == 200, r.text
+    cliente.post("/api/nucleo/laboratorio/cola/paso")
+    assert cliente.get(f"/api/nucleo/laboratorio/rieles/operaciones/{tarda['id']}").json()["estado"] == "liquidada"
+
+    r = cliente.post("/api/nucleo/laboratorio/rieles/devoluciones", json={"operacion": cobro["id"], "monto": "20.00", "motivo": "MD06"})
+    assert r.status_code == 200, r.text
+    cliente.post("/api/nucleo/laboratorio/cola/paso")
+    assert cliente.get("/api/nucleo/laboratorio/cuentas").json()[0]["saldo"] == "100.00"
+    assert cliente.get("/api/nucleo/laboratorio/balance").json()["cuadra"] is True
+    lista = cliente.get("/api/nucleo/laboratorio/rieles").json()
+    assert lista["resumen"] == {"entrada_liquidada": 1, "salida_rechazada": 1, "salida_liquidada": 1, "devolucion_liquidada": 1}
+    assert len(lista["avisos"]) == 4 and all(av["procesado"] for av in lista["avisos"])
+
+
+def test_LOS_ERRORES_DE_LOS_RIELES_LLEGAN_COMO_MENSAJES_CLAROS(cliente):
+    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    r = cliente.get("/api/nucleo/laboratorio/rieles/claves/ana@ejemplo.test")
+    assert r.status_code == 200 and r.json()["documento"] == "***.456.789-**"
+    assert cliente.get("/api/nucleo/laboratorio/rieles/claves/noexiste@ejemplo.test").status_code == 404
+    r = cliente.get("/api/nucleo/laboratorio/rieles/claves/12345678900")
+    assert r.status_code == 400 and "verificadores" in r.json()["detail"]
+    r = cliente.post("/api/nucleo/laboratorio/rieles/pagos", json={"cuenta": a, "clave": "ana@ejemplo.test", "monto": "30.00"})
+    assert r.status_code == 400 and "Saldo insuficiente" in r.json()["detail"]
+    r = cliente.post("/api/nucleo/laboratorio/rieles/pagos", json={"cuenta": a, "clave": "noexiste@ejemplo.test", "monto": "30.00"})
+    assert r.status_code == 404
+    r = cliente.post("/api/nucleo/laboratorio/rieles/devoluciones", json={"operacion": "op_nada", "monto": "1.00", "motivo": "MD06"})
+    assert r.status_code == 400
+    r = cliente.post("/api/nucleo/laboratorio/rieles/devoluciones", json={"operacion": "op_nada", "monto": "1.00", "motivo": "ZZ00"})
+    assert r.status_code == 422
+    assert cliente.get("/api/nucleo/laboratorio/rieles/operaciones/op_nada").status_code == 404

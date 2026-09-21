@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Siete tablas, y cada columna con su porqué.
+El esquema del núcleo. Once tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -22,6 +22,13 @@ El esquema del núcleo. Siete tablas, y cada columna con su porqué.
     trabajos          la cola: lo que hay que hacer después, con turnos,
                       reintentos y cola de muertos. El porqué de cada
                       columna está en `nucleo/cola.py`.
+    operaciones       cada cobro, pago o devolución por un riel (hoy, PIX):
+                      su estado, su identificador punta a punta, su clave.
+    operacion_estados la línea de tiempo de cada operación, sólo se agrega.
+    avisos_riel       lo que el riel nos avisó, crudo, idempotente por su
+                      identificador. Es la hoja para investigar.
+    sim_claves        el directorio de claves del SIMULADOR (DICT de mentira),
+                      con claves de prueba que se portan distinto.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -141,6 +148,67 @@ trabajos = Table(
     CheckConstraint("estado in ('pendiente','en_curso','hecho','muerto')", name="estado_del_trabajo_valido"),
     CheckConstraint("intentos >= 0 and max_intentos > 0", name="intentos_validos"),
     Index("ix_trabajos_para_tomar", "estado", "proximo_intento"),
+)
+
+operaciones = Table(
+    "operaciones", metadata,
+    Column("id", String(40), primary_key=True),               # «op_…»
+    Column("riel", String(20), nullable=False),               # «simulador», mañana «liquidante»
+    Column("direccion", String(12), nullable=False),          # entrada, salida, devolucion
+    Column("estado", String(12), nullable=False),             # ver nucleo/rieles/operaciones.py
+    Column("cuenta", String(40), ForeignKey("cuentas.id"), nullable=False),
+    Column("monto", BigInteger, nullable=False),              # centavos
+    Column("referencia", String(120), nullable=False),        # idempotencia del pedido
+    Column("txid", String(35), nullable=True),                # el del cobro (BR Code)
+    Column("end_to_end", String(32), nullable=True),          # el del SPI, cuando lo hay
+    Column("clave", String(120), nullable=True),              # la clave PIX de la contraparte
+    Column("contraparte", Text, nullable=True),               # JSON: nombre, ISPB, banco
+    Column("descripcion", String(140), nullable=True),
+    Column("motivo", String(200), nullable=True),             # del rechazo o de la devolución
+    Column("origen", String(40), ForeignKey("operaciones.id"), nullable=True),  # la devolución apunta a su cobro
+    Column("codigo_br", Text, nullable=True),                 # el BR Code del cobro
+    Column("creada", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("actualizada", DateTime(timezone=True), nullable=True),
+    UniqueConstraint("referencia", name="uq_operaciones_referencia"),
+    UniqueConstraint("end_to_end", name="uq_operaciones_end_to_end"),
+    CheckConstraint("direccion in ('entrada','salida','devolucion')", name="direccion_valida"),
+    CheckConstraint("monto > 0", name="monto_positivo"),
+    Index("ix_operaciones_cuenta", "cuenta"),
+    Index("ix_operaciones_txid", "txid"),
+)
+
+operacion_estados = Table(
+    "operacion_estados", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("operacion", String(40), ForeignKey("operaciones.id"), nullable=False),
+    Column("estado", String(12), nullable=False),
+    Column("detalle", String(300), nullable=True),
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_operacion_estados_operacion", "operacion"),
+)
+
+avisos_riel = Table(
+    "avisos_riel", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("riel", String(20), nullable=False),
+    Column("id_externo", String(120), nullable=False),        # el del riel: un aviso, una fila
+    Column("tipo", String(40), nullable=False),               # credito_recibido, estado_de_pago, devolucion_liquidada
+    Column("carga", Text, nullable=False),                    # JSON, por lista de lo permitido
+    Column("recibido", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("procesado", DateTime(timezone=True), nullable=True),
+    Column("resultado", String(200), nullable=True),
+    UniqueConstraint("riel", "id_externo", name="uq_avisos_riel_externo"),
+)
+
+sim_claves = Table(
+    "sim_claves", metadata,
+    Column("clave", String(120), primary_key=True),
+    Column("tipo", String(10), nullable=False),               # cpf, cnpj, email, telefone, evp
+    Column("nombre", String(120), nullable=False),
+    Column("documento", String(20), nullable=False),          # CPF/CNPJ del titular, enmascarado al mostrar
+    Column("ispb", String(8), nullable=False),
+    Column("banco", String(80), nullable=False),
+    Column("comportamiento", String(12), nullable=False, default="normal"),  # normal, rechaza, tarda
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple

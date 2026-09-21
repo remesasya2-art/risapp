@@ -162,6 +162,57 @@ async def cobrar_tarifa(*, cuenta_id: str, monto: str, referencia: str, actor: s
         ])
 
 
+# ─── los tres asientos de un pago saliente ────────────────────────────────
+#
+#   Un pago por PIX no es un débito: entre que se ordena y que el SPI lo
+#   liquida pasan segundos, y en ese rato la plata ya no es del titular pero
+#   tampoco salió del banco. Por eso son tres asientos y no uno:
+#
+#     1. reservar   titular → obligaciones por pagos en tránsito (2.1.02)
+#     2. liquidar   tránsito → cuenta de liquidación (la plata salió)
+#     3. revertir   tránsito → titular (el SPI lo rechazó; la plata vuelve)
+#
+#   Cada uno con su referencia propia, así un aviso repetido del riel no
+#   liquida dos veces ni revierte lo ya liquidado.
+
+async def reservar_para_pago(*, cuenta_id: str, monto: str, referencia: str, actor: str,
+                             descripcion: str = "Pago ordenado, en tránsito", fecha: date = None) -> int:
+    c = a_centavos(monto)
+    async with base.sesion() as s:
+        disponible = await libro.saldo(s, cuenta_id)
+    if disponible < c:
+        raise AsientoInvalido(
+            f"Saldo insuficiente: hay {a_texto(disponible)} y se piden {a_texto(c)}.")
+    return await _asentar_con_reintento(
+        fecha=fecha or _hoy(), descripcion=descripcion, referencia=referencia, comando="reservar_pago",
+        actor=actor, lineas=[
+            Partida(plan.DE_TITULARES, debe=c, cuenta=cuenta_id),
+            Partida(plan.TRANSITO, haber=c),
+        ])
+
+
+async def liquidar_pago(*, monto: str, referencia: str, actor: str,
+                        descripcion: str = "Pago liquidado por el SPI", fecha: date = None) -> int:
+    c = a_centavos(monto)
+    return await _asentar_con_reintento(
+        fecha=fecha or _hoy(), descripcion=descripcion, referencia=referencia, comando="liquidar_pago",
+        actor=actor, lineas=[
+            Partida(plan.TRANSITO, debe=c),
+            Partida(plan.LIQUIDACION, haber=c),
+        ])
+
+
+async def revertir_pago(*, cuenta_id: str, monto: str, referencia: str, actor: str,
+                        descripcion: str = "Pago rechazado, vuelve al titular", fecha: date = None) -> int:
+    c = a_centavos(monto)
+    return await _asentar_con_reintento(
+        fecha=fecha or _hoy(), descripcion=descripcion, referencia=referencia, comando="revertir_pago",
+        actor=actor, lineas=[
+            Partida(plan.TRANSITO, debe=c),
+            Partida(plan.DE_TITULARES, haber=c, cuenta=cuenta_id),
+        ])
+
+
 async def cerrar_dia(*, dia: date, actor: str, nota: str = None) -> dict:
     async with base.sesion() as s:
         return await libro.cerrar_dia(s, dia, actor=actor, nota=nota)

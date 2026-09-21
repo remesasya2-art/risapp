@@ -12,6 +12,9 @@
  *   asiento deja un evento, el trabajador lo convierte en un trabajo, y acá
  *   se ve pasar por pendiente, en curso, hecho o muerto — con dos trabajos
  *   de muestra para encolar a mano, uno que termina bien y uno que falla.
+ *   Y los rieles: cobrar por PIX (un QR con el BR Code de verdad), pagar a
+ *   una clave, devolver, consultar el DICT — contra un simulador con claves
+ *   de prueba que se portan distinto (una rechaza, una tarda).
  *
  * APAGADO DE FABRICA
  *
@@ -21,7 +24,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -43,7 +46,13 @@ const COLOR_DEL_ESTADO = {
   en_curso: { background: '#dbeafe', color: '#1e40af' },
   hecho: { background: '#dcfce7', color: '#166534' },
   muerto: { background: '#fee2e2', color: '#991b1b' },
+  // los de una operación por un riel
+  activa: { background: '#e0e7ff', color: '#3730a3' },
+  enviada: { background: '#dbeafe', color: '#1e40af' },
+  liquidada: { background: '#dcfce7', color: '#166534' },
+  rechazada: { background: '#fee2e2', color: '#991b1b' },
 };
+const DIRECCION = { entrada: 'Cobro', salida: 'Pago', devolucion: 'Devolución' };
 const Etiqueta = ({ valor }) => (
   <span style={{ ...(COLOR_DEL_ESTADO[valor] || {}), padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
     {valor === 'en_curso' ? 'en curso' : valor}
@@ -57,6 +66,12 @@ export default function Nucleo() {
   const [balance, setBalance] = useState(null);
   const [cierres, setCierres] = useState([]);
   const [cola, setCola] = useState(null);
+  const [rieles, setRieles] = useState(null);
+  const [cobro, setCobro] = useState({ cuenta: '', monto: '', descripcion: '' });
+  const [ultimoCobro, setUltimoCobro] = useState(null);
+  const [pago, setPago] = useState({ cuenta: '', clave: '', monto: '', descripcion: '' });
+  const [titularDeLaClave, setTitularDeLaClave] = useState(null);
+  const [devolviendo, setDevolviendo] = useState(null);   // { id, monto } del cobro que se está devolviendo
   const [vuelta, setVuelta] = useState(0);
   const [titular, setTitular] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -72,14 +87,14 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q] = await Promise.all([
+        const [c, l, b, z, q, rl] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
-          api.get('/nucleo/laboratorio/cola?limite=30'),
+          api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
-        setCola(q.data || null);
+        setCola(q.data || null); setRieles(rl.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -148,6 +163,73 @@ export default function Nucleo() {
       await api.post(`/nucleo/laboratorio/cola/trabajos/${id}/reintentar`);
       toast.success(`Trabajo Nº ${id} de vuelta en la cola`); recargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo reintentar'); }
+    finally { setOcupado(false); }
+  };
+
+  // Después de tocar un riel se procesa la cola enseguida y se recarga: el
+  // trabajador también lo haría solo en unos segundos, pero acá se quiere
+  // ver el resultado sin esperar.
+  const procesarYRecargar = async () => {
+    try { await api.post('/nucleo/laboratorio/cola/paso'); } catch { /* el trabajador lo hará solo */ }
+    recargar();
+  };
+
+  const generarCobro = async () => {
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/rieles/cobros', { cuenta: cobro.cuenta, monto: cobro.monto, descripcion: cobro.descripcion || undefined });
+      setUltimoCobro(r.data); toast.success(`Cobro ${r.data.id} generado`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo generar el cobro'); }
+    finally { setOcupado(false); }
+  };
+
+  const simularPago = async (op) => {
+    setOcupado(true);
+    try {
+      await api.post(`/nucleo/laboratorio/rieles/cobros/${op.id}/simular_pago`, {});
+      toast.success('Llegó el crédito del SPI'); await procesarYRecargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo simular'); }
+    finally { setOcupado(false); }
+  };
+
+  const consultarClave = async () => {
+    if (!pago.clave.trim()) return;
+    setTitularDeLaClave(null);
+    try {
+      const r = await api.get(`/nucleo/laboratorio/rieles/claves/${encodeURIComponent(pago.clave.trim())}`);
+      setTitularDeLaClave(r.data);
+    } catch (e) { setTitularDeLaClave({ error: e?.response?.data?.detail || 'No se pudo consultar' }); }
+  };
+
+  const pagar = async () => {
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/rieles/pagos', { cuenta: pago.cuenta, clave: pago.clave.trim(), monto: pago.monto, descripcion: pago.descripcion || undefined });
+      toast.success(`Pago ${r.data.id} ordenado (${r.data.end_to_end})`);
+      setPago((p) => ({ ...p, monto: '', descripcion: '' })); await procesarYRecargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo ordenar el pago'); }
+    finally { setOcupado(false); }
+  };
+
+  const simularResultado = async (op, estadoFinal) => {
+    setOcupado(true);
+    try {
+      await api.post(`/nucleo/laboratorio/rieles/pagos/${op.id}/simular_resultado`, estadoFinal === 'RJCT' ? { estado: 'RJCT', motivo: 'AB03' } : { estado: 'ACSC' });
+      toast.success('El SPI contestó'); await procesarYRecargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo simular'); }
+    finally { setOcupado(false); }
+  };
+
+  // Una devolución puede ser parcial, y sale de la cuenta del titular, que
+  // puede haber gastado parte de lo que cobró: se pregunta cuánto, en la
+  // misma fila (nunca con un cuadro del navegador: hay un guardián).
+  const devolver = async () => {
+    if (!devolviendo) return;
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/rieles/devoluciones', { operacion: devolviendo.id, monto: devolviendo.monto.trim(), motivo: 'MD06' });
+      toast.success(`Devolución ${r.data.id} ordenada`); setDevolviendo(null); await procesarYRecargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo devolver'); }
     finally { setOcupado(false); }
   };
 
@@ -281,6 +363,124 @@ export default function Nucleo() {
             </div>
           </div>
 
+
+          {/* Rieles PIX */}
+          <div style={tarjeta} data-testid="nucleo-rieles">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong>Rieles PIX {rieles ? `· ${rieles.riel} · ISPB ${rieles.ispb}` : ''}</strong>
+              {rieles ? (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                  Claves de prueba: {rieles.claves_de_prueba.map((c) => `${c.clave}${c.comportamiento !== 'normal' ? ` (${c.comportamiento})` : ''}`).join(' · ')}
+                </span>
+              ) : null}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginTop: 12 }}>
+              {/* Cobrar */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}><QrCode size={15} /> Cobrar por PIX</strong>
+                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <select style={campo} value={cobro.cuenta} onChange={(e) => setCobro({ ...cobro, cuenta: e.target.value })} data-testid="rieles-cobro-cuenta">
+                    <option value="">Cuenta que cobra…</option>{cuentas.map((c) => <option key={c.id} value={c.id}>{c.id} · {c.titular_ref}</option>)}
+                  </select>
+                  <input style={campo} placeholder="Monto en reales, p. ej. 150.00" value={cobro.monto} inputMode="decimal"
+                    onChange={(e) => setCobro({ ...cobro, monto: e.target.value })} data-testid="rieles-cobro-monto" />
+                  <input style={campo} placeholder="Descripción (va en el QR, opcional)" value={cobro.descripcion}
+                    onChange={(e) => setCobro({ ...cobro, descripcion: e.target.value })} />
+                  <button type="button" onClick={generarCobro} disabled={ocupado} style={boton} data-testid="rieles-generar-cobro">Generar QR</button>
+                </div>
+                {ultimoCobro ? (
+                  <div style={{ marginTop: 10, fontSize: 12 }} data-testid="rieles-ultimo-cobro">
+                    <div style={rotulo}>BR Code · txid {ultimoCobro.txid}</div>
+                    <textarea readOnly value={ultimoCobro.codigo_br} rows={3} style={{ ...campo, ...mono, resize: 'none', fontSize: 11 }} />
+                    <button type="button" onClick={() => simularPago(ultimoCobro)} disabled={ocupado} style={{ ...botonSuave, marginTop: 6 }} data-testid="rieles-simular-pago">
+                      Simular que lo pagaron
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Pagar */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}><Send size={15} /> Pagar por PIX</strong>
+                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <select style={campo} value={pago.cuenta} onChange={(e) => setPago({ ...pago, cuenta: e.target.value })} data-testid="rieles-pago-cuenta">
+                    <option value="">Cuenta que paga…</option>{cuentas.map((c) => <option key={c.id} value={c.id}>{c.id} · {c.titular_ref} · R$ {c.saldo}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input style={campo} placeholder="Clave PIX (CPF, correo, teléfono, aleatoria)" value={pago.clave} list="rieles-claves"
+                      onChange={(e) => { setPago({ ...pago, clave: e.target.value }); setTitularDeLaClave(null); }} data-testid="rieles-pago-clave" />
+                    <datalist id="rieles-claves">{(rieles?.claves_de_prueba || []).map((c) => <option key={c.clave} value={c.clave} />)}</datalist>
+                    <button type="button" onClick={consultarClave} style={{ ...botonSuave, padding: '6px 10px' }} title="Consultar el DICT" data-testid="rieles-consultar-clave"><Search size={13} /></button>
+                  </div>
+                  {titularDeLaClave ? (
+                    <div style={{ fontSize: 12, color: titularDeLaClave.error ? '#b91c1c' : '#374151' }} data-testid="rieles-titular">
+                      {titularDeLaClave.error ? titularDeLaClave.error : <>{titularDeLaClave.nombre} · {titularDeLaClave.documento} · {titularDeLaClave.banco} (ISPB {titularDeLaClave.ispb})</>}
+                    </div>
+                  ) : null}
+                  <input style={campo} placeholder="Monto en reales" value={pago.monto} inputMode="decimal"
+                    onChange={(e) => setPago({ ...pago, monto: e.target.value })} data-testid="rieles-pago-monto" />
+                  <input style={campo} placeholder="Descripción (opcional)" value={pago.descripcion}
+                    onChange={(e) => setPago({ ...pago, descripcion: e.target.value })} />
+                  <button type="button" onClick={pagar} disabled={ocupado} style={boton} data-testid="rieles-pagar">Pagar</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Operaciones */}
+            <div style={{ overflowX: 'auto', marginTop: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }} data-testid="rieles-operaciones">
+                <thead><tr><th style={th}>Operación</th><th style={th}>Estado</th><th style={{ ...th, textAlign: 'right' }}>Monto</th><th style={th}>Contraparte</th><th style={th}>Punta a punta</th><th style={th}>Motivo</th><th style={th} /></tr></thead>
+                <tbody>
+                  {!rieles || rieles.operaciones.length === 0 ? <tr><td style={td} colSpan={7}>Todavía no hay operaciones por ningún riel.</td></tr> : rieles.operaciones.map((o) => (
+                    <tr key={o.id} data-testid={`rieles-op-${o.direccion}-${o.estado}`}>
+                      <td style={td}>{DIRECCION[o.direccion] || o.direccion}<div style={{ ...mono, color: '#9ca3af' }}>{o.id}</div></td>
+                      <td style={td}><Etiqueta valor={o.estado} /></td>
+                      <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>R$ {o.monto.replace('.', ',')}</td>
+                      <td style={td}>{o.contraparte?.nombre || '—'}<div style={{ ...mono, color: '#9ca3af' }}>{o.clave}</div></td>
+                      <td style={{ ...td, ...mono, color: '#6b7280' }}>{o.end_to_end || (o.txid ? `txid ${o.txid.slice(0, 10)}…` : '—')}</td>
+                      <td style={{ ...td, color: '#991b1b', maxWidth: 260 }}>{o.motivo || ''}</td>
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        {o.direccion === 'entrada' && o.estado === 'activa' ? (
+                          <button type="button" onClick={() => simularPago(o)} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="rieles-simular-pago-fila">Simular pago</button>
+                        ) : null}
+                        {o.direccion === 'entrada' && o.estado === 'liquidada' && devolviendo?.id !== o.id ? (
+                          <button type="button" onClick={() => setDevolviendo({ id: o.id, monto: o.monto })} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="rieles-devolver"><Undo2 size={12} /> Devolver</button>
+                        ) : null}
+                        {o.direccion === 'entrada' && o.estado === 'liquidada' && devolviendo?.id === o.id ? (
+                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                            <input style={{ ...campo, width: 90, padding: '5px 7px' }} value={devolviendo.monto} inputMode="decimal" title={`Hasta R$ ${o.monto}`}
+                              onChange={(e) => setDevolviendo({ id: o.id, monto: e.target.value })} data-testid="rieles-devolver-monto" />
+                            <button type="button" onClick={devolver} disabled={ocupado} style={{ ...boton, padding: '5px 9px' }} data-testid="rieles-devolver-confirmar">Devolver</button>
+                            <button type="button" onClick={() => setDevolviendo(null)} style={{ ...botonSuave, padding: '5px 9px' }}>Cancelar</button>
+                          </span>
+                        ) : null}
+                        {o.direccion !== 'entrada' && o.estado === 'enviada' ? (
+                          <>
+                            <button type="button" onClick={() => simularResultado(o, 'ACSC')} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px', marginRight: 4 }} data-testid="rieles-simular-acsc">Liquidar</button>
+                            <button type="button" onClick={() => simularResultado(o, 'RJCT')} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px', background: '#fee2e2', color: '#991b1b' }} data-testid="rieles-simular-rjct">Rechazar</button>
+                          </>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {rieles ? (
+              <details style={{ marginTop: 10 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 13, color: '#374151' }}>Avisos del riel (últimos {rieles.avisos.length})</summary>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }} data-testid="rieles-avisos">
+                  <thead><tr><th style={th}>Nº</th><th style={th}>Tipo</th><th style={th}>Identificador del riel</th><th style={th}>Resultado</th></tr></thead>
+                  <tbody>
+                    {rieles.avisos.length === 0 ? <tr><td style={td} colSpan={4}>Todavía no hay avisos.</td></tr> : rieles.avisos.map((a) => (
+                      <tr key={a.id}><td style={{ ...td, ...mono }}>{a.id}</td><td style={td}>{a.tipo}</td>
+                        <td style={{ ...td, ...mono, color: '#6b7280' }}>{a.id_externo}</td><td style={td}>{a.procesado ? a.resultado : 'sin procesar'}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            ) : null}
+          </div>
 
           {/* Cola de trabajos y eventos */}
           <div style={tarjeta} data-testid="nucleo-cola">

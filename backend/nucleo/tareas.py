@@ -26,6 +26,8 @@ LOS DE LABORATORIO
 """
 import logging
 
+from nucleo.rieles import operaciones as _rieles
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +61,10 @@ MANEJADORES = {
     "fallar": fallar,
     "avisar_asiento": avisar_asiento,
     "anotar_cierre": anotar_cierre,
+    # Los rieles (nucleo/rieles/operaciones.py): hablar con el riel y darle
+    # sentido a lo que el riel avisa, los dos con reintentos y cola de muertos.
+    "enviar_pago": _rieles.enviar_pago,
+    "procesar_aviso": _rieles.procesar_aviso,
 }
 
 SUSCRIPCIONES = {
