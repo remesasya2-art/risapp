@@ -22,11 +22,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  AlertTriangle, BookOpen, Bitcoin, CheckCircle2, Download, FileSpreadsheet,
+  AlertTriangle, BookOpen, CheckCircle2, Download, FileSpreadsheet,
   Info, Layers, ScrollText, ShieldCheck, Table2,
 } from 'lucide-react';
 import api from '../../utils/api';
-import LibroBtc from './LibroBtc';
 import ErrorBoundary from '../common/ErrorBoundary';
 
 const COLOR = {
@@ -54,7 +53,6 @@ const VISTAS = [
   { clave: 'mayor', etiqueta: 'Libro mayor', Icono: Layers },
   { clave: 'reconciliacion', etiqueta: 'Reconciliación', Icono: ShieldCheck },
   { clave: 'integridad', etiqueta: 'Integridad', Icono: AlertTriangle },
-  { clave: 'btc', etiqueta: 'Órdenes BTC', Icono: Bitcoin },
 ];
 
 const hoy = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
@@ -98,7 +96,6 @@ export default function LibroMayor({ vistaInicial }) {
   const peticion = useRef(0);
 
   const cargar = useCallback(async () => {
-    if (vista === 'btc') return;
     const mia = ++peticion.current;
     setCargando(true);
     setDatos(null);
@@ -176,8 +173,7 @@ export default function LibroMayor({ vistaInicial }) {
         })}
       </div>
 
-      {vista === 'btc' ? <LibroBtc /> : (
-        <>
+      <>
           <div style={tarjeta}>
             <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700,
               display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -259,8 +255,7 @@ export default function LibroMayor({ vistaInicial }) {
               {vista === 'integridad' ? <Integridad datos={datos} /> : null}
             </ErrorBoundary>
           )}
-        </>
-      )}
+      </>
     </div>
   );
 }
@@ -271,7 +266,6 @@ const DESCRIPCIONES = {
   mayor: 'Los movimientos agrupados por cuenta, con el saldo que va dejando cada uno.',
   reconciliacion: 'El saldo guardado de cada usuario contra la suma de su libro. Sin tolerancia.',
   integridad: 'Los defectos que impedirían defender este libro ante un auditor.',
-  btc: 'Órdenes directas de BTC. No tocan el saldo RIS y llevan su propio libro.',
 };
 
 /* ─── Balance de comprobación ──────────────────────────────────────────── */

@@ -381,9 +381,6 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedUserForRole, setSelectedUserForRole] = useState(null);
   const [assigningRole, setAssigningRole] = useState(false);
-  const [showCleanupModal, setShowCleanupModal] = useState(false);
-  const [pendingToClean, setPendingToClean] = useState([]);
-  const [cleaningUp, setCleaningUp] = useState(false);
   const [bajandoFicha, setBajandoFicha] = useState(false);
   // Partner/Gestor management states
   const [partnerSearchQuery, setPartnerSearchQuery] = useState('');
@@ -802,26 +799,10 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   };
 
-  const deleteSingleWithdrawal = async (txId) => {
-    if (!confirm('¿Eliminar esta transacción? El saldo será reembolsado al usuario.')) return;
-    setCleaningUp(true);
-    try {
-      await api.delete(`/admin/withdrawals/delete/${txId}`);
-      toast.success('Transacción eliminada y saldo reembolsado');
-      setPendingToClean(prev => prev.filter(tx => tx.transaction_id !== txId));
-      loadData();
-    } catch (error) {
-      toast.error('Error al eliminar');
-    } finally {
-      setCleaningUp(false);
-    }
-  };
-
   const pageStyle = { minHeight: '100vh', background: '#f8f9fc', fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' };
   const cardStyle = { backgroundColor: '#ffffff', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' };
   const btnPrimary = { backgroundColor: '#6366f1', color: 'white', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
   const btnSuccess = { backgroundColor: '#16a34a', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
-  const btnDanger = { backgroundColor: '#dc2626', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
   const btnSecondary = { backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
 
 
@@ -2419,72 +2400,6 @@ const [searchParams, setSearchParams] = useSearchParams();
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cleanup Modal */}
-      {showCleanupModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Trash2 style={{ width: '24px', height: '24px', color: '#dc2626' }} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Limpieza de Retiros</h3>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Transacciones pendientes detectadas</p>
-                </div>
-              </div>
-              <button onClick={() => setShowCleanupModal(false)} style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
-              </button>
-            </div>
-
-            {pendingToClean.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px' }}>
-                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                  <Activity style={{ width: '32px', height: '32px', color: '#16a34a' }} />
-                </div>
-                <h4 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>¡Todo limpio!</h4>
-                <p style={{ color: '#6b7280', margin: 0 }}>No hay transacciones pendientes para limpiar</p>
-              </div>
-            ) : (
-              <>
-                <div style={{ backgroundColor: '#fef3c7', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-                  <p style={{ color: '#92400e', fontSize: '13px', margin: 0 }}>
-                    ⚠️ Se encontraron {pendingToClean.length} transacción(es) pendiente(s). Eliminar devolverá el saldo al usuario.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', maxHeight: '300px', overflowY: 'auto' }}>
-                  {pendingToClean.map((tx) => (
-                    <div key={tx.transaction_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-                      <div>
-                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{tx.beneficiary || 'Sin nombre'}</p>
-                        <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>
-                          R{tx.display_id} • {fmt(tx.amount_ves)} VES
-                        </p>
-                      </div>
-                      <button 
-                        onClick={() => deleteSingleWithdrawal(tx.transaction_id)}
-                        disabled={cleaningUp}
-                        style={{ ...btnDanger, opacity: cleaningUp ? 0.5 : 1, padding: '8px 12px' }}
-                      >
-                        <Trash2 style={{ width: '14px', height: '14px' }} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button onClick={() => setShowCleanupModal(false)} style={{ ...btnSecondary, flex: 1 }}>
-                    Cerrar
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}
