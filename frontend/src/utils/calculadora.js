@@ -60,12 +60,11 @@ export function tasaDelSentido(rates, sentido, tasaDisponible = true) {
  * @param {number} p.monto    Lo escrito, ya como número.
  * @param {number} p.tasa     Bolívares por 1 real (ver `tasaDelSentido`).
  * @param {number} p.bcv      Bolívares por 1 dólar al BCV. 0 si no hay dato.
- * @param {number} p.usdt     Bolívares por 1 USDT. 0 si no hay tasa.
- * @returns {{brl:number, ves:number, usd:number, usdt:number}} Todo en 0 si
- *   no hay tasa o no hay monto. `usd` y `usdt` en 0 si falta su referencia.
+ * @returns {{brl:number, ves:number, usd:number}} Todo en 0 si no hay tasa
+ *   o no hay monto. `usd` en 0 si falta el BCV.
  */
-export function convertir({ origen, monto, tasa, bcv = 0, usdt = 0 }) {
-  const nada = { brl: 0, ves: 0, usd: 0, usdt: 0 };
+export function convertir({ origen, monto, tasa, bcv = 0 }) {
+  const nada = { brl: 0, ves: 0, usd: 0 };
   if (!(tasa > 0) || !(monto > 0)) return nada;
 
   // Todo pasa por bolívares: es la moneda que las tres casillas comparten.
@@ -80,7 +79,6 @@ export function convertir({ origen, monto, tasa, bcv = 0, usdt = 0 }) {
     brl: redondear(ves / tasa),
     ves: redondear(ves),
     usd: bcv > 0 ? redondear(ves / bcv) : 0,
-    usdt: usdt > 0 ? redondear(ves / usdt) : 0,
   };
 }
 

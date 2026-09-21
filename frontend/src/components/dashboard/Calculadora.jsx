@@ -13,8 +13,9 @@
  *
  *   Están en `utils/calculadora.js`, que se prueba con node y números
  *   exactos. Esto dibuja: tres casillas atadas, el selector del sentido, las
- *   tres tasas con las que calcula, y el botón que lleva al flujo del sentido
- *   elegido.
+ *   dos tasas con las que calcula, y el botón que lleva al flujo del sentido
+ *   elegido. La tasa del USDT no va: el dueño la sacó, porque no hay un flujo
+ *   donde el cliente pague con USDT y mostrarla sólo confunde.
  *
  * LAS TASAS SALEN DE `RateContext`, NO DE UN PEDIDO PROPIO
  *
@@ -57,11 +58,10 @@ export default function Calculadora({ isMobile = false }) {
 
   const tasa = tasaDelSentido(rates, sentido, tasaDisponible);
   const bcv = Number(rates?.bcv_usd_ves) || 0;
-  const usdt = Number(rates?.usdtris_to_ves) || 0;
   const bcvVencida = rates?.bcv_vencida === true;
 
   const monto = aNumero(escrito);
-  const cuenta = convertir({ origen, monto, tasa, bcv, usdt });
+  const cuenta = convertir({ origen, monto, tasa, bcv });
   const hayCuenta = monto > 0 && tasa > 0;
   const elSentido = SENTIDOS.find((s) => s.clave === sentido);
 
@@ -155,22 +155,19 @@ export default function Calculadora({ isMobile = false }) {
           );
         })}
 
-        {/* Las tres tasas con las que calcula */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '8px', marginTop: '2px' }}>
+        {/* Las dos tasas con las que calcula */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '8px', marginTop: '2px' }}>
           <Tasa testid="calc-tasa-envio"
             valor={tasa > 0 ? `1 R$ = ${fmt(tasa)} Bs` : 'Sin tasa'}
             nombre={sentido === A_BRASIL ? 'Tasa Venezuela → Brasil' : 'Tasa Brasil → Venezuela'} />
-          <Tasa valor={usdt > 0 ? `1 USDT = ${fmt(usdt)} Bs` : 'USDT sin tasa'} nombre="USDT" />
           <Tasa valor={bcv > 0 ? `1 $ = ${fmt(bcv)} Bs` : 'BCV sin dato'}
             nombre={bcvVencida ? `BCV ${fmtAntiguedadHoras(rates?.bcv_edad_horas)}` : 'Referencia BCV'}
             alerta={bcvVencida} />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: 'auto', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '12px', color: '#6b7280', fontVariantNumeric: 'tabular-nums' }} data-testid="calc-usdt">
-            {hayCuenta && cuenta.usdt > 0
-              ? `≈ ${fmt(cuenta.usdt)} USDT`
-              : 'Sólo orientativo: la tasa del envío se fija al cotizar.'}
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+            Sólo orientativo: la tasa del envío se fija al cotizar.
           </span>
           <Link to={elSentido.ruta} data-testid="calc-ir-al-envio" style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '12px',

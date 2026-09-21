@@ -33,8 +33,9 @@ INICIO = _RAIZ / "frontend" / "src" / "pages" / "Dashboard.jsx"
 _node = shutil.which("node")
 
 # Las tasas de la captura con la que se decidió esto: 1 R$ = 173 Bs hacia
-# Venezuela, el BCV a 849,56 y el USDT a 852. Hacia Brasil se inventa una
-# distinta a propósito, para que usar la equivocada se note.
+# Venezuela y el BCV a 849,56. Hacia Brasil se inventa una distinta a
+# propósito, para que usar la equivocada se note. La del USDT también viene,
+# para comprobar que la calculadora NO la usa: el dueño la sacó.
 RATES = {"ris_to_ves": 173.0, "ves_to_ris_rate": 181.5,
          "bcv_usd_ves": 849.56, "usdtris_to_ves": 852.0}
 
@@ -99,8 +100,8 @@ def test_sin_tasa_disponible_no_hay_tasa_aunque_el_contexto_traiga_relleno():
 # ─── Las cuentas, con números exactos ─────────────────────────────────────
 
 def test_escribiendo_reales_salen_bolivares_y_dolares_al_bcv():
-    c = js("m.convertir({origen: m.REALES, monto: 100, tasa: 173, bcv: 849.56, usdt: 852})")
-    assert c == {"brl": 100, "ves": 17300, "usd": 20.36, "usdt": 20.31}
+    c = js("m.convertir({origen: m.REALES, monto: 100, tasa: 173, bcv: 849.56})")
+    assert c == {"brl": 100, "ves": 17300, "usd": 20.36}
 
 
 def test_escribiendo_dolares_al_bcv_salen_bolivares_y_reales():
@@ -112,7 +113,7 @@ def test_escribiendo_dolares_al_bcv_salen_bolivares_y_reales():
 
 def test_escribiendo_bolivares_salen_reales_y_dolares():
     c = js("m.convertir({origen: m.BOLIVARES, monto: 17300, tasa: 173, bcv: 849.56})")
-    assert c == {"brl": 100, "ves": 17300, "usd": 20.36, "usdt": 0}
+    assert c == {"brl": 100, "ves": 17300, "usd": 20.36}
 
 
 def test_la_misma_cuenta_hacia_brasil_da_otro_numero():
@@ -122,7 +123,7 @@ def test_la_misma_cuenta_hacia_brasil_da_otro_numero():
 
 
 def test_sin_tasa_o_sin_monto_todo_queda_en_cero():
-    nada = {"brl": 0, "ves": 0, "usd": 0, "usdt": 0}
+    nada = {"brl": 0, "ves": 0, "usd": 0}
     assert js("m.convertir({origen: m.REALES, monto: 100, tasa: 0, bcv: 849.56})") == nada
     assert js("m.convertir({origen: m.REALES, monto: 0, tasa: 173, bcv: 849.56})") == nada
     assert js("m.convertir({origen: 'otra', monto: 100, tasa: 173})") == nada
@@ -166,6 +167,14 @@ def test_la_pantalla_respeta_que_sin_tasa_no_hay_cuenta():
     # Y se lo pasa al módulo, que es quien decide: no alcanza con leerlo.
     assert "tasaDelSentido(rates, sentido, tasaDisponible)" in codigo
     assert 'data-testid="calc-sin-tasa"' in codigo
+
+
+def test_LA_CALCULADORA_NO_MUESTRA_EL_USDT():
+    """El dueño la sacó: no hay un flujo donde el cliente pague con USDT, y
+    una tasa que no lleva a ningún lado confunde. Ni en la pantalla ni en
+    las cuentas."""
+    assert "usdt" not in _sin_comentarios(_fuente(PANTALLA)).lower()
+    assert "usdt" not in _sin_comentarios(_fuente(MODULO)).lower()
 
 
 def test_la_pantalla_ofrece_los_dos_sentidos_con_su_flujo():
