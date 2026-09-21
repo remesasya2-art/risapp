@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Cinco tablas, y cada columna con su porqué.
+El esquema del núcleo. Siete tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -15,6 +15,13 @@ El esquema del núcleo. Cinco tablas, y cada columna con su porqué.
     cierres           un renglón por día cerrado: hasta qué asiento, con qué
                       hash, y los totales. Después del cierre no se asienta
                       con fecha de ese día ni anterior.
+    eventos           la bandeja de salida: «pasó tal cosa», escrita en LA
+                      MISMA transacción que la cosa. Un asiento y su evento
+                      entran juntos o no entra ninguno. `publicado` en NULL
+                      es «todavía nadie lo despachó».
+    trabajos          la cola: lo que hay que hacer después, con turnos,
+                      reintentos y cola de muertos. El porqué de cada
+                      columna está en `nucleo/cola.py`.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -98,6 +105,42 @@ cierres = Table(
     Column("cerrado_en", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("cerrado_por", String(80), nullable=False),
     Column("nota", Text, nullable=True),
+)
+
+eventos = Table(
+    "eventos", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tipo", String(60), nullable=False),               # «asiento_registrado», «dia_cerrado»
+    Column("clave", String(120), nullable=False),             # sobre qué: «asiento:12», «cierre:2026-09-21»
+    Column("carga", Text, nullable=False),                    # JSON canónico con lo que hace falta saber
+    Column("creado", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("publicado", DateTime(timezone=True), nullable=True),  # NULL: pendiente de despachar
+    # Un hecho, un evento. Es lo que hace inofensivo volver a anotarlo.
+    UniqueConstraint("tipo", "clave", name="uq_eventos_tipo_clave"),
+    Index("ix_eventos_publicado", "publicado"),
+)
+
+trabajos = Table(
+    "trabajos", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tipo", String(60), nullable=False),               # el nombre del manejador (nucleo/tareas.py)
+    Column("clave", String(120), nullable=False),             # idempotencia: (tipo, clave) es único
+    Column("carga", Text, nullable=False),                    # JSON con lo que el manejador necesita
+    Column("estado", String(12), nullable=False, default="pendiente"),
+    Column("intentos", Integer, nullable=False, default=0),   # cuántas veces se tomó
+    Column("max_intentos", Integer, nullable=False, default=6),
+    Column("proximo_intento", DateTime(timezone=True), nullable=False),  # desde cuándo se puede tomar
+    Column("tomado_por", String(80), nullable=True),          # el trabajador que lo tiene
+    Column("tomado_hasta", DateTime(timezone=True), nullable=True),      # el turno; vencido, otro lo retoma
+    Column("ultimo_error", Text, nullable=True),
+    Column("resultado", Text, nullable=True),                 # lo que devolvió el manejador, si devolvió algo
+    Column("origen_evento", Integer, ForeignKey("eventos.id"), nullable=True),  # si nació de un evento
+    Column("creado", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("terminado", DateTime(timezone=True), nullable=True),
+    UniqueConstraint("tipo", "clave", name="uq_trabajos_tipo_clave"),
+    CheckConstraint("estado in ('pendiente','en_curso','hecho','muerto')", name="estado_del_trabajo_valido"),
+    CheckConstraint("intentos >= 0 and max_intentos > 0", name="intentos_validos"),
+    Index("ix_trabajos_para_tomar", "estado", "proximo_intento"),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple

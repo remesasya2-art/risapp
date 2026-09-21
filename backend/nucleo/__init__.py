@@ -36,6 +36,15 @@ LA FRONTERA
     Motivo: el día que el núcleo se separe en su propio servicio —que es a
     donde va—, tiene que poder salir del repositorio sin arrastrar nada.
 
+LOS EVENTOS Y LA COLA
+
+    Cada asiento deja un evento en una bandeja de salida, en la misma
+    transacción. Un trabajador los despacha como trabajos de una cola con
+    turnos, reintentos con espera creciente y cola de muertos. Todo en la
+    misma base que el libro, por la garantía que eso da: ver `cola.py`.
+    El trabajador corre en el mismo proceso web mientras dure el
+    laboratorio: ver `trabajador.py`.
+
 EL DINERO VA EN CENTAVOS ENTEROS
 
     Los montos son enteros en la unidad mínima de la moneda (centavos para el

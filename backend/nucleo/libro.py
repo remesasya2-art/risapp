@@ -25,6 +25,14 @@ NO HAY FUNCION QUE EDITE NI BORRE
     lo revierte, con su propia referencia y su propia explicación, y los dos
     quedan en el libro. Es la diferencia entre un libro y una planilla.
 
+CADA ASIENTO DEJA UN EVENTO EN LA MISMA TRANSACCION
+
+    «Se registró el asiento N» va a la bandeja de salida (`eventos`) dentro
+    de la misma transacción que el asiento. Si el asiento no entra, el evento
+    tampoco; si entra, el evento queda aunque el proceso muera un instante
+    después. Lo que se hace con ese evento —avisar, informar— es asunto de
+    la cola (`nucleo/cola.py`), no del libro. Lo mismo con el cierre del día.
+
 EL SALDO SE DERIVA DE LAS PARTIDAS
 
     No hay columna de saldo en `cuentas`. El saldo es haber menos debe (para
@@ -160,6 +168,13 @@ async def asentar(sesion, *, fecha: date, descripcion: str, referencia: str, com
              debe=p.debe, haber=p.haber)
         for i, p in enumerate(lineas)
     ])
+    # El evento, en la misma transacción. Ver el encabezado.
+    from nucleo import cola
+    await cola.anotar_evento(sesion, tipo="asiento_registrado", clave=f"asiento:{numero}", carga={
+        "numero": numero, "fecha": fecha.isoformat(), "referencia": referencia, "comando": comando,
+        "actor": actor, "descripcion": descripcion, "hash": hash_propio,
+        "cuentas": sorted({p.cuenta for p in lineas if p.cuenta}),
+    })
     return numero
 
 
@@ -269,6 +284,11 @@ async def cerrar_dia(sesion, dia: date, *, actor: str, nota: Optional[str] = Non
                 total_debe=int(totales[0]), total_haber=int(totales[1]), cerrado_por=actor, nota=nota)
     await sesion.execute(cierres.insert().values(**fila))
     fila["dia"] = dia.isoformat()
+    from nucleo import cola
+    await cola.anotar_evento(sesion, tipo="dia_cerrado", clave=f"cierre:{fila['dia']}", carga={
+        "dia": fila["dia"], "hasta_asiento": hasta, "hash_final": hash_final, "asientos": int(cuantos),
+        "total_debe": fila["total_debe"], "total_haber": fila["total_haber"], "cerrado_por": actor,
+    })
     return fila
 
 
