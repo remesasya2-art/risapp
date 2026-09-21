@@ -169,7 +169,11 @@ export default function Calculadora({ isMobile = false }) {
           <span style={{ fontSize: '12px', color: '#6b7280' }}>
             Sólo orientativo: la tasa del envío se fija al cotizar.
           </span>
-          <Link to={elSentido.ruta} data-testid="calc-ir-al-envio" style={{
+          {/* El monto escrito viaja al flujo, para no tipearlo dos veces. En
+              reales en los dos sentidos: es la moneda en que las dos pantallas
+              de envío toman el monto. Con la casilla vacía, sin parámetro. */}
+          <Link to={hayCuenta ? `${elSentido.ruta}?monto=${cuenta.brl}` : elSentido.ruta}
+            data-testid="calc-ir-al-envio" style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '12px',
             fontWeight: 700, fontSize: '13px', color: '#5B4FE9', textDecoration: 'none',
             border: '1.5px solid rgba(91,79,233,0.25)',

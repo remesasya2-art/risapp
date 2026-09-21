@@ -39,7 +39,8 @@
  *   las mismas. El cambio es cuándo se valida y cómo se ve.
  */
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { montoDeLaUrl } from '../utils/montoDeLaUrl';
 import { useAuth } from '../contexts/AuthContext';
 import {
   ArrowLeft, ArrowRight, Plus, X, User, Check, Wallet, ShieldCheck,
@@ -161,7 +162,10 @@ export default function SendReais() {
   const [paso, setPaso] = useState(1);
   const [beneficiarios, setBeneficiarios] = useState([]);
   const [elegido, setElegido] = useState(null);
-  const [monto, setMonto] = useState('');
+  // La calculadora del inicio manda el monto por la URL (`?monto=`). Ver
+  // `utils/montoDeLaUrl.js`.
+  const [parametros] = useSearchParams();
+  const [monto, setMonto] = useState(() => montoDeLaUrl(parametros));
   const [enviando, setEnviando] = useState(false);
   const [mostrarPin, setMostrarPin] = useState(false);
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
