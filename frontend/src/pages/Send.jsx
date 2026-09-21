@@ -48,6 +48,9 @@
  */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import useRecarga from '../hooks/useRecarga';
+import useEsperarElPago, { ESPERANDO, PAGADO, VENCIDO } from '../hooks/useEsperarElPago';
+import PagoRecibido from '../components/flujo/PagoRecibido';
+import EsperandoElPago from '../components/flujo/EsperandoElPago';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -226,6 +229,14 @@ export default function Send() {
   const recarga = useRecarga();
   const [pagoAlFinal, setPagoAlFinal] = useState(false);
   const [cobro, setCobro] = useState(null);      // el QR, cuando se cotizó
+  // ¿YA ENTRO EL PIX? Se le pregunta al servidor mientras el QR está en
+  // pantalla. Antes no se preguntaba nunca: el cliente pagaba y la pantalla
+  // se quedaba igual. Con tarjeta no hace falta: contesta al instante.
+  const espera = useEsperarElPago(
+    step === 5 && cobro && cobro.metodo !== 'tarjeta' ? cobro.payment_order_id : null);
+  // El reloj del cobro, descontado en pantalla para que el número se mueva.
+  // Quién decide si venció es el servidor, con la pregunta de arriba.
+  const [quedanCobro, setQuedanCobro] = useState(0);
   // EL CPF DE QUIEN PAGA. `cpf_de_la_cuenta.exigir_para_pagar` lo exige
   // SIEMPRE, incluso cuando la cuenta ya tiene uno atado: primero valida el
   // declarado y después lo compara. Así que se manda siempre, y sólo se le
@@ -319,6 +330,32 @@ export default function Send() {
     const inicial = setTimeout(() => setAhora(Date.now()), 0);
     return () => { clearInterval(t); clearTimeout(inicial); };
   }, []);
+
+  // El reloj del cobro arranca con lo que dijo el servidor y se descuenta de
+  // a un segundo mientras se espera el pago. El primer valor va en un
+  // microtask, como los demás relojes de esta pantalla.
+  useEffect(() => {
+    if (step !== 5 || !cobro) return undefined;
+    const inicial = setTimeout(() => setQuedanCobro(cobro.expires_in_seconds || 0), 0);
+    return () => clearTimeout(inicial);
+  }, [step, cobro]);
+  useEffect(() => {
+    if (step !== 5 || !cobro || espera.estado !== ESPERANDO || quedanCobro <= 0) return undefined;
+    const t = setTimeout(() => setQuedanCobro((q) => Math.max(0, q - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [step, cobro, espera.estado, quedanCobro]);
+
+  // Cuando entra el pago: el saldo puede haber cambiado (el bono que cubrió
+  // parte), y un aviso corto además de la pantalla verde, para quien tenga
+  // la pestaña de fondo.
+  useEffect(() => {
+    if (espera.estado !== PAGADO) return;
+    toast.success('¡Pago recibido! Tu envío ya está en camino.');
+    refreshUser?.();
+    // Sólo cuando cambia el desenlace: `refreshUser` se redefine en cada
+    // render y ponerlo acá volvería a pedir el usuario todo el tiempo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [espera.estado]);
 
   // Al llegar a confirmar se vuelve a pedir la tasa: es el instante anterior a
   // que el dinero salga, el único momento en el que de verdad importa.
@@ -1008,7 +1045,35 @@ export default function Send() {
           </div>
         ) : null}
 
-        {step === 5 && cobro && cobro.metodo !== 'tarjeta' ? (
+        {step === 5 && cobro && cobro.metodo !== 'tarjeta' && espera.estado === PAGADO ? (
+          <PagoRecibido
+            numero={cobro.display_id}
+            pagaste={cobro.amount_brl}
+            recibe={cobro.amount_ves}
+            beneficiario={selectedBeneficiary?.full_name}
+            onHistorial={() => navigate('/history')}
+            onOtroEnvio={() => { setCobro(null); setStep(1); }}
+          />
+        ) : null}
+
+        {step === 5 && cobro && cobro.metodo !== 'tarjeta' && espera.estado === VENCIDO ? (
+          <div style={{ ...tarjeta, padding: '22px' }} data-testid="cobro-vencido">
+            <Aviso tono="error" titulo="Este cobro venció y no se pagó">
+              La tasa que te habíamos reservado ya no vale: hacé un pedido nuevo
+              para ver el precio de ahora. Si pagaste justo al final, el pago
+              queda registrado y el equipo lo revisa; lo vas a ver en tu historial.
+            </Aviso>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px' }}>
+              <Boton tipo="primario" ancho onClick={() => { setCobro(null); setStep(1); }}
+                testid="cobro-vencido-nuevo">
+                Hacer un pedido nuevo
+              </Boton>
+              <Boton ancho onClick={() => navigate('/history')}>Ver en mi historial</Boton>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 5 && cobro && cobro.metodo !== 'tarjeta' && espera.estado === ESPERANDO ? (
           <div style={{ ...tarjeta, padding: '22px' }} data-testid="cobro-pix">
             <h2 style={{ fontSize: '17px', fontWeight: 700, color: C.tinta, margin: '0 0 4px 0' }}>
               Pagá para que salga
@@ -1049,8 +1114,10 @@ export default function Send() {
 
             <div style={{ marginBottom: '16px' }}>
               <Aviso tono="alerta" testid="cobro-vence">
-                Este cobro vence en 7 minutos. La tasa que ves te la
-                respetamos hasta entonces, aunque cambie.
+                Este cobro vence en{' '}
+                <strong style={{ fontVariantNumeric: 'tabular-nums' }} data-testid="cobro-reloj">
+                  {Math.floor(quedanCobro / 60)}:{String(quedanCobro % 60).padStart(2, '0')}
+                </strong>. La tasa que ves te la respetamos hasta entonces, aunque cambie.
               </Aviso>
             </div>
 
@@ -1066,6 +1133,8 @@ export default function Send() {
                 Ver en mi historial
               </Boton>
             </div>
+
+            <EsperandoElPago onRevisar={espera.revisarAhora} />
           </div>
         ) : null}
 

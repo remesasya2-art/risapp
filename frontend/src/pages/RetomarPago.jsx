@@ -26,6 +26,9 @@ import toast from 'react-hot-toast';
 import { AlertCircle, ArrowLeft, Clock, CreditCard, Upload } from 'lucide-react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import useEsperarElPago, { PAGADO, VENCIDO } from '../hooks/useEsperarElPago';
+import PagoRecibido from '../components/flujo/PagoRecibido';
+import EsperandoElPago from '../components/flujo/EsperandoElPago';
 import CardPaymentBrick from '../components/CardPaymentBrick';
 import NotificationBell from '../components/NotificationBell';
 import { Aviso, Boton } from '../components/flujo';
@@ -79,6 +82,33 @@ export default function RetomarPago() {
       if (mia === peticion.current) setCargando(false);
     }
   }, [transactionId]);
+
+  // ¿YA ENTRO EL PIX? Se le pregunta al servidor mientras el QR está en
+  // pantalla. Antes esta pantalla leía el pedido una vez y volvía a preguntar
+  // sólo cuando el reloj llegaba a cero: el cliente pagaba y no pasaba nada.
+  // Con tarjeta no hace falta (contesta al instante), y en el corredor a
+  // Brasil se paga con un comprobante que revisa una persona.
+  const esperaElPix = Boolean(pago?.se_puede_pagar && pago?.corredor === 'venezuela'
+    && pago?.metodo !== 'tarjeta' && pago?.payment_order_id);
+  const espera = useEsperarElPago(esperaElPix ? pago.payment_order_id : null);
+
+  // Si el servidor dice que venció, se vuelve a leer el pedido: es él quien
+  // sabe el motivo exacto, y esta pantalla ya sabe mostrarlo.
+  useEffect(() => {
+    if (espera.estado !== VENCIDO) return undefined;
+    // En un microtask, como los demás pedidos de esta pantalla: así el
+    // `setState` de `cargar` no ocurre de forma sincrónica dentro del efecto.
+    const t = setTimeout(() => { cargar(); }, 0);
+    return () => clearTimeout(t);
+  }, [espera.estado, cargar]);
+
+  useEffect(() => {
+    if (espera.estado !== PAGADO) return;
+    toast.success('¡Pago recibido! Tu envío ya está en camino.');
+    refreshUser?.();
+    // Sólo cuando cambia el desenlace; `refreshUser` se redefine en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [espera.estado]);
 
   // EL PRIMER PEDIDO SALE EN UN MICROTASK y no en el cuerpo del efecto: así
   // el `setState` de adentro no ocurre de forma sincrónica durante el montaje.
@@ -181,8 +211,22 @@ export default function RetomarPago() {
         ) : null}
       </section>
 
+      {/* ── Entró el pago ────────────────────────────────────────────────── */}
+      {espera.estado === PAGADO ? (
+        <PagoRecibido
+          numero={pago.display_id}
+          pagaste={pago.monto_a_pagar}
+          recibe={pago.amount_output}
+          monedaRecibe={pago.currency_output || 'VES'}
+          beneficiario={pago.beneficiary_data?.full_name}
+          onHistorial={() => navigate('/history')}
+          onOtroEnvio={() => navigate('/send')}
+          testid="retomar-pagado"
+        />
+      ) : null}
+
       {/* ── No se puede pagar: el motivo, y qué hacer ───────────────────── */}
-      {!pago.se_puede_pagar ? (
+      {espera.estado !== PAGADO && !pago.se_puede_pagar ? (
         <section style={{ ...tarjeta, padding: '22px' }} data-testid="retomar-vencido">
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start',
             marginBottom: '14px' }}>
@@ -202,7 +246,7 @@ export default function RetomarPago() {
       ) : null}
 
       {/* ── Todavía se puede: el reloj y con qué ────────────────────────── */}
-      {pago.se_puede_pagar ? (
+      {espera.estado !== PAGADO && pago.se_puede_pagar ? (
         <>
           <section style={{ ...tarjeta, padding: '14px 18px', marginBottom: '14px',
             display: 'flex', alignItems: 'center', gap: '10px' }}
@@ -243,6 +287,7 @@ export default function RetomarPago() {
               }}>
                 Copiar el código
               </Boton>
+              <EsperandoElPago onRevisar={espera.revisarAhora} testid="retomar-esperando" />
             </section>
           ) : null}
 
