@@ -404,6 +404,23 @@ AJUSTES = {
               "el cliente las ve, sube comprobantes y paga lo que deba, y el "
               "panel de Encomiendas sigue entero para terminarlas."),
 
+    # ── El núcleo de cuentas ──────────────────────────────────────────────
+    #
+    # La arquitectura de fintech que se construye mientras se resuelve lo
+    # legal. Viene APAGADA de fábrica y falla cerrado: sus rutas contestan
+    # 404 a todo el mundo. En 1, sólo el super administrador ve la pestaña
+    # «Núcleo» del panel, con datos de prueba; los clientes no ven nada. El 2
+    # queda reservado para cuando haya licencia y HOY se comporta igual que
+    # el 1. Ver `nucleo/modo.py`.
+    "nucleo_modo": Ajuste(
+        tipo=ENTERO, defecto=0, minimo=0, maximo=2,
+        unidad="0 = apagado, 1 = laboratorio, 2 = activo (reservado)",
+        etiqueta="Núcleo de cuentas (fintech)",
+        ayuda="En 0 (fábrica) no existe: ni rutas ni pestaña. En 1 aparece la "
+              "pestaña «Núcleo» sólo para el super administrador, con plata de "
+              "prueba, y los clientes no ven nada. El 2 está reservado para el "
+              "día que haya licencia; hoy hace lo mismo que el 1."),
+
     "cripto_abierta": Ajuste(
         tipo=ENTERO, defecto=1, minimo=0, maximo=2,
         unidad="0 = cerrada, 1 = sólo salida, 2 = abierta",

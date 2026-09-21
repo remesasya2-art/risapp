@@ -163,3 +163,12 @@ wrapt==2.2.0
 yarl==1.22.0
 zipp==3.23.0
 webauthn==2.5.2
+
+# ── El núcleo de cuentas (backend/nucleo) ─────────────────────────────────
+# Base relacional aparte de Mongo: Postgres en producción (asyncpg), SQLite
+# en los tests (aiosqlite), y Alembic para llevar el esquema con migraciones.
+# El porqué está en nucleo/base.py.
+sqlalchemy==2.0.43
+asyncpg==0.30.0
+aiosqlite==0.21.0
+alembic==1.16.5
