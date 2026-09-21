@@ -736,6 +736,13 @@ async def get_admin_payment_record_detail(record_id: str, admin_user: Usuario = 
     if not has_permission(admin_user, "transactions.view"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
+    # Un identificador que no tiene forma de ObjectId no es un error del
+    # servidor: es un registro que no existe. Sin esto, `ObjectId(...)` lanzaba
+    # y la ruta contestaba 500 con «error inesperado» a quien escribiera la
+    # dirección a mano o tuviera un enlace viejo.
+    if not ObjectId.is_valid(record_id):
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
     record = await db.admin_payment_records.find_one({"_id": ObjectId(record_id)})
     
     if not record:
