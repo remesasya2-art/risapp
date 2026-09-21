@@ -1658,6 +1658,49 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     await store_idempotency_result(current_user.user_id, "recharge_ves", _rch_key, _resp_rch)
     return _resp_rch
 
+# ══════════════════════════════════════════════════════════════════════════
+# Mis recargas en bolívares
+# ══════════════════════════════════════════════════════════════════════════
+#
+# La pantalla «Recargar con VES» muestra las recargas que el cliente ya pidió
+# —en revisión, aprobadas, rechazadas con su motivo—. Pide esta ruta desde
+# siempre; la ruta existió hasta junio de 2026 y se fue en una limpieza. Desde
+# entonces la lista quedaba vacía en silencio y cada visita dejaba un 404.
+# Apareció en la revisión general del 21 de septiembre.
+#
+# Vuelve POR LISTA DE LO PERMITIDO, que la versión vieja no tenía: al
+# documento de una recarga el panel le escribe `processed_by` —el
+# identificador del administrador que la aprobó o rechazó—, y eso no tiene
+# por qué viajar al navegador del cliente.
+
+class UnaRecargaEnBolivares(BaseModel):
+    transaction_id: str
+    display_id: Optional[str] = None
+    amount_ves: Optional[float] = None
+    amount_ris: Optional[float] = None
+    status: Optional[str] = None
+    created_at: Optional[datetime] = None
+    processed_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    destination_bank: Optional[str] = None
+    payment_method: Optional[str] = None
+
+
+@router.get("/recharge/ves/status", response_model=list[UnaRecargaEnBolivares])
+async def mis_recargas_en_bolivares(current_user: User = Depends(get_current_user)):
+    """Las recargas en bolívares del propio usuario, de la más nueva a la más
+    vieja. Veinte alcanzan: es lo que la pantalla lista debajo del formulario."""
+    filas = await db.transactions.find(
+        {"user_id": current_user.user_id, "type": "recharge_ves"},
+        {"_id": 0, "transaction_id": 1, "display_id": 1, "amount_ves": 1,
+         "amount_ris": 1, "status": 1, "created_at": 1, "processed_at": 1,
+         "rejection_reason": 1, "destination_bank": 1, "payment_method": 1},
+    ).sort("created_at", -1).to_list(20)
+    for fila in filas:
+        _normalize_tx_money(fila)
+    return filas
+
+
 # ============== TRANSACTION HISTORY ==============
 
 # LO QUE EL CLIENTE VE DE SU PROPIA OPERACION, POR LISTA DE LO PERMITIDO
