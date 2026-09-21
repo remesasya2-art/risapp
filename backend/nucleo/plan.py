@@ -34,6 +34,7 @@ CUENTAS = (
 # código: si un día cambia un código, cambia en un lugar.
 DE_TITULARES = "2.1.01"
 LIQUIDACION = "1.1.02"
+TRANSITO = "2.1.02"        # pagos salientes ya ordenados y todavía no liquidados por el SPI
 TARIFAS = "4.1.01"
 CAPITAL = "3.1.01"
 PUENTE = "5.9.99"

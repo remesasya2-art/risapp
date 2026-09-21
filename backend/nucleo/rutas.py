@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from models.user import User
 from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
+from nucleo.rieles import operaciones as rieles_op, pix, simulador
 from routes.dependencies import get_super_admin
 
 router = APIRouter(prefix="/nucleo", tags=["Núcleo"])
@@ -118,6 +119,75 @@ class Reintento(BaseModel):
     estado: str
 
 
+class EstadoDeOperacion(BaseModel):
+    estado: str
+    detalle: Optional[str] = None
+    momento: Optional[str] = None
+
+
+class Operacion(BaseModel):
+    id: str
+    riel: str
+    direccion: str
+    estado: str
+    cuenta: str
+    monto: str
+    referencia: str
+    txid: Optional[str] = None
+    end_to_end: Optional[str] = None
+    clave: Optional[str] = None
+    contraparte: Optional[dict] = None
+    descripcion: Optional[str] = None
+    motivo: Optional[str] = None
+    origen: Optional[str] = None
+    codigo_br: Optional[str] = None
+    creada: Optional[str] = None
+    actualizada: Optional[str] = None
+    historial: list[EstadoDeOperacion] = Field(default_factory=list)
+
+
+class AvisoDelRiel(BaseModel):
+    id: int
+    riel: str
+    id_externo: str
+    tipo: str
+    carga: dict
+    recibido: Optional[str] = None
+    procesado: Optional[str] = None
+    resultado: Optional[str] = None
+
+
+class ClaveDePrueba(BaseModel):
+    clave: str
+    nombre: str
+    banco: str
+    comportamiento: str
+
+
+class Titular(BaseModel):
+    clave: str
+    tipo: str
+    nombre: str
+    documento: str
+    ispb: str
+    banco: str
+
+
+class Rieles(BaseModel):
+    riel: str
+    ispb: str
+    claves_de_prueba: list[ClaveDePrueba]
+    motivos_de_devolucion: dict
+    resumen: dict
+    operaciones: list[Operacion]
+    avisos: list[AvisoDelRiel]
+
+
+class AvisoRecibido(BaseModel):
+    id: int
+    nuevo: bool
+
+
 class Cuenta(BaseModel):
     id: str
     titular_ref: str
@@ -201,6 +271,35 @@ class Movimiento(BaseModel):
 class PedidoDeCierre(BaseModel):
     dia: date
     nota: Optional[str] = Field(default=None, max_length=500)
+
+
+class NuevoCobro(BaseModel):
+    cuenta: str = Field(min_length=1, max_length=40)
+    monto: str = Field(min_length=1, max_length=24)
+    descripcion: Optional[str] = Field(default=None, max_length=140)
+
+
+class PagoSimulado(BaseModel):
+    pagador_clave: str = Field(default="ana@ejemplo.test", min_length=1, max_length=120)
+
+
+class NuevoPago(BaseModel):
+    cuenta: str = Field(min_length=1, max_length=40)
+    clave: str = Field(min_length=1, max_length=120)
+    monto: str = Field(min_length=1, max_length=24)
+    referencia: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    descripcion: Optional[str] = Field(default=None, max_length=140)
+
+
+class ResultadoSimulado(BaseModel):
+    estado: str = Field(pattern="^(ACSC|RJCT)$")
+    motivo: Optional[str] = Field(default=None, max_length=4)
+
+
+class NuevaDevolucion(BaseModel):
+    operacion: str = Field(min_length=1, max_length=40)
+    monto: str = Field(min_length=1, max_length=24)
+    motivo: str = Field(pattern="^(MD06|SL02|FR01|BE08)$")
 
 
 class NuevoTrabajo(BaseModel):
@@ -343,3 +442,133 @@ async def reintentar(trabajo_id: int, admin: User = Depends(get_super_admin),
         if not await cola.reintentar(s, trabajo_id):
             raise HTTPException(status_code=409, detail="Sólo se reintenta un trabajo muerto.")
     return {"id": trabajo_id, "estado": cola.PENDIENTE}
+
+
+# ── los rieles ─────────────────────────────────────────────────────────────
+#
+#   Todo lo de acá pasa por `nucleo/rieles/operaciones.py`; las rutas sólo
+#   traducen errores a códigos. Las de «simular» existen porque el riel es
+#   el simulador: cuando haya uno real, esas dos no van a tener sentido y se
+#   sacan (y devuelven 400 si el riel vigente no es el simulador).
+
+def _error_de_operacion(e: Exception):
+    if isinstance(e, rieles_op.ClaveDesconocida):
+        return HTTPException(status_code=404, detail=str(e))
+    return HTTPException(status_code=400, detail=str(e))
+
+
+def _solo_simulador():
+    from nucleo.rieles import vigente
+    r = vigente()
+    if not isinstance(r, simulador.Simulador):
+        raise HTTPException(status_code=400, detail="Sólo se simula contra el simulador.")
+    return r
+
+
+@router.get("/laboratorio/rieles", response_model=Rieles)
+async def rieles(limite: int = 50, admin: User = Depends(get_super_admin),
+                 _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    from nucleo.rieles import vigente
+    r = vigente()
+    limite = max(1, min(limite, 200))
+    return {"riel": r.nombre, "ispb": r.ispb,
+            "claves_de_prueba": [{"clave": c, "nombre": n, "banco": b, "comportamiento": comp}
+                                 for c, _t, n, _d, _i, b, comp in simulador.CLAVES_DE_PRUEBA],
+            "motivos_de_devolucion": pix.MOTIVOS_DE_DEVOLUCION,
+            "resumen": await rieles_op.resumen(),
+            "operaciones": await rieles_op.listar(limite),
+            "avisos": await rieles_op.listar_avisos(limite)}
+
+
+@router.get("/laboratorio/rieles/claves/{clave}", response_model=Titular)
+async def clave(clave: str, admin: User = Depends(get_super_admin),
+                _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        t = await rieles_op.consultar_clave(clave)
+    except pix.ClaveInvalida as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if t is None:
+        raise HTTPException(status_code=404, detail="La clave no está en el DICT.")
+    return t
+
+
+@router.get("/laboratorio/rieles/operaciones/{operacion_id}", response_model=Operacion)
+async def operacion(operacion_id: str, admin: User = Depends(get_super_admin),
+                    _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await rieles_op.detalle(operacion_id)
+    except rieles_op.OperacionInvalida as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/laboratorio/rieles/cobros", response_model=Operacion)
+async def cobrar(pedido: NuevoCobro, admin: User = Depends(get_super_admin),
+                 _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await rieles_op.crear_cobro(cuenta_id=pedido.cuenta, monto=pedido.monto,
+                                           descripcion=pedido.descripcion or "", actor=admin.user_id)
+    except (rieles_op.OperacionInvalida, comandos.MontoInvalido, ValueError) as e:
+        raise _error_de_operacion(e)
+
+
+@router.post("/laboratorio/rieles/cobros/{operacion_id}/simular_pago", response_model=AvisoRecibido)
+async def simular_pago(operacion_id: str, pedido: PagoSimulado, admin: User = Depends(get_super_admin),
+                       _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    r = _solo_simulador()
+    try:
+        op = await rieles_op.detalle(operacion_id)
+    except rieles_op.OperacionInvalida as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if op["direccion"] != rieles_op.ENTRADA:
+        raise HTTPException(status_code=400, detail="Sólo se simula el pago de un cobro.")
+    try:
+        async with base.sesion() as s:
+            return await r.simular_pago_del_cobro(s, txid=op["txid"], monto=comandos.a_centavos(op["monto"]),
+                                                  pagador_clave=pedido.pagador_clave)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/rieles/pagos", response_model=Operacion)
+async def pagar(pedido: NuevoPago, admin: User = Depends(get_super_admin),
+                _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    import secrets
+    referencia = pedido.referencia or f"lab-{secrets.token_hex(4)}"
+    try:
+        return await rieles_op.ordenar_pago(cuenta_id=pedido.cuenta, clave=pedido.clave, monto=pedido.monto,
+                                            referencia=referencia, actor=admin.user_id,
+                                            descripcion=pedido.descripcion or "")
+    except (rieles_op.ClaveDesconocida, rieles_op.OperacionInvalida, pix.ClaveInvalida,
+            AsientoInvalido, comandos.MontoInvalido) as e:
+        raise _error_de_operacion(e)
+    except DiaCerrado as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/laboratorio/rieles/pagos/{operacion_id}/simular_resultado", response_model=AvisoRecibido)
+async def simular_resultado(operacion_id: str, pedido: ResultadoSimulado, admin: User = Depends(get_super_admin),
+                            _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    r = _solo_simulador()
+    try:
+        op = await rieles_op.detalle(operacion_id)
+    except rieles_op.OperacionInvalida as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if op["direccion"] == rieles_op.ENTRADA or not op["end_to_end"]:
+        raise HTTPException(status_code=400, detail="Sólo se simula el resultado de un pago o una devolución.")
+    try:
+        async with base.sesion() as s:
+            return await r.simular_resultado(s, end_to_end=op["end_to_end"], estado=pedido.estado, motivo=pedido.motivo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/rieles/devoluciones", response_model=Operacion)
+async def devolver(pedido: NuevaDevolucion, admin: User = Depends(get_super_admin),
+                   _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await rieles_op.devolver(operacion_id=pedido.operacion, monto=pedido.monto, motivo=pedido.motivo,
+                                        actor=admin.user_id)
+    except (rieles_op.OperacionInvalida, AsientoInvalido, comandos.MontoInvalido) as e:
+        raise _error_de_operacion(e)
+    except DiaCerrado as e:
+        raise HTTPException(status_code=409, detail=str(e))

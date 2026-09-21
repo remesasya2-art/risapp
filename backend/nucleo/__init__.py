@@ -45,6 +45,15 @@ LOS EVENTOS Y LA COLA
     El trabajador corre en el mismo proceso web mientras dure el
     laboratorio: ver `trabajador.py`.
 
+LOS RIELES
+
+    Por dónde entra y sale la plata de verdad: hoy el PIX, contra un
+    simulador que habla como un liquidante (órdenes, avisos, DICT, códigos
+    de rechazo del SPI, BR Code). El puerto está en `rieles/__init__.py`; el
+    día del contrato se escribe el adaptador real con esa misma forma. Las
+    operaciones, sus tres asientos y su línea de tiempo están en
+    `rieles/operaciones.py`, y todo pasa por la cola.
+
 EL DINERO VA EN CENTAVOS ENTEROS
 
     Los montos son enteros en la unidad mínima de la moneda (centavos para el
