@@ -421,6 +421,35 @@ AJUSTES = {
               "prueba, y los clientes no ven nada. El 2 está reservado para el "
               "día que haya licencia; hoy hace lo mismo que el 1."),
 
+    # LOS UMBRALES DEL MONITOREO DEL NUCLEO. Los lee `nucleo/riesgo/monitoreo.py`
+    # cada vez que evalúa una operación; se cambian acá y rigen enseguida.
+    # Están en el catálogo y no en código porque el oficial de cumplimiento
+    # los va a ajustar más de una vez, y ninguno debería ser un despliegue.
+    "nucleo_umbral_operacion": Ajuste(
+        tipo=DINERO, defecto=Decimal("10000.00"), minimo=Decimal("100.00"), maximo=Decimal("1000000.00"),
+        unidad="R$", etiqueta="Núcleo · umbral por operación",
+        ayuda="Una operación por un riel del núcleo igual o mayor que esto deja "
+              "una alerta de monitoreo y abre un caso. Sólo cuenta con el núcleo "
+              "prendido; no toca los límites de la aplicación."),
+    "nucleo_umbral_30_dias": Ajuste(
+        tipo=DINERO, defecto=Decimal("50000.00"), minimo=Decimal("1000.00"), maximo=Decimal("10000000.00"),
+        unidad="R$", etiqueta="Núcleo · acumulado en 30 días",
+        ayuda="Lo liquidado por un titular en 30 días, por todas sus cuentas del "
+              "núcleo, que llega a esto deja una alerta."),
+    "nucleo_umbral_12_meses": Ajuste(
+        tipo=DINERO, defecto=Decimal("300000.00"), minimo=Decimal("1000.00"), maximo=Decimal("100000000.00"),
+        unidad="R$", etiqueta="Núcleo · acumulado en 12 meses",
+        ayuda="Lo mismo, en doce meses."),
+    "nucleo_fraccionamiento_horas": Ajuste(
+        tipo=ENTERO, defecto=24, minimo=1, maximo=168,
+        unidad="horas", etiqueta="Núcleo · ventana de fraccionamiento",
+        ayuda="Tres o más operaciones por debajo del umbral, dentro de esta "
+              "ventana, que juntas lo pasan: la forma clásica de esquivarlo."),
+    "nucleo_velocidad_por_hora": Ajuste(
+        tipo=ENTERO, defecto=10, minimo=1, maximo=1000,
+        unidad="operaciones", etiqueta="Núcleo · operaciones por hora",
+        ayuda="Más que esto en una hora, por titular, deja una alerta."),
+
     "cripto_abierta": Ajuste(
         tipo=ENTERO, defecto=1, minimo=0, maximo=2,
         unidad="0 = cerrada, 1 = sólo salida, 2 = abierta",

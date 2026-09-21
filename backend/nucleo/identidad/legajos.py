@@ -218,7 +218,14 @@ async def resolver_cruce(cruce_id: int, *, resolucion: str, actor: str) -> dict:
         await s.execute(cruces.update().where(cruces.c.id == cruce_id).values(
             resuelto=True, resolucion=resolucion.strip()[:300], resuelto_por=actor, resuelto_en=_ahora()))
         await _acomodar_estado(s, c.titular)
-        return _cruce((await s.execute(select(cruces).where(cruces.c.id == cruce_id))).first())
+        resultado = _cruce((await s.execute(select(cruces).where(cruces.c.id == cruce_id))).first())
+    # Un cruce de sanciones CONFIRMADO es un caso: se abre solo, para que
+    # el análisis y la comunicación queden en el expediente.
+    if c.clase == formas.SANCIONES and resolucion.strip().lower().startswith("confirmado"):
+        from nucleo.riesgo import casos
+        await casos.abrir(titular=c.titular, origen="lista", actor=actor,
+                          detalle=f"{c.lista}: {resolucion.strip()[:200]}")
+    return resultado
 
 
 # ─── decidir ──────────────────────────────────────────────────────────────

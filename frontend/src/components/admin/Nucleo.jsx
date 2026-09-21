@@ -18,6 +18,9 @@
  *   Y la identidad: el legajo de cada titular (verificar, cruzar con las
  *   listas, aprobar con un nivel de riesgo), contra un simulador con
  *   personas de prueba. Sin legajo aprobado no se abre una cuenta.
+ *   Y el riesgo: las alertas del monitoreo (umbrales configurables desde
+ *   Configuración), el expediente de caso con sus plazos, los cuatro ojos
+ *   para comunicar, y la comunicación al COAF contra un simulador.
  *
  * APAGADO DE FABRICA
  *
@@ -27,7 +30,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -60,11 +63,17 @@ const COLOR_DEL_ESTADO = {
   aprobado: { background: '#dcfce7', color: '#166534' },
   rechazado: { background: '#fee2e2', color: '#991b1b' },
   vencido: { background: '#fee2e2', color: '#991b1b' },
+  // los de un caso
+  abierto: { background: '#fef3c7', color: '#92400e' },
+  en_analisis: { background: '#dbeafe', color: '#1e40af' },
+  concluido: { background: '#e0e7ff', color: '#3730a3' },
+  comunicado: { background: '#dcfce7', color: '#166534' },
+  archivado: { background: '#f3f4f6', color: '#374151' },
 };
 const DIRECCION = { entrada: 'Cobro', salida: 'Pago', devolucion: 'Devolución' };
 const Etiqueta = ({ valor }) => (
   <span style={{ ...(COLOR_DEL_ESTADO[valor] || {}), padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
-    {valor === 'en_curso' ? 'en curso' : valor === 'en_revision' ? 'en revisión' : valor}
+    {valor === 'en_curso' ? 'en curso' : valor === 'en_revision' ? 'en revisión' : valor === 'en_analisis' ? 'en análisis' : valor}
   </span>
 );
 
@@ -86,6 +95,11 @@ export default function Nucleo() {
   const [abierto, setAbierto] = useState(null);           // el titular cuyo legajo se está mirando
   const [nivel, setNivel] = useState('bajo');
   const [resolucion, setResolucion] = useState('');
+  const [riesgo, setRiesgo] = useState(null);
+  const [casoAbierto, setCasoAbierto] = useState(null);   // el caso que se está mirando
+  const [como, setComo] = useState('');                   // laboratorio: a nombre de quién se actúa
+  const [nota, setNota] = useState('');
+  const [conclusion, setConclusion] = useState('');
   const [vuelta, setVuelta] = useState(0);
   const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -101,15 +115,15 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl, idn] = await Promise.all([
+        const [c, l, b, z, q, rl, idn, rg] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
-          api.get('/nucleo/laboratorio/identidad'),
+          api.get('/nucleo/laboratorio/identidad'), api.get('/nucleo/laboratorio/riesgo'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
-        setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null);
+        setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null); setRiesgo(rg.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -285,6 +299,33 @@ export default function Nucleo() {
       await api.post(`/nucleo/laboratorio/identidad/cruces/${cruceId}/resolver`, { resolucion: resolucion.trim() });
       toast.success('Cruce resuelto'); setResolucion(''); recargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo resolver'); }
+    finally { setOcupado(false); }
+  };
+
+  const accionDeCaso = async (id, accion, cuerpo) => {
+    setOcupado(true);
+    try {
+      const rutas = {
+        tomar: `/nucleo/laboratorio/riesgo/casos/${id}/tomar`,
+        anotar: `/nucleo/laboratorio/riesgo/casos/${id}/anotar`,
+        concluir: `/nucleo/laboratorio/riesgo/casos/${id}/concluir`,
+        aprobar_comunicacion: `/nucleo/laboratorio/riesgo/casos/${id}/aprobar_comunicacion`,
+      };
+      const r = await api.post(rutas[accion], { ...(cuerpo || {}), como: como.trim() || undefined });
+      toast.success({ tomar: `Tomado por ${r.data.analista}`, anotar: 'Nota agregada', concluir: `Caso ${r.data.estado}`, aprobar_comunicacion: `Comunicado al COAF · acuse ${r.data.acuse}` }[accion]);
+      if (accion === 'anotar') setNota('');
+      if (accion === 'concluir') setConclusion('');
+      setCasoAbierto(id); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo'); }
+    finally { setOcupado(false); }
+  };
+
+  const declararNoOcurrencia = async () => {
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/riesgo/no_ocurrencia', { anio: new Date().getFullYear() - 1, como: como.trim() || undefined });
+      toast.success(`No ocurrencia ${r.data.periodo} · acuse ${r.data.acuse}`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo declarar'); }
     finally { setOcupado(false); }
   };
 
@@ -654,6 +695,134 @@ export default function Nucleo() {
                 </table>
               </details>
             ) : null}
+          </div>
+
+          {/* Riesgo: alertas, casos, COAF */}
+          <div style={tarjeta} data-testid="nucleo-riesgo">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Siren size={16} /> Riesgo: monitoreo, casos y COAF {riesgo ? `· ${riesgo.comunicador}` : ''}</strong>
+              {riesgo ? (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                  Umbrales (Configuración): operación R$ {centavos(riesgo.umbrales.umbral_operacion)} · 30 días R$ {centavos(riesgo.umbrales.umbral_30_dias)} · 12 meses R$ {centavos(riesgo.umbrales.umbral_12_meses)} · fraccionamiento {riesgo.umbrales.fraccionamiento_horas} h · {riesgo.umbrales.velocidad_por_hora} op/h
+                </span>
+              ) : null}
+            </div>
+            {riesgo ? (
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', margin: '10px 0', fontSize: 13 }}>
+                <span>Alertas <strong>{Object.values(riesgo.resumen_alertas).reduce((a, b) => a + b, 0)}</strong></span>
+                <span>Casos abiertos <strong>{riesgo.resumen_casos.abierto}</strong></span>
+                <span>En análisis <strong>{riesgo.resumen_casos.en_analisis}</strong></span>
+                <span>Concluidos <strong>{riesgo.resumen_casos.concluido}</strong></span>
+                <span>Comunicados <strong>{riesgo.resumen_casos.comunicado}</strong></span>
+                <span style={{ color: riesgo.resumen_casos.vencidos ? '#b91c1c' : undefined }}>Con plazo vencido <strong>{riesgo.resumen_casos.vencidos}</strong></span>
+                <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{ color: '#6b7280', fontSize: 12 }}>Actuar como (laboratorio):</span>
+                  <input style={{ ...campo, width: 160, padding: '5px 8px' }} placeholder="p. ej. ana.analista" value={como} onChange={(e) => setComo(e.target.value)} data-testid="riesgo-como" />
+                </span>
+              </div>
+            ) : null}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+              {/* Casos */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14 }}>Casos</strong>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }} data-testid="riesgo-casos">
+                  <thead><tr><th style={th}>Caso</th><th style={th}>Titular</th><th style={th}>Estado</th><th style={th}>Plazo</th><th style={th} /></tr></thead>
+                  <tbody>
+                    {!riesgo || riesgo.casos.length === 0 ? <tr><td style={td} colSpan={5}>Ningún caso.</td></tr> : riesgo.casos.map((k) => (
+                      <tr key={k.id} data-testid={`riesgo-caso-${k.estado}`} style={{ background: casoAbierto === k.id ? '#f5f3ff' : undefined }}>
+                        <td style={td}><span style={mono}>{k.id}</span><div style={{ fontSize: 11, color: '#6b7280' }}>por {k.origen}</div></td>
+                        <td style={td}>{nombreDelTitular(k.titular)}</td>
+                        <td style={td}><Etiqueta valor={k.estado} /></td>
+                        <td style={{ ...td, color: k.analisis_vencido || k.comunicacion_vencida ? '#b91c1c' : undefined, fontSize: 12 }}>
+                          {k.estado === 'concluido' ? `comunicar antes de ${hora(k.comunicar_hasta)}` : k.estado === 'abierto' || k.estado === 'en_analisis' ? `analizar antes del ${(k.analizar_hasta || '').slice(0, 10)}` : k.acuse || '—'}
+                        </td>
+                        <td style={td}><button type="button" onClick={() => setCasoAbierto(k.id)} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="riesgo-abrir-caso">Ver</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* El caso abierto */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }} data-testid="riesgo-expediente">
+                {(() => {
+                  const k = (riesgo?.casos || []).find((x) => x.id === casoAbierto);
+                  if (!k) return <p style={{ color: '#6b7280', fontSize: 13, margin: 0 }}>Elegí un caso para ver el expediente.</p>;
+                  const trabajable = k.estado === 'abierto' || k.estado === 'en_analisis';
+                  return (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ fontSize: 14 }}>{k.id} · {nombreDelTitular(k.titular)}</strong><Etiqueta valor={k.estado} />
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>
+                        {k.detalle} · analista {k.analista || '—'}{k.aprobado_por ? ` · aprobó ${k.aprobado_por}` : ''}{k.acuse ? ` · acuse ${k.acuse}` : ''}
+                      </div>
+                      {k.alertas.length ? (
+                        <div style={{ fontSize: 12, marginBottom: 6 }}><strong>Alertas:</strong> {k.alertas.map((a) => <span key={a.id} style={{ ...mono, marginRight: 6 }}>{a.regla}</span>)}</div>
+                      ) : null}
+                      <div style={{ fontSize: 12, maxHeight: 120, overflowY: 'auto', background: '#f9fafb', borderRadius: 8, padding: 8 }}>
+                        {k.notas.map((n, i) => <div key={i}><strong>{n.autor}</strong> · {hora(n.momento)} · {n.texto}</div>)}
+                      </div>
+                      {trabajable ? (
+                        <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                          {k.estado === 'abierto' ? <button type="button" onClick={() => accionDeCaso(k.id, 'tomar')} disabled={ocupado} style={botonSuave} data-testid="riesgo-tomar">Tomar para análisis</button> : null}
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <input style={campo} placeholder="Una nota del análisis" value={nota} onChange={(e) => setNota(e.target.value)} data-testid="riesgo-nota" />
+                            <button type="button" onClick={() => accionDeCaso(k.id, 'anotar', { texto: nota })} disabled={ocupado || !nota.trim()} style={{ ...botonSuave, padding: '6px 10px' }} data-testid="riesgo-anotar">Anotar</button>
+                          </div>
+                          {k.estado === 'en_analisis' ? (
+                            <>
+                              <input style={campo} placeholder="Conclusión del análisis" value={conclusion} onChange={(e) => setConclusion(e.target.value)} data-testid="riesgo-conclusion" />
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button type="button" onClick={() => accionDeCaso(k.id, 'concluir', { conclusion, comunicar: true })} disabled={ocupado || !conclusion.trim()} style={boton} data-testid="riesgo-concluir-comunicar"><FileText size={13} /> Concluir y comunicar al COAF</button>
+                                <button type="button" onClick={() => accionDeCaso(k.id, 'concluir', { conclusion, comunicar: false })} disabled={ocupado || !conclusion.trim()} style={botonSuave} data-testid="riesgo-concluir-archivar">Concluir sin comunicar</button>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {k.estado === 'concluido' ? (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 12, color: '#374151', marginBottom: 6 }}>Concluido por <strong>{k.analista}</strong>: {k.conclusion}. Falta la segunda firma (otra persona).</div>
+                          <button type="button" onClick={() => accionDeCaso(k.id, 'aprobar_comunicacion')} disabled={ocupado} style={boton} data-testid="riesgo-aprobar-comunicacion">Aprobar y comunicar al COAF</button>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Alertas */}
+            <div style={{ overflowX: 'auto', marginTop: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }} data-testid="riesgo-alertas">
+                <thead><tr><th style={th}>Alerta</th><th style={th}>Regla</th><th style={th}>Titular</th><th style={th}>Operación</th><th style={th}>Detalle</th><th style={th}>Caso</th></tr></thead>
+                <tbody>
+                  {!riesgo || riesgo.alertas.length === 0 ? <tr><td style={td} colSpan={6}>Ninguna alerta del monitoreo.</td></tr> : riesgo.alertas.map((a) => (
+                    <tr key={a.id} data-testid="riesgo-alerta">
+                      <td style={{ ...td, ...mono }}>{a.id}</td><td style={td}><strong>{a.regla.replaceAll('_', ' ')}</strong></td>
+                      <td style={td}>{nombreDelTitular(a.titular)}</td><td style={{ ...td, ...mono, color: '#6b7280' }}>{a.operacion}</td>
+                      <td style={{ ...td, fontSize: 12 }}>{Object.entries(a.detalle).map(([k, v]) => `${k} ${typeof v === 'number' && v > 1000 ? centavos(v) : v}`).join(' · ')}</td>
+                      <td style={{ ...td, ...mono, color: '#6b7280' }}>{a.caso || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Comunicaciones */}
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: '#374151' }}>Comunicaciones al COAF ({riesgo?.comunicaciones.length || 0}) · <button type="button" onClick={declararNoOcurrencia} disabled={ocupado} style={{ ...botonSuave, padding: '3px 8px', fontSize: 12 }} data-testid="riesgo-no-ocurrencia">Declarar no ocurrencia del año pasado</button></summary>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }} data-testid="riesgo-comunicaciones">
+                <thead><tr><th style={th}>Nº</th><th style={th}>Tipo</th><th style={th}>Caso / período</th><th style={th}>Acuse</th><th style={th}>Firmas</th></tr></thead>
+                <tbody>
+                  {(riesgo?.comunicaciones || []).map((m) => (
+                    <tr key={m.id} data-testid="riesgo-comunicacion"><td style={{ ...td, ...mono }}>{m.id}</td><td style={td}>{m.tipo.replaceAll('_', ' ')}</td>
+                      <td style={{ ...td, ...mono }}>{m.caso || m.periodo}</td><td style={{ ...td, ...mono }}>{m.acuse}</td><td style={td}>{m.enviada_por} · {m.aprobada_por}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
           </div>
 
           {/* Cola de trabajos y eventos */}

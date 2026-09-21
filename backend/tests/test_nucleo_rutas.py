@@ -258,3 +258,57 @@ def test_LOS_ERRORES_DE_LA_IDENTIDAD_LLEGAN_COMO_MENSAJES_CLAROS(cliente):
     r = cliente.post("/api/nucleo/laboratorio/identidad/cruces/999/resolver", json={"resolucion": "x"})
     assert r.status_code == 400
     assert cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular": "tit_nadie"}).status_code == 409
+
+
+# ─── el riesgo por HTTP ───────────────────────────────────────────────────
+
+def test_el_riesgo_por_http_del_umbral_al_acuse(cliente):
+    a = cuenta_por_http(cliente, "u_ana")
+    cobro = cliente.post("/api/nucleo/laboratorio/rieles/cobros", json={"cuenta": a, "monto": "12000.00"}).json()
+    cliente.post(f"/api/nucleo/laboratorio/rieles/cobros/{cobro['id']}/simular_pago", json={})
+    cliente.post("/api/nucleo/laboratorio/cola/paso")
+    r = cliente.get("/api/nucleo/laboratorio/riesgo")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["umbrales"]["umbral_operacion"] == 1000000 and d["comunicador"].startswith("simulador")
+    assert any(al["regla"] == "umbral_operacion" for al in d["alertas"])
+    (caso,) = [c for c in d["casos"] if c["origen"] == "alerta"]
+    assert caso["estado"] == "abierto" and caso["alertas"]
+
+    # tomar como ana, concluir a comunicar, y los cuatro ojos
+    r = cliente.post(f"/api/nucleo/laboratorio/riesgo/casos/{caso['id']}/tomar", json={"como": "ana"})
+    assert r.status_code == 200 and r.json()["analista"] == "ana"
+    r = cliente.post(f"/api/nucleo/laboratorio/riesgo/casos/{caso['id']}/anotar", json={"texto": "renta no explica", "como": "ana"})
+    assert r.status_code == 200 and len(r.json()["notas"]) >= 2
+    r = cliente.post(f"/api/nucleo/laboratorio/riesgo/casos/{caso['id']}/concluir",
+                     json={"conclusion": "valor incompatible", "comunicar": True, "como": "ana"})
+    assert r.status_code == 200 and r.json()["estado"] == "concluido" and r.json()["comunicar_hasta"]
+    r = cliente.post(f"/api/nucleo/laboratorio/riesgo/casos/{caso['id']}/aprobar_comunicacion", json={"como": "ana"})
+    assert r.status_code == 400 and "Cuatro ojos" in r.json()["detail"]
+    r = cliente.post(f"/api/nucleo/laboratorio/riesgo/casos/{caso['id']}/aprobar_comunicacion", json={"como": "jefa"})
+    assert r.status_code == 200 and r.json()["estado"] == "comunicado" and r.json()["acuse"].startswith("SISCOAF-SIM-")
+    d = cliente.get("/api/nucleo/laboratorio/riesgo").json()
+    assert d["comunicaciones"][0]["acuse"] == r.json()["acuse"] and d["resumen_casos"]["comunicado"] == 1
+
+    r = cliente.post("/api/nucleo/laboratorio/riesgo/no_ocurrencia", json={"anio": 2025, "como": "jefa"})
+    assert r.status_code == 200 and r.json()["tipo"] == "no_ocurrencia"
+    r = cliente.post("/api/nucleo/laboratorio/riesgo/no_ocurrencia", json={"anio": 2025})
+    assert r.status_code == 400 and "Cuatro ojos" in r.json()["detail"]     # sin «como»: la misma persona
+
+
+def test_EN_ACTIVO_NADIE_ACTUA_COMO_OTRO(cliente):
+    """«como» es del laboratorio. En activo, quien actúa es quien está
+    logueado, y por eso los cuatro ojos no se pueden fingir."""
+    from routes import dependencies as deps
+    t = cuenta_por_http(cliente, "u_ana")
+    r = cliente.post("/api/nucleo/laboratorio/riesgo/casos", json={"titular": "tit_x", "detalle": "a mano"})
+    assert r.status_code == 200
+    caso = r.json()["id"]
+    from nucleo import modo as _modo
+    cliente.app.dependency_overrides[_modo.exigir_encendido] = lambda: _modo.ACTIVO
+    try:
+        r = cliente.post(f"/api/nucleo/laboratorio/riesgo/casos/{caso}/tomar", json={"como": "ana"})
+        assert r.status_code == 200 and r.json()["analista"] == SUPER.user_id
+    finally:
+        cliente.app.dependency_overrides.pop(_modo.exigir_encendido, None)
+    assert t

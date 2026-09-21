@@ -20,6 +20,7 @@ from models.user import User
 from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from nucleo.identidad import formas as id_formas, legajos, simulador as id_simulador
+from nucleo.riesgo import casos as riesgo_casos, monitoreo
 from nucleo.rieles import operaciones as rieles_op, pix, simulador
 from routes.dependencies import get_super_admin
 
@@ -240,6 +241,77 @@ class Legajo(BaseModel):
     cruces: list[Cruce] = Field(default_factory=list)
 
 
+class Alerta(BaseModel):
+    id: int
+    titular: str
+    cuenta: str
+    operacion: str
+    regla: str
+    detalle: dict
+    momento: Optional[str] = None
+    caso: Optional[str] = None
+
+
+class NotaDeCaso(BaseModel):
+    autor: str
+    texto: str
+    momento: Optional[str] = None
+
+
+class AlertaDelCaso(BaseModel):
+    id: int
+    regla: str
+    operacion: str
+    detalle: dict
+    momento: Optional[str] = None
+
+
+class Caso(BaseModel):
+    id: str
+    titular: str
+    origen: str
+    estado: str
+    analista: Optional[str] = None
+    detalle: Optional[str] = None
+    abierto_en: Optional[str] = None
+    analizar_hasta: Optional[str] = None
+    concluido_en: Optional[str] = None
+    conclusion: Optional[str] = None
+    comunicar: Optional[bool] = None
+    comunicar_hasta: Optional[str] = None
+    aprobado_por: Optional[str] = None
+    comunicado_en: Optional[str] = None
+    acuse: Optional[str] = None
+    archivado_en: Optional[str] = None
+    analisis_vencido: bool
+    comunicacion_vencida: bool
+    notas: list[NotaDeCaso] = Field(default_factory=list)
+    alertas: list[AlertaDelCaso] = Field(default_factory=list)
+
+
+class Comunicacion(BaseModel):
+    id: int
+    caso: Optional[str] = None
+    tipo: str
+    periodo: Optional[int] = None
+    archivo: str
+    acuse: str
+    enviada_en: Optional[str] = None
+    enviada_por: str
+    aprobada_por: str
+    comunicador: str
+
+
+class Riesgo(BaseModel):
+    comunicador: str
+    umbrales: dict
+    resumen_alertas: dict
+    resumen_casos: dict
+    alertas: list[Alerta]
+    casos: list[Caso]
+    comunicaciones: list[Comunicacion]
+
+
 class PersonaDePrueba(BaseModel):
     documento: str
     nombre: str
@@ -389,6 +461,31 @@ class Rechazo(BaseModel):
 
 class Resolucion(BaseModel):
     resolucion: str = Field(min_length=1, max_length=300)
+
+
+class NuevoCaso(BaseModel):
+    titular: str = Field(min_length=1, max_length=40)
+    detalle: str = Field(min_length=1, max_length=300)
+
+
+class ComoQuien(BaseModel):
+    # SOLO LABORATORIO: actuar a nombre de otra persona, para poder mostrar
+    # los cuatro ojos con un solo super administrador logueado. En ACTIVO
+    # se ignora: quien actúa es quien está logueado. Hay test y mutación.
+    como: Optional[str] = Field(default=None, min_length=1, max_length=80)
+
+
+class NotaNueva(ComoQuien):
+    texto: str = Field(min_length=1, max_length=1000)
+
+
+class ConclusionDelCaso(ComoQuien):
+    conclusion: str = Field(min_length=1, max_length=2000)
+    comunicar: bool
+
+
+class NoOcurrencia(ComoQuien):
+    anio: int = Field(ge=2020, le=2100)
 
 
 class NuevoTrabajo(BaseModel):
@@ -748,3 +845,102 @@ async def resolver_cruce(cruce_id: int, pedido: Resolucion, admin: User = Depend
         return await legajos.resolver_cruce(cruce_id, resolucion=pedido.resolucion, actor=admin.user_id)
     except legajos.LegajoInvalido as e:
         raise _error_de_legajo(e)
+
+
+# ── riesgo ─────────────────────────────────────────────────────────────────
+
+def _quien(admin: User, como: Optional[str], modo_vigente: int) -> str:
+    """Quién actúa. En laboratorio se puede decir «como» otra persona, para
+    mostrar los cuatro ojos; en activo, siempre quien está logueado."""
+    if como and modo_vigente == modo.LABORATORIO:
+        return como
+    return admin.user_id
+
+
+def _error_de_caso(e: Exception):
+    return HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/laboratorio/riesgo", response_model=Riesgo)
+async def riesgo(admin: User = Depends(get_super_admin),
+                 modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    from nucleo.riesgo import comunicador
+    return {"comunicador": comunicador().nombre, "umbrales": await monitoreo.umbrales(),
+            "resumen_alertas": await monitoreo.resumen(), "resumen_casos": await riesgo_casos.resumen(),
+            "alertas": await monitoreo.listar(), "casos": await riesgo_casos.listar(),
+            "comunicaciones": await riesgo_casos.listar_comunicaciones()}
+
+
+@router.post("/laboratorio/riesgo/evaluar/{operacion_id}", response_model=list[Alerta])
+async def evaluar(operacion_id: str, admin: User = Depends(get_super_admin),
+                  modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Vuelve a correr las reglas sobre una operación, a mano."""
+    nuevas = await monitoreo.evaluar_operacion(operacion_id)
+    return [a for a in await monitoreo.listar() if a["operacion"] == operacion_id and a["id"] in {n["id"] for n in nuevas}]
+
+
+@router.post("/laboratorio/riesgo/casos", response_model=Caso)
+async def abrir_caso(pedido: NuevoCaso, admin: User = Depends(get_super_admin),
+                     modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await riesgo_casos.abrir(titular=pedido.titular, origen="manual", actor=admin.user_id, detalle=pedido.detalle)
+    except riesgo_casos.CasoInvalido as e:
+        raise _error_de_caso(e)
+
+
+@router.get("/laboratorio/riesgo/casos/{caso_id}", response_model=Caso)
+async def caso(caso_id: str, admin: User = Depends(get_super_admin),
+               modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await riesgo_casos.detalle(caso_id)
+    except riesgo_casos.CasoInvalido as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/laboratorio/riesgo/casos/{caso_id}/tomar", response_model=Caso)
+async def tomar_caso(caso_id: str, pedido: ComoQuien, admin: User = Depends(get_super_admin),
+                     modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await riesgo_casos.tomar(caso_id, analista=_quien(admin, pedido.como, modo_vigente))
+    except riesgo_casos.CasoInvalido as e:
+        raise _error_de_caso(e)
+
+
+@router.post("/laboratorio/riesgo/casos/{caso_id}/anotar", response_model=Caso)
+async def anotar_caso(caso_id: str, pedido: NotaNueva, admin: User = Depends(get_super_admin),
+                      modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await riesgo_casos.anotar(caso_id, autor=_quien(admin, pedido.como, modo_vigente), texto=pedido.texto)
+    except riesgo_casos.CasoInvalido as e:
+        raise _error_de_caso(e)
+
+
+@router.post("/laboratorio/riesgo/casos/{caso_id}/concluir", response_model=Caso)
+async def concluir_caso(caso_id: str, pedido: ConclusionDelCaso, admin: User = Depends(get_super_admin),
+                        modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await riesgo_casos.concluir(caso_id, analista=_quien(admin, pedido.como, modo_vigente),
+                                           conclusion=pedido.conclusion, comunicar=pedido.comunicar)
+    except riesgo_casos.CasoInvalido as e:
+        raise _error_de_caso(e)
+
+
+@router.post("/laboratorio/riesgo/casos/{caso_id}/aprobar_comunicacion", response_model=Caso)
+async def aprobar_comunicacion(caso_id: str, pedido: ComoQuien, admin: User = Depends(get_super_admin),
+                               modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await riesgo_casos.aprobar_comunicacion(caso_id, aprobador=_quien(admin, pedido.como, modo_vigente))
+    except riesgo_casos.CasoInvalido as e:
+        raise _error_de_caso(e)
+
+
+@router.post("/laboratorio/riesgo/no_ocurrencia", response_model=Comunicacion)
+async def no_ocurrencia(pedido: NoOcurrencia, admin: User = Depends(get_super_admin),
+                        modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """La declaración anual. Quien la pide es quien está logueado; «como»
+    nombra a la segunda firma (en laboratorio)."""
+    try:
+        return await riesgo_casos.declarar_no_ocurrencia(anio=pedido.anio, actor=admin.user_id,
+                                                          aprobador=_quien(admin, pedido.como, modo_vigente))
+    except riesgo_casos.CasoInvalido as e:
+        raise _error_de_caso(e)

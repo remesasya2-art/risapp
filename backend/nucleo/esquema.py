@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Dieciséis tablas, y cada columna con su porqué.
+El esquema del núcleo. Veinte tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -38,6 +38,12 @@ El esquema del núcleo. Dieciséis tablas, y cada columna con su porqué.
                       resolvió.
     sim_personas      las personas de prueba del simulador de identidad.
     sim_listas        las listas de prueba (CSNU, OFAC, PEP).
+    alertas           lo que el monitoreo encontró: una por operación y regla.
+    casos             el expediente: estado, analista, plazos, conclusión,
+                      quién aprobó comunicar, acuse.
+    caso_notas        lo que se fue anotando en el caso. Sólo se agrega.
+    comunicaciones    cada comunicación al COAF (y cada no ocurrencia), con
+                      el archivo que se mandó y el acuse que volvió.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -293,6 +299,66 @@ sim_listas = Table(
     Column("nombre", String(120), nullable=False),
     Column("detalle", String(300), nullable=True),
     UniqueConstraint("lista", "documento", name="uq_sim_listas_lista_documento"),
+)
+
+alertas = Table(
+    "alertas", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("titular", String(40), nullable=False),            # el titular_ref de la cuenta (id del legajo)
+    Column("cuenta", String(40), ForeignKey("cuentas.id"), nullable=False),
+    Column("operacion", String(40), ForeignKey("operaciones.id"), nullable=False),
+    Column("regla", String(30), nullable=False),
+    Column("detalle", Text, nullable=True),                   # JSON con los números que la hicieron saltar
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("caso", String(40), ForeignKey("casos.id"), nullable=True),
+    UniqueConstraint("operacion", "regla", name="uq_alertas_operacion_regla"),
+    Index("ix_alertas_titular", "titular"),
+)
+
+casos = Table(
+    "casos", metadata,
+    Column("id", String(40), primary_key=True),               # «caso_…»
+    Column("titular", String(40), nullable=False),
+    Column("origen", String(10), nullable=False),             # alerta, lista, manual
+    Column("estado", String(12), nullable=False),             # abierto, en_analisis, concluido, comunicado, archivado
+    Column("analista", String(80), nullable=True),
+    Column("detalle", String(300), nullable=True),
+    Column("abierto_en", DateTime(timezone=True), nullable=False),
+    Column("analizar_hasta", DateTime(timezone=True), nullable=False),   # +45 días
+    Column("concluido_en", DateTime(timezone=True), nullable=True),
+    Column("conclusion", Text, nullable=True),
+    Column("comunicar", Boolean, nullable=True),
+    Column("comunicar_hasta", DateTime(timezone=True), nullable=True),   # +24 horas desde la conclusión
+    Column("aprobado_por", String(80), nullable=True),        # la segunda firma
+    Column("comunicado_en", DateTime(timezone=True), nullable=True),
+    Column("acuse", String(60), nullable=True),
+    Column("archivado_en", DateTime(timezone=True), nullable=True),
+    CheckConstraint("estado in ('abierto','en_analisis','concluido','comunicado','archivado')", name="estado_del_caso_valido"),
+    Index("ix_casos_titular", "titular"),
+)
+
+caso_notas = Table(
+    "caso_notas", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("caso", String(40), ForeignKey("casos.id"), nullable=False),
+    Column("autor", String(80), nullable=False),
+    Column("texto", Text, nullable=False),
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_caso_notas_caso", "caso"),
+)
+
+comunicaciones = Table(
+    "comunicaciones", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("caso", String(40), ForeignKey("casos.id"), nullable=True),   # NULL en una no ocurrencia
+    Column("tipo", String(15), nullable=False),               # comunicacion, no_ocurrencia
+    Column("periodo", Integer, nullable=True),                # el año, en una no ocurrencia
+    Column("archivo", Text, nullable=False),                  # lo que se mandó, tal cual
+    Column("acuse", String(60), nullable=False),
+    Column("enviada_en", DateTime(timezone=True), nullable=False),
+    Column("enviada_por", String(80), nullable=False),
+    Column("aprobada_por", String(80), nullable=False),
+    Column("comunicador", String(40), nullable=False),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple
