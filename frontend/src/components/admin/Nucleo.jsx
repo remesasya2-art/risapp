@@ -8,7 +8,10 @@
  *   legal: cuentas de pago, partida doble nativa, libro encadenado por hash,
  *   cierre diario. Acá se prueba con plata de mentira: crear cuentas,
  *   acreditar, debitar, transferir, cobrar una tarifa, mirar el libro, ver el
- *   balance cuadrar, verificar la cadena y cerrar el día.
+ *   balance cuadrar, verificar la cadena y cerrar el día. Y la cola: cada
+ *   asiento deja un evento, el trabajador lo convierte en un trabajo, y acá
+ *   se ve pasar por pendiente, en curso, hecho o muerto — con dos trabajos
+ *   de muestra para encolar a mano, uno que termina bien y uno que falla.
  *
  * APAGADO DE FABRICA
  *
@@ -18,7 +21,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -31,6 +34,21 @@ const th = { textAlign: 'left', fontSize: 11, color: '#6b7280', textTransform: '
 const td = { padding: '7px 8px', borderBottom: '1px solid #f3f4f6', fontSize: 13, verticalAlign: 'top' };
 const mono = { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 };
 const centavos = (n) => (n / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const hora = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+
+// El color de cada estado de la cola. Muerto en rojo porque es lo único que
+// pide que una persona haga algo.
+const COLOR_DEL_ESTADO = {
+  pendiente: { background: '#fef3c7', color: '#92400e' },
+  en_curso: { background: '#dbeafe', color: '#1e40af' },
+  hecho: { background: '#dcfce7', color: '#166534' },
+  muerto: { background: '#fee2e2', color: '#991b1b' },
+};
+const Etiqueta = ({ valor }) => (
+  <span style={{ ...(COLOR_DEL_ESTADO[valor] || {}), padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
+    {valor === 'en_curso' ? 'en curso' : valor}
+  </span>
+);
 
 export default function Nucleo() {
   const [estado, setEstado] = useState(null);       // null: cargando; {apagado:true}: 404
@@ -38,6 +56,7 @@ export default function Nucleo() {
   const [libro, setLibro] = useState([]);
   const [balance, setBalance] = useState(null);
   const [cierres, setCierres] = useState([]);
+  const [cola, setCola] = useState(null);
   const [vuelta, setVuelta] = useState(0);
   const [titular, setTitular] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -53,12 +72,14 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z] = await Promise.all([
+        const [c, l, b, z, q] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
+          api.get('/nucleo/laboratorio/cola?limite=30'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
+        setCola(q.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -100,6 +121,36 @@ export default function Nucleo() {
     finally { setOcupado(false); }
   };
 
+  const encolar = async (tipo) => {
+    setOcupado(true);
+    try {
+      const carga = tipo === 'eco' ? { mensaje: `hola desde el panel ${new Date().toLocaleTimeString('es-AR')}` } : { motivo: 'Falla a propósito, para ver la cola de muertos.' };
+      const r = await api.post('/nucleo/laboratorio/cola/trabajos', { tipo, carga });
+      toast.success(`Trabajo Nº ${r.data.id} encolado`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo encolar'); }
+    finally { setOcupado(false); }
+  };
+
+  const procesar = async () => {
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/cola/paso');
+      const d = r.data;
+      toast.success(`Despachados ${d.despachados} · corridos ${d.corridos} (hechos ${d.hechos}, reintentan ${d.reintentan}, muertos ${d.muertos})`);
+      recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo procesar'); }
+    finally { setOcupado(false); }
+  };
+
+  const reintentar = async (id) => {
+    setOcupado(true);
+    try {
+      await api.post(`/nucleo/laboratorio/cola/trabajos/${id}/reintentar`);
+      toast.success(`Trabajo Nº ${id} de vuelta en la cola`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo reintentar'); }
+    finally { setOcupado(false); }
+  };
+
   if (estado === null) return <p style={{ color: '#6b7280' }}>Cargando…</p>;
 
   if (estado.apagado) {
@@ -127,6 +178,12 @@ export default function Nucleo() {
         <div><div style={rotulo}>Cuentas</div><div style={{ fontWeight: 700 }}>{estado.cuentas}</div></div>
         <div><div style={rotulo}>Asientos</div><div style={{ fontWeight: 700 }}>{estado.asientos}</div></div>
         <div><div style={rotulo}>Último cierre</div><div style={{ fontWeight: 700 }}>{estado.ultimo_cierre || '—'}</div></div>
+        <div>
+          <div style={rotulo}>Cola</div>
+          <div style={{ fontWeight: 700, color: estado.cola?.muerto ? '#b91c1c' : undefined }} data-testid="nucleo-cola-resumen">
+            {estado.cola ? `${estado.cola.pendiente} pendientes · ${estado.cola.muerto} muertos` : '—'}
+          </div>
+        </div>
         <div>
           <div style={rotulo}>Cadena</div>
           <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: cadena?.ok ? '#15803d' : '#b91c1c' }} data-testid="nucleo-cadena">
@@ -222,6 +279,80 @@ export default function Nucleo() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+
+          {/* Cola de trabajos y eventos */}
+          <div style={tarjeta} data-testid="nucleo-cola">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong>Cola de trabajos y eventos</strong>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => encolar('eco')} disabled={ocupado} style={botonSuave} data-testid="nucleo-encolar-eco">
+                  <Plus size={13} /> Encolar un eco
+                </button>
+                <button type="button" onClick={() => encolar('fallar')} disabled={ocupado} style={botonSuave} data-testid="nucleo-encolar-fallar">
+                  <Plus size={13} /> Encolar uno que falla
+                </button>
+                <button type="button" onClick={procesar} disabled={ocupado} style={boton} data-testid="nucleo-procesar">
+                  <Play size={13} /> Procesar ahora
+                </button>
+              </div>
+            </div>
+            {cola ? (
+              <>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', margin: '10px 0', fontSize: 13 }}>
+                  <span>Pendientes <strong>{cola.resumen.pendiente}</strong></span>
+                  <span>En curso <strong>{cola.resumen.en_curso}</strong></span>
+                  <span>Hechos <strong>{cola.resumen.hecho}</strong></span>
+                  <span style={{ color: cola.resumen.muerto ? '#b91c1c' : undefined }}>Muertos <strong>{cola.resumen.muerto}</strong></span>
+                  <span>Eventos <strong>{cola.resumen.eventos}</strong> ({cola.resumen.eventos_sin_publicar} sin despachar)</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }} data-testid="nucleo-trabajador">
+                  Trabajador <span style={mono}>{cola.trabajador.nombre}</span> · {cola.trabajador.corriendo ? 'corriendo' : 'parado'}
+                  {' · '}{cola.trabajador.vueltas} vueltas · última {hora(cola.trabajador.ultima_vuelta)}
+                  {cola.trabajador.ultimo_error ? <span style={{ color: '#b91c1c' }}> · último error: {cola.trabajador.ultimo_error}</span> : null}
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }} data-testid="nucleo-trabajos">
+                    <thead><tr><th style={th}>Nº</th><th style={th}>Tipo</th><th style={th}>Clave</th><th style={th}>Estado</th><th style={th}>Intentos</th><th style={th}>Próximo</th><th style={th}>Resultado / último error</th><th style={th} /></tr></thead>
+                    <tbody>
+                      {cola.trabajos.length === 0 ? <tr><td style={td} colSpan={8}>La cola está vacía.</td></tr> : cola.trabajos.map((t) => (
+                        <tr key={t.id} data-testid={`nucleo-trabajo-${t.estado}`}>
+                          <td style={{ ...td, ...mono }}>{t.id}</td><td style={td}>{t.tipo}</td>
+                          <td style={{ ...td, ...mono, color: '#6b7280' }}>{t.clave}</td>
+                          <td style={td}><Etiqueta valor={t.estado} /></td>
+                          <td style={td}>{t.intentos} / {t.max_intentos}</td>
+                          <td style={td}>{t.estado === 'pendiente' ? hora(t.proximo_intento) : '—'}</td>
+                          <td style={{ ...td, maxWidth: 320 }}>
+                            {t.resultado ? <span>{t.resultado}</span> : null}
+                            {t.ultimo_error ? <span style={{ color: '#991b1b' }}>{t.ultimo_error}</span> : null}
+                          </td>
+                          <td style={td}>
+                            {t.estado === 'muerto' ? (
+                              <button type="button" onClick={() => reintentar(t.id)} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="nucleo-reintentar">
+                                <RotateCcw size={12} /> Reintentar
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: 'pointer', fontSize: 13, color: '#374151' }}>Eventos (últimos {cola.eventos.length})</summary>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }} data-testid="nucleo-eventos">
+                    <thead><tr><th style={th}>Nº</th><th style={th}>Tipo</th><th style={th}>Clave</th><th style={th}>Despachado</th></tr></thead>
+                    <tbody>
+                      {cola.eventos.length === 0 ? <tr><td style={td} colSpan={4}>Todavía no hay eventos.</td></tr> : cola.eventos.map((e) => (
+                        <tr key={e.id}><td style={{ ...td, ...mono }}>{e.id}</td><td style={td}>{e.tipo}</td>
+                          <td style={{ ...td, ...mono, color: '#6b7280' }}>{e.clave}</td><td style={td}>{e.publicado ? hora(e.publicado) : 'pendiente'}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              </>
+            ) : null}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>

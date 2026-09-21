@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from models.user import User
-from nucleo import base, comandos, modo
+from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from routes.dependencies import get_super_admin
 
@@ -34,6 +34,24 @@ class Cadena(BaseModel):
     hash_final: Optional[str] = None
 
 
+class ResumenDeLaCola(BaseModel):
+    pendiente: int
+    en_curso: int
+    hecho: int
+    muerto: int
+    eventos: int
+    eventos_sin_publicar: int
+
+
+class Trabajador(BaseModel):
+    nombre: str
+    corriendo: bool
+    vueltas: int
+    ultima_vuelta: Optional[str] = None
+    ultimo_error: Optional[str] = None
+    ultimo_modo: Optional[str] = None
+
+
 class Estado(BaseModel):
     modo: int
     modo_nombre: str
@@ -43,7 +61,61 @@ class Estado(BaseModel):
     asientos: int
     ultimo_cierre: Optional[str] = None
     cadena: Optional[Cadena] = None
+    cola: Optional[ResumenDeLaCola] = None
+    trabajador: Optional[Trabajador] = None
     detalle: Optional[str] = None
+
+
+class Trabajo(BaseModel):
+    id: int
+    tipo: str
+    clave: str
+    carga: dict
+    estado: str
+    intentos: int
+    max_intentos: int
+    proximo_intento: Optional[str] = None
+    tomado_por: Optional[str] = None
+    tomado_hasta: Optional[str] = None
+    ultimo_error: Optional[str] = None
+    resultado: Optional[str] = None
+    origen_evento: Optional[int] = None
+    creado: Optional[str] = None
+    terminado: Optional[str] = None
+
+
+class Evento(BaseModel):
+    id: int
+    tipo: str
+    clave: str
+    carga: dict
+    creado: Optional[str] = None
+    publicado: Optional[str] = None
+
+
+class Cola(BaseModel):
+    resumen: ResumenDeLaCola
+    trabajador: Trabajador
+    trabajos: list[Trabajo]
+    eventos: list[Evento]
+
+
+class TrabajoEncolado(BaseModel):
+    id: int
+    nuevo: bool
+
+
+class Paso(BaseModel):
+    despachados: int
+    corridos: int
+    hechos: int
+    muertos: int
+    reintentan: int
+
+
+class Reintento(BaseModel):
+    id: int
+    estado: str
 
 
 class Cuenta(BaseModel):
@@ -131,6 +203,13 @@ class PedidoDeCierre(BaseModel):
     nota: Optional[str] = Field(default=None, max_length=500)
 
 
+class NuevoTrabajo(BaseModel):
+    # Sólo los de laboratorio: desde la pestaña no se encola un aviso real.
+    tipo: str = Field(pattern="^(" + "|".join(tareas.DE_LABORATORIO) + ")$")
+    clave: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    carga: dict = Field(default_factory=dict)
+
+
 # ── helpers ────────────────────────────────────────────────────────────────
 
 def _sin_base():
@@ -147,7 +226,7 @@ async def _con_base():
 @router.get("/estado", response_model=Estado)
 async def estado(admin: User = Depends(get_super_admin), modo_vigente: int = Depends(modo.exigir_encendido)):
     e = await comandos.estado()
-    return {"modo": modo_vigente, "modo_nombre": modo.NOMBRES[modo_vigente], **e}
+    return {"modo": modo_vigente, "modo_nombre": modo.NOMBRES[modo_vigente], "trabajador": trabajador.estado(), **e}
 
 
 @router.get("/laboratorio/cuentas", response_model=list[Cuenta])
@@ -226,3 +305,41 @@ async def cerrar(pedido: PedidoDeCierre, admin: User = Depends(get_super_admin),
         return await comandos.cerrar_dia(dia=pedido.dia, actor=admin.user_id, nota=pedido.nota)
     except DiaCerrado as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+
+# ── la cola ────────────────────────────────────────────────────────────────
+
+@router.get("/laboratorio/cola", response_model=Cola)
+async def cola_(limite: int = 50, admin: User = Depends(get_super_admin),
+                _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    limite = max(1, min(limite, 200))
+    async with base.sesion() as s:
+        return {"resumen": await cola.resumen(s), "trabajador": trabajador.estado(),
+                "trabajos": await cola.listar_trabajos(s, limite=limite),
+                "eventos": await cola.listar_eventos(s, limite=limite)}
+
+
+@router.post("/laboratorio/cola/trabajos", response_model=TrabajoEncolado)
+async def encolar(pedido: NuevoTrabajo, admin: User = Depends(get_super_admin),
+                  _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Encola un trabajo de laboratorio. Sin clave, una nueva cada vez."""
+    import secrets
+    clave = pedido.clave or f"lab-{secrets.token_hex(4)}"
+    async with base.sesion() as s:
+        return await cola.encolar(s, tipo=pedido.tipo, clave=clave, carga=pedido.carga)
+
+
+@router.post("/laboratorio/cola/paso", response_model=Paso)
+async def paso(admin: User = Depends(get_super_admin), _m: int = Depends(modo.exigir_encendido),
+               _b=Depends(_con_base)):
+    """Una vuelta del trabajador, ahora, sin esperar al bucle."""
+    return await trabajador.una_vuelta()
+
+
+@router.post("/laboratorio/cola/trabajos/{trabajo_id}/reintentar", response_model=Reintento)
+async def reintentar(trabajo_id: int, admin: User = Depends(get_super_admin),
+                     _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    async with base.sesion() as s:
+        if not await cola.reintentar(s, trabajo_id):
+            raise HTTPException(status_code=409, detail="Sólo se reintenta un trabajo muerto.")
+    return {"id": trabajo_id, "estado": cola.PENDIENTE}

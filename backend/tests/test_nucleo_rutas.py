@@ -107,3 +107,47 @@ def test_sin_base_configurada_el_laboratorio_dice_que_falta(cliente, monkeypatch
     assert r.status_code == 503 and nucleo_base.VARIABLE in r.json()["detail"]
     e = cliente.get("/api/nucleo/estado").json()
     assert e["conectada"] is False and e["base"] == "sin configurar"
+
+
+# ─── la cola por HTTP ─────────────────────────────────────────────────────
+
+def test_la_cola_por_http_encola_procesa_y_revive(cliente):
+    a = cliente.post("/api/nucleo/laboratorio/cuentas", json={"titular_ref": "u_ana"}).json()["id"]
+    cliente.post("/api/nucleo/laboratorio/movimientos",
+                 json={"tipo": "acreditar", "cuenta": a, "monto": "100.00", "referencia": "in-1"})
+    r = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "eco", "carga": {"mensaje": "hola"}})
+    assert r.status_code == 200 and r.json()["nuevo"] is True, r.text
+    r = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "fallar", "clave": "f1"})
+    assert r.status_code == 200
+    muerto = r.json()["id"]
+
+    r = cliente.post("/api/nucleo/laboratorio/cola/paso")
+    assert r.status_code == 200, r.text
+    # el asiento dejó un evento, el evento se despachó como trabajo y corrió
+    assert r.json() == {"despachados": 1, "corridos": 3, "hechos": 2, "muertos": 0, "reintentan": 1}
+
+    q = cliente.get("/api/nucleo/laboratorio/cola").json()
+    assert q["resumen"]["hecho"] == 2 and q["resumen"]["pendiente"] == 1
+    assert q["resumen"]["eventos"] == 1 and q["resumen"]["eventos_sin_publicar"] == 0
+    assert q["trabajador"]["nombre"]
+    por_tipo = {t["tipo"]: t for t in q["trabajos"]}
+    assert por_tipo["eco"]["resultado"] == "eco: hola"
+    assert por_tipo["avisar_asiento"]["clave"] == "asiento_registrado:asiento:1"
+    assert "a propósito" in por_tipo["fallar"]["ultimo_error"] or "Falla" in por_tipo["fallar"]["ultimo_error"]
+    assert q["eventos"][0]["tipo"] == "asiento_registrado" and q["eventos"][0]["publicado"]
+
+    # un pendiente no se reintenta a mano: sólo un muerto
+    r = cliente.post(f"/api/nucleo/laboratorio/cola/trabajos/{muerto}/reintentar")
+    assert r.status_code == 409
+
+    e = cliente.get("/api/nucleo/estado").json()
+    assert e["cola"]["pendiente"] == 1 and e["trabajador"]["nombre"]
+
+
+def test_DESDE_LA_PESTANA_SOLO_SE_ENCOLAN_LOS_DE_LABORATORIO(cliente):
+    """Un aviso real no se fabrica a mano desde un botón."""
+    r = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "avisar_asiento", "carga": {}})
+    assert r.status_code == 422
+    r = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "eco", "clave": "misma"})
+    r2 = cliente.post("/api/nucleo/laboratorio/cola/trabajos", json={"tipo": "eco", "clave": "misma"})
+    assert r.json()["nuevo"] is True and r2.json()["nuevo"] is False and r.json()["id"] == r2.json()["id"]

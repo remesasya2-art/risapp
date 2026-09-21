@@ -304,6 +304,14 @@ async def lifespan(app):
         _paf.arrancar(db)
     except Exception as e:
         logger.warning(f"Pago al final: no se pudo arrancar el barrido: {e}")
+    # EL TRABAJADOR DEL NUCLEO. Con el núcleo apagado (lo de fábrica) mira
+    # el interruptor cada medio minuto y no toca nada; prendido, despacha
+    # los eventos y corre la cola. Ver nucleo/trabajador.py.
+    try:
+        from nucleo import trabajador as _nucleo_trabajador
+        _nucleo_trabajador.arrancar(db)
+    except Exception as e:
+        logger.warning(f"Núcleo: no se pudo arrancar el trabajador: {e}")
     yield
     # Shutdown
     # Lo que el contador tiene en memoria, a la base antes de cerrarla. No
@@ -312,6 +320,11 @@ async def lifespan(app):
     try:
         from services import pago_al_final as _paf
         await _paf.parar()
+    except Exception:
+        pass
+    try:
+        from nucleo import trabajador as _nucleo_trabajador
+        await _nucleo_trabajador.parar()
     except Exception:
         pass
     try:

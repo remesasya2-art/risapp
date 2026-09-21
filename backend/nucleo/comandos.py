@@ -171,7 +171,7 @@ async def estado() -> dict:
     """Lo que la pestaña del panel muestra arriba de todo."""
     if not base.hay_base():
         return {"base": "sin configurar", "conectada": False, "cuentas": 0, "asientos": 0,
-                "ultimo_cierre": None, "cadena": None}
+                "ultimo_cierre": None, "cadena": None, "cola": None}
     try:
         async with base.sesion() as s:
             from sqlalchemy import func
@@ -180,9 +180,11 @@ async def estado() -> dict:
             n_asientos = (await s.execute(select(func.count()).select_from(asientos))).scalar_one()
             ultimo = (await s.execute(select(func.max(cierres.c.dia)))).scalar_one_or_none()
             cadena = await libro.verificar_cadena(s)
+            from nucleo import cola
+            resumen_de_la_cola = await cola.resumen(s)
         return {"base": base.descripcion_de_la_url(), "conectada": True, "cuentas": int(n_cuentas),
                 "asientos": int(n_asientos), "ultimo_cierre": ultimo.isoformat() if ultimo else None,
-                "cadena": cadena}
+                "cadena": cadena, "cola": resumen_de_la_cola}
     except Exception as e:  # la pestaña tiene que poder decir «no conecta» sin caerse
         return {"base": base.descripcion_de_la_url(), "conectada": False, "cuentas": 0, "asientos": 0,
-                "ultimo_cierre": None, "cadena": None, "detalle": type(e).__name__}
+                "ultimo_cierre": None, "cadena": None, "cola": None, "detalle": type(e).__name__}

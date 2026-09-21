@@ -89,10 +89,23 @@ def test_la_migracion_deja_las_mismas_tablas_que_el_metadata(tmp_path):
     for nombre, tabla in metadata.tables.items():
         columnas = {c["name"] for c in ins.get_columns(nombre)}
         assert columnas == {c.name for c in tabla.columns}, (nombre, columnas)
+        # Y los únicos y los índices, con su nombre: una cola migrada sin la
+        # restricción única aceptaría el mismo trabajo dos veces.
+        from sqlalchemy import Index, UniqueConstraint
+        unicos_migrados = {u["name"] for u in ins.get_unique_constraints(nombre)}
+        unicos = {c.name for c in tabla.constraints if isinstance(c, UniqueConstraint)}
+        assert unicos <= unicos_migrados, (nombre, unicos - unicos_migrados)
+        indices_migrados = {i["name"] for i in ins.get_indexes(nombre)}
+        indices = {i.name for i in tabla.indexes if isinstance(i, Index)}
+        assert indices <= indices_migrados, (nombre, indices - indices_migrados)
 
 
 def test_el_esquema_no_se_baja():
-    """El downgrade está escrito para fallar: el libro no se borra con un comando."""
-    texto = (NUCLEO / "migraciones" / "versiones" / "0001_el_libro.py").read_text(encoding="utf-8")
-    m = re.search(r"def downgrade\(\):(.*)", texto, re.S)
-    assert m and "raise" in m.group(1)
+    """Cada downgrade está escrito para fallar: el libro no se borra con un
+    comando. Se recorren TODAS las migraciones: la próxima que alguien
+    escriba con un downgrade de verdad se pone en rojo acá."""
+    versiones = sorted((NUCLEO / "migraciones" / "versiones").glob("0*.py"))
+    assert len(versiones) >= 2, versiones
+    for archivo in versiones:
+        m = re.search(r"def downgrade\(\):(.*)", archivo.read_text(encoding="utf-8"), re.S)
+        assert m and "raise" in m.group(1), archivo.name
