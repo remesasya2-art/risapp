@@ -28,7 +28,13 @@ sys.path.insert(0, _BACKEND)
 
 
 
-_RECARGA = os.path.join(_BACKEND, "..", "frontend", "src", "pages", "Recharge.jsx")
+_SRC = os.path.join(_BACKEND, "..", "frontend", "src")
+# El ritmo vivió primero en la pantalla de recarga. Cuando el envío pasó a
+# pagarse al final se generalizó en `hooks/useEsperarElPago.js`, y la recarga
+# pasó a usar el hook: UNA copia de la pregunta, no dos. Estos tests leen el
+# ritmo de donde está, y uno comprueba que la recarga no tenga el suyo propio.
+_HOOK = os.path.join(_SRC, "hooks", "useEsperarElPago.js")
+_RECARGA = os.path.join(_SRC, "pages", "Recharge.jsx")
 
 # Cuánto dura el código PIX. Es lo que hay que cubrir preguntando.
 _MINUTOS_DEL_CODIGO = 15
@@ -48,9 +54,9 @@ def _solo_el_codigo(texto: str) -> str:
 
 def _el_ritmo():
     """Los tramos del ritmo, leídos del archivo de verdad."""
-    codigo = _solo_el_codigo(open(_RECARGA, encoding="utf-8").read())
-    bloque = re.search(r"const RITMO = \[(.*?)\];", codigo, re.S)
-    assert bloque, "no se encontró el RITMO en la pantalla de recarga"
+    codigo = _solo_el_codigo(open(_HOOK, encoding="utf-8").read())
+    bloque = re.search(r"export const RITMO = \[(.*?)\];", codigo, re.S)
+    assert bloque, "no se encontró el RITMO en el hook"
     tramos = []
     for hasta, cada in re.findall(r"\{\s*(?:hasta:\s*(\d+),\s*)?cada:\s*(\d+)",
                                   bloque.group(1)):
@@ -95,19 +101,31 @@ def test_SE_PREGUNTA_MUCHO_MENOS_EN_LOS_QUINCE_MINUTOS():
 
 def test_NO_QUEDO_UN_RELOJ_FIJO_PREGUNTANDO_POR_EL_PAGO():
     """Si volviera el `setInterval`, el ritmo quedaría de adorno."""
-    codigo = _solo_el_codigo(open(_RECARGA, encoding="utf-8").read())
-    assert not re.search(r"pollRef\.current\s*=\s*setInterval", codigo), (
+    codigo = _solo_el_codigo(open(_HOOK, encoding="utf-8").read())
+    assert not re.search(r"programada\.current\s*=\s*setInterval", codigo), (
         "volvió el reloj fijo para consultar el pago")
     assert "cadaCuanto(" in codigo, "nadie usa el ritmo"
 
 
-def test_AL_CORTAR_SE_DEJA_LA_REFERENCIA_EN_NULL():
+def test_AL_CORTAR_NO_SE_VUELVE_A_PROGRAMAR():
     """Sin eso, la pregunta que estaba en vuelo cuando el pago se confirmó se
     vuelve a programar, y la cadena sigue viva para siempre sobre un pago que
-    ya terminó."""
+    ya terminó. En el hook la bandera es `parado`: la limpieza del efecto la
+    levanta y la cadena la mira antes de reprogramarse."""
+    codigo = _solo_el_codigo(open(_HOOK, encoding="utf-8").read())
+    assert re.search(r"parado\s*=\s*true", codigo), "la limpieza no levanta la bandera"
+    assert re.search(r"if \(parado \|\| como !== ESPERANDO\) return;", codigo), (
+        "la cadena no mira la bandera antes de reprogramarse")
+    assert "clearTimeout(programada.current)" in codigo, "no corta el reloj"
+
+
+def test_LA_RECARGA_USA_EL_HOOK_Y_NO_TIENE_UN_RITMO_PROPIO():
+    """Dos copias de la pregunta son la que un día se arregla en una y no en
+    la otra. La recarga tuvo la suya; ahora usa la compartida."""
     codigo = _solo_el_codigo(open(_RECARGA, encoding="utf-8").read())
-    parar = re.search(r"const pararDePreguntar = \(\) => \{(.*?)\};", codigo, re.S)
-    assert parar, "no está `pararDePreguntar`"
-    assert "clearTimeout" in parar.group(1), "no corta el reloj"
-    assert re.search(r"pollRef\.current\s*=\s*null", parar.group(1)), (
-        "no deja la referencia en null: la cadena se vuelve a programar sola")
+    assert "useEsperarElPago(" in codigo, "la recarga no usa el hook"
+    assert "const RITMO" not in codigo, "la recarga volvió a tener su propio ritmo"
+    assert "/gestor/pix/status/" not in codigo, "la recarga vuelve a preguntar por su cuenta"
+    # Y sólo pregunta mientras hay un QR esperando: con otro estado, `null`.
+    assert re.search(r"useEsperarElPago\(\s*step === 2 && paymentStatus === 'pending' && pixData\?\.payment_id \? pixData\.payment_id : null", codigo), (
+        "la recarga pregunta aunque no haya un QR esperando")

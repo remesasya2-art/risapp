@@ -9,6 +9,8 @@ import {
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import useCripto from '../hooks/useCripto';
+import useEsperarElPago, { ESPERANDO, PAGADO, VENCIDO, CANCELADO } from '../hooks/useEsperarElPago';
+import EsperandoElPago from '../components/flujo/EsperandoElPago';
 import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 import { confirmar } from '../components/flujo/confirmar.js';
 import { QRCodeSVG } from 'qrcode.react';
@@ -16,36 +18,15 @@ import NotificationBell from '../components/NotificationBell';
 import CardPaymentBrick from '../components/CardPaymentBrick';
 import { fmt } from '../utils/format';
 
-// ─── Cada cuánto se pregunta si el pago PIX entró ─────────────────────────
+// ¿YA ENTRO EL PIX? LO PREGUNTA `hooks/useEsperarElPago`, NO ESTA PANTALLA.
 //
-// ANTES ERAN CINCO SEGUNDOS FIJOS, LOS QUINCE MINUTOS QUE DURA EL CODIGO
-//
-//     Son 180 preguntas por persona, y cada una cruza a Mercado Pago desde el
-//     servidor. Con esta escalera son 48: **un 73% menos**, sin que nadie
-//     espere más de lo que ya esperaba.
-//
-// POR QUE UNA ESCALERA Y NO UN NUMERO MAS GRANDE
-//
-//     La gente paga en el primer minuto: abre la app del banco, escanea y
-//     confirma. Ahí los cinco segundos valen, porque es cuando el aviso de
-//     «listo» tiene que llegar rápido. El que a los diez minutos no pagó no es
-//     alguien a punto de pagar: es alguien que se fue a hacer otra cosa y
-//     dejó la pantalla abierta.
-//
-//     Y del otro lado está el aviso de Mercado Pago, que acredita solo. Esto
-//     es la red de seguridad, no el camino principal.
-const RITMO = [
-  { hasta: 60, cada: 5000 },      // el primer minuto: cuando de verdad se paga
-  { hasta: 300, cada: 15000 },    // hasta los cinco minutos
-  { cada: 30000 },                // de ahí en adelante
-];
-
-/** Cuántos milisegundos esperar, según hace cuánto que la persona está mirando. */
-function cadaCuanto(segundosEsperando) {
-  const tramo = RITMO.find((t) => t.hasta === undefined || segundosEsperando < t.hasta);
-  return (tramo || RITMO[RITMO.length - 1]).cada;
-}
-
+//   Esta pantalla tenía su propia copia de la pregunta: el ritmo escalonado
+//   (5 s el primer minuto, después 15, después 30), la guarda en una ref
+//   contra preguntas solapadas, y la lectura de las tres formas de decir
+//   «pagado». Cuando el envío pasó a pagarse al final, esa copia se
+//   generalizó en el hook y las pantallas del envío lo usan. Quedaban dos
+//   versiones de lo mismo: la que un día se arreglaba en una y no en la otra.
+//   Ahora es una sola. El porqué de cada regla está en el hook.
 export default function Recharge() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
@@ -64,30 +45,40 @@ export default function Recharge() {
   const [proofImage, setProofImage] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, completed, expired, cancelled
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutos en segundos
-  // «Hay un pedido en vuelo» se guarda en una ref y no en el estado.
-  //
-  // Estaba en `useState`, y ahí la guarda no frenaba nada: el `setInterval`
-  // que consulta el pago cada 5 s captura la función del render en que se
-  // armó, y esa función ve para siempre el `checkingPayment` de ESE render
-  // —falso—. Se comprobó simulando el ciclo: con la guarda por estado, 8 de
-  // 9 consultas se solapaban; con la ref, ninguna.
-  //
-  // Lo que costaba: si la respuesta tardaba más que los 5 s del poll, dos
-  // consultas volvían juntas con «pagado», y el usuario veía el aviso de
-  // pago confirmado dos veces. Una ref no vive en el render, así que la
-  // función vieja y la nueva miran el mismo valor.
-  const consultaEnVuelo = useRef(false);
   const timerRef = useRef(null);
-  const pollRef = useRef(null);
-  const desdeCuandoEspera = useRef(0);
 
-  // Corta la cadena de preguntas. Deja la ref en NULL a propósito: es lo que
-  // mira `preguntarYVolver` para no reprogramarse después de que el pago ya se
-  // resolvió mientras ella estaba esperando la respuesta.
-  const pararDePreguntar = () => {
-    clearTimeout(pollRef.current);
-    pollRef.current = null;
-  };
+  // La pregunta «¿ya entró?», sólo mientras hay un QR en pantalla esperando.
+  // Con `null` el hook no pregunta: al confirmarse, vencer o cancelarse, el
+  // estado deja de ser «pending» y la pregunta se apaga sola.
+  const { estado: elPago, revisarAhora } = useEsperarElPago(
+    step === 2 && paymentStatus === 'pending' && pixData?.payment_id ? pixData.payment_id : null);
+
+  // Lo que hace la pantalla con el desenlace. En un microtask, por la regla
+  // de la casa (`react-hooks/set-state-in-effect`). `refreshUser` va en las
+  // dependencias porque el lint lo pide; el desenlace se atiende una sola
+  // vez por cobro gracias a `atendido`, así que si la función cambiara de
+  // identidad no se repetiría el aviso.
+  const atendido = useRef(null);
+  useEffect(() => {
+    if (elPago === ESPERANDO) return;
+    const clave = `${pixData?.payment_id}:${elPago}`;
+    if (atendido.current === clave) return;
+    atendido.current = clave;
+    const t = setTimeout(async () => {
+      clearInterval(timerRef.current);
+      if (elPago === PAGADO) {
+        setPaymentStatus('completed');
+        toast.success('¡Pago PIX confirmado! Tu saldo ha sido actualizado.');
+        await refreshUser();
+      } else if (elPago === VENCIDO) {
+        setPaymentStatus('expired');
+        toast.error('El código PIX ha expirado');
+      } else if (elPago === CANCELADO) {
+        setPaymentStatus('cancelled');
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, [elPago, pixData?.payment_id, refreshUser]);
 
   // Limites de monto: vienen del servidor (GET /limits) para que el cartel que ve
   // el usuario y el 400 que devuelve el backend salgan del mismo numero.
@@ -159,61 +150,9 @@ export default function Recharge() {
         });
       }, 1000);
 
-      // Se pregunta si el pago entró, cada vez más espaciado. Ver RITMO.
-      desdeCuandoEspera.current = Date.now();
-
-      const preguntarYVolver = async () => {
-        await checkPaymentStatus();
-        // Si mientras se preguntaba el pago se confirmó, venció o se canceló,
-        // `pararDePreguntar` dejó esto en null y no hay que reprogramar nada.
-        if (pollRef.current === null) return;
-        const esperando = (Date.now() - desdeCuandoEspera.current) / 1000;
-        pollRef.current = setTimeout(preguntarYVolver, cadaCuanto(esperando));
-      };
-
-      pollRef.current = setTimeout(preguntarYVolver, cadaCuanto(0));
-
-      // Y una primera vez enseguida, sin esperar.
-      checkPaymentStatus();
-
-      return () => {
-        clearInterval(timerRef.current);
-        pararDePreguntar();
-      };
+      return () => clearInterval(timerRef.current);
     }
   }, [step, pixData, paymentStatus]);
-
-  const checkPaymentStatus = async () => {
-    if (!pixData?.payment_id || consultaEnVuelo.current) return;
-
-    consultaEnVuelo.current = true;
-    try {
-      const response = await api.get(`/gestor/pix/status/${pixData.payment_id}`);
-      const status = response.data.status;
-      
-      // Check for any success status
-      if (status === 'completed' || status === 'approved' || status === 'paid') {
-        setPaymentStatus('completed');
-        clearInterval(timerRef.current);
-        pararDePreguntar();
-        toast.success('¡Pago PIX confirmado! Tu saldo ha sido actualizado.');
-        await refreshUser();
-      } else if (status === 'expired') {
-        setPaymentStatus('expired');
-        clearInterval(timerRef.current);
-        pararDePreguntar();
-        toast.error('El código PIX ha expirado');
-      } else if (status === 'cancelled') {
-        setPaymentStatus('cancelled');
-        clearInterval(timerRef.current);
-        pararDePreguntar();
-      }
-    } catch (error) {
-      console.error('Error checking payment status:', error);
-    } finally {
-      consultaEnVuelo.current = false;
-    }
-  };
 
   const vesPaymentInfo = {
     bank_name: 'Banco de Venezuela',
@@ -341,7 +280,6 @@ export default function Recharge() {
       await api.post(`/gestor/pix/cancel/${pixData.payment_id}`);
       setPaymentStatus('cancelled');
       clearInterval(timerRef.current);
-      pararDePreguntar();
       toast.success('Pago PIX cancelado');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error al cancelar');
@@ -870,6 +808,12 @@ export default function Recharge() {
                   <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Monto a pagar</p>
                   <p style={{ fontSize: '28px', fontWeight: '700', color: '#15803d', margin: 0 }}>R$ {fmt(parseFloat(amount))}</p>
                   <p style={{ fontSize: '14px', color: '#16a34a', margin: '8px 0 0 0' }}>Recibirás: {fmt(amountRis)} RIS</p>
+                </div>
+
+                {/* La misma línea que en las pantallas del envío: la pantalla
+                    está atenta, y el impaciente puede preguntar ya. */}
+                <div style={{ marginBottom: '16px' }}>
+                  <EsperandoElPago onRevisar={revisarAhora} testid="esperando-recarga" />
                 </div>
 
                 {/* Actions */}

@@ -118,16 +118,19 @@ PANTALLAS = {
 }
 
 
-def test_el_hook_pregunta_por_LA_MISMA_RUTA_que_la_recarga():
-    """Si preguntara por otra, un cambio en el receptor podría dejar bien la
-    recarga y rota la pantalla del envío sin que nadie lo note."""
+def test_el_hook_pregunta_por_LA_RUTA_DEL_ESTADO_y_la_recarga_usa_el_hook():
+    """Antes esto comprobaba que el hook y la recarga preguntaran por la misma
+    ruta, porque cada uno tenía su llamada. Ahora la recarga usa el hook: hay
+    UNA llamada, y un cambio en el receptor rompe o arregla las tres
+    pantallas a la vez, que es lo que se quería."""
     hook = HOOK.read_text(encoding="utf-8")
     recarga = (_SRC / "pages" / "Recharge.jsx").read_text(encoding="utf-8")
     # La LLAMADA, no el nombre: el encabezado del hook menciona la ruta en
     # prosa, y con «está en el archivo» una mutación que cambiara la ruta de
     # la llamada pasaba en verde por el comentario. Pasó.
     assert "api.get(`/gestor/pix/status/${paymentId}`)" in hook
-    assert "api.get(`/gestor/pix/status/${pixData.payment_id}`)" in recarga
+    assert "useEsperarElPago(" in recarga
+    assert "/gestor/pix/status/" not in recarga
 
 
 @pytest.mark.parametrize("nombre", sorted(PANTALLAS))
