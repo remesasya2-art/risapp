@@ -174,7 +174,7 @@ async def limits_payload(db) -> dict:
     que redondear mal.
     """
     from services import configuracion, cripto_abierta, pago_al_final
-    from services import recarga_abierta
+    from services import encomiendas_abiertas, recarga_abierta
     from services.money import to_float
 
     ajustes = await configuracion.leer_todo(db)
@@ -214,4 +214,8 @@ async def limits_payload(db) -> dict:
         # recarga contestan 503, así que la pantalla tiene que esconder sus
         # ocho puertas: un botón que lleva a un error no es una opción.
         "recarga": bool(int(ajustes[recarga_abierta.CLAVE])),
+        # Si se pueden mandar encomiendas nuevas. Con esto en false, cotizar y
+        # confirmar contestan 503, así que el menú tiene que dejar de ofrecer
+        # «Enviar un paquete». Lo que ya está en camino no depende de esto.
+        "encomiendas": bool(int(ajustes[encomiendas_abiertas.CLAVE])),
     }

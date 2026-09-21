@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, PackagePlus, RefreshCw } from 'lucide-react';
 import api from '../utils/api';
+import useEncomiendas from '../hooks/useEncomiendas';
 import { fmt } from '../utils/format';
 import Chrome from '../components/envios/Chrome';
 import { Aviso, Boton, Cargando, NoSePudoLeer, Vacio } from '../components/envios/ui';
@@ -27,6 +28,7 @@ export default function EnviosMis() {
   const [cargando, setCargando] = useState(true);
   const [noSeLeyo, setNoSeLeyo] = useState(null);
   const peticion = useRef(0);
+  const encomiendas = useEncomiendas();
 
   const cargar = useCallback(async () => {
     const mia = ++peticion.current;
@@ -57,11 +59,17 @@ export default function EnviosMis() {
 
   return (
     <Chrome titulo="Mis envíos" volverA="/">
-      <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
-        <Boton style={{ width: '100%', justifyContent: 'center', padding: '14px' }}>
-          <PackagePlus size={16} /> Enviar un paquete
-        </Boton>
-      </Link>
+      {encomiendas.abiertas ? (
+        <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
+          <Boton style={{ width: '100%', justifyContent: 'center', padding: '14px' }}>
+            <PackagePlus size={16} /> Enviar un paquete
+          </Boton>
+        </Link>
+      ) : (
+        <Aviso tono="info" titulo="El envío de paquetes está suspendido por ahora">
+          Los envíos que ya están en camino siguen igual: los ves acá abajo.
+        </Aviso>
+      )}
 
       {datos?.degradado ? (
         <Aviso tono="alerta" titulo="No pudimos leer la lista completa">
@@ -82,9 +90,16 @@ export default function EnviosMis() {
       ) : null}
 
       {!cargando && !noSeLeyo && !datos?.degradado && envios.length === 0 ? (
-        <Vacio titulo="Todavía no mandaste nada">
-          Cotizar es gratis y no reserva nada: podés ver el precio antes de decidir.
-        </Vacio>
+        // Con el servicio suspendido, «cotizar es gratis» invita a algo que no
+        // se puede hacer. El aviso de arriba ya lo dijo; acá alcanza con no
+        // repetir la invitación.
+        encomiendas.abiertas ? (
+          <Vacio titulo="Todavía no mandaste nada">
+            Cotizar es gratis y no reserva nada: podés ver el precio antes de decidir.
+          </Vacio>
+        ) : (
+          <Vacio titulo="No tenés envíos en camino" />
+        )
       ) : null}
 
       {envios.map((e) => <Fila key={e.envio_id} envio={e} />)}

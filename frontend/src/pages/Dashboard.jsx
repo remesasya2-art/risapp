@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import useRecarga from '../hooks/useRecarga';
+import useEncomiendas from '../hooks/useEncomiendas';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -32,6 +33,7 @@ export default function Dashboard() {
   // sale lo que el servidor hace cumplir.
   const cripto = useCripto();
   const recarga = useRecarga();
+  const encomiendas = useEncomiendas();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -170,7 +172,6 @@ const normalized = { ...tx };
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
     { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
     { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
-    { icon: Package, label: 'Enviar un paquete', path: '/envios' },
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },
@@ -183,6 +184,15 @@ const normalized = { ...tx };
   // está no hay que acordarse de esconderlo. Va en la posición 1, donde estaba.
   if (recarga.abierta) {
     menuItems.splice(1, 0, { icon: Wallet, label: 'Recargar', path: '/recharge' });
+  }
+
+  // ENVIAR UN PAQUETE SE INSERTA, POR EL MISMO MOTIVO. Va después de «Gastar
+  // en Brasil», donde estaba. Con el servicio suspendido la entrada
+  // desaparece del menú; quien ya tiene un paquete en camino lo sigue viendo
+  // desde el historial y desde «Mis envíos», que no dependen de esto.
+  if (encomiendas.abiertas) {
+    const despuesDeBrasil = menuItems.findIndex((m) => m.path === '/send-reais') + 1;
+    menuItems.splice(despuesDeBrasil, 0, { icon: Package, label: 'Enviar un paquete', path: '/envios' });
   }
 
   // BITCOIN LIGHTNING SE INSERTA, NO SE FILTRA.

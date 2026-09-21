@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import useRecarga from '../hooks/useRecarga';
+import useEncomiendas from '../hooks/useEncomiendas';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Camera, CheckCircle2, CreditCard, Link2, PackageSearch, RefreshCw,
@@ -332,6 +333,9 @@ function Cobros({ envio }) {
  *   cambiaron mientras el usuario no estaba.
  */
 function Confirmar({ envio, onListo }) {
+  // Los dos «Cotizar de nuevo» de abajo llevan a `/envios/nuevo`, que con el
+  // servicio suspendido rebota. Un botón que rebota es peor que ninguno.
+  const encomiendas = useEncomiendas();
   const [contenido, setContenido] = useState(false);
   const [estimado, setEstimado] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -386,11 +390,13 @@ function Confirmar({ envio, onListo }) {
         <strong>No despaches nada.</strong> Los precios y los límites pueden haber
         cambiado desde que la pediste, así que hay que cotizar otra vez. Si la caja
         ya salió, avisanos por el centro de ayuda antes de que llegue.
-        <div style={{ marginTop: '10px' }}>
-          <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
-            <Boton>Cotizar de nuevo</Boton>
-          </Link>
-        </div>
+        {encomiendas.abiertas ? (
+          <div style={{ marginTop: '10px' }}>
+            <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
+              <Boton>Cotizar de nuevo</Boton>
+            </Link>
+          </div>
+        ) : null}
       </Aviso>
     );
   }
@@ -438,9 +444,11 @@ function Confirmar({ envio, onListo }) {
           style={{ flex: 1, justifyContent: 'center', padding: '14px' }}>
           Confirmar el envío
         </Boton>
-        <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
-          <Boton variante="secundario">Cotizar de nuevo</Boton>
-        </Link>
+        {encomiendas.abiertas ? (
+          <Link to="/envios/nuevo" style={{ textDecoration: 'none' }}>
+            <Boton variante="secundario">Cotizar de nuevo</Boton>
+          </Link>
+        ) : null}
       </div>
     </div>
   );

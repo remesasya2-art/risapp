@@ -136,7 +136,7 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     """
     p = corre(limits.limits_payload(base))
     assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar", "cripto",
-                      "pago_al_final", "recarga"}, p
+                      "pago_al_final", "recarga", "encomiendas"}, p
     assert set(p["pix"]) == {"min_brl", "max_brl"}
     assert set(p["tarjeta"]) == {"min_brl", "max_brl"}
     assert set(p["ves"]) == {"min_ves", "max_ves"}
@@ -148,6 +148,9 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     # es «se ofrece o no se ofrece».
     assert isinstance(p["pago_al_final"], bool)
     assert isinstance(p["recarga"], bool)
+    # Lo mismo para las encomiendas: se pueden mandar o no. Lo que ya está en
+    # camino no depende de esto, así que no hay más estados que resolver.
+    assert isinstance(p["encomiendas"], bool)
 
 
 @pytest.mark.parametrize("campo", ["min_brl", "max_brl"])

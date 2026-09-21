@@ -41,9 +41,9 @@ from fastapi import (APIRouter, Depends, File, Form, HTTPException,
 from fastapi.responses import Response
 
 from routes.dependencies import get_current_user, get_verified_user
-from services import (envios_archivos, envios_catalogo, envios_cobros,
-                      envios_comprobante, envios_cotizador, envios_crear,
-                      envios_consulta, envios_seguimiento)
+from services import (encomiendas_abiertas, envios_archivos, envios_catalogo,
+                      envios_cobros, envios_comprobante, envios_cotizador,
+                      envios_crear, envios_consulta, envios_seguimiento)
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
 from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.user import User
@@ -77,7 +77,18 @@ async def obtener_limites():
     `disponible: false`. Un sistema recién instalado no es un error.
     """
     try:
-        return _sin_detalle(await envios_catalogo.limites())
+        salida = _sin_detalle(await envios_catalogo.limites())
+        # LA SUSPENSION SE CUENTA ACA, Y CON SU MOTIVO.
+        #
+        #   Un módulo configurado y suspendido no es un módulo a medio
+        #   configurar. La pantalla ya sabe mostrar `faltantes` cuando
+        #   `disponible` es false; lo que cambia es el texto: éste dice que lo
+        #   que ya está en camino sigue igual, que es lo primero que va a
+        #   preguntar quien tenga una caja viajando.
+        if not await encomiendas_abiertas.esta_abierta():
+            salida["disponible"] = False
+            salida["faltantes"] = [encomiendas_abiertas.SUSPENDIDO]
+        return salida
     except Exception as e:                                    # pragma: no cover
         logger.warning(f"envios: /limites falló: {e}")
         # La lista de prohibidos NO va vacía en el fallback: una lista vacía se
@@ -137,6 +148,8 @@ async def cotizar(pedido: PedidoDeCotizacion,
     arreglar. Lo que depende de la configuración vuelve como 503 con un mensaje
     que no le explica a un anónimo qué le falta al panel.
     """
+    # ANTES de cotizar nada: con el servicio suspendido no nace ningún envío.
+    await encomiendas_abiertas.exigir_abierta()
     try:
         return await envios_cotizador.cotizar(current_user, pedido.model_dump())
     except envios_cotizador.NoSePuedeCotizar as e:
@@ -159,6 +172,10 @@ async def crear(pedido: PedidoDeCreacion, request: Request,
     Idempotente: dos `POST` con la misma `idempotency_key` devuelven el mismo
     resultado y crean un solo envío.
     """
+    # También acá, y no sólo en cotizar: una cotización hecha un minuto antes
+    # de apagar el servicio no tiene por qué poder confirmarse un minuto
+    # después.
+    await encomiendas_abiertas.exigir_abierta()
     try:
         return await envios_crear.crear(
             current_user, pedido.envio_id, pedido.declaracion.model_dump(),
