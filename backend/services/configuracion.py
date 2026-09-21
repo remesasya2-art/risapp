@@ -388,6 +388,22 @@ AJUSTES = {
               "0 mientras «pagar el envío al final» esté apagado: con los dos "
               "apagados nadie podría enviar nada."),
 
+    # ── Encomiendas ───────────────────────────────────────────────────────
+    #
+    # El servicio de encomiendas se suspende por ahora. Viene en 1 de fábrica
+    # por la misma regla que la recarga: el despliegue no apaga cosas solo, lo
+    # apaga una persona desde acá. Qué se apaga y qué sigue andando está en
+    # `services/encomiendas_abiertas.py`.
+    "encomiendas_abiertas": Ajuste(
+        tipo=ENTERO, defecto=1, minimo=0, maximo=1,
+        unidad="0 = suspendido, 1 = se pueden mandar",
+        etiqueta="Envío de paquetes (encomiendas)",
+        ayuda="En 1 (fábrica) todo sigue igual. En 0 no se pueden cotizar ni "
+              "confirmar encomiendas nuevas y el menú del cliente deja de "
+              "ofrecerlas, pero las que ya están en camino siguen su curso: "
+              "el cliente las ve, sube comprobantes y paga lo que deba, y el "
+              "panel de Encomiendas sigue entero para terminarlas."),
+
     "cripto_abierta": Ajuste(
         tipo=ENTERO, defecto=1, minimo=0, maximo=2,
         unidad="0 = cerrada, 1 = sólo salida, 2 = abierta",

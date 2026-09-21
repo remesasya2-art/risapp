@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import ConfirmacionHost from './components/flujo/ConfirmacionHost';
 import PuertaCripto from './components/PuertaCripto';
 import PuertaRecarga from './components/PuertaRecarga';
+import PuertaEncomiendas from './components/PuertaEncomiendas';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
 
@@ -137,7 +138,7 @@ function AppRoutes() {
       <Route path="/referidos" element={<ProtectedRoute><Referidos /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
       <Route path="/envios" element={<ProtectedRoute><EnviosMis /></ProtectedRoute>} />
-      <Route path="/envios/nuevo" element={<ProtectedRoute><EnvioNuevo /></ProtectedRoute>} />
+      <Route path="/envios/nuevo" element={<ProtectedRoute><PuertaEncomiendas><EnvioNuevo /></PuertaEncomiendas></ProtectedRoute>} />
       {/* VA ANTES QUE `/envios/:envioId`, y el orden importa: si fuera al
           revés, `:envioId` se comería «tx_xxx/pagar» y abriría el detalle de
           una encomienda que no existe. */}
