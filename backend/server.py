@@ -269,6 +269,18 @@ async def lifespan(app):
             logger.warning("BORDE: %s", estado_borde["detalle"])
     except Exception as e:
         logger.warning(f"Borde: no se pudo revisar al arrancar: {e}")
+
+    # El núcleo de cuentas. Se anuncia porque su estado de fábrica es
+    # «apagado» y conviene que el registro lo diga: si un día aparece
+    # «laboratorio» sin que nadie lo haya prendido, hay que mirar.
+    try:
+        from nucleo import base as nucleo_base, modo as nucleo_modo
+        modo_nucleo = await nucleo_modo.leer(db)
+        logger.info("Núcleo de cuentas: modo «%s», base %s",
+                    nucleo_modo.NOMBRES[modo_nucleo],
+                    "configurada" if nucleo_base.url_configurada() else "sin configurar")
+    except Exception as e:
+        logger.warning(f"Núcleo: no se pudo revisar al arrancar: {e}")
     try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
@@ -553,6 +565,14 @@ app.mount("/api/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Include modular routers (from routes/)
 app.include_router(modular_api_router)
+
+# El núcleo de cuentas (backend/nucleo). Se registra ACA y no en
+# routes/__init__.py a propósito: nucleo.rutas importa la puerta del super
+# administrador de routes.dependencies, y si el paquete routes lo importara a
+# él habría un ciclo cada vez que un test importe el núcleo primero. Apagado
+# de fábrica: con `nucleo_modo` en 0 todas sus rutas contestan 404.
+from nucleo.rutas import router as nucleo_router  # noqa: E402
+app.include_router(nucleo_router, prefix="/api")
 
 # Include admin router (separate file for backward compatibility)
 app.include_router(admin_router)
