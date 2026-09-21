@@ -107,6 +107,15 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
   const sePuedeRetomar = ['awaiting_payment', 'payment_expired']
     .includes(txStatus);
 
+  // LA MONEDA DE LO QUE RECIBE EL BENEFICIARIO SE LEE, NO SE ESCRIBE A MANO
+  //
+  //   Acá decía «VES» fijo. Cuando se escribió, todos los envíos iban a
+  //   Venezuela; después llegó el corredor a Brasil y nadie volvió a esta
+  //   línea, así que una orden de 4.400 bolívares a Brasil mostraba «40,00
+  //   VES» donde eran 40 reales. El respaldo en «VES» es para las órdenes
+  //   viejas que no tengan guardada la moneda de salida.
+  const monedaSalida = tx.currency_output || 'VES';
+
   // Monto principal y unidad según el flujo (busca el primer campo con valor)
   let mainAmount, mainUnit;
   if (isBtc) {
@@ -270,8 +279,11 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
               </div>
               {isWithdrawal && !isBtc && tx.amount_output && (
                 <div style={{ fontSize: '10.5px', color: '#8E8E9A', marginTop: '1px', whiteSpace: 'nowrap' }}>
-                  {fmt(tx.amount_output)} VES
-                  {rates?.bcv_usd_ves > 0 && (
+                  {fmt(tx.amount_output)} {monedaSalida}
+                  {/* La equivalencia en dólares BCV sólo tiene sentido sobre
+                      bolívares: dividir reales por la tasa del BCV da un
+                      número que no es nada. */}
+                  {monedaSalida === 'VES' && rates?.bcv_usd_ves > 0 && (
                     <> = ${fmt(tx.amount_output / rates.bcv_usd_ves, 2)} BCV</>
                   )}
                 </div>
