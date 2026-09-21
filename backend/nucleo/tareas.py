@@ -27,6 +27,7 @@ LOS DE LABORATORIO
 import logging
 
 from nucleo.rieles import operaciones as _rieles
+from nucleo.riesgo import monitoreo as _monitoreo
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +66,15 @@ MANEJADORES = {
     # sentido a lo que el riel avisa, los dos con reintentos y cola de muertos.
     "enviar_pago": _rieles.enviar_pago,
     "procesar_aviso": _rieles.procesar_aviso,
+    # El monitoreo (nucleo/riesgo/monitoreo.py): las reglas sobre cada
+    # operación liquidada.
+    "evaluar_riesgo": _monitoreo.evaluar_riesgo,
 }
 
 SUSCRIPCIONES = {
     "asiento_registrado": ("avisar_asiento",),
     "dia_cerrado": ("anotar_cierre",),
+    "operacion_liquidada": ("evaluar_riesgo",),
 }
 
 # Lo que se puede encolar a mano desde la pestaña del laboratorio.

@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Once tablas, y cada columna con su porqué.
+El esquema del núcleo. Veinte tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -29,6 +29,21 @@ El esquema del núcleo. Once tablas, y cada columna con su porqué.
                       identificador. Es la hoja para investigar.
     sim_claves        el directorio de claves del SIMULADOR (DICT de mentira),
                       con claves de prueba que se portan distinto.
+    titulares         el legajo de cada persona: quién es, qué declaró, qué
+                      riesgo tiene, si está aprobado y hasta cuándo. Una
+                      cuenta de pago sólo se abre con un legajo aprobado.
+    verificaciones    lo que el verificador contestó cada vez: puntajes,
+                      situación del CPF, motivos. Nunca las fotos.
+    cruces            cada cruce con una lista (sanciones, PEP) y cómo se
+                      resolvió.
+    sim_personas      las personas de prueba del simulador de identidad.
+    sim_listas        las listas de prueba (CSNU, OFAC, PEP).
+    alertas           lo que el monitoreo encontró: una por operación y regla.
+    casos             el expediente: estado, analista, plazos, conclusión,
+                      quién aprobó comunicar, acuse.
+    caso_notas        lo que se fue anotando en el caso. Sólo se agrega.
+    comunicaciones    cada comunicación al COAF (y cada no ocurrencia), con
+                      el archivo que se mandó y el acuse que volvió.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -209,6 +224,141 @@ sim_claves = Table(
     Column("ispb", String(8), nullable=False),
     Column("banco", String(80), nullable=False),
     Column("comportamiento", String(12), nullable=False, default="normal"),  # normal, rechaza, tarda
+)
+
+titulares = Table(
+    "titulares", metadata,
+    Column("id", String(40), primary_key=True),               # «tit_…»
+    Column("documento", String(14), nullable=False),          # CPF o CNPJ, sólo dígitos
+    Column("tipo", String(4), nullable=False),                # cpf, cnpj
+    Column("nombre", String(120), nullable=False),
+    Column("nacimiento", Date, nullable=True),
+    Column("ocupacion", String(80), nullable=True),
+    Column("renta_declarada", BigInteger, nullable=True),     # centavos por mes
+    Column("pep_declarado", Boolean, nullable=False, default=False),   # lo que la persona dijo
+    Column("pep", Boolean, nullable=False, default=False),             # lo que dijo o lo que la lista dijo
+    Column("origen_de_fondos", String(30), nullable=True),
+    Column("nivel_de_riesgo", String(8), nullable=True),      # bajo, medio, alto
+    Column("estado", String(12), nullable=False, default="incompleto"),
+    Column("vigente_hasta", Date, nullable=True),
+    Column("motivo", String(300), nullable=True),             # del rechazo
+    Column("decidido_por", String(80), nullable=True),
+    Column("cruzado_en", DateTime(timezone=True), nullable=True),   # la última vez que se miró en las listas
+    Column("creado", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("actualizado", DateTime(timezone=True), nullable=True),
+    UniqueConstraint("documento", name="uq_titulares_documento"),
+    CheckConstraint("estado in ('incompleto','en_revision','aprobado','rechazado','vencido')", name="estado_del_legajo_valido"),
+)
+
+verificaciones = Table(
+    "verificaciones", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("titular", String(40), ForeignKey("titulares.id"), nullable=False),
+    Column("proveedor", String(40), nullable=False),
+    Column("puntaje_documento", Integer, nullable=False),
+    Column("puntaje_vida", Integer, nullable=False),
+    Column("puntaje_rostro", Integer, nullable=False),
+    Column("situacion_cpf", String(20), nullable=False),
+    Column("nombre_en_documento", String(120), nullable=False),
+    Column("documento_vencido", Boolean, nullable=False, default=False),
+    Column("aprobada", Boolean, nullable=False),
+    Column("motivos", Text, nullable=True),                   # JSON, lista de textos
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_verificaciones_titular", "titular"),
+)
+
+cruces = Table(
+    "cruces", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("titular", String(40), ForeignKey("titulares.id"), nullable=False),
+    Column("lista", String(20), nullable=False),              # CSNU, OFAC, PEP-CGU
+    Column("clase", String(10), nullable=False),              # sanciones, pep
+    Column("nombre_en_lista", String(120), nullable=False),
+    Column("detalle", String(300), nullable=True),
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("resuelto", Boolean, nullable=False, default=False),
+    Column("resolucion", String(300), nullable=True),         # «falso positivo: …», «confirmado: …»
+    Column("resuelto_por", String(80), nullable=True),
+    Column("resuelto_en", DateTime(timezone=True), nullable=True),
+    Index("ix_cruces_titular", "titular"),
+)
+
+sim_personas = Table(
+    "sim_personas", metadata,
+    Column("documento", String(14), primary_key=True),
+    Column("nombre", String(120), nullable=False),
+    Column("nacimiento", String(10), nullable=False),
+    Column("comportamiento", String(20), nullable=False, default="normal"),
+)
+
+sim_listas = Table(
+    "sim_listas", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("lista", String(20), nullable=False),
+    Column("documento", String(14), nullable=False),
+    Column("nombre", String(120), nullable=False),
+    Column("detalle", String(300), nullable=True),
+    UniqueConstraint("lista", "documento", name="uq_sim_listas_lista_documento"),
+)
+
+alertas = Table(
+    "alertas", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("titular", String(40), nullable=False),            # el titular_ref de la cuenta (id del legajo)
+    Column("cuenta", String(40), ForeignKey("cuentas.id"), nullable=False),
+    Column("operacion", String(40), ForeignKey("operaciones.id"), nullable=False),
+    Column("regla", String(30), nullable=False),
+    Column("detalle", Text, nullable=True),                   # JSON con los números que la hicieron saltar
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("caso", String(40), ForeignKey("casos.id"), nullable=True),
+    UniqueConstraint("operacion", "regla", name="uq_alertas_operacion_regla"),
+    Index("ix_alertas_titular", "titular"),
+)
+
+casos = Table(
+    "casos", metadata,
+    Column("id", String(40), primary_key=True),               # «caso_…»
+    Column("titular", String(40), nullable=False),
+    Column("origen", String(10), nullable=False),             # alerta, lista, manual
+    Column("estado", String(12), nullable=False),             # abierto, en_analisis, concluido, comunicado, archivado
+    Column("analista", String(80), nullable=True),
+    Column("detalle", String(300), nullable=True),
+    Column("abierto_en", DateTime(timezone=True), nullable=False),
+    Column("analizar_hasta", DateTime(timezone=True), nullable=False),   # +45 días
+    Column("concluido_en", DateTime(timezone=True), nullable=True),
+    Column("conclusion", Text, nullable=True),
+    Column("comunicar", Boolean, nullable=True),
+    Column("comunicar_hasta", DateTime(timezone=True), nullable=True),   # +24 horas desde la conclusión
+    Column("aprobado_por", String(80), nullable=True),        # la segunda firma
+    Column("comunicado_en", DateTime(timezone=True), nullable=True),
+    Column("acuse", String(60), nullable=True),
+    Column("archivado_en", DateTime(timezone=True), nullable=True),
+    CheckConstraint("estado in ('abierto','en_analisis','concluido','comunicado','archivado')", name="estado_del_caso_valido"),
+    Index("ix_casos_titular", "titular"),
+)
+
+caso_notas = Table(
+    "caso_notas", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("caso", String(40), ForeignKey("casos.id"), nullable=False),
+    Column("autor", String(80), nullable=False),
+    Column("texto", Text, nullable=False),
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_caso_notas_caso", "caso"),
+)
+
+comunicaciones = Table(
+    "comunicaciones", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("caso", String(40), ForeignKey("casos.id"), nullable=True),   # NULL en una no ocurrencia
+    Column("tipo", String(15), nullable=False),               # comunicacion, no_ocurrencia
+    Column("periodo", Integer, nullable=True),                # el año, en una no ocurrencia
+    Column("archivo", Text, nullable=False),                  # lo que se mandó, tal cual
+    Column("acuse", String(60), nullable=False),
+    Column("enviada_en", DateTime(timezone=True), nullable=False),
+    Column("enviada_por", String(80), nullable=False),
+    Column("aprobada_por", String(80), nullable=False),
+    Column("comunicador", String(40), nullable=False),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple

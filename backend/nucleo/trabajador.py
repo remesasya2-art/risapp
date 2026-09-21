@@ -40,6 +40,7 @@ NOMBRE = f"{socket.gethostname()}:{os.getpid()}"
 CADA_CUANTO_ENCENDIDO = 3       # segundos entre vueltas con el núcleo prendido
 CADA_CUANTO_APAGADO = 30        # con el núcleo apagado, una mirada al interruptor cada tanto
 TOPE_POR_VUELTA = 50            # trabajos por vuelta, para no acaparar el proceso web
+RONDAS_POR_VUELTA = 5           # eslabones evento → trabajo → evento que se siguen en una vuelta
 
 _tarea = None
 _estado = {"nombre": NOMBRE, "corriendo": False, "vueltas": 0, "ultima_vuelta": None,
@@ -76,19 +77,31 @@ async def correr_uno(*, ahora: Optional[datetime] = None) -> Optional[dict]:
 async def una_vuelta(*, ahora: Optional[datetime] = None, tope: int = TOPE_POR_VUELTA) -> dict:
     """Despacha los eventos pendientes y corre hasta `tope` trabajos. No
     mira el interruptor: eso lo hace `latir`. Desde el panel se llama a
-    mano («Procesar ahora»)."""
-    async with base.sesion() as s:
-        despachados = await cola.despachar_eventos(s, tareas.SUSCRIPCIONES, ahora=ahora)
-    cuenta = {cola.HECHO: 0, cola.MUERTO: 0, cola.PENDIENTE: 0}
-    corridos = 0
-    for _ in range(tope):
-        r = await correr_uno(ahora=ahora)
-        if r is None:
+    mano («Procesar ahora»).
+
+    Repite mientras una ronda haya despachado o corrido algo, hasta
+    RONDAS_POR_VUELTA: un trabajo que deja un evento que deja otro trabajo
+    (un crédito que liquida una operación, que el monitoreo tiene que
+    mirar) termina en la misma vuelta. Sin esto, cada eslabón esperaba a
+    la vuelta siguiente y «Procesar ahora» procesaba a medias."""
+    totales = {"despachados": 0, "corridos": 0, "hechos": 0, "muertos": 0, "reintentan": 0}
+    for _ in range(RONDAS_POR_VUELTA):
+        async with base.sesion() as s:
+            despachados = await cola.despachar_eventos(s, tareas.SUSCRIPCIONES, ahora=ahora)
+        corridos = 0
+        for _ in range(tope):
+            r = await correr_uno(ahora=ahora)
+            if r is None:
+                break
+            corridos += 1
+            clave = {cola.HECHO: "hechos", cola.MUERTO: "muertos", cola.PENDIENTE: "reintentan"}.get(r["estado"])
+            if clave:
+                totales[clave] += 1
+        totales["despachados"] += despachados
+        totales["corridos"] += corridos
+        if not despachados and not corridos:
             break
-        corridos += 1
-        cuenta[r["estado"]] = cuenta.get(r["estado"], 0) + 1
-    return {"despachados": despachados, "corridos": corridos, "hechos": cuenta[cola.HECHO],
-            "muertos": cuenta[cola.MUERTO], "reintentan": cuenta[cola.PENDIENTE]}
+    return totales
 
 
 async def latir(db) -> bool:

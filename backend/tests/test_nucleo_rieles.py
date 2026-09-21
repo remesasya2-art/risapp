@@ -39,7 +39,8 @@ def base_limpia():
 
 
 def cuenta(titular="u_ana", saldo=None):
-    c = ya(comandos.crear_cuenta(titular_ref=titular))["id"]
+    from _nucleo_comun import cuenta_aprobada
+    c = cuenta_aprobada(titular)
     if saldo:
         ya(comandos.acreditar(cuenta_id=c, monto=saldo, referencia=f"in-{c}", actor="t"))
     return c

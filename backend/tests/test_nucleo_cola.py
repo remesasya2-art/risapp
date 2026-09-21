@@ -48,7 +48,8 @@ def base_limpia():
 
 
 def cuenta(titular="u_ana"):
-    return ya(comandos.crear_cuenta(titular_ref=titular))["id"]
+    from _nucleo_comun import cuenta_aprobada
+    return cuenta_aprobada(titular)
 
 
 async def _eventos():

@@ -97,6 +97,12 @@ async def _registrar_estado(sesion, operacion_id: str, estado: str, detalle: str
         operacion=operacion_id, estado=estado, detalle=(detalle or "")[:300] or None))
     await sesion.execute(operaciones.update().where(operaciones.c.id == operacion_id)
                          .values(estado=estado, actualizada=_ahora(), **cambios))
+    # Una operación liquidada es lo que el monitoreo mira. El evento va en
+    # la misma transacción, como los del libro: si la operación quedó
+    # liquidada, el monitoreo se va a enterar aunque el proceso se caiga.
+    if estado == LIQUIDADA:
+        await cola.anotar_evento(sesion, tipo="operacion_liquidada", clave=f"operacion:{operacion_id}",
+                                 carga={"operacion": operacion_id})
 
 
 async def _cuenta_activa(sesion, cuenta_id: str):
