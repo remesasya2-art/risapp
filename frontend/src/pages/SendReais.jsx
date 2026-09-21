@@ -39,7 +39,8 @@
  *   las mismas. El cambio es cuándo se valida y cómo se ve.
  */
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { montoDeLaUrl } from '../utils/montoDeLaUrl';
 import { useAuth } from '../contexts/AuthContext';
 import {
   ArrowLeft, ArrowRight, Plus, X, User, Check, Wallet, ShieldCheck,
@@ -161,7 +162,10 @@ export default function SendReais() {
   const [paso, setPaso] = useState(1);
   const [beneficiarios, setBeneficiarios] = useState([]);
   const [elegido, setElegido] = useState(null);
-  const [monto, setMonto] = useState('');
+  // La calculadora del inicio manda el monto por la URL (`?monto=`). Ver
+  // `utils/montoDeLaUrl.js`.
+  const [parametros] = useSearchParams();
+  const [monto, setMonto] = useState(() => montoDeLaUrl(parametros));
   const [enviando, setEnviando] = useState(false);
   const [mostrarPin, setMostrarPin] = useState(false);
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
@@ -670,8 +674,14 @@ export default function SendReais() {
             }}>
               R$ {fmt(montoNum)}
             </p>
-            <p style={{ ...ayuda, marginBottom: '18px' }}>
-              Se descuentan RI$ {fmt(montoNum)} de tu saldo.
+            {/* Con el pago al final prendido, «se descuentan de tu saldo» es
+                verdad para uno solo de los dos botones de abajo: pagando en
+                bolívares no se toca el saldo. Es la misma corrección que
+                lleva `Send.jsx` en su paso de confirmar. */}
+            <p style={{ ...ayuda, marginBottom: '18px' }} data-testid="br-como-se-paga">
+              {pagoAlFinal
+                ? <>Con «Usar mi saldo» se descuentan RI$ {fmt(montoNum)}. Pagando en bolívares, tu saldo no se toca.</>
+                : <>Se descuentan RI$ {fmt(montoNum)} de tu saldo.</>}
             </p>
 
             <div style={{

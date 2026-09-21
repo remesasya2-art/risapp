@@ -564,16 +564,30 @@ async def get_active_pix(current_user: User = Depends(require_authenticated_user
     
     # Check if expired
     expires_at = payment.get("expires_at")
-    if expires_at:
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        
-        if datetime.now(timezone.utc) > expires_at:
-            await db.gestor_pix_payments.update_one(
-                {"payment_id": payment["payment_id"]},
-                {"$set": {"status": "expired"}}
-            )
-            return {"has_active": False}
+    if not expires_at:
+        # Un cobro pendiente sin vencimiento no debería existir: los dos
+        # lugares que escriben cobros lo ponen. Pero si aparece uno —un
+        # documento a mano, una versión vieja—, restarle la fecha a `None` de
+        # más abajo tumbaba la ruta entera, y la pantalla de recarga quedaba
+        # sin saber si tiene un cobro abierto. Se cierra como vencido, que es
+        # lo que le pasaría a cualquier cobro de más de siete minutos, y se
+        # deja rastro para que alguien mire de dónde salió.
+        logger.warning("Cobro PIX %s pendiente sin expires_at: se cierra como vencido",
+                       payment.get("payment_id"))
+        await db.gestor_pix_payments.update_one(
+            {"payment_id": payment["payment_id"]},
+            {"$set": {"status": "expired"}}
+        )
+        return {"has_active": False}
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if datetime.now(timezone.utc) > expires_at:
+        await db.gestor_pix_payments.update_one(
+            {"payment_id": payment["payment_id"]},
+            {"$set": {"status": "expired"}}
+        )
+        return {"has_active": False}
     
     remaining_seconds = int((expires_at - datetime.now(timezone.utc)).total_seconds())
     

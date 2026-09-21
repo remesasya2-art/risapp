@@ -51,7 +51,8 @@ import useRecarga from '../hooks/useRecarga';
 import useEsperarElPago, { ESPERANDO, PAGADO, VENCIDO } from '../hooks/useEsperarElPago';
 import PagoRecibido from '../components/flujo/PagoRecibido';
 import EsperandoElPago from '../components/flujo/EsperandoElPago';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { montoDeLaUrl } from '../utils/montoDeLaUrl';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
 import { FormattedNumberInput } from '../components/common/FormattedNumberInput';
@@ -252,7 +253,10 @@ export default function Send() {
 
   // Se puede escribir en cualquiera de las dos monedas. `ultimoCampo` dice cuál
   // manda: el otro se muestra calculado y no pisa lo que la persona escribió.
-  const [risEscrito, setRisEscrito] = useState('');
+  // La calculadora del inicio manda el monto por la URL (`?monto=`), para
+  // no tipearlo dos veces. Ver `utils/montoDeLaUrl.js`.
+  const [parametros] = useSearchParams();
+  const [risEscrito, setRisEscrito] = useState(() => montoDeLaUrl(parametros));
   const [vesEscrito, setVesEscrito] = useState('');
   const [ultimoCampo, setUltimoCampo] = useState('ris');
 

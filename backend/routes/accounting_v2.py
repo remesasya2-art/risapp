@@ -18,6 +18,7 @@ from database import db
 from services.accounting_engine import (
     CoreAccountingEngine,
     ExecutiveReportService,
+    TasaSinConfigurar,
     WebhookConciliationService,
     ensure_indexes,
     CARACAS_TZ,
@@ -181,6 +182,13 @@ async def executive_report(
         return await ExecutiveReportService.generate_report(start, end)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except TasaSinConfigurar as e:
+        # La excepción ya dice qué tasa falta y dónde se configura. Sin esto
+        # llegaba al manejador genérico y el panel mostraba «error inesperado»,
+        # que manda a quien lo ve a buscar un fallo donde hay una configuración
+        # pendiente. 503 y no 400: el pedido está bien, es el servicio el que
+        # no puede contestar hasta que alguien cargue la tasa.
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 # ---------- Audit Log ----------
