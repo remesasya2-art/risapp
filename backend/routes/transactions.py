@@ -1712,6 +1712,11 @@ LO_QUE_VE_EL_CLIENTE = {
     # Cuánto
     "amount_input": 1, "amount_output": 1, "amount_ris": 1, "amount_ves": 1,
     "amount": 1, "usd_cliente": 1, "ves_recibe": 1, "currency_input": 1,
+    # `currency_output` faltaba, y el historial le ponía «VES» a mano a lo que
+    # recibe el beneficiario: una orden a Brasil mostraba «40,00 VES» donde
+    # eran 40 reales. La pantalla no podía arreglarlo sola porque el dato no
+    # le llegaba.
+    "currency_output": 1,
     # A quién
     "beneficiary_data": 1, "beneficiario_data": 1, "beneficiario": 1,
     # El comprobante del pago, que es lo que el cliente viene a buscar
