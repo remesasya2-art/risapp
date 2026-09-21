@@ -670,8 +670,14 @@ export default function SendReais() {
             }}>
               R$ {fmt(montoNum)}
             </p>
-            <p style={{ ...ayuda, marginBottom: '18px' }}>
-              Se descuentan RI$ {fmt(montoNum)} de tu saldo.
+            {/* Con el pago al final prendido, «se descuentan de tu saldo» es
+                verdad para uno solo de los dos botones de abajo: pagando en
+                bolívares no se toca el saldo. Es la misma corrección que
+                lleva `Send.jsx` en su paso de confirmar. */}
+            <p style={{ ...ayuda, marginBottom: '18px' }} data-testid="br-como-se-paga">
+              {pagoAlFinal
+                ? <>Con «Usar mi saldo» se descuentan RI$ {fmt(montoNum)}. Pagando en bolívares, tu saldo no se toca.</>
+                : <>Se descuentan RI$ {fmt(montoNum)} de tu saldo.</>}
             </p>
 
             <div style={{
