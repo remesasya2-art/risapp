@@ -53,6 +53,19 @@ class ComprobacionDeRespaldo(BaseModel):
     motivo: Optional[str] = None
     hash: str
     registrado: bool
+    en: Optional[str] = None            # "navegador" cuando la lectura pesada la hizo el navegador
+
+
+class HuellaAComprobar(BaseModel):
+    """Lo que manda el navegador después de leer el archivo entero de su
+    lado: sin subirlo. Ver `respaldo_de_mongo.comprobar_huella`."""
+    hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
+    documentos: int = Field(ge=0)
+    hash_de_cierre_ok: bool
+    lineas_ok: bool
+    colecciones: dict = Field(default_factory=dict)
+    firma: Optional[str] = Field(default=None, max_length=64)
+    motivo_del_navegador: Optional[str] = Field(default=None, max_length=300)
 
 
 @router.get("", response_model=Respaldos)
@@ -71,4 +84,17 @@ async def crear_respaldo(request: Request, quien: User = Depends(get_super_admin
 
 @router.post("/comprobar", response_model=ComprobacionDeRespaldo)
 async def comprobar_respaldo(cuerpo: RespaldoAComprobar, request: Request, quien: User = Depends(get_super_admin)):
+    """Con el archivo entero. Sirve para un guión o un archivo chico; el
+    panel no la usa: un respaldo real pasa el tope de cuerpo (40 MB) y el
+    tiempo de Cloudflare. Ver `/comprobar-huella`."""
     return await respaldo_de_mongo.comprobar_y_anotar(db, cuerpo.contenido, cuerpo.firma, quien=quien, request=request)
+
+
+@router.post("/comprobar-huella", response_model=ComprobacionDeRespaldo)
+async def comprobar_huella(cuerpo: HuellaAComprobar, request: Request, quien: User = Depends(get_super_admin)):
+    """El navegador leyó el archivo y manda la huella y lo que encontró; acá
+    se pone la firma y el registro. Nada de 70 MB viajando."""
+    return await respaldo_de_mongo.comprobar_huella(
+        db, huella=cuerpo.hash, documentos=cuerpo.documentos, hash_de_cierre_ok=cuerpo.hash_de_cierre_ok,
+        lineas_ok=cuerpo.lineas_ok, colecciones=cuerpo.colecciones, firma=cuerpo.firma,
+        motivo_del_navegador=cuerpo.motivo_del_navegador, quien=quien, request=request)

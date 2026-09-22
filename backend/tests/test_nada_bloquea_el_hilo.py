@@ -3,7 +3,8 @@ tests/test_nada_bloquea_el_hilo.py — Que nadie agarre el hilo y no lo suelte.
 
 LA APLICACION CORRE EN UN SOLO HILO, Y ESO NO ES UN DESCUIDO
 
-    `railway.toml` la arranca con `uvicorn server:app`, sin `--workers`, y el
+    `railway.toml` la arranca con `uvicorn server:app`, con un proceso salvo
+    que `WEB_WORKERS` diga otra cosa, y el
     panel de Railway dice una réplica. Un proceso, un hilo. Funciona porque
     mientras espera algo de afuera —la base, una API— suelta el turno y atiende
     a otro.

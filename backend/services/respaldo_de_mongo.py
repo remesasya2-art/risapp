@@ -40,6 +40,28 @@ LA FIRMA Y LA COMPROBACION
     `comprobar` verifica el hash del cierre, la firma, la cantidad de
     documentos y que cada línea se pueda leer. Un respaldo que no se probó
     es una esperanza; la pantalla tiene el botón para probarlo.
+
+LA FIRMA VA SOBRE LA HUELLA, Y VIAJA ADENTRO DEL ARCHIVO
+
+    La primera versión firmaba el contenido entero y mostraba la firma en la
+    pantalla, en un texto que desaparecía al moverse. El dueño del proyecto
+    creó cuatro respaldos y no llegó a guardar ninguna firma. Y comprobarlos
+    exigía SUBIR el archivo entero: con 70 MB, desde una conexión de casa,
+    el pedido moría por tiempo en Cloudflare antes de llegar.
+
+    Ahora la firma es HMAC-SHA256 sobre la HUELLA (el SHA-256 del contenido),
+    que vale lo mismo —un SHA-256 no se falsifica— y se puede verificar con
+    sólo la huella en la mano. Y va escrita en la última línea del archivo,
+    `{"tipo":"firma",...}`, después del cierre: el archivo se basta solo, y
+    no hay nada que copiar. La huella registrada en la base sigue siendo la
+    del contenido SIN esa última línea, que es lo que se firmó.
+
+    Así el navegador puede hacer la lectura pesada —cada línea, el hash del
+    cierre, la cuenta de documentos— y mandarle al servidor sólo la huella y
+    la firma (`comprobar_huella`). Las firmas del esquema anterior, sobre el
+    contenido entero, se siguen aceptando cuando se comprueba con el archivo
+    (`comprobar`), para que los cuatro respaldos de septiembre de 2026 no
+    queden huérfanos.
 """
 import hashlib
 import hmac
@@ -92,11 +114,51 @@ def _hash(texto: str) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
 
-def firmar(contenido: str) -> Optional[str]:
+def _hmac(llave: str, texto: str) -> str:
+    return hmac.new(llave.encode("utf-8"), texto.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def firmar_huella(huella: str) -> Optional[str]:
+    """La firma de un respaldo: HMAC-SHA256 de su huella. Ver el encabezado."""
     llave = _llave()
     if not llave:
         return None
-    return hmac.new(llave.encode("utf-8"), contenido.encode("utf-8"), hashlib.sha256).hexdigest()
+    return _hmac(llave, huella)
+
+
+def firmar(contenido: str) -> Optional[str]:
+    return firmar_huella(_hash(contenido))
+
+
+def _firma_verifica(firma: str, huella: str, contenido: Optional[str] = None) -> Optional[bool]:
+    """None sin llave. Acepta el esquema actual (sobre la huella) y, si hay
+    contenido, el anterior (sobre el contenido entero)."""
+    llave = _llave()
+    if not llave:
+        return None
+    if hmac.compare_digest(_hmac(llave, huella), firma):
+        return True
+    return contenido is not None and hmac.compare_digest(_hmac(llave, contenido), firma)
+
+
+def linea_de_firma(huella: str, firma: Optional[str], documentos: int) -> str:
+    return _linea({"tipo": "firma", "hash": huella, "firma": firma, "documentos": documentos})
+
+
+def partir(archivo: str) -> tuple:
+    """(contenido firmado, firma de la última línea o None). Un archivo sin
+    línea de firma —los del esquema anterior— vuelve entero y sin firma."""
+    recortado = archivo[:-1] if archivo.endswith("\n") else archivo
+    corte = recortado.rfind("\n")
+    ultima = recortado[corte + 1:]
+    if ultima.startswith('{"documentos"') or ultima.startswith('{"firma"') or '"tipo":"firma"' in ultima:
+        try:
+            datos = json_util.loads(ultima)
+        except Exception:
+            return archivo, None
+        if datos.get("tipo") == "firma":
+            return recortado[:corte + 1], datos.get("firma") or None
+    return archivo, None
 
 
 async def exportar(db, *, actor: str, ahora: Optional[datetime] = None) -> tuple:
@@ -131,16 +193,23 @@ async def crear(db, *, quien, request=None, ahora: Optional[datetime] = None) ->
     contenido, firma, resumen = await exportar(db, actor=actor, ahora=ahora)
     registro = {"momento": ahora, "actor": actor, "documentos": resumen["documentos"], "colecciones": resumen["colecciones"],
                 "bytes": resumen["bytes"], "hash": resumen["hash"], "firmado": resumen["firmado"],
+                # Los registros anteriores a septiembre de 2026 no tienen este campo:
+                # su firma es sobre el contenido entero y no se puede juzgar por la huella.
+                "esquema_de_firma": "huella",
                 "comprobado_en": None, "comprobacion": None}
     r = await db[COLECCION_DEL_REGISTRO].insert_one(dict(registro))
     await auditoria.registrar(db, "respaldo.creado", quien=quien, request=request, objetivo_tipo="respaldo",
                               objetivo_id=resumen["hash"][:16], detalle={"documentos": resumen["documentos"], "bytes": resumen["bytes"],
                                                                         "firmado": resumen["firmado"]})
-    return {"id": str(r.inserted_id), **_para_mostrar(registro), "contenido": contenido, "firma": firma}
+    archivo = contenido + linea_de_firma(resumen["hash"], firma, resumen["documentos"])
+    return {"id": str(r.inserted_id), **_para_mostrar(registro), "contenido": archivo, "firma": firma}
 
 
 def comprobar(contenido: str, firma: Optional[str] = None) -> dict:
-    """Lo que un auditor haría con el archivo en la mano."""
+    """Lo que un auditor haría con el archivo en la mano. Si el archivo trae
+    la línea de firma y no se pasa otra, se usa ésa."""
+    contenido, firma_del_archivo = partir(contenido)
+    firma = firma or firma_del_archivo
     salida = {"ok": False, "hash_ok": False, "firma": "sin_firma", "documentos": 0, "colecciones": {}, "motivo": None}
     lineas = contenido.split("\n")
     if lineas and lineas[-1] == "":
@@ -162,12 +231,11 @@ def comprobar(contenido: str, firma: Optional[str] = None) -> dict:
         salida["motivo"] = "el hash del cierre no coincide con el contenido: el archivo fue alterado o está incompleto"
         return salida
     if firma:
-        llave = _llave()
-        if not llave:
+        verifica = _firma_verifica(firma, _hash(contenido), contenido)
+        if verifica is None:
             salida["firma"] = "sin_llave"
         else:
-            esperada = hmac.new(llave.encode("utf-8"), contenido.encode("utf-8"), hashlib.sha256).hexdigest()
-            salida["firma"] = "ok" if hmac.compare_digest(esperada, firma) else "invalida"
+            salida["firma"] = "ok" if verifica else "invalida"
             if salida["firma"] == "invalida":
                 salida["motivo"] = "la firma no es la de la llave de respaldo"
                 return salida
@@ -193,7 +261,7 @@ async def comprobar_y_anotar(db, contenido: str, firma: Optional[str], *, quien,
     from services import auditoria
     ahora = ahora or datetime.now(timezone.utc)
     resultado = comprobar(contenido, firma)
-    h = _hash(contenido)
+    h = _hash(partir(contenido)[0])
     conocido = await db[COLECCION_DEL_REGISTRO].find_one({"hash": h})
     if conocido is not None:
         await db[COLECCION_DEL_REGISTRO].update_one({"_id": conocido["_id"]}, {"$set": {"comprobado_en": ahora, "comprobacion": resultado}})
@@ -201,6 +269,60 @@ async def comprobar_y_anotar(db, contenido: str, firma: Optional[str], *, quien,
                               detalle={"ok": resultado["ok"], "firma": resultado["firma"], "documentos": resultado["documentos"],
                                        "registrado": conocido is not None, "motivo": resultado["motivo"]}, exito=resultado["ok"])
     return {**resultado, "hash": h, "registrado": conocido is not None}
+
+
+async def comprobar_huella(db, *, huella: str, documentos: int, hash_de_cierre_ok: bool, lineas_ok: bool,
+                           colecciones: Optional[dict] = None, firma: Optional[str] = None, motivo_del_navegador: Optional[str] = None,
+                           quien, request=None, ahora: Optional[datetime] = None) -> dict:
+    """La comprobación cuando la lectura pesada la hizo el navegador y acá
+    llegan sólo la huella, la cuenta y lo que encontró. El servidor pone lo
+    que el navegador no puede: la firma (necesita la llave) y si esa huella
+    es la de un respaldo que esta base registró.
+
+    Lo que informa el navegador se guarda diciendo que lo informó él: es una
+    comprobación que el super administrador se hace a sí mismo, no una
+    frontera de seguridad."""
+    from services import auditoria
+    ahora = ahora or datetime.now(timezone.utc)
+    huella = (huella or "").strip().lower()
+    salida = {"ok": False, "hash_ok": bool(hash_de_cierre_ok), "firma": "sin_firma", "documentos": int(documentos),
+              "colecciones": dict(colecciones or {}), "motivo": None, "hash": huella, "registrado": False, "en": "navegador"}
+    conocido = await db[COLECCION_DEL_REGISTRO].find_one({"hash": huella})
+    salida["registrado"] = conocido is not None
+    if firma:
+        verifica = _firma_verifica(firma, huella)
+        if verifica is None:
+            salida["firma"] = "sin_llave"
+        elif verifica:
+            salida["firma"] = "ok"
+        elif conocido is not None and conocido.get("firmado") and conocido.get("esquema_de_firma") != "huella":
+            # Un respaldo del esquema anterior: su firma es sobre el contenido
+            # entero, que acá no está. No se puede juzgar sin el archivo, y se
+            # dice así en vez de llamarla inválida.
+            salida["firma"] = "no_verificable_por_la_huella"
+        else:
+            salida["firma"] = "invalida"
+    if not hash_de_cierre_ok:
+        salida["motivo"] = motivo_del_navegador or "el hash del cierre no coincide con el contenido: el archivo fue alterado o está incompleto"
+    elif not lineas_ok:
+        salida["motivo"] = motivo_del_navegador or "alguna línea no se puede leer"
+    elif conocido is None:
+        # Antes que la firma: una huella que esta base no registró es un
+        # archivo de otra base o alterado, y eso explica también que la firma
+        # no cierre.
+        salida["motivo"] = "esa huella no figura entre los respaldos registrados en esta base"
+    elif salida["firma"] == "invalida":
+        salida["motivo"] = "la firma no es la de la llave de respaldo"
+    elif conocido.get("documentos") != int(documentos):
+        salida["motivo"] = f"el registro dice {conocido.get('documentos')} documentos y el archivo tiene {documentos}"
+    else:
+        salida["ok"] = True
+    if conocido is not None:
+        await db[COLECCION_DEL_REGISTRO].update_one({"_id": conocido["_id"]}, {"$set": {"comprobado_en": ahora, "comprobacion": salida}})
+    await auditoria.registrar(db, "respaldo.comprobado", quien=quien, request=request, objetivo_tipo="respaldo", objetivo_id=huella[:16],
+                              detalle={"ok": salida["ok"], "firma": salida["firma"], "documentos": salida["documentos"],
+                                       "registrado": salida["registrado"], "motivo": salida["motivo"], "en": "navegador"}, exito=salida["ok"])
+    return salida
 
 
 def _para_mostrar(r: dict) -> dict:

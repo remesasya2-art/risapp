@@ -2,7 +2,23 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cd backend && /app/venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port $PORT"
+# CUANTOS PROCESOS, Y POR QUE SALE DE UNA VARIABLE Y NO DE ESTE ARCHIVO
+#
+#   Railway le da prioridad a este archivo sobre lo que se escriba en su
+#   panel, así que cambiar la cantidad de procesos exigía editar código en
+#   GitHub, que es justo lo que las reglas del proyecto no permiten para
+#   configurar. `WEB_WORKERS` se pone en las variables del servicio; sin
+#   ella, un proceso, como siempre fue.
+#
+#   Antes de poner más de uno hace falta `LIMITES_EN_LA_BASE=si`: los
+#   contadores de intentos en memoria se multiplican por proceso (ver
+#   routes/security_2fa.py). Todo lo demás que corre por reloj —BCV, salud,
+#   cola del núcleo— ya se reparte con turnos en la base (services/turnos.py),
+#   así que con dos procesos revisa uno solo. Empezar con 2, no con 4.
+#
+#   Este comando y el de nixpacks.toml tienen que ser el mismo; un test lo
+#   vigila (tests/test_los_procesos_salen_de_una_variable.py).
+startCommand = "cd backend && /app/venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers ${WEB_WORKERS:-1}"
 healthcheckPath = "/api/health"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

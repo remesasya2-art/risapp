@@ -64,4 +64,6 @@ cmds = [
     ]
 
     [start]
-    cmd = "cd backend && /app/venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port $PORT"
+    # El mismo comando que railway.toml, con los procesos desde `WEB_WORKERS`.
+    # El porqué está explicado allá.
+    cmd = "cd backend && /app/venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers ${WEB_WORKERS:-1}"

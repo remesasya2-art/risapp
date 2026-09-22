@@ -983,6 +983,15 @@ arriba del Resumen del panel. El núcleo de cuentas tiene su propio reloj y su
 propia sonda anónima (`/api/health/nucleo`), que contesta 404 mientras el
 núcleo esté apagado.
 
+**Más de un proceso.** La cantidad de procesos del servidor sale de la
+variable `WEB_WORKERS` en Railway; sin ella, uno. Está en una variable y no en
+`railway.toml` porque Railway le da prioridad a ese archivo sobre su panel, y
+cambiar un número de procesos no puede exigir un commit. Antes de poner más
+de uno hace falta `LIMITES_EN_LA_BASE=si`, que lleva a Mongo los contadores
+de intentos; con eso, todo lo que corre por reloj ya se reparte con turnos en
+la base y con dos procesos revisa uno solo. La salud de la aplicación lo dice
+en su renglón `contadores`.
+
 **Lo que no se calla.** Dos cosas que antes eran una línea de registro y nada
 más dejan ahora fila en la pestaña Errores y avisan a los super
 administradores por la campana (`services/gritos.py`): el asiento del libro
@@ -1005,12 +1014,19 @@ colecciones que hay que conservar —cuentas, verificaciones, envíos, cobros,
 libros, configuración, auditoría— en un archivo de una línea JSON por
 documento, en el JSON extendido de Mongo, así que fechas, `Decimal128`,
 binarios del cofre y `ObjectId` conservan su tipo. La primera línea es la
-cabecera; cada línea del medio dice `{"coleccion": …, "doc": …}`; la última es
-el cierre, con la cantidad de documentos y el SHA-256 del cuerpo. Con la
-variable `LLAVE_DE_RESPALDO` (o la del núcleo) va firmado con HMAC-SHA256.
-No se exportan las sesiones, los códigos de un solo uso ni lo que se
-regenera solo (tasas del BCV, notificaciones, contadores, el registro de
-errores de 30 días).
+cabecera; cada línea del medio dice `{"coleccion": …, "doc": …}`; después
+viene el cierre, con la cantidad de documentos y el SHA-256 del cuerpo; y la
+última línea es la firma: `{"tipo": "firma", "hash": …, "firma": …}`. Con la
+variable `LLAVE_DE_RESPALDO` (o la del núcleo) la firma es HMAC-SHA256 sobre
+la huella (el SHA-256 de todo lo anterior a esa línea), que es la huella que
+la base registra. **El archivo se basta solo**: no hay nada que copiar ni
+guardar aparte. La primera versión mostraba la firma en un texto de la
+pantalla que desaparecía al moverse; el operador creó cuatro respaldos el
+22/09/2026 sin llegar a guardar ninguna firma, y de ahí este cambio. Esos
+cuatro llevan la firma del esquema anterior (sobre el contenido entero), que
+se sigue aceptando al comprobar con el archivo en la mano. No se exportan las
+sesiones, los códigos de un solo uso ni lo que se regenera solo (tasas del
+BCV, notificaciones, contadores, el registro de errores de 30 días).
 
 **El archivo no se guarda en la base.** Se baja y se guarda afuera, en un
 lugar tan protegido como la base misma: lleva los datos personales de todos
@@ -1018,9 +1034,16 @@ los clientes y los documentos del cofre (cifrados, pero ahí). La base sólo
 registra cuándo, quién, cuánto y la última comprobación; la auditoría asienta
 cada creación y cada comprobación.
 
-**La comprobación.** El botón «Comprobar» de la misma pestaña verifica el
-hash del cierre, la firma, la cantidad de documentos y que cada línea se
-pueda leer. Un respaldo que no se comprobó es una esperanza.
+**La comprobación, sin subir el archivo.** El botón «Comprobar» de la misma
+pestaña lee el archivo **en el navegador**: el hash del cierre, la cantidad
+de documentos, que cada línea se lea, y la firma de la última línea. Al
+servidor le manda sólo la huella y lo que encontró, y él pone lo que el
+navegador no puede: verificar la firma (necesita la llave) y decir si esa
+huella es la de un respaldo que esta base registró. Queda anotado como
+comprobado «en el navegador», en el registro y en la auditoría. La primera
+versión subía el archivo entero: con 70 MB desde una conexión de casa moría
+por tiempo en Cloudflare antes de llegar, y el tope de cuerpo de 40 MB lo
+rechazaba igual. Un respaldo que no se comprobó es una esperanza.
 
 **Objetivos de recuperación.** Son los dos números que un socio pregunta, y
 se escriben con lo que hay, no con lo que se desearía:
@@ -1053,7 +1076,9 @@ algo de la lista de colecciones, y anotar acá la fecha y cuánto tardó.
        done
 
    Los `_id`, las fechas y los `Decimal128` entran con su tipo porque el
-   archivo ya está en el formato que `mongoimport` espera.
+   archivo ya está en el formato que `mongoimport` espera. La cabecera, el
+   cierre y la línea de firma no tienen `coleccion`, así que el filtro los
+   deja afuera solos.
 4. **Un backend apuntando ahí**, con `MONGO_URL` del Mongo de prueba y **la
    misma `COFRE_LLAVE` de producción**: sin ella los documentos de identidad
    restaurados no se abren, y ésa es la primera cosa que hay que comprobar.
@@ -1233,7 +1258,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Cada consulta de usuario está atada a su dueño | `backend/routes/`, `backend/services/` | revisión de septiembre de 2026 (ver 10) |
 | El ping de vida dice si la base responde, y el reloj de salud mira seis cosas y avisa sólo cuando cambia | `backend/services/salud_de_la_app.py` | `test_salud_de_la_app.py` |
 | El asiento del libro que falla y el pago a la dirección equivocada dejan fila en Errores y avisan | `backend/services/gritos.py` | `test_el_libro_no_se_calla.py` |
-| El respaldo se exporta firmado y se comprueba línea a línea | `backend/services/respaldo_de_mongo.py` | `test_respaldo_de_mongo.py` |
+| El respaldo se exporta con la firma adentro y se comprueba en el navegador, sin subirlo | `backend/services/respaldo_de_mongo.py`, `frontend/src/components/admin/Respaldo.jsx` | `test_respaldo_de_mongo.py` |
+| La cantidad de procesos se configura con una variable, sin editar código | `railway.toml`, `nixpacks.toml` | `test_los_procesos_salen_de_una_variable.py` |
 | Ningún contador de intentos vive en la memoria de una ruta | `backend/routes/` | `test_lightning_cuenta_en_la_base.py` |
 | CI escanea las dependencias en cada pull request | `.github/workflows/lint.yml` | `test_el_ci_escanea_dependencias.py` |
 
