@@ -73,6 +73,13 @@ async def _detect_transaction_support() -> bool:
     return _SUPPORTS_TRANSACTIONS
 
 
+async def hay_transacciones() -> bool:
+    """Para la salud de la aplicación: si el Mongo de producción es un conjunto
+    de réplicas (y entonces un cobro mueve el saldo y escribe el libro en UNA
+    operación) o un nodo suelto, donde eso son dos escrituras separadas."""
+    return await _detect_transaction_support()
+
+
 @asynccontextmanager
 async def _atomic_session():
     """Yield a Motor session inside a transaction, or None if standalone."""

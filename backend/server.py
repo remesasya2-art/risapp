@@ -654,11 +654,25 @@ from fastapi.responses import JSONResponse                        # noqa: E402
 _SIN_RUTA = {"detail": "Not Found"}
 
 
-def _no_existe(request, full_path: str):
-    """El 404, y el grito si lo que rebotó era el aviso de un cobro."""
-    sin_ruta.avisar_si_es_un_pago_perdido(
+async def _no_existe(request, full_path: str):
+    """El 404, y el grito si lo que rebotó era el aviso de un cobro.
+
+    El grito ya no es sólo una línea de registro: deja fila en la pestaña
+    Errores y avisa a los super administradores (services/gritos.py). Un
+    cobro que no se acredita no puede depender de que alguien esté mirando
+    el log en ese momento.
+    """
+    motivo = sin_ruta.avisar_si_es_un_pago_perdido(
         request.method, request.url.path,
         request.query_params, request.headers.keys())
+    if motivo:
+        from services import gritos
+        # La base de `database`, no la conexión propia de este archivo: es la
+        # que usan Errores y la campana, y la que los tests pueden sustituir.
+        from database import db as base_compartida
+        await gritos.pago_a_direccion_equivocada(
+            base_compartida, metodo=request.method, camino=request.url.path, motivo=motivo,
+            pago=request.query_params.get("data.id") or request.query_params.get("id"))
     return JSONResponse(_SIN_RUTA, status_code=404)
 
 
@@ -672,7 +686,7 @@ def _no_existe(request, full_path: str):
 @app.api_route("/{full_path:path}", methods=["POST", "PUT", "PATCH", "DELETE"],
                include_in_schema=False)
 async def _sin_ruta_con_datos(request: Request, full_path: str):
-    return _no_existe(request, full_path)
+    return await _no_existe(request, full_path)
 
 
 if FRONTEND_BUILD_DIR.exists():
@@ -702,13 +716,13 @@ async def serve_frontend(request: Request, full_path: str):
     # que le pegaba a una dirección inexistente lo veía como si hubiera
     # funcionado.
     if sin_ruta.es_de_la_api(full_path):
-        return _no_existe(request, full_path)
+        return await _no_existe(request, full_path)
 
     # Sin build no hay ninguna aplicación que servir, así que lo honesto es
     # decir que eso no está — nunca un 405, que hablaría del método cuando el
     # problema es que no hay nada ahí.
     if not FRONTEND_BUILD_DIR.exists():
-        return _no_existe(request, full_path)
+        return await _no_existe(request, full_path)
 
     # Con build: los archivos reales (sw.js, íconos, manifest…) si existen; si
     # no, el index.html, porque `/envios/ABC123` lo resuelve el navegador y no

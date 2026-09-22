@@ -96,6 +96,32 @@ jobs:
         # solos en vez de salir a la red. Ver tests/conftest.py.
         run: python -m pytest tests/ -q --no-header
 
+      # EL ESCANEO DE DEPENDENCIAS VA EN ESTE MISMO TRABAJO, Y AVISA SIN FRENAR
+      #
+      #   Va acá y no en un trabajo aparte porque cada trabajo de CI habla con
+      #   GitHub, y la cuenta del proyecto ya llegó al tope de peticiones por
+      #   hora dos veces con el código listo. Un paso más en un trabajo que ya
+      #   existe no suma peticiones; un trabajo nuevo, sí.
+      #
+      #   Y no bloquea, a propósito y por ahora: hay advertencias conocidas y
+      #   anotadas en la sección 11 del dossier de seguridad (`cryptography`,
+      #   que no se puede saltar tres versiones mayores sin un entorno de
+      #   ensayo; `litellm`, que no se importa en el código propio). Ponerlo
+      #   en bloqueante hoy sería congelar las fusiones por lo que ya se sabe.
+      #   El día que la lista quede limpia, se saca el `continue-on-error` y
+      #   una dependencia nueva con agujero frena el pull request.
+      #
+      #   `--no-deps` porque el archivo ya fija cada versión, incluidas las
+      #   transitivas; resolver de nuevo sería auditar otra cosa que la que se
+      #   despliega. `tests/test_el_ci_escanea_dependencias.py` vigila que el
+      #   paso siga estando.
+      - name: "[INFO] Escaneo de dependencias del backend (no bloquea)"
+        working-directory: backend
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --no-deps --desc off --progress-spinner off
+        continue-on-error: true
+
   # Hasta ahora CI no miraba el frontend en absoluto: ni que compilara. El bug
   # que motivó esto —un `useEffect` adentro de un manejador de eventos, en el
   # panel de administración— pasó por acá sin que nada se quejara.
@@ -147,4 +173,14 @@ jobs:
       - name: "[INFO] Lint completo (no bloquea)"
         working-directory: frontend
         run: npm run lint
+        continue-on-error: true
+
+      # El escaneo del frontend, con el mismo criterio que el del backend: en
+      # el trabajo que ya existe, y avisando sin frenar. `--omit=dev` porque
+      # lo que se sirve al visitante es el build; las herramientas de
+      # desarrollo no viajan. Sólo alto y crítico: por debajo de eso el ruido
+      # de `npm audit` tapa lo que importa.
+      - name: "[INFO] Escaneo de dependencias del frontend (no bloquea)"
+        working-directory: frontend
+        run: npm audit --audit-level=high --omit=dev
         continue-on-error: true

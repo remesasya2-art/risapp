@@ -970,12 +970,116 @@ diferencia no es accidental.
 aunque Mongo esté caído —Railway reinicia el proceso cuando el ping falla, y
 reiniciar la aplicación no levanta a Mongo— pero lo dice en `base: false`,
 con lo último que vio el reloj de salud (`services/salud_de_la_app.py`): cada
-cinco minutos revisa que la base responda y que exista el candado de un CPF
-por cuenta, y avisa por la campana del equipo, sólo a los super
-administradores, únicamente cuando el estado cambia. El detalle está en
-`/api/admin/salud` y arriba del Resumen del panel. El núcleo de cuentas tiene
-su propio reloj y su propia sonda anónima (`/api/health/nucleo`), que contesta
-404 mientras el núcleo esté apagado.
+cinco minutos revisa seis cosas y avisa por la campana del equipo, sólo a los
+super administradores, únicamente cuando el estado cambia. Las seis: que la
+base responda; que exista el candado de un CPF por cuenta; que el Mongo sea
+un conjunto de réplicas (con un nodo suelto el motor contable corre sin
+transacciones, y un cobro son dos escrituras separadas); que el último
+raspado del BCV esté dentro de su vigencia; que el cofre esté cifrando y la
+llave puesta sea la que cifró los documentos (una llave equivocada es grave:
+el KYC no puede abrir nada); y que los límites de intentos se cuenten en la
+base y no en la memoria del proceso. El detalle está en `/api/admin/salud` y
+arriba del Resumen del panel. El núcleo de cuentas tiene su propio reloj y su
+propia sonda anónima (`/api/health/nucleo`), que contesta 404 mientras el
+núcleo esté apagado.
+
+**Lo que no se calla.** Dos cosas que antes eran una línea de registro y nada
+más dejan ahora fila en la pestaña Errores y avisan a los super
+administradores por la campana (`services/gritos.py`): el asiento del libro
+que no se pudo escribir cuando el saldo sí se movió —con cuenta, movimiento y
+monto, para reponer la línea a mano— y el aviso de un cobro que llegó a una
+dirección que no existe, como los meses en que Mercado Pago avisó a la raíz
+del sitio. La fila va siempre; la campana, como mucho una vez cada diez
+minutos por tipo, para que un fallo que se repite no la convierta en un
+aviso que alguien silencia.
+
+### 9.1 Respaldo y restauración
+
+**Dónde está la única copia.** Mongo corre en Railway, que no respalda la
+base por su cuenta. Hasta septiembre de 2026 la única copia de cada cuenta,
+cada envío y cada línea del libro era la que estaba en ese servidor.
+
+**El respaldo.** Un super administrador lo crea desde Administración →
+Respaldo de la base (`services/respaldo_de_mongo.py`). Exporta las 49
+colecciones que hay que conservar —cuentas, verificaciones, envíos, cobros,
+libros, configuración, auditoría— en un archivo de una línea JSON por
+documento, en el JSON extendido de Mongo, así que fechas, `Decimal128`,
+binarios del cofre y `ObjectId` conservan su tipo. La primera línea es la
+cabecera; cada línea del medio dice `{"coleccion": …, "doc": …}`; la última es
+el cierre, con la cantidad de documentos y el SHA-256 del cuerpo. Con la
+variable `LLAVE_DE_RESPALDO` (o la del núcleo) va firmado con HMAC-SHA256.
+No se exportan las sesiones, los códigos de un solo uso ni lo que se
+regenera solo (tasas del BCV, notificaciones, contadores, el registro de
+errores de 30 días).
+
+**El archivo no se guarda en la base.** Se baja y se guarda afuera, en un
+lugar tan protegido como la base misma: lleva los datos personales de todos
+los clientes y los documentos del cofre (cifrados, pero ahí). La base sólo
+registra cuándo, quién, cuánto y la última comprobación; la auditoría asienta
+cada creación y cada comprobación.
+
+**La comprobación.** El botón «Comprobar» de la misma pestaña verifica el
+hash del cierre, la firma, la cantidad de documentos y que cada línea se
+pueda leer. Un respaldo que no se comprobó es una esperanza.
+
+**Objetivos de recuperación.** Son los dos números que un socio pregunta, y
+se escriben con lo que hay, no con lo que se desearía:
+
+| | Hoy | Cómo se mejora |
+|---|---|---|
+| **RPO** (cuánto se puede perder: el tiempo desde el último respaldo) | **Lo que tarde el operador entre un respaldo y el siguiente.** El respaldo es manual. Con uno por día, hasta 24 horas de operación. | Un respaldo automático diario, guardado afuera por la aplicación misma, que hoy no existe porque exige decidir dónde (un almacén de objetos) y con qué credencial. Está en la lista de más abajo. |
+| **RTO** (cuánto se tarda en volver: desde la caída hasta que la aplicación atiende de nuevo) | **Estimado entre una y dos horas, sin confirmar.** Es lo que tarda el procedimiento de abajo hecho por alguien que lo leyó antes. | La restauración de prueba lo confirma o lo corrige. Hasta que se haga, este número es una estimación, y así queda escrito. |
+
+**Procedimiento de restauración, y de la restauración de prueba.** Es el
+mismo: la prueba se hace contra un Mongo aparte, nunca contra el de
+producción. Conviene hacerla una vez ahora y después cada vez que cambie
+algo de la lista de colecciones, y anotar acá la fecha y cuánto tardó.
+
+1. **Un Mongo vacío.** En Railway, un servicio nuevo de MongoDB en un
+   proyecto de prueba; o, en una máquina propia, `mongod` local. Anotar la
+   hora de inicio.
+2. **El respaldo y su firma.** Bajar el archivo del lugar donde se guarda y
+   comprobarlo primero desde la pestaña (o con `comprobar` desde una consola
+   de Python). Un archivo que no comprueba no se restaura: se busca el
+   anterior.
+3. **Partir el archivo por colección e importarlo.** Cada línea del medio
+   trae el nombre de la colección; `mongoimport` lee el JSON extendido tal
+   cual:
+
+       for c in $(grep -o '"coleccion":"[^"]*"' respaldo.jsonl | sort -u | cut -d'"' -f4); do
+         grep "\"coleccion\":\"$c\"" respaldo.jsonl \
+           | python3 -c 'import sys,json; [print(json.dumps(json.loads(l)["doc"])) for l in sys.stdin]' \
+           | mongoimport --uri "$MONGO_DE_PRUEBA" --collection "$c"
+       done
+
+   Los `_id`, las fechas y los `Decimal128` entran con su tipo porque el
+   archivo ya está en el formato que `mongoimport` espera.
+4. **Un backend apuntando ahí**, con `MONGO_URL` del Mongo de prueba y **la
+   misma `COFRE_LLAVE` de producción**: sin ella los documentos de identidad
+   restaurados no se abren, y ésa es la primera cosa que hay que comprobar.
+   Al arrancar, el registro tiene que decir `Cofre en modo «cifrando» …
+   verificado contra el testigo`, y la salud de la aplicación tiene que
+   ponerse en verde en `cofre`. Los índices se crean solos al arrancar.
+5. **Mirar tres cosas con los ojos:** una cuenta cualquiera con su saldo y su
+   historial; el libro mayor desde el panel (`Contabilidad → Libro`), que
+   tiene que cuadrar contra el pozo; y un documento de identidad abierto
+   desde Verificaciones.
+6. **Anotar la hora de fin.** La diferencia con la de inicio es el RTO
+   medido, y reemplaza el estimado de la tabla de arriba.
+7. **Apagar y borrar el Mongo de prueba.** Contiene los datos de todos los
+   clientes; no se deja vivo «por si acaso».
+
+**Lo que la restauración NO devuelve, y qué hacer con cada cosa:** las
+sesiones (todos vuelven a entrar; es lo esperable después de una caída), los
+códigos de un solo uso (se piden de nuevo), la tasa del BCV (el raspador la
+trae en la próxima vuelta; hasta entonces gana el dólar del panel), las
+notificaciones pendientes y el registro de errores de los últimos 30 días.
+
+**Lo que falta para que esto sea de verdad continuidad:** un respaldo
+automático diario guardado afuera (RPO fijo de 24 horas sin depender de que
+alguien se acuerde), la restauración de prueba hecha y anotada, y un Mongo
+con conjunto de réplicas, que además de las transacciones da una segunda
+copia viva. Los tres están en la sección 11.
 
 ---
 
@@ -1066,6 +1170,10 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **Cada medio atado a su dueño** | No implementado | El proxy de medios deja que cualquiera con sesión pida el comprobante de cualquier otro **si conoce los tres identificadores**, que son 34 caracteres cada uno y no se adivinan. El secreto es hoy el identificador mismo. Atarlo al dueño requiere guardar esa relación, que no existe. Decisión consciente, anotada en `backend/routes/media.py`. |
 | **Cifrado de documentos en reposo** | **Prendido en producción** | El cofre está en modo «cifrando»: al arrancar, la aplicación abre la llave, la coteja contra el testigo y lo deja escrito en el registro (`Cofre en modo «cifrando» … verificado contra el testigo`). La fila anterior decía «apagado por omisión»; quedó vieja. Lo que sigue siendo del operador: guardar la llave en tres lugares y comprobar cada copia con `verificar` cada tanto. El procedimiento está en `docs/la-llave-del-cofre.md`. |
 | **Prueba de intrusión externa** | No realizada | Contratación. Las revisiones hechas hasta hoy son internas. |
+| **Restauración de prueba del respaldo** | Procedimiento escrito (9.1), no ejecutado todavía | Media jornada del operador con un Mongo aparte. Confirma el RTO estimado de una a dos horas y prueba que la llave del cofre abre los documentos restaurados. Hasta que se haga, el respaldo es una esperanza comprobada línea a línea, no una restauración probada. |
+| **Respaldo automático diario, guardado afuera** | No implementado; el respaldo es manual desde el panel | Decidir dónde se guarda (un almacén de objetos fuera de Railway) y con qué credencial. Hasta entonces el RPO es lo que tarde el operador entre un respaldo y el siguiente. |
+| **Mongo con conjunto de réplicas** | Sin confirmar; la salud de la aplicación lo dice en `transacciones` | Es un ajuste del proveedor de Mongo, no de código. Con un nodo suelto el motor contable corre sin transacciones y un cobro que mueve el saldo y escribe el libro son dos escrituras separadas. |
+| **Escaneo de dependencias en modo aviso** | Corre en CI en cada pull request, no frena | Que la lista de advertencias conocidas quede limpia (las de `cryptography`, `litellm`, `ecdsa`, `black`, `anyio` y `soupsieve`); entonces se saca el `continue-on-error` del flujo y una dependencia nueva con agujero frena la fusión. `litellm` no se importa en el código propio: la salida más corta es sacarlo de `requirements.txt`. |
 | **Encargado de datos / LGPD** | No designado formalmente | Decisión del operador. |
 | **Sesión corta para el rol `agent`** | Hoy dura 7 días | Decisión del operador. El agente entra al panel y se le exige segundo factor, pero su sesión dura como la de un cliente. Acortarla es un cambio de una línea; el costo es que el agente vuelva a autenticarse durante la jornada. Está fijado en `test_duracion_de_la_sesion.py` para que sea una decisión y no un olvido. |
 | **Ofrecerle el segundo factor al cliente** | No implementado, y la trampa cerrada | El segundo factor es del personal: las tres puertas que emiten sesión lo exigen sólo si el rol llega al panel o si Recursos Humanos marcó la cuenta como personal, con una sola definición (`services/personal.exige_dos_pasos`). Para el cliente, el factor extra es la huella, que sí tiene pantalla y sí se respeta. **Había una trampa y se sacó:** `/auth/2fa/setup-init` y `/auth/2fa/setup-confirm` encendían el segundo factor con sólo tener sesión, o sea para cualquier cliente, y el ingreso no lo miraba; no las llamaba ningún código del repositorio, así que se retiraron. `test_segundo_factor_sin_trampas.py` se pone rojo si vuelve a aparecer un alta fuera del login. Ofrecérselo de verdad pide tres cosas, en este orden: que las tres puertas respeten la marca, que la regla siga viviendo en un solo lugar, y la fila de abajo. |
@@ -1123,6 +1231,11 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Ningún registro escribe un dato personal en claro | `backend/services/registro.py` | `test_registros_sin_datos.py` |
 | `script-src` sin `unsafe-inline` ni `unsafe-eval` | `backend/services/csp.py` | `test_politica_de_contenido.py` |
 | Cada consulta de usuario está atada a su dueño | `backend/routes/`, `backend/services/` | revisión de septiembre de 2026 (ver 10) |
+| El ping de vida dice si la base responde, y el reloj de salud mira seis cosas y avisa sólo cuando cambia | `backend/services/salud_de_la_app.py` | `test_salud_de_la_app.py` |
+| El asiento del libro que falla y el pago a la dirección equivocada dejan fila en Errores y avisan | `backend/services/gritos.py` | `test_el_libro_no_se_calla.py` |
+| El respaldo se exporta firmado y se comprueba línea a línea | `backend/services/respaldo_de_mongo.py` | `test_respaldo_de_mongo.py` |
+| Ningún contador de intentos vive en la memoria de una ruta | `backend/routes/` | `test_lightning_cuenta_en_la_base.py` |
+| CI escanea las dependencias en cada pull request | `.github/workflows/lint.yml` | `test_el_ci_escanea_dependencias.py` |
 
 ---
 

@@ -178,9 +178,11 @@ _CONTADOR = None
 
 
 def _en_la_base() -> bool:
-    """¿La cuenta va a Mongo? Se decide por variable de entorno, no por código."""
-    return (os.getenv("LIMITES_EN_LA_BASE", "no") or "").strip().lower() in (
-        "si", "sí", "1", "true", "on")
+    """¿La cuenta va a Mongo? Se decide por variable de entorno, no por código.
+    La regla vive en `services/limites_en_la_base.py`, que también la lee la
+    salud de la aplicación."""
+    from services import limites_en_la_base
+    return limites_en_la_base.activo()
 
 
 def _armar_el_contador():

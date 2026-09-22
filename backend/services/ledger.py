@@ -150,9 +150,13 @@ async def record_ris_entry(
         await db[LEDGER_COLLECTION].insert_one(entry)
         return entry["entry_id"]
     except Exception as e:
-        logger.error(
-            f"No se pudo registrar en el ledger RIS (user={user_id}, type={movement_type}): {e}"
-        )
+        # No se relanza: el saldo YA se movió y tumbar el flujo no lo repone.
+        # Pero tampoco se calla: fila en Errores y campana a los super
+        # administradores, con lo necesario para reponer la línea a mano.
+        # Ver services/gritos.py.
+        from services import gritos
+        await gritos.libro_sin_linea(db, libro="RIS", user_id=user_id, movement_type=movement_type,
+                                     amount=amount, account=account, error=e)
         return None
 
 
