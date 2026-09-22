@@ -130,6 +130,7 @@ ACCIONES = {
     # bajó y cuándo tiene que quedar escrito.
     "respaldo.creado":          (Cat.PELIGRO, "Respaldo de la base creado y bajado"),
     "respaldo.comprobado":      (Cat.PELIGRO, "Respaldo de la base comprobado"),
+    "respaldo.descargado":      (Cat.PELIGRO, "Respaldo de la base bajado del almacén"),
     "usuario.reactivado":       (Cat.USUARIOS, "Usuario reactivado"),
     "usuario.lista_negra":      (Cat.USUARIOS, "Usuario a lista negra"),
     # Configuración

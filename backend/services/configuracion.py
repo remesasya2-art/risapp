@@ -461,6 +461,25 @@ AJUSTES = {
               "recién cuando los saldos cripto estén en cero. Los avisos de "
               "pago siguen entrando en los tres estados, para no perder un "
               "depósito que ya se pagó."),
+
+    # ── El respaldo automático de la base ─────────────────────────────────
+    #
+    # Ver services/respaldo_automatico.py. Arranca PRENDIDO, al revés que el
+    # cofre o la política de contenido: un respaldo que no se hace no rompe
+    # nada hoy y lo rompe todo el día que haga falta, así que la omisión
+    # segura es hacerlo. Igual necesita el almacén de objetos configurado
+    # (ENVIOS_R2_*); sin él no hay a dónde guardar y la salud lo dice.
+    #
+    # No hay un ajuste de «cuántos se conservan»: el token de R2 no puede
+    # borrar (a propósito, ver envios_almacen.py), así que la retención es
+    # una regla de ciclo de vida del bucket, configurada en Cloudflare.
+    "respaldo_automatico_encendido": Ajuste(
+        tipo=ENTERO, defecto=1, minimo=0, maximo=1,
+        unidad="0 = apagado, 1 = prendido",
+        etiqueta="Respaldo automático de la base",
+        ayuda="Prendido, un reloj crea un respaldo por día, lo firma, lo guarda "
+              "en el almacén de objetos y lo comprueba entero. Apagalo sólo si "
+              "sabés por qué: la salud de la aplicación se pone en rojo."),
 }
 
 

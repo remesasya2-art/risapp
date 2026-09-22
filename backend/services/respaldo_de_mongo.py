@@ -191,18 +191,32 @@ async def crear(db, *, quien, request=None, ahora: Optional[datetime] = None) ->
     ahora = ahora or datetime.now(timezone.utc)
     actor = getattr(quien, "user_id", None) or (quien or {}).get("user_id") or "sistema"
     contenido, firma, resumen = await exportar(db, actor=actor, ahora=ahora)
-    registro = {"momento": ahora, "actor": actor, "documentos": resumen["documentos"], "colecciones": resumen["colecciones"],
-                "bytes": resumen["bytes"], "hash": resumen["hash"], "firmado": resumen["firmado"],
+    registro = await registrar(db, resumen, ahora=ahora, actor=actor, origen="manual", quien=quien, request=request)
+    archivo = contenido + linea_de_firma(resumen["hash"], firma, resumen["documentos"])
+    return {"id": registro["id"], **_para_mostrar(registro), "contenido": archivo, "firma": firma}
+
+
+async def registrar(db, resumen: dict, *, ahora: datetime, actor: str, origen: str, quien=None, request=None,
+                    almacen: Optional[dict] = None, comprobacion: Optional[dict] = None, error: Optional[str] = None) -> dict:
+    """La fila del registro y su línea de auditoría. `origen` es «manual» (el
+    botón) o «automatico» (el reloj); `almacen` dice dónde quedó guardado
+    afuera, cuando el reloj lo subió."""
+    from services import auditoria
+    registro = {"momento": ahora, "actor": actor, "origen": origen, "documentos": resumen["documentos"],
+                "colecciones": resumen["colecciones"], "bytes": resumen["bytes"], "hash": resumen["hash"],
+                "firmado": resumen["firmado"],
                 # Los registros anteriores a septiembre de 2026 no tienen este campo:
                 # su firma es sobre el contenido entero y no se puede juzgar por la huella.
                 "esquema_de_firma": "huella",
-                "comprobado_en": None, "comprobacion": None}
+                "almacen": almacen, "error": error,
+                "comprobado_en": ahora if comprobacion else None, "comprobacion": comprobacion}
     r = await db[COLECCION_DEL_REGISTRO].insert_one(dict(registro))
     await auditoria.registrar(db, "respaldo.creado", quien=quien, request=request, objetivo_tipo="respaldo",
-                              objetivo_id=resumen["hash"][:16], detalle={"documentos": resumen["documentos"], "bytes": resumen["bytes"],
-                                                                        "firmado": resumen["firmado"]})
-    archivo = contenido + linea_de_firma(resumen["hash"], firma, resumen["documentos"])
-    return {"id": str(r.inserted_id), **_para_mostrar(registro), "contenido": archivo, "firma": firma}
+                              objetivo_id=resumen["hash"][:16],
+                              detalle={"documentos": resumen["documentos"], "bytes": resumen["bytes"], "firmado": resumen["firmado"],
+                                       "origen": origen, "guardado_afuera": bool(almacen), "error": error},
+                              exito=error is None)
+    return {"id": str(r.inserted_id), **registro}
 
 
 def comprobar(contenido: str, firma: Optional[str] = None) -> dict:
@@ -325,11 +339,21 @@ async def comprobar_huella(db, *, huella: str, documentos: int, hash_de_cierre_o
     return salida
 
 
+def _iso(v):
+    return v.isoformat() if hasattr(v, "isoformat") else v
+
+
 def _para_mostrar(r: dict) -> dict:
-    return {"momento": r["momento"].isoformat() if hasattr(r["momento"], "isoformat") else r["momento"], "actor": r["actor"],
+    # Lista de lo permitido. Del almacén se muestra dónde quedó, nunca una
+    # credencial: el bucket y la clave no abren nada sin la llave de R2.
+    almacen = r.get("almacen") or None
+    return {"momento": _iso(r["momento"]), "actor": r["actor"], "origen": r.get("origen") or "manual",
             "documentos": r["documentos"], "colecciones": r["colecciones"], "bytes": r["bytes"], "hash": r["hash"],
             "firmado": bool(r.get("firmado")),
-            "comprobado_en": r["comprobado_en"].isoformat() if hasattr(r.get("comprobado_en"), "isoformat") else r.get("comprobado_en"),
+            "almacen": ({"bucket": almacen.get("bucket"), "clave": almacen.get("clave"),
+                         "borrado_en": _iso(almacen.get("borrado_en"))} if almacen else None),
+            "error": r.get("error"),
+            "comprobado_en": _iso(r.get("comprobado_en")),
             "comprobacion": r.get("comprobacion")}
 
 

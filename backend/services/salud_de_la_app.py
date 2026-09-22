@@ -31,6 +31,9 @@ QUE MIRA
     contadores    que los límites de intentos se cuentan en la base y no en
                   la memoria del proceso, donde se reinician con cada
                   despliegue y no sirven con más de un proceso.
+    respaldo      que el último respaldo automático guardado afuera y
+                  comprobado tiene menos de un día (ver
+                  `services/respaldo_automatico.py`); o por qué no lo hay.
 
     Sólo `base` y una llave equivocada del cofre son graves. Lo demás es
     «no sana», que en el Resumen se ve en rojo y avisa al equipo, pero no
@@ -90,7 +93,7 @@ async def revisar(db) -> dict:
         comprobaciones.append({"nombre": "base", "ok": False, "detalle": f"Mongo no responde: {type(e).__name__}: {e}", "grave": True})
         return {"ok": False, "revisado_en": ahora.isoformat(), "comprobaciones": comprobaciones}
     for nombre, mirar in (("cpf_unico", _cpf_unico), ("transacciones", _transacciones), ("bcv", _bcv),
-                          ("cofre", _cofre), ("contadores", _contadores)):
+                          ("cofre", _cofre), ("contadores", _contadores), ("respaldo", _respaldo)):
         try:
             ok, detalle, grave = await mirar(db)
         except Exception as e:
@@ -134,6 +137,11 @@ async def _cofre(db):
         return False, "el cofre está APAGADO: los documentos de identidad se guardan en claro (COFRE_MODO=cifrando)", False
     grave = estado["motivo"] in ("llave_equivocada", "sin_llave")
     return bool(estado["ok"]), estado["detalle"], grave
+
+
+async def _respaldo(db):
+    from services import respaldo_automatico
+    return await respaldo_automatico.para_la_salud(db)
 
 
 async def _contadores(db):

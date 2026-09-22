@@ -289,6 +289,10 @@ async def lifespan(app):
         # services/salud_de_la_app.py.
         from services import salud_de_la_app as _salud_de_la_app
         _salud_de_la_app.arrancar(db)
+        # El respaldo automático: una vez por día, guardado afuera y
+        # comprobado. Ver services/respaldo_automatico.py.
+        from services import respaldo_automatico as _respaldo_automatico
+        _respaldo_automatico.arrancar(db)
     except Exception as e:
         logger.warning(f"BCV scheduler failed to start: {e}")
     # El contador de uso vuelca a la base cada 30 segundos, en una tarea de
@@ -337,6 +341,8 @@ async def lifespan(app):
         stop_scheduler()
         from services import salud_de_la_app as _salud_de_la_app
         await _salud_de_la_app.parar()
+        from services import respaldo_automatico as _respaldo_automatico
+        await _respaldo_automatico.parar()
     except Exception:
         pass
     client.close()

@@ -58,6 +58,7 @@ CADA_CUANTO_SE_REPITE = 600      # segundos entre dos campanas del mismo tipo
 # filtrar por ellos y para que un test pueda comprobar que cada uno se grita.
 LIBRO_SIN_LINEA = "libro_sin_linea"
 PAGO_A_DIRECCION_EQUIVOCADA = "pago_a_direccion_equivocada"
+RESPALDO_FALLIDO = "respaldo_fallido"
 
 _ultima_campana: dict[str, float] = {}
 
@@ -131,3 +132,11 @@ async def pago_a_direccion_equivocada(db, *, metodo: str, camino: str, motivo: s
     return await gritar(db, tipo=PAGO_A_DIRECCION_EQUIVOCADA,
                         titulo="AVISO DE PAGO A LA DIRECCION EQUIVOCADA",
                         mensaje=mensaje, ruta=camino, metodo=metodo, status=404)
+
+
+async def respaldo_fallido(db, *, paso: str, error) -> dict:
+    """El respaldo automático no se pudo hacer o guardar afuera. Un respaldo
+    que falla en silencio es exactamente un respaldo que no existe."""
+    return await gritar(db, tipo=RESPALDO_FALLIDO, titulo="EL RESPALDO AUTOMATICO FALLO",
+                        mensaje=f"no se pudo {paso}: {type(error).__name__ if not isinstance(error, str) else ''}{error}",
+                        ruta="respaldo/automatico")

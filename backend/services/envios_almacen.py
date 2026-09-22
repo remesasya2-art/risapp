@@ -350,6 +350,47 @@ async def traer(clave: str, *, tope: int, bucket: str = None,
     return datos, None
 
 
+async def existe(clave: str, *, bucket: str = None, presupuesto: float = SEGUNDOS_CONEXION) -> bool | None:
+    """True si el objeto está, False si el almacén dice que no, None si no se
+    pudo saber. Es una cabecera (`head_object`), o sea permiso de lectura:
+    este módulo sigue sin poder borrar nada. Lo usan los respaldos
+    automáticos para enterarse de que la regla de retención de R2 ya se llevó
+    uno, y marcarlo, en vez de ofrecer un enlace a algo que no está."""
+    if not configurado() or not clave:
+        return None
+    try:
+        cliente = _cliente()
+        await _en_hilo(functools.partial(cliente.head_object, Bucket=bucket or _texto(VAR_BUCKET), Key=clave),
+                       presupuesto=presupuesto)
+        return True
+    except Exception as e:
+        if _clasificar(e) == "ausente":
+            return False
+        logger.warning(f"almacen: no se pudo preguntar por {clave}: {e}")
+        return None
+
+
+async def url_firmada(clave: str, *, segundos: int = 600, bucket: str = None) -> str | None:
+    """Un enlace de descarga directa al objeto, firmado y con vencimiento.
+
+    Para bajar un respaldo de 70 MB: si pasara por la aplicación, el pedido
+    moriría por tiempo en Cloudflare a los cien segundos. El navegador va
+    directo al almacén con este enlace, que sólo sirve `segundos` y sólo para
+    esa clave. Firmar es un cálculo local (no habla con el bucket), pero va en
+    el hilo igual por si boto3 decide resolver el endpoint."""
+    if not configurado() or not clave:
+        return None
+    try:
+        cliente = _cliente()
+        return await _en_hilo(
+            functools.partial(cliente.generate_presigned_url, "get_object",
+                              Params={"Bucket": bucket or _texto(VAR_BUCKET), "Key": clave}, ExpiresIn=int(segundos)),
+            presupuesto=SEGUNDOS_CONEXION)
+    except Exception as e:
+        logger.error(f"almacen: no se pudo firmar el enlace de {clave}: {e}")
+        return None
+
+
 async def probar() -> dict:
     """Escribe y vuelve a leer un objeto minusculo. Para el boton del panel.
 
