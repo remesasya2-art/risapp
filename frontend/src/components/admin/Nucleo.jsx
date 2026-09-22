@@ -21,6 +21,9 @@
  *   Y los reportes regulatorios: el balancete COSIF del mes, el CCS del día
  *   y la e-Financeira del semestre, generados sobre días cerrados, con su
  *   versión y su protocolo de transmisión (contra un simulador del STA).
+ *   Y el respaldo: la exportación firmada de lo que la ley obliga a
+ *   conservar (se baja y se guarda afuera; la base sólo registra que se
+ *   hizo) y la comprobación que prueba que un respaldo se puede leer.
  *   Y la salud (qué se mira de verdad, y que avisa al equipo cuando cambia),
  *   los secretos (si cada credencial está y su huella, nunca el valor) y
  *   las métricas que un tablero externo puede leer en texto plano.
@@ -43,7 +46,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock, Eye, ScrollText, HeartPulse, KeyRound, Gauge } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock, Eye, ScrollText, HeartPulse, KeyRound, Gauge, Archive, FileCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -141,6 +144,10 @@ export default function Nucleo() {
   const [salud, setSalud] = useState(null);
   const [secretos, setSecretos] = useState(null);
   const [metricas, setMetricas] = useState(null);
+  const [respaldos, setRespaldos] = useState(null);
+  const [ultimoRespaldo, setUltimoRespaldo] = useState(null);       // { hash, firma, filas } del recién creado
+  const [aComprobar, setAComprobar] = useState({ contenido: '', nombre: '', firma: '' });
+  const [comprobacion, setComprobacion] = useState(null);
   const [vuelta, setVuelta] = useState(0);
   const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -156,7 +163,7 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl, idn, rg, rp, cu, opn, sl, sc, mt] = await Promise.all([
+        const [c, l, b, z, q, rl, idn, rg, rp, cu, opn, sl, sc, mt, rs] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
@@ -164,12 +171,13 @@ export default function Nucleo() {
           api.get('/nucleo/laboratorio/reportes'), api.get('/nucleo/laboratorio/cumplimiento'),
           api.get('/nucleo/laboratorio/operacion'), api.get('/nucleo/laboratorio/salud'),
           api.get('/nucleo/laboratorio/secretos'), api.get('/nucleo/laboratorio/metricas'),
+          api.get('/nucleo/laboratorio/respaldos'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
         setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null); setRiesgo(rg.data || null);
         setReportes(rp.data || null); setCumplimiento(cu.data || null); setOperacion(opn.data || null);
-        setSalud(sl.data || null); setSecretos(sc.data || null); setMetricas(mt.data || null);
+        setSalud(sl.data || null); setSecretos(sc.data || null); setMetricas(mt.data || null); setRespaldos(rs.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -485,6 +493,41 @@ export default function Nucleo() {
       const r = await api.post('/nucleo/laboratorio/reportes/generar', { tipo: obligacion, periodo });
       toast.success(`${r.data.documento} ${r.data.periodo} · versión ${r.data.version}`); recargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo generar'); }
+    finally { setOcupado(false); }
+  };
+
+  const crearRespaldo = async () => {
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/respaldos');
+      // El contenido se baja al navegador: el sentido de un respaldo es estar afuera.
+      const url = URL.createObjectURL(new Blob([r.data.contenido], { type: 'application/x-ndjson' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = `nucleo-respaldo-${r.data.momento.slice(0, 19).replaceAll(':', '')}.jsonl`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      setUltimoRespaldo({ hash: r.data.hash, firma: r.data.firma, filas: r.data.filas, firmado: r.data.firmado });
+      toast.success(`Respaldo de ${r.data.filas} filas${r.data.firmado ? ', firmado' : ', SIN FIRMA (falta la llave)'}`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo crear el respaldo'); }
+    finally { setOcupado(false); }
+  };
+
+  const elegirArchivo = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const lector = new FileReader();
+    lector.onload = () => setAComprobar((x) => ({ ...x, contenido: String(lector.result || ''), nombre: f.name }));
+    lector.readAsText(f);
+  };
+
+  const comprobarRespaldo = async () => {
+    if (!aComprobar.contenido) return toast.error('Elegí el archivo del respaldo');
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/respaldos/comprobar', { contenido: aComprobar.contenido, firma: aComprobar.firma.trim() || undefined });
+      setComprobacion(r.data);
+      (r.data.ok ? toast.success : toast.error)(r.data.ok ? `Respaldo íntegro · ${r.data.filas} filas · firma ${r.data.firma}` : `NO pasa: ${r.data.motivo}`);
+      recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo comprobar'); }
     finally { setOcupado(false); }
   };
 
@@ -1191,6 +1234,57 @@ export default function Nucleo() {
                       {(cumplimiento?.resultados || []).map((x) => <option key={x} value={x}>{x}</option>)}
                     </select>
                     <button type="button" onClick={responderReclamo} disabled={ocupado} style={boton} data-testid="ouvidoria-responder">Responder</button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Respaldo */}
+          <div style={tarjeta} data-testid="nucleo-respaldo">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Archive size={16} /> Respaldo de lo que se conserva</strong>
+              {respaldos ? <span style={{ fontSize: 12, color: respaldos.llave_configurada ? '#6b7280' : '#b45309' }}>{respaldos.llave_configurada ? 'llave de respaldo configurada: los respaldos salen firmados' : 'SIN llave de respaldo (NUCLEO_SECRETO_LLAVE_DE_RESPALDO): los respaldos salen sin firma'} · {respaldos.tablas_que_se_conservan.length} tablas</span> : null}
+            </div>
+            <p style={{ margin: '8px 0 10px', fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+              Exporta el libro, los legajos, las operaciones, los casos y comunicaciones, los reportes, los incidentes, los reclamos, la bitácora y las aprobaciones (no la cola ni el simulador) en un archivo de una línea por fila, con hash de cierre y firma. <strong>El archivo se baja y se guarda afuera</strong>; la base sólo registra que se hizo. Y un respaldo que no se probó es una esperanza: la comprobación recompone la cadena del libro y de la bitácora desde el archivo.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <button type="button" onClick={crearRespaldo} disabled={ocupado} style={boton} data-testid="respaldo-crear"><Archive size={13} /> Crear y bajar un respaldo</button>
+                {ultimoRespaldo ? (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#374151' }} data-testid="respaldo-ultimo">
+                    <div>{ultimoRespaldo.filas} filas · hash <span style={mono}>{ultimoRespaldo.hash.slice(0, 16)}…</span></div>
+                    <div>{ultimoRespaldo.firmado ? <>Firma (guardala junto al archivo): <span style={{ ...mono, wordBreak: 'break-all' }} data-testid="respaldo-firma">{ultimoRespaldo.firma}</span></> : 'Sin firma: falta la llave de respaldo.'}</div>
+                  </div>
+                ) : null}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }} data-testid="respaldo-tabla">
+                  <thead><tr><th style={th}>Cuándo</th><th style={th}>Quién</th><th style={th}>Filas</th><th style={th}>Firmado</th><th style={th}>Comprobación</th></tr></thead>
+                  <tbody>
+                    {!respaldos || respaldos.respaldos.length === 0 ? <tr><td style={td} colSpan={5}>Ningún respaldo todavía.</td></tr> : respaldos.respaldos.map((r) => (
+                      <tr key={r.id} data-testid="respaldo-fila">
+                        <td style={{ ...td, fontSize: 12 }}>{fechaYHora(r.momento)}<div style={{ ...mono, fontSize: 10, color: '#9ca3af' }}>{r.hash.slice(0, 16)}…</div></td>
+                        <td style={{ ...td, fontSize: 12 }}>{r.actor}</td>
+                        <td style={{ ...td, fontSize: 12 }}>{r.filas} · {(r.bytes / 1024).toFixed(1)} KB</td>
+                        <td style={td}>{r.firmado ? <Etiqueta valor="hecho" /> : <Etiqueta valor="pendiente" />}</td>
+                        <td style={{ ...td, fontSize: 12 }}>{r.comprobacion ? <span style={{ color: r.comprobacion.ok ? '#166534' : '#b91c1c' }} data-testid={`respaldo-comprobado-${r.comprobacion.ok ? 'ok' : 'falla'}`}>{r.comprobacion.ok ? 'íntegro' : 'NO PASA'} · {fechaYHora(r.comprobado_en)}</span> : <span style={{ color: '#9ca3af' }}>sin comprobar</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}><FileCheck size={14} /> Comprobar un respaldo</strong>
+                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <input type="file" accept=".jsonl,.txt,application/x-ndjson" onChange={elegirArchivo} style={{ fontSize: 13 }} data-testid="respaldo-archivo" />
+                  {aComprobar.nombre ? <div style={{ fontSize: 12, color: '#6b7280' }}>{aComprobar.nombre} · {(aComprobar.contenido.length / 1024).toFixed(1)} KB</div> : null}
+                  <input style={campo} placeholder="Firma (la que se guardó junto al archivo; opcional)" value={aComprobar.firma} onChange={(e) => setAComprobar({ ...aComprobar, firma: e.target.value })} data-testid="respaldo-firma-a-comprobar" />
+                  <button type="button" onClick={comprobarRespaldo} disabled={ocupado || !aComprobar.contenido} style={botonSuave} data-testid="respaldo-comprobar">Comprobar</button>
+                </div>
+                {comprobacion ? (
+                  <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: comprobacion.ok ? '#f0fdf4' : '#fef2f2', fontSize: 13 }} data-testid={`respaldo-resultado-${comprobacion.ok ? 'ok' : 'falla'}`}>
+                    <div><strong>{comprobacion.ok ? 'Íntegro' : 'NO PASA'}</strong>{comprobacion.motivo ? ` · ${comprobacion.motivo}` : ''}</div>
+                    <div style={{ color: '#374151', marginTop: 4 }}>hash del cierre {comprobacion.hash_ok ? 'coincide' : 'NO coincide'} · firma {comprobacion.firma.replaceAll('_', ' ')} · {comprobacion.filas} filas{comprobacion.libro ? ` · libro ${comprobacion.libro.ok ? 'encadena' : 'ROTO'} (${comprobacion.libro.asientos} asientos)` : ''}{comprobacion.bitacora ? ` · bitácora ${comprobacion.bitacora.ok ? 'encadena' : 'ROTA'} (${comprobacion.bitacora.renglones} renglones)` : ''}{comprobacion.registrado ? ' · es uno de los registrados' : ' · no figura entre los registrados'}</div>
                   </div>
                 ) : null}
               </div>

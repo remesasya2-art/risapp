@@ -22,7 +22,7 @@ from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from nucleo.identidad import formas as id_formas, legajos, simulador as id_simulador
 from nucleo.cumplimiento import calendario, incidentes as cumpl_incidentes, ouvidoria as cumpl_ouvidoria
-from nucleo.operacion import aprobaciones, bitacora, registros as op_registros, salud as op_salud, secretos as op_secretos
+from nucleo.operacion import aprobaciones, bitacora, registros as op_registros, respaldo as op_respaldo, salud as op_salud, secretos as op_secretos
 from nucleo.reportes import ReporteInvalido, registro as reportes_reg
 from nucleo.reportes.periodos import PeriodoInvalido
 from nucleo.riesgo import casos as riesgo_casos, monitoreo
@@ -505,6 +505,40 @@ class Secretos(BaseModel):
     faltantes: list[str]
 
 
+class Respaldo(BaseModel):
+    id: int
+    momento: str
+    actor: str
+    filas: int
+    tablas: dict
+    bytes: int
+    hash: str
+    firmado: bool
+    comprobado_en: Optional[str] = None
+    comprobacion: Optional[dict] = None
+    contenido: Optional[str] = None     # sólo al crearlo: se devuelve para guardarlo afuera
+    firma: Optional[str] = None
+
+
+class Respaldos(BaseModel):
+    llave_configurada: bool
+    tablas_que_se_conservan: list[str]
+    respaldos: list[Respaldo]
+
+
+class ComprobacionDeRespaldo(BaseModel):
+    ok: bool
+    hash_ok: bool
+    firma: str
+    filas: int
+    tablas: dict
+    libro: Optional[dict] = None
+    bitacora: Optional[dict] = None
+    motivo: Optional[str] = None
+    hash: str
+    registrado: bool
+
+
 class PersonaDePrueba(BaseModel):
     documento: str
     nombre: str
@@ -727,6 +761,11 @@ class Motivo(BaseModel):
 class Decision(ComoQuien):
     aprobar: bool
     nota: Optional[str] = Field(default=None, max_length=300)
+
+
+class RespaldoAComprobar(BaseModel):
+    contenido: str = Field(min_length=2, max_length=50_000_000)
+    firma: Optional[str] = Field(default=None, max_length=64)
 
 
 class NuevoTrabajo(BaseModel):
@@ -1467,3 +1506,28 @@ async def metricas_en_texto(admin: User = Depends(get_super_admin),
                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     """Las mismas, en la forma `nombre valor` que lee un recolector."""
     return op_registros.en_texto(await op_registros.resumen())
+
+
+# ── operación: respaldo ───────────────────────────────────────────────────
+
+@router.get("/laboratorio/respaldos", response_model=Respaldos)
+async def respaldos_(admin: User = Depends(get_super_admin),
+                     modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    return {"llave_configurada": op_secretos.secretos().leer("llave_de_respaldo") is not None,
+            "tablas_que_se_conservan": [t.name for t in op_respaldo.TABLAS_QUE_SE_CONSERVAN],
+            "respaldos": await op_respaldo.listar()}
+
+
+@router.post("/laboratorio/respaldos", response_model=Respaldo)
+async def crear_respaldo(admin: User = Depends(get_super_admin),
+                         modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Exporta y devuelve el contenido y la firma para guardarlos afuera.
+    La base sólo guarda el registro (cuándo, quién, cuánto, hash)."""
+    return await op_respaldo.crear(actor=admin.user_id)
+
+
+@router.post("/laboratorio/respaldos/comprobar", response_model=ComprobacionDeRespaldo)
+async def comprobar_respaldo(pedido: RespaldoAComprobar, admin: User = Depends(get_super_admin),
+                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Lo que un auditor haría con el archivo en la mano."""
+    return await op_respaldo.comprobar_y_anotar(pedido.contenido, pedido.firma, actor=admin.user_id)

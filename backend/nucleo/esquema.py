@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Veintiséis tablas, y cada columna con su porqué.
+El esquema del núcleo. Veintisiete tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -60,6 +60,10 @@ El esquema del núcleo. Veintiséis tablas, y cada columna con su porqué.
                       encadenada por hash como el libro. Sólo se agrega.
     aprobaciones      los pedidos de cuatro ojos: qué se quiere hacer, quién lo
                       pidió, quién decidió, y qué pasó al ejecutarlo.
+    respaldos         cada exportación de lo que se conserva: cuándo, quién,
+                      cuántas filas, su hash y su firma, y el resultado de la
+                      última comprobación. El contenido no se guarda acá: se
+                      guarda afuera, que para eso es un respaldo.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -490,6 +494,21 @@ aprobaciones = Table(
     Column("resultado", Text, nullable=True),
     CheckConstraint("estado in ('pendiente','aprobado','rechazado','ejecutado','fallido','vencido')", name="estado_de_la_aprobacion_valido"),
     Index("ix_aprobaciones_estado", "estado"),
+)
+
+respaldos = Table(
+    "respaldos", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("momento", DateTime(timezone=True), nullable=False),
+    Column("actor", String(80), nullable=False),
+    Column("filas", Integer, nullable=False),
+    Column("tablas", Text, nullable=False),                    # JSON: filas por tabla
+    Column("bytes", Integer, nullable=False),
+    Column("hash", String(64), nullable=False),                # SHA-256 del contenido: identifica al archivo
+    Column("firmado", Boolean, nullable=False, default=False), # con la llave de respaldo, si estaba configurada
+    Column("comprobado_en", DateTime(timezone=True), nullable=True),
+    Column("comprobacion", Text, nullable=True),               # JSON con el resultado de la última comprobación
+    UniqueConstraint("hash", name="uq_respaldos_hash"),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple

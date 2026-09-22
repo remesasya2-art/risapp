@@ -490,3 +490,21 @@ def test_la_salud_los_secretos_y_las_metricas_por_http(cliente, monkeypatch):
     r = cliente.get("/api/nucleo/laboratorio/metricas/texto")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
     assert "nucleo_cuentas_activas 1\n" in r.text
+
+
+# ─── el respaldo por HTTP ─────────────────────────────────────────────────
+
+def test_el_respaldo_por_http_se_crea_se_baja_y_se_comprueba(cliente, monkeypatch):
+    monkeypatch.setenv("NUCLEO_SECRETO_LLAVE_DE_RESPALDO", "llave-de-prueba")
+    a = cuenta_por_http(cliente, "u_ana")
+    cliente.post("/api/nucleo/laboratorio/movimientos", json={"tipo": "acreditar", "cuenta": a, "monto": "100.00", "referencia": "in-1"})
+    r = cliente.get("/api/nucleo/laboratorio/respaldos")
+    assert r.status_code == 200 and r.json()["llave_configurada"] is True and "asientos" in r.json()["tablas_que_se_conservan"]
+    r = cliente.post("/api/nucleo/laboratorio/respaldos")
+    assert r.status_code == 200 and r.json()["firmado"] is True and r.json()["contenido"].startswith('{"actor"')
+    contenido, firma = r.json()["contenido"], r.json()["firma"]
+    assert cliente.get("/api/nucleo/laboratorio/respaldos").json()["respaldos"][0]["contenido"] is None
+    r = cliente.post("/api/nucleo/laboratorio/respaldos/comprobar", json={"contenido": contenido, "firma": firma})
+    assert r.status_code == 200 and r.json()["ok"] is True and r.json()["firma"] == "ok" and r.json()["registrado"] is True
+    r = cliente.post("/api/nucleo/laboratorio/respaldos/comprobar", json={"contenido": contenido + "x", "firma": firma})
+    assert r.status_code == 200 and r.json()["ok"] is False
