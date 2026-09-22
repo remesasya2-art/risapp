@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Veinte tablas, y cada columna con su porqué.
+El esquema del núcleo. Veintiuna tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -44,6 +44,10 @@ El esquema del núcleo. Veinte tablas, y cada columna con su porqué.
     caso_notas        lo que se fue anotando en el caso. Sólo se agrega.
     comunicaciones    cada comunicación al COAF (y cada no ocurrencia), con
                       el archivo que se mandó y el acuse que volvió.
+    reportes          cada reporte regulatorio generado (balancete COSIF, CCS,
+                      e-Financeira), con el archivo tal cual, su versión y el
+                      protocolo de la transmisión. Sólo se agrega: una
+                      corrección es una versión nueva, nunca una edición.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -81,6 +85,10 @@ cuentas = Table(
     Column("estado", String(12), nullable=False, default="activa"),  # activa, bloqueada, cerrada
     Column("de_prueba", Boolean, nullable=False, default=True),      # todo lo del laboratorio es de prueba
     Column("creada", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    # Cuándo se cerró. Hoy no hay función que cierre cuentas; la columna
+    # existe porque el CCS informa el FIN de cada relación con su fecha, y
+    # el día que alguien escriba el cierre tiene que anotarla acá.
+    Column("cerrada_en", DateTime(timezone=True), nullable=True),
     CheckConstraint("estado in ('activa','bloqueada','cerrada')", name="estado_valido"),
     Index("ix_cuentas_titular", "titular_ref"),
 )
@@ -359,6 +367,25 @@ comunicaciones = Table(
     Column("enviada_por", String(80), nullable=False),
     Column("aprobada_por", String(80), nullable=False),
     Column("comunicador", String(40), nullable=False),
+)
+
+reportes = Table(
+    "reportes", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tipo", String(20), nullable=False),               # balancete, ccs, efinanceira
+    Column("periodo", String(10), nullable=False),            # «2026-09», «2026-09-21», «2026-S2», «2026»
+    Column("version", Integer, nullable=False, default=1),    # 1 es la primera; 2 en adelante, rectificaciones
+    Column("documento", String(30), nullable=False),          # cómo lo llama el regulador: «CADOC 4010»
+    Column("archivo", Text, nullable=False),                  # lo que se manda, tal cual
+    Column("resumen", Text, nullable=False),                  # JSON con los números que la pestaña muestra
+    Column("generado_en", DateTime(timezone=True), nullable=False),
+    Column("generado_por", String(80), nullable=False),
+    Column("transmitido_en", DateTime(timezone=True), nullable=True),
+    Column("transmitido_por", String(80), nullable=True),
+    Column("protocolo", String(60), nullable=True),           # lo que el sistema del BCB devolvió
+    Column("transmisor", String(40), nullable=True),          # por qué puerto salió
+    UniqueConstraint("tipo", "periodo", "version", name="uq_reportes_tipo_periodo_version"),
+    Index("ix_reportes_tipo_periodo", "tipo", "periodo"),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple

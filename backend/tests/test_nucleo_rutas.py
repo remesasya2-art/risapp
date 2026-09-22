@@ -64,12 +64,17 @@ def test_el_recorrido_del_laboratorio(cliente):
     assert cliente.get("/api/nucleo/laboratorio/balance").json()["cuadra"] is True
     assert cliente.get("/api/nucleo/laboratorio/cadena").json()["ok"] is True
 
-    r = cliente.post("/api/nucleo/laboratorio/cierres", json={"dia": "2026-09-21", "nota": "prueba"})
+    # El día de hoy según el núcleo (el que llevan los asientos), no uno
+    # escrito a mano: el test se puso en rojo solo el día que el reloj pasó
+    # la fecha que tenía escrita.
+    from nucleo import comandos
+    hoy = comandos._hoy().isoformat()
+    r = cliente.post("/api/nucleo/laboratorio/cierres", json={"dia": hoy, "nota": "prueba"})
     assert r.status_code == 200 and r.json()["hasta_asiento"] == 2
-    assert cliente.get("/api/nucleo/laboratorio/cierres").json()[0]["dia"] == "2026-09-21"
+    assert cliente.get("/api/nucleo/laboratorio/cierres").json()[0]["dia"] == hoy
 
     e = cliente.get("/api/nucleo/estado").json()
-    assert e["cuentas"] == 2 and e["asientos"] == 2 and e["ultimo_cierre"] == "2026-09-21"
+    assert e["cuentas"] == 2 and e["asientos"] == 2 and e["ultimo_cierre"] == hoy
     assert e["cadena"]["ok"] is True
 
 
@@ -312,3 +317,56 @@ def test_EN_ACTIVO_NADIE_ACTUA_COMO_OTRO(cliente):
     finally:
         cliente.app.dependency_overrides.pop(_modo.exigir_encendido, None)
     assert t
+
+
+# ─── los reportes por HTTP ────────────────────────────────────────────────
+
+def test_los_reportes_por_http_del_cierre_al_protocolo(cliente):
+    a = cuenta_por_http(cliente, "u_ana")
+    r = cliente.post("/api/nucleo/laboratorio/movimientos",
+                     json={"tipo": "acreditar", "cuenta": a, "monto": "3000.00", "referencia": "in-1"})
+    assert r.status_code == 200
+    from datetime import datetime
+    from nucleo.reportes import periodos
+    from nucleo.riesgo.monitoreo import HORA_DE_BRASIL
+    from nucleo import comandos
+    hoy = datetime.now(HORA_DE_BRASIL).date()        # el CCS mide el día en hora de Brasil
+    mes = periodos.mes_de(comandos._hoy())           # el balancete, el mes de la fecha que llevan los asientos
+
+    r = cliente.get("/api/nucleo/laboratorio/reportes")
+    assert r.status_code == 200
+    assert r.json()["transmisor"] == "simulador-sta" and r.json()["tipos"] == ["balancete", "ccs", "efinanceira"]
+    assert {c["codigo"] for c in r.json()["cosif"]} == {"1.1.01", "1.1.02", "1.1.03", "1.2.01", "2.1.01", "2.1.02",
+                                                          "2.2.01", "3.1.01", "3.2.01", "4.1.01", "4.2.01", "5.1.01", "5.1.02", "5.9.99"}
+    assert r.json()["reportes"] == []
+
+    # Sin el mes cerrado, 400 con el motivo. Y un período mal escrito, también 400.
+    r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "balancete", "periodo": mes})
+    assert r.status_code == 400 and "cerrado" in r.json()["detail"]
+    r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "balancete", "periodo": "2026-13"})
+    assert r.status_code == 400 and "no es un período" in r.json()["detail"]
+    r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "otro", "periodo": mes})
+    assert r.status_code == 422
+
+    # Cierra el mes; la cola genera el balancete y el CCS del día.
+    fin = periodos.limites(periodos.MES, mes)[1]
+    assert cliente.post("/api/nucleo/laboratorio/cierres", json={"dia": fin.isoformat()}).status_code == 200
+    assert cliente.post("/api/nucleo/laboratorio/cola/paso").status_code == 200
+    generados = {(x["tipo"], x["periodo"]): x for x in cliente.get("/api/nucleo/laboratorio/reportes").json()["reportes"]}
+    assert ("balancete", mes) in generados and ("ccs", hoy.isoformat()) in generados
+    balancete = generados[("balancete", mes)]
+    assert balancete["estado"] == "generado" and balancete["resumen"]["cuadra"] is True and balancete["archivo"] is None
+
+    # El archivo entero, por su id. Y la transmisión, con protocolo, una vez.
+    r = cliente.get(f"/api/nucleo/laboratorio/reportes/{balancete['id']}")
+    assert r.status_code == 200 and '"documento": "CADOC 4010"' in r.json()["archivo"]
+    r = cliente.post(f"/api/nucleo/laboratorio/reportes/{balancete['id']}/transmitir")
+    assert r.status_code == 200 and r.json()["estado"] == "transmitido" and r.json()["protocolo"].startswith("STA-SIM-")
+    r = cliente.post(f"/api/nucleo/laboratorio/reportes/{balancete['id']}/transmitir")
+    assert r.status_code == 400 and "ya se transmitió" in r.json()["detail"]
+    assert cliente.get("/api/nucleo/laboratorio/reportes/999").status_code == 404
+
+    # Rectificar: una versión nueva, sustitución.
+    r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "balancete", "periodo": mes})
+    assert r.status_code == 200 and r.json()["version"] == 2 and r.json()["resumen"]["tipo_remessa"] == "S"
+    assert cliente.get("/api/nucleo/laboratorio/reportes").json()["resumen"]["balancete"] == {"generados": 2, "transmitidos": 1}

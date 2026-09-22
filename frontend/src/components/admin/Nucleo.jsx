@@ -18,6 +18,9 @@
  *   Y la identidad: el legajo de cada titular (verificar, cruzar con las
  *   listas, aprobar con un nivel de riesgo), contra un simulador con
  *   personas de prueba. Sin legajo aprobado no se abre una cuenta.
+ *   Y los reportes regulatorios: el balancete COSIF del mes, el CCS del día
+ *   y la e-Financeira del semestre, generados sobre días cerrados, con su
+ *   versión y su protocolo de transmisión (contra un simulador del STA).
  *   Y el riesgo: las alertas del monitoreo (umbrales configurables desde
  *   Configuración), el expediente de caso con sus plazos, los cuatro ojos
  *   para comunicar, y la comunicación al COAF contra un simulador.
@@ -30,7 +33,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -63,6 +66,9 @@ const COLOR_DEL_ESTADO = {
   aprobado: { background: '#dcfce7', color: '#166534' },
   rechazado: { background: '#fee2e2', color: '#991b1b' },
   vencido: { background: '#fee2e2', color: '#991b1b' },
+  // los de un reporte regulatorio
+  generado: { background: '#fef3c7', color: '#92400e' },
+  transmitido: { background: '#dcfce7', color: '#166534' },
   // los de un caso
   abierto: { background: '#fef3c7', color: '#92400e' },
   en_analisis: { background: '#dbeafe', color: '#1e40af' },
@@ -100,6 +106,9 @@ export default function Nucleo() {
   const [como, setComo] = useState('');                   // laboratorio: a nombre de quién se actúa
   const [nota, setNota] = useState('');
   const [conclusion, setConclusion] = useState('');
+  const [reportes, setReportes] = useState(null);
+  const [pedidoDeReporte, setPedidoDeReporte] = useState({ tipo: 'balancete', periodo: new Date().toISOString().slice(0, 7) });
+  const [reporteAbierto, setReporteAbierto] = useState(null);   // { id, archivo } del que se está leyendo
   const [vuelta, setVuelta] = useState(0);
   const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -115,15 +124,17 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl, idn, rg] = await Promise.all([
+        const [c, l, b, z, q, rl, idn, rg, rp] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
           api.get('/nucleo/laboratorio/identidad'), api.get('/nucleo/laboratorio/riesgo'),
+          api.get('/nucleo/laboratorio/reportes'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
         setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null); setRiesgo(rg.data || null);
+        setReportes(rp.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -326,6 +337,34 @@ export default function Nucleo() {
       const r = await api.post('/nucleo/laboratorio/riesgo/no_ocurrencia', { anio: new Date().getFullYear() - 1, como: como.trim() || undefined });
       toast.success(`No ocurrencia ${r.data.periodo} · acuse ${r.data.acuse}`); recargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo declarar'); }
+    finally { setOcupado(false); }
+  };
+
+  const generarReporte = async () => {
+    if (!pedidoDeReporte.periodo.trim()) return toast.error('Escribí el período');
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/reportes/generar', { tipo: pedidoDeReporte.tipo, periodo: pedidoDeReporte.periodo.trim() });
+      toast.success(`${r.data.documento} ${r.data.periodo} · versión ${r.data.version}`);
+      setReporteAbierto({ id: r.data.id, archivo: r.data.archivo }); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo generar'); }
+    finally { setOcupado(false); }
+  };
+
+  const verReporte = async (id) => {
+    if (reporteAbierto?.id === id) return setReporteAbierto(null);
+    try {
+      const r = await api.get(`/nucleo/laboratorio/reportes/${id}`);
+      setReporteAbierto({ id, archivo: r.data.archivo });
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo leer'); }
+  };
+
+  const transmitirReporte = async (id) => {
+    setOcupado(true);
+    try {
+      const r = await api.post(`/nucleo/laboratorio/reportes/${id}/transmitir`);
+      toast.success(`Transmitido · protocolo ${r.data.protocolo}`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo transmitir'); }
     finally { setOcupado(false); }
   };
 
@@ -819,6 +858,77 @@ export default function Nucleo() {
                   {(riesgo?.comunicaciones || []).map((m) => (
                     <tr key={m.id} data-testid="riesgo-comunicacion"><td style={{ ...td, ...mono }}>{m.id}</td><td style={td}>{m.tipo.replaceAll('_', ' ')}</td>
                       <td style={{ ...td, ...mono }}>{m.caso || m.periodo}</td><td style={{ ...td, ...mono }}>{m.acuse}</td><td style={td}>{m.enviada_por} · {m.aprobada_por}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </div>
+
+          {/* Reportes regulatorios: balancete COSIF, CCS, e-Financeira */}
+          <div style={tarjeta} data-testid="nucleo-reportes">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><FileOutput size={16} /> Reportes regulatorios: balancete COSIF, CCS y e-Financeira {reportes ? `· ${reportes.transmisor}` : ''}</strong>
+              {reportes ? (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                  {Object.entries(reportes.resumen).map(([t, r]) => `${t}: ${r.generados} generados, ${r.transmitidos} transmitidos`).join(' · ')}
+                </span>
+              ) : null}
+            </div>
+            <p style={{ margin: '8px 0 10px', fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+              Se generan sólo sobre días cerrados en el libro; al cerrar un día, la cola genera sola lo que quedó completo (el CCS del día, el balancete del mes, la e-Financeira del semestre).
+              Generar de nuevo un período deja una versión nueva (sustitución), nunca pisa la anterior. Transmitir es siempre de una persona. Los códigos COSIF son provisorios hasta que el contador los confirme.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
+              <div style={{ width: 160 }}>
+                <div style={rotulo}>Reporte</div>
+                <select style={campo} value={pedidoDeReporte.tipo} onChange={(e) => setPedidoDeReporte({ tipo: e.target.value, periodo: { balancete: new Date().toISOString().slice(0, 7), ccs: new Date().toISOString().slice(0, 10), efinanceira: `${new Date().getFullYear()}-S${new Date().getMonth() < 6 ? 1 : 2}` }[e.target.value] })} data-testid="reportes-tipo">
+                  <option value="balancete">Balancete COSIF (4010)</option>
+                  <option value="ccs">CCS del día</option>
+                  <option value="efinanceira">e-Financeira</option>
+                </select>
+              </div>
+              <div style={{ width: 140 }}>
+                <div style={rotulo}>Período</div>
+                <input style={campo} value={pedidoDeReporte.periodo} onChange={(e) => setPedidoDeReporte({ ...pedidoDeReporte, periodo: e.target.value })} placeholder="2026-09 · 2026-09-21 · 2026-S2" data-testid="reportes-periodo" />
+              </div>
+              <button type="button" onClick={generarReporte} disabled={ocupado} style={boton} data-testid="reportes-generar"><FileText size={13} /> Generar</button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }} data-testid="reportes-tabla">
+                <thead><tr><th style={th}>Nº</th><th style={th}>Documento</th><th style={th}>Período</th><th style={th}>Versión</th><th style={th}>Resumen</th><th style={th}>Estado</th><th style={th}>Protocolo</th><th style={th} /></tr></thead>
+                <tbody>
+                  {!reportes || reportes.reportes.length === 0 ? <tr><td style={td} colSpan={8}>Ningún reporte generado.</td></tr> : reportes.reportes.map((r) => (
+                    <tr key={r.id} data-testid={`reportes-${r.estado}`} style={{ background: reporteAbierto?.id === r.id ? '#f5f3ff' : undefined }}>
+                      <td style={{ ...td, ...mono }}>{r.id}</td>
+                      <td style={td}>{r.documento}<div style={{ fontSize: 11, color: '#6b7280' }}>por {r.generado_por} · {hora(r.generado_en)}</div></td>
+                      <td style={{ ...td, ...mono }}>{r.periodo}</td>
+                      <td style={td}>{r.version}{r.resumen.tipo_remessa ? ` (${r.resumen.tipo_remessa})` : ''}</td>
+                      <td style={{ ...td, fontSize: 12 }}>
+                        {r.tipo === 'balancete' ? `${r.resumen.contas} cuentas COSIF · ${r.resumen.cuadra ? 'cuadra' : 'NO CUADRA'} · R$ ${centavos(r.resumen.total_debe)}` : null}
+                        {r.tipo === 'ccs' ? `${r.resumen.altas} altas · ${r.resumen.bajas} bajas` : null}
+                        {r.tipo === 'efinanceira' ? `${r.resumen.declarados} titulares · ${r.resumen.meses_informados} meses` : null}
+                      </td>
+                      <td style={td}><Etiqueta valor={r.estado} /></td>
+                      <td style={{ ...td, ...mono }}>{r.protocolo || '—'}</td>
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        <button type="button" onClick={() => verReporte(r.id)} style={{ ...botonSuave, padding: '5px 9px', marginRight: 6 }} data-testid="reportes-ver">{reporteAbierto?.id === r.id ? 'Cerrar' : 'Ver archivo'}</button>
+                        {r.estado === 'generado' ? <button type="button" onClick={() => transmitirReporte(r.id)} disabled={ocupado} style={{ ...boton, padding: '5px 9px' }} data-testid="reportes-transmitir"><Send size={12} /> Transmitir</button> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {reporteAbierto ? (
+              <pre style={{ ...mono, background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: 8, padding: 10, marginTop: 10, maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap' }} data-testid="reportes-archivo">{reporteAbierto.archivo}</pre>
+            ) : null}
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: '#374151' }}>Plan de cuentas y su código COSIF (provisorio)</summary>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }} data-testid="reportes-cosif">
+                <thead><tr><th style={th}>Cuenta</th><th style={th}>Nombre</th><th style={th}>COSIF</th></tr></thead>
+                <tbody>
+                  {(reportes?.cosif || []).map((c) => (
+                    <tr key={c.codigo}><td style={{ ...td, ...mono }}>{c.codigo}</td><td style={td}>{c.nombre}</td><td style={{ ...td, ...mono }}>{c.cosif}</td></tr>
                   ))}
                 </tbody>
               </table>

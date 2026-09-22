@@ -20,6 +20,8 @@ from models.user import User
 from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from nucleo.identidad import formas as id_formas, legajos, simulador as id_simulador
+from nucleo.reportes import ReporteInvalido, registro as reportes_reg
+from nucleo.reportes.periodos import PeriodoInvalido
 from nucleo.riesgo import casos as riesgo_casos, monitoreo
 from nucleo.rieles import operaciones as rieles_op, pix, simulador
 from routes.dependencies import get_super_admin
@@ -312,6 +314,37 @@ class Riesgo(BaseModel):
     comunicaciones: list[Comunicacion]
 
 
+class Reporte(BaseModel):
+    id: int
+    tipo: str
+    periodo: str
+    version: int
+    documento: str
+    resumen: dict
+    estado: str
+    generado_en: Optional[str] = None
+    generado_por: str
+    transmitido_en: Optional[str] = None
+    transmitido_por: Optional[str] = None
+    protocolo: Optional[str] = None
+    transmisor: Optional[str] = None
+    archivo: Optional[str] = None
+
+
+class CuentaCosif(BaseModel):
+    codigo: str
+    nombre: str
+    cosif: str
+
+
+class Reportes(BaseModel):
+    transmisor: str
+    tipos: list[str]
+    cosif: list[CuentaCosif]
+    resumen: dict
+    reportes: list[Reporte]
+
+
 class PersonaDePrueba(BaseModel):
     documento: str
     nombre: str
@@ -486,6 +519,11 @@ class ConclusionDelCaso(ComoQuien):
 
 class NoOcurrencia(ComoQuien):
     anio: int = Field(ge=2020, le=2100)
+
+
+class PedidoDeReporte(BaseModel):
+    tipo: str = Field(pattern="^(" + "|".join(reportes_reg.TIPOS) + ")$")
+    periodo: str = Field(min_length=4, max_length=10)
 
 
 class NuevoTrabajo(BaseModel):
@@ -944,3 +982,46 @@ async def no_ocurrencia(pedido: NoOcurrencia, admin: User = Depends(get_super_ad
                                                           aprobador=_quien(admin, pedido.como, modo_vigente))
     except riesgo_casos.CasoInvalido as e:
         raise _error_de_caso(e)
+
+
+# ── reportes regulatorios ──────────────────────────────────────────────────
+
+def _error_de_reporte(e: Exception):
+    return HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/laboratorio/reportes", response_model=Reportes)
+async def reportes(admin: User = Depends(get_super_admin),
+                   modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    from nucleo import plan
+    from nucleo.reportes import transmisor
+    return {"transmisor": transmisor().nombre, "tipos": list(reportes_reg.TIPOS),
+            "cosif": [{"codigo": c, "nombre": n, "cosif": plan.cosif_de(c)} for c, n, *_ in plan.CUENTAS],
+            "resumen": await reportes_reg.resumen(), "reportes": await reportes_reg.listar()}
+
+
+@router.post("/laboratorio/reportes/generar", response_model=Reporte)
+async def generar_reporte(pedido: PedidoDeReporte, admin: User = Depends(get_super_admin),
+                          modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await reportes_reg.generar(pedido.tipo, pedido.periodo, actor=admin.user_id)
+    except (ReporteInvalido, PeriodoInvalido) as e:
+        raise _error_de_reporte(e)
+
+
+@router.get("/laboratorio/reportes/{reporte_id}", response_model=Reporte)
+async def reporte(reporte_id: int, admin: User = Depends(get_super_admin),
+                  modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await reportes_reg.detalle(reporte_id)
+    except ReporteInvalido as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/laboratorio/reportes/{reporte_id}/transmitir", response_model=Reporte)
+async def transmitir_reporte(reporte_id: int, admin: User = Depends(get_super_admin),
+                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await reportes_reg.transmitir(reporte_id, actor=admin.user_id)
+    except (ReporteInvalido, ValueError) as e:
+        raise _error_de_reporte(e)
