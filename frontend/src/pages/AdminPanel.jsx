@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
-, AlertTriangle, BarChart3, Receipt, Landmark } from 'lucide-react';
+, AlertTriangle, BarChart3, Receipt, Landmark, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { confirmar } from '../components/flujo/confirmar.js';
@@ -23,6 +23,7 @@ import Errores from '../components/admin/Errores';
 import Nucleo from '../components/admin/Nucleo';
 import Uso from '../components/admin/Uso';
 import Configuracion from '../components/admin/Configuracion';
+import Respaldo from '../components/admin/Respaldo';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
@@ -122,6 +123,9 @@ const TABS = [
   // a cada cuenta que se registra, y quien pudiera cambiarlo podría subirlo,
   // cobrar y bajarlo otra vez. El backend lo exige igual (`get_super_admin`).
   { key: 'configuracion', label: 'Configuración', icon: SlidersHorizontal, superAdminOnly: true },
+  // El respaldo de la base: se baja un archivo con los datos de todos los
+  // clientes. Sólo super administrador; el backend lo exige igual.
+  { key: 'respaldo', label: 'Respaldo de la base', icon: Archive, superAdminOnly: true },
   // El laboratorio del núcleo de cuentas: la arquitectura de fintech que se
   // construye mientras se resuelve lo legal. SOLO super administrador, y
   // además el servidor contesta 404 a todo mientras «Núcleo de cuentas» esté
@@ -161,7 +165,7 @@ const GRUPOS = [
   { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
     hijas: ['ledger', 'seguridad', 'cobros', 'reportes'] },
   { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
-    hijas: ['configuracion', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
+    hijas: ['configuracion', 'respaldo', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
 ];
 
 // La ficha de cada sección, venga de donde venga. `crm` no entra: era el
@@ -1083,6 +1087,11 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'configuracion' && (
           <ErrorBoundary clave="configuracion" donde="Configuración">
             <Configuracion />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'respaldo' && (
+          <ErrorBoundary clave="respaldo" donde="Respaldo de la base">
+            <Respaldo />
           </ErrorBoundary>
         )}
         {activeTab === 'overview' && (

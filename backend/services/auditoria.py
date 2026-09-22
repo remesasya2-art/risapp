@@ -126,6 +126,10 @@ ACCIONES = {
     # Se le saca el CPF a una cuenta que lo compartía con otra: es un documento
     # de identidad que se le quita a alguien, con motivo, y queda asentado.
     "usuario.cpf_liberado":     (Cat.USUARIOS, "CPF liberado de una cuenta repetida"),
+    # El respaldo de la base lleva los datos de todos los clientes: quién lo
+    # bajó y cuándo tiene que quedar escrito.
+    "respaldo.creado":          (Cat.PELIGRO, "Respaldo de la base creado y bajado"),
+    "respaldo.comprobado":      (Cat.PELIGRO, "Respaldo de la base comprobado"),
     "usuario.reactivado":       (Cat.USUARIOS, "Usuario reactivado"),
     "usuario.lista_negra":      (Cat.USUARIOS, "Usuario a lista negra"),
     # Configuración
