@@ -44,7 +44,7 @@ def comprobacion(r, nombre):
     return next(c for c in r["comprobaciones"] if c["nombre"] == nombre)
 
 
-TODAS = {"base", "cpf_unico", "transacciones", "bcv", "cofre", "contadores"}
+TODAS = {"base", "cpf_unico", "transacciones", "bcv", "cofre", "contadores", "respaldo"}
 
 
 def bcv_de_hace(base, horas):
@@ -65,6 +65,12 @@ def todo_sano(base, monkeypatch):
     monkeypatch.setenv(cofre.VARIABLE_LLAVE, cofre.llave_nueva()["llave"])
     ya(cofre.sellar_testigo(base))
     monkeypatch.setenv(limites_en_la_base.VARIABLE, "si")
+    # Un respaldo automático de hace dos horas, guardado afuera y comprobado.
+    from services import envios_almacen
+    for v in (envios_almacen.VAR_ENDPOINT, envios_almacen.VAR_BUCKET, envios_almacen.VAR_ACCESS_KEY, envios_almacen.VAR_SECRETO):
+        monkeypatch.setenv(v, "https://cuenta.r2.example" if v == envios_almacen.VAR_ENDPOINT else "x")
+    ya(base.respaldos.insert_one({"origen": "automatico", "error": None, "documentos": 9, "momento": datetime.now(timezone.utc) - timedelta(hours=2),
+                                  "almacen": {"bucket": "x", "clave": "respaldos/a.jsonl", "borrado_en": None}, "comprobacion": {"ok": True}}))
     return base
 
 
@@ -231,3 +237,9 @@ def test_el_detalle_es_solo_del_super_administrador(cliente):
     r = c.get("/api/admin/salud")
     assert r.status_code == 200 and {x["nombre"] for x in r.json()["comprobaciones"]} == TODAS
     assert r.json()["vigilancia"]["cada_segundos"] == 300
+
+
+def test_sin_respaldo_automatico_reciente_no_es_sana(todo_sano):
+    ya(todo_sano.respaldos.delete_many({}))
+    c = comprobacion(ya(salud.revisar(todo_sano)), "respaldo")
+    assert c["ok"] is False and c["grave"] is False and "todavía" in c["detalle"]

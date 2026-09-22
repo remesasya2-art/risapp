@@ -87,11 +87,34 @@ export default function Respaldo() {
   const [aComprobar, setAComprobar] = useState({ archivo: null, nombre: '', firma: '' });
   const [comprobacion, setComprobacion] = useState(null);
   const [progreso, setProgreso] = useState('');
-
+  const [guardando, setGuardando] = useState(false);
   const cargar = useCallback(() => {
     api.get('/admin/respaldos').then((r) => setDatos(r.data)).catch((e) => toast.error(e?.response?.data?.detail || 'No se pudo cargar'));
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
+
+  const guardarAfueraAhora = async () => {
+    setGuardando(true);
+    try {
+      const r = await api.post('/admin/respaldos/automatico');
+      if (r.data.hecho) toast.success(`Guardado afuera y comprobado: ${r.data.documentos} documentos`);
+      else toast.error(r.data.motivo === 'sin_almacen' ? 'No hay almacén de objetos configurado (ENVIOS_R2_*)' : (r.data.error || `No se hizo: ${r.data.motivo}`));
+      cargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo guardar afuera'); }
+    finally { setGuardando(false); }
+  };
+
+  const bajarDelAlmacen = async (r) => {
+    try {
+      const e = await api.get(`/admin/respaldos/${r.id}/enlace`);
+      // Directo al almacén, con un enlace firmado que vence: los 70 MB no
+      // pasan por la aplicación ni por el tope de tiempo de Cloudflare.
+      const a = document.createElement('a');
+      a.href = e.data.url; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (err) { toast.error(err?.response?.data?.detail || 'No se pudo armar el enlace de descarga'); }
+  };
+
 
   const crear = async () => {
     setOcupado(true);
@@ -161,16 +184,33 @@ export default function Respaldo() {
               <div>{ultimo.firmado ? <>Firmado. La firma viaja en la última línea del archivo: no hay nada que copiar. <span style={{ ...mono, wordBreak: 'break-all', color: '#9ca3af' }} data-testid="respaldo-firma">{ultimo.firma.slice(0, 16)}…</span></> : 'Sin firma: falta la llave de respaldo.'}</div>
             </div>
           ) : null}
+          {datos ? (
+            <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: datos.automatico.configurado && datos.automatico.encendido ? '#f0fdf4' : '#fffbeb', fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }} data-testid="respaldo-automatico">
+              <span>
+                <strong>Respaldo automático</strong>{' · '}
+                {!datos.automatico.configurado ? 'sin almacén de objetos: no tiene dónde guardar (ENVIOS_R2_* en Railway)'
+                  : !datos.automatico.encendido ? 'APAGADO en Configuración'
+                    : `prendido: uno por día, guardado en el almacén bajo «${datos.automatico.prefijo}/» y comprobado entero. La retención (${datos.automatico.retencion_recomendada_dias} días recomendados) es una regla de ciclo de vida del bucket en R2: la aplicación no puede borrar, a propósito`}
+              </span>
+              <button type="button" onClick={guardarAfueraAhora} disabled={guardando || !datos.automatico.configurado} style={{ ...botonSuave, padding: '6px 10px' }} data-testid="respaldo-guardar-afuera">{guardando ? 'Guardando afuera…' : 'Guardar afuera ahora'}</button>
+            </div>
+          ) : null}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }} data-testid="respaldo-tabla">
-            <thead><tr><th style={th}>Cuándo</th><th style={th}>Quién</th><th style={th}>Documentos</th><th style={th}>Firmado</th><th style={th}>Comprobación</th></tr></thead>
+            <thead><tr><th style={th}>Cuándo</th><th style={th}>Quién</th><th style={th}>Documentos</th><th style={th}>Firmado</th><th style={th}>Comprobación</th><th style={th}>Dónde</th></tr></thead>
             <tbody>
-              {!datos || datos.respaldos.length === 0 ? <tr><td style={td} colSpan={5}>Ningún respaldo todavía.</td></tr> : datos.respaldos.map((r) => (
+              {!datos || datos.respaldos.length === 0 ? <tr><td style={td} colSpan={6}>Ningún respaldo todavía.</td></tr> : datos.respaldos.map((r) => (
                 <tr key={r.id} data-testid="respaldo-fila">
                   <td style={{ ...td, fontSize: 12 }}>{fechaYHora(r.momento)}<div style={{ ...mono, fontSize: 10, color: '#9ca3af' }}>{r.hash.slice(0, 16)}…</div></td>
                   <td style={{ ...td, fontSize: 12 }}>{r.actor}</td>
                   <td style={{ ...td, fontSize: 12 }}>{r.documentos} · {(r.bytes / 1024).toFixed(1)} KB</td>
                   <td style={{ ...td, fontSize: 12, color: r.firmado ? '#166534' : '#b45309' }}>{r.firmado ? 'sí' : 'no'}</td>
                   <td style={{ ...td, fontSize: 12 }}>{r.comprobacion ? <span style={{ color: r.comprobacion.ok ? '#166534' : '#b91c1c' }} data-testid={`respaldo-comprobado-${r.comprobacion.ok ? 'ok' : 'falla'}`}>{r.comprobacion.ok ? 'íntegro' : 'NO PASA'} · {fechaYHora(r.comprobado_en)}</span> : <span style={{ color: '#9ca3af' }}>sin comprobar</span>}</td>
+                  <td style={{ ...td, fontSize: 12 }}>
+                    {r.error ? <span style={{ color: '#b91c1c' }} data-testid="respaldo-con-error">falló: {r.error}</span>
+                      : r.almacen ? (r.almacen.borrado_en ? <span style={{ color: '#9ca3af' }}>estuvo en el almacén; R2 lo borró (se supo el {fechaYHora(r.almacen.borrado_en)})</span>
+                        : <span>en el almacén <button type="button" onClick={() => bajarDelAlmacen(r)} style={{ ...botonSuave, padding: '3px 8px', marginLeft: 6 }} data-testid="respaldo-bajar">Bajar</button></span>)
+                        : <span style={{ color: '#6b7280' }}>bajado al navegador</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>

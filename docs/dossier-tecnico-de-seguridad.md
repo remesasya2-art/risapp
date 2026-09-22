@@ -1050,7 +1050,7 @@ se escriben con lo que hay, no con lo que se desearía:
 
 | | Hoy | Cómo se mejora |
 |---|---|---|
-| **RPO** (cuánto se puede perder: el tiempo desde el último respaldo) | **Lo que tarde el operador entre un respaldo y el siguiente.** El respaldo es manual. Con uno por día, hasta 24 horas de operación. | Un respaldo automático diario, guardado afuera por la aplicación misma, que hoy no existe porque exige decidir dónde (un almacén de objetos) y con qué credencial. Está en la lista de más abajo. |
+| **RPO** (cuánto se puede perder: el tiempo desde el último respaldo) | **24 horas.** Un reloj de la aplicación crea un respaldo por día, lo guarda en el almacén de objetos, lo vuelve a leer de ahí y lo comprueba entero; la salud lo dice en el renglón `respaldo` y grita si falla. Mientras el almacén no esté configurado en producción, vuelve a ser «lo que tarde el operador», y la salud lo dice en rojo. | Un segundo destino, en otro proveedor, para el día que el almacén de objetos y la base caigan juntos. |
 | **RTO** (cuánto se tarda en volver: desde la caída hasta que la aplicación atiende de nuevo) | **Estimado entre una y dos horas, sin confirmar.** Es lo que tarda el procedimiento de abajo hecho por alguien que lo leyó antes. | La restauración de prueba lo confirma o lo corrige. Hasta que se haga, este número es una estimación, y así queda escrito. |
 
 **Procedimiento de restauración, y de la restauración de prueba.** Es el
@@ -1100,11 +1100,29 @@ códigos de un solo uso (se piden de nuevo), la tasa del BCV (el raspador la
 trae en la próxima vuelta; hasta entonces gana el dólar del panel), las
 notificaciones pendientes y el registro de errores de los últimos 30 días.
 
-**Lo que falta para que esto sea de verdad continuidad:** un respaldo
-automático diario guardado afuera (RPO fijo de 24 horas sin depender de que
-alguien se acuerde), la restauración de prueba hecha y anotada, y un Mongo
-con conjunto de réplicas, que además de las transacciones da una segunda
-copia viva. Los tres están en la sección 11.
+**El respaldo automático.** `services/respaldo_automatico.py`: un reloj con
+turno se despierta cada hora y, si el último automático bueno tiene más de
+23 horas, exporta y firma, sube el archivo al almacén de objetos que la
+aplicación ya usa para las fotos (`ENVIOS_R2_*`) bajo `respaldos/`, **lo
+vuelve a leer de ahí y comprueba eso entero** —no lo que tenía en memoria:
+lo que quedó guardado es lo único que va a existir el día que haga falta—,
+y lo registra con `origen=automatico` y dónde quedó. Si algo falla grita:
+fila en Errores y campana a los super administradores; un respaldo fallido
+no cuenta como el último bueno y se reintenta en la próxima vuelta. Se apaga
+desde Configuración; arranca prendido porque la omisión segura es hacerlo.
+Bajar uno es un enlace directo al almacén, firmado y que vence en diez
+minutos: los 70 MB no pasan por la aplicación. **La aplicación no borra
+nada del almacén**: el token de R2 no tiene permiso de borrado, a
+propósito, así que la retención es una regla de ciclo de vida del bucket,
+configurada en Cloudflare (30 días recomendados sobre el prefijo
+`respaldos/`). Cuando R2 se lleva uno, la aplicación se entera al pedir el
+enlace y marca la fila.
+
+**Lo que falta para que esto sea de verdad continuidad:** la regla de
+retención configurada en R2 (sin ella los respaldos se acumulan: 70 MB por
+día), la restauración de prueba hecha y anotada, y un Mongo con conjunto de
+réplicas, que además de las transacciones da una segunda copia viva. Los
+tres están en la sección 11.
 
 ---
 
@@ -1196,7 +1214,8 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **Cifrado de documentos en reposo** | **Prendido en producción** | El cofre está en modo «cifrando»: al arrancar, la aplicación abre la llave, la coteja contra el testigo y lo deja escrito en el registro (`Cofre en modo «cifrando» … verificado contra el testigo`). La fila anterior decía «apagado por omisión»; quedó vieja. Lo que sigue siendo del operador: guardar la llave en tres lugares y comprobar cada copia con `verificar` cada tanto. El procedimiento está en `docs/la-llave-del-cofre.md`. |
 | **Prueba de intrusión externa** | No realizada | Contratación. Las revisiones hechas hasta hoy son internas. |
 | **Restauración de prueba del respaldo** | Procedimiento escrito (9.1), no ejecutado todavía | Media jornada del operador con un Mongo aparte. Confirma el RTO estimado de una a dos horas y prueba que la llave del cofre abre los documentos restaurados. Hasta que se haga, el respaldo es una esperanza comprobada línea a línea, no una restauración probada. |
-| **Respaldo automático diario, guardado afuera** | No implementado; el respaldo es manual desde el panel | Decidir dónde se guarda (un almacén de objetos fuera de Railway) y con qué credencial. Hasta entonces el RPO es lo que tarde el operador entre un respaldo y el siguiente. |
+| **Regla de retención de los respaldos en R2** | No configurada | En Cloudflare, el bucket de la aplicación → reglas de ciclo de vida: borrar los objetos con prefijo `respaldos/` a los 30 días. La aplicación no puede borrar (el token de R2 no tiene ese permiso, a propósito); sin la regla, los respaldos automáticos se acumulan a 70 MB por día. |
+| **Segundo destino para el respaldo** | No implementado | El respaldo automático va al mismo proveedor que las fotos. El día que ese almacén y la base caigan juntos, la copia de afuera es la que el operador bajó a mano. Un segundo destino en otro proveedor cierra eso. |
 | **Mongo con conjunto de réplicas** | Sin confirmar; la salud de la aplicación lo dice en `transacciones` | Es un ajuste del proveedor de Mongo, no de código. Con un nodo suelto el motor contable corre sin transacciones y un cobro que mueve el saldo y escribe el libro son dos escrituras separadas. |
 | **Escaneo de dependencias en modo aviso** | Corre en CI en cada pull request, no frena | Que la lista de advertencias conocidas quede limpia (las de `cryptography`, `litellm`, `ecdsa`, `black`, `anyio` y `soupsieve`); entonces se saca el `continue-on-error` del flujo y una dependencia nueva con agujero frena la fusión. `litellm` no se importa en el código propio: la salida más corta es sacarlo de `requirements.txt`. |
 | **Encargado de datos / LGPD** | No designado formalmente | Decisión del operador. |
@@ -1259,6 +1278,7 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | El ping de vida dice si la base responde, y el reloj de salud mira seis cosas y avisa sólo cuando cambia | `backend/services/salud_de_la_app.py` | `test_salud_de_la_app.py` |
 | El asiento del libro que falla y el pago a la dirección equivocada dejan fila en Errores y avisan | `backend/services/gritos.py` | `test_el_libro_no_se_calla.py` |
 | El respaldo se exporta con la firma adentro y se comprueba en el navegador, sin subirlo | `backend/services/respaldo_de_mongo.py`, `frontend/src/components/admin/Respaldo.jsx` | `test_respaldo_de_mongo.py` |
+| Un respaldo por día, guardado afuera, vuelto a leer y comprobado; la aplicación no borra nada del almacén | `backend/services/respaldo_automatico.py`, `backend/services/envios_almacen.py` | `test_respaldo_automatico.py`, `test_envios_almacen.py` |
 | La cantidad de procesos se configura con una variable, sin editar código | `railway.toml`, `nixpacks.toml` | `test_los_procesos_salen_de_una_variable.py` |
 | Ningún contador de intentos vive en la memoria de una ruta | `backend/routes/` | `test_lightning_cuenta_en_la_base.py` |
 | CI escanea las dependencias en cada pull request | `.github/workflows/lint.yml` | `test_el_ci_escanea_dependencias.py` |
