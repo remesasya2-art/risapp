@@ -2,7 +2,11 @@
 
 **Fecha del reporte:** 20 de septiembre de 2026
 **Lo reportó:** el dueño del proyecto, desde producción
-**Estado:** causa encontrada y demostrada. Sin arreglar todavía.
+**Estado:** arreglado. El receptor de avisos de Mercado Pago busca el cobro con los
+dos tipos de identificador (`routes/gestor_pix.py`, `pago_que_no_se_acredito.identificadores_posibles`),
+y los avisos que no encuentran su cobro quedan en la pantalla «Cobros sin acreditar» en vez
+de perderse. Lo que sigue pendiente es lo de la orden concreta del cliente, más abajo,
+que es un trabajo a mano y no de código.
 
 ---
 
