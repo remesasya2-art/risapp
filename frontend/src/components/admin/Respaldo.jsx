@@ -6,6 +6,16 @@
  *   registra que se hizo y quién) y comprueba uno guardado: hash del cierre,
  *   firma, cantidad de documentos, que cada línea se lea. El archivo lleva
  *   los datos de todos los clientes: se guarda donde se guardaría la base.
+ *
+ *   LA COMPROBACION SE HACE ACA, EN EL NAVEGADOR, Y NO SUBIENDO EL ARCHIVO
+ *
+ *   La primera versión mandaba el archivo entero al servidor. Con 70 MB,
+ *   desde una conexión de casa, el pedido moría por tiempo en Cloudflare, y
+ *   el botón quedaba gris sin decir nada. Ahora el archivo se lee de este
+ *   lado —cada línea, el hash del cierre, la cuenta de documentos, la firma
+ *   que viaja en la última línea— y al servidor van sólo la huella y lo que
+ *   se encontró. Él pone lo que acá no se puede: la firma (necesita la
+ *   llave) y si esa huella es la de un respaldo que la base registró.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Archive, FileCheck, RefreshCw } from 'lucide-react';
@@ -21,12 +31,62 @@ const td = { padding: '7px 8px', borderBottom: '1px solid #f3f4f6', fontSize: 13
 const mono = { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 };
 const fechaYHora = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 
+const sha256 = async (texto) => {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+
+/**
+ * Lee el respaldo entero de este lado: lo que antes hacía el servidor.
+ * Devuelve la huella del contenido firmado (todo menos la línea de firma),
+ * si el hash del cierre coincide, si cada línea se lee, la cuenta por
+ * colección, y la firma que viene en la última línea.
+ */
+async function leerRespaldo(archivo, avisar) {
+  const texto = await archivo.text();
+  const lineas = texto.split('\n');
+  if (lineas[lineas.length - 1] === '') lineas.pop();
+  const salida = { huella: '', hashDeCierreOk: false, lineasOk: false, documentos: 0, colecciones: {}, firma: null, motivo: null };
+  const leer = (l, n) => { try { return JSON.parse(l); } catch { throw new Error(`la línea ${n} no se puede leer`); } };
+
+  let ultima = lineas.length ? leer(lineas[lineas.length - 1], lineas.length) : null;
+  if (ultima && ultima.tipo === 'firma') { salida.firma = ultima.firma || null; lineas.pop(); ultima = null; }
+  if (lineas.length < 2) { salida.motivo = 'el archivo no tiene cabecera y cierre'; return salida; }
+
+  const cabecera = leer(lineas[0], 1);
+  const cierre = leer(lineas[lineas.length - 1], lineas.length);
+  if (cabecera.tipo !== 'respaldo_risapp' || cierre.tipo !== 'fin') { salida.motivo = 'no es un respaldo de la aplicación'; return salida; }
+
+  const contenido = lineas.join('\n') + '\n';
+  const cuerpo = lineas.slice(0, -1).join('\n') + '\n';
+  avisar('calculando la huella…');
+  salida.huella = await sha256(contenido);
+  salida.hashDeCierreOk = (await sha256(cuerpo)) === cierre.hash;
+  if (!salida.hashDeCierreOk) { salida.motivo = 'el hash del cierre no coincide con el contenido: el archivo fue alterado o está incompleto'; return salida; }
+
+  avisar('leyendo cada línea…');
+  try {
+    for (let i = 1; i < lineas.length - 1; i += 1) {
+      const fila = leer(lineas[i], i + 1);
+      if (!fila.coleccion || !('doc' in fila)) throw new Error(`la línea ${i + 1} no es un documento del respaldo`);
+      salida.colecciones[fila.coleccion] = (salida.colecciones[fila.coleccion] || 0) + 1;
+      salida.documentos += 1;
+    }
+    salida.lineasOk = true;
+  } catch (e) { salida.motivo = e.message; return salida; }
+  // El cierre viene en JSON extendido: el número puede llegar como {"$numberInt":"1707"}.
+  const dicho = typeof cierre.documentos === 'object' && cierre.documentos ? Number(cierre.documentos.$numberInt ?? cierre.documentos.$numberLong) : Number(cierre.documentos);
+  if (dicho !== salida.documentos) { salida.lineasOk = false; salida.motivo = `el cierre dice ${dicho} documentos y hay ${salida.documentos}`; }
+  return salida;
+}
+
 export default function Respaldo() {
   const [datos, setDatos] = useState(null);
   const [ocupado, setOcupado] = useState(false);
   const [ultimo, setUltimo] = useState(null);                 // { hash, firma, documentos, firmado } del recién creado
-  const [aComprobar, setAComprobar] = useState({ contenido: '', nombre: '', firma: '' });
+  const [aComprobar, setAComprobar] = useState({ archivo: null, nombre: '', firma: '' });
   const [comprobacion, setComprobacion] = useState(null);
+  const [progreso, setProgreso] = useState('');
 
   const cargar = useCallback(() => {
     api.get('/admin/respaldos').then((r) => setDatos(r.data)).catch((e) => toast.error(e?.response?.data?.detail || 'No se pudo cargar'));
@@ -42,7 +102,7 @@ export default function Respaldo() {
       a.href = url; a.download = `risapp-respaldo-${r.data.momento.slice(0, 19).replaceAll(':', '')}.jsonl`;
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       setUltimo({ hash: r.data.hash, firma: r.data.firma, documentos: r.data.documentos, firmado: r.data.firmado });
-      toast.success(`Respaldo de ${r.data.documentos} documentos${r.data.firmado ? ', firmado' : ', SIN FIRMA (falta la llave)'}`);
+      toast.success(`Respaldo de ${r.data.documentos} documentos${r.data.firmado ? ', firmado (la firma va adentro del archivo)' : ', SIN FIRMA (falta la llave)'}`);
       cargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo crear el respaldo'); }
     finally { setOcupado(false); }
@@ -51,21 +111,31 @@ export default function Respaldo() {
   const elegirArchivo = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const lector = new FileReader();
-    lector.onload = () => setAComprobar((x) => ({ ...x, contenido: String(lector.result || ''), nombre: f.name }));
-    lector.readAsText(f);
+    setComprobacion(null);
+    setAComprobar((x) => ({ ...x, archivo: f, nombre: f.name, tamano: f.size }));
   };
 
   const comprobar = async () => {
-    if (!aComprobar.contenido) return toast.error('Elegí el archivo del respaldo');
+    if (!aComprobar.archivo) return toast.error('Elegí el archivo del respaldo');
     setOcupado(true);
     try {
-      const r = await api.post('/admin/respaldos/comprobar', { contenido: aComprobar.contenido, firma: aComprobar.firma.trim() || undefined });
+      setProgreso('leyendo el archivo…');
+      const leido = await leerRespaldo(aComprobar.archivo, setProgreso);
+      setProgreso('consultando la firma y el registro…');
+      const r = await api.post('/admin/respaldos/comprobar-huella', {
+        hash: leido.huella,
+        documentos: leido.documentos,
+        hash_de_cierre_ok: leido.hashDeCierreOk,
+        lineas_ok: leido.lineasOk,
+        colecciones: leido.colecciones,
+        firma: aComprobar.firma.trim() || leido.firma || undefined,
+        motivo_del_navegador: leido.motivo || undefined,
+      });
       setComprobacion(r.data);
-      (r.data.ok ? toast.success : toast.error)(r.data.ok ? `Respaldo íntegro · ${r.data.documentos} documentos · firma ${r.data.firma}` : `NO pasa: ${r.data.motivo}`);
+      (r.data.ok ? toast.success : toast.error)(r.data.ok ? `Respaldo íntegro · ${r.data.documentos} documentos · firma ${r.data.firma.replaceAll('_', ' ')}` : `NO pasa: ${r.data.motivo}`);
       cargar();
-    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo comprobar'); }
-    finally { setOcupado(false); }
+    } catch (e) { toast.error(e?.response?.data?.detail || e?.message || 'No se pudo comprobar'); }
+    finally { setOcupado(false); setProgreso(''); }
   };
 
   return (
@@ -88,7 +158,7 @@ export default function Respaldo() {
           {ultimo ? (
             <div style={{ marginTop: 8, fontSize: 12, color: '#374151' }} data-testid="respaldo-ultimo">
               <div>{ultimo.documentos} documentos · hash <span style={mono}>{ultimo.hash.slice(0, 16)}…</span></div>
-              <div>{ultimo.firmado ? <>Firma (guardala junto al archivo): <span style={{ ...mono, wordBreak: 'break-all' }} data-testid="respaldo-firma">{ultimo.firma}</span></> : 'Sin firma: falta la llave de respaldo.'}</div>
+              <div>{ultimo.firmado ? <>Firmado. La firma viaja en la última línea del archivo: no hay nada que copiar. <span style={{ ...mono, wordBreak: 'break-all', color: '#9ca3af' }} data-testid="respaldo-firma">{ultimo.firma.slice(0, 16)}…</span></> : 'Sin firma: falta la llave de respaldo.'}</div>
             </div>
           ) : null}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }} data-testid="respaldo-tabla">
@@ -110,9 +180,9 @@ export default function Respaldo() {
           <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}><FileCheck size={14} /> Comprobar un respaldo guardado</strong>
           <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
             <input type="file" accept=".jsonl,.txt,application/x-ndjson" onChange={elegirArchivo} style={{ fontSize: 13 }} data-testid="respaldo-archivo" />
-            {aComprobar.nombre ? <div style={{ fontSize: 12, color: '#6b7280' }}>{aComprobar.nombre} · {(aComprobar.contenido.length / 1024).toFixed(1)} KB</div> : null}
-            <input style={campo} placeholder="Firma (la que se guardó junto al archivo; opcional)" value={aComprobar.firma} onChange={(e) => setAComprobar({ ...aComprobar, firma: e.target.value })} data-testid="respaldo-firma-a-comprobar" />
-            <button type="button" onClick={comprobar} disabled={ocupado || !aComprobar.contenido} style={botonSuave} data-testid="respaldo-comprobar">Comprobar</button>
+            {aComprobar.nombre ? <div style={{ fontSize: 12, color: '#6b7280' }}>{aComprobar.nombre} · {(aComprobar.tamano / 1024).toFixed(1)} KB · se lee acá, en tu navegador; no se sube</div> : null}
+            <input style={campo} placeholder="Firma aparte (sólo para respaldos viejos que no la traen adentro; opcional)" value={aComprobar.firma} onChange={(e) => setAComprobar({ ...aComprobar, firma: e.target.value })} data-testid="respaldo-firma-a-comprobar" />
+            <button type="button" onClick={comprobar} disabled={ocupado || !aComprobar.archivo} style={botonSuave} data-testid="respaldo-comprobar">{progreso ? `Comprobando: ${progreso}` : 'Comprobar'}</button>
           </div>
           {comprobacion ? (
             <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: comprobacion.ok ? '#f0fdf4' : '#fef2f2', fontSize: 13 }} data-testid={`respaldo-resultado-${comprobacion.ok ? 'ok' : 'falla'}`}>
