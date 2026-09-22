@@ -154,7 +154,11 @@ def test_un_trabajo_muerto_no_es_sano():
     async def matar_uno():
         from nucleo import cola
         async with base.sesion() as s:
-            t = await cola.encolar(s, tipo="fallar", clave="x", carga={})
+            # Con `ahora=T0`. Sin él, el trabajo se encolaba con el reloj REAL y
+            # las vueltas van con el reloj del test (T0 = 21/09/2026 15:00):
+            # cada vuelta anterior a la hora real no lo tomaba. El test pasó
+            # hasta el 22/09/2026 a las 15:00 UTC y empezó a fallar solo.
+            t = await cola.encolar(s, tipo="fallar", clave="x", carga={}, ahora=T0)
         for _ in range(cola.INTENTOS_MAXIMOS + 1):
             await trabajador.una_vuelta(ahora=T0 + timedelta(days=_))
     ya(matar_uno())
