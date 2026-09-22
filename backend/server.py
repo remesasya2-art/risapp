@@ -587,6 +587,15 @@ app.include_router(modular_api_router)
 from nucleo.rutas import router as nucleo_router  # noqa: E402
 app.include_router(nucleo_router, prefix="/api")
 
+# Y la guarda de cuatro ojos sobre la configuración del núcleo: con el núcleo
+# prendido, `nucleo_modo` y los umbrales se cambian pidiendo y aprobando desde
+# la pestaña, no desde Configuración. Se engancha ACA, único puente entre la
+# aplicación y el núcleo. Ver nucleo/operacion/aprobaciones.py.
+from nucleo.operacion import aprobaciones as _nucleo_aprobaciones  # noqa: E402
+from services import configuracion as _configuracion  # noqa: E402
+if _nucleo_aprobaciones.guarda_de_configuracion not in _configuracion.GUARDAS:
+    _configuracion.GUARDAS.append(_nucleo_aprobaciones.guarda_de_configuracion)
+
 # Include admin router (separate file for backward compatibility)
 app.include_router(admin_router)
 

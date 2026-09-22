@@ -21,6 +21,10 @@
  *   Y los reportes regulatorios: el balancete COSIF del mes, el CCS del día
  *   y la e-Financeira del semestre, generados sobre días cerrados, con su
  *   versión y su protocolo de transmisión (contra un simulador del STA).
+ *   Y la operación: la bitácora encadenada (quién hizo qué, con antes y
+ *   después) y el cuatro ojos general: transmitir un reporte, comunicar un
+ *   incidente o cambiar la configuración del núcleo prendido se PIDE acá y
+ *   otra persona lo aprueba; recién ahí se ejecuta.
  *   Y el cumplimiento: el registro de incidentes (los relevantes se
  *   comunican al BCB con plazo), la ouvidoria (protocolo y diez días
  *   hábiles) y el calendario de obligaciones, que se deduce de las tablas.
@@ -36,7 +40,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock, Eye, ScrollText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -74,6 +78,9 @@ const COLOR_DEL_ESTADO = {
   generado: { background: '#fef3c7', color: '#92400e' },
   transmitido: { background: '#dcfce7', color: '#166534' },
   no_corresponde: { background: '#f3f4f6', color: '#374151' },
+  // los de un pedido de cuatro ojos
+  ejecutado: { background: '#dcfce7', color: '#166534' },
+  fallido: { background: '#fee2e2', color: '#991b1b' },
   // los de un incidente y de un reclamo
   cerrado: { background: '#dcfce7', color: '#166534' },
   respondido: { background: '#dcfce7', color: '#166534' },
@@ -123,6 +130,11 @@ export default function Nucleo() {
   const [cierre, setCierre] = useState({ causa: '', acciones: '' });
   const [nuevoReclamo, setNuevoReclamo] = useState({ canal: 'bcb', asunto: '', descripcion: '', caso_soporte: '' });
   const [respuesta, setRespuesta] = useState({ id: null, respuesta: '', resultado: 'procedente' });
+  const [operacion, setOperacion] = useState(null);
+  const [motivo, setMotivo] = useState('');                               // del pedido de cuatro ojos que se está armando
+  const [pidiendo, setPidiendo] = useState(null);                         // { tipo: 'reporte'|'incidente', id } que espera motivo
+  const [pedidoDeConfig, setPedidoDeConfig] = useState({ clave: 'nucleo_umbral_operacion', valor: '', motivo: '' });
+  const [notaDeDecision, setNotaDeDecision] = useState('');
   const [vuelta, setVuelta] = useState(0);
   const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -138,17 +150,18 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl, idn, rg, rp, cu] = await Promise.all([
+        const [c, l, b, z, q, rl, idn, rg, rp, cu, opn] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
           api.get('/nucleo/laboratorio/identidad'), api.get('/nucleo/laboratorio/riesgo'),
           api.get('/nucleo/laboratorio/reportes'), api.get('/nucleo/laboratorio/cumplimiento'),
+          api.get('/nucleo/laboratorio/operacion'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
         setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null); setRiesgo(rg.data || null);
-        setReportes(rp.data || null); setCumplimiento(cu.data || null);
+        setReportes(rp.data || null); setCumplimiento(cu.data || null); setOperacion(opn.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -373,12 +386,39 @@ export default function Nucleo() {
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo leer'); }
   };
 
-  const transmitirReporte = async (id) => {
+  const pedirConMotivo = async () => {
+    if (!motivo.trim()) return toast.error('Escribí el motivo: quien aprueba tiene que saber por qué');
     setOcupado(true);
     try {
-      const r = await api.post(`/nucleo/laboratorio/reportes/${id}/transmitir`);
-      toast.success(`Transmitido · protocolo ${r.data.protocolo}`); recargar();
-    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo transmitir'); }
+      const rutas = {
+        reporte: `/nucleo/laboratorio/reportes/${pidiendo.id}/transmitir`,
+        incidente: `/nucleo/laboratorio/cumplimiento/incidentes/${pidiendo.id}/comunicar`,
+      };
+      const r = await api.post(rutas[pidiendo.tipo], { motivo: motivo.trim() });
+      toast.success(`Pedido ${r.data.id} · espera la aprobación de otra persona`);
+      setPidiendo(null); setMotivo(''); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo pedir'); }
+    finally { setOcupado(false); }
+  };
+
+  const pedirConfiguracion = async () => {
+    if (!pedidoDeConfig.valor.trim() || !pedidoDeConfig.motivo.trim()) return toast.error('Escribí el valor y el motivo');
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/operacion/configuracion', pedidoDeConfig);
+      toast.success(`Pedido ${r.data.id} · espera la aprobación de otra persona`);
+      setPedidoDeConfig({ ...pedidoDeConfig, valor: '', motivo: '' }); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo pedir'); }
+    finally { setOcupado(false); }
+  };
+
+  const decidir = async (id, aprobar) => {
+    setOcupado(true);
+    try {
+      const r = await api.post(`/nucleo/laboratorio/operacion/aprobaciones/${id}/decidir`, { aprobar, nota: notaDeDecision.trim() || undefined, como: como.trim() || undefined });
+      toast.success(aprobar ? `Aprobado y ejecutado · ${r.data.resultado}` : 'Rechazado');
+      setNotaDeDecision(''); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo decidir'); recargar(); }
     finally { setOcupado(false); }
   };
 
@@ -398,11 +438,10 @@ export default function Nucleo() {
     try {
       const rutas = {
         anotar: `/nucleo/laboratorio/cumplimiento/incidentes/${id}/anotar`,
-        comunicar: `/nucleo/laboratorio/cumplimiento/incidentes/${id}/comunicar`,
         cerrar: `/nucleo/laboratorio/cumplimiento/incidentes/${id}/cerrar`,
       };
-      const r = await api.post(rutas[accion], cuerpo || {});
-      toast.success({ anotar: 'Nota agregada', comunicar: `Comunicado al BCB · protocolo ${r.data.protocolo}`, cerrar: 'Incidente cerrado' }[accion]);
+      await api.post(rutas[accion], cuerpo || {});
+      toast.success({ anotar: 'Nota agregada', cerrar: 'Incidente cerrado' }[accion]);
       if (accion === 'anotar') setNota('');
       if (accion === 'cerrar') setCierre({ causa: '', acciones: '' });
       setIncidenteAbierto(id); recargar();
@@ -989,7 +1028,7 @@ export default function Nucleo() {
                       <td style={{ ...td, ...mono }}>{r.protocolo || '—'}</td>
                       <td style={{ ...td, whiteSpace: 'nowrap' }}>
                         <button type="button" onClick={() => verReporte(r.id)} style={{ ...botonSuave, padding: '5px 9px', marginRight: 6 }} data-testid="reportes-ver">{reporteAbierto?.id === r.id ? 'Cerrar' : 'Ver archivo'}</button>
-                        {r.estado === 'generado' ? <button type="button" onClick={() => transmitirReporte(r.id)} disabled={ocupado} style={{ ...boton, padding: '5px 9px' }} data-testid="reportes-transmitir"><Send size={12} /> Transmitir</button> : null}
+                        {r.estado === 'generado' ? <button type="button" onClick={() => { setPidiendo({ tipo: 'reporte', id: r.id }); setMotivo(''); }} disabled={ocupado} style={{ ...boton, padding: '5px 9px' }} data-testid="reportes-transmitir"><Eye size={12} /> Pedir transmisión</button> : null}
                       </td>
                     </tr>
                   ))}
@@ -1096,7 +1135,7 @@ export default function Nucleo() {
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <input style={{ ...campo, flex: 1, minWidth: 180 }} placeholder="Una nota" value={nota} onChange={(e) => setNota(e.target.value)} data-testid="incidentes-nota" />
                         <button type="button" onClick={() => accionDeIncidente(i.id, 'anotar', { texto: nota })} disabled={ocupado || !nota.trim()} style={{ ...botonSuave, padding: '6px 10px' }} data-testid="incidentes-anotar">Anotar</button>
-                        {i.relevante && !i.protocolo ? <button type="button" onClick={() => accionDeIncidente(i.id, 'comunicar')} disabled={ocupado} style={{ ...boton, padding: '6px 10px' }} data-testid="incidentes-comunicar"><Send size={12} /> Comunicar al BCB</button> : null}
+                        {i.relevante && !i.protocolo ? <button type="button" onClick={() => { setPidiendo({ tipo: 'incidente', id: i.id }); setMotivo(''); }} disabled={ocupado} style={{ ...boton, padding: '6px 10px' }} data-testid="incidentes-comunicar"><Eye size={12} /> Pedir comunicación al BCB</button> : null}
                       </div>
                       {i.estado === 'abierto' ? (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6, marginTop: 8 }}>
@@ -1146,6 +1185,92 @@ export default function Nucleo() {
                     <button type="button" onClick={responderReclamo} disabled={ocupado} style={boton} data-testid="ouvidoria-responder">Responder</button>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Operación: cuatro ojos y bitácora */}
+          <div style={tarjeta} data-testid="nucleo-operacion">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Eye size={16} /> Operación: cuatro ojos y bitácora</strong>
+              {operacion ? (
+                <span style={{ fontSize: 13, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  <span>Pedidos pendientes <strong>{operacion.resumen_aprobaciones.pendiente}</strong></span>
+                  <span>Ejecutados <strong>{operacion.resumen_aprobaciones.ejecutado}</strong></span>
+                  <span style={{ color: operacion.resumen_aprobaciones.fallido ? '#b91c1c' : undefined }}>Fallidos <strong>{operacion.resumen_aprobaciones.fallido}</strong></span>
+                  <span style={{ color: operacion.cadena_de_la_bitacora.ok ? '#166534' : '#b91c1c' }}>Bitácora {operacion.cadena_de_la_bitacora.ok ? 'íntegra' : 'ROTA'} · {operacion.cadena_de_la_bitacora.asientos} renglones</span>
+                </span>
+              ) : null}
+            </div>
+            <p style={{ margin: '8px 0 10px', fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+              Transmitir un reporte, comunicar un incidente al BCB y cambiar la configuración del núcleo mientras está prendido se <strong>piden</strong> acá y <strong>otra persona los aprueba</strong>; recién ahí se ejecutan. Quien pide no puede aprobar. Un pedido vence a las 72 horas. Todo queda en la bitácora, encadenada por hash como el libro.
+              {' '}Con el núcleo prendido, la pantalla de Configuración rechaza los ajustes del núcleo y manda acá.
+            </p>
+
+            {pidiendo ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 10, borderRadius: 10, background: '#eef2ff', marginBottom: 10 }} data-testid="operacion-pedido-en-curso">
+                <span style={{ fontSize: 13 }}>{pidiendo.tipo === 'reporte' ? `Pedir la transmisión del reporte ${pidiendo.id}` : `Pedir la comunicación al BCB del incidente ${pidiendo.id}`} · motivo:</span>
+                <input style={{ ...campo, flex: 1 }} placeholder="Por qué (lo lee quien aprueba)" value={motivo} onChange={(e) => setMotivo(e.target.value)} data-testid="operacion-motivo" />
+                <button type="button" onClick={pedirConMotivo} disabled={ocupado} style={boton} data-testid="operacion-pedir">Pedir</button>
+                <button type="button" onClick={() => setPidiendo(null)} style={botonSuave}>Cancelar</button>
+              </div>
+            ) : null}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+              {/* Pedidos */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14 }}>Pedidos de cuatro ojos</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '8px 0' }}>
+                  <select style={campo} value={pedidoDeConfig.clave} onChange={(e) => setPedidoDeConfig({ ...pedidoDeConfig, clave: e.target.value })} data-testid="operacion-clave">
+                    {(operacion?.claves_configurables || []).map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                  <input style={campo} placeholder="Valor nuevo" value={pedidoDeConfig.valor} onChange={(e) => setPedidoDeConfig({ ...pedidoDeConfig, valor: e.target.value })} data-testid="operacion-valor" />
+                  <input style={campo} placeholder="Motivo" value={pedidoDeConfig.motivo} onChange={(e) => setPedidoDeConfig({ ...pedidoDeConfig, motivo: e.target.value })} data-testid="operacion-motivo-config" />
+                  <button type="button" onClick={pedirConfiguracion} disabled={ocupado} style={boton} data-testid="operacion-pedir-config"><Eye size={13} /> Pedir el cambio</button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ color: '#6b7280', fontSize: 12 }}>Decidir como (laboratorio):</span>
+                  <input style={{ ...campo, width: 150, padding: '5px 8px' }} placeholder="p. ej. jefa" value={como} onChange={(e) => setComo(e.target.value)} data-testid="operacion-como" />
+                  <input style={{ ...campo, flex: 1, padding: '5px 8px' }} placeholder="Nota de la decisión (opcional)" value={notaDeDecision} onChange={(e) => setNotaDeDecision(e.target.value)} data-testid="operacion-nota" />
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }} data-testid="operacion-aprobaciones">
+                  <thead><tr><th style={th}>Pedido</th><th style={th}>Estado</th><th style={th}>Quién</th><th style={th} /></tr></thead>
+                  <tbody>
+                    {!operacion || operacion.aprobaciones.length === 0 ? <tr><td style={td} colSpan={4}>Ningún pedido.</td></tr> : operacion.aprobaciones.map((a) => (
+                      <tr key={a.id} data-testid={`operacion-${a.estado}`}>
+                        <td style={td}><strong>{a.accion.replaceAll('_', ' ')}</strong> · <span style={mono}>{a.objetivo}</span>{a.accion === 'configurar' ? ` → ${a.carga.valor}` : ''}<div style={{ fontSize: 11, color: '#6b7280' }}>{a.motivo}{a.resultado ? ` · ${a.resultado}` : ''}{a.nota ? ` · nota: ${a.nota}` : ''}</div></td>
+                        <td style={td}><Etiqueta valor={a.estado} /></td>
+                        <td style={{ ...td, fontSize: 12 }}>pidió {a.pedido_por}{a.decidido_por ? <><br />decidió {a.decidido_por}</> : <><br />vence {fechaYHora(a.vence_en)}</>}</td>
+                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                          {a.estado === 'pendiente' ? <>
+                            <button type="button" onClick={() => decidir(a.id, true)} disabled={ocupado} style={{ ...boton, padding: '5px 9px', marginRight: 4 }} data-testid="operacion-aprobar">Aprobar</button>
+                            <button type="button" onClick={() => decidir(a.id, false)} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="operacion-rechazar">Rechazar</button>
+                          </> : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Bitácora */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}><ScrollText size={14} /> Bitácora {operacion ? <span style={{ fontSize: 11, color: operacion.cadena_de_la_bitacora.ok ? '#166534' : '#b91c1c' }}>{operacion.cadena_de_la_bitacora.ok ? '· cadena íntegra' : `· ROTA en el renglón ${operacion.cadena_de_la_bitacora.roto_en}`}</span> : null}</strong>
+                <div style={{ maxHeight: 360, overflow: 'auto', marginTop: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }} data-testid="operacion-bitacora">
+                    <thead><tr><th style={th}>Cuándo</th><th style={th}>Quién</th><th style={th}>Qué</th><th style={th}>Sobre</th></tr></thead>
+                    <tbody>
+                      {!operacion || operacion.bitacora.length === 0 ? <tr><td style={td} colSpan={4}>Todavía nada.</td></tr> : operacion.bitacora.map((b) => (
+                        <tr key={b.id} data-testid="operacion-renglon">
+                          <td style={{ ...td, fontSize: 12, whiteSpace: 'nowrap' }}>{fechaYHora(b.momento)}</td>
+                          <td style={{ ...td, fontSize: 12 }}>{b.actor}</td>
+                          <td style={{ ...td, fontSize: 12 }}><strong>{b.accion}</strong>{b.detalle ? <div style={{ color: '#6b7280' }}>{b.detalle}</div> : null}{b.antes || b.despues ? <div style={{ ...mono, fontSize: 11, color: '#6b7280' }}>{b.antes ? `antes ${JSON.stringify(b.antes)} ` : ''}{b.despues ? `después ${JSON.stringify(b.despues)}` : ''}</div> : null}</td>
+                          <td style={{ ...td, ...mono, fontSize: 11 }}>{b.objetivo}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>

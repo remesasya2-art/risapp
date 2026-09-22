@@ -360,9 +360,17 @@ def test_los_reportes_por_http_del_cierre_al_protocolo(cliente):
     # El archivo entero, por su id. Y la transmisión, con protocolo, una vez.
     r = cliente.get(f"/api/nucleo/laboratorio/reportes/{balancete['id']}")
     assert r.status_code == 200 and '"documento": "CADOC 4010"' in r.json()["archivo"]
-    r = cliente.post(f"/api/nucleo/laboratorio/reportes/{balancete['id']}/transmitir")
-    assert r.status_code == 200 and r.json()["estado"] == "transmitido" and r.json()["protocolo"].startswith("STA-SIM-")
-    r = cliente.post(f"/api/nucleo/laboratorio/reportes/{balancete['id']}/transmitir")
+    # Transmitir es de cuatro ojos: se pide, otra persona aprueba, y ahí sale.
+    r = cliente.post(f"/api/nucleo/laboratorio/reportes/{balancete['id']}/transmitir", json={"motivo": "Balancete del mes"})
+    assert r.status_code == 200 and r.json()["estado"] == "pendiente" and r.json()["accion"] == "transmitir_reporte"
+    pedido = r.json()["id"]
+    assert cliente.get(f"/api/nucleo/laboratorio/reportes/{balancete['id']}").json()["estado"] == "generado"
+    r = cliente.post(f"/api/nucleo/laboratorio/operacion/aprobaciones/{pedido}/decidir", json={"aprobar": True})
+    assert r.status_code == 400 and "quien pidió" in r.json()["detail"]
+    r = cliente.post(f"/api/nucleo/laboratorio/operacion/aprobaciones/{pedido}/decidir", json={"aprobar": True, "como": "jefa"})
+    assert r.status_code == 200 and r.json()["estado"] == "ejecutado" and "STA-SIM-" in r.json()["resultado"]
+    assert cliente.get(f"/api/nucleo/laboratorio/reportes/{balancete['id']}").json()["transmitido_por"] == "jefa"
+    r = cliente.post(f"/api/nucleo/laboratorio/reportes/{balancete['id']}/transmitir", json={"motivo": "otra vez"})
     assert r.status_code == 400 and "ya se transmitió" in r.json()["detail"]
     assert cliente.get("/api/nucleo/laboratorio/reportes/999").status_code == 404
 
@@ -393,9 +401,12 @@ def test_el_cumplimiento_por_http_incidente_reclamo_y_calendario(cliente):
     assert [(a["accion"], a["referencia"]) for a in acciones] == [("comunicar_incidente", inc)]
     r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/anotar", json={"texto": "Se reinició el trabajador."})
     assert r.status_code == 200 and r.json()["notas"][-1]["texto"] == "Se reinició el trabajador."
-    r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/comunicar")
-    assert r.status_code == 200 and r.json()["protocolo"].startswith("STA-SIM-")
-    assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/comunicar").status_code == 400
+    # Comunicar al BCB es de cuatro ojos: se pide y otra persona aprueba.
+    r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/comunicar", json={"motivo": "Relevante: pagos frenados"})
+    assert r.status_code == 200 and r.json()["estado"] == "pendiente" and r.json()["accion"] == "comunicar_incidente"
+    r = cliente.post(f"/api/nucleo/laboratorio/operacion/aprobaciones/{r.json()['id']}/decidir", json={"aprobar": True, "como": "jefa"})
+    assert r.status_code == 200 and r.json()["estado"] == "ejecutado" and "STA-SIM-" in r.json()["resultado"]
+    assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/comunicar", json={"motivo": "otra vez"}).status_code == 400
     r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/cerrar", json={"causa": "Certificado vencido", "acciones": "Renovado y alarma"})
     assert r.status_code == 200 and r.json()["estado"] == "cerrado"
     assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/cerrar", json={"causa": "x", "acciones": "x"}).status_code == 400
@@ -422,3 +433,35 @@ def test_el_cumplimiento_por_http_incidente_reclamo_y_calendario(cliente):
     r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "ouvidoria", "periodo": "2099-S1"})
     assert r.status_code == 400 and "terminó" in r.json()["detail"]
     assert isinstance(todo["calendario"], list) and set(todo["resumen_calendario"]) == {"pendientes", "vencidas", "acciones", "acciones_vencidas"}
+
+
+
+# ─── la operación por HTTP ────────────────────────────────────────────────
+
+def test_la_operacion_por_http_bitacora_y_cuatro_ojos_sobre_la_configuracion(cliente):
+    r = cliente.get("/api/nucleo/laboratorio/operacion")
+    assert r.status_code == 200
+    assert r.json()["acciones_con_cuatro_ojos"] == ["configurar", "transmitir_reporte", "comunicar_incidente"]
+    assert "nucleo_modo" in r.json()["claves_configurables"] and r.json()["cadena_de_la_bitacora"]["ok"] is True
+
+    # Un valor fuera de rango no llega a pedido.
+    r = cliente.post("/api/nucleo/laboratorio/operacion/configuracion", json={"clave": "nucleo_modo", "valor": "7", "motivo": "x"})
+    assert r.status_code == 400
+    r = cliente.post("/api/nucleo/laboratorio/operacion/configuracion", json={"clave": "bono_al_referido", "valor": "1", "motivo": "x"})
+    assert r.status_code == 422                                    # sólo claves del núcleo
+    r = cliente.post("/api/nucleo/laboratorio/operacion/configuracion", json={"clave": "nucleo_umbral_operacion", "valor": "25000", "motivo": "Sube el ticket"})
+    assert r.status_code == 200 and r.json()["estado"] == "pendiente"
+    pedido = r.json()["id"]
+    r = cliente.post(f"/api/nucleo/laboratorio/operacion/aprobaciones/{pedido}/decidir", json={"aprobar": False, "como": "jefa", "nota": "Todavía no"})
+    assert r.status_code == 200 and r.json()["estado"] == "rechazado"
+    r = cliente.post("/api/nucleo/laboratorio/operacion/configuracion", json={"clave": "nucleo_umbral_operacion", "valor": "25000", "motivo": "Sube el ticket"})
+    r = cliente.post(f"/api/nucleo/laboratorio/operacion/aprobaciones/{r.json()['id']}/decidir", json={"aprobar": True, "como": "jefa"})
+    assert r.status_code == 200 and r.json()["estado"] == "ejecutado"
+    assert cliente.get("/api/nucleo/laboratorio/riesgo").json()["umbrales"]["umbral_operacion"] == 2500000
+
+    # Todo quedó en la bitácora, encadenado.
+    op = cliente.get("/api/nucleo/laboratorio/operacion").json()
+    acciones = [b["accion"] for b in op["bitacora"]]
+    assert "config.cambio" in acciones and "aprobacion.rechazada" in acciones and op["cadena_de_la_bitacora"]["ok"] is True
+    assert op["resumen_aprobaciones"]["ejecutado"] == 1 and op["resumen_aprobaciones"]["rechazado"] == 1
+    assert cliente.post("/api/nucleo/laboratorio/operacion/aprobaciones/apr_nadie/decidir", json={"aprobar": True, "como": "jefa"}).status_code == 400

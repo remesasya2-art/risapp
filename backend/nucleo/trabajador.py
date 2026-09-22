@@ -108,7 +108,17 @@ async def latir(db) -> bool:
     """Una vuelta del bucle: mira el interruptor y, si el núcleo está
     prendido y con base, trabaja. Devuelve si trabajó."""
     m = await modo.leer(db)
-    _estado["ultimo_modo"] = modo.NOMBRES.get(m, "apagado")
+    nombre = modo.NOMBRES.get(m, "apagado")
+    anterior = _estado.get("ultimo_modo")
+    _estado["ultimo_modo"] = nombre
+    if anterior is not None and anterior != nombre and base.hay_base():
+        # El interruptor cambió (desde Configuración, con cuatro ojos, o a
+        # mano en la base): que quede en la bitácora quién no lo hizo desde
+        # acá también. El actor es «interruptor» porque el trabajador no sabe
+        # quién fue; la auditoría de la aplicación sí.
+        from nucleo.operacion import bitacora
+        await bitacora.anotar_sin_romper(actor="interruptor", accion="modo.cambio", objetivo=modo.CLAVE,
+                                         antes={"modo": anterior}, despues={"modo": nombre})
     if not (modo.se_puede_usar(m) and base.hay_base()):
         return False
     r = await una_vuelta()

@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Veinticuatro tablas, y cada columna con su porqué.
+El esquema del núcleo. Veintiséis tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -56,6 +56,10 @@ El esquema del núcleo. Veinticuatro tablas, y cada columna con su porqué.
     reclamos          la ouvidoria (Res. CMN 4.860/2020): cada reclamo con su
                       protocolo, su plazo en días hábiles, su respuesta y su
                       resultado. Cita el caso de la mesa de ayuda si vino de ahí.
+    bitacora          quién hizo qué sobre el núcleo, con el antes y el después,
+                      encadenada por hash como el libro. Sólo se agrega.
+    aprobaciones      los pedidos de cuatro ojos: qué se quiere hacer, quién lo
+                      pidió, quién decidió, y qué pasó al ejecutarlo.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -449,6 +453,43 @@ reclamos = Table(
     Column("respondido_por", String(80), nullable=True),
     UniqueConstraint("protocolo", name="uq_reclamos_protocolo"),
     CheckConstraint("estado in ('abierto','respondido')", name="estado_del_reclamo_valido"),
+)
+
+bitacora = Table(
+    "bitacora", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("momento", DateTime(timezone=True), nullable=False),
+    Column("actor", String(80), nullable=False),
+    Column("accion", String(40), nullable=False),              # «cierre.dia», «reporte.transmitido», «config.cambio»…
+    Column("objetivo", String(120), nullable=False),           # sobre qué: un id, una clave, un período
+    Column("antes", Text, nullable=True),                      # JSON: cómo estaba
+    Column("despues", Text, nullable=True),                    # JSON: cómo quedó
+    Column("detalle", String(300), nullable=True),
+    Column("hash_previo", String(64), nullable=False),
+    Column("hash", String(64), nullable=False),
+    UniqueConstraint("hash", name="uq_bitacora_hash"),
+    Index("ix_bitacora_accion", "accion"),
+    Index("ix_bitacora_objetivo", "objetivo"),
+)
+
+aprobaciones = Table(
+    "aprobaciones", metadata,
+    Column("id", String(40), primary_key=True),               # «apr_…»
+    Column("accion", String(40), nullable=False),             # configurar, transmitir_reporte, comunicar_incidente
+    Column("objetivo", String(120), nullable=False),
+    Column("carga", Text, nullable=False),                    # JSON con lo que se va a hacer
+    Column("motivo", String(300), nullable=False),
+    Column("estado", String(12), nullable=False),             # pendiente, aprobado, rechazado, ejecutado, fallido, vencido
+    Column("pedido_por", String(80), nullable=False),
+    Column("pedido_en", DateTime(timezone=True), nullable=False),
+    Column("vence_en", DateTime(timezone=True), nullable=False),
+    Column("decidido_por", String(80), nullable=True),
+    Column("decidido_en", DateTime(timezone=True), nullable=True),
+    Column("nota", String(300), nullable=True),               # de quien decidió
+    Column("ejecutado_en", DateTime(timezone=True), nullable=True),
+    Column("resultado", Text, nullable=True),
+    CheckConstraint("estado in ('pendiente','aprobado','rechazado','ejecutado','fallido','vencido')", name="estado_de_la_aprobacion_valido"),
+    Index("ix_aprobaciones_estado", "estado"),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple

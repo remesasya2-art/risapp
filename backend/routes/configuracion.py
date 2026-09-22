@@ -113,6 +113,10 @@ async def guardar_configuracion(cuerpo: GuardarAjustes, pedido: Request,
     # ── Segunda pasada: escribir, y anotar sólo lo que de verdad cambió ───
     antes = await configuracion.leer_todo(db)
     cambios = {c: v for c, v in limpios.items() if antes.get(c) != v}
+    try:
+        await configuracion.comprobar_guardas(db, cambios)
+    except configuracion.CambioNoPermitido as e:
+        raise HTTPException(status_code=400, detail=str(e))
     for clave, valor in cambios.items():
         await configuracion.escribir(db, clave, valor)
 
