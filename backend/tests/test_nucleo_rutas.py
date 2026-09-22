@@ -465,3 +465,28 @@ def test_la_operacion_por_http_bitacora_y_cuatro_ojos_sobre_la_configuracion(cli
     assert "config.cambio" in acciones and "aprobacion.rechazada" in acciones and op["cadena_de_la_bitacora"]["ok"] is True
     assert op["resumen_aprobaciones"]["ejecutado"] == 1 and op["resumen_aprobaciones"]["rechazado"] == 1
     assert cliente.post("/api/nucleo/laboratorio/operacion/aprobaciones/apr_nadie/decidir", json={"aprobar": True, "como": "jefa"}).status_code == 400
+
+
+# ─── salud, secretos y métricas por HTTP ──────────────────────────────────
+
+def test_la_salud_los_secretos_y_las_metricas_por_http(cliente, monkeypatch):
+    r = cliente.get("/api/nucleo/laboratorio/salud")
+    assert r.status_code == 200 and {c["nombre"] for c in r.json()["comprobaciones"]} >= {"base", "libro", "bitacora", "trabajador", "secretos"}
+    assert r.json()["ok"] is False                                        # el trabajador no corre en los tests
+    assert r.json()["vigilancia"]["avisadores"] >= 0
+
+    monkeypatch.setenv("NUCLEO_SECRETO_CREDENCIAL_STA", "usuario:clave-secretisima")
+    r = cliente.get("/api/nucleo/laboratorio/secretos")
+    assert r.status_code == 200 and r.json()["puerto"] == "variables-de-entorno"
+    cuerpo = r.text
+    assert "secretisima" not in cuerpo and "sqlite" not in cuerpo            # ni el secreto ni la cadena de conexión
+    sta = next(s for s in r.json()["secretos"] if s["nombre"] == "credencial_sta")
+    assert sta["configurado"] is True and len(sta["huella"]) == 12 and r.json()["faltantes"] == []
+
+    a = cuenta_por_http(cliente, "u_ana")
+    cliente.post("/api/nucleo/laboratorio/movimientos", json={"tipo": "acreditar", "cuenta": a, "monto": "100.00", "referencia": "in-1"})
+    r = cliente.get("/api/nucleo/laboratorio/metricas")
+    assert r.status_code == 200 and r.json()["cuentas_activas"] == 1 and r.json()["saldo_de_titulares_centavos"] == 10000
+    r = cliente.get("/api/nucleo/laboratorio/metricas/texto")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    assert "nucleo_cuentas_activas 1\n" in r.text

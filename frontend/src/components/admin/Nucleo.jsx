@@ -21,6 +21,9 @@
  *   Y los reportes regulatorios: el balancete COSIF del mes, el CCS del día
  *   y la e-Financeira del semestre, generados sobre días cerrados, con su
  *   versión y su protocolo de transmisión (contra un simulador del STA).
+ *   Y la salud (qué se mira de verdad, y que avisa al equipo cuando cambia),
+ *   los secretos (si cada credencial está y su huella, nunca el valor) y
+ *   las métricas que un tablero externo puede leer en texto plano.
  *   Y la operación: la bitácora encadenada (quién hizo qué, con antes y
  *   después) y el cuatro ojos general: transmitir un reporte, comunicar un
  *   incidente o cambiar la configuración del núcleo prendido se PIDE acá y
@@ -40,7 +43,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock, Eye, ScrollText } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock, Eye, ScrollText, HeartPulse, KeyRound, Gauge } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -135,6 +138,9 @@ export default function Nucleo() {
   const [pidiendo, setPidiendo] = useState(null);                         // { tipo: 'reporte'|'incidente', id } que espera motivo
   const [pedidoDeConfig, setPedidoDeConfig] = useState({ clave: 'nucleo_umbral_operacion', valor: '', motivo: '' });
   const [notaDeDecision, setNotaDeDecision] = useState('');
+  const [salud, setSalud] = useState(null);
+  const [secretos, setSecretos] = useState(null);
+  const [metricas, setMetricas] = useState(null);
   const [vuelta, setVuelta] = useState(0);
   const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -150,18 +156,20 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl, idn, rg, rp, cu, opn] = await Promise.all([
+        const [c, l, b, z, q, rl, idn, rg, rp, cu, opn, sl, sc, mt] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
           api.get('/nucleo/laboratorio/identidad'), api.get('/nucleo/laboratorio/riesgo'),
           api.get('/nucleo/laboratorio/reportes'), api.get('/nucleo/laboratorio/cumplimiento'),
-          api.get('/nucleo/laboratorio/operacion'),
+          api.get('/nucleo/laboratorio/operacion'), api.get('/nucleo/laboratorio/salud'),
+          api.get('/nucleo/laboratorio/secretos'), api.get('/nucleo/laboratorio/metricas'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
         setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null); setRiesgo(rg.data || null);
         setReportes(rp.data || null); setCumplimiento(cu.data || null); setOperacion(opn.data || null);
+        setSalud(sl.data || null); setSecretos(sc.data || null); setMetricas(mt.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -1187,6 +1195,56 @@ export default function Nucleo() {
                 ) : null}
               </div>
             </div>
+          </div>
+
+          {/* Salud, secretos y métricas */}
+          <div style={tarjeta} data-testid="nucleo-salud">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><HeartPulse size={16} color={salud ? (salud.ok ? '#166534' : '#b91c1c') : undefined} /> Salud del núcleo {salud ? (salud.ok ? '· sano' : '· NO SANO') : ''}</strong>
+              {salud ? <span style={{ fontSize: 12, color: '#6b7280' }}>Revisado {fechaYHora(salud.revisado_en)} · la vigilancia avisa al equipo sólo cuando cambia · {salud.vigilancia.avisadores} avisador{salud.vigilancia.avisadores === 1 ? '' : 'es'} · sonda anónima en /api/health/nucleo</span> : null}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginTop: 10 }}>
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14 }}>Comprobaciones</strong>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }} data-testid="salud-comprobaciones">
+                  <tbody>
+                    {(salud?.comprobaciones || []).map((c) => (
+                      <tr key={c.nombre} data-testid={`salud-${c.ok ? 'ok' : 'falla'}`}>
+                        <td style={{ ...td, width: 18 }}>{c.ok ? <ShieldCheck size={15} color="#166534" /> : <ShieldAlert size={15} color={c.grave ? '#b91c1c' : '#b45309'} />}</td>
+                        <td style={{ ...td, fontWeight: 600 }}>{c.nombre}{c.grave ? <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>grave</span> : null}</td>
+                        <td style={{ ...td, fontSize: 12, color: c.ok ? '#374151' : '#b91c1c' }}>{c.detalle}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}><KeyRound size={14} /> Secretos {secretos ? <span style={{ fontSize: 11, color: '#6b7280' }}>· puerto {secretos.puerto} · nunca se muestra el valor, sólo la huella</span> : null}</strong>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }} data-testid="secretos-tabla">
+                  <thead><tr><th style={th}>Secreto</th><th style={th}>Está</th><th style={th}>Huella</th></tr></thead>
+                  <tbody>
+                    {(secretos?.secretos || []).map((s) => (
+                      <tr key={s.nombre} data-testid={`secretos-${s.configurado ? 'configurado' : 'falta'}`}>
+                        <td style={td}><span style={mono}>{s.nombre}</span>{s.obligatorio ? <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>obligatorio</span> : null}<div style={{ fontSize: 11, color: '#6b7280' }}>{s.para_que} · <span style={mono}>{s.variable}</span></div></td>
+                        <td style={td}>{s.configurado ? <Etiqueta valor="hecho" /> : <Etiqueta valor={s.obligatorio ? 'muerto' : 'pendiente'} />}</td>
+                        <td style={{ ...td, ...mono, fontSize: 11 }}>{s.huella || '—'}{s.rotado ? ' · rotado' : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 6 }}><Gauge size={14} /> Métricas (también en texto plano para un tablero: /api/nucleo/laboratorio/metricas/texto)</summary>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8, marginTop: 8 }} data-testid="metricas-grilla">
+                {Object.entries(metricas || {}).map(([k, v]) => (
+                  <div key={k} style={{ border: '1px solid #f3f4f6', borderRadius: 8, padding: '8px 10px' }} data-testid="metricas-valor">
+                    <div style={rotulo}>{k.replaceAll('_', ' ')}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{k.endsWith('centavos') ? `R$ ${centavos(v)}` : v}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
 
           {/* Operación: cuatro ojos y bitácora */}

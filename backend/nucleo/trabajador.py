@@ -108,6 +108,10 @@ async def latir(db) -> bool:
     """Una vuelta del bucle: mira el interruptor y, si el núcleo está
     prendido y con base, trabaja. Devuelve si trabajó."""
     m = await modo.leer(db)
+    # El latido es que el bucle da la vuelta, trabaje o no: la salud mira
+    # esto para saber si el trabajador vive. Si sólo se anotara al trabajar,
+    # el primer tick después de prender el núcleo diría «sin latir».
+    _estado["ultima_vuelta"] = datetime.now(timezone.utc).isoformat()
     nombre = modo.NOMBRES.get(m, "apagado")
     anterior = _estado.get("ultimo_modo")
     _estado["ultimo_modo"] = nombre
@@ -122,6 +126,10 @@ async def latir(db) -> bool:
     if not (modo.se_puede_usar(m) and base.hay_base()):
         return False
     r = await una_vuelta()
+    # Cada cinco minutos, la salud; avisa sólo cuando cambia. Ver
+    # nucleo/operacion/salud.py.
+    from nucleo.operacion import salud as _salud
+    await _salud.vigilar()
     _estado["vueltas"] += 1
     _estado["ultima_vuelta"] = datetime.now(timezone.utc).isoformat()
     _estado["ultimo_error"] = None
@@ -147,7 +155,10 @@ async def _bucle(db):
 
 
 def arrancar(db) -> None:
-    """Deja corriendo el trabajador. Se llama una vez, al arrancar."""
+    """Deja corriendo el trabajador. Se llama una vez, al arrancar. Y deja
+    los registros del núcleo en JSON (nucleo/operacion/registros.py)."""
+    from nucleo.operacion import registros as _registros
+    _registros.instalar()
     global _tarea
     if _tarea is not None and not _tarea.done():
         return

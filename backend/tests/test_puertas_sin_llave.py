@@ -52,6 +52,7 @@ SIN_TOPE_A_PROPOSITO = {
     #    usuario detrás de una IP compartida.
     ("GET", "/api/"): "el ping de vida",
     ("GET", "/api/health"): "el ping de vida",
+    ("GET", "/api/health/nucleo"): "el ping de vida del núcleo: contesta sólo ok/no ok con lo último que vio la vigilancia, sin calcular nada, y 404 apagado",
     ("GET", "/api/rate"): "la tasa del día, igual para todos",
     ("GET", "/api/limits"): "los límites publicados",
     ("GET", "/api/policies"): "las políticas publicadas",

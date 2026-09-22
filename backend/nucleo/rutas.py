@@ -14,6 +14,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from models.user import User
@@ -21,7 +22,7 @@ from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from nucleo.identidad import formas as id_formas, legajos, simulador as id_simulador
 from nucleo.cumplimiento import calendario, incidentes as cumpl_incidentes, ouvidoria as cumpl_ouvidoria
-from nucleo.operacion import aprobaciones, bitacora
+from nucleo.operacion import aprobaciones, bitacora, registros as op_registros, salud as op_salud, secretos as op_secretos
 from nucleo.reportes import ReporteInvalido, registro as reportes_reg
 from nucleo.reportes.periodos import PeriodoInvalido
 from nucleo.riesgo import casos as riesgo_casos, monitoreo
@@ -472,6 +473,36 @@ class PanelDeOperacion(BaseModel):
     bitacora: list[RenglonDeBitacora]
     cadena_de_la_bitacora: Cadena
     claves_configurables: list[str]
+
+
+class Comprobacion(BaseModel):
+    nombre: str
+    ok: bool
+    detalle: str
+    grave: bool
+
+
+class Salud(BaseModel):
+    ok: bool
+    revisado_en: str
+    comprobaciones: list[Comprobacion]
+    vigilancia: dict
+
+
+class Secreto(BaseModel):
+    nombre: str
+    para_que: str
+    variable: str
+    configurado: bool
+    huella: Optional[str] = None
+    obligatorio: bool
+    rotado: bool
+
+
+class Secretos(BaseModel):
+    puerto: str
+    secretos: list[Secreto]
+    faltantes: list[str]
 
 
 class PersonaDePrueba(BaseModel):
@@ -1378,3 +1409,61 @@ async def decidir_aprobacion(pedido_id: str, pedido: Decision, admin: User = Dep
         return await aprobaciones.decidir(pedido_id, actor=_quien(admin, pedido.como, modo_vigente), aprobar=pedido.aprobar, nota=pedido.nota)
     except aprobaciones.AprobacionInvalida as e:
         raise _error_de_aprobacion(e)
+
+
+# ── operación: salud, secretos y métricas ─────────────────────────────────
+
+@router.get("/laboratorio/salud", response_model=Salud)
+async def salud(admin: User = Depends(get_super_admin),
+                modo_vigente: int = Depends(modo.exigir_encendido)):
+    """La revisión completa, con detalle. Sin `_con_base` a propósito: sin
+    base, la salud tiene que poder decir «sin base»."""
+    r = await op_salud.revisar(modo_vigente=modo_vigente)
+    return {**r, "vigilancia": op_salud.estado()}
+
+
+@router.get("/laboratorio/secretos", response_model=Secretos)
+async def secretos(admin: User = Depends(get_super_admin),
+                   modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Si cada secreto está y su huella. NUNCA el valor: no hay ruta que lo
+    devuelva, y hay test."""
+    return {"puerto": op_secretos.secretos().nombre, "secretos": await op_secretos.estado(modo_vigente),
+            "faltantes": op_secretos.faltantes(modo_vigente)}
+
+
+class Metricas(BaseModel):
+    cuentas_activas: int
+    asientos_total: int
+    asientos_hoy: int
+    saldo_de_titulares_centavos: int
+    trabajos_pendientes: int
+    trabajos_en_curso: int
+    trabajos_hechos: int
+    trabajos_muertos: int
+    operaciones_activas: int
+    operaciones_enviadas: int
+    operaciones_liquidadas: int
+    operaciones_rechazadas: int
+    reportes_generados: int
+    reportes_transmitidos: int
+    obligaciones_pendientes: int
+    obligaciones_vencidas: int
+    acciones_con_plazo_vencidas: int
+    aprobaciones_pendientes: int
+    incidentes_abiertos: int
+    reclamos_vencidos: int
+    bitacora_renglones: int
+
+
+@router.get("/laboratorio/metricas", response_model=Metricas)
+async def metricas(admin: User = Depends(get_super_admin),
+                   modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Las métricas del núcleo, para la pestaña."""
+    return await op_registros.resumen()
+
+
+@router.get("/laboratorio/metricas/texto", response_model=str, response_class=PlainTextResponse)
+async def metricas_en_texto(admin: User = Depends(get_super_admin),
+                            modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Las mismas, en la forma `nombre valor` que lee un recolector."""
+    return op_registros.en_texto(await op_registros.resumen())
