@@ -27,8 +27,9 @@ from nucleo import base
 from nucleo.esquema import asientos, cierres, cuentas, reportes
 from nucleo.reportes import ReporteInvalido, transmisor as _transmisor
 from nucleo.reportes import balancete, ccs, efinanceira, periodos
+from nucleo.cumplimiento import incidentes as _incidentes, ouvidoria as _ouvidoria
 
-BALANCETE, CCS, EFINANCEIRA = "balancete", "ccs", "efinanceira"
+BALANCETE, CCS, EFINANCEIRA, INCIDENTES, OUVIDORIA = "balancete", "ccs", "efinanceira", "incidentes", "ouvidoria"
 
 # Por tipo: la clase de período que lleva, cómo lo llama el regulador y
 # quién arma el archivo. Un tipo nuevo se agrega acá y en ningún otro lado.
@@ -36,6 +37,10 @@ TIPOS = {
     BALANCETE: (periodos.MES, balancete.DOCUMENTO, balancete.armar),
     CCS: (periodos.DIA, ccs.DOCUMENTO, ccs.armar),
     EFINANCEIRA: (periodos.SEMESTRE, efinanceira.DOCUMENTO, efinanceira.armar),
+    # Los informes del cumplimiento (nucleo/cumplimiento/): del registro de
+    # incidentes, una vez al año; de la ouvidoria, una vez por semestre.
+    INCIDENTES: (periodos.ANIO, _incidentes.DOCUMENTO_DEL_INFORME, _incidentes.armar_informe),
+    OUVIDORIA: (periodos.SEMESTRE, _ouvidoria.DOCUMENTO_DEL_INFORME, _ouvidoria.armar_informe),
 }
 
 

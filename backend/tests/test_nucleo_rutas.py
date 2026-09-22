@@ -335,7 +335,7 @@ def test_los_reportes_por_http_del_cierre_al_protocolo(cliente):
 
     r = cliente.get("/api/nucleo/laboratorio/reportes")
     assert r.status_code == 200
-    assert r.json()["transmisor"] == "simulador-sta" and r.json()["tipos"] == ["balancete", "ccs", "efinanceira"]
+    assert r.json()["transmisor"] == "simulador-sta" and r.json()["tipos"] == ["balancete", "ccs", "efinanceira", "incidentes", "ouvidoria"]
     assert {c["codigo"] for c in r.json()["cosif"]} == {"1.1.01", "1.1.02", "1.1.03", "1.2.01", "2.1.01", "2.1.02",
                                                           "2.2.01", "3.1.01", "3.2.01", "4.1.01", "4.2.01", "5.1.01", "5.1.02", "5.9.99"}
     assert r.json()["reportes"] == []
@@ -370,3 +370,55 @@ def test_los_reportes_por_http_del_cierre_al_protocolo(cliente):
     r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "balancete", "periodo": mes})
     assert r.status_code == 200 and r.json()["version"] == 2 and r.json()["resumen"]["tipo_remessa"] == "S"
     assert cliente.get("/api/nucleo/laboratorio/reportes").json()["resumen"]["balancete"] == {"generados": 2, "transmitidos": 1}
+
+
+# ─── el cumplimiento por HTTP ─────────────────────────────────────────────
+
+def test_el_cumplimiento_por_http_incidente_reclamo_y_calendario(cliente):
+    r = cliente.get("/api/nucleo/laboratorio/cumplimiento")
+    assert r.status_code == 200
+    assert r.json()["tipos_de_incidente"] == ["indisponibilidad", "fuga_de_datos", "fraude", "ciberataque", "otro"]
+    assert r.json()["canales"] == ["telefono", "correo", "panel", "bcb", "procon"] and r.json()["acciones"] == []
+
+    # Un incidente relevante: lleva plazo, aparece como acción, se comunica una vez, se cierra una vez.
+    r = cliente.post("/api/nucleo/laboratorio/cumplimiento/incidentes",
+                     json={"tipo": "indisponibilidad", "titulo": "PIX caído", "impacto": "Sin pagos", "clientes_afectados": 12, "relevante": True})
+    assert r.status_code == 200 and r.json()["comunicar_hasta"] and r.json()["estado"] == "abierto"
+    inc = r.json()["id"]
+    assert cliente.post("/api/nucleo/laboratorio/cumplimiento/incidentes",
+                        json={"tipo": "raro", "titulo": "x", "impacto": "x", "clientes_afectados": 0}).status_code == 422
+    assert cliente.post("/api/nucleo/laboratorio/cumplimiento/incidentes",
+                        json={"tipo": "otro", "titulo": "x", "impacto": "x", "clientes_afectados": 0, "inicio": "ayer"}).status_code == 400
+    acciones = cliente.get("/api/nucleo/laboratorio/cumplimiento").json()["acciones"]
+    assert [(a["accion"], a["referencia"]) for a in acciones] == [("comunicar_incidente", inc)]
+    r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/anotar", json={"texto": "Se reinició el trabajador."})
+    assert r.status_code == 200 and r.json()["notas"][-1]["texto"] == "Se reinició el trabajador."
+    r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/comunicar")
+    assert r.status_code == 200 and r.json()["protocolo"].startswith("STA-SIM-")
+    assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/comunicar").status_code == 400
+    r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/cerrar", json={"causa": "Certificado vencido", "acciones": "Renovado y alarma"})
+    assert r.status_code == 200 and r.json()["estado"] == "cerrado"
+    assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/incidentes/{inc}/cerrar", json={"causa": "x", "acciones": "x"}).status_code == 400
+
+    # Un reclamo: protocolo, diez días hábiles, respuesta una vez.
+    r = cliente.post("/api/nucleo/laboratorio/cumplimiento/reclamos",
+                     json={"canal": "bcb", "asunto": "Cobro duplicado", "descripcion": "Se cobró dos veces", "caso_soporte": "S-000042"})
+    assert r.status_code == 200 and r.json()["protocolo"].startswith("OUV-") and r.json()["caso_soporte"] == "S-000042"
+    rec = r.json()["id"]
+    assert [a["accion"] for a in cliente.get("/api/nucleo/laboratorio/cumplimiento").json()["acciones"]] == ["responder_reclamo"]
+    assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/reclamos/{rec}/responder",
+                        json={"respuesta": "x", "resultado": "raro"}).status_code == 422
+    r = cliente.post(f"/api/nucleo/laboratorio/cumplimiento/reclamos/{rec}/responder",
+                     json={"respuesta": "Se devolvió el segundo cobro.", "resultado": "procedente"})
+    assert r.status_code == 200 and r.json()["estado"] == "respondido" and r.json()["en_plazo"] is True
+    assert cliente.post(f"/api/nucleo/laboratorio/cumplimiento/reclamos/{rec}/responder",
+                        json={"respuesta": "otra", "resultado": "parcial"}).status_code == 400
+    todo = cliente.get("/api/nucleo/laboratorio/cumplimiento").json()
+    assert todo["acciones"] == [] and todo["resumen_incidentes"]["cerrado"] == 1 and todo["resumen_reclamos"]["respondido"] == 1
+
+    # El calendario y los informes del cumplimiento por el mismo camino que los reportes.
+    r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "incidentes", "periodo": "2025"})
+    assert r.status_code == 200 and r.json()["documento"] == "Informe anual de incidentes" and r.json()["resumen"]["total"] == 0
+    r = cliente.post("/api/nucleo/laboratorio/reportes/generar", json={"tipo": "ouvidoria", "periodo": "2099-S1"})
+    assert r.status_code == 400 and "terminó" in r.json()["detail"]
+    assert isinstance(todo["calendario"], list) and set(todo["resumen_calendario"]) == {"pendientes", "vencidas", "acciones", "acciones_vencidas"}

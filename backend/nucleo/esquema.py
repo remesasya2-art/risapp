@@ -1,5 +1,5 @@
 """
-El esquema del núcleo. Veintiuna tablas, y cada columna con su porqué.
+El esquema del núcleo. Veinticuatro tablas, y cada columna con su porqué.
 
     plan_de_cuentas   el plan contable (estilo COSIF, reducido). Cada cuenta
                       tiene naturaleza deudora o acreedora: es lo que decide
@@ -48,6 +48,14 @@ El esquema del núcleo. Veintiuna tablas, y cada columna con su porqué.
                       e-Financeira), con el archivo tal cual, su versión y el
                       protocolo de la transmisión. Sólo se agrega: una
                       corrección es una versión nueva, nunca una edición.
+    incidentes        el registro de incidentes (Res. BCB 85/2021): qué pasó,
+                      cuándo, a cuántos tocó, si es relevante y se comunica
+                      al BCB, y con qué protocolo. La causa y las acciones se
+                      escriben una vez, al cerrar.
+    incidente_notas   lo que se fue anotando en el incidente. Sólo se agrega.
+    reclamos          la ouvidoria (Res. CMN 4.860/2020): cada reclamo con su
+                      protocolo, su plazo en días hábiles, su respuesta y su
+                      resultado. Cita el caso de la mesa de ayuda si vino de ahí.
 
 EL DINERO ES BIGINT EN CENTAVOS
 
@@ -386,6 +394,61 @@ reportes = Table(
     Column("transmisor", String(40), nullable=True),          # por qué puerto salió
     UniqueConstraint("tipo", "periodo", "version", name="uq_reportes_tipo_periodo_version"),
     Index("ix_reportes_tipo_periodo", "tipo", "periodo"),
+)
+
+incidentes = Table(
+    "incidentes", metadata,
+    Column("id", String(40), primary_key=True),               # «inc_…»
+    Column("tipo", String(20), nullable=False),               # indisponibilidad, fuga_de_datos, fraude, ciberataque, otro
+    Column("titulo", String(200), nullable=False),
+    Column("inicio", DateTime(timezone=True), nullable=False),   # cuándo empezó (puede ser antes de que se registrara)
+    Column("fin", DateTime(timezone=True), nullable=True),
+    Column("impacto", Text, nullable=False),
+    Column("clientes_afectados", Integer, nullable=False, default=0),
+    Column("relevante", Boolean, nullable=False, default=False),   # relevante = se comunica al BCB
+    Column("estado", String(12), nullable=False),             # abierto, cerrado
+    Column("causa", Text, nullable=True),                     # se escribe al cerrar
+    Column("acciones", Text, nullable=True),                  # se escribe al cerrar
+    Column("abierto_en", DateTime(timezone=True), nullable=False),
+    Column("abierto_por", String(80), nullable=False),
+    Column("comunicar_hasta", DateTime(timezone=True), nullable=True),   # sólo si es relevante
+    Column("comunicado_en", DateTime(timezone=True), nullable=True),
+    Column("comunicado_por", String(80), nullable=True),
+    Column("protocolo", String(60), nullable=True),
+    Column("cerrado_en", DateTime(timezone=True), nullable=True),
+    Column("cerrado_por", String(80), nullable=True),
+    CheckConstraint("estado in ('abierto','cerrado')", name="estado_del_incidente_valido"),
+)
+
+incidente_notas = Table(
+    "incidente_notas", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("incidente", String(40), ForeignKey("incidentes.id"), nullable=False),
+    Column("autor", String(80), nullable=False),
+    Column("texto", Text, nullable=False),
+    Column("momento", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("ix_incidente_notas_incidente", "incidente"),
+)
+
+reclamos = Table(
+    "reclamos", metadata,
+    Column("id", String(40), primary_key=True),               # «ouv_…»
+    Column("protocolo", String(20), nullable=False),          # «OUV-2026-000001»: se dicta por teléfono
+    Column("titular", String(40), nullable=True),             # el id del legajo, si es un titular
+    Column("canal", String(20), nullable=False),              # telefono, correo, panel, bcb, procon
+    Column("asunto", String(200), nullable=False),
+    Column("descripcion", Text, nullable=False),
+    Column("caso_soporte", String(20), nullable=True),        # el «S-000123» de la mesa de ayuda, como texto
+    Column("estado", String(12), nullable=False),             # abierto, respondido
+    Column("abierto_en", DateTime(timezone=True), nullable=False),
+    Column("abierto_por", String(80), nullable=False),
+    Column("responder_hasta", Date, nullable=False),          # diez días hábiles
+    Column("respuesta", Text, nullable=True),
+    Column("resultado", String(15), nullable=True),           # procedente, improcedente, parcial
+    Column("respondido_en", DateTime(timezone=True), nullable=True),
+    Column("respondido_por", String(80), nullable=True),
+    UniqueConstraint("protocolo", name="uq_reclamos_protocolo"),
+    CheckConstraint("estado in ('abierto','respondido')", name="estado_del_reclamo_valido"),
 )
 
 # El hash del que no tiene anterior. Sesenta y cuatro ceros: se lee a simple
