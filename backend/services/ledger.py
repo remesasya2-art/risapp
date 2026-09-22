@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from database import db
-from services.money import ZERO, from_db, quantize_money, to_decimal, to_float
+from services.money import ZERO, from_db, quantize_money, to_decimal, to_decimal128, to_float
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,12 @@ async def record_ris_entry(
     *,
     user_id: str,
     movement_type: str,            # recarga_pix, envio_ves, envio_reais, refund_envio_ves, refund_envio_reais, bono_referido, pago_tarjeta, ajuste_admin...
-    amount: float,                 # SIEMPRE positivo; 'direction' define el signo
+    amount,                        # SIEMPRE positivo; 'direction' define el signo. Decimal, texto o float: se normaliza
     direction: str,                # "credit" (entra saldo) | "debit" (sale saldo)
     account: str = "balance_ris",  # balance_ris | balance_ris_terceros
     balance_before=None,
     balance_after=None,
+    decimales: int = 2,            # 2 para RIS; el libro cripto pasa 8
     reference_kind: str = None,    # transaction | pix_payment | btc_remesa | referral | card_payment | manual
     reference_id: str = None,
     transaction_id: str = None,
@@ -94,7 +95,20 @@ async def record_ris_entry(
                 "role": u.get("role", "user"),
             }
 
-        amount_abs = abs(float(amount or 0))
+        # EL DINERO SE GUARDA EN Decimal128, NO EN float.
+        #
+        #   Acá decía `abs(float(amount or 0))`. Cada línea del libro quedaba en
+        #   coma flotante mientras el resto de la aplicación cuida los saldos en
+        #   `Decimal128`, y los lectores tuvieron que aprender a sumar en Decimal
+        #   «por si acaso» (`sum_ris_balance`, `contabilidad._monto`). Un libro
+        #   contable que guarda 0.1 + 0.2 como 0.30000000000000004 no es un libro:
+        #   es una aproximación. Se normaliza con `to_decimal` (un float entra
+        #   por `str`, sin arrastrar su ruido) y se guarda ya redondeado a los
+        #   decimales de la cuenta.
+        #
+        #   Lo que ya está escrito en float queda como está: `from_db` y
+        #   `to_decimal` leen las dos formas, y así tiene que seguir.
+        amount_abs = quantize_money(abs(to_decimal(amount)), decimales)
         signed = amount_abs if direction == "credit" else -amount_abs
 
         entry = {
@@ -109,13 +123,13 @@ async def record_ris_entry(
             # Naturaleza del movimiento
             "movement_type": movement_type,
             "direction": direction,
-            "amount": amount_abs,
-            "signed_amount": signed,
+            "amount": to_decimal128(amount_abs, decimales),
+            "signed_amount": to_decimal128(signed, decimales),
             "currency": "RIS",
             "account": account,
             # Saldo antes/después (si el llamador lo provee)
-            "balance_before": balance_before,
-            "balance_after": balance_after,
+            "balance_before": None if balance_before is None else to_decimal128(balance_before, decimales),
+            "balance_after": None if balance_after is None else to_decimal128(balance_after, decimales),
             # Enlace al origen
             "reference": ({"kind": reference_kind, "id": reference_id} if reference_kind else None),
             "transaction_id": transaction_id,
@@ -221,11 +235,11 @@ async def create_opening_entries():
                 await record_ris_entry(
                     user_id=uid,
                     movement_type="saldo_apertura",
-                    amount=to_float(abs(opening)),
+                    amount=abs(opening),
                     direction="credit" if opening > 0 else "debit",
                     account=account,
-                    balance_before=to_float(led),
-                    balance_after=to_float(current),
+                    balance_before=led,
+                    balance_after=current,
                     reference_kind="manual",
                     reference_id="opening_migration",
                     actor_type="system",
@@ -308,18 +322,17 @@ async def create_closing_entries(*, actor_id: str, actor_email: str = None,
                 # El saldo baja a cero: si el libro estaba en positivo, la línea
                 # es un débito; si estaba en negativo, un crédito.
                 direccion = "debit" if saldo_libro > ZERO else "credit"
-                # `to_float` redondea a DOS decimales por defecto, y sobre un
-                # saldo cripto de ocho eso dejaría un resto —el cierre de
-                # 12.3456789 se escribiría como 12.35 y el libro quedaría en
-                # -0.0043211—. Se le pasan los decimales de la cuenta.
-                monto = to_float(abs(saldo_libro), decimales)
+                # El monto va en Decimal, con los decimales de la cuenta: un
+                # cierre cripto de 12.3456789 redondeado a dos dejaría el libro
+                # en -0.0043211, un resto del que nadie sabría el origen.
                 comun = dict(
                     user_id=uid,
                     movement_type="cierre_de_libro",
-                    amount=monto,
+                    amount=abs(saldo_libro),
                     direction=direccion,
-                    balance_before=to_float(saldo_libro, decimales),
-                    balance_after=0.0,
+                    balance_before=saldo_libro,
+                    balance_after=ZERO,
+                    decimales=decimales,
                     reference_kind="manual",
                     reference_id=f"cierre_{motivo}",
                     actor_type="admin",

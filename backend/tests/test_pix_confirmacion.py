@@ -45,6 +45,7 @@ from conftest import ensenarle_decimal128_a_mongomock, usar_base    # noqa: E402
 ensenarle_decimal128_a_mongomock()
 
 from services import ledger, saldos                                 # noqa: E402
+from services.money import to_decimal as _plata   # la plata en la base va en Decimal128: se compara en Decimal, como la lee la aplicación  # noqa: E402
 
 
 def _cargar_gestor_pix():
@@ -209,10 +210,10 @@ def test_la_acreditacion_deja_su_linea_con_el_contexto_completo(base):
         linea, = await _lineas(base)
         assert linea["movement_type"] == "recarga_pix"
         assert linea["direction"] == "credit"
-        assert linea["amount"] == 500.0
+        assert _plata(linea["amount"]) == _plata("500.0")
         assert linea["account"] == "balance_ris"
-        assert linea["balance_before"] == 0.0
-        assert linea["balance_after"] == 500.0
+        assert _plata(linea["balance_before"]) == _plata("0.0")
+        assert _plata(linea["balance_after"]) == _plata("500.0")
         assert linea["reference"] == {"kind": "pix_payment", "id": "pix_1"}
         assert linea["actor"]["type"] == "webhook"
         assert linea["actor"]["id"] == "mercadopago"
@@ -243,7 +244,7 @@ def test_acreditar_sobre_un_saldo_que_ya_existe_encadena_bien(base):
         await _pago(base, monto=250)
         await gp.process_pix_confirmation("pix_1", "usr_ana")
         linea, = await _lineas(base)
-        assert (linea["balance_before"], linea["balance_after"]) == (1000.0, 1250.0)
+        assert (_plata(linea["balance_before"]), _plata(linea["balance_after"])) == (_plata("1000.0"), _plata("1250.0"))
     corre(caso())
 
 

@@ -62,6 +62,7 @@ def _cargar_payments_card():
 
 pc = _cargar_payments_card()
 from fastapi import HTTPException                                   # noqa: E402
+from services.money import to_decimal as _plata   # la plata en la base va en Decimal128: se compara en Decimal, como la lee la aplicación  # noqa: E402
 
 
 def corre(coro):
@@ -225,7 +226,7 @@ def test_un_pago_aprobado_acredita_y_asienta(base):
         linea, = await _lineas(base)
         assert linea["movement_type"] == "pago_tarjeta"
         assert linea["direction"] == "credit"
-        assert linea["amount"] == 100.0
+        assert _plata(linea["amount"]) == _plata("100.0")
         assert linea["reference"] == {"kind": "card_payment", "id": "998877"}
         assert linea["actor"]["type"] == "user"
     corre(caso())

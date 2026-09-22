@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from database import db
+from services.money import quantize_money, to_decimal, to_decimal128
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,11 @@ async def record_crypto_entry(
     user_id: str,
     currency: str,                 # "usdt" | "usdc"
     movement_type: str,            # deposito_cripto | ajuste_admin_cripto
-    amount: float,
+    amount,                        # Decimal, texto o float: se normaliza
     direction: str,                # "credit" (entra saldo) | "debit" (sale saldo)
     balance_before=None,
     balance_after=None,
+    decimales: int = 8,
     reference_kind: str = None,    # crypto_deposit | manual
     reference_id: str = None,      # order_id
     actor_type: str = "webhook",   # user | admin | system | webhook
@@ -82,7 +84,9 @@ async def record_crypto_entry(
                 "role": u.get("role", "user"),
             }
 
-        amount_abs = abs(float(amount or 0))
+        # En Decimal128 con OCHO decimales, como los saldos cripto. El porqué
+        # entero está en `ledger.record_ris_entry`.
+        amount_abs = quantize_money(abs(to_decimal(amount)), decimales)
         signed = amount_abs if direction == "credit" else -amount_abs
 
         entry = {
@@ -95,12 +99,12 @@ async def record_crypto_entry(
             "user_role": user_snapshot.get("role"),
             "movement_type": movement_type,
             "direction": direction,
-            "amount": amount_abs,
-            "signed_amount": signed,
+            "amount": to_decimal128(amount_abs, decimales),
+            "signed_amount": to_decimal128(signed, decimales),
             "currency": book,
             "account": account,
-            "balance_before": balance_before,
-            "balance_after": balance_after,
+            "balance_before": None if balance_before is None else to_decimal128(balance_before, decimales),
+            "balance_after": None if balance_after is None else to_decimal128(balance_after, decimales),
             "reference": ({"kind": reference_kind, "id": reference_id} if reference_kind else None),
             "actor": {"type": actor_type, "id": actor_id, "email": actor_email},
             "metadata": metadata or {},
