@@ -388,6 +388,29 @@ const [searchParams, setSearchParams] = useSearchParams();
   // CPF). Sólo la ve el super administrador: la ruta lo exige, y si contesta
   // 403 la tira no se dibuja.
   const [saludDeLaApp, setSaludDeLaApp] = useState(null);
+  // Los CPF repetidos (dos cuentas con el mismo documento). Sólo el super
+  // administrador los ve y los resuelve; liberar el CPF de una cuenta lleva
+  // motivo y queda en la auditoría.
+  const [cpfRepetidos, setCpfRepetidos] = useState(null);
+  const [motivoDeLiberacion, setMotivoDeLiberacion] = useState({});      // user_id → motivo escrito
+  const [liberando, setLiberando] = useState(false);
+  const cargarCpfRepetidos = useCallback(() => {
+    if (user?.role !== 'super_admin') return;
+    api.get('/admin/cpf-repetidos').then((r) => setCpfRepetidos(r.data)).catch(() => {});
+  }, [user?.role]);
+  useEffect(() => { cargarCpfRepetidos(); }, [cargarCpfRepetidos]);
+  const liberarCpf = async (userId) => {
+    const motivo = (motivoDeLiberacion[userId] || '').trim();
+    if (!motivo) return toast.error('Escribí el motivo: se le saca un documento de identidad a una cuenta');
+    setLiberando(true);
+    try {
+      const r = await api.post(`/admin/users/${userId}/cpf/liberar`, { motivo });
+      toast.success(r.data.quedan_repetidos === 0 ? 'CPF liberado · no quedan repetidos y el candado quedó creado' : `CPF liberado · quedan ${r.data.quedan_repetidos} repetidos`);
+      setMotivoDeLiberacion((m) => ({ ...m, [userId]: '' }));
+      cargarCpfRepetidos();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo liberar'); }
+    finally { setLiberando(false); }
+  };
   useEffect(() => {
     if (user?.role !== 'super_admin') return;
     let vigente = true;
@@ -1182,6 +1205,31 @@ const [searchParams, setSearchParams] = useSearchParams();
         {/* Partners Tab - Socios y Gestores */}
         {activeTab === 'users' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {cpfRepetidos && (cpfRepetidos.repetidos.length > 0 || !cpfRepetidos.candado) ? (
+              <div style={{ ...cardStyle, padding: '16px', borderLeft: '4px solid #dc2626' }} data-testid="cpf-repetidos">
+                <h3 style={{ margin: '0 0 6px', fontSize: '15px', color: '#991b1b' }}>CPF repetidos: {cpfRepetidos.repetidos.length} documento{cpfRepetidos.repetidos.length === 1 ? '' : 's'} con más de una cuenta</h3>
+                <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#6b7280', lineHeight: 1.5 }}>
+                  Mientras haya repetidos no se puede crear el candado que impide registrar dos cuentas con el mismo CPF{cpfRepetidos.candado ? '' : ' (hoy falta)'}. Mirá las dos cuentas, decidí cuál es la buena, y liberá el CPF de la otra: no se borra ni se le toca el saldo, sólo pierde el documento, con tu motivo asentado en la auditoría.
+                </p>
+                {cpfRepetidos.repetidos.map((r) => (
+                  <div key={r.cpf} style={{ border: '1px solid #fecaca', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px' }} data-testid="cpf-repetido">
+                    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', marginBottom: '6px' }}>CPF {r.cpf}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '10px' }}>
+                      {r.cuentas.map((c) => (
+                        <div key={c.user_id} style={{ background: '#fafafa', borderRadius: '8px', padding: '10px', fontSize: '13px' }} data-testid="cpf-repetido-cuenta">
+                          <div><strong>{c.nombre || '(sin nombre)'}</strong> · {c.email}</div>
+                          <div style={{ color: '#6b7280', fontSize: '12px' }}>creada {c.creada ? new Date(c.creada).toLocaleDateString('es-AR') : '—'} · último ingreso {c.ultimo_ingreso ? new Date(c.ultimo_ingreso).toLocaleDateString('es-AR') : 'nunca'} · verificación {c.verificacion || '—'} · saldo RIS {c.saldo_ris.toLocaleString('es-AR', { minimumFractionDigits: 2 })}{c.vetada ? ' · VETADA' : ''}{c.borrada ? ' · BORRADA' : ''}</div>
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                            <input value={motivoDeLiberacion[c.user_id] || ''} onChange={(e) => setMotivoDeLiberacion((m) => ({ ...m, [c.user_id]: e.target.value }))} placeholder="Motivo para liberar el CPF de esta cuenta" style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '12px' }} data-testid="cpf-motivo" />
+                            <button type="button" onClick={() => liberarCpf(c.user_id)} disabled={liberando} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }} data-testid="cpf-liberar">Liberar el CPF de esta cuenta</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {/* Search bar */}
             <div style={{ ...cardStyle, padding: '16px' }}>
               <div style={{ position: 'relative' }}>
