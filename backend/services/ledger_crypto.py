@@ -114,7 +114,9 @@ async def record_crypto_entry(
         await db[LEDGER_COLLECTION].insert_one(entry)
         return entry["entry_id"]
     except Exception as e:
-        logger.error(
-            f"No se pudo registrar en el ledger cripto (user={user_id}, currency={currency}): {e}"
-        )
+        # Igual que en el libro RIS: no se relanza, pero no se calla. Ver
+        # services/gritos.py.
+        from services import gritos
+        await gritos.libro_sin_linea(db, libro=f"cripto/{currency}", user_id=user_id,
+                                     movement_type=movement_type, amount=amount, account=account, error=e)
         return None
