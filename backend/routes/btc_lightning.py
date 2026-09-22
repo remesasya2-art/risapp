@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from services.aviso_de_tasa import avisar_si_hace_falta
 from services.notifications import avisar_al_personal
 from routes.dependencies import get_current_user, sin_transacciones_personales
+from routes.security_2fa import frenar_por_cuenta
 from services.money import para_mostrar
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ MARGEN = 0.99
 COMISION = 1.02
 LIMITE_DIARIO_USD = 500.0
 LIMITE_MAXIMO_USD = 200.0
-_rate_limit_invoices = {}  # {user_id: [timestamps]}
+REGLA_DE_FACTURAS = "5/minute"       # por cuenta; el contador vive en security_2fa
 
 
 async def _get_margen_dinamico():
@@ -290,15 +291,13 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0.")
     if body.usd_cliente > LIMITE_MAXIMO_USD:
         raise HTTPException(status_code=400, detail="El monto maximo por operacion es $200 USD.")
-    # Rate limiting: max 5 invoices por usuario por minuto
-    now = time.time()
-    _user_reqs = _rate_limit_invoices.get(current_user.user_id, [])
-    _user_reqs = [t for t in _user_reqs if now - t < 60]
-    if len(_user_reqs) >= 5:
-        raise HTTPException(status_code=429, detail="Demasiadas solicitudes. Intenta de nuevo en 1 minuto.")
-    _user_reqs.append(now)
-    _rate_limit_invoices[current_user.user_id] = _user_reqs
-        
+    # Cinco facturas por cuenta por minuto. Era un diccionario en la memoria
+    # del proceso —el último de la aplicación—, o sea: se reiniciaba con cada
+    # despliegue y con dos procesos eran diez. Ahora es el mismo contador que
+    # el login, que con LIMITES_EN_LA_BASE=si vive en Mongo y lo comparten los
+    # workers. Ver routes/security_2fa.py.
+    await frenar_por_cuenta(current_user.user_id, "lightning.factura", REGLA_DE_FACTURAS)
+
     enviado_hoy = await _get_total_enviado_hoy(current_user.user_id)
     if enviado_hoy + body.usd_cliente > LIMITE_DIARIO_USD:
         disponible = max(0.0, LIMITE_DIARIO_USD - enviado_hoy)
