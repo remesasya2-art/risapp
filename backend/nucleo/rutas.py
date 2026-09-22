@@ -20,6 +20,9 @@ from models.user import User
 from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from nucleo.identidad import formas as id_formas, legajos, simulador as id_simulador
+from nucleo.cumplimiento import calendario, incidentes as cumpl_incidentes, ouvidoria as cumpl_ouvidoria
+from nucleo.reportes import ReporteInvalido, registro as reportes_reg
+from nucleo.reportes.periodos import PeriodoInvalido
 from nucleo.riesgo import casos as riesgo_casos, monitoreo
 from nucleo.rieles import operaciones as rieles_op, pix, simulador
 from routes.dependencies import get_super_admin
@@ -312,6 +315,125 @@ class Riesgo(BaseModel):
     comunicaciones: list[Comunicacion]
 
 
+class Reporte(BaseModel):
+    id: int
+    tipo: str
+    periodo: str
+    version: int
+    documento: str
+    resumen: dict
+    estado: str
+    generado_en: Optional[str] = None
+    generado_por: str
+    transmitido_en: Optional[str] = None
+    transmitido_por: Optional[str] = None
+    protocolo: Optional[str] = None
+    transmisor: Optional[str] = None
+    archivo: Optional[str] = None
+
+
+class CuentaCosif(BaseModel):
+    codigo: str
+    nombre: str
+    cosif: str
+
+
+class Reportes(BaseModel):
+    transmisor: str
+    tipos: list[str]
+    cosif: list[CuentaCosif]
+    resumen: dict
+    reportes: list[Reporte]
+
+
+class NotaDeIncidente(BaseModel):
+    autor: str
+    texto: str
+    momento: Optional[str] = None
+
+
+class Incidente(BaseModel):
+    id: str
+    tipo: str
+    titulo: str
+    inicio: Optional[str] = None
+    fin: Optional[str] = None
+    impacto: str
+    clientes_afectados: int
+    relevante: bool
+    estado: str
+    causa: Optional[str] = None
+    acciones: Optional[str] = None
+    abierto_en: Optional[str] = None
+    abierto_por: str
+    comunicar_hasta: Optional[str] = None
+    comunicado_en: Optional[str] = None
+    comunicado_por: Optional[str] = None
+    protocolo: Optional[str] = None
+    cerrado_en: Optional[str] = None
+    cerrado_por: Optional[str] = None
+    comunicacion_vencida: bool
+    notas: list[NotaDeIncidente]
+
+
+class Reclamo(BaseModel):
+    id: str
+    protocolo: str
+    titular: Optional[str] = None
+    canal: str
+    asunto: str
+    descripcion: str
+    caso_soporte: Optional[str] = None
+    estado: str
+    abierto_en: Optional[str] = None
+    abierto_por: str
+    responder_hasta: str
+    respuesta: Optional[str] = None
+    resultado: Optional[str] = None
+    respondido_en: Optional[str] = None
+    respondido_por: Optional[str] = None
+    vencido: bool
+    en_plazo: Optional[bool] = None
+
+
+class Obligacion(BaseModel):
+    obligacion: str
+    periodicidad: str
+    fuente: str
+    plazo: str
+    periodo: str
+    vence: str
+    dias: int
+    estado: str
+    vencido: bool
+    detalle: str
+    reporte: Optional[int] = None
+    protocolo: Optional[str] = None
+
+
+class AccionConPlazo(BaseModel):
+    accion: str
+    referencia: str
+    titulo: str
+    vence: str
+    dias: int
+    vencido: bool
+    fuente: str
+
+
+class Cumplimiento(BaseModel):
+    resumen_calendario: dict
+    calendario: list[Obligacion]
+    acciones: list[AccionConPlazo]
+    resumen_incidentes: dict
+    incidentes: list[Incidente]
+    tipos_de_incidente: list[str]
+    resumen_reclamos: dict
+    reclamos: list[Reclamo]
+    canales: list[str]
+    resultados: list[str]
+
+
 class PersonaDePrueba(BaseModel):
     documento: str
     nombre: str
@@ -486,6 +608,39 @@ class ConclusionDelCaso(ComoQuien):
 
 class NoOcurrencia(ComoQuien):
     anio: int = Field(ge=2020, le=2100)
+
+
+class PedidoDeReporte(BaseModel):
+    tipo: str = Field(pattern="^(" + "|".join(reportes_reg.TIPOS) + ")$")
+    periodo: str = Field(min_length=4, max_length=10)
+
+
+class NuevoIncidente(BaseModel):
+    tipo: str = Field(pattern="^(" + "|".join(cumpl_incidentes.TIPOS) + ")$")
+    titulo: str = Field(min_length=1, max_length=200)
+    impacto: str = Field(min_length=1, max_length=2000)
+    clientes_afectados: int = Field(ge=0, le=10_000_000)
+    relevante: bool = False
+    inicio: Optional[str] = Field(default=None, max_length=32)   # ISO; vacío es «ahora»
+
+
+class CierreDeIncidente(BaseModel):
+    causa: str = Field(min_length=1, max_length=2000)
+    acciones: str = Field(min_length=1, max_length=2000)
+    fin: Optional[str] = Field(default=None, max_length=32)
+
+
+class NuevoReclamo(BaseModel):
+    canal: str = Field(pattern="^(" + "|".join(cumpl_ouvidoria.CANALES) + ")$")
+    asunto: str = Field(min_length=1, max_length=200)
+    descripcion: str = Field(min_length=1, max_length=4000)
+    titular: Optional[str] = Field(default=None, max_length=40)
+    caso_soporte: Optional[str] = Field(default=None, max_length=20)
+
+
+class RespuestaDelReclamo(BaseModel):
+    respuesta: str = Field(min_length=1, max_length=4000)
+    resultado: str = Field(pattern="^(" + "|".join(cumpl_ouvidoria.RESULTADOS) + ")$")
 
 
 class NuevoTrabajo(BaseModel):
@@ -944,3 +1099,129 @@ async def no_ocurrencia(pedido: NoOcurrencia, admin: User = Depends(get_super_ad
                                                           aprobador=_quien(admin, pedido.como, modo_vigente))
     except riesgo_casos.CasoInvalido as e:
         raise _error_de_caso(e)
+
+
+# ── reportes regulatorios ──────────────────────────────────────────────────
+
+def _error_de_reporte(e: Exception):
+    return HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/laboratorio/reportes", response_model=Reportes)
+async def reportes(admin: User = Depends(get_super_admin),
+                   modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    from nucleo import plan
+    from nucleo.reportes import transmisor
+    return {"transmisor": transmisor().nombre, "tipos": list(reportes_reg.TIPOS),
+            "cosif": [{"codigo": c, "nombre": n, "cosif": plan.cosif_de(c)} for c, n, *_ in plan.CUENTAS],
+            "resumen": await reportes_reg.resumen(), "reportes": await reportes_reg.listar()}
+
+
+@router.post("/laboratorio/reportes/generar", response_model=Reporte)
+async def generar_reporte(pedido: PedidoDeReporte, admin: User = Depends(get_super_admin),
+                          modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await reportes_reg.generar(pedido.tipo, pedido.periodo, actor=admin.user_id)
+    except (ReporteInvalido, PeriodoInvalido) as e:
+        raise _error_de_reporte(e)
+
+
+@router.get("/laboratorio/reportes/{reporte_id}", response_model=Reporte)
+async def reporte(reporte_id: int, admin: User = Depends(get_super_admin),
+                  modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await reportes_reg.detalle(reporte_id)
+    except ReporteInvalido as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/laboratorio/reportes/{reporte_id}/transmitir", response_model=Reporte)
+async def transmitir_reporte(reporte_id: int, admin: User = Depends(get_super_admin),
+                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await reportes_reg.transmitir(reporte_id, actor=admin.user_id)
+    except (ReporteInvalido, ValueError) as e:
+        raise _error_de_reporte(e)
+
+
+# ── cumplimiento: incidentes, ouvidoria y calendario ──────────────────────
+
+def _momento(texto: Optional[str]):
+    """Un ISO opcional a datetime con zona; vacío es None (= ahora)."""
+    if not texto:
+        return None
+    from datetime import datetime, timezone
+    try:
+        m = datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"«{texto}» no es una fecha y hora.")
+    return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
+
+
+@router.get("/laboratorio/cumplimiento", response_model=Cumplimiento)
+async def cumplimiento(admin: User = Depends(get_super_admin),
+                       modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    return {"resumen_calendario": await calendario.resumen(), "calendario": await calendario.obligaciones(),
+            "acciones": await calendario.acciones_con_plazo(),
+            "resumen_incidentes": await cumpl_incidentes.resumen(), "incidentes": await cumpl_incidentes.listar(),
+            "tipos_de_incidente": list(cumpl_incidentes.TIPOS),
+            "resumen_reclamos": await cumpl_ouvidoria.resumen(), "reclamos": await cumpl_ouvidoria.listar(),
+            "canales": list(cumpl_ouvidoria.CANALES), "resultados": list(cumpl_ouvidoria.RESULTADOS)}
+
+
+@router.post("/laboratorio/cumplimiento/incidentes", response_model=Incidente)
+async def abrir_incidente(pedido: NuevoIncidente, admin: User = Depends(get_super_admin),
+                          modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await cumpl_incidentes.abrir(tipo=pedido.tipo, titulo=pedido.titulo, impacto=pedido.impacto,
+                                            clientes_afectados=pedido.clientes_afectados, relevante=pedido.relevante,
+                                            actor=admin.user_id, inicio=_momento(pedido.inicio))
+    except cumpl_incidentes.IncidenteInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/cumplimiento/incidentes/{incidente_id}/anotar", response_model=Incidente)
+async def anotar_incidente(incidente_id: str, pedido: NotaNueva, admin: User = Depends(get_super_admin),
+                           modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await cumpl_incidentes.anotar(incidente_id, autor=_quien(admin, pedido.como, modo_vigente), texto=pedido.texto)
+    except cumpl_incidentes.IncidenteInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/cumplimiento/incidentes/{incidente_id}/comunicar", response_model=Incidente)
+async def comunicar_incidente(incidente_id: str, admin: User = Depends(get_super_admin),
+                              modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await cumpl_incidentes.comunicar(incidente_id, actor=admin.user_id)
+    except (cumpl_incidentes.IncidenteInvalido, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/cumplimiento/incidentes/{incidente_id}/cerrar", response_model=Incidente)
+async def cerrar_incidente(incidente_id: str, pedido: CierreDeIncidente, admin: User = Depends(get_super_admin),
+                           modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await cumpl_incidentes.cerrar(incidente_id, actor=admin.user_id, causa=pedido.causa,
+                                             acciones=pedido.acciones, fin=_momento(pedido.fin))
+    except cumpl_incidentes.IncidenteInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/cumplimiento/reclamos", response_model=Reclamo)
+async def abrir_reclamo(pedido: NuevoReclamo, admin: User = Depends(get_super_admin),
+                        modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await cumpl_ouvidoria.abrir(canal=pedido.canal, asunto=pedido.asunto, descripcion=pedido.descripcion,
+                                           actor=admin.user_id, titular=pedido.titular, caso_soporte=pedido.caso_soporte)
+    except cumpl_ouvidoria.ReclamoInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/laboratorio/cumplimiento/reclamos/{reclamo_id}/responder", response_model=Reclamo)
+async def responder_reclamo(reclamo_id: str, pedido: RespuestaDelReclamo, admin: User = Depends(get_super_admin),
+                            modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    try:
+        return await cumpl_ouvidoria.responder(reclamo_id, actor=admin.user_id, respuesta=pedido.respuesta, resultado=pedido.resultado)
+    except cumpl_ouvidoria.ReclamoInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))

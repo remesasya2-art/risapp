@@ -18,6 +18,12 @@
  *   Y la identidad: el legajo de cada titular (verificar, cruzar con las
  *   listas, aprobar con un nivel de riesgo), contra un simulador con
  *   personas de prueba. Sin legajo aprobado no se abre una cuenta.
+ *   Y los reportes regulatorios: el balancete COSIF del mes, el CCS del día
+ *   y la e-Financeira del semestre, generados sobre días cerrados, con su
+ *   versión y su protocolo de transmisión (contra un simulador del STA).
+ *   Y el cumplimiento: el registro de incidentes (los relevantes se
+ *   comunican al BCB con plazo), la ouvidoria (protocolo y diez días
+ *   hábiles) y el calendario de obligaciones, que se deduce de las tablas.
  *   Y el riesgo: las alertas del monitoreo (umbrales configurables desde
  *   Configuración), el expediente de caso con sus plazos, los cuatro ojos
  *   para comunicar, y la comunicación al COAF contra un simulador.
@@ -30,7 +36,7 @@
  *   lo sostienen (backend/tests/test_nucleo_apagado_de_fabrica.py).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, ShieldCheck, ShieldAlert, Lock, Play, RotateCcw, QrCode, Send, Search, Undo2, UserCheck, Fingerprint, ListChecks, Siren, FileText, FileOutput, CalendarClock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -44,6 +50,7 @@ const td = { padding: '7px 8px', borderBottom: '1px solid #f3f4f6', fontSize: 13
 const mono = { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 };
 const centavos = (n) => (n / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hora = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+const fechaYHora = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 
 // El color de cada estado de la cola. Muerto en rojo porque es lo único que
 // pide que una persona haga algo.
@@ -63,6 +70,13 @@ const COLOR_DEL_ESTADO = {
   aprobado: { background: '#dcfce7', color: '#166534' },
   rechazado: { background: '#fee2e2', color: '#991b1b' },
   vencido: { background: '#fee2e2', color: '#991b1b' },
+  // los de un reporte regulatorio y del calendario
+  generado: { background: '#fef3c7', color: '#92400e' },
+  transmitido: { background: '#dcfce7', color: '#166534' },
+  no_corresponde: { background: '#f3f4f6', color: '#374151' },
+  // los de un incidente y de un reclamo
+  cerrado: { background: '#dcfce7', color: '#166534' },
+  respondido: { background: '#dcfce7', color: '#166534' },
   // los de un caso
   abierto: { background: '#fef3c7', color: '#92400e' },
   en_analisis: { background: '#dbeafe', color: '#1e40af' },
@@ -100,6 +114,15 @@ export default function Nucleo() {
   const [como, setComo] = useState('');                   // laboratorio: a nombre de quién se actúa
   const [nota, setNota] = useState('');
   const [conclusion, setConclusion] = useState('');
+  const [reportes, setReportes] = useState(null);
+  const [pedidoDeReporte, setPedidoDeReporte] = useState({ tipo: 'balancete', periodo: new Date().toISOString().slice(0, 7) });
+  const [reporteAbierto, setReporteAbierto] = useState(null);   // { id, archivo } del que se está leyendo
+  const [cumplimiento, setCumplimiento] = useState(null);
+  const [nuevoIncidente, setNuevoIncidente] = useState({ tipo: 'indisponibilidad', titulo: '', impacto: '', clientes_afectados: '0', relevante: true });
+  const [incidenteAbierto, setIncidenteAbierto] = useState(null);
+  const [cierre, setCierre] = useState({ causa: '', acciones: '' });
+  const [nuevoReclamo, setNuevoReclamo] = useState({ canal: 'bcb', asunto: '', descripcion: '', caso_soporte: '' });
+  const [respuesta, setRespuesta] = useState({ id: null, respuesta: '', resultado: 'procedente' });
   const [vuelta, setVuelta] = useState(0);
   const [titularDeLaCuenta, setTitularDeLaCuenta] = useState('');
   const [mov, setMov] = useState({ tipo: 'acreditar', cuenta: '', desde: '', hacia: '', monto: '', referencia: '', descripcion: '' });
@@ -115,15 +138,17 @@ export default function Nucleo() {
         if (!vigente) return;
         setEstado(r.data);
         if (!r.data?.conectada) return;
-        const [c, l, b, z, q, rl, idn, rg] = await Promise.all([
+        const [c, l, b, z, q, rl, idn, rg, rp, cu] = await Promise.all([
           api.get('/nucleo/laboratorio/cuentas'), api.get('/nucleo/laboratorio/libro?limite=30'),
           api.get('/nucleo/laboratorio/balance'), api.get('/nucleo/laboratorio/cierres'),
           api.get('/nucleo/laboratorio/cola?limite=30'), api.get('/nucleo/laboratorio/rieles?limite=30'),
           api.get('/nucleo/laboratorio/identidad'), api.get('/nucleo/laboratorio/riesgo'),
+          api.get('/nucleo/laboratorio/reportes'), api.get('/nucleo/laboratorio/cumplimiento'),
         ]);
         if (!vigente) return;
         setCuentas(c.data || []); setLibro(l.data || []); setBalance(b.data || null); setCierres(z.data || []);
         setCola(q.data || null); setRieles(rl.data || null); setIdentidad(idn.data || null); setRiesgo(rg.data || null);
+        setReportes(rp.data || null); setCumplimiento(cu.data || null);
       })
       .catch((e) => {
         if (!vigente) return;
@@ -326,6 +351,93 @@ export default function Nucleo() {
       const r = await api.post('/nucleo/laboratorio/riesgo/no_ocurrencia', { anio: new Date().getFullYear() - 1, como: como.trim() || undefined });
       toast.success(`No ocurrencia ${r.data.periodo} · acuse ${r.data.acuse}`); recargar();
     } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo declarar'); }
+    finally { setOcupado(false); }
+  };
+
+  const generarReporte = async () => {
+    if (!pedidoDeReporte.periodo.trim()) return toast.error('Escribí el período');
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/reportes/generar', { tipo: pedidoDeReporte.tipo, periodo: pedidoDeReporte.periodo.trim() });
+      toast.success(`${r.data.documento} ${r.data.periodo} · versión ${r.data.version}`);
+      setReporteAbierto({ id: r.data.id, archivo: r.data.archivo }); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo generar'); }
+    finally { setOcupado(false); }
+  };
+
+  const verReporte = async (id) => {
+    if (reporteAbierto?.id === id) return setReporteAbierto(null);
+    try {
+      const r = await api.get(`/nucleo/laboratorio/reportes/${id}`);
+      setReporteAbierto({ id, archivo: r.data.archivo });
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo leer'); }
+  };
+
+  const transmitirReporte = async (id) => {
+    setOcupado(true);
+    try {
+      const r = await api.post(`/nucleo/laboratorio/reportes/${id}/transmitir`);
+      toast.success(`Transmitido · protocolo ${r.data.protocolo}`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo transmitir'); }
+    finally { setOcupado(false); }
+  };
+
+  const abrirIncidente = async () => {
+    if (!nuevoIncidente.titulo.trim() || !nuevoIncidente.impacto.trim()) return toast.error('Escribí qué pasó y qué impacto tuvo');
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/cumplimiento/incidentes', { ...nuevoIncidente, clientes_afectados: Number(nuevoIncidente.clientes_afectados) || 0 });
+      toast.success(`Incidente ${r.data.id} registrado${r.data.relevante ? ' · comunicar al BCB antes de ' + fechaYHora(r.data.comunicar_hasta) : ''}`);
+      setNuevoIncidente({ tipo: 'indisponibilidad', titulo: '', impacto: '', clientes_afectados: '0', relevante: true }); setIncidenteAbierto(r.data.id); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo registrar'); }
+    finally { setOcupado(false); }
+  };
+
+  const accionDeIncidente = async (id, accion, cuerpo) => {
+    setOcupado(true);
+    try {
+      const rutas = {
+        anotar: `/nucleo/laboratorio/cumplimiento/incidentes/${id}/anotar`,
+        comunicar: `/nucleo/laboratorio/cumplimiento/incidentes/${id}/comunicar`,
+        cerrar: `/nucleo/laboratorio/cumplimiento/incidentes/${id}/cerrar`,
+      };
+      const r = await api.post(rutas[accion], cuerpo || {});
+      toast.success({ anotar: 'Nota agregada', comunicar: `Comunicado al BCB · protocolo ${r.data.protocolo}`, cerrar: 'Incidente cerrado' }[accion]);
+      if (accion === 'anotar') setNota('');
+      if (accion === 'cerrar') setCierre({ causa: '', acciones: '' });
+      setIncidenteAbierto(id); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo'); }
+    finally { setOcupado(false); }
+  };
+
+  const abrirReclamo = async () => {
+    if (!nuevoReclamo.asunto.trim() || !nuevoReclamo.descripcion.trim()) return toast.error('Escribí el asunto y la descripción');
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/cumplimiento/reclamos', { ...nuevoReclamo, caso_soporte: nuevoReclamo.caso_soporte.trim() || undefined });
+      toast.success(`Reclamo ${r.data.protocolo} · responder antes del ${r.data.responder_hasta}`);
+      setNuevoReclamo({ canal: 'bcb', asunto: '', descripcion: '', caso_soporte: '' }); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo registrar'); }
+    finally { setOcupado(false); }
+  };
+
+  const responderReclamo = async () => {
+    if (!respuesta.respuesta.trim()) return toast.error('Escribí la respuesta');
+    setOcupado(true);
+    try {
+      const r = await api.post(`/nucleo/laboratorio/cumplimiento/reclamos/${respuesta.id}/responder`, { respuesta: respuesta.respuesta, resultado: respuesta.resultado });
+      toast.success(`${r.data.protocolo} respondido · ${r.data.en_plazo ? 'en plazo' : 'FUERA DE PLAZO'}`);
+      setRespuesta({ id: null, respuesta: '', resultado: 'procedente' }); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo responder'); }
+    finally { setOcupado(false); }
+  };
+
+  const generarDelCalendario = async (obligacion, periodo) => {
+    setOcupado(true);
+    try {
+      const r = await api.post('/nucleo/laboratorio/reportes/generar', { tipo: obligacion, periodo });
+      toast.success(`${r.data.documento} ${r.data.periodo} · versión ${r.data.version}`); recargar();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo generar'); }
     finally { setOcupado(false); }
   };
 
@@ -823,6 +935,219 @@ export default function Nucleo() {
                 </tbody>
               </table>
             </details>
+          </div>
+
+          {/* Reportes regulatorios: balancete COSIF, CCS, e-Financeira */}
+          <div style={tarjeta} data-testid="nucleo-reportes">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><FileOutput size={16} /> Reportes regulatorios: balancete COSIF, CCS y e-Financeira {reportes ? `· ${reportes.transmisor}` : ''}</strong>
+              {reportes ? (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                  {Object.entries(reportes.resumen).map(([t, r]) => `${t}: ${r.generados} generados, ${r.transmitidos} transmitidos`).join(' · ')}
+                </span>
+              ) : null}
+            </div>
+            <p style={{ margin: '8px 0 10px', fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+              Se generan sólo sobre días cerrados en el libro; al cerrar un día, la cola genera sola lo que quedó completo (el CCS del día, el balancete del mes, la e-Financeira del semestre).
+              Generar de nuevo un período deja una versión nueva (sustitución), nunca pisa la anterior. Transmitir es siempre de una persona. Los códigos COSIF son provisorios hasta que el contador los confirme.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
+              <div style={{ width: 160 }}>
+                <div style={rotulo}>Reporte</div>
+                <select style={campo} value={pedidoDeReporte.tipo} onChange={(e) => setPedidoDeReporte({ tipo: e.target.value, periodo: { balancete: new Date().toISOString().slice(0, 7), ccs: new Date().toISOString().slice(0, 10), efinanceira: `${new Date().getFullYear()}-S${new Date().getMonth() < 6 ? 1 : 2}`, incidentes: String(new Date().getFullYear() - 1), ouvidoria: `${new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)}-S${new Date().getMonth() < 6 ? 2 : 1}` }[e.target.value] })} data-testid="reportes-tipo">
+                  <option value="balancete">Balancete COSIF (4010)</option>
+                  <option value="ccs">CCS del día</option>
+                  <option value="efinanceira">e-Financeira</option>
+                  <option value="incidentes">Informe anual de incidentes</option>
+                  <option value="ouvidoria">Informe semestral de la ouvidoria</option>
+                </select>
+              </div>
+              <div style={{ width: 140 }}>
+                <div style={rotulo}>Período</div>
+                <input style={campo} value={pedidoDeReporte.periodo} onChange={(e) => setPedidoDeReporte({ ...pedidoDeReporte, periodo: e.target.value })} placeholder="2026-09 · 2026-09-21 · 2026-S2" data-testid="reportes-periodo" />
+              </div>
+              <button type="button" onClick={generarReporte} disabled={ocupado} style={boton} data-testid="reportes-generar"><FileText size={13} /> Generar</button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }} data-testid="reportes-tabla">
+                <thead><tr><th style={th}>Nº</th><th style={th}>Documento</th><th style={th}>Período</th><th style={th}>Versión</th><th style={th}>Resumen</th><th style={th}>Estado</th><th style={th}>Protocolo</th><th style={th} /></tr></thead>
+                <tbody>
+                  {!reportes || reportes.reportes.length === 0 ? <tr><td style={td} colSpan={8}>Ningún reporte generado.</td></tr> : reportes.reportes.map((r) => (
+                    <tr key={r.id} data-testid={`reportes-${r.estado}`} style={{ background: reporteAbierto?.id === r.id ? '#f5f3ff' : undefined }}>
+                      <td style={{ ...td, ...mono }}>{r.id}</td>
+                      <td style={td}>{r.documento}<div style={{ fontSize: 11, color: '#6b7280' }}>por {r.generado_por} · {hora(r.generado_en)}</div></td>
+                      <td style={{ ...td, ...mono }}>{r.periodo}</td>
+                      <td style={td}>{r.version}{r.resumen.tipo_remessa ? ` (${r.resumen.tipo_remessa})` : ''}</td>
+                      <td style={{ ...td, fontSize: 12 }}>
+                        {r.tipo === 'balancete' ? `${r.resumen.contas} cuentas COSIF · ${r.resumen.cuadra ? 'cuadra' : 'NO CUADRA'} · R$ ${centavos(r.resumen.total_debe)}` : null}
+                        {r.tipo === 'ccs' ? `${r.resumen.altas} altas · ${r.resumen.bajas} bajas` : null}
+                        {r.tipo === 'efinanceira' ? `${r.resumen.declarados} titulares · ${r.resumen.meses_informados} meses` : null}
+                        {r.tipo === 'incidentes' ? `${r.resumen.total} incidentes · ${r.resumen.relevantes} relevantes · ${r.resumen.comunicados} comunicados` : null}
+                        {r.tipo === 'ouvidoria' ? `${r.resumen.total} reclamos · ${r.resumen.respondidos} respondidos · ${r.resumen.en_plazo} en plazo` : null}
+                      </td>
+                      <td style={td}><Etiqueta valor={r.estado} /></td>
+                      <td style={{ ...td, ...mono }}>{r.protocolo || '—'}</td>
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        <button type="button" onClick={() => verReporte(r.id)} style={{ ...botonSuave, padding: '5px 9px', marginRight: 6 }} data-testid="reportes-ver">{reporteAbierto?.id === r.id ? 'Cerrar' : 'Ver archivo'}</button>
+                        {r.estado === 'generado' ? <button type="button" onClick={() => transmitirReporte(r.id)} disabled={ocupado} style={{ ...boton, padding: '5px 9px' }} data-testid="reportes-transmitir"><Send size={12} /> Transmitir</button> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {reporteAbierto ? (
+              <pre style={{ ...mono, background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: 8, padding: 10, marginTop: 10, maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap' }} data-testid="reportes-archivo">{reporteAbierto.archivo}</pre>
+            ) : null}
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: '#374151' }}>Plan de cuentas y su código COSIF (provisorio)</summary>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6 }} data-testid="reportes-cosif">
+                <thead><tr><th style={th}>Cuenta</th><th style={th}>Nombre</th><th style={th}>COSIF</th></tr></thead>
+                <tbody>
+                  {(reportes?.cosif || []).map((c) => (
+                    <tr key={c.codigo}><td style={{ ...td, ...mono }}>{c.codigo}</td><td style={td}>{c.nombre}</td><td style={{ ...td, ...mono }}>{c.cosif}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </div>
+
+          {/* Cumplimiento: calendario, incidentes, ouvidoria */}
+          <div style={tarjeta} data-testid="nucleo-cumplimiento">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}><CalendarClock size={16} /> Cumplimiento: calendario de obligaciones, incidentes y ouvidoria</strong>
+              {cumplimiento ? (
+                <span style={{ fontSize: 13, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  <span>Obligaciones pendientes <strong>{cumplimiento.resumen_calendario.pendientes}</strong></span>
+                  <span style={{ color: cumplimiento.resumen_calendario.vencidas ? '#b91c1c' : undefined }}>Vencidas <strong>{cumplimiento.resumen_calendario.vencidas}</strong></span>
+                  <span style={{ color: cumplimiento.resumen_calendario.acciones_vencidas ? '#b91c1c' : undefined }}>Acciones con plazo <strong>{cumplimiento.resumen_calendario.acciones}</strong></span>
+                </span>
+              ) : null}
+            </div>
+
+            {/* Acciones con plazo */}
+            {cumplimiento && cumplimiento.acciones.length > 0 ? (
+              <div style={{ margin: '10px 0', padding: 10, borderRadius: 10, background: '#fff7ed', border: '1px solid #fed7aa' }} data-testid="cumplimiento-acciones">
+                <strong style={{ fontSize: 13 }}>Hay que hacer</strong>
+                {cumplimiento.acciones.map((a) => (
+                  <div key={a.referencia} style={{ fontSize: 13, marginTop: 4, color: a.vencido ? '#b91c1c' : '#7c2d12' }} data-testid={`cumplimiento-accion-${a.accion}`}>
+                    {a.accion === 'comunicar_incidente' ? 'Comunicar al BCB' : 'Responder el reclamo'} · {a.titulo} · vence {a.vence.length > 10 ? fechaYHora(a.vence) : a.vence}{a.vencido ? ' · VENCIDO' : ` · ${a.dias} día${a.dias === 1 ? '' : 's'}`} <span style={{ color: '#9a3412' }}>({a.fuente})</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Calendario */}
+            <div style={{ overflowX: 'auto', marginTop: 10 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }} data-testid="cumplimiento-calendario">
+                <thead><tr><th style={th}>Obligación</th><th style={th}>Período</th><th style={th}>Vence</th><th style={th}>Estado</th><th style={th}>Fuente · plazo</th><th style={th} /></tr></thead>
+                <tbody>
+                  {!cumplimiento || cumplimiento.calendario.length === 0 ? <tr><td style={td} colSpan={6}>Ninguna obligación con período terminado todavía.</td></tr> : cumplimiento.calendario.map((o) => (
+                    <tr key={`${o.obligacion}-${o.periodo}`} data-testid={`calendario-${o.estado}`} style={{ background: o.vencido ? '#fef2f2' : undefined }}>
+                      <td style={td}>{{ balancete: 'Balancete COSIF (4010)', ccs: 'CCS del día', efinanceira: 'e-Financeira', no_ocurrencia: 'No ocurrencia al COAF', incidentes: 'Informe anual de incidentes', ouvidoria: 'Informe de la ouvidoria' }[o.obligacion]}{o.detalle ? <div style={{ fontSize: 11, color: '#6b7280' }}>{o.detalle}</div> : null}</td>
+                      <td style={{ ...td, ...mono }}>{o.periodo}</td>
+                      <td style={{ ...td, color: o.vencido ? '#b91c1c' : undefined }}>{o.vence}{o.estado === 'pendiente' ? <div style={{ fontSize: 11 }}>{o.vencido ? `vencido hace ${-o.dias} días` : `faltan ${o.dias} días`}</div> : null}</td>
+                      <td style={td}><Etiqueta valor={o.estado} />{o.protocolo ? <div style={{ ...mono, fontSize: 11, color: '#6b7280' }}>{o.protocolo}</div> : null}</td>
+                      <td style={{ ...td, fontSize: 12, color: '#6b7280' }}>{o.fuente}<div>{o.plazo}</div></td>
+                      <td style={td}>{o.estado === 'pendiente' && o.obligacion !== 'no_ocurrencia' ? <button type="button" onClick={() => generarDelCalendario(o.obligacion, o.periodo)} disabled={ocupado} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="calendario-generar">Generar</button> : null}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginTop: 14 }}>
+              {/* Incidentes */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14 }}>Incidentes (Res. BCB 85/2021)</strong>
+                {cumplimiento ? <div style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>Abiertos {cumplimiento.resumen_incidentes.abierto} · cerrados {cumplimiento.resumen_incidentes.cerrado} · relevantes sin comunicar <strong style={{ color: cumplimiento.resumen_incidentes.relevantes_sin_comunicar ? '#b91c1c' : undefined }}>{cumplimiento.resumen_incidentes.relevantes_sin_comunicar}</strong></div> : null}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <select style={campo} value={nuevoIncidente.tipo} onChange={(e) => setNuevoIncidente({ ...nuevoIncidente, tipo: e.target.value })} data-testid="incidentes-tipo">
+                    {(cumplimiento?.tipos_de_incidente || []).map((t) => <option key={t} value={t}>{t.replaceAll('_', ' ')}</option>)}
+                  </select>
+                  <input style={campo} type="number" min="0" placeholder="Clientes afectados" value={nuevoIncidente.clientes_afectados} onChange={(e) => setNuevoIncidente({ ...nuevoIncidente, clientes_afectados: e.target.value })} data-testid="incidentes-clientes" />
+                  <input style={{ ...campo, gridColumn: '1 / -1' }} placeholder="Qué pasó (título)" value={nuevoIncidente.titulo} onChange={(e) => setNuevoIncidente({ ...nuevoIncidente, titulo: e.target.value })} data-testid="incidentes-titulo" />
+                  <input style={{ ...campo, gridColumn: '1 / -1' }} placeholder="Impacto" value={nuevoIncidente.impacto} onChange={(e) => setNuevoIncidente({ ...nuevoIncidente, impacto: e.target.value })} data-testid="incidentes-impacto" />
+                  <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" checked={nuevoIncidente.relevante} onChange={(e) => setNuevoIncidente({ ...nuevoIncidente, relevante: e.target.checked })} data-testid="incidentes-relevante" /> Relevante: se comunica al BCB
+                  </label>
+                  <button type="button" onClick={abrirIncidente} disabled={ocupado} style={boton} data-testid="incidentes-registrar"><Siren size={13} /> Registrar incidente</button>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }} data-testid="incidentes-tabla">
+                  <thead><tr><th style={th}>Incidente</th><th style={th}>Estado</th><th style={th}>BCB</th><th style={th} /></tr></thead>
+                  <tbody>
+                    {!cumplimiento || cumplimiento.incidentes.length === 0 ? <tr><td style={td} colSpan={4}>Ningún incidente registrado.</td></tr> : cumplimiento.incidentes.map((i) => (
+                      <tr key={i.id} data-testid={`incidentes-${i.estado}`} style={{ background: incidenteAbierto === i.id ? '#f5f3ff' : undefined }}>
+                        <td style={td}><strong>{i.titulo}</strong><div style={{ fontSize: 11, color: '#6b7280' }}>{i.tipo.replaceAll('_', ' ')} · {i.clientes_afectados} clientes · desde {hora(i.inicio)}{i.fin ? ` hasta ${hora(i.fin)}` : ''}</div></td>
+                        <td style={td}><Etiqueta valor={i.estado} /></td>
+                        <td style={{ ...td, fontSize: 12 }}>{!i.relevante ? 'no relevante' : i.protocolo ? <span style={mono}>{i.protocolo}</span> : <span style={{ color: i.comunicacion_vencida ? '#b91c1c' : '#92400e' }}>comunicar antes de {fechaYHora(i.comunicar_hasta)}</span>}</td>
+                        <td style={td}><button type="button" onClick={() => setIncidenteAbierto(incidenteAbierto === i.id ? null : i.id)} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="incidentes-ver">Ver</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {incidenteAbierto ? (() => {
+                  const i = (cumplimiento?.incidentes || []).find((x) => x.id === incidenteAbierto);
+                  if (!i) return null;
+                  return (
+                    <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: '#f9fafb', fontSize: 13 }} data-testid="incidentes-expediente">
+                      <div><strong>{i.id}</strong> · {i.impacto}{i.causa ? <> · <strong>Causa:</strong> {i.causa} · <strong>Acciones:</strong> {i.acciones}</> : null}</div>
+                      <div style={{ margin: '6px 0', color: '#374151' }}>{i.notas.map((n, k) => <div key={k}><strong>{n.autor}</strong> · {hora(n.momento)} · {n.texto}</div>)}</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <input style={{ ...campo, flex: 1, minWidth: 180 }} placeholder="Una nota" value={nota} onChange={(e) => setNota(e.target.value)} data-testid="incidentes-nota" />
+                        <button type="button" onClick={() => accionDeIncidente(i.id, 'anotar', { texto: nota })} disabled={ocupado || !nota.trim()} style={{ ...botonSuave, padding: '6px 10px' }} data-testid="incidentes-anotar">Anotar</button>
+                        {i.relevante && !i.protocolo ? <button type="button" onClick={() => accionDeIncidente(i.id, 'comunicar')} disabled={ocupado} style={{ ...boton, padding: '6px 10px' }} data-testid="incidentes-comunicar"><Send size={12} /> Comunicar al BCB</button> : null}
+                      </div>
+                      {i.estado === 'abierto' ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6, marginTop: 8 }}>
+                          <input style={campo} placeholder="Causa" value={cierre.causa} onChange={(e) => setCierre({ ...cierre, causa: e.target.value })} data-testid="incidentes-causa" />
+                          <input style={campo} placeholder="Acciones tomadas" value={cierre.acciones} onChange={(e) => setCierre({ ...cierre, acciones: e.target.value })} data-testid="incidentes-acciones" />
+                          <button type="button" onClick={() => accionDeIncidente(i.id, 'cerrar', cierre)} disabled={ocupado || !cierre.causa.trim() || !cierre.acciones.trim()} style={botonSuave} data-testid="incidentes-cerrar">Cerrar incidente</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })() : null}
+              </div>
+
+              {/* Ouvidoria */}
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 12 }}>
+                <strong style={{ fontSize: 14 }}>Ouvidoria (Res. CMN 4.860/2020)</strong>
+                {cumplimiento ? <div style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>Abiertos {cumplimiento.resumen_reclamos.abierto} · respondidos {cumplimiento.resumen_reclamos.respondido} · vencidos <strong style={{ color: cumplimiento.resumen_reclamos.vencidos ? '#b91c1c' : undefined }}>{cumplimiento.resumen_reclamos.vencidos}</strong> · diez días hábiles para responder</div> : null}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <select style={campo} value={nuevoReclamo.canal} onChange={(e) => setNuevoReclamo({ ...nuevoReclamo, canal: e.target.value })} data-testid="ouvidoria-canal">
+                    {(cumplimiento?.canales || []).map((c) => <option key={c} value={c}>{{ telefono: 'Teléfono', correo: 'Correo', panel: 'Panel del cliente', bcb: 'Vía Banco Central', procon: 'Vía Procon' }[c] || c}</option>)}
+                  </select>
+                  <input style={campo} placeholder="Caso de la mesa de ayuda (S-000123)" value={nuevoReclamo.caso_soporte} onChange={(e) => setNuevoReclamo({ ...nuevoReclamo, caso_soporte: e.target.value })} data-testid="ouvidoria-caso" />
+                  <input style={{ ...campo, gridColumn: '1 / -1' }} placeholder="Asunto" value={nuevoReclamo.asunto} onChange={(e) => setNuevoReclamo({ ...nuevoReclamo, asunto: e.target.value })} data-testid="ouvidoria-asunto" />
+                  <input style={{ ...campo, gridColumn: '1 / -1' }} placeholder="Qué reclama" value={nuevoReclamo.descripcion} onChange={(e) => setNuevoReclamo({ ...nuevoReclamo, descripcion: e.target.value })} data-testid="ouvidoria-descripcion" />
+                  <button type="button" onClick={abrirReclamo} disabled={ocupado} style={{ ...boton, gridColumn: '1 / -1' }} data-testid="ouvidoria-registrar"><Plus size={13} /> Registrar reclamo</button>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }} data-testid="ouvidoria-tabla">
+                  <thead><tr><th style={th}>Protocolo</th><th style={th}>Asunto</th><th style={th}>Plazo</th><th style={th}>Estado</th><th style={th} /></tr></thead>
+                  <tbody>
+                    {!cumplimiento || cumplimiento.reclamos.length === 0 ? <tr><td style={td} colSpan={5}>Ningún reclamo.</td></tr> : cumplimiento.reclamos.map((r) => (
+                      <tr key={r.id} data-testid={`ouvidoria-${r.estado}`} style={{ background: respuesta.id === r.id ? '#f5f3ff' : undefined }}>
+                        <td style={{ ...td, ...mono }}>{r.protocolo}</td>
+                        <td style={td}>{r.asunto}<div style={{ fontSize: 11, color: '#6b7280' }}>{r.canal}{r.caso_soporte ? ` · mesa de ayuda ${r.caso_soporte}` : ''}{r.resultado ? ` · ${r.resultado}` : ''}</div></td>
+                        <td style={{ ...td, fontSize: 12, color: r.vencido ? '#b91c1c' : undefined }}>{r.estado === 'abierto' ? `hasta ${r.responder_hasta}${r.vencido ? ' · VENCIDO' : ''}` : (r.en_plazo ? 'en plazo' : 'fuera de plazo')}</td>
+                        <td style={td}><Etiqueta valor={r.estado} /></td>
+                        <td style={td}>{r.estado === 'abierto' ? <button type="button" onClick={() => setRespuesta({ id: respuesta.id === r.id ? null : r.id, respuesta: '', resultado: 'procedente' })} style={{ ...botonSuave, padding: '5px 9px' }} data-testid="ouvidoria-abrir-respuesta">Responder</button> : null}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {respuesta.id ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 6, marginTop: 8 }}>
+                    <input style={campo} placeholder="Respuesta conclusiva al cliente" value={respuesta.respuesta} onChange={(e) => setRespuesta({ ...respuesta, respuesta: e.target.value })} data-testid="ouvidoria-respuesta" />
+                    <select style={campo} value={respuesta.resultado} onChange={(e) => setRespuesta({ ...respuesta, resultado: e.target.value })} data-testid="ouvidoria-resultado">
+                      {(cumplimiento?.resultados || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                    <button type="button" onClick={responderReclamo} disabled={ocupado} style={boton} data-testid="ouvidoria-responder">Responder</button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           {/* Cola de trabajos y eventos */}

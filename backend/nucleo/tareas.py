@@ -26,6 +26,7 @@ LOS DE LABORATORIO
 """
 import logging
 
+from nucleo.reportes import registro as _reportes
 from nucleo.rieles import operaciones as _rieles
 from nucleo.riesgo import monitoreo as _monitoreo
 
@@ -69,11 +70,15 @@ MANEJADORES = {
     # El monitoreo (nucleo/riesgo/monitoreo.py): las reglas sobre cada
     # operación liquidada.
     "evaluar_riesgo": _monitoreo.evaluar_riesgo,
+    # Los reportes (nucleo/reportes/registro.py): con cada día cerrado, lo
+    # que quedó completo se genera solo (CCS del día, balancete del mes,
+    # e-Financeira del semestre). Transmitir sigue siendo de una persona.
+    "generar_reportes": _reportes.generar_del_cierre,
 }
 
 SUSCRIPCIONES = {
     "asiento_registrado": ("avisar_asiento",),
-    "dia_cerrado": ("anotar_cierre",),
+    "dia_cerrado": ("anotar_cierre", "generar_reportes"),
     "operacion_liquidada": ("evaluar_riesgo",),
 }
 
