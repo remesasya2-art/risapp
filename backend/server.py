@@ -284,6 +284,11 @@ async def lifespan(app):
     try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
+        # El reloj de salud de la aplicación: cada cinco minutos mira si la
+        # base responde y avisa al equipo sólo cuando eso cambia. Ver
+        # services/salud_de_la_app.py.
+        from services import salud_de_la_app as _salud_de_la_app
+        _salud_de_la_app.arrancar(db)
     except Exception as e:
         logger.warning(f"BCV scheduler failed to start: {e}")
     # El contador de uso vuelca a la base cada 30 segundos, en una tarea de
@@ -330,6 +335,8 @@ async def lifespan(app):
     try:
         from services.bcv_scraper import stop_scheduler
         stop_scheduler()
+        from services import salud_de_la_app as _salud_de_la_app
+        await _salud_de_la_app.parar()
     except Exception:
         pass
     client.close()

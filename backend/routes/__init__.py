@@ -32,6 +32,8 @@ from routes.centro_gestion import router as centro_gestion_router
 from routes.pin import router as pin_router
 from routes.webauthn_login import router as webauthn_router
 from routes.ledger_admin import router as ledger_admin_router
+from routes.cpf_repetidos import router as cpf_repetidos_router
+from routes.respaldo_admin import router as respaldo_admin_router
 from routes.credits import router as credits_router
 from routes.credits_admin import router as credits_admin_router
 from routes.envios import router as envios_router
@@ -81,6 +83,8 @@ api_router.include_router(centro_gestion_router)
 api_router.include_router(pin_router)
 api_router.include_router(webauthn_router)
 api_router.include_router(ledger_admin_router)
+api_router.include_router(cpf_repetidos_router)
+api_router.include_router(respaldo_admin_router)
 api_router.include_router(credits_admin_router)
 api_router.include_router(envios_router)
 api_router.include_router(envios_admin_router)

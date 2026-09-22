@@ -5,7 +5,7 @@ import { useRate } from '../contexts/RateContext';
 import { 
   ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
   RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
-, AlertTriangle, BarChart3, Receipt, Landmark } from 'lucide-react';
+, AlertTriangle, BarChart3, Receipt, Landmark, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { confirmar } from '../components/flujo/confirmar.js';
@@ -23,6 +23,7 @@ import Errores from '../components/admin/Errores';
 import Nucleo from '../components/admin/Nucleo';
 import Uso from '../components/admin/Uso';
 import Configuracion from '../components/admin/Configuracion';
+import Respaldo from '../components/admin/Respaldo';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
@@ -122,6 +123,9 @@ const TABS = [
   // a cada cuenta que se registra, y quien pudiera cambiarlo podría subirlo,
   // cobrar y bajarlo otra vez. El backend lo exige igual (`get_super_admin`).
   { key: 'configuracion', label: 'Configuración', icon: SlidersHorizontal, superAdminOnly: true },
+  // El respaldo de la base: se baja un archivo con los datos de todos los
+  // clientes. Sólo super administrador; el backend lo exige igual.
+  { key: 'respaldo', label: 'Respaldo de la base', icon: Archive, superAdminOnly: true },
   // El laboratorio del núcleo de cuentas: la arquitectura de fintech que se
   // construye mientras se resuelve lo legal. SOLO super administrador, y
   // además el servidor contesta 404 a todo mientras «Núcleo de cuentas» esté
@@ -161,7 +165,7 @@ const GRUPOS = [
   { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
     hijas: ['ledger', 'seguridad', 'cobros', 'reportes'] },
   { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
-    hijas: ['configuracion', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
+    hijas: ['configuracion', 'respaldo', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
 ];
 
 // La ficha de cada sección, venga de donde venga. `crm` no entra: era el
@@ -384,6 +388,39 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [userHistory, setUserHistory] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
   const [resumenDeCuentas, setResumenDeCuentas] = useState(null);
+  // La salud de la aplicación (si la base responde, si está el candado del
+  // CPF). Sólo la ve el super administrador: la ruta lo exige, y si contesta
+  // 403 la tira no se dibuja.
+  const [saludDeLaApp, setSaludDeLaApp] = useState(null);
+  // Los CPF repetidos (dos cuentas con el mismo documento). Sólo el super
+  // administrador los ve y los resuelve; liberar el CPF de una cuenta lleva
+  // motivo y queda en la auditoría.
+  const [cpfRepetidos, setCpfRepetidos] = useState(null);
+  const [motivoDeLiberacion, setMotivoDeLiberacion] = useState({});      // user_id → motivo escrito
+  const [liberando, setLiberando] = useState(false);
+  const cargarCpfRepetidos = useCallback(() => {
+    if (user?.role !== 'super_admin') return;
+    api.get('/admin/cpf-repetidos').then((r) => setCpfRepetidos(r.data)).catch(() => {});
+  }, [user?.role]);
+  useEffect(() => { cargarCpfRepetidos(); }, [cargarCpfRepetidos]);
+  const liberarCpf = async (userId) => {
+    const motivo = (motivoDeLiberacion[userId] || '').trim();
+    if (!motivo) return toast.error('Escribí el motivo: se le saca un documento de identidad a una cuenta');
+    setLiberando(true);
+    try {
+      const r = await api.post(`/admin/users/${userId}/cpf/liberar`, { motivo });
+      toast.success(r.data.quedan_repetidos === 0 ? 'CPF liberado · no quedan repetidos y el candado quedó creado' : `CPF liberado · quedan ${r.data.quedan_repetidos} repetidos`);
+      setMotivoDeLiberacion((m) => ({ ...m, [userId]: '' }));
+      cargarCpfRepetidos();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'No se pudo liberar'); }
+    finally { setLiberando(false); }
+  };
+  useEffect(() => {
+    if (user?.role !== 'super_admin') return;
+    let vigente = true;
+    api.get('/admin/salud').then((r) => { if (vigente) setSaludDeLaApp(r.data); }).catch(() => {});
+    return () => { vigente = false; };
+  }, [user?.role]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedUserForRole, setSelectedUserForRole] = useState(null);
@@ -1052,8 +1089,24 @@ const [searchParams, setSearchParams] = useSearchParams();
             <Configuracion />
           </ErrorBoundary>
         )}
+        {activeTab === 'respaldo' && (
+          <ErrorBoundary clave="respaldo" donde="Respaldo de la base">
+            <Respaldo />
+          </ErrorBoundary>
+        )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {saludDeLaApp ? (
+              <div style={{ ...cardStyle, padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: '8px 18px', alignItems: 'center', borderLeft: `4px solid ${saludDeLaApp.ok ? '#16a34a' : '#dc2626'}` }} data-testid="salud-de-la-app">
+                <strong style={{ fontSize: '14px', color: saludDeLaApp.ok ? '#166534' : '#991b1b' }}>Salud de la aplicación · {saludDeLaApp.ok ? 'sana' : 'NO SANA'}</strong>
+                {saludDeLaApp.comprobaciones.map((c) => (
+                  <span key={c.nombre} style={{ fontSize: '13px', color: c.ok ? '#374151' : '#b91c1c' }} data-testid={`salud-de-la-app-${c.ok ? 'ok' : 'falla'}`}>
+                    {c.ok ? '✓' : '✗'} <strong>{c.nombre.replaceAll('_', ' ')}</strong>: {c.detalle}
+                  </span>
+                ))}
+                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: 'auto' }}>el reloj revisa cada {Math.round(saludDeLaApp.vigilancia.cada_segundos / 60)} min y avisa al equipo cuando cambia</span>
+              </div>
+            ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               {[
                 { icon: ArrowUpRight, value: pendientes.withdrawals ?? 0, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
@@ -1161,6 +1214,31 @@ const [searchParams, setSearchParams] = useSearchParams();
         {/* Partners Tab - Socios y Gestores */}
         {activeTab === 'users' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {cpfRepetidos && (cpfRepetidos.repetidos.length > 0 || !cpfRepetidos.candado) ? (
+              <div style={{ ...cardStyle, padding: '16px', borderLeft: '4px solid #dc2626' }} data-testid="cpf-repetidos">
+                <h3 style={{ margin: '0 0 6px', fontSize: '15px', color: '#991b1b' }}>CPF repetidos: {cpfRepetidos.repetidos.length} documento{cpfRepetidos.repetidos.length === 1 ? '' : 's'} con más de una cuenta</h3>
+                <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#6b7280', lineHeight: 1.5 }}>
+                  Mientras haya repetidos no se puede crear el candado que impide registrar dos cuentas con el mismo CPF{cpfRepetidos.candado ? '' : ' (hoy falta)'}. Mirá las dos cuentas, decidí cuál es la buena, y liberá el CPF de la otra: no se borra ni se le toca el saldo, sólo pierde el documento, con tu motivo asentado en la auditoría.
+                </p>
+                {cpfRepetidos.repetidos.map((r) => (
+                  <div key={r.cpf} style={{ border: '1px solid #fecaca', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px' }} data-testid="cpf-repetido">
+                    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', marginBottom: '6px' }}>CPF {r.cpf}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '10px' }}>
+                      {r.cuentas.map((c) => (
+                        <div key={c.user_id} style={{ background: '#fafafa', borderRadius: '8px', padding: '10px', fontSize: '13px' }} data-testid="cpf-repetido-cuenta">
+                          <div><strong>{c.nombre || '(sin nombre)'}</strong> · {c.email}</div>
+                          <div style={{ color: '#6b7280', fontSize: '12px' }}>creada {c.creada ? new Date(c.creada).toLocaleDateString('es-AR') : '—'} · último ingreso {c.ultimo_ingreso ? new Date(c.ultimo_ingreso).toLocaleDateString('es-AR') : 'nunca'} · verificación {c.verificacion || '—'} · saldo RIS {c.saldo_ris.toLocaleString('es-AR', { minimumFractionDigits: 2 })}{c.vetada ? ' · VETADA' : ''}{c.borrada ? ' · BORRADA' : ''}</div>
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                            <input value={motivoDeLiberacion[c.user_id] || ''} onChange={(e) => setMotivoDeLiberacion((m) => ({ ...m, [c.user_id]: e.target.value }))} placeholder="Motivo para liberar el CPF de esta cuenta" style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '12px' }} data-testid="cpf-motivo" />
+                            <button type="button" onClick={() => liberarCpf(c.user_id)} disabled={liberando} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }} data-testid="cpf-liberar">Liberar el CPF de esta cuenta</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {/* Search bar */}
             <div style={{ ...cardStyle, padding: '16px' }}>
               <div style={{ position: 'relative' }}>

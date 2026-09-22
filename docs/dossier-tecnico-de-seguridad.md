@@ -966,6 +966,17 @@ frena la operación.**
 Las dos últimas son de seguridad. Las tres primeras, de disponibilidad. La
 diferencia no es accidental.
 
+**Cómo se sabe que la base está viva.** `/api/health` sigue contestando 200
+aunque Mongo esté caído —Railway reinicia el proceso cuando el ping falla, y
+reiniciar la aplicación no levanta a Mongo— pero lo dice en `base: false`,
+con lo último que vio el reloj de salud (`services/salud_de_la_app.py`): cada
+cinco minutos revisa que la base responda y que exista el candado de un CPF
+por cuenta, y avisa por la campana del equipo, sólo a los super
+administradores, únicamente cuando el estado cambia. El detalle está en
+`/api/admin/salud` y arriba del Resumen del panel. El núcleo de cuentas tiene
+su propio reloj y su propia sonda anónima (`/api/health/nucleo`), que contesta
+404 mientras el núcleo esté apagado.
+
 ---
 
 ## 10. Aseguramiento de calidad
@@ -1053,7 +1064,7 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **Pasar la política de contenido a bloquear** | Implementada, en modo reporte | Dos cosas, y la segunda es la que traba. **Una:** mirar los avisos que recoge `/api/csp-reporte`. El buzón descarta los de extensiones del navegador de cada visitante y no repite el mismo, así que lo que queda escrito es lo que hay que decidir: un aviso con un dominio nombrado dice qué agregar, y uno de `wasm-eval` con el origen tapado por el navegador no se puede atribuir a nadie. **Dos:** el SDK del proveedor de pagos inyecta un script EN LINEA, así que prenderla hoy rompe el cobro con tarjeta. Las tres salidas —`'unsafe-inline'`, el hash del script, `'strict-dynamic'`— están evaluadas con su costo en `services/csp.py`, y `test_SIGUE_SIN_PODER_PASAR_A_EXIGIR_Y_ESTA_DICHO` falla si alguien borra ese análisis. Ver 8.2. |
 | **`cryptography` con vulnerabilidades publicadas** | 46.0.7; el arreglo está en 49.0.0 | Un salto de tres versiones mayores. Media aplicación depende de ella y la suite no ejerce los caminos de red reales, así que no hay forma de comprobar acá que no rompa nada. Requiere una prueba en un entorno de ensayo. Junto con `black` (herramienta de desarrollo), `ecdsa` (sin versión arreglada publicada) y `litellm` (no se importa en el código propio) son las 22 advertencias que quedan de las 124 originales. |
 | **Cada medio atado a su dueño** | No implementado | El proxy de medios deja que cualquiera con sesión pida el comprobante de cualquier otro **si conoce los tres identificadores**, que son 34 caracteres cada uno y no se adivinan. El secreto es hoy el identificador mismo. Atarlo al dueño requiere guardar esa relación, que no existe. Decisión consciente, anotada en `backend/routes/media.py`. |
-| **Cifrado de documentos en reposo** | Implementado, apagado por omisión | Es una decisión del operador, no técnica. El mecanismo está y probado (ver 7.4); prenderlo requiere generar la llave, respaldarla en tres lugares y comprobar cada copia con `verificar`. El procedimiento está en `docs/la-llave-del-cofre.md`. |
+| **Cifrado de documentos en reposo** | **Prendido en producción** | El cofre está en modo «cifrando»: al arrancar, la aplicación abre la llave, la coteja contra el testigo y lo deja escrito en el registro (`Cofre en modo «cifrando» … verificado contra el testigo`). La fila anterior decía «apagado por omisión»; quedó vieja. Lo que sigue siendo del operador: guardar la llave en tres lugares y comprobar cada copia con `verificar` cada tanto. El procedimiento está en `docs/la-llave-del-cofre.md`. |
 | **Prueba de intrusión externa** | No realizada | Contratación. Las revisiones hechas hasta hoy son internas. |
 | **Encargado de datos / LGPD** | No designado formalmente | Decisión del operador. |
 | **Sesión corta para el rol `agent`** | Hoy dura 7 días | Decisión del operador. El agente entra al panel y se le exige segundo factor, pero su sesión dura como la de un cliente. Acortarla es un cambio de una línea; el costo es que el agente vuelva a autenticarse durante la jornada. Está fijado en `test_duracion_de_la_sesion.py` para que sea una decisión y no un olvido. |

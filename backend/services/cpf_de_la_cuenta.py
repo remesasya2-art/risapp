@@ -673,3 +673,92 @@ async def anotar_si_el_kyc_discrepa(db, user_id: str, del_kyc) -> dict:
     logger.warning("KYC de %s: el CPF de la verificación no es el declarado "
                    "al registrarse", user_id)
     return {"discrepa": True, "declarado": declarado, "en_el_kyc": n}
+
+
+# ── Los repetidos, y cómo se resuelven desde el panel ─────────────────────
+#
+#   `sembrar` los detecta al arrancar y los deja en el registro, pero un
+#   registro no es una pantalla: resolverlos obligaba a entrar a la base a
+#   mano. Acá está lo que la pestaña «Usuarios» necesita: la lista de pares
+#   con lo justo de cada cuenta para decidir cuál es la buena, y la acción de
+#   LIBERAR el CPF de la otra.
+#
+#   Liberar no borra la cuenta ni le toca el saldo: le saca el CPF (queda en
+#   `cpf_liberado`, tapado, con quién, cuándo y por qué), suelta su reserva,
+#   y lo asienta en el libro de auditoría. Después vuelve a intentar crear el
+#   candado único: si era el último repetido, queda creado.
+
+LO_QUE_SE_MUESTRA_DE_CADA_CUENTA = {
+    "_id": 0, "user_id": 1, "name": 1, "full_name": 1, "email": 1, "cpf_number": 1, "created_at": 1,
+    "verification_status": 1, "status": 1, "is_deleted": 1, "is_banned": 1, "last_login": 1, "balance_ris": 1,
+}
+
+
+def _resumen_de_la_cuenta(u: dict) -> dict:
+    from services.money import from_db, to_float
+    return {"user_id": u.get("user_id"), "nombre": u.get("full_name") or u.get("name"), "email": u.get("email"),
+            "creada": u.get("created_at").isoformat() if hasattr(u.get("created_at"), "isoformat") else u.get("created_at"),
+            "ultimo_ingreso": u.get("last_login").isoformat() if hasattr(u.get("last_login"), "isoformat") else u.get("last_login"),
+            "verificacion": u.get("verification_status"), "estado": u.get("status"),
+            "borrada": bool(u.get("is_deleted")), "vetada": bool(u.get("is_banned")),
+            "saldo_ris": to_float(from_db(u.get("balance_ris")))}
+
+
+async def repetidos(db) -> list:
+    """Los CPF que tienen más de una cuenta, con el resumen de cada una."""
+    por_cpf = {}
+    cursor = db.users.find({"cpf_number": {"$nin": [None, ""]}}, LO_QUE_SE_MUESTRA_DE_CADA_CUENTA)
+    async for u in cursor:
+        n = cpf.normalizar(u.get("cpf_number"))
+        if n:
+            por_cpf.setdefault(n, []).append(u)
+    salida = []
+    for n, cuentas in sorted(por_cpf.items()):
+        if len(cuentas) < 2:
+            continue
+        cuentas.sort(key=lambda u: (u.get("created_at") or datetime.min.replace(tzinfo=timezone.utc)).isoformat()
+                     if hasattr(u.get("created_at"), "isoformat") else "")
+        salida.append({"cpf": _tapado(n), "cuentas": [_resumen_de_la_cuenta(u) for u in cuentas]})
+    return salida
+
+
+class NoSePuedeLiberar(ValueError):
+    pass
+
+
+async def liberar(db, user_id: str, *, motivo: str, quien, request=None) -> dict:
+    """Le saca el CPF a UNA cuenta que lo comparte con otra. Sólo si de verdad
+    está repetido: liberar el CPF de una cuenta que es la única que lo tiene
+    la dejaría sin documento sin ningún motivo."""
+    from services import auditoria
+    if not (motivo or "").strip():
+        raise NoSePuedeLiberar("Liberar un CPF lleva motivo: es un documento de identidad que se le saca a una cuenta.")
+    u = await db.users.find_one({"user_id": user_id}, LO_QUE_SE_MUESTRA_DE_CADA_CUENTA)
+    if not u:
+        raise NoSePuedeLiberar(f"No existe la cuenta {user_id}.")
+    n = cpf.normalizar(u.get("cpf_number"))
+    if not n:
+        raise NoSePuedeLiberar("Esa cuenta no tiene CPF.")
+    otras = await db.users.count_documents({"cpf_number": {"$in": [n, u.get("cpf_number")]}, "user_id": {"$ne": user_id}})
+    if otras == 0:
+        raise NoSePuedeLiberar("Esa cuenta es la única con ese CPF: no hay nada que liberar.")
+    ahora = datetime.now(timezone.utc)
+    actor = quien.user_id if hasattr(quien, "user_id") else (quien or {}).get("user_id")
+    await db.users.update_one({"user_id": user_id}, {
+        "$set": {"cpf_number": None,
+                 "cpf_liberado": {"cpf": _tapado(n), "motivo": motivo.strip(), "por": actor, "en": ahora}}})
+    # La reserva del CPF pasa a la cuenta más vieja de las que quedan, AHORA
+    # y no en el próximo arranque: si quedara suelta, un registro nuevo podría
+    # tomarla entre medio; si quedara en la cuenta liberada, seguiría
+    # bloqueada para alguien que ya no lo tiene.
+    restante = await db.users.find_one({"cpf_number": {"$in": [n, u.get("cpf_number")]}, "user_id": {"$ne": user_id}},
+                                       {"_id": 0, "user_id": 1, "email": 1}, sort=[("created_at", 1)])
+    await db[COLECCION_TOMADOS].delete_one({"_id": n})
+    if restante:
+        await anclar(db, n, restante["user_id"], correo=restante.get("email") or "")
+    await auditoria.registrar(
+        db, "usuario.cpf_liberado", quien=quien, request=request,
+        objetivo_tipo="usuario", objetivo_id=user_id, objetivo_desc=u.get("email"),
+        antes={"cpf": _tapado(n)}, despues={"cpf": None}, detalle={"motivo": motivo.strip(), "compartido_con": otras})
+    indice = await asegurar_el_indice(db)
+    return {"user_id": user_id, "cpf": _tapado(n), "indice": indice, "quedan_repetidos": len(await repetidos(db))}

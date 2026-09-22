@@ -79,6 +79,19 @@ async def reconcile(admin: User = Depends(get_super_admin)):
     }
 
 
+def _para_el_json(valor):
+    """Decimal128 → número, en cualquier profundidad del documento. Sólo para
+    mostrar: el cálculo sigue en Decimal."""
+    from bson.decimal128 import Decimal128
+    if isinstance(valor, Decimal128):
+        return float(valor.to_decimal())
+    if isinstance(valor, dict):
+        return {k: _para_el_json(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_para_el_json(v) for v in valor]
+    return valor
+
+
 @router.get("/entries")
 async def list_entries(
     user_id: str = Query(...),
@@ -90,7 +103,10 @@ async def list_entries(
     rows = []
     cursor = db.ledger.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).limit(min(max(limit, 1), 500))
     async for r in cursor:
-        rows.append(r)
+        # Las líneas nuevas guardan la plata en Decimal128, que el JSON no
+        # sabe escribir: un 500 en esta pantalla, exactamente el que ya pasó
+        # dos veces en producción con los saldos. Se convierte en el borde.
+        rows.append(_para_el_json(r))
     bal_doc = await db.users.find_one({"user_id": user_id}, {"balance_ris": 1})
     led = await sum_ris_balance(user_id, "balance_ris")
     bal = from_db((bal_doc or {}).get("balance_ris"))

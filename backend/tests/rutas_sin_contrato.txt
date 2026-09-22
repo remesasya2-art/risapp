@@ -175,7 +175,6 @@ GET /api/gestor/pix/active
 GET /api/gestor/pix/history
 GET /api/gestor/pix/pending
 GET /api/gestor/pix/status/{payment_id}
-GET /api/health
 GET /api/limits
 GET /api/limits/me
 GET /api/media/twilio/{path:path}

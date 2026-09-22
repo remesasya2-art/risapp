@@ -48,6 +48,7 @@ ensenarle_decimal128_a_mongomock()
 
 from services import ledger                                          # noqa: E402
 from services.money import ZERO                                     # noqa: E402
+from services.money import to_decimal as _plata   # la plata en la base va en Decimal128: se compara en Decimal, como la lee la aplicación  # noqa: E402
 
 
 def _cargar_ledger_admin():
@@ -182,9 +183,9 @@ def test_la_apertura_funciona_con_el_saldo_guardado_de_las_dos_formas(base, como
         linea, = await base.ledger.find({"user_id": "usr_ana"}).to_list(10)
         assert linea["movement_type"] == "saldo_apertura"
         assert linea["direction"] == "credit"
-        assert linea["amount"] == 1500.0
-        assert linea["balance_before"] == 0.0
-        assert linea["balance_after"] == 1500.0
+        assert _plata(linea["amount"]) == _plata("1500.0")
+        assert _plata(linea["balance_before"]) == _plata("0.0")
+        assert _plata(linea["balance_after"]) == _plata("1500.0")
         # Y después de abrir, el libro cuadra contra el saldo.
         assert await ledger.sum_ris_balance("usr_ana") == Decimal("1500.00")
     corre(caso())
@@ -202,7 +203,7 @@ def test_la_apertura_respeta_los_movimientos_que_el_libro_ya_tenia(base):
         await ledger.create_opening_entries()
         apertura, = await base.ledger.find(
             {"user_id": "usr_ana", "movement_type": "saldo_apertura"}).to_list(10)
-        assert apertura["amount"] == 1300.0
+        assert _plata(apertura["amount"]) == _plata("1300.0")
         assert await ledger.sum_ris_balance("usr_ana") == Decimal("1500.00")
     corre(caso())
 
@@ -271,7 +272,7 @@ def test_un_saldo_negativo_abre_con_una_linea_de_debito(base):
         await ledger.create_opening_entries()
         linea, = await base.ledger.find({"user_id": "usr_ana"}).to_list(10)
         assert linea["direction"] == "debit"
-        assert linea["amount"] == 40.0
+        assert _plata(linea["amount"]) == _plata("40.0")
         assert await ledger.sum_ris_balance("usr_ana") == Decimal("-40.00")
     corre(caso())
 

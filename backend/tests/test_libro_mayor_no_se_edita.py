@@ -44,6 +44,7 @@ from conftest import ensenarle_decimal128_a_mongomock, usar_base    # noqa: E402
 ensenarle_decimal128_a_mongomock()
 
 from services import ledger                                        # noqa: E402
+from services.money import to_decimal as _plata   # la plata en la base va en Decimal128: se compara en Decimal, como la lee la aplicación  # noqa: E402
 
 
 def corre(coro):
@@ -118,16 +119,16 @@ def test_el_codigo_del_modulo_no_actualiza_ni_borra_la_coleccion():
 def test_la_linea_guarda_el_saldo_antes_y_despues(base):
     _asentar()
     linea = corre(base[ledger.LEDGER_COLLECTION].find_one({"user_id": "u_1"}))
-    assert linea["balance_before"] == 0
-    assert linea["balance_after"] == 100
-    assert linea["signed_amount"] == 100
+    assert _plata(linea["balance_before"]) == _plata("0")
+    assert _plata(linea["balance_after"]) == _plata("100")
+    assert _plata(linea["signed_amount"]) == _plata("100")
 
 
 def test_un_debito_queda_con_signo_negativo(base):
     _asentar(direction="debit", amount=40, balance_before=100, balance_after=60)
     linea = corre(base[ledger.LEDGER_COLLECTION].find_one({"user_id": "u_1"}))
-    assert linea["amount"] == 40, "el monto se guarda siempre positivo"
-    assert linea["signed_amount"] == -40, "y el signo lo pone la dirección"
+    assert _plata(linea["amount"]) == _plata("40"), "el monto se guarda siempre positivo"
+    assert _plata(linea["signed_amount"]) == _plata("-40"), "y el signo lo pone la dirección"
 
 
 def test_la_linea_dice_quien_fue_y_no_solo_su_id(base):

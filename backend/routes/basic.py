@@ -3,7 +3,10 @@ Basic routes - Health check, rates, etc.
 """
 import logging
 from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from database import db
 from models.user import User
@@ -19,10 +22,43 @@ async def root():
     """Root endpoint"""
     return {"message": "RIS App API", "version": "2.0.0"}
 
-@router.get("/health")
+class PingDeVida(BaseModel):
+    status: str
+    base: Optional[bool] = None    # lo último que vio el reloj de salud; None hasta la primera vuelta
+
+
+@router.get("/health", response_model=PingDeVida)
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+    """El ping de vida. Sigue contestando 200 aunque la base esté caída
+    (reiniciar el proceso no la levanta), pero lo dice en `base`, con lo
+    último que vio el reloj de salud, sin consultar nada en cada llamada.
+    Ver services/salud_de_la_app.py."""
+    from services import salud_de_la_app
+    return {"status": "healthy", "base": salud_de_la_app.ultimo_ok_de_la_base()}
+
+
+class Comprobacion(BaseModel):
+    nombre: str
+    ok: bool
+    detalle: str
+    grave: bool
+
+
+class SaludDeLaApp(BaseModel):
+    ok: bool
+    revisado_en: str
+    comprobaciones: list[Comprobacion]
+    vigilancia: dict
+
+
+@router.get("/admin/salud", response_model=SaludDeLaApp)
+async def salud_de_la_aplicacion(_: User = Depends(get_super_admin)):
+    """La revisión completa, ahora, con el detalle y los últimos cambios de
+    estado. Sólo el super administrador: el detalle dice cómo está armada
+    la casa."""
+    from services import salud_de_la_app
+    r = await salud_de_la_app.vigilar(db, forzar=True)
+    return {**r, "vigilancia": salud_de_la_app.estado()}
 
 @router.get("/rate")
 async def get_current_rate():

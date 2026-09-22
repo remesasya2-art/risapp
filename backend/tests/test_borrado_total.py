@@ -46,6 +46,7 @@ ensenarle_decimal128_a_mongomock()
 
 from services import contabilidad, ledger                           # noqa: E402
 from services.money import ZERO                                     # noqa: E402
+from services.money import to_decimal as _plata   # la plata en la base va en Decimal128: se compara en Decimal, como la lee la aplicación  # noqa: E402
 
 
 def corre(coro):
@@ -136,7 +137,7 @@ def test_el_cierre_de_cripto_no_pierde_decimales(base):
         cierre, = await base.ledger.find(
             {"user_id": "u1", "account": "balance_usdt",
              "movement_type": "cierre_de_libro"}).to_list(10)
-        assert cierre["amount"] == pytest.approx(12.3456789, abs=1e-9)
+        assert _plata(cierre["amount"]) == _plata("12.3456789")
         assert cierre["book"] == "USDT"
         assert await ledger.sum_ris_balance("u1", "balance_usdt", 8) == ZERO
     corre(caso())
@@ -152,9 +153,9 @@ def test_el_cierre_de_un_libro_en_negativo_es_un_credito(base):
         cierre, = await base.ledger.find(
             {"movement_type": "cierre_de_libro"}).to_list(10)
         assert cierre["direction"] == "credit"
-        assert cierre["amount"] == 40.0
-        assert cierre["balance_before"] == -40.0
-        assert cierre["balance_after"] == 0.0
+        assert _plata(cierre["amount"]) == _plata("40.0")
+        assert _plata(cierre["balance_before"]) == _plata("-40.0")
+        assert _plata(cierre["balance_after"]) == _plata("0.0")
     corre(caso())
 
 

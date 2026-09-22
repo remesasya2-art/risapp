@@ -43,6 +43,7 @@ from conftest import ensenarle_decimal128_a_mongomock, usar_base   # noqa: E402
 ensenarle_decimal128_a_mongomock()
 
 from services import saldos                                        # noqa: E402
+from services.money import to_decimal as _plata   # la plata en la base va en Decimal128: se compara en Decimal, como la lee la aplicación  # noqa: E402
 
 
 def corre(coro):
@@ -114,11 +115,11 @@ def test_el_libro_anota_los_saldos_reales_no_una_cuenta_aparte(base, saldo_inici
         await _usuario(base, saldo_inicial)
         await saldos.mover(base, "usr_ana", 250.50, movimiento="recarga_pix")
         linea, = await _lineas(base)
-        assert linea["balance_before"] == 1000.00
-        assert linea["balance_after"] == 1250.50
-        assert linea["amount"] == 250.50
+        assert _plata(linea["balance_before"]) == _plata("1000.00")
+        assert _plata(linea["balance_after"]) == _plata("1250.50")
+        assert _plata(linea["amount"]) == _plata("250.50")
         assert linea["direction"] == "credit"
-        assert linea["signed_amount"] == 250.50
+        assert _plata(linea["signed_amount"]) == _plata("250.50")
         assert linea["account"] == "balance_ris"
         assert linea["movement_type"] == "recarga_pix"
     corre(caso())
@@ -138,7 +139,7 @@ def test_un_usuario_sin_el_campo_de_saldo_arranca_en_cero(base):
         assert r["saldo_anterior"] == Decimal("0.00")
         assert r["saldo_nuevo"] == Decimal("75.00")
         linea, = await _lineas(base, "usr_nuevo")
-        assert (linea["balance_before"], linea["balance_after"]) == (0.0, 75.0)
+        assert (_plata(linea["balance_before"]), _plata(linea["balance_after"])) == (_plata("0.0"), _plata("75.0"))
     corre(caso())
 
 
@@ -221,8 +222,8 @@ def test_el_saldo_posterior_sale_de_la_escritura(base):
         assert b["saldo_anterior"] == a["saldo_nuevo"]
         assert b["saldo_nuevo"] == Decimal("700.00")
         primera, segunda = await _lineas(base)
-        assert (primera["balance_after"], segunda["balance_before"]) == (600.0, 600.0)
-        assert segunda["balance_after"] == 700.0
+        assert (_plata(primera["balance_after"]), _plata(segunda["balance_before"])) == (_plata("600.0"), _plata("600.0"))
+        assert _plata(segunda["balance_after"]) == _plata("700.0")
     corre(caso())
 
 
@@ -322,7 +323,7 @@ def test_la_cuenta_de_terceros_no_toca_el_saldo_principal(base):
         linea, = await _lineas(base, "usr_gestor")
         assert linea["account"] == "balance_ris_terceros"
         assert linea["direction"] == "debit"
-        assert linea["amount"] == 300.0
+        assert _plata(linea["amount"]) == _plata("300.0")
     corre(caso())
 
 
@@ -584,10 +585,10 @@ def test_el_traspaso_deja_las_dos_patas_en_el_libro(base):
         assert len(lineas) == 2
         salida = next(x for x in lineas if x["account"] == "balance_ris")
         entrada = next(x for x in lineas if x["account"] == "balance_ris_terceros")
-        assert (salida["direction"], salida["amount"]) == ("debit", 300.0)
-        assert (salida["balance_before"], salida["balance_after"]) == (1000.0, 700.0)
-        assert (entrada["direction"], entrada["amount"]) == ("credit", 300.0)
-        assert (entrada["balance_before"], entrada["balance_after"]) == (200.0, 500.0)
+        assert (salida["direction"], _plata(salida["amount"])) == ("debit", _plata("300.0"))
+        assert (_plata(salida["balance_before"]), _plata(salida["balance_after"])) == (_plata("1000.0"), _plata("700.0"))
+        assert (entrada["direction"], _plata(entrada["amount"])) == ("credit", _plata("300.0"))
+        assert (_plata(entrada["balance_before"]), _plata(entrada["balance_after"])) == (_plata("200.0"), _plata("500.0"))
         assert {x["movement_type"] for x in lineas} == {"traspaso_interno"}
     corre(caso())
 
