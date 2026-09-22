@@ -14,6 +14,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from models.user import User
@@ -21,6 +22,7 @@ from nucleo import base, cola, comandos, modo, tareas, trabajador
 from nucleo.libro import AsientoInvalido, DiaCerrado
 from nucleo.identidad import formas as id_formas, legajos, simulador as id_simulador
 from nucleo.cumplimiento import calendario, incidentes as cumpl_incidentes, ouvidoria as cumpl_ouvidoria
+from nucleo.operacion import aprobaciones, bitacora, registros as op_registros, respaldo as op_respaldo, salud as op_salud, secretos as op_secretos
 from nucleo.reportes import ReporteInvalido, registro as reportes_reg
 from nucleo.reportes.periodos import PeriodoInvalido
 from nucleo.riesgo import casos as riesgo_casos, monitoreo
@@ -434,6 +436,109 @@ class Cumplimiento(BaseModel):
     resultados: list[str]
 
 
+class PedidoDeAprobacion(BaseModel):
+    id: str
+    accion: str
+    objetivo: str
+    carga: dict
+    motivo: str
+    estado: str
+    pedido_por: str
+    pedido_en: Optional[str] = None
+    vence_en: Optional[str] = None
+    decidido_por: Optional[str] = None
+    decidido_en: Optional[str] = None
+    nota: Optional[str] = None
+    ejecutado_en: Optional[str] = None
+    resultado: Optional[str] = None
+
+
+class RenglonDeBitacora(BaseModel):
+    id: int
+    momento: str
+    actor: str
+    accion: str
+    objetivo: str
+    antes: Optional[dict] = None
+    despues: Optional[dict] = None
+    detalle: Optional[str] = None
+    hash: str
+
+
+class PanelDeOperacion(BaseModel):
+    # No «Operacion»: ese nombre ya es el de una operación por un riel (PIX).
+    resumen_aprobaciones: dict
+    aprobaciones: list[PedidoDeAprobacion]
+    acciones_con_cuatro_ojos: list[str]
+    bitacora: list[RenglonDeBitacora]
+    cadena_de_la_bitacora: Cadena
+    claves_configurables: list[str]
+
+
+class Comprobacion(BaseModel):
+    nombre: str
+    ok: bool
+    detalle: str
+    grave: bool
+
+
+class Salud(BaseModel):
+    ok: bool
+    revisado_en: str
+    comprobaciones: list[Comprobacion]
+    vigilancia: dict
+
+
+class Secreto(BaseModel):
+    nombre: str
+    para_que: str
+    variable: str
+    configurado: bool
+    huella: Optional[str] = None
+    obligatorio: bool
+    rotado: bool
+
+
+class Secretos(BaseModel):
+    puerto: str
+    secretos: list[Secreto]
+    faltantes: list[str]
+
+
+class Respaldo(BaseModel):
+    id: int
+    momento: str
+    actor: str
+    filas: int
+    tablas: dict
+    bytes: int
+    hash: str
+    firmado: bool
+    comprobado_en: Optional[str] = None
+    comprobacion: Optional[dict] = None
+    contenido: Optional[str] = None     # sólo al crearlo: se devuelve para guardarlo afuera
+    firma: Optional[str] = None
+
+
+class Respaldos(BaseModel):
+    llave_configurada: bool
+    tablas_que_se_conservan: list[str]
+    respaldos: list[Respaldo]
+
+
+class ComprobacionDeRespaldo(BaseModel):
+    ok: bool
+    hash_ok: bool
+    firma: str
+    filas: int
+    tablas: dict
+    libro: Optional[dict] = None
+    bitacora: Optional[dict] = None
+    motivo: Optional[str] = None
+    hash: str
+    registrado: bool
+
+
 class PersonaDePrueba(BaseModel):
     documento: str
     nombre: str
@@ -643,6 +748,26 @@ class RespuestaDelReclamo(BaseModel):
     resultado: str = Field(pattern="^(" + "|".join(cumpl_ouvidoria.RESULTADOS) + ")$")
 
 
+class PedidoDeConfiguracion(BaseModel):
+    clave: str = Field(pattern="^nucleo_[a-z0-9_]+$")
+    valor: str = Field(min_length=1, max_length=24)
+    motivo: str = Field(min_length=1, max_length=300)
+
+
+class Motivo(BaseModel):
+    motivo: str = Field(min_length=1, max_length=300)
+
+
+class Decision(ComoQuien):
+    aprobar: bool
+    nota: Optional[str] = Field(default=None, max_length=300)
+
+
+class RespaldoAComprobar(BaseModel):
+    contenido: str = Field(min_length=2, max_length=50_000_000)
+    firma: Optional[str] = Field(default=None, max_length=64)
+
+
 class NuevoTrabajo(BaseModel):
     # Sólo los de laboratorio: desde la pestaña no se encola un aviso real.
     tipo: str = Field(pattern="^(" + "|".join(tareas.DE_LABORATORIO) + ")$")
@@ -659,6 +784,13 @@ def _sin_base():
 async def _con_base():
     if not base.hay_base():
         _sin_base()
+
+
+async def _anotar(admin: User, accion: str, objetivo, antes=None, despues=None, detalle: Optional[str] = None):
+    """La bitácora del núcleo, DESPUES de que la acción salió bien. Si falla,
+    no deshace la acción (ver nucleo/operacion/bitacora.py)."""
+    await bitacora.anotar_sin_romper(actor=admin.user_id, accion=accion, objetivo=str(objetivo),
+                                     antes=antes, despues=despues, detalle=detalle)
 
 
 # ── rutas ──────────────────────────────────────────────────────────────────
@@ -745,9 +877,11 @@ async def cierres(admin: User = Depends(get_super_admin), _m: int = Depends(modo
 async def cerrar(pedido: PedidoDeCierre, admin: User = Depends(get_super_admin),
                  _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await comandos.cerrar_dia(dia=pedido.dia, actor=admin.user_id, nota=pedido.nota)
+        c = await comandos.cerrar_dia(dia=pedido.dia, actor=admin.user_id, nota=pedido.nota)
     except DiaCerrado as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await _anotar(admin, "cierre.dia", c["dia"], despues={"hasta_asiento": c["hasta_asiento"], "hash_final": c["hash_final"]}, detalle=pedido.nota)
+    return c
 
 
 # ── la cola ────────────────────────────────────────────────────────────────
@@ -785,6 +919,7 @@ async def reintentar(trabajo_id: int, admin: User = Depends(get_super_admin),
     async with base.sesion() as s:
         if not await cola.reintentar(s, trabajo_id):
             raise HTTPException(status_code=409, detail="Sólo se reintenta un trabajo muerto.")
+    await _anotar(admin, "cola.reintento", trabajo_id, antes={"estado": cola.MUERTO}, despues={"estado": cola.PENDIENTE})
     return {"id": trabajo_id, "estado": cola.PENDIENTE}
 
 
@@ -979,27 +1114,33 @@ async def cruzar(titular_id: str, admin: User = Depends(get_super_admin),
 async def aprobar(titular_id: str, pedido: Aprobacion, admin: User = Depends(get_super_admin),
                   _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await legajos.aprobar(titular_id, nivel_de_riesgo=pedido.nivel_de_riesgo, actor=admin.user_id)
+        l = await legajos.aprobar(titular_id, nivel_de_riesgo=pedido.nivel_de_riesgo, actor=admin.user_id)
     except legajos.LegajoInvalido as e:
         raise _error_de_legajo(e)
+    await _anotar(admin, "legajo.aprobado", titular_id, despues={"nivel_de_riesgo": pedido.nivel_de_riesgo, "vigente_hasta": l.get("vigente_hasta")})
+    return l
 
 
 @router.post("/laboratorio/identidad/titulares/{titular_id}/rechazar", response_model=Legajo)
 async def rechazar(titular_id: str, pedido: Rechazo, admin: User = Depends(get_super_admin),
                    _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await legajos.rechazar(titular_id, motivo=pedido.motivo, actor=admin.user_id)
+        l = await legajos.rechazar(titular_id, motivo=pedido.motivo, actor=admin.user_id)
     except legajos.LegajoInvalido as e:
         raise _error_de_legajo(e)
+    await _anotar(admin, "legajo.rechazado", titular_id, detalle=pedido.motivo)
+    return l
 
 
 @router.post("/laboratorio/identidad/cruces/{cruce_id}/resolver", response_model=Cruce)
 async def resolver_cruce(cruce_id: int, pedido: Resolucion, admin: User = Depends(get_super_admin),
                          _m: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await legajos.resolver_cruce(cruce_id, resolucion=pedido.resolucion, actor=admin.user_id)
+        c = await legajos.resolver_cruce(cruce_id, resolucion=pedido.resolucion, actor=admin.user_id)
     except legajos.LegajoInvalido as e:
         raise _error_de_legajo(e)
+    await _anotar(admin, "cruce.resuelto", cruce_id, detalle=pedido.resolucion)
+    return c
 
 
 # ── riesgo ─────────────────────────────────────────────────────────────────
@@ -1038,9 +1179,11 @@ async def evaluar(operacion_id: str, admin: User = Depends(get_super_admin),
 async def abrir_caso(pedido: NuevoCaso, admin: User = Depends(get_super_admin),
                      modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await riesgo_casos.abrir(titular=pedido.titular, origen="manual", actor=admin.user_id, detalle=pedido.detalle)
+        k = await riesgo_casos.abrir(titular=pedido.titular, origen="manual", actor=admin.user_id, detalle=pedido.detalle)
     except riesgo_casos.CasoInvalido as e:
         raise _error_de_caso(e)
+    await _anotar(admin, "caso.abierto", k["id"], despues={"titular": pedido.titular}, detalle=pedido.detalle)
+    return k
 
 
 @router.get("/laboratorio/riesgo/casos/{caso_id}", response_model=Caso)
@@ -1074,19 +1217,23 @@ async def anotar_caso(caso_id: str, pedido: NotaNueva, admin: User = Depends(get
 async def concluir_caso(caso_id: str, pedido: ConclusionDelCaso, admin: User = Depends(get_super_admin),
                         modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await riesgo_casos.concluir(caso_id, analista=_quien(admin, pedido.como, modo_vigente),
-                                           conclusion=pedido.conclusion, comunicar=pedido.comunicar)
+        k = await riesgo_casos.concluir(caso_id, analista=_quien(admin, pedido.como, modo_vigente),
+                                        conclusion=pedido.conclusion, comunicar=pedido.comunicar)
     except riesgo_casos.CasoInvalido as e:
         raise _error_de_caso(e)
+    await _anotar(admin, "caso.concluido", caso_id, despues={"estado": k["estado"], "comunicar": pedido.comunicar, "analista": k["analista"]})
+    return k
 
 
 @router.post("/laboratorio/riesgo/casos/{caso_id}/aprobar_comunicacion", response_model=Caso)
 async def aprobar_comunicacion(caso_id: str, pedido: ComoQuien, admin: User = Depends(get_super_admin),
                                modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await riesgo_casos.aprobar_comunicacion(caso_id, aprobador=_quien(admin, pedido.como, modo_vigente))
+        k = await riesgo_casos.aprobar_comunicacion(caso_id, aprobador=_quien(admin, pedido.como, modo_vigente))
     except riesgo_casos.CasoInvalido as e:
         raise _error_de_caso(e)
+    await _anotar(admin, "caso.comunicado", caso_id, despues={"acuse": k["acuse"], "aprobado_por": k["aprobado_por"]})
+    return k
 
 
 @router.post("/laboratorio/riesgo/no_ocurrencia", response_model=Comunicacion)
@@ -1095,10 +1242,12 @@ async def no_ocurrencia(pedido: NoOcurrencia, admin: User = Depends(get_super_ad
     """La declaración anual. Quien la pide es quien está logueado; «como»
     nombra a la segunda firma (en laboratorio)."""
     try:
-        return await riesgo_casos.declarar_no_ocurrencia(anio=pedido.anio, actor=admin.user_id,
-                                                          aprobador=_quien(admin, pedido.como, modo_vigente))
+        m = await riesgo_casos.declarar_no_ocurrencia(anio=pedido.anio, actor=admin.user_id,
+                                                       aprobador=_quien(admin, pedido.como, modo_vigente))
     except riesgo_casos.CasoInvalido as e:
         raise _error_de_caso(e)
+    await _anotar(admin, "coaf.no_ocurrencia", pedido.anio, despues={"acuse": m["acuse"], "aprobada_por": m["aprobada_por"]})
+    return m
 
 
 # ── reportes regulatorios ──────────────────────────────────────────────────
@@ -1121,9 +1270,11 @@ async def reportes(admin: User = Depends(get_super_admin),
 async def generar_reporte(pedido: PedidoDeReporte, admin: User = Depends(get_super_admin),
                           modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await reportes_reg.generar(pedido.tipo, pedido.periodo, actor=admin.user_id)
+        r = await reportes_reg.generar(pedido.tipo, pedido.periodo, actor=admin.user_id)
     except (ReporteInvalido, PeriodoInvalido) as e:
         raise _error_de_reporte(e)
+    await _anotar(admin, "reporte.generado", f"{pedido.tipo} {pedido.periodo}", despues={"id": r["id"], "version": r["version"], "resumen": r["resumen"]})
+    return r
 
 
 @router.get("/laboratorio/reportes/{reporte_id}", response_model=Reporte)
@@ -1135,12 +1286,19 @@ async def reporte(reporte_id: int, admin: User = Depends(get_super_admin),
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/laboratorio/reportes/{reporte_id}/transmitir", response_model=Reporte)
-async def transmitir_reporte(reporte_id: int, admin: User = Depends(get_super_admin),
+@router.post("/laboratorio/reportes/{reporte_id}/transmitir", response_model=PedidoDeAprobacion)
+async def transmitir_reporte(reporte_id: int, pedido: Motivo, admin: User = Depends(get_super_admin),
                              modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Mandarle un archivo al regulador es de cuatro ojos: acá se PIDE; otra
+    persona lo aprueba en /laboratorio/operacion y ahí se transmite."""
     try:
-        return await reportes_reg.transmitir(reporte_id, actor=admin.user_id)
-    except (ReporteInvalido, ValueError) as e:
+        r = await reportes_reg.detalle(reporte_id)
+        if r["protocolo"]:
+            raise ReporteInvalido(f"El reporte {reporte_id} ya se transmitió (protocolo {r['protocolo']}).")
+        return await aprobaciones.pedir(accion="transmitir_reporte", objetivo=f"reporte:{reporte_id}",
+                                        carga={"reporte_id": reporte_id, "documento": r["documento"], "periodo": r["periodo"], "version": r["version"]},
+                                        actor=admin.user_id, motivo=pedido.motivo)
+    except (ReporteInvalido, aprobaciones.AprobacionInvalida) as e:
         raise _error_de_reporte(e)
 
 
@@ -1173,11 +1331,13 @@ async def cumplimiento(admin: User = Depends(get_super_admin),
 async def abrir_incidente(pedido: NuevoIncidente, admin: User = Depends(get_super_admin),
                           modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await cumpl_incidentes.abrir(tipo=pedido.tipo, titulo=pedido.titulo, impacto=pedido.impacto,
-                                            clientes_afectados=pedido.clientes_afectados, relevante=pedido.relevante,
-                                            actor=admin.user_id, inicio=_momento(pedido.inicio))
+        i = await cumpl_incidentes.abrir(tipo=pedido.tipo, titulo=pedido.titulo, impacto=pedido.impacto,
+                                         clientes_afectados=pedido.clientes_afectados, relevante=pedido.relevante,
+                                         actor=admin.user_id, inicio=_momento(pedido.inicio))
     except cumpl_incidentes.IncidenteInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
+    await _anotar(admin, "incidente.abierto", i["id"], despues={"tipo": pedido.tipo, "relevante": pedido.relevante, "clientes_afectados": pedido.clientes_afectados}, detalle=pedido.titulo)
+    return i
 
 
 @router.post("/laboratorio/cumplimiento/incidentes/{incidente_id}/anotar", response_model=Incidente)
@@ -1189,12 +1349,21 @@ async def anotar_incidente(incidente_id: str, pedido: NotaNueva, admin: User = D
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/laboratorio/cumplimiento/incidentes/{incidente_id}/comunicar", response_model=Incidente)
-async def comunicar_incidente(incidente_id: str, admin: User = Depends(get_super_admin),
+@router.post("/laboratorio/cumplimiento/incidentes/{incidente_id}/comunicar", response_model=PedidoDeAprobacion)
+async def comunicar_incidente(incidente_id: str, pedido: Motivo, admin: User = Depends(get_super_admin),
                               modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Avisarle al BCB es de cuatro ojos: acá se PIDE; otra persona lo
+    aprueba en /laboratorio/operacion y ahí se comunica."""
     try:
-        return await cumpl_incidentes.comunicar(incidente_id, actor=admin.user_id)
-    except (cumpl_incidentes.IncidenteInvalido, ValueError) as e:
+        i = await cumpl_incidentes.detalle(incidente_id)
+        if not i["relevante"]:
+            raise cumpl_incidentes.IncidenteInvalido("Un incidente no relevante no se comunica al BCB.")
+        if i["protocolo"]:
+            raise cumpl_incidentes.IncidenteInvalido(f"El incidente ya se comunicó (protocolo {i['protocolo']}).")
+        return await aprobaciones.pedir(accion="comunicar_incidente", objetivo=f"incidente:{incidente_id}",
+                                        carga={"incidente_id": incidente_id, "titulo": i["titulo"], "comunicar_hasta": i["comunicar_hasta"]},
+                                        actor=admin.user_id, motivo=pedido.motivo)
+    except (cumpl_incidentes.IncidenteInvalido, aprobaciones.AprobacionInvalida) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -1202,26 +1371,163 @@ async def comunicar_incidente(incidente_id: str, admin: User = Depends(get_super
 async def cerrar_incidente(incidente_id: str, pedido: CierreDeIncidente, admin: User = Depends(get_super_admin),
                            modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await cumpl_incidentes.cerrar(incidente_id, actor=admin.user_id, causa=pedido.causa,
-                                             acciones=pedido.acciones, fin=_momento(pedido.fin))
+        i = await cumpl_incidentes.cerrar(incidente_id, actor=admin.user_id, causa=pedido.causa,
+                                          acciones=pedido.acciones, fin=_momento(pedido.fin))
     except cumpl_incidentes.IncidenteInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
+    await _anotar(admin, "incidente.cerrado", incidente_id, despues={"causa": pedido.causa, "acciones": pedido.acciones, "fin": i["fin"]})
+    return i
 
 
 @router.post("/laboratorio/cumplimiento/reclamos", response_model=Reclamo)
 async def abrir_reclamo(pedido: NuevoReclamo, admin: User = Depends(get_super_admin),
                         modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await cumpl_ouvidoria.abrir(canal=pedido.canal, asunto=pedido.asunto, descripcion=pedido.descripcion,
-                                           actor=admin.user_id, titular=pedido.titular, caso_soporte=pedido.caso_soporte)
+        r = await cumpl_ouvidoria.abrir(canal=pedido.canal, asunto=pedido.asunto, descripcion=pedido.descripcion,
+                                        actor=admin.user_id, titular=pedido.titular, caso_soporte=pedido.caso_soporte)
     except cumpl_ouvidoria.ReclamoInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
+    await _anotar(admin, "reclamo.abierto", r["protocolo"], despues={"canal": pedido.canal, "responder_hasta": r["responder_hasta"], "caso_soporte": pedido.caso_soporte}, detalle=pedido.asunto)
+    return r
 
 
 @router.post("/laboratorio/cumplimiento/reclamos/{reclamo_id}/responder", response_model=Reclamo)
 async def responder_reclamo(reclamo_id: str, pedido: RespuestaDelReclamo, admin: User = Depends(get_super_admin),
                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
     try:
-        return await cumpl_ouvidoria.responder(reclamo_id, actor=admin.user_id, respuesta=pedido.respuesta, resultado=pedido.resultado)
+        r = await cumpl_ouvidoria.responder(reclamo_id, actor=admin.user_id, respuesta=pedido.respuesta, resultado=pedido.resultado)
     except cumpl_ouvidoria.ReclamoInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
+    await _anotar(admin, "reclamo.respondido", r["protocolo"], despues={"resultado": pedido.resultado, "en_plazo": r["en_plazo"]})
+    return r
+
+
+# ── operación: bitácora y cuatro ojos ─────────────────────────────────────
+
+def _error_de_aprobacion(e: Exception):
+    return HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/laboratorio/operacion", response_model=PanelDeOperacion)
+async def operacion(admin: User = Depends(get_super_admin),
+                    modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    from services import configuracion
+    async with base.sesion() as s:
+        cadena = await bitacora.verificar_cadena(s)
+    return {"resumen_aprobaciones": await aprobaciones.resumen(), "aprobaciones": await aprobaciones.listar(),
+            "acciones_con_cuatro_ojos": list(aprobaciones.EJECUTORES), "bitacora": await bitacora.listar(limite=100),
+            "cadena_de_la_bitacora": {"ok": cadena["ok"], "asientos": cadena["renglones"], "roto_en": cadena["roto_en"],
+                                      "motivo": cadena["motivo"], "hash_final": cadena.get("hash_final")},
+            "claves_configurables": [c for c in configuracion.AJUSTES if c.startswith(aprobaciones.CLAVES_DEL_NUCLEO)]}
+
+
+@router.post("/laboratorio/operacion/configuracion", response_model=PedidoDeAprobacion)
+async def pedir_configuracion(pedido: PedidoDeConfiguracion, admin: User = Depends(get_super_admin),
+                              modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Pedir un cambio de `nucleo_modo` o de un umbral. Se valida acá, para
+    que quien apruebe no apruebe un valor fuera de rango."""
+    from services import configuracion
+    try:
+        valor, motivo_de_rechazo = configuracion.normalizar(pedido.clave, pedido.valor)
+    except configuracion.AjusteDesconocido:
+        raise HTTPException(status_code=400, detail=f"No existe el ajuste «{pedido.clave}».")
+    if motivo_de_rechazo:
+        raise HTTPException(status_code=400, detail=motivo_de_rechazo)
+    try:
+        return await aprobaciones.pedir(accion="configurar", objetivo=pedido.clave, carga={"clave": pedido.clave, "valor": pedido.valor},
+                                        actor=admin.user_id, motivo=pedido.motivo)
+    except aprobaciones.AprobacionInvalida as e:
+        raise _error_de_aprobacion(e)
+
+
+@router.post("/laboratorio/operacion/aprobaciones/{pedido_id}/decidir", response_model=PedidoDeAprobacion)
+async def decidir_aprobacion(pedido_id: str, pedido: Decision, admin: User = Depends(get_super_admin),
+                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """La segunda firma. En laboratorio, «como» nombra a quien decide."""
+    try:
+        return await aprobaciones.decidir(pedido_id, actor=_quien(admin, pedido.como, modo_vigente), aprobar=pedido.aprobar, nota=pedido.nota)
+    except aprobaciones.AprobacionInvalida as e:
+        raise _error_de_aprobacion(e)
+
+
+# ── operación: salud, secretos y métricas ─────────────────────────────────
+
+@router.get("/laboratorio/salud", response_model=Salud)
+async def salud(admin: User = Depends(get_super_admin),
+                modo_vigente: int = Depends(modo.exigir_encendido)):
+    """La revisión completa, con detalle. Sin `_con_base` a propósito: sin
+    base, la salud tiene que poder decir «sin base»."""
+    r = await op_salud.revisar(modo_vigente=modo_vigente)
+    return {**r, "vigilancia": op_salud.estado()}
+
+
+@router.get("/laboratorio/secretos", response_model=Secretos)
+async def secretos(admin: User = Depends(get_super_admin),
+                   modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Si cada secreto está y su huella. NUNCA el valor: no hay ruta que lo
+    devuelva, y hay test."""
+    return {"puerto": op_secretos.secretos().nombre, "secretos": await op_secretos.estado(modo_vigente),
+            "faltantes": op_secretos.faltantes(modo_vigente)}
+
+
+class Metricas(BaseModel):
+    cuentas_activas: int
+    asientos_total: int
+    asientos_hoy: int
+    saldo_de_titulares_centavos: int
+    trabajos_pendientes: int
+    trabajos_en_curso: int
+    trabajos_hechos: int
+    trabajos_muertos: int
+    operaciones_activas: int
+    operaciones_enviadas: int
+    operaciones_liquidadas: int
+    operaciones_rechazadas: int
+    reportes_generados: int
+    reportes_transmitidos: int
+    obligaciones_pendientes: int
+    obligaciones_vencidas: int
+    acciones_con_plazo_vencidas: int
+    aprobaciones_pendientes: int
+    incidentes_abiertos: int
+    reclamos_vencidos: int
+    bitacora_renglones: int
+
+
+@router.get("/laboratorio/metricas", response_model=Metricas)
+async def metricas(admin: User = Depends(get_super_admin),
+                   modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Las métricas del núcleo, para la pestaña."""
+    return await op_registros.resumen()
+
+
+@router.get("/laboratorio/metricas/texto", response_model=str, response_class=PlainTextResponse)
+async def metricas_en_texto(admin: User = Depends(get_super_admin),
+                            modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Las mismas, en la forma `nombre valor` que lee un recolector."""
+    return op_registros.en_texto(await op_registros.resumen())
+
+
+# ── operación: respaldo ───────────────────────────────────────────────────
+
+@router.get("/laboratorio/respaldos", response_model=Respaldos)
+async def respaldos_(admin: User = Depends(get_super_admin),
+                     modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    return {"llave_configurada": op_secretos.secretos().leer("llave_de_respaldo") is not None,
+            "tablas_que_se_conservan": [t.name for t in op_respaldo.TABLAS_QUE_SE_CONSERVAN],
+            "respaldos": await op_respaldo.listar()}
+
+
+@router.post("/laboratorio/respaldos", response_model=Respaldo)
+async def crear_respaldo(admin: User = Depends(get_super_admin),
+                         modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Exporta y devuelve el contenido y la firma para guardarlos afuera.
+    La base sólo guarda el registro (cuándo, quién, cuánto, hash)."""
+    return await op_respaldo.crear(actor=admin.user_id)
+
+
+@router.post("/laboratorio/respaldos/comprobar", response_model=ComprobacionDeRespaldo)
+async def comprobar_respaldo(pedido: RespaldoAComprobar, admin: User = Depends(get_super_admin),
+                             modo_vigente: int = Depends(modo.exigir_encendido), _b=Depends(_con_base)):
+    """Lo que un auditor haría con el archivo en la mano."""
+    return await op_respaldo.comprobar_y_anotar(pedido.contenido, pedido.firma, actor=admin.user_id)

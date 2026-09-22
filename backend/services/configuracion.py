@@ -482,6 +482,26 @@ PAREJAS_MINIMO_Y_MAXIMO = (
 )
 
 
+class CambioNoPermitido(ValueError):
+    """Una guarda frenó el cambio. El mensaje dice quién y por qué, para la
+    pantalla."""
+
+
+# Funciones `async (db, cambios: dict) -> None` que pueden frenar una escritura
+# lanzando `CambioNoPermitido`. La lista la llena `server.py` al arrancar: este
+# módulo no conoce a quien la usa (el núcleo de cuentas, por ejemplo), y así
+# tiene que seguir.
+GUARDAS: list = []
+
+
+async def comprobar_guardas(db, cambios: dict) -> None:
+    """Se consulta ANTES de escribir nada, con el conjunto entero de cambios
+    ya normalizado: una guarda que frena a mitad de camino dejaría la mitad
+    escrita."""
+    for guarda in GUARDAS:
+        await guarda(db, cambios)
+
+
 class AjusteDesconocido(KeyError):
     """Una clave que no está en `AJUSTES`.
 

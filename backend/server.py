@@ -587,6 +587,49 @@ app.include_router(modular_api_router)
 from nucleo.rutas import router as nucleo_router  # noqa: E402
 app.include_router(nucleo_router, prefix="/api")
 
+# Y la guarda de cuatro ojos sobre la configuración del núcleo: con el núcleo
+# prendido, `nucleo_modo` y los umbrales se cambian pidiendo y aprobando desde
+# la pestaña, no desde Configuración. Se engancha ACA, único puente entre la
+# aplicación y el núcleo. Ver nucleo/operacion/aprobaciones.py.
+from nucleo.operacion import aprobaciones as _nucleo_aprobaciones  # noqa: E402
+from services import configuracion as _configuracion  # noqa: E402
+if _nucleo_aprobaciones.guarda_de_configuracion not in _configuracion.GUARDAS:
+    _configuracion.GUARDAS.append(_nucleo_aprobaciones.guarda_de_configuracion)
+
+# La salud del núcleo avisa por la campana del equipo y el correo de la
+# aplicación (sólo a los super administradores), y publica una sonda anónima
+# para el monitor externo. Las dos cosas se enganchan ACA, por la frontera.
+from nucleo.operacion import salud as _nucleo_salud  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+
+
+async def _avisar_salud_del_nucleo(titulo: str, mensaje: str, grave: bool) -> None:
+    from services import notifications as _notif
+    await _notif.avisar_al_personal(title=titulo, message=mensaje, notification_type="error" if grave else "warning",
+                                    solo_super_admin=True, data={"seccion": "nucleo"})
+
+
+if _avisar_salud_del_nucleo not in _nucleo_salud.AVISADORES:
+    _nucleo_salud.AVISADORES.append(_avisar_salud_del_nucleo)
+
+
+class SaludDelNucleo(BaseModel):
+    ok: bool
+
+
+@app.get("/api/health/nucleo", include_in_schema=False, response_model=SaludDelNucleo)
+async def salud_del_nucleo():
+    """Sólo `{"ok": …}` y el código (200 o 503): es para el monitor, que no
+    se loguea. Con el núcleo apagado, 404: no se anuncia lo que no está.
+    No calcula nada: devuelve lo último que vio la vigilancia del
+    trabajador (ver nucleo/operacion/salud.py), por eso no lleva tope."""
+    from fastapi.responses import JSONResponse
+    from nucleo import modo as _modo
+    if not _modo.se_puede_usar(await _modo.leer(db)):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    ok = await _nucleo_salud.ok_para_la_sonda()
+    return JSONResponse({"ok": ok}, status_code=200 if ok else 503)
+
 # Include admin router (separate file for backward compatibility)
 app.include_router(admin_router)
 

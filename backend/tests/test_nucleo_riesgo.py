@@ -160,9 +160,16 @@ def test_el_horario_inusual_se_mide_en_hora_de_brasil(mongo):
     o = cobrar_y_pagar(c, "50.00")
 
     async def madrugada():
+        from nucleo.esquema import alertas
         async with base.sesion() as s:
             await s.execute(operaciones.update().where(operaciones.c.id == o)
                             .values(actualizada=datetime(2026, 9, 21, 6, 30, tzinfo=timezone.utc)))   # 03:30 en Brasil
+            # La cola ya evaluó la operación con la hora REAL al liquidarla. Si
+            # el test corre entre las 0 y las 5 de Brasilia, esa evaluación ya
+            # dejó la alerta de horario (con la hora real) y la de acá no sería
+            # «nueva». Se borra la de la cola para que el test mida lo suyo: el
+            # producto no tiene función que borre alertas, y así tiene que seguir.
+            await s.execute(alertas.delete().where(alertas.c.operacion == o))
     ya(madrugada())
     nuevas = ya(monitoreo.evaluar_operacion(o, db=mongo))
     assert any(a["regla"] == "horario" and a["detalle"]["hora"] == 3 for a in nuevas)
