@@ -384,6 +384,16 @@ const [searchParams, setSearchParams] = useSearchParams();
   const [userHistory, setUserHistory] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
   const [resumenDeCuentas, setResumenDeCuentas] = useState(null);
+  // La salud de la aplicación (si la base responde, si está el candado del
+  // CPF). Sólo la ve el super administrador: la ruta lo exige, y si contesta
+  // 403 la tira no se dibuja.
+  const [saludDeLaApp, setSaludDeLaApp] = useState(null);
+  useEffect(() => {
+    if (user?.role !== 'super_admin') return;
+    let vigente = true;
+    api.get('/admin/salud').then((r) => { if (vigente) setSaludDeLaApp(r.data); }).catch(() => {});
+    return () => { vigente = false; };
+  }, [user?.role]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedUserForRole, setSelectedUserForRole] = useState(null);
@@ -1054,6 +1064,17 @@ const [searchParams, setSearchParams] = useSearchParams();
         )}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {saludDeLaApp ? (
+              <div style={{ ...cardStyle, padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: '8px 18px', alignItems: 'center', borderLeft: `4px solid ${saludDeLaApp.ok ? '#16a34a' : '#dc2626'}` }} data-testid="salud-de-la-app">
+                <strong style={{ fontSize: '14px', color: saludDeLaApp.ok ? '#166534' : '#991b1b' }}>Salud de la aplicación · {saludDeLaApp.ok ? 'sana' : 'NO SANA'}</strong>
+                {saludDeLaApp.comprobaciones.map((c) => (
+                  <span key={c.nombre} style={{ fontSize: '13px', color: c.ok ? '#374151' : '#b91c1c' }} data-testid={`salud-de-la-app-${c.ok ? 'ok' : 'falla'}`}>
+                    {c.ok ? '✓' : '✗'} <strong>{c.nombre.replaceAll('_', ' ')}</strong>: {c.detalle}
+                  </span>
+                ))}
+                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: 'auto' }}>el reloj revisa cada {Math.round(saludDeLaApp.vigilancia.cada_segundos / 60)} min y avisa al equipo cuando cambia</span>
+              </div>
+            ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               {[
                 { icon: ArrowUpRight, value: pendientes.withdrawals ?? 0, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
