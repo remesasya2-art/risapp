@@ -21,6 +21,8 @@ from routes.security_2fa import frenar_por_cuenta
 from services.money import para_mostrar
 from models.movimientos import beneficiario_para_la_orden
 from models.btc_salida import LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN, OrdenesBtcPendientes
+from models.btc_salida import (EstadoDeMiRemesa, LimiteDiarioBtc, MiBilleteraBtc, MiHistorialBtc,
+                               MiRemesaActiva, PrecioBtc)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
@@ -244,7 +246,7 @@ class MarcarEnviadoRequest(BaseModel):
     operador_id: str
 
 
-@router.get("/precio")
+@router.get("/precio", response_model=PrecioBtc, response_model_exclude_unset=True)
 async def get_precio_btc():
     precio = await _get_btc_price()
     tasa_ves = await _get_tasa_ves()
@@ -448,7 +450,7 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
     }
 
 
-@router.get("/limite-diario")
+@router.get("/limite-diario", response_model=LimiteDiarioBtc, response_model_exclude_unset=True)
 async def get_limite_diario(current_user: User = Depends(get_current_user)):
     enviado_hoy = await _get_total_enviado_hoy(current_user.user_id)
     return {"limite_diario_usd": LIMITE_DIARIO_USD, "enviado_hoy_usd": enviado_hoy, "disponible_usd": max(0.0, LIMITE_DIARIO_USD - enviado_hoy)}
@@ -644,7 +646,7 @@ async def get_remesas_pendientes(current_user: User = Depends(get_super_admin)):
     ).sort("pagado_en", 1).to_list(100)
     return {"ordenes": remesas, "remesas": remesas, "total": len(remesas)}
 
-@router.get("/mi-remesa-activa")
+@router.get("/mi-remesa-activa", response_model=MiRemesaActiva, response_model_exclude_unset=True)
 async def mi_remesa_activa(current_user: User = Depends(get_current_user)):
     """Devuelve la remesa BTC más reciente y relevante del usuario (de las últimas
     48h, no cancelada), para que al volver a la app vea su estado: el invoice si
@@ -674,7 +676,7 @@ async def mi_remesa_activa(current_user: User = Depends(get_current_user)):
     return {"activa": True, "remesa": remesa}
 
 
-@router.get("/status/{remesa_id}")
+@router.get("/status/{remesa_id}", response_model=EstadoDeMiRemesa, response_model_exclude_unset=True)
 async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_current_user)):
     """Permite al frontend verificar el estado de pago de una orden."""
     remesa = await db.btc_remesas.find_one(
@@ -705,7 +707,7 @@ async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_curre
     )
     return {"ok": True, "msg": "Envío cancelado."}
 
-@router.get("/wallet")
+@router.get("/wallet", response_model=MiBilleteraBtc, response_model_exclude_unset=True)
 async def get_btc_wallet(current_user: User = Depends(get_current_user)):
     """Retorna el saldo de la billetera BTC-VES del usuario autenticado."""
     wallet = await db.btc_ves_wallets.find_one(
@@ -722,7 +724,7 @@ async def get_btc_wallet(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.get("/historial")
+@router.get("/historial", response_model=MiHistorialBtc, response_model_exclude_unset=True)
 async def get_historial_usuario(current_user: User = Depends(get_current_user)):
     """Retorna el historial de envíos BTC del usuario autenticado."""
     remesas = await db.btc_remesas.find(
