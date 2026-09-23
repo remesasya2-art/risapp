@@ -169,7 +169,6 @@ GET /api/limits/me
 GET /api/media/twilio/{path:path}
 GET /api/notifications
 GET /api/notifications/unread-count
-GET /api/payments/card/config
 GET /api/policies
 GET /api/policies/status
 GET /api/primeros-pasos
