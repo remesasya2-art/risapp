@@ -91,9 +91,13 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
 
   const beneficiary = tx.beneficiary_data || {};
   const account = beneficiary.account_number || beneficiary.phone || '';
-// El ojito aparece en CUALQUIER transacción con un comprobante cargado
+  // El ojito aparece en CUALQUIER transacción con un comprobante cargado
   // (el admin lo sube en los envíos; el usuario en las recargas), sin importar el tipo ni el estado.
-  const showVoucher = (tx.proof_images && tx.proof_images.length > 0) || tx.proof_image || tx.comprobante_pago;
+  //
+  // La lista ya no trae las fotos —eran 10 MB por cada vez que se abría el
+  // inicio—, sólo si las hay. Las fotos se piden al tocar el ojito: ver
+  // `hooks/useComprobante.js`.
+  const showVoucher = tx.tiene_comprobante;
 
   // RETOMAR UN PEDIDO QUE QUEDO A MEDIAS.
   //

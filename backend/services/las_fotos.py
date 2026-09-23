@@ -98,3 +98,36 @@ async def cuales_tienen_foto(base, filtro: dict) -> set:
         if fila.get("tiene"):
             con_foto.add(fila.get("transaction_id"))
     return con_foto
+
+
+# De `LAS_FOTOS`, las que guardan una LISTA de fotos. Las demás guardan una
+# sola. Hace falta saberlo para preguntar si hay alguna: a una lista vacía
+# `$nin: [None, ""]` le dice que sí, porque ninguno de sus elementos es nulo.
+LAS_QUE_SON_LISTA = ("proof_images",)
+
+
+def con_alguna_foto() -> dict:
+    """El filtro de Mongo para «tiene al menos una foto», en cualquiera de los
+    campos de `LAS_FOTOS`.
+
+    Es la misma pregunta que se hacía la pantalla para mostrar el ojito
+    (`proof_images` no vacía, o `proof_image`, o `comprobante_pago`), pero
+    contestada por la base: lo que vuelve es el id, no la foto.
+
+    Se arma recorriendo `LAS_FOTOS` para que un campo de fotos nuevo quede
+    incluido sin que nadie se acuerde de venir acá.
+    """
+    return {"$or": [
+        {f"{campo}.0": {"$exists": True}} if campo in LAS_QUE_SON_LISTA
+        else {campo: {"$exists": True, "$nin": [None, ""]}}
+        for campo in LAS_FOTOS
+    ]}
+
+
+async def cuales_tienen_comprobante(base, filtro: dict) -> set:
+    """De las operaciones que cumplen `filtro`, los `transaction_id` que
+    tienen alguna foto. Sin traerse ninguna: la proyección es sólo el id."""
+    con_foto = set()
+    async for fila in base.transactions.find({**filtro, **con_alguna_foto()}, solo("transaction_id")):
+        con_foto.add(fila.get("transaction_id"))
+    return con_foto

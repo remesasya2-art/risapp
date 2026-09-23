@@ -102,9 +102,13 @@ def test_EL_HISTORIAL_MUESTRA_LO_DE_SIEMPRE_Y_NADA_DEL_PANEL(base):
     assert ve["amount_output"] == 3650.5 and ve["currency_output"] == "VES"
     assert ve["beneficiary_data"]["full_name"] == "Carmen López"
     assert ve["beneficiary_data"]["account_number"] == "01020000000000000002"
-    assert ve["proof_images"] == ["data:image/jpeg;base64,AAAA", "/api/media/comprobante_2.jpg"]
+    # Las fotos llegan en el detalle; la lista dice sólo que las hay.
+    assert ve["tiene_comprobante"] is True and "proof_images" not in ve
+    assert por_id["tx_btc"]["tiene_comprobante"] is True and "comprobante_pago" not in por_id["tx_btc"]
     for s in SECRETOS:
         assert s not in r.text, s
+    detalle = cliente().get("/api/transactions/tx_ve").json()
+    assert detalle["proof_images"] == ["data:image/jpeg;base64,AAAA", "/api/media/comprobante_2.jpg"]
 
 
 def test_EL_BENEFICIARIO_DE_UN_ENVIO_BTC_VIEJO_SALE_RECORTADO(base):
@@ -158,25 +162,31 @@ class _BaseQueAnota:
 
 
 def test_LA_PROYECCION_SOLA_ES_LA_LISTA_DE_LO_PERMITIDO(base):
-    from models.movimientos import LO_QUE_VE_EL_CLIENTE
+    """La lista pide lo permitido sin fotos, después pregunta cuáles tienen
+    comprobante trayendo sólo el id, y el detalle pide lo permitido entero."""
+    from models.movimientos import LO_QUE_VE_EL_CLIENTE, LO_QUE_VE_EN_LA_LISTA
     anotadas = []
     usar_base(_BaseQueAnota(base, anotadas))
     c = cliente()
     c.get("/api/transactions")
     c.get("/api/transactions/tx_ve")
-    assert anotadas == [LO_QUE_VE_EL_CLIENTE, LO_QUE_VE_EL_CLIENTE]
+    assert anotadas == [LO_QUE_VE_EN_LA_LISTA, {"_id": 0, "transaction_id": 1}, LO_QUE_VE_EL_CLIENTE]
 
 
-@pytest.mark.parametrize("camino", ["/api/transactions", "/api/transactions/tx_btc"])
-def test_EL_CONTRATO_SOLO_CORTA_LO_QUE_LA_PROYECCION_DEJE_PASAR(base, monkeypatch, camino):
+@pytest.mark.parametrize("camino,lista", [("/api/transactions", "LO_QUE_VE_EN_LA_LISTA"),
+                                          ("/api/transactions/tx_btc", "LO_QUE_VE_EL_CLIENTE")])
+def test_EL_CONTRATO_SOLO_CORTA_LO_QUE_LA_PROYECCION_DEJE_PASAR(base, monkeypatch, camino, lista):
     """Si alguien vuelve a poner `{"_id": 0}` en la consulta, el contrato
-    corta igual lo que el panel le escribió a la orden."""
+    corta igual lo que el panel le escribió a la orden. Y en la lista, las
+    fotos: son lo que la hacía pesar 10 MB."""
     import routes.transactions as rutas
-    monkeypatch.setattr(rutas, "LO_QUE_VE_EL_CLIENTE", {"_id": 0})
+    monkeypatch.setattr(rutas, lista, {"_id": 0})
     r = cliente().get(camino)
     assert r.status_code == 200, r.text
     for s in SECRETOS:
         assert s not in r.text, s
+    if lista == "LO_QUE_VE_EN_LA_LISTA":
+        assert "base64" not in r.text and "comprobante_2" not in r.text
 
 
 def test_UN_DOCUMENTO_EN_UN_CAMPO_SIMPLE_SALE_VACIO(base):
@@ -231,3 +241,11 @@ def test_CADA_RUTA_TIENE_SU_CONTRATO(camino, modelo):
 def test_EL_CONTRATO_SALE_DE_LA_MISMA_LISTA_QUE_LA_CONSULTA():
     from models.movimientos import LO_QUE_VE_EL_CLIENTE, MovimientoQueVeElCliente
     assert set(MovimientoQueVeElCliente.model_fields) == set(LO_QUE_VE_EL_CLIENTE) - {"_id"}
+
+
+def test_LA_LISTA_ES_EL_DETALLE_SIN_LAS_FOTOS():
+    """Un campo nuevo del detalle aparece solo en la lista; las fotos, nunca."""
+    from models.movimientos import LO_QUE_VE_EL_CLIENTE, LO_QUE_VE_EN_LA_LISTA, MovimientoEnLaLista
+    from services.las_fotos import LAS_FOTOS
+    assert set(LO_QUE_VE_EN_LA_LISTA) == set(LO_QUE_VE_EL_CLIENTE) - set(LAS_FOTOS)
+    assert set(MovimientoEnLaLista.model_fields) == set(LO_QUE_VE_EN_LA_LISTA) - {"_id"} | {"tiene_comprobante"}

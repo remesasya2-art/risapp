@@ -217,8 +217,10 @@ def test_el_comprobante_sigue_llegando():
     cliente, base = _app("ris_hist_comprobante")
     _sembrar_una_remesa_procesada(base)
 
+    # La lista dice que lo hay —es lo que dibuja el ojito—, y el detalle, que
+    # es lo que se pide al tocarlo, trae las fotos. Ver models/movimientos.py.
     tx = cliente.get("/api/transactions").json()["transactions"][0]
-    assert tx["proof_images"] == DEL_CLIENTE["proof_images"]
+    assert tx["tiene_comprobante"] is True
 
     detalle = cliente.get("/api/transactions/tx_1").json()
     assert detalle["proof_images"] == DEL_CLIENTE["proof_images"]
@@ -228,9 +230,13 @@ def test_llega_todo_lo_que_la_pantalla_muestra():
     cliente, base = _app("ris_hist_todo")
     _sembrar_una_remesa_procesada(base)
 
+    from services.las_fotos import LAS_FOTOS
     tx = cliente.get("/api/transactions").json()["transactions"][0]
+    detalle = cliente.get("/api/transactions/tx_1").json()
     for campo, valor in DEL_CLIENTE.items():
-        assert tx.get(campo) == valor, f"falta «{campo}» en el historial"
+        # Las fotos no viajan en la lista: llegan en el detalle.
+        donde = detalle if campo in LAS_FOTOS else tx
+        assert donde.get(campo) == valor, f"falta «{campo}» en el historial"
 
 
 def test_el_envio_por_bitcoin_no_queda_en_blanco():
@@ -259,8 +265,12 @@ def test_el_envio_por_bitcoin_no_queda_en_blanco():
 
     tx = cliente.get("/api/transactions").json()["transactions"][0]
     for campo in ("tipo", "subtipo", "estado", "usd_cliente", "ves_recibe",
-                  "beneficiario", "beneficiario_data", "comprobante_pago"):
+                  "beneficiario", "beneficiario_data"):
         assert campo in tx, f"el historial de Bitcoin perdió «{campo}»"
+    # La foto de Bitcoin está en `comprobante_pago`, no en `proof_images`: si
+    # la pregunta de la lista no mirara ese campo, el ojito no aparecería.
+    assert tx["tiene_comprobante"] is True
+    assert cliente.get("/api/transactions/tx_btc").json()["comprobante_pago"] == "/api/media/btc.jpg"
 
 
 def test_la_plata_sale_como_numero_y_no_como_decimal128():
@@ -284,17 +294,34 @@ def test_la_plata_sale_como_numero_y_no_como_decimal128():
 _RAIZ = pathlib.Path(_BACKEND).parent
 _FRONT = _RAIZ / "frontend" / "src"
 
-# Las pantallas que muestran una transacción del historial, y las variables de
-# cada una que contienen la transacción que devolvió el servidor.
+# Las pantallas que muestran una transacción del historial, las variables de
+# cada una que contienen la transacción que devolvió el servidor, y de CUAL de
+# las dos rutas vino.
 #
-# `normalized` es la copia que hacen las dos pantallas en `openVoucher` antes
-# de abrir el comprobante: le escriben `proof_image` cuando el envío por
-# Bitcoin trae la foto en `comprobante_pago`.
+# Importa de cuál: la lista no trae las fotos y el detalle sí. Una pantalla
+# que leyera `tx.proof_images` de la lista mostraría el ojito apagado sin dar
+# error, que es el modo de fallar que este test está para ver.
+#
+# `normalized` es la copia que hace `useComprobante` antes de abrir el
+# comprobante: le escribe `proof_image` cuando el envío por Bitcoin trae la
+# foto en `comprobante_pago`. `deLaLista` es la fila que tocó el cliente.
+LISTA, DETALLE = "lista", "detalle"
 PANTALLAS = (
-    ("pages/History.jsx", ("tx", "selectedVoucher", "normalized")),
-    ("pages/Dashboard.jsx", ("tx", "selectedVoucher", "normalized")),
-    ("components/dashboard/TransactionItem.jsx", ("tx",)),
+    ("pages/History.jsx", ("tx",), LISTA),
+    ("pages/History.jsx", ("selectedVoucher",), DETALLE),
+    ("pages/Dashboard.jsx", ("tx",), LISTA),
+    ("pages/Dashboard.jsx", ("selectedVoucher",), DETALLE),
+    ("components/dashboard/TransactionItem.jsx", ("tx",), LISTA),
+    ("hooks/useComprobante.js", ("deLaLista",), LISTA),
+    ("hooks/useComprobante.js", ("normalized",), DETALLE),
 )
+
+
+def _lo_que_manda(ruta):
+    from models.movimientos import MovimientoEnLaLista
+    if ruta == LISTA:
+        return set(MovimientoEnLaLista.model_fields)
+    return set(LO_QUE_VE_EL_CLIENTE)
 
 # Campos que la pantalla se arma sola y NO vienen del servidor. Hoy no hay
 # ninguno; cuando aparezca uno, va acá con el motivo al lado, y así queda
@@ -321,12 +348,12 @@ def test_cada_campo_que_muestra_la_pantalla_esta_en_la_lista():
     servidor, se agrega a la lista de la ruta.
     """
     faltan = {}
-    for archivo, variables in PANTALLAS:
+    for archivo, variables, ruta in PANTALLAS:
         texto = (_FRONT / archivo).read_text(encoding="utf-8")
         for campo in _campos_que_lee(texto, variables):
-            if campo in LO_QUE_VE_EL_CLIENTE or campo in SE_LOS_ARMA_LA_PANTALLA:
+            if campo in _lo_que_manda(ruta) or campo in SE_LOS_ARMA_LA_PANTALLA:
                 continue
-            faltan.setdefault(campo, []).append(archivo)
+            faltan.setdefault(campo, []).append(f"{archivo}, de la {ruta}")
 
     assert not faltan, (
         "la pantalla del cliente muestra campos que el servidor ya no le "
@@ -334,8 +361,8 @@ def test_cada_campo_que_muestra_la_pantalla_esta_en_la_lista():
         "\n".join(f"  {c}  ({', '.join(a)})" for c, a in sorted(faltan.items())))
 
 
-@pytest.mark.parametrize("archivo,variables", PANTALLAS)
-def test_la_guarda_no_esta_ciega(archivo, variables):
+@pytest.mark.parametrize("archivo,variables,ruta", PANTALLAS)
+def test_la_guarda_no_esta_ciega(archivo, variables, ruta):
     """Que las variables que vigila el test de arriba sigan existiendo.
 
     Una guarda que busca `tx.` en un archivo donde alguien renombró `tx` a `t`

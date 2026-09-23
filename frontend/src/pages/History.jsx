@@ -9,6 +9,8 @@ import {
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import TransactionItem from '../components/dashboard/TransactionItem';
+import AvisoDelComprobante from '../components/dashboard/AvisoDelComprobante';
+import useComprobante from '../hooks/useComprobante';
 import CryptoHistoryItem from '../components/dashboard/CryptoHistoryItem';
 import { fmt } from '../utils/format';
 import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo';
@@ -33,8 +35,7 @@ export default function History() {
   const [filter, setFilter] = useState(initialFilter);
   const [currency, setCurrency] = useState(initialCurrency);
   const [showFilters, setShowFilters] = useState(initialFilter !== 'all');
-  const [showVoucherModal, setShowVoucherModal] = useState(false);
-  const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const { showVoucherModal, setShowVoucherModal, selectedVoucher, openVoucher, estadoDelComprobante } = useComprobante();
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -110,18 +111,6 @@ export default function History() {
     backgroundColor: '#ffffff',
     borderRadius: '20px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-  };
-
-  const openVoucher = (tx) => {
-const normalized = { ...tx };
-    // Las remesas BTC guardan el comprobante en 'comprobante_pago'; el modal
-    // muestra proof_image/proof_images, así que lo normalizamos aquí.
-    const sinProof = !normalized.proof_image && (!normalized.proof_images || normalized.proof_images.length === 0);
-    if (sinProof && tx.comprobante_pago) {
-      normalized.proof_image = tx.comprobante_pago;
-    }
-    setSelectedVoucher(normalized);
-    setShowVoucherModal(true);
   };
 
   return (
@@ -366,7 +355,9 @@ const normalized = { ...tx };
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>
-                  📷 {(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante
+                  📷 {estadoDelComprobante === 'listo'
+                    ? <>{(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante</>
+                    : 'Comprobante'}
                 </p>
                 {/* Botón descargar todas */}
                 {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) && (
@@ -393,7 +384,9 @@ const normalized = { ...tx };
               </div>
               
               {/* Grid de imágenes */}
-              {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
+              {estadoDelComprobante !== 'listo' ? (
+                <AvisoDelComprobante estado={estadoDelComprobante} />
+              ) : (selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
                 <div style={{ 
                   display: 'grid', 
                   gridTemplateColumns: (selectedVoucher.proof_images?.length || 1) > 1 ? 'repeat(2, 1fr)' : '1fr', 
