@@ -639,13 +639,19 @@ def _payload(envio, servicio, referencias, despacho, contexto, limites) -> dict:
             ],
         },
 
-        # LO ÚNICO QUE COBRA RIS APP.
+        # LO ÚNICO QUE COBRA RIS APP: el concepto y el total. Nada más.
+        #
+        # Antes salía el desglose entero —servicio, sobrecargos, subtotal y
+        # `margen_ris`—, y la pantalla sólo lee el concepto y el total. El
+        # margen de ganancia viajaba a cada cliente que cotizaba sin que nada
+        # lo mostrara. Y no alcanzaba con sacar `margen_ris`: con el subtotal,
+        # o con el servicio más los sobrecargos, el margen es una resta. Por
+        # eso sale el total solo.
+        #
+        # El desglose NO se pierde: queda guardado en `envio.cotizacion`, que
+        # es de donde lo leen el cobro y el panel del equipo.
         "a_pagar_en_risapp": {
             "concepto": CONCEPTO,
-            "servicio_traslado": {"monto_ris": cot["servicio_traslado_ris"]},
-            "sobrecargos": cot["sobrecargos"],
-            "subtotal_ris": cot["subtotal_ris"],
-            "margen_ris": cot["margen_ris"],
             "total_estimado_ris": cot["total_estimado_ris"],
         },
 
