@@ -55,6 +55,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from database import db
 from routes.dependencies import get_current_user
 from models.user import User
+from typing import List
+from models.avisos import AvisosSinLeer, LO_QUE_VE_DE_UN_AVISO, UnAviso
 from services.notifications import PERSONAL, TRABAJO
 
 logger = logging.getLogger(__name__)
@@ -118,7 +120,7 @@ def _mas_viejos_que(antes_de: str | None, ultimo_id: str | None) -> dict:
     ]}
 
 
-@router.get("/notifications")
+@router.get("/notifications", response_model=List[UnAviso], response_model_exclude_unset=True)
 async def get_notifications(current_user: User = Depends(get_current_user),
                             ambito: str | None = Query(None),
                             limite: int = Query(_POR_PAGINA, ge=1, le=_TOPE),
@@ -138,12 +140,13 @@ async def get_notifications(current_user: User = Depends(get_current_user),
     if corte:
         filtro = {"$and": [filtro, corte]}
 
+    # Sólo lo que leen las pantallas. Ver models/avisos.py.
     return await db.notifications.find(
-        filtro, {"_id": 0},
+        filtro, LO_QUE_VE_DE_UN_AVISO,
     ).sort(_ORDEN).limit(limite).to_list(limite)
 
 
-@router.get("/notifications/unread-count")
+@router.get("/notifications/unread-count", response_model=AvisosSinLeer)
 async def get_unread_count(current_user: User = Depends(get_current_user),
                            ambito: str | None = Query(None)):
     """El número rojo de la campana."""

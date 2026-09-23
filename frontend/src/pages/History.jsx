@@ -9,6 +9,8 @@ import {
 import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import TransactionItem from '../components/dashboard/TransactionItem';
+import AvisoDelComprobante from '../components/dashboard/AvisoDelComprobante';
+import useComprobante from '../hooks/useComprobante';
 import CryptoHistoryItem from '../components/dashboard/CryptoHistoryItem';
 import { fmt } from '../utils/format';
 import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo';
@@ -33,8 +35,7 @@ export default function History() {
   const [filter, setFilter] = useState(initialFilter);
   const [currency, setCurrency] = useState(initialCurrency);
   const [showFilters, setShowFilters] = useState(initialFilter !== 'all');
-  const [showVoucherModal, setShowVoucherModal] = useState(false);
-  const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const { showVoucherModal, setShowVoucherModal, selectedVoucher, openVoucher, estadoDelComprobante } = useComprobante();
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -110,18 +111,6 @@ export default function History() {
     backgroundColor: '#ffffff',
     borderRadius: '20px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-  };
-
-  const openVoucher = (tx) => {
-const normalized = { ...tx };
-    // Las remesas BTC guardan el comprobante en 'comprobante_pago'; el modal
-    // muestra proof_image/proof_images, así que lo normalizamos aquí.
-    const sinProof = !normalized.proof_image && (!normalized.proof_images || normalized.proof_images.length === 0);
-    if (sinProof && tx.comprobante_pago) {
-      normalized.proof_image = tx.comprobante_pago;
-    }
-    setSelectedVoucher(normalized);
-    setShowVoucherModal(true);
   };
 
   return (
@@ -332,7 +321,11 @@ const normalized = { ...tx };
               </button>
             </div>
 
-            {/* Información de la transacción */}
+            {/* Información de la transacción.
+                Las monedas se leen de la operación, como en la lista
+                (`TransactionItem.jsx`): acá decía «VES» fijo, y una recarga de
+                50 RIS se mostraba como «50,00 VES», y un envío a Brasil en
+                bolívares. El equivalente BCV sólo tiene sentido en bolívares. */}
             <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
@@ -342,8 +335,8 @@ const normalized = { ...tx };
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
                   <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
-                    {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} VES
-                    {rates?.bcv_usd_ves && (
+                    {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} {selectedVoucher.currency_output || 'VES'}
+                    {(selectedVoucher.currency_output || 'VES') === 'VES' && rates?.bcv_usd_ves > 0 && (
                       <span style={{ fontSize: '14px', color: '#16a34a', marginLeft: 6 }}>= $ {fmt((selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0) / rates.bcv_usd_ves, 2)} BCV</span>
                     )}
                   </p>
@@ -366,7 +359,9 @@ const normalized = { ...tx };
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>
-                  📷 {(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante
+                  📷 {estadoDelComprobante === 'listo'
+                    ? <>{(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante</>
+                    : 'Comprobante'}
                 </p>
                 {/* Botón descargar todas */}
                 {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) && (
@@ -393,7 +388,9 @@ const normalized = { ...tx };
               </div>
               
               {/* Grid de imágenes */}
-              {(selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
+              {estadoDelComprobante !== 'listo' ? (
+                <AvisoDelComprobante estado={estadoDelComprobante} />
+              ) : (selectedVoucher.proof_images?.length > 0 || selectedVoucher.proof_image) ? (
                 <div style={{ 
                   display: 'grid', 
                   gridTemplateColumns: (selectedVoucher.proof_images?.length || 1) > 1 ? 'repeat(2, 1fr)' : '1fr', 

@@ -1882,7 +1882,13 @@ const [searchParams, setSearchParams] = useSearchParams();
                     <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px' }}>
                       <p style={{ fontSize: '11px', fontWeight: '700', color: '#166534', margin: '0 0 6px', letterSpacing: '0.05em' }}>BENEFICIARIO</p>
                       <p style={{ fontWeight: '700', color: '#111827', margin: '0 0 2px', fontSize: '15px' }}>{orden.beneficiario_data?.full_name || 'N/A'}</p>
-                      <p style={{ color: '#374151', fontSize: '13px', margin: '0 0 2px' }}>CI: {orden.beneficiario_data?.cedula || 'N/A'}</p>
+                      {/* `id_document` y `phone_number` son los nombres con que se guarda un
+                          beneficiario (`BeneficiaryCreate`). Esta tarjeta leía `cedula` y
+                          `phone`, que no existen: cada orden salía con «CI: N/A» y, en
+                          pago móvil, sin teléfono, y quien pagaba tenía que ir a buscarlos
+                          a otro lado. Los nombres viejos quedan como respaldo, igual que en
+                          `routes/btc_admin.py`. */}
+                      <p style={{ color: '#374151', fontSize: '13px', margin: '0 0 2px' }}>CI: {orden.beneficiario_data?.id_document || orden.beneficiario_data?.cedula || 'N/A'}</p>
                       <p style={{ color: '#374151', fontSize: '13px', margin: 0 }}>
                         {orden.beneficiario_data?.payment_type === 'pago_movil' ? '📱 Pago Móvil' : '🏦 Transferencia'}
                       </p>
@@ -1891,7 +1897,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                       <p style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', margin: '0 0 6px', letterSpacing: '0.05em' }}>DATOS PAGO</p>
                       {orden.beneficiario_data?.payment_type === 'pago_movil' ? (
                         <>
-                          <p style={{ fontWeight: '600', color: '#111827', margin: '0 0 2px', fontSize: '14px' }}>📱 {orden.beneficiario_data?.phone || 'N/A'}</p>
+                          <p style={{ fontWeight: '600', color: '#111827', margin: '0 0 2px', fontSize: '14px' }}>📱 {orden.beneficiario_data?.phone_number || orden.beneficiario_data?.phone || 'N/A'}</p>
                           <p style={{ color: '#374151', fontSize: '13px', margin: 0 }}>{orden.beneficiario_data?.bank || 'N/A'}</p>
                         </>
                       ) : (

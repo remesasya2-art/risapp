@@ -17,7 +17,9 @@ from services.rate_history import log_if_changed, determine_auto_change_type
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["basic"])
 
-@router.get("/")
+from models.reglas_publicas import LaTasa, RaizDeLaApi
+
+@router.get("/", response_model=RaizDeLaApi)
 async def root():
     """Root endpoint"""
     return {"message": "RIS App API", "version": "2.0.0"}
@@ -60,7 +62,7 @@ async def salud_de_la_aplicacion(_: User = Depends(get_super_admin)):
     r = await salud_de_la_app.vigilar(db, forzar=True)
     return {**r, "vigilancia": salud_de_la_app.estado()}
 
-@router.get("/rate")
+@router.get("/rate", response_model=LaTasa, response_model_exclude_unset=True)
 async def get_current_rate():
     """Get current exchange rates - applies auto off-hours adjustment if enabled."""
     rate = await db.rates.find_one(sort=[("updated_at", -1)])

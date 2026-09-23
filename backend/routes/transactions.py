@@ -9,7 +9,7 @@ import uuid
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from database import db
@@ -55,7 +55,8 @@ from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
 
 logger = logging.getLogger(__name__)
 from models.cuenta import MiBeneficiario, MiBeneficiarioEnBrasil
-from models.movimientos import LO_QUE_VE_EL_CLIENTE, MisMovimientos, MovimientoQueVeElCliente
+from models.movimientos import LO_QUE_VE_EL_CLIENTE, LO_QUE_VE_EN_LA_LISTA, MisMovimientos, MovimientoQueVeElCliente
+from services.las_fotos import cuales_tienen_comprobante
 from models.dinero_en_transito import EstadoDeMiEnvioCripto, MiRetiroPendiente
 router = APIRouter(tags=["transactions"])
 
@@ -1712,8 +1713,19 @@ async def mis_recargas_en_bolivares(current_user: User = Depends(get_current_use
 
 @router.get("/transactions", response_model=MisMovimientos, response_model_exclude_unset=True)
 async def get_transactions(
-    page: int = 1,
-    limit: int = 10,
+    # EL TOPE DE `limit`
+    #
+    #   No tenía. La lista viajaba con las fotos adentro (unos 667 KB cada una),
+    #   y un cliente con sesión podía pedir `?limit=100000`: el servidor cargaba
+    #   en memoria su historial entero con todas las fotos. Medido: 60 MB con
+    #   sesenta operaciones. Las pantallas piden 10; 50 deja margen.
+    #
+    #   `page` empieza en 1 porque con 0 el `skip` sale negativo, el driver de
+    #   Mongo lo rechaza (`ValueError: skip must be >= 0`) y nadie lo atajaba:
+    #   llegaba como un 500. Y `limit=0`, para Mongo, no es «ninguna» sino
+    #   «sin tope».
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
     filter_type: str = None,
     current_user: User = Depends(get_current_user)
 ):
@@ -1727,13 +1739,20 @@ async def get_transactions(
 
     skip = (page - 1) * limit
     total = await db.transactions.count_documents(query)
+    # Sin las fotos: se piden al tocar «Ver comprobante», por el detalle de
+    # esa operación. El porqué, en `models/movimientos.py`.
     transactions = await db.transactions.find(
         query,
-        LO_QUE_VE_EL_CLIENTE
+        LO_QUE_VE_EN_LA_LISTA
     ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
 
+    con_comprobante = await cuales_tienen_comprobante(db, {
+        "user_id": current_user.user_id,
+        "transaction_id": {"$in": [t.get("transaction_id") for t in transactions]},
+    })
     for _tx in transactions:
         _normalize_tx_money(_tx)
+        _tx["tiene_comprobante"] = _tx.get("transaction_id") in con_comprobante
 
     return {
         "total": total,

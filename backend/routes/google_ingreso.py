@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from database import db
 from routes.dependencies import set_session_cookie
 from services import alta_de_cuenta, codigos, cpf_de_la_cuenta, google_ingreso
+from models.reglas_publicas import ConfigDelBotonDeGoogle
 from services import personal as _personal
 from services.email_notifications import notify_login
 from services.perfil import para_su_dueno
@@ -73,7 +74,7 @@ class CompletarRegistroGoogleRequest(BaseModel):
     accept_terms: bool = False
 
 
-@router.get("/config")
+@router.get("/config", response_model=ConfigDelBotonDeGoogle)
 async def config():
     """Pública a propósito: el id de cliente de Google es público por
     diseño (va en el HTML de cualquier sitio que use el botón). Sin él, el

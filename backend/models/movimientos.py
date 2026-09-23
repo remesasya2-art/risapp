@@ -22,6 +22,7 @@ from typing import List, Optional
 from pydantic import BaseModel, create_model
 
 from models.escalar import Escalar
+from services.las_fotos import LAS_FOTOS
 
 
 # LO QUE EL CLIENTE VE DE SU PROPIA OPERACION, POR LISTA DE LO PERMITIDO
@@ -141,9 +142,36 @@ MovimientoQueVeElCliente = create_model(
     **{c: (_tipo_de(c), None) for c in LO_QUE_VE_EL_CLIENTE if c != "_id"})
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# La lista del historial: todo lo del detalle MENOS las fotos
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Las fotos del comprobante se guardan adentro de la operación, en base64
+# (ver `services/las_fotos.py`): unos 667 KB cada una, y un retiro completado
+# lleva dos o más. La lista las mandaba todas para dibujar un ojito.
+#
+# Medido corriendo la ruta con diez operaciones con foto, que es la primera
+# página del inicio: 10 MB cada vez que el cliente abre la app. Con
+# `?limit=60`, 60 MB, y el tope no existía: cualquier cliente con sesión podía
+# pedir su historial entero y hacer que el servidor lo cargara en memoria.
+#
+# Ahora la lista dice SI hay comprobante (`tiene_comprobante`) y las fotos se
+# piden al tocar «Ver comprobante», por el detalle de esa sola operación.
+#
+# Se genera de la misma lista que el detalle, para que un campo nuevo que se
+# agregue allá aparezca acá sin que nadie se acuerde. Lo único que se saca es
+# lo que `LAS_FOTOS` nombra.
+LO_QUE_VE_EN_LA_LISTA = {c: v for c, v in LO_QUE_VE_EL_CLIENTE.items() if c not in LAS_FOTOS}
+
+MovimientoEnLaLista = create_model(
+    "MovimientoEnLaLista",
+    tiene_comprobante=(Optional[bool], None),
+    **{c: (_tipo_de(c), None) for c in LO_QUE_VE_EN_LA_LISTA if c != "_id"})
+
+
 class MisMovimientos(BaseModel):
     total: Escalar = None
     page: Escalar = None
     limit: Escalar = None
     pages: Escalar = None
-    transactions: List[MovimientoQueVeElCliente] = []
+    transactions: List[MovimientoEnLaLista] = []
