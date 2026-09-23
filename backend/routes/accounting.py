@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
+from services import las_fotos
 from services import bancos
 from services import quien_es
 from openpyxl import Workbook
@@ -430,7 +431,13 @@ async def get_accounting_report(
         "status": {"$in": ["completed", "approved"]},
         "created_at": {"$gte": start, "$lt": end},
         "hidden_from_admin": {"$ne": True}
-    }, {"_id": 0}).sort("created_at", 1).to_list(1000)
+    # Sólo lo que el cálculo usa. Con `{"_id": 0}` se traía la orden entera,
+    # con los comprobantes en base64 adentro: hasta mil órdenes de un período,
+    # unos 667 KB por foto, para leer cinco números por fila. Ver
+    # services/las_fotos.py.
+    }, las_fotos.solo("transaction_id", "display_id", "user_id", "created_at",
+                      "amount_input", "amount_output", "rate")
+    ).sort("created_at", 1).to_list(1000)
 
     # Get ALL USDT buy operations sorted chronologically to consume FIFO
     all_buy_ops = await db.usdt_operations.find(
