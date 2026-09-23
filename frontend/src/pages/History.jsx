@@ -321,7 +321,11 @@ export default function History() {
               </button>
             </div>
 
-            {/* Información de la transacción */}
+            {/* Información de la transacción.
+                Las monedas se leen de la operación, como en la lista
+                (`TransactionItem.jsx`): acá decía «VES» fijo, y una recarga de
+                50 RIS se mostraba como «50,00 VES», y un envío a Brasil en
+                bolívares. El equivalente BCV sólo tiene sentido en bolívares. */}
             <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
@@ -331,8 +335,8 @@ export default function History() {
                 <div>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
                   <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
-                    {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} VES
-                    {rates?.bcv_usd_ves && (
+                    {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} {selectedVoucher.currency_output || 'VES'}
+                    {(selectedVoucher.currency_output || 'VES') === 'VES' && rates?.bcv_usd_ves > 0 && (
                       <span style={{ fontSize: '14px', color: '#16a34a', marginLeft: 6 }}>= $ {fmt((selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0) / rates.bcv_usd_ves, 2)} BCV</span>
                     )}
                   </p>

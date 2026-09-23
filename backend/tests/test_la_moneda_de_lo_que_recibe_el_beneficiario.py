@@ -165,3 +165,36 @@ def test_LA_EQUIVALENCIA_EN_DOLARES_BCV_SOLO_SOBRE_BOLIVARES():
     antes = fuente[max(0, i - 60):i]
     assert "monedaSalida === 'VES' &&" in antes, (
         "la equivalencia en dólares BCV se muestra para cualquier moneda")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La ventana del comprobante, en el inicio y en el historial
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Tenía el mismo «VES» escrito a mano que la lista, y quedó sin arreglar
+# cuando se arregló la lista: una recarga de 50 RIS se mostraba como
+# «50,00 VES». En el inicio, además, «Monto enviado» decía «RIS» fijo.
+
+_VENTANAS = [pathlib.Path(_BACKEND).parent / "frontend" / "src" / "pages" / n
+             for n in ("Dashboard.jsx", "History.jsx")]
+
+
+def _bloque_de(fuente, titulo):
+    i = fuente.index(f">{titulo}</p>")
+    return fuente[i:i + 600]
+
+
+@pytest.mark.parametrize("ventana", _VENTANAS, ids=lambda p: p.name)
+def test_LA_VENTANA_DEL_COMPROBANTE_LEE_LA_MONEDA_QUE_RECIBE(ventana):
+    bloque = _bloque_de(ventana.read_text(encoding="utf-8"), "Monto recibido")
+    assert not re.search(r"\?\? 0\)\}\s*VES", bloque), f"{ventana.name}: «VES» escrito a mano"
+    assert "{selectedVoucher.currency_output || 'VES'}" in bloque, ventana.name
+    assert "(selectedVoucher.currency_output || 'VES') === 'VES' && rates?.bcv_usd_ves > 0 && (" in bloque, (
+        f"{ventana.name}: la equivalencia BCV se muestra para cualquier moneda")
+
+
+@pytest.mark.parametrize("ventana", _VENTANAS, ids=lambda p: p.name)
+def test_LA_VENTANA_DEL_COMPROBANTE_LEE_LA_MONEDA_QUE_SE_ENVIA(ventana):
+    bloque = _bloque_de(ventana.read_text(encoding="utf-8"), "Monto enviado")
+    assert "{selectedVoucher.currency_input || 'RIS'}" in bloque, ventana.name
+    assert "amount_input)} RIS`" not in bloque, f"{ventana.name}: «RIS» escrito a mano"
