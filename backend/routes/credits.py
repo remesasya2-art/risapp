@@ -31,6 +31,8 @@ from database import db
 from services import cripto_abierta
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from models.user import User
+from models.dinero_en_transito import (EstadoDeMiDeposito, MiHistorialCripto,
+                                       MontoMinimoDeCredito, RedesDeCredito)
 from services.geo_restrictions import assert_payment_allowed
 from services import nowpayments
 from services.credits import normalize_currency, CREDIT_LABELS, credit_user
@@ -98,7 +100,7 @@ class DepositRequest(BaseModel):
     network: str | None = None
 
 
-@router.get("/networks")
+@router.get("/networks", response_model=RedesDeCredito, response_model_exclude_unset=True)
 async def list_networks(
     currency: str = Query(..., description="'usdt' o 'usdc'"),
     current_user: User = Depends(get_current_user),
@@ -142,7 +144,7 @@ async def list_networks(
     return {"currency": key, "networks": networks, "default_ticker": default_ticker}
 
 
-@router.get("/min-amount")
+@router.get("/min-amount", response_model=MontoMinimoDeCredito, response_model_exclude_unset=True)
 async def get_min_amount(
     currency: str = Query(..., description="'usdt' o 'usdc'"),
     network: str | None = Query(None, description="ticker de red, ej. 'usdttrc20'"),
@@ -278,7 +280,7 @@ async def create_deposit(
     }
 
 
-@router.get("/deposit/{order_id}/status")
+@router.get("/deposit/{order_id}/status", response_model=EstadoDeMiDeposito, response_model_exclude_unset=True)
 async def get_deposit_status(
     order_id: str,
     current_user: User = Depends(get_current_user),
@@ -524,7 +526,7 @@ def build_history_pipeline(user_id: str, key, skip: int, limit: int) -> list:
     ]
 
 
-@router.get("/history")
+@router.get("/history", response_model=MiHistorialCripto, response_model_exclude_unset=True)
 async def get_credit_history(
     page: int = Query(1, ge=1),
     limit: int = Query(10, le=100),

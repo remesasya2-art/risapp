@@ -56,7 +56,6 @@ SIN_TOPE_A_PROPOSITO = {
     ("GET", "/api/rate"): "la tasa del día, igual para todos",
     ("GET", "/api/limits"): "los límites publicados",
     ("GET", "/api/policies"): "las políticas publicadas",
-    ("GET", "/api/ves-payment-info"): "los datos de pago publicados",
     ("GET", "/api/btc/precio"): "el precio publicado",
     ("GET", "/api/push/web/vapid-public-key"): "una clave pública",
     # El id de cliente de Google es público por diseño: va en el HTML de

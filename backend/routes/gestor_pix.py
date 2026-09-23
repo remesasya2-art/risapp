@@ -21,6 +21,8 @@ from services.limits import validate_pix_amount
 from services import bancos, cpf_de_la_cuenta, kyc_quota, pagos_una_sola_vez, saldos
 from services import recarga_abierta
 from models.user import User
+from typing import List
+from models.dinero_en_transito import EstadoDeMiPix, MiPixActivo, MiPixPendiente, UnPixDeMiHistorial
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
 from services.email_notifications import notify_pix_received, notify_recharge_success
@@ -233,7 +235,7 @@ async def create_pix_payment(request: CreatePixRequest, current_user: User = Dep
     }
 
 
-@router.get("/pending")
+@router.get("/pending", response_model=MiPixPendiente, response_model_exclude_unset=True)
 async def get_pending_pix(current_user: User = Depends(require_authenticated_user)):
     """Get pending PIX payment for current user - allows resuming incomplete payments"""
     # Find pending payment that hasn't expired
@@ -293,7 +295,7 @@ async def cancel_pix_payment(payment_id: str, current_user: User = Depends(requi
     return {"success": True, "message": "Pago cancelado"}
 
 
-@router.get("/status/{payment_id}")
+@router.get("/status/{payment_id}", response_model=EstadoDeMiPix, response_model_exclude_unset=True)
 async def get_pix_status(payment_id: str, current_user: User = Depends(require_authenticated_user)):
     """Check PIX payment status - also checks with Mercado Pago if available"""
     payment = await db.gestor_pix_payments.find_one({
@@ -551,7 +553,7 @@ async def simulate_pix_payment(payment_id: str, current_user: User = Depends(req
 # Se borra el muerto. Queda el de arriba, que además es el que sí deja fecha
 # de cancelación.
 
-@router.get("/active")
+@router.get("/active", response_model=MiPixActivo, response_model_exclude_unset=True)
 async def get_active_pix(current_user: User = Depends(require_authenticated_user)):
     """Get active (pending) PIX payment if exists"""
     payment = await db.gestor_pix_payments.find_one({
@@ -601,7 +603,7 @@ async def get_active_pix(current_user: User = Depends(require_authenticated_user
 
 
 
-@router.get("/history")
+@router.get("/history", response_model=List[UnPixDeMiHistorial], response_model_exclude_unset=True)
 async def get_pix_history(current_user: User = Depends(require_authenticated_user)):
     """Get PIX payment history for the gestor"""
     payments = await db.gestor_pix_payments.find({

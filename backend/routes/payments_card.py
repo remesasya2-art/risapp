@@ -30,6 +30,7 @@ from pydantic import BaseModel, EmailStr, Field
 from database import db
 from services import recarga_abierta
 from models.user import User
+from models.escalar import Escalar
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from services.notifications import create_notification
 from services import bancos, configuracion, pagos_una_sola_vez, saldos
@@ -136,13 +137,40 @@ async def _register_card_fee(payment_id: str, fee_brl: float, gross_brl: float):
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────
-@router.get("/config")
+
+class ComisionesDeTarjeta(BaseModel):
+    """Las tres comisiones que se le cobran al cliente, y nada más.
+
+    `_get_card_fees` junta las de fábrica con TODO lo que haya guardado en
+    `app_settings.card_fees`, y esta ruta lo devolvía tal cual: cualquier
+    clave que alguien agregue ahí —una nota sobre lo que se negoció con el
+    procesador, por ejemplo— le llegaba a cada cliente que abría el pago con
+    tarjeta. Comprobado corriéndolo. El cálculo interno sigue leyendo el
+    diccionario entero; lo que sale, sólo esto.
+    """
+    credit_pct: Escalar = None
+    debit_pct: Escalar = None
+    flat_brl: Escalar = None
+
+
+class ConfigDeTarjeta(BaseModel):
+    public_key: Escalar = None
+    fees: Optional[ComisionesDeTarjeta] = None
+    min_amount_brl: Escalar = None
+    max_amount_brl: Escalar = None
+    locale: Escalar = None
+    currency: Escalar = None
+
+
+@router.get("/config", response_model=ConfigDeTarjeta)
 async def get_card_config(current_user: User = Depends(get_current_user)):
     """Frontend bootstrap: public key + fee schedule + limits."""
     fees = await _get_card_fees()
     return {
         "public_key": os.environ.get("MERCADOPAGO_PUBLIC_KEY"),
-        "fees": fees,
+        # Recortadas acá también, y no sólo en el contrato: una capa por sí
+        # sola no se sabe si anda. Ver `ComisionesDeTarjeta`.
+        "fees": {k: fees.get(k) for k in DEFAULT_CARD_FEES},
         "min_amount_brl": to_float(await configuracion.leer(db, "tarjeta_minimo")),
         "max_amount_brl": to_float(await configuracion.leer(db, "tarjeta_maximo")),
         "locale": "pt-BR",

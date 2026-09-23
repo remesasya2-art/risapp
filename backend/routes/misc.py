@@ -57,21 +57,6 @@ async def get_policies_status(current_user: User = Depends(get_current_user)):
     return {"accepted_policies": user.get("accepted_policies", [])}
 
 
-# ============== VES PAYMENT INFO ==============
-
-@router.get("/ves-payment-info")
-async def get_ves_payment_info():
-    """Get VES payment info for manual transfers"""
-    info = await db.settings.find_one({"type": "ves_payment_info"}, {"_id": 0})
-    return info or {
-        "bank": "Banesco",
-        "account_type": "Corriente",
-        "account_number": "0134-0000-00-0000000000",
-        "holder_name": "RIS APP C.A.",
-        "holder_id": "J-00000000-0"
-    }
-
-
 # ============== LIMITES DE MONTO ==============
 
 @router.get("/limits")

@@ -56,6 +56,7 @@ from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
 logger = logging.getLogger(__name__)
 from models.cuenta import MiBeneficiario, MiBeneficiarioEnBrasil
 from models.movimientos import LO_QUE_VE_EL_CLIENTE, MisMovimientos, MovimientoQueVeElCliente
+from models.dinero_en_transito import EstadoDeMiEnvioCripto, MiRetiroPendiente
 router = APIRouter(tags=["transactions"])
 
 # ============== ENVIO CRIPTO: PAGOS INCOMPLETOS (3 NIVELES) ==============
@@ -980,7 +981,7 @@ async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: Use
     return _resp_crypto
 
 
-@router.get("/withdraw-crypto/{transaction_id}/status")
+@router.get("/withdraw-crypto/{transaction_id}/status", response_model=EstadoDeMiEnvioCripto, response_model_exclude_unset=True)
 async def get_crypto_withdrawal_status(transaction_id: str, current_user: User = Depends(get_current_user)):
     """Polling del estado de una orden de envio cripto (para la pantalla de pago).
 
@@ -1889,7 +1890,7 @@ async def get_transaction(transaction_id: str, current_user: User = Depends(get_
 
 # ============== PENDING WITHDRAWAL CHECK ==============
 
-@router.get("/withdrawal/pending")
+@router.get("/withdrawal/pending", response_model=MiRetiroPendiente, response_model_exclude_unset=True)
 async def check_pending_withdrawal(current_user: User = Depends(get_current_user)):
     """Check if user has a pending withdrawal"""
     withdrawal = await db.transactions.find_one(

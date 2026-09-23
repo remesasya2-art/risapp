@@ -96,7 +96,11 @@ const TABS = [
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
   { key: 'crm', label: 'CRM', icon: UserCog },
   { key: 'rates', label: 'Tasas', icon: TrendingUp },
-  { key: 'btc', label: 'BTC Lightning', icon: Zap },
+  // Sólo del super administrador, igual que las dos rutas que consulta: la
+  // lista de órdenes (`/btc/operador/pendientes`) y marcarlas como enviadas
+  // (`/admin/btc/marcar-enviado`). Visible para un `admin`, mostraba la lista
+  // pero el botón de pagar le contestaba 403.
+  { key: 'btc', label: 'BTC Lightning', icon: Zap, superAdminOnly: true },
   { key: 'credits', label: 'Créditos Cripto', icon: Wallet, superAdminOnly: true },
   // La cola de Pacaraima. SIN `superAdminOnly`: la usa el operador todos los
   // dias y el super administrador tambien puede hacer cualquier tarea de
