@@ -16,7 +16,7 @@ from models.user import User
 from pydantic import BaseModel
 from services.aviso_de_tasa import avisar_si_hace_falta
 from services.notifications import avisar_al_personal
-from routes.dependencies import get_current_user, sin_transacciones_personales
+from routes.dependencies import get_current_user, get_super_admin, sin_transacciones_personales
 from routes.security_2fa import frenar_por_cuenta
 from services.money import para_mostrar
 from models.movimientos import beneficiario_para_la_orden
@@ -583,10 +583,20 @@ async def webhook_blink(request: Request):
     return {"ok": True}
 
 
+# SOLO EL SUPER ADMINISTRADOR, COMO SU GEMELA DEL PANEL
+#
+#   Esta ruta marca una orden como enviada y DEBITA la billetera BTC-VES del
+#   cliente. Pedía `get_current_user` y comprobaba a mano que el rol fuera
+#   `admin`: cualquier colaborador podía usarla, tuviera los permisos que
+#   tuviera, porque la tabla de `services/permisos.py` sólo la aplican
+#   `get_admin_user` y `get_crm_user`.
+#
+#   Su gemela, `/admin/btc/marcar-enviado` (routes/btc_admin.py), exige super
+#   administrador, igual que todo el panel de Bitcoin y que los retiros. Es la
+#   que usa el panel; ésta no la llama ninguna pantalla. Quedaba abierta sólo
+#   para quien la escribiera a mano.
 @router.post("/operador/marcar-enviado")
-async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "super_admin"]:
-        raise HTTPException(status_code=403, detail="Solo operadores pueden marcar envíos como completados.")
+async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depends(get_super_admin)):
     remesa = await db.btc_remesas.find_one({"remesa_id": body.remesa_id})
     if not remesa:
         raise HTTPException(status_code=404, detail="Orden no encontrada.")
