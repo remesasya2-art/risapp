@@ -13,13 +13,15 @@ from models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/push/web", tags=["push"])
 
+from models.reglas_publicas import ClavePublicaDeAvisos, EstadoDeMisAvisosAlCelular
+
 
 class WebPushSubscription(BaseModel):
     endpoint: str
     keys: dict
 
 
-@router.get("/vapid-public-key")
+@router.get("/vapid-public-key", response_model=ClavePublicaDeAvisos)
 async def get_vapid_public_key():
     """Get VAPID public key for web push"""
     return {"public_key": web_push_service.get_public_key()}
@@ -49,7 +51,7 @@ async def unsubscribe_web_push(current_user: User = Depends(get_current_user)):
     return {"success": True}
 
 
-@router.get("/status")
+@router.get("/status", response_model=EstadoDeMisAvisosAlCelular)
 async def get_web_push_status(current_user: User = Depends(get_current_user)):
     """Si el usuario tiene una suscripcion guardada, y cual.
 
@@ -67,7 +69,10 @@ async def get_web_push_status(current_user: User = Depends(get_current_user)):
         Va el endpoint solo, nunca las `keys`: sin ellas no se puede firmar ni
         cifrar un envio, y el que lo recibe es el duenio de la sesion.
     """
-    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    # Sólo la suscripción: con `{"_id": 0}` se traía la cuenta entera —clave,
+    # PIN, segundo factor— para leer un campo.
+    user = await db.users.find_one({"user_id": current_user.user_id},
+                                   {"_id": 0, "web_push_subscription": 1})
     sub = (user or {}).get("web_push_subscription") or {}
     return {"subscribed": bool(sub), "endpoint": sub.get("endpoint")}
 

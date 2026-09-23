@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models.escalar import Escalar
+from models.reglas_publicas import LosLimites, MisLimites
 from openpyxl import Workbook
 
 from database import db
@@ -69,7 +70,7 @@ async def get_policies_status(current_user: User = Depends(get_current_user)):
 
 # ============== LIMITES DE MONTO ==============
 
-@router.get("/limits")
+@router.get("/limits", response_model=LosLimites, response_model_exclude_unset=True)
 async def get_limits():
     """Limites de monto por operacion, para que la pantalla no los tenga hardcodeados.
 
@@ -79,7 +80,7 @@ async def get_limits():
     return await limits_payload(db)
 
 
-@router.get("/limits/me")
+@router.get("/limits/me", response_model=MisLimites, response_model_exclude_unset=True)
 async def get_my_limits(current_user: User = Depends(get_current_user)):
     """Limites por operacion mas el cupo que le queda a ESTE usuario sin verificar.
 
