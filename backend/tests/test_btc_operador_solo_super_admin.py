@@ -81,3 +81,77 @@ def test_EL_SUPER_ADMIN_SIGUE_PUDIENDO(base):
     assert r.status_code == 200, r.text
     assert ya(base.btc_remesas.find_one({"remesa_id": "r1"}))["estado"] == "enviado"
     assert ya(base.btc_ves_wallets.find_one({"user_id": "u_cli"}))["saldo"] == 175.0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 2. La lista de órdenes pendientes del panel
+# ══════════════════════════════════════════════════════════════════════════
+
+SECRETOS = ("precio_con_margen", "63000", "precio_btc_usado", "hash_del_pago", "RIS r1",
+            "u_cli", "ben_9", "no_reembolsable")
+
+
+@pytest.mark.parametrize("quien", [AGENTE_KYC, CLIENTA], ids=["admin_con_permiso_de_kyc", "cliente"])
+def test_LA_LISTA_DE_PENDIENTES_ES_SOLO_DEL_SUPER_ADMIN(base, quien):
+    assert como(quien).get("/api/btc/operador/pendientes").status_code == 403
+
+
+def test_LA_LISTA_TRAE_LO_QUE_LEE_LA_PESTANA_Y_NADA_DEL_MARGEN(base):
+    r = como(JEFA).get("/api/btc/operador/pendientes")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["total"] == 1 and d["ordenes"] == d["remesas"]
+    o = d["ordenes"][0]
+    assert o["remesa_id"] == "r1" and o["ves_recibe"] == 1825.0 and o["usd_cliente"] == 50
+    assert o["sats"] == 50000 and o["creado_en"] == 0
+    assert o["beneficiario_data"]["full_name"] == "José Rodríguez"
+    assert o["beneficiario_data"]["account_number"] == "01340000000000000001"
+    for s in SECRETOS:
+        assert s not in r.text, s
+
+
+class _BaseQueAnota:
+    def __init__(self, base, anotadas):
+        self._base, self._anotadas = base, anotadas
+
+    def __getattr__(self, nombre):
+        coleccion = getattr(self._base, nombre)
+        if nombre != "btc_remesas":
+            return coleccion
+        anotadas = self._anotadas
+
+        class _Col:
+            def find(self, filtro, proyeccion=None, *a, **k):
+                anotadas.append(proyeccion)
+                return coleccion.find(filtro, proyeccion, *a, **k)
+
+            def __getattr__(self, otro):
+                return getattr(coleccion, otro)
+        return _Col()
+
+
+def test_LA_PROYECCION_SOLA_NO_TRAE_EL_MARGEN(base):
+    from models.btc_salida import LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN
+    anotadas = []
+    usar_base(_BaseQueAnota(base, anotadas))
+    como(JEFA).get("/api/btc/operador/pendientes")
+    assert anotadas == [LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN]
+    for campo in ("precio_con_margen", "precio_btc_usado", "payment_hash", "memo", "user_id"):
+        assert campo not in LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN, campo
+
+
+def test_EL_CONTRATO_SOLO_CORTA_EL_MARGEN(base, monkeypatch):
+    import routes.btc_lightning as rutas
+    monkeypatch.setattr(rutas, "LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN", {"_id": 0})
+    r = como(JEFA).get("/api/btc/operador/pendientes")
+    assert r.status_code == 200, r.text
+    for s in SECRETOS:
+        assert s not in r.text, s
+
+
+def test_LA_PESTANA_DE_BITCOIN_ES_SOLO_DEL_SUPER_ADMIN_EN_EL_PANEL():
+    """Si el panel se la mostrara a un `admin`, vería la pestaña y un 403."""
+    import re
+    from pathlib import Path
+    panel = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "AdminPanel.jsx").read_text(encoding="utf-8")
+    assert re.search(r"\{\s*key:\s*'btc'[^}]*superAdminOnly:\s*true", panel), "la pestaña 'btc' tiene que ser superAdminOnly"

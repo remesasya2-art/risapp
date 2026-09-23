@@ -20,6 +20,7 @@ from routes.dependencies import get_current_user, get_super_admin, sin_transacci
 from routes.security_2fa import frenar_por_cuenta
 from services.money import para_mostrar
 from models.movimientos import beneficiario_para_la_orden
+from models.btc_salida import LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN, OrdenesBtcPendientes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
@@ -631,11 +632,16 @@ async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depend
     return {"ok": True, "msg": "Orden marcada como enviada.", "remesa_id": body.remesa_id}
 
 
-@router.get("/operador/pendientes")
-async def get_remesas_pendientes(current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "super_admin"]:
-        raise HTTPException(status_code=403, detail="Solo operadores pueden ver esta lista.")
-    remesas = await db.btc_remesas.find({"estado": "pagado"}, {"_id": 0}).sort("pagado_en", 1).to_list(100)
+# Sólo el super administrador, por la misma razón que `marcar-enviado` de
+# arriba. Y por lista de lo permitido: con `{"_id": 0}` salían el precio con
+# margen, el precio de compra y el identificador del pago de cada orden. Ver
+# models/btc_salida.py.
+@router.get("/operador/pendientes", response_model=OrdenesBtcPendientes,
+            response_model_exclude_unset=True)
+async def get_remesas_pendientes(current_user: User = Depends(get_super_admin)):
+    remesas = await db.btc_remesas.find(
+        {"estado": "pagado"}, LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN
+    ).sort("pagado_en", 1).to_list(100)
     return {"ordenes": remesas, "remesas": remesas, "total": len(remesas)}
 
 @router.get("/mi-remesa-activa")

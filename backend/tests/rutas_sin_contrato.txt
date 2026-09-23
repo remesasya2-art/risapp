@@ -148,7 +148,6 @@ GET /api/auth/google/config
 GET /api/btc/historial
 GET /api/btc/limite-diario
 GET /api/btc/mi-remesa-activa
-GET /api/btc/operador/pendientes
 GET /api/btc/precio
 GET /api/btc/status/{remesa_id}
 GET /api/btc/wallet
