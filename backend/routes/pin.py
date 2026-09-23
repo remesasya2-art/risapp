@@ -17,6 +17,7 @@ from utils.security import hash_password_async, verify_password_async
 from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
+from models.cuenta import EstadoDelPin
 router = APIRouter(prefix="/pin", tags=["pin"])
 
 SEVERE_ATTEMPTS = 9  # invalida el PIN y obliga a restablecerlo desde el perfil
@@ -61,7 +62,7 @@ def _locked_remaining(doc: dict) -> int:
     return int(delta) if delta > 0 else 0
 
 
-@router.get("/status")
+@router.get("/status", response_model=EstadoDelPin)
 async def pin_status(current_user: User = Depends(get_current_user)):
     """Estado del PIN para el frontend (sin revelar el PIN)."""
     doc = await _get_user_doc(current_user.user_id)

@@ -42,13 +42,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # `pin_hash` terminó tapado sólo en la de la huella. El motivo largo está allá.
 #
 # Se reexportan los nombres porque los tests y otras rutas los buscan acá.
+from models.cuenta import EstadoDeLaClave, PerfilDelDueno                  # noqa: E402
 from services.perfil import (                                      # noqa: E402
     LO_QUE_VE_SU_DUENO, LOS_SALDOS, para_su_dueno, terminar_de_armar)
 
 
-@router.get("/me")
+@router.get("/me", response_model=Optional[PerfilDelDueno], response_model_exclude_unset=True)
 async def get_me(current_user: User = Depends(get_current_user)):
-    """Get current user info"""
+    """El perfil de quien pregunta. Dos capas de lo permitido: la proyección
+    (`LO_QUE_VE_SU_DUENO`) y el contrato, generado de la MISMA lista para que
+    no puedan divergir (models/cuenta.py). `exclude_unset` hace que un campo
+    que la cuenta no tiene siga sin salir, en vez de salir como `null`: la
+    pantalla distingue «no está» de «está vacío» en más de un lugar."""
     user = await db.users.find_one({"user_id": current_user.user_id},
                                    LO_QUE_VE_SU_DUENO)
     if user:
@@ -823,7 +828,7 @@ async def set_new_password(request: SetNewPasswordRequest, pedido: Request,
     return {"message": "Contraseña actualizada", "sesiones_cerradas": cerradas}
 
 
-@router.get("/password-status")
+@router.get("/password-status", response_model=EstadoDeLaClave)
 async def get_password_status(current_user: User = Depends(get_current_user)):
     """Check if user needs to change password"""
     user = await db.users.find_one({"user_id": current_user.user_id})

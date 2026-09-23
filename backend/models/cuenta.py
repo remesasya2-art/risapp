@@ -49,3 +49,46 @@ class EstadoDeMiVerificacion(BaseModel):
     submitted_at: Optional[Any] = None
     verified_at: Optional[Any] = None
     document_type: Optional[str] = None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 2. El perfil, y la seguridad de la cuenta
+# ══════════════════════════════════════════════════════════════════════════
+
+def _perfil_del_dueno():
+    """El contrato de `/auth/me`, GENERADO de la lista de lo permitido de
+    `services/perfil.py`, que es la misma que usa la proyección.
+
+    No se escribe a mano a propósito. Dos listas de los mismos campos —la de
+    la proyección y la del modelo— terminan distintas, y cuando pasa el campo
+    se pierde en silencio: la ruta contesta 200 y la pantalla queda con un
+    hueco. Generado, agregar un campo a la lista lo agrega a los dos.
+
+    Todos los campos son `Any`: los saldos salen como número, el bono como un
+    objeto, las fechas como fecha. El contrato decide QUE sale, no de qué tipo
+    —eso lo hace `perfil.terminar_de_armar`, que ya estaba—."""
+    from services.perfil import LO_PERMITIDO
+    return create_model("PerfilDelDueno", **{c: (Optional[Any], None) for c in sorted(LO_PERMITIDO)})
+
+
+PerfilDelDueno = _perfil_del_dueno()
+
+
+class EstadoDeLaClave(BaseModel):
+    password_set: Optional[bool] = None
+    must_change_password: Optional[bool] = None
+
+
+class EstadoDeDosPasos(BaseModel):
+    enabled: bool
+    role: Optional[str] = None
+    is_required: bool
+    backup_codes_remaining: int
+
+
+class EstadoDelPin(BaseModel):
+    has_pin: bool
+    must_reset: bool
+    locked: bool
+    locked_seconds: int
+    is_super_admin: bool

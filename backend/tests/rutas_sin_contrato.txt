@@ -144,10 +144,7 @@ GET /api/admin/wipe-all/preview
 GET /api/admin/withdrawals/all
 GET /api/admin/withdrawals/pending
 GET /api/auth/2fa/admin-access-log
-GET /api/auth/2fa/status
 GET /api/auth/google/config
-GET /api/auth/me
-GET /api/auth/password-status
 GET /api/beneficiaries
 GET /api/beneficiaries/br
 GET /api/btc/historial
@@ -181,7 +178,6 @@ GET /api/media/twilio/{path:path}
 GET /api/notifications
 GET /api/notifications/unread-count
 GET /api/payments/card/config
-GET /api/pin/status
 GET /api/policies
 GET /api/policies/status
 GET /api/primeros-pasos
