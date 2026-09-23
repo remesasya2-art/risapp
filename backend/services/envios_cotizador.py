@@ -46,6 +46,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from models.envios_salida import retiro_para_el_cliente
 from services.envios_policy import (limites_efectivos, validar_descripcion,
                                     validar_paquete, quien_impone)
 from services.envios_tarifas import cotizar_servicio, peso_facturable
@@ -651,9 +652,9 @@ def _payload(envio, servicio, referencias, despacho, contexto, limites) -> dict:
         # ORIENTACIÓN. Los contrata y los paga el usuario. No entran en el total.
         "referencias": [_referencia_visible(r) for r in (referencias or [])],
 
-        "retiro": {k: v for k, v in despacho.items()
-                   if k not in ("disponible", "faltantes", "retirador_id",
-                                "retirador_motivo", "congelado_at")},
+        # Lista de lo permitido, compartida con la confirmación y el detalle.
+        # `disponible` y `faltantes` quedan afuera solos: no están en la lista.
+        "retiro": retiro_para_el_cliente(despacho),
 
         "vence_at": cot["vence_at"],
         "terminos_version": cot["terminos_version"],

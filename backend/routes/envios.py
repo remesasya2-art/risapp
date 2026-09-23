@@ -46,6 +46,8 @@ from services import (encomiendas_abiertas, envios_archivos, envios_catalogo,
                       envios_crear, envios_consulta, envios_seguimiento)
 from services.envios_policy import CATEGORIAS_PROHIBIDAS_POR_DEFECTO, TERMINOS_VERSION
 from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
+from models.envios_salida import (CatalogoDeEnvios, DetalleDeMiEnvio, LimitesDeEnvio,
+                                  MisEnvios, SeguimientoPublico)
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -69,7 +71,7 @@ def _sin_detalle(payload: dict) -> dict:
     return salida
 
 
-@router.get("/limites")
+@router.get("/limites", response_model=LimitesDeEnvio, response_model_exclude_unset=True)
 async def obtener_limites():
     """Límites físicos vigentes, prohibidos y versión de términos.
 
@@ -104,7 +106,7 @@ async def obtener_limites():
         }
 
 
-@router.get("/catalogo")
+@router.get("/catalogo", response_model=CatalogoDeEnvios, response_model_exclude_unset=True)
 async def obtener_catalogo(current_user: User = Depends(get_current_user)):
     """Transportistas de destino y sus agencias activas, para el formulario."""
     try:
@@ -276,7 +278,8 @@ async def ver_foto(envio_id: str, asset_id: str,
                     headers={"Cache-Control": "private, max-age=300"})
 
 
-@router.get("/seguimiento/{token}")
+@router.get("/seguimiento/{token}", response_model=SeguimientoPublico,
+            response_model_exclude_unset=True)
 async def seguimiento(token: str, request: Request):
     """El seguimiento público. **Sin un solo dato personal.**
 
@@ -303,7 +306,7 @@ async def seguimiento(token: str, request: Request):
     return datos
 
 
-@router.get("")
+@router.get("", response_model=MisEnvios, response_model_exclude_unset=True)
 async def listar_envios(pagina: int = 1, por_pagina: int = 20, estado: str = None,
                         current_user: User = Depends(get_current_user)):
     """Los envíos del usuario, del más nuevo al más viejo."""
@@ -313,7 +316,7 @@ async def listar_envios(pagina: int = 1, por_pagina: int = 20, estado: str = Non
                                         por_pagina=por_pagina, estado=estado)
 
 
-@router.get("/{envio_id}")
+@router.get("/{envio_id}", response_model=DetalleDeMiEnvio, response_model_exclude_unset=True)
 async def ver_envio(envio_id: str, current_user: User = Depends(get_current_user)):
     """El detalle de un envío, con su línea de tiempo.
 

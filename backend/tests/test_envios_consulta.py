@@ -524,12 +524,15 @@ def test_las_rutas_fijas_se_declaran_antes_que_la_comodin():
     """`GET /envios/{envio_id}` matchearía `/envios/limites` si se declarara
     antes. FastAPI resuelve por orden de declaración, y este es el error que se
     descubre cuando una ruta que funcionaba deja de funcionar."""
-    fuente = open(os.path.join(_BACKEND, "routes", "envios.py"),
-                  encoding="utf-8").read()
-    comodin = fuente.index('@router.get("/{envio_id}")')
-    for fija in ('@router.get("/limites")', '@router.get("/catalogo")',
-                 '@router.get("/seguimiento/{token}")'):
-        assert fuente.index(fija) < comodin, fija
+    # Se mira el orden de las rutas REGISTRADAS y no el texto del archivo.
+    # Buscar el decorador como texto se rompió el día que se le agregó el
+    # contrato de salida (`response_model=…`): el orden seguía bien, pero el
+    # texto exacto ya no estaba. El orden registrado es el que usa FastAPI.
+    from routes.envios import router
+    orden = [r.path for r in router.routes if "GET" in getattr(r, "methods", ())]
+    comodin = orden.index("/envios/{envio_id}")
+    for fija in ("/envios/limites", "/envios/catalogo", "/envios/seguimiento/{token}"):
+        assert orden.index(fija) < comodin, fija
 
 
 @pytest.mark.parametrize("pagina,por_pagina", [

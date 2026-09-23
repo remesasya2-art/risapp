@@ -160,11 +160,6 @@ GET /api/credits/deposit/{order_id}/status
 GET /api/credits/history
 GET /api/credits/min-amount
 GET /api/credits/networks
-GET /api/envios
-GET /api/envios/catalogo
-GET /api/envios/limites
-GET /api/envios/seguimiento/{token}
-GET /api/envios/{envio_id}
 GET /api/envios/{envio_id}/foto/{asset_id}
 GET /api/gestor/pix/active
 GET /api/gestor/pix/history

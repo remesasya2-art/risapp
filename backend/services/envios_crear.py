@@ -37,6 +37,7 @@ import logging
 import secrets
 from datetime import datetime, timezone
 
+from models.envios_salida import retiro_para_el_cliente
 from services.envios_cotizador import esta_vencida
 from services.envios_estados import puede_transicionar
 from services.envios_policy import limites_efectivos, validar_paquete
@@ -424,8 +425,8 @@ def _resultado(envio: dict) -> dict:
         # apretar un botón que en cualquier otra app de este rubro le habría
         # sacado plata.
         "cobrado_ahora_ris": "0.00",
-        "retiro": {k: v for k, v in despacho.items()
-                   if k not in ("retirador_id", "retirador_motivo", "congelado_at")},
+        # Lista de lo permitido, compartida con la cotización y el detalle.
+        "retiro": retiro_para_el_cliente(despacho),
         "proximo_paso": (
             "Despachá el paquete a esa dirección y después cargá el comprobante acá. "
             "Recién con el comprobante te vamos a cobrar el servicio, calculado sobre "
