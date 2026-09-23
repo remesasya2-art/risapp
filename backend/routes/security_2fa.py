@@ -52,6 +52,7 @@ from services.email_notifications import notify_dos_pasos_activado
 from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
 from services.perfil import para_su_dueno
+from models.cuenta import EstadoDeDosPasos
 from utils.security import hash_password_async, verify_password_async
 
 logger = logging.getLogger(__name__)
@@ -464,7 +465,7 @@ async def ensure_security_indexes():
 # ============================================================
 # Endpoints — Setup / Enrollment
 # ============================================================
-@router.get("/status")
+@router.get("/status", response_model=EstadoDeDosPasos)
 async def twofa_status(current_user: User = Depends(get_current_user)):
     user = await db.users.find_one({"user_id": current_user.user_id})
     enabled = bool(user.get("two_factor_enabled", False))
