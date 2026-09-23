@@ -26,11 +26,12 @@
  *
  * POR QUE NO SE DIBUJA NADA SI NO HAY CODIGO
  *
- *   Una cuenta vieja puede no tenerlo, y la ruta devuelve vacío en ese caso a
- *   propósito (está explicado en `routes/referidos.py`: generarlo al leerlo
- *   crearía dos códigos distintos en dos pedidos simultáneos). Una tarjeta con
- *   el hueco en blanco se ve como un error de la aplicación; no dibujar nada
- *   se ve como que esa cuenta no tiene esta función, que es la verdad.
+ *   A una cuenta de cliente vieja, sin código, la ruta se lo da la primera vez
+ *   que lo pide (`routes/referidos.py` explica cómo sin crear dos). Vacío
+ *   llega sólo para administradores y personal, que no invitan a nadie. Una
+ *   tarjeta con el hueco en blanco se ve como un error de la aplicación; no
+ *   dibujar nada se ve como que esa cuenta no tiene esta función, que es la
+ *   verdad.
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
