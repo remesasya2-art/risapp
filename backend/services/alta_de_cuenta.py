@@ -38,6 +38,17 @@ logger = logging.getLogger(__name__)
 VERSION_DE_LOS_TERMINOS = "2026-06-29"
 
 
+def nuevo_codigo_de_referido() -> str:
+    """El código de invitación con el que nace una cuenta.
+
+    Vive acá y no escrito en cada lugar que lo necesita porque ahora son dos:
+    el alta, y la cuenta vieja que no lo tiene y lo recibe al abrir su perfil
+    (`routes/referidos.py`). Dos fórmulas escritas a mano terminan siendo dos
+    formatos de código.
+    """
+    return f"REF{uuid.uuid4().hex[:8].upper()}"
+
+
 class NoSePudoCrear(Exception):
     """Con el motivo para la persona adentro, en castellano."""
 
@@ -52,7 +63,7 @@ async def crear(db, *, email: str, name: str, password_hash, referred_by,
     """
     ahora = ahora or datetime.now(timezone.utc)
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    referral_code = f"REF{uuid.uuid4().hex[:8].upper()}"
+    referral_code = nuevo_codigo_de_referido()
 
     user = {
         "user_id": user_id,
