@@ -182,9 +182,6 @@ GET /api/primeros-pasos
 GET /api/push/web/status
 GET /api/push/web/vapid-public-key
 GET /api/rate
-GET /api/soporte/casos
-GET /api/soporte/casos/{caso_id}
-GET /api/soporte/motivos
 GET /api/transactions
 GET /api/transactions/export
 GET /api/transactions/{transaction_id}
