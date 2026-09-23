@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { fmt } from '../../utils/format';
 
+// Los `auto_*` los escribía la tasa nocturna, que se eliminó. Ya no se anotan
+// nuevos, pero quedan en el historial viejo y tienen que seguir leyéndose.
 const CHANGE_TYPE_LABEL = {
   manual: { text: 'Manual', bg: '#dbeafe', color: '#1e40af' },
   auto_off_hours: { text: 'Auto - Fuera horario', bg: '#fef3c7', color: '#ca8a04' },

@@ -46,9 +46,6 @@ def base():
                            "updated_at": AHORA}))
     ya(m.bcv_rates.insert_one({"rates": {"dolar": 40.5, "euro": 44.1}, "value_date": "2026-09-22",
                                "fetched_at": AHORA}))
-    # Tasa automática prendida: la respuesta suma `is_off_hours` y `auto_rate_enabled`.
-    ya(m.app_settings.insert_one({"setting_id": "auto_rate", "enabled": True,
-                                  "delta_brl_ves": 2.0, "delta_ves_brl": 3.0}))
     return m
 
 
@@ -76,7 +73,7 @@ def test_LA_TASA_SALE_ENTERA(base):
     cruda = ya(basica.get_current_rate())
     r = cliente(basica.router).get("/api/rate")
     assert r.status_code == 200, r.text
-    assert "bcv_usd_ves" in cruda and "is_off_hours" in cruda, "los datos tienen que cubrir las ramas"
+    assert "bcv_usd_ves" in cruda and "updated_at" in cruda, "los datos tienen que cubrir las ramas"
     assert _claves(r.json()) == _claves(cruda), sorted(_claves(cruda) ^ _claves(r.json()))
 
 
@@ -106,18 +103,13 @@ def test_LOS_PRIMEROS_PASOS_SALEN_ENTEROS(base):
 #    configuración, y los avisos al celular no leen la cuenta entera
 # ══════════════════════════════════════════════════════════════════════════
 
-def test_LA_TASA_PUBLICA_CORTA_LO_QUE_SE_COLE_DE_LA_CONFIGURACION(base, monkeypatch):
-    """`apply_rate_adjustment` copia lo que le pasen. Si alguien le suma un
-    campo de la configuración, la ruta pública no lo publica."""
-    import routes.basic as basica
-    original = basica.apply_rate_adjustment
-
-    def con_de_mas(base_rates, config, *a, **k):
-        return {**original(base_rates, config, *a, **k), "delta_interno": 2.0, "nota_del_panel": "subir el lunes"}
-    monkeypatch.setattr(basica, "apply_rate_adjustment", con_de_mas)
-    r = cliente(basica.router).get("/api/rate")
-    assert r.status_code == 200, r.text
-    assert "delta_interno" not in r.text and "subir el lunes" not in r.text
+def test_LA_TASA_PUBLICA_CORTA_LO_QUE_NO_NOMBRA():
+    """La ruta es pública. Si alguien le suma un campo a lo que arma, el
+    contrato no lo publica."""
+    from models.reglas_publicas import LaTasa
+    salida = LaTasa.model_validate({"ris_to_ves": 1.0, "delta_interno": 2.0,
+                                    "nota_del_panel": "subir el lunes"}).model_dump(exclude_unset=True)
+    assert salida == {"ris_to_ves": 1.0}
 
 
 class _BaseQueAnota:

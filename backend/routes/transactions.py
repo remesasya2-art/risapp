@@ -17,7 +17,6 @@ from services import cripto_abierta, recarga_abierta
 
 from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from services import bonos, comisiones, saldos
-from services.rate_engine import apply_rate_adjustment, load_auto_rate_config
 from services import nowpayments
 from services.min_amount import effective_min_amount
 from services.limits import validate_pix_amount, validate_ves_amount
@@ -503,10 +502,9 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
     _base_rtv = (rate or {}).get("ris_to_ves")
     if not _base_rtv or _base_rtv <= 0:
         raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
-    # Aplicar el mismo ajuste de horario que /api/rate para que el envío coincida con la cotización
-    _cfg = await load_auto_rate_config(db)
-    _eff = apply_rate_adjustment({"ris_to_ves": _base_rtv}, _cfg)
-    ris_to_ves = _eff.get("ris_to_ves") or _base_rtv
+    # La misma tasa que muestra /api/rate: la cargada, sin ajuste nocturno
+    # (se eliminó; ver `routes/basic.py`).
+    ris_to_ves = _base_rtv
 
     amount_ves = round(request.amount * ris_to_ves, 2)
 
@@ -1576,10 +1574,9 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     _base_vtr = (rate_doc or {}).get("ves_to_ris_rate")
     if not _base_vtr or _base_vtr <= 0:
         raise HTTPException(status_code=503, detail="La tasa no está disponible en este momento. Intenta más tarde.")
-    # Aplicar el mismo ajuste de horario que /api/rate para que la orden coincida con la cotización
-    _cfg = await load_auto_rate_config(db)
-    _eff = apply_rate_adjustment({"ves_to_ris_rate": _base_vtr}, _cfg)
-    ves_to_ris = _eff.get("ves_to_ris_rate") or _base_vtr
+    # La misma tasa que muestra /api/rate: la cargada, sin ajuste nocturno
+    # (se eliminó; ver `routes/basic.py`).
+    ves_to_ris = _base_vtr
 
     # Fórmula oficial: ves_to_ris_rate = VES por 1 RIS  ->  RIS = VES / tasa
     amount_ris = round(amount_ves / ves_to_ris, 2)
@@ -2028,8 +2025,7 @@ async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
     if not _base or _base <= 0:
         raise HTTPException(status_code=503,
                             detail="La tasa no está disponible en este momento. Intenta más tarde.")
-    _cfg = await load_auto_rate_config(db)
-    ris_to_ves = apply_rate_adjustment({"ris_to_ves": _base}, _cfg).get("ris_to_ves") or _base
+    ris_to_ves = _base    # la de /api/rate, sin ajuste nocturno
     amount_ves = round(request.amount * ris_to_ves, 2)
 
     # 3) EL BONO DESCUENTA DEL COBRO, no del saldo.
@@ -2378,14 +2374,13 @@ async def cotizar_envio_reais(request: CotizarEnvioReaisRequest,
             status_code=400,
             detail="Ese beneficiario no es de Brasil. Elegí uno con clave PIX.")
 
-    # La tasa del sentido inverso, con el mismo ajuste de horario que /api/rate.
+    # La tasa del sentido inverso, la misma que muestra /api/rate.
     rate_doc = await db.rates.find_one(sort=[("updated_at", -1)])
     _base = (rate_doc or {}).get("ves_to_ris_rate")
     if not _base or _base <= 0:
         raise HTTPException(status_code=503,
                             detail="La tasa no está disponible en este momento. Intenta más tarde.")
-    _cfg = await load_auto_rate_config(db)
-    ves_to_ris = apply_rate_adjustment({"ves_to_ris_rate": _base}, _cfg).get("ves_to_ris_rate") or _base
+    ves_to_ris = _base
 
     # La fórmula oficial, la misma que la recarga en bolívares:
     # `ves_to_ris_rate` son los bolívares que vale 1 RIS, así que se divide.

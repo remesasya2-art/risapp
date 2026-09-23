@@ -55,11 +55,12 @@ LA TASA SE CONGELA AL COTIZAR
     Decisión del dueño del proyecto. Se guarda en la orden al crearla y se
     respeta al confirmarse, aunque para entonces la tasa haya cambiado.
 
-    Y cambia sola: `services/rate_engine.apply_rate_adjustment` le resta un
-    delta fuera del horario laboral. O sea que un envío cotizado a las 21:58 y
-    pagado a las 22:01 tiene dos tasas distintas si se releyera. El cliente
-    recibe los bolívares que le prometió la pantalla; la diferencia la absorbe
-    la empresa, y está acotada a los siete minutos que dura el cobro PIX.
+    La tasa la cambia el super administrador cuando quiere, y antes también
+    cambiaba sola de noche (la tasa automática, ya eliminada). O sea que un
+    envío cotizado y pagado siete minutos después puede tener dos tasas
+    distintas si se releyera. El cliente recibe los bolívares que le prometió
+    la pantalla; la diferencia la absorbe la empresa, y está acotada a los
+    siete minutos que dura el cobro PIX.
 
 EL BONO DESCUENTA DEL PIX
 

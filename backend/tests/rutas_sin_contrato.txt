@@ -166,7 +166,6 @@ POST /api/admin/accounting/v2/p2p-sales
 POST /api/admin/accounting/v2/usdt-lots
 POST /api/admin/accounting/v2/webhook-conciliate
 POST /api/admin/accounting/wipe
-POST /api/admin/auto-rate
 POST /api/admin/ban
 POST /api/admin/bcv-rates/refresh
 POST /api/admin/blacklist

@@ -34,8 +34,8 @@ export default function BalanceCard({
   // El saldo en bolivares es `saldo x risToVes`, y NO `saldo x bcvUsdVes`.
   //
   // Esta tarjeta multiplicaba por la tasa del DOLAR, o sea que trataba 1 RIS
-  // como 1 USD. El RIS esta denominado en reales —`rate_engine` llama a
-  // `ris_to_ves` la tasa BRL->VES, y la contabilidad valua la circulacion RIS
+  // como 1 USD. El RIS esta denominado en reales —el panel carga
+  // `ris_to_ves` como la tasa BRL->VES, y la contabilidad valua la circulacion RIS
   // con ella— asi que el numero salia inflado por el factor BRL/USD: unas 5,8
   // veces. Con 206,85 RIS y las tasas de hoy mostraba Bs 165.723 cuando el
   // saldo vale Bs 28.545.
