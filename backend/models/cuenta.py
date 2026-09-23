@@ -92,3 +92,80 @@ class EstadoDelPin(BaseModel):
     locked: bool
     locked_seconds: int
     is_super_admin: bool
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3. Su saldo, sus beneficiarios, sus huellas, sus referidos
+# ══════════════════════════════════════════════════════════════════════════
+
+class MiSaldo(BaseModel):
+    balance_ris: Optional[Any] = None
+    balance_ris_terceros: Optional[Any] = None
+    balance_ves: Optional[Any] = None
+    bono: Optional[Any] = None
+
+
+class MiBeneficiario(BaseModel):
+    """Un beneficiario en Venezuela. Sin el `user_id` ni nada interno: los
+    datos de pago que el propio cliente cargó, para elegirlo al enviar.
+
+    `Any` y no `str` en cada campo, a propósito: un documento viejo puede
+    tener el número de cuenta o el teléfono guardado como número, y el
+    contrato NO lo convierte —contestaría error y la lista de beneficiarios
+    desaparecería de la pantalla de envío—. Acá se decide qué sale, no de
+    qué tipo."""
+    beneficiary_id: Optional[Any] = None
+    full_name: Optional[Any] = None
+    id_document: Optional[Any] = None
+    bank: Optional[Any] = None
+    bank_code: Optional[Any] = None
+    phone_number: Optional[Any] = None
+    account_number: Optional[Any] = None
+    payment_type: Optional[Any] = None
+    created_at: Optional[Any] = None
+
+
+class MiBeneficiarioEnBrasil(BaseModel):
+    beneficiary_id: Optional[Any] = None
+    full_name: Optional[Any] = None
+    cpf: Optional[Any] = None
+    pix_key: Optional[Any] = None
+    payment_type: Optional[Any] = None
+    created_at: Optional[Any] = None
+
+
+class MiHuella(BaseModel):
+    """Una llave de acceso registrada. NUNCA la clave pública ni el contador:
+    no le sirven a la pantalla y describen el dispositivo."""
+    credential_id: Optional[Any] = None
+    label: Optional[Any] = None
+    created_at: Optional[Any] = None
+
+
+class MisHuellas(BaseModel):
+    credentials: List[MiHuella]
+
+
+class MiCodigoDeReferido(BaseModel):
+    codigo: str
+    enlace: str
+
+
+class UnReferido(BaseModel):
+    """De cada persona que usó el código: el nombre corto, el mes y si el
+    bono se cobró. Nada más —son datos de un tercero—."""
+    nombre: Optional[str] = None
+    cuando: Optional[str] = None
+    cobrado: bool
+    motivo: Optional[str] = None
+
+
+class MisReferidos(BaseModel):
+    total: int
+    cobrados: int
+    pendientes: int
+    ganado: str
+    pagina: int
+    por_pagina: int
+    hay_mas: bool
+    referidos: List[UnReferido]

@@ -279,3 +279,95 @@ def test_CADA_RUTA_DE_LA_CUENTA_TIENE_SU_CONTRATO_PUESTO(modulo, camino, modelo)
     if typing.get_origin(declarado) is typing.Union:
         declarado = next(a for a in typing.get_args(declarado) if a is not type(None))
     assert declarado is getattr(mc, modelo), (camino, declarado)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3. Saldo, beneficiarios, huellas y referidos
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_SUS_BENEFICIARIOS_SALEN_ENTEROS_Y_SIN_NADA_INTERNO(base):
+    ya(base.beneficiaries.insert_many([
+        {"beneficiary_id": "b1", "user_id": "u_ana", "full_name": "José", "id_document": "V123", "bank": "Banesco",
+         "bank_code": "0134", "phone_number": "04141234567", "account_number": "01340000000000000000",
+         "payment_type": "transferencia", "created_at": datetime(2026, 5, 1, tzinfo=timezone.utc),
+         "nota_interna": "revisar", "creado_por_ip": "10.0.0.7"},
+        # Un documento viejo con números guardados como número: el contrato no
+        # puede convertirlo en un error que vacíe la lista.
+        {"beneficiary_id": "b2", "user_id": "u_ana", "full_name": "María", "account_number": 1340000000,
+         "phone_number": 4141234567},
+        {"beneficiary_id": "b3", "user_id": "u_ana", "pais": "BR", "full_name": "Pedro", "cpf": "11144477735",
+         "pix_key": "pedro@ejemplo.test", "nota_interna": "x"},
+        {"beneficiary_id": "b9", "user_id": "u_otro", "full_name": "Ajeno"},
+    ]))
+    from routes.transactions import router
+    c = cliente_con(router)
+    r = c.get("/api/beneficiaries")
+    assert r.status_code == 200
+    por_id = {b["beneficiary_id"]: b for b in r.json()}
+    assert set(por_id) == {"b1", "b2", "b3"}, "sólo los suyos"
+    assert por_id["b1"]["account_number"] == "01340000000000000000" and por_id["b2"]["account_number"] == 1340000000
+    assert "nota_interna" not in r.text and "10.0.0.7" not in r.text and "user_id" not in r.text
+    r = c.get("/api/beneficiaries/br")
+    assert r.status_code == 200 and [b["beneficiary_id"] for b in r.json()] == ["b3"]
+    assert r.json()[0]["pix_key"] == "pedro@ejemplo.test" and "nota_interna" not in r.text
+
+
+def test_SUS_HUELLAS_SIN_LA_CLAVE_PUBLICA(base):
+    ya(base.users.insert_one({"user_id": "u_ana", "webauthn_credentials": [
+        {"credential_id": "c1", "label": "Mi teléfono", "created_at": datetime(2026, 6, 1, tzinfo=timezone.utc),
+         "public_key": "CLAVE-PUBLICA", "sign_count": 17, "transports": ["internal"]}]}))
+    from routes.webauthn_login import router
+    r = cliente_con(router).get("/api/webauthn/credentials")
+    assert r.status_code == 200 and r.json()["credentials"][0]["credential_id"] == "c1"
+    assert set(r.json()["credentials"][0]) == {"credential_id", "label", "created_at"}
+    assert "CLAVE-PUBLICA" not in r.text and "sign_count" not in r.text
+
+
+def test_SU_CODIGO_Y_SUS_REFERIDOS(base):
+    ya(base.users.insert_one({"user_id": "u_ana", "referral_code": "ANA123"}))
+    from routes.referidos import router
+    c = cliente_con(router)
+    r = c.get("/api/referidos/mi-codigo")
+    assert r.status_code == 200 and r.json()["codigo"] == "ANA123" and r.json()["enlace"].endswith("ref=ANA123")
+    r = c.get("/api/referidos/mis-referidos")
+    assert r.status_code == 200 and r.json()["total"] == 0 and r.json()["referidos"] == []
+    assert set(r.json()) == {"total", "cobrados", "pendientes", "ganado", "pagina", "por_pagina", "hay_mas", "referidos"}
+
+
+def test_SU_SALDO(base):
+    from routes.misc import router
+    r = cliente_con(router).get("/api/user/balance")
+    assert r.status_code == 200 and set(r.json()) == {"balance_ris", "balance_ris_terceros", "balance_ves", "bono"}
+
+
+@pytest.mark.parametrize("modelo,campos", [
+    ("MiSaldo", {"balance_ris", "balance_ris_terceros", "balance_ves", "bono"}),
+    ("MiBeneficiario", {"beneficiary_id", "full_name", "id_document", "bank", "bank_code", "phone_number",
+                        "account_number", "payment_type", "created_at"}),
+    ("MiBeneficiarioEnBrasil", {"beneficiary_id", "full_name", "cpf", "pix_key", "payment_type", "created_at"}),
+    ("MiHuella", {"credential_id", "label", "created_at"}),
+    ("UnReferido", {"nombre", "cuando", "cobrado", "motivo"}),
+])
+def test_los_contratos_de_tu_cuenta_declaran_exactamente_lo_de_hoy(modelo, campos):
+    import models.cuenta as mc
+    assert set(getattr(mc, modelo).model_fields) == campos
+
+
+@pytest.mark.parametrize("modulo,camino,modelo", [
+    ("routes.misc", "/user/balance", "MiSaldo"),
+    ("routes.transactions", "/beneficiaries", "MiBeneficiario"),
+    ("routes.transactions", "/beneficiaries/br", "MiBeneficiarioEnBrasil"),
+    ("routes.webauthn_login", "/webauthn/credentials", "MisHuellas"),
+    ("routes.referidos", "/referidos/mi-codigo", "MiCodigoDeReferido"),
+    ("routes.referidos", "/referidos/mis-referidos", "MisReferidos"),
+])
+def test_CADA_RUTA_DE_TU_CUENTA_TIENE_SU_CONTRATO_PUESTO(modulo, camino, modelo):
+    import importlib
+    import typing
+    import models.cuenta as mc
+    router = importlib.import_module(modulo).router
+    (ruta,) = [r for r in router.routes if getattr(r, "path", None) == camino and "GET" in r.methods]
+    declarado = ruta.response_model
+    if typing.get_origin(declarado) in (list, typing.List):
+        (declarado,) = typing.get_args(declarado)
+    assert declarado is getattr(mc, modelo), (camino, declarado)

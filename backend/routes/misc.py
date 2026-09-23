@@ -16,7 +16,7 @@ from routes.dependencies import get_current_user, get_super_admin
 from services.limits import limits_payload
 from services.kyc_quota import quota_payload
 from models.user import User
-from models.cuenta import EstadoDeMiVerificacion, LO_QUE_VE_DE_SU_VERIFICACION
+from models.cuenta import EstadoDeMiVerificacion, LO_QUE_VE_DE_SU_VERIFICACION, MiSaldo
 from services import cofre, cpf_de_la_cuenta
 from services.notifications import avisar_al_personal
 from services.imagen_recibida import (ImagenInvalida, limpiar_imagen,
@@ -97,7 +97,7 @@ async def get_my_limits(current_user: User = Depends(get_current_user)):
 
 # ============== USER BALANCE ==============
 
-@router.get("/user/balance")
+@router.get("/user/balance", response_model=MiSaldo)
 async def get_user_balance(current_user: User = Depends(get_current_user)):
     """Get user balance"""
     from services import bonos

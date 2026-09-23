@@ -8,7 +8,7 @@ import math
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -54,6 +54,7 @@ from utils.helpers import get_next_withdrawal_id
 from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
 
 logger = logging.getLogger(__name__)
+from models.cuenta import MiBeneficiario, MiBeneficiarioEnBrasil
 router = APIRouter(tags=["transactions"])
 
 # ============== ENVIO CRIPTO: PAGOS INCOMPLETOS (3 NIVELES) ==============
@@ -249,7 +250,7 @@ async def create_beneficiary(request: BeneficiaryCreate, current_user: User = De
 
     return {"message": "Beneficiario creado", "beneficiary_id": beneficiary_id}
 
-@router.get("/beneficiaries")
+@router.get("/beneficiaries", response_model=List[MiBeneficiario])
 async def get_beneficiaries(current_user: User = Depends(get_current_user)):
     """Get user's beneficiaries"""
     beneficiaries = await db.beneficiaries.find(
@@ -315,7 +316,7 @@ async def create_br_beneficiary(request: BrBeneficiaryCreate, current_user: User
     await db.beneficiaries.insert_one(beneficiary)
     return {"message": "Beneficiario (Brasil) creado", "beneficiary_id": beneficiary_id}
 
-@router.get("/beneficiaries/br")
+@router.get("/beneficiaries/br", response_model=List[MiBeneficiarioEnBrasil])
 async def get_br_beneficiaries(current_user: User = Depends(get_current_user)):
     """Lista los beneficiarios en Brasil del usuario."""
     rows = await db.beneficiaries.find(

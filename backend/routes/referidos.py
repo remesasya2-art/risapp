@@ -33,10 +33,11 @@ from models.user import User
 from routes.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
+from models.cuenta import MiCodigoDeReferido, MisReferidos
 router = APIRouter(prefix="/referidos", tags=["referidos"])
 
 
-@router.get("/mis-referidos")
+@router.get("/mis-referidos", response_model=MisReferidos)
 async def mis_referidos(pagina: int = 1,
                         current_user: User = Depends(get_current_user)):
     """Los referidos de QUIEN PREGUNTA, y nada más.
@@ -49,7 +50,7 @@ async def mis_referidos(pagina: int = 1,
     return await bonos.mis_referidos(db, current_user.user_id, pagina=pagina)
 
 
-@router.get("/mi-codigo")
+@router.get("/mi-codigo", response_model=MiCodigoDeReferido)
 async def mi_codigo(current_user: User = Depends(get_current_user)):
     """El código de referido de quien pregunta, y su enlace para compartir."""
     # Sólo el código. Sin proyección esto traería el usuario entero —documento,

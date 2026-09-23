@@ -57,6 +57,7 @@ from database import db
 from models.user import User
 from routes.dependencies import get_current_user
 from services.perfil import para_su_dueno
+from models.cuenta import MisHuellas
 from services import personal
 
 logger = logging.getLogger(__name__)
@@ -214,7 +215,7 @@ async def register_verify(body: RegisterVerifyBody, current_user: User = Depends
     return {"success": True, "message": "Huella activada en este dispositivo"}
 
 
-@router.get("/credentials")
+@router.get("/credentials", response_model=MisHuellas)
 async def list_credentials(current_user: User = Depends(get_current_user)):
     doc = await db.users.find_one({"user_id": current_user.user_id})
     creds = (doc or {}).get("webauthn_credentials", []) or []
