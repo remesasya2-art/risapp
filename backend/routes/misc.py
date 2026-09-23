@@ -17,7 +17,8 @@ from services.limits import limits_payload
 from services.kyc_quota import quota_payload
 from models.user import User
 from models.cuenta import EstadoDeMiVerificacion, LO_QUE_VE_DE_SU_VERIFICACION, MiSaldo
-from services import cofre, cpf_de_la_cuenta
+from services import cofre, cpf_de_la_cuenta, las_fotos
+from services.money import from_db, to_float
 from services.notifications import avisar_al_personal
 from services.imagen_recibida import (ImagenInvalida, limpiar_imagen,
                                       limpiar_imagen_opcional)
@@ -261,7 +262,15 @@ async def get_verification_status(current_user: User = Depends(get_current_user)
 @router.get("/transactions/export")
 async def export_transactions(current_user: User = Depends(get_super_admin)):
     """Export all transactions to Excel"""
-    transactions = await db.transactions.find({"hidden_from_admin": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    # Sólo las columnas que se escriben. Con `{"_id": 0}` se traía cada orden
+    # entera, comprobantes en base64 incluidos: a diez mil filas es el caso que
+    # `services/las_fotos.py` calcula en unos 12 GB, y el proceso de Railway
+    # se muere mucho antes, llevándose la app para todos.
+    transactions = await db.transactions.find(
+        {"hidden_from_admin": {"$ne": True}},
+        las_fotos.solo("display_id", "transaction_id", "user_email", "type",
+                       "amount_ris", "amount_ves", "status", "created_at"),
+    ).sort("created_at", -1).to_list(10000)
     
     wb = Workbook()
     ws = wb.active
@@ -271,12 +280,17 @@ async def export_transactions(current_user: User = Depends(get_super_admin)):
     ws.append(headers)
     
     for tx in transactions:
+        # Los montos pasan por `to_float(from_db(...))`: el dinero se guarda
+        # en Decimal128, y el Excel no sabe escribirlo —contesta «Cannot
+        # convert Decimal128 to Excel» y la exportación entera da 500—.
+        # `display_id or transaction_id`, y no `get(clave, otra)`: una orden
+        # con `display_id: None` daba `None[:15]`.
         ws.append([
-            tx.get("display_id", tx.get("transaction_id", ""))[:15],
+            (tx.get("display_id") or tx.get("transaction_id") or "")[:15],
             tx.get("user_email", ""),
             tx.get("type", ""),
-            tx.get("amount_ris", 0),
-            tx.get("amount_ves", 0),
+            to_float(from_db(tx.get("amount_ris") or 0)),
+            to_float(from_db(tx.get("amount_ves") or 0)),
             tx.get("status", ""),
             str(tx.get("created_at", ""))[:19]
         ])
