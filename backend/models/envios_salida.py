@@ -21,30 +21,15 @@ LOS TIPOS SON LOS DE LA RESPUESTA DE HOY
     migrar puede traer un número donde otro trae un texto. El contrato
     recorta; no convierte, y no puede contestar 500 por un documento viejo.
     Lo único que no deja pasar en un campo simple es un documento entero
-    (ver `_sin_estructura`). Las rutas usan `exclude_unset`, así que lo que la
+    (ver `models/escalar.py`). Las rutas usan `exclude_unset`, así que lo que la
     función no pone sigue sin salir, en vez de salir como null.
 """
-from typing import Annotated, Any, List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, BeforeValidator, create_model
+from pydantic import BaseModel, create_model
 
-
-def _sin_estructura(valor):
-    """Un valor suelto pasa; un documento o una lista, no.
-
-    `Any` a secas deja pasar CUALQUIER cosa, sub-documentos incluidos, y así el
-    contrato no cortaba nada. Lo encontró su propio test: con la función de la
-    lista devolviendo de más, `destino.destinatario` —que la función convierte
-    en el nombre— salía como el documento entero de quien recibe, con su
-    cédula y su teléfono. Un campo que es un texto, un número o una fecha no
-    puede traer un diccionario adentro: si llega uno, es un error de quien
-    armó la respuesta, y se muestra vacío en vez de mostrarse de más.
-    """
-    return None if isinstance(valor, (dict, list, tuple, set)) else valor
-
-
-# Un valor de cualquier tipo SIMPLE. Ver `_sin_estructura`.
-Escalar = Annotated[Optional[Any], BeforeValidator(_sin_estructura)]
+# Un valor simple de cualquier tipo. Ver models/escalar.py.
+from models.escalar import Escalar, _sin_estructura  # noqa: F401
 
 
 def _libre(nombre: str, campos) -> type:

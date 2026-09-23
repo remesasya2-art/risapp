@@ -19,6 +19,7 @@ from services.notifications import avisar_al_personal
 from routes.dependencies import get_current_user, sin_transacciones_personales
 from routes.security_2fa import frenar_por_cuenta
 from services.money import para_mostrar
+from models.movimientos import beneficiario_para_la_orden
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
@@ -400,7 +401,11 @@ async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depe
         "remesa_id": remesa_id, 
         "user_id": current_user.user_id, 
         "beneficiario_id": body.beneficiario_id, 
-        "beneficiario_data": {k: v for k, v in beneficiario.items() if k != "_id"}, 
+        # Lista de lo permitido, no una copia del beneficiario entero: esto
+        # pasa al historial del cliente (`transactions`), y la copia llevaba
+        # `user_id`, `beneficiary_id` y cualquier campo que se le agregue
+        # mañana a los beneficiarios. Ver models/movimientos.py.
+        "beneficiario_data": beneficiario_para_la_orden(beneficiario), 
         "usd_cliente": body.usd_cliente, 
         "ves_recibe": ves_recibe, 
         "btc_pagar": btc_pagar, 
