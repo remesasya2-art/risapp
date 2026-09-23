@@ -197,7 +197,6 @@ GET /api/transactions
 GET /api/transactions/export
 GET /api/transactions/{transaction_id}
 GET /api/user/balance
-GET /api/verification/status
 GET /api/ves-payment-info
 GET /api/webauthn/credentials
 GET /api/withdraw-crypto/{transaction_id}/status
