@@ -35,8 +35,6 @@ export function RateProvider({ children }) {
         ris_to_ves: response.data.ris_to_ves || 110,
         ves_to_ris_rate: response.data.ves_to_ris_rate || 140,
         brl_to_ris: response.data.brl_to_ris || 1,
-        base_ris_to_ves: response.data.base_ris_to_ves,
-        base_ves_to_ris_rate: response.data.base_ves_to_ris_rate,
         auto_rate_enabled: response.data.auto_rate_enabled,
         is_off_hours: response.data.is_off_hours,
         bcv_usd_ves: response.data.bcv_usd_ves,

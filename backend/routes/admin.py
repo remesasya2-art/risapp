@@ -2641,16 +2641,38 @@ class AutoRateConfigRequest(BaseModel):
     delta_ves_brl: float | None = None
 
 
-@router.get("/auto-rate")
+class ConfigDeTasaAutomatica(BaseModel):
+    enabled: Optional[bool] = None
+    work_start_hour: Optional[int] = None
+    work_end_hour: Optional[int] = None
+    work_days: Optional[List[int]] = None
+    delta_brl_ves: Optional[float] = None
+    delta_ves_brl: Optional[float] = None
+    is_off_hours_now: Optional[bool] = None
+    current_caracas_time: Optional[str] = None
+    # La tasa ANTES del ajuste. Vivía en la ruta pública `/rate`; ver el
+    # comentario en `routes/basic.py`.
+    base_ris_to_ves: Optional[float] = None
+    base_ves_to_ris_rate: Optional[float] = None
+
+
+@router.get("/auto-rate", response_model=ConfigDeTasaAutomatica)
 async def get_auto_rate_config(admin: User = Depends(get_super_admin)):
     """Get current auto-rate configuration and status."""
     from services.rate_engine import load_auto_rate_config, is_off_hours, caracas_now
     config = await load_auto_rate_config(db)
     now = caracas_now()
+    # Los mismos valores y respaldos que usa `/rate` para calcular la ajustada:
+    # si no coincidieran, la tarjeta mostraría un «base → ajustada» que no es
+    # la cuenta que hace el servidor.
+    tasa = await db.rates.find_one({}, {"_id": 0, "ris_to_ves": 1, "ves_to_ris_rate": 1},
+                                   sort=[("updated_at", -1)]) or {}
     return {
         **config,
         "is_off_hours_now": is_off_hours(config, now),
         "current_caracas_time": now.isoformat(),
+        "base_ris_to_ves": to_float(from_db(tasa.get("ris_to_ves", 110.0))),
+        "base_ves_to_ris_rate": to_float(from_db(tasa.get("ves_to_ris_rate", 140.0))),
     }
 
 

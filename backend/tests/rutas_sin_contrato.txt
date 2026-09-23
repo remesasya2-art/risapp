@@ -45,7 +45,6 @@ GET /api/admin/accounting/v2/usdt-inventory-summary
 GET /api/admin/accounting/v2/usdt-lots
 GET /api/admin/agent-ratings
 GET /api/admin/audit-log
-GET /api/admin/auto-rate
 GET /api/admin/bcv-rates
 GET /api/admin/bcv-rates/history
 GET /api/admin/blacklist

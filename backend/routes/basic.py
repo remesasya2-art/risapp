@@ -76,9 +76,13 @@ async def get_current_rate():
     effective = apply_rate_adjustment(base, config)
     if rate:
         effective["updated_at"] = rate.get("updated_at")
-    # Expose base values so admin UI can show both
-    effective["base_ris_to_ves"] = base["ris_to_ves"]
-    effective["base_ves_to_ris_rate"] = base["ves_to_ris_rate"]
+    # LA TASA DE ANTES DEL AJUSTE NO SALE DE ACA
+    #
+    #   Salían `base_ris_to_ves` y `base_ves_to_ris_rate` para que la tarjeta
+    #   de tasa automática del panel mostrara «base → ajustada». Pero esta ruta
+    #   es pública: fuera de horario le decía a cualquiera, sin sesión, cuánto
+    #   se le suma a la tasa por la noche. La tarjeta ahora la lee de
+    #   `GET /admin/auto-rate`, que es sólo del super administrador.
 
     # Tasas de envío con saldo cripto (USDT/USDC → VES). No llevan ajuste
     # automático por horario (son un valor fijo que configura el admin aparte).

@@ -1166,7 +1166,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                   <p style={{ fontSize: '32px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {fmt(rates?.ris_to_ves) || '0.00'} VES</p>
                   {rates?.auto_rate_enabled && rates?.is_off_hours && (
                     <p style={{ fontSize: '12px', color: '#ca8a04', margin: '4px 0 0 0', fontWeight: '600' }}>
-                      Modo automático activo — Base: {fmt(rates?.base_ris_to_ves)}
+                      Modo automático activo — fuera de horario
                     </p>
                   )}
                   <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
@@ -1179,9 +1179,9 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
             </div>
 
+            {/* La tasa base la trae la tarjeta desde `/admin/auto-rate`, sólo
+                para el super administrador: ver el comentario de AutoRateCard. */}
             <AutoRateCard
-              baseRisToVes={rates?.base_ris_to_ves ?? rates?.ris_to_ves}
-              baseVesToRis={rates?.base_ves_to_ris_rate ?? rates?.ves_to_ris_rate}
               onChange={loadData}
               userRole={user?.role}
             />
