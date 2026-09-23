@@ -5,9 +5,8 @@ del botón de Google y la raíz de la API.
 
 Todas ya armaban la respuesta a mano: en pantalla no cambia nada. El contrato
 es la segunda capa, y la que más lo necesita es `/rate`, que no pide sesión y
-la consulta cada visitante: arma su respuesta con `apply_rate_adjustment`, que
-copia el diccionario de configuración que le pasen. Un campo nuevo en la
-configuración de la tasa automática saldría solo para cualquiera.
+la consulta cada visitante: un campo que se le sume a la respuesta saldría
+solo para cualquiera.
 
 Los tests (`tests/test_contratos_livianos.py`) comparan, con datos reales, las
 claves que arma cada ruta con las que salen por su contrato: el contrato que se
@@ -26,13 +25,13 @@ def _simple(nombre, campos):
 
 RaizDeLaApi = _simple("RaizDeLaApi", ("message", "version"))
 
-# Sin `base_ris_to_ves` ni `base_ves_to_ris_rate`, a propósito: son la tasa
-# ANTES del ajuste fuera de horario, y en esta ruta pública le decían a
-# cualquiera cuánto se le suma de noche. El panel las lee de
-# `GET /admin/auto-rate` (ver `ConfigDeTasaAutomatica`).
+# Sin `base_*`, `is_off_hours` ni `auto_rate_enabled`: eran de la tasa
+# nocturna, que se eliminó (ver `routes/basic.py`, en `/rate`). Y las dos
+# `base_*`, mientras existió, le decían a cualquiera cuánto se le sumaba de
+# noche.
 LaTasa = _simple("LaTasa", (
     "ris_to_ves", "ves_to_ris_rate", "brl_to_ris", "usd_to_ves",
-    "is_off_hours", "auto_rate_enabled", "updated_at",
+    "updated_at",
     "usdtris_to_ves", "usdcris_to_ves",
     "bcv_usd_ves", "bcv_eur_ves", "bcv_value_date", "bcv_vencida", "bcv_edad_horas",
 ))

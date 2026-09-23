@@ -33,7 +33,7 @@ import { WipeButton } from '../components/common/WipeButton';
 import { RestoreButton } from '../components/common/RestoreButton';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import CampanaDelEquipo from '../components/CampanaDelEquipo';
-import { AutoRateCard } from '../components/common/AutoRateCard';
+import { RateHistoryButton } from '../components/common/RateHistoryButton';
 import { BcvRatesCard } from '../components/common/BcvRatesCard';
 import KycPanel from '../components/admin/KycPanel';
 import { StatusBadge } from '../components/dashboard/TransactionItem';
@@ -1164,27 +1164,21 @@ const [searchParams, setSearchParams] = useSearchParams();
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
                   <p style={{ fontSize: '32px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {fmt(rates?.ris_to_ves) || '0.00'} VES</p>
-                  {rates?.auto_rate_enabled && rates?.is_off_hours && (
-                    <p style={{ fontSize: '12px', color: '#ca8a04', margin: '4px 0 0 0', fontWeight: '600' }}>
-                      Modo automático activo — fuera de horario
-                    </p>
-                  )}
                   <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
                     Última actualización: {rates?.updated_at
                       ? new Date(rates.updated_at).toLocaleString('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'medium' })
                       : '—'}
                   </p>
                 </div>
-                <button onClick={() => setActiveTab('rates')} style={btnPrimary}>Modificar</button>
+                {/* «Historial» vivía en la tarjeta de la tasa automática, que se
+                    eliminó con la tasa nocturna. Se esconde solo para quien no
+                    es super administrador: la ruta es sólo suya. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <RateHistoryButton userRole={user?.role} />
+                  <button onClick={() => setActiveTab('rates')} style={btnPrimary}>Modificar</button>
+                </div>
               </div>
             </div>
-
-            {/* La tasa base la trae la tarjeta desde `/admin/auto-rate`, sólo
-                para el super administrador: ver el comentario de AutoRateCard. */}
-            <AutoRateCard
-              onChange={loadData}
-              userRole={user?.role}
-            />
 
             <BcvRatesCard />
           </div>

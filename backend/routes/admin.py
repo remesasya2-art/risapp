@@ -2632,76 +2632,10 @@ async def refresh_bcv_rates(admin: User = Depends(get_admin_user)):
         await turnos.soltar(db, TURNO)
 
 
-class AutoRateConfigRequest(BaseModel):
-    enabled: bool | None = None
-    work_start_hour: int | None = None
-    work_end_hour: int | None = None
-    work_days: list[int] | None = None
-    delta_brl_ves: float | None = None
-    delta_ves_brl: float | None = None
-
-
-class ConfigDeTasaAutomatica(BaseModel):
-    enabled: Optional[bool] = None
-    work_start_hour: Optional[int] = None
-    work_end_hour: Optional[int] = None
-    work_days: Optional[List[int]] = None
-    delta_brl_ves: Optional[float] = None
-    delta_ves_brl: Optional[float] = None
-    is_off_hours_now: Optional[bool] = None
-    current_caracas_time: Optional[str] = None
-    # La tasa ANTES del ajuste. Vivía en la ruta pública `/rate`; ver el
-    # comentario en `routes/basic.py`.
-    base_ris_to_ves: Optional[float] = None
-    base_ves_to_ris_rate: Optional[float] = None
-
-
-@router.get("/auto-rate", response_model=ConfigDeTasaAutomatica)
-async def get_auto_rate_config(admin: User = Depends(get_super_admin)):
-    """Get current auto-rate configuration and status."""
-    from services.rate_engine import load_auto_rate_config, is_off_hours, caracas_now
-    config = await load_auto_rate_config(db)
-    now = caracas_now()
-    # Los mismos valores y respaldos que usa `/rate` para calcular la ajustada:
-    # si no coincidieran, la tarjeta mostraría un «base → ajustada» que no es
-    # la cuenta que hace el servidor.
-    tasa = await db.rates.find_one({}, {"_id": 0, "ris_to_ves": 1, "ves_to_ris_rate": 1},
-                                   sort=[("updated_at", -1)]) or {}
-    return {
-        **config,
-        "is_off_hours_now": is_off_hours(config, now),
-        "current_caracas_time": now.isoformat(),
-        "base_ris_to_ves": to_float(from_db(tasa.get("ris_to_ves", 110.0))),
-        "base_ves_to_ris_rate": to_float(from_db(tasa.get("ves_to_ris_rate", 140.0))),
-    }
-
-
-@router.post("/auto-rate")
-async def update_auto_rate_config(
-    request: AutoRateConfigRequest,
-    admin: User = Depends(get_super_admin)
-):
-    """Update auto-rate configuration."""
-    update_fields = {}
-    for field in ["enabled", "work_start_hour", "work_end_hour", "work_days", "delta_brl_ves", "delta_ves_brl"]:
-        val = getattr(request, field)
-        if val is not None:
-            update_fields[field] = val
-
-    if not update_fields:
-        raise HTTPException(status_code=400, detail="Debes enviar al menos un campo")
-
-    update_fields["updated_at"] = datetime.now(timezone.utc)
-    update_fields["updated_by"] = admin.user_id
-
-    await db.app_settings.update_one(
-        {"setting_id": "auto_rate"},
-        {"$set": {"setting_id": "auto_rate", **update_fields}},
-        upsert=True
-    )
-
-    logger.info(f"Auto-rate config updated by {admin.user_id}: {update_fields}")
-    return {"success": True, "message": "Configuración actualizada", **update_fields}
+# `GET` y `POST /admin/auto-rate` vivían acá: la configuración de la «tasa
+# automática», el ajuste nocturno de la tasa. Se eliminó entera por decisión del
+# dueño del proyecto —ver el comentario en `routes/basic.py`, en `/rate`—. El
+# documento `app_settings.auto_rate` puede seguir en la base; ya nadie lo lee.
 
 # ============== KYC ==============
 

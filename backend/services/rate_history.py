@@ -36,16 +36,3 @@ async def log_if_changed(db, route: str, new_rate: float, change_type: str, admi
         "timestamp": datetime.now(timezone.utc),
     }
     await db.rate_history.insert_one(entry)
-
-
-def determine_auto_change_type(config: dict, now: datetime) -> str:
-    """Classify why the automatic rate is currently what it is."""
-    from services.rate_engine import is_ve_holiday
-    if is_ve_holiday(now.date()):
-        return "auto_holiday"
-    if now.weekday() not in config.get("work_days", [0,1,2,3,4,5]):
-        return "auto_weekend"
-    hour = now.hour
-    if hour < config.get("work_start_hour", 8) or hour >= config.get("work_end_hour", 22):
-        return "auto_off_hours"
-    return "auto_in_hours"

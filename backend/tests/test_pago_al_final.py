@@ -290,8 +290,8 @@ def test_LA_TASA_ES_LA_DE_LA_COTIZACION_Y_NO_LA_DEL_PAGO(base):
     """Se congela al cotizar. Se cambia la tasa del sistema entre la
     cotización y el pago, y la orden tiene que salir con la vieja.
 
-    No es hipotético: `rate_engine.apply_rate_adjustment` le resta un delta al
-    cruzar el horario laboral, así que la tasa se mueve sola.
+    No es hipotético: el super administrador cambia la tasa cuando quiere, y
+    un cobro PIX dura siete minutos.
     """
     una_orden(base, rate=55.0, amount_output=5500.0)
     corre(base.rates.insert_one({"ris_to_ves": 40.0,

@@ -6,8 +6,8 @@ QUE PASO
     saldo» calculado como `saldo x bcvUsdVes` — o sea, multiplicando un saldo en
     RIS por la tasa del DOLAR. Trataba 1 RIS como 1 USD.
 
-    El RIS esta denominado en REALES: `services/rate_engine.py` documenta
-    `ris_to_ves` como la tasa BRL->VES, y `accounting_engine` valua la
+    El RIS esta denominado en REALES: el panel carga `ris_to_ves` como la
+    tasa BRL->VES (`models/requests.py`, «1 RIS = X VES»), y `accounting_engine` valua la
     circulacion de RIS con esa misma tasa. Asi que el numero salia inflado por
     el factor BRL/USD, unas 5,8 veces:
 
@@ -76,8 +76,8 @@ def test_el_saldo_se_convierte_con_la_tasa_RIS_y_no_con_la_del_dolar():
         assert factor == "risToVes", (
             f"El saldo se esta multiplicando por `{factor}`. El saldo esta en RIS "
             f"y el RIS esta denominado en reales: la unica tasa que lo lleva a "
-            f"bolivares es `risToVes` (`ris_to_ves`, que rate_engine documenta "
-            f"como BRL->VES). Multiplicar por la tasa del dolar infla el numero "
+            f"bolivares es `risToVes` (`ris_to_ves`, la tasa "
+            f"BRL->VES). Multiplicar por la tasa del dolar infla el numero "
             f"por el factor BRL/USD, unas 5,8 veces.")
 
 

@@ -11,8 +11,6 @@ from pydantic import BaseModel
 from database import db
 from models.user import User
 from routes.dependencies import get_current_user, get_super_admin
-from services.rate_engine import apply_rate_adjustment, load_auto_rate_config, caracas_now
-from services.rate_history import log_if_changed, determine_auto_change_type
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["basic"])
@@ -64,7 +62,7 @@ async def salud_de_la_aplicacion(_: User = Depends(get_super_admin)):
 
 @router.get("/rate", response_model=LaTasa, response_model_exclude_unset=True)
 async def get_current_rate():
-    """Get current exchange rates - applies auto off-hours adjustment if enabled."""
+    """La tasa vigente: la que cargó el super administrador, tal cual."""
     rate = await db.rates.find_one(sort=[("updated_at", -1)])
     base = {
         "ris_to_ves": (rate or {}).get("ris_to_ves", 110.0),
@@ -72,20 +70,23 @@ async def get_current_rate():
         "brl_to_ris": (rate or {}).get("brl_to_ris", 1.0),
         "usd_to_ves": (rate or {}).get("usd_to_ves", 50.0),
     }
-    config = await load_auto_rate_config(db)
-    effective = apply_rate_adjustment(base, config)
+    # SIN TASA NOCTURNA
+    #
+    #   Acá se le aplicaba un ajuste fuera del horario laboral (la «tasa
+    #   automática»): de noche, los domingos y los feriados, se restaba un delta
+    #   a BRL→VES y se sumaba otro a VES→BRL. Se eliminó por decisión del dueño
+    #   del proyecto, con su tarjeta del panel y sus dos rutas. La tasa es la
+    #   que se carga a mano, a cualquier hora.
+    #
+    #   Si vuelve, tiene que volver en los cinco lugares a la vez: esta ruta y
+    #   los cuatro de `routes/transactions.py` que convierten plata. Una tasa
+    #   distinta entre lo que muestra la pantalla y lo que cobra la orden es
+    #   exactamente lo que `test_sin_tasa_nocturna.py` impide.
+    effective = dict(base)
     if rate:
         effective["updated_at"] = rate.get("updated_at")
-    # LA TASA DE ANTES DEL AJUSTE NO SALE DE ACA
-    #
-    #   Salían `base_ris_to_ves` y `base_ves_to_ris_rate` para que la tarjeta
-    #   de tasa automática del panel mostrara «base → ajustada». Pero esta ruta
-    #   es pública: fuera de horario le decía a cualquiera, sin sesión, cuánto
-    #   se le suma a la tasa por la noche. La tarjeta ahora la lee de
-    #   `GET /admin/auto-rate`, que es sólo del super administrador.
-
-    # Tasas de envío con saldo cripto (USDT/USDC → VES). No llevan ajuste
-    # automático por horario (son un valor fijo que configura el admin aparte).
+    # Tasas de envío con saldo cripto (USDT/USDC → VES): un valor fijo que
+    # configura el admin aparte.
     effective["usdtris_to_ves"] = (rate or {}).get("usdtris_to_ves")
     effective["usdcris_to_ves"] = (rate or {}).get("usdcris_to_ves")
 
@@ -111,18 +112,9 @@ async def get_current_rate():
             # puede tumbarla.
             logger.warning(f"No se pudo calcular la antigüedad del BCV: {e}")
 
-    # Log rate transitions (only if changed from last entry)
-    try:
-        now = caracas_now()
-        if config.get("enabled"):
-            change_type = determine_auto_change_type(config, now)
-        else:
-            change_type = "manual"
-        await log_if_changed(db, "brl_ves", effective.get("ris_to_ves"), change_type)
-        await log_if_changed(db, "ves_brl", effective.get("ves_to_ris_rate"), change_type)
-    except Exception as e:
-        logger.warning(f"Rate history log failed: {e}")
-
+    # El historial de la tasa ya no se escribe desde acá. Esta ruta anotaba los
+    # saltos del ajuste nocturno, que ya no existe; los cambios a mano los anota
+    # `POST /admin/rates` en el momento en que se hacen, con quién los hizo.
     return effective
 
 # `GET /download-build` vivía acá y se sacó.
