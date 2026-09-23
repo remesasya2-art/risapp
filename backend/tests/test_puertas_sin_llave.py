@@ -55,7 +55,6 @@ SIN_TOPE_A_PROPOSITO = {
     ("GET", "/api/health/nucleo"): "el ping de vida del núcleo: contesta sólo ok/no ok con lo último que vio la vigilancia, sin calcular nada, y 404 apagado",
     ("GET", "/api/rate"): "la tasa del día, igual para todos",
     ("GET", "/api/limits"): "los límites publicados",
-    ("GET", "/api/policies"): "las políticas publicadas",
     ("GET", "/api/btc/precio"): "el precio publicado",
     ("GET", "/api/push/web/vapid-public-key"): "una clave pública",
     # El id de cliente de Google es público por diseño: va en el HTML de

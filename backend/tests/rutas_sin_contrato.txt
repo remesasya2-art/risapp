@@ -153,8 +153,6 @@ GET /api/envios/{envio_id}/foto/{asset_id}
 GET /api/limits
 GET /api/limits/me
 GET /api/media/twilio/{path:path}
-GET /api/policies
-GET /api/policies/status
 GET /api/primeros-pasos
 GET /api/push/web/status
 GET /api/push/web/vapid-public-key

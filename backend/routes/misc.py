@@ -5,10 +5,11 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from models.escalar import Escalar
 from openpyxl import Workbook
 
 from database import db
@@ -33,11 +34,14 @@ class AcceptPolicy(BaseModel):
     policy_type: str
 
 
-@router.get("/policies")
-async def get_policies():
-    """Get all policies"""
-    policies = await db.policies.find({}, {"_id": 0}).to_list(10)
-    return policies
+# `GET /policies` vivía acá y se sacó. Era pública, sin sesión, y devolvía los
+# documentos enteros de `policies` con `{"_id": 0}`: lo que alguien guardara ahí
+# —a mano, porque ningún código escribe esa colección— salía para cualquiera.
+# Ninguna pantalla la pedía. Ver tests/test_politicas_sin_puerta_publica.py.
+
+
+class EstadoDeMisPoliticas(BaseModel):
+    accepted_policies: List[Escalar] = []
 
 
 @router.post("/policies/accept")
@@ -50,11 +54,17 @@ async def accept_policy(data: AcceptPolicy, current_user: User = Depends(get_cur
     return {"success": True}
 
 
-@router.get("/policies/status")
+@router.get("/policies/status", response_model=EstadoDeMisPoliticas)
 async def get_policies_status(current_user: User = Depends(get_current_user)):
-    """Get user's policy acceptance status"""
-    user = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0})
-    return {"accepted_policies": user.get("accepted_policies", [])}
+    """Las políticas que aceptó quien pregunta.
+
+    Traía el documento entero del usuario —clave, PIN, segundo factor— para
+    leer una lista, y con una cuenta que ya no existe contestaba 500
+    (`None.get`). Ahora pide esa lista sola.
+    """
+    user = await db.users.find_one({"user_id": current_user.user_id},
+                                   {"_id": 0, "accepted_policies": 1})
+    return {"accepted_policies": (user or {}).get("accepted_policies") or []}
 
 
 # ============== LIMITES DE MONTO ==============
