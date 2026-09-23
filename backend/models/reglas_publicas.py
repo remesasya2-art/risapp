@@ -26,15 +26,13 @@ def _simple(nombre, campos):
 
 RaizDeLaApi = _simple("RaizDeLaApi", ("message", "version"))
 
-# `base_ris_to_ves` y `base_ves_to_ris_rate` son la tasa ANTES del ajuste
-# fuera de horario. Hoy sólo las lee la tarjeta de tasa automática del panel,
-# pero salen por esta ruta pública: están en el contrato para no romper el
-# panel, y sacarlas de acá es una decisión aparte (el panel necesitaría su
-# propia ruta).
+# Sin `base_ris_to_ves` ni `base_ves_to_ris_rate`, a propósito: son la tasa
+# ANTES del ajuste fuera de horario, y en esta ruta pública le decían a
+# cualquiera cuánto se le suma de noche. El panel las lee de
+# `GET /admin/auto-rate` (ver `ConfigDeTasaAutomatica`).
 LaTasa = _simple("LaTasa", (
     "ris_to_ves", "ves_to_ris_rate", "brl_to_ris", "usd_to_ves",
     "is_off_hours", "auto_rate_enabled", "updated_at",
-    "base_ris_to_ves", "base_ves_to_ris_rate",
     "usdtris_to_ves", "usdcris_to_ves",
     "bcv_usd_ves", "bcv_eur_ves", "bcv_value_date", "bcv_vencida", "bcv_edad_horas",
 ))

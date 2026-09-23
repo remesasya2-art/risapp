@@ -17,7 +17,13 @@ const AMBER = '#b3730d';
 const GREEN = '#1f9d6b';
 const BLUE = '#2f6fd6';
 
-export const AutoRateCard = ({ baseRisToVes, baseVesToRis, onChange, userRole }) => {
+// LA TASA BASE VIENE DE `/admin/auto-rate`, NO DE `/rate`
+//
+//   Antes llegaba por props desde la tasa pública. Pero `/rate` la ve
+//   cualquiera sin sesión, y fuera de horario le decía cuánto se le suma a la
+//   tasa de noche. Ahora la manda sólo la ruta del super administrador, que es
+//   la misma que esta tarjeta ya pedía para su configuración.
+export const AutoRateCard = ({ onChange, userRole }) => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,6 +59,8 @@ export const AutoRateCard = ({ baseRisToVes, baseVesToRis, onChange, userRole })
   if (loading) return null;
   if (!config) return null;
 
+  const baseRisToVes = config.base_ris_to_ves;
+  const baseVesToRis = config.base_ves_to_ris_rate;
   const workDaysSet = new Set(config.work_days || []);
   const toggleDay = (d) => {
     const next = new Set(workDaysSet);
