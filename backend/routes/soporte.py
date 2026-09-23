@@ -46,6 +46,8 @@ from pydantic import BaseModel, Field
 
 from database import db
 from models.user import User
+from models.soporte import (LO_QUE_VE_DE_SU_CASO, LO_QUE_VE_DE_UN_MENSAJE, LosMotivos,
+                            MiCaso, MisCasos)
 from routes.dependencies import get_current_user, get_crm_user
 from services import soporte
 from services.imagen_recibida import ImagenInvalida, limpiar_foto_del_chat
@@ -114,20 +116,9 @@ async def _registrar(caso_id, texto, autor_id=None, autor_nombre=None):
     })
 
 
-# Lo que el cliente ve de su caso. LISTA DE LO PERMITIDO, no de lo prohibido, y
-# la diferencia no es de estilo: con una lista de lo prohibido, cada campo nuevo
-# que se le agregue al caso viaja al cliente hasta que alguien se acuerde de
-# agregarlo a la lista, y el que se olvida no avisa. Así lo escribí la primera
-# vez y ya se colaban `escalado_por_nombre` y el motivo del escalamiento —quién
-# de la casa marcó el caso como grave y por qué—.
-#
-# `asignado_a_nombre` va a propósito: el cliente lee «¿Cómo fue la atención de
-# Ana?». `asignado_a` no: el identificador interno no le sirve para nada.
-_DEL_CLIENTE = (
-    "caso_id", "numero", "asunto", "motivo", "estado", "creado_en",
-    "actualizado_en", "ultimo_mensaje", "ultimo_mensaje_en", "ultimo_mensaje_de",
-    "sin_leer_cliente", "calificacion", "asignado_a_nombre", "cerrado_en",
-)
+# La lista vive en `models/soporte.py`, al lado del contrato que se genera de
+# ella: así la proyección y el contrato no pueden decir cosas distintas.
+_DEL_CLIENTE = LO_QUE_VE_DE_SU_CASO
 
 
 def _publico(caso):
@@ -199,13 +190,18 @@ async def _conversacion(caso_id, con_notas_internas):
     corta, y se dan vuelta para mostrarlos.
     """
     consulta = {"caso_id": caso_id}
+    # El equipo ve el mensaje entero; el cliente, sólo lo que su pantalla lee.
+    # Antes los dos compartían `{"_id": 0}`, y así le llegaba al cliente el
+    # `autor_id` del asesor que le contestó. Ver `models/soporte.py`.
+    proyeccion = {"_id": 0}
     if not con_notas_internas:
         consulta["interno"] = {"$ne": True}
+        proyeccion = LO_QUE_VE_DE_UN_MENSAJE
     # `.limit()` y no `to_list(n)`: el tope tiene que estar en la CONSULTA. Con
     # `to_list(n)` el servidor manda igual todo lo que encontró y el corte pasa
     # en el cliente —y el doble de Mongo que usan los tests ni siquiera lo hace,
     # así que un tope escrito así no se prueba nunca—.
-    ultimos = await db.soporte_mensajes.find(consulta, {"_id": 0}).sort(
+    ultimos = await db.soporte_mensajes.find(consulta, proyeccion).sort(
         "creado_en", -1).limit(_TOPE_MENSAJES).to_list(_TOPE_MENSAJES)
     ultimos.reverse()
     return ultimos
@@ -249,13 +245,14 @@ class Calificacion(BaseModel):
     comentario: Optional[str] = None
 
 
-@router.get("/soporte/motivos")
+@router.get("/soporte/motivos", response_model=LosMotivos)
 async def motivos(current_user: User = Depends(get_current_user)):
     """Los motivos que se le ofrecen al cliente al abrir un caso."""
     return {"motivos": [{"clave": k, "texto": v[0]} for k, v in soporte.MOTIVOS.items()]}
 
 
-@router.get("/soporte/casos")
+@router.get("/soporte/casos", response_model=MisCasos,
+             response_model_exclude_unset=True)
 async def mis_casos(current_user: User = Depends(get_current_user)):
     """Mis casos, el más reciente primero."""
     casos = await db.soporte_casos.find(
@@ -264,7 +261,8 @@ async def mis_casos(current_user: User = Depends(get_current_user)):
     return {"casos": [_publico(c) for c in casos]}
 
 
-@router.get("/soporte/casos/{caso_id}")
+@router.get("/soporte/casos/{caso_id}", response_model=MiCaso,
+             response_model_exclude_unset=True)
 async def mi_caso(caso_id: str, current_user: User = Depends(get_current_user)):
     """Un caso mío y su conversación, SIN las notas internas."""
     caso = await _mio(caso_id, current_user.user_id)

@@ -46,6 +46,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from models.envios_salida import retiro_para_el_cliente
 from services.envios_policy import (limites_efectivos, validar_descripcion,
                                     validar_paquete, quien_impone)
 from services.envios_tarifas import cotizar_servicio, peso_facturable
@@ -638,22 +639,28 @@ def _payload(envio, servicio, referencias, despacho, contexto, limites) -> dict:
             ],
         },
 
-        # LO ÚNICO QUE COBRA RIS APP.
+        # LO ÚNICO QUE COBRA RIS APP: el concepto y el total. Nada más.
+        #
+        # Antes salía el desglose entero —servicio, sobrecargos, subtotal y
+        # `margen_ris`—, y la pantalla sólo lee el concepto y el total. El
+        # margen de ganancia viajaba a cada cliente que cotizaba sin que nada
+        # lo mostrara. Y no alcanzaba con sacar `margen_ris`: con el subtotal,
+        # o con el servicio más los sobrecargos, el margen es una resta. Por
+        # eso sale el total solo.
+        #
+        # El desglose NO se pierde: queda guardado en `envio.cotizacion`, que
+        # es de donde lo leen el cobro y el panel del equipo.
         "a_pagar_en_risapp": {
             "concepto": CONCEPTO,
-            "servicio_traslado": {"monto_ris": cot["servicio_traslado_ris"]},
-            "sobrecargos": cot["sobrecargos"],
-            "subtotal_ris": cot["subtotal_ris"],
-            "margen_ris": cot["margen_ris"],
             "total_estimado_ris": cot["total_estimado_ris"],
         },
 
         # ORIENTACIÓN. Los contrata y los paga el usuario. No entran en el total.
         "referencias": [_referencia_visible(r) for r in (referencias or [])],
 
-        "retiro": {k: v for k, v in despacho.items()
-                   if k not in ("disponible", "faltantes", "retirador_id",
-                                "retirador_motivo", "congelado_at")},
+        # Lista de lo permitido, compartida con la confirmación y el detalle.
+        # `disponible` y `faltantes` quedan afuera solos: no están en la lista.
+        "retiro": retiro_para_el_cliente(despacho),
 
         "vence_at": cot["vence_at"],
         "terminos_version": cot["terminos_version"],

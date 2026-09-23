@@ -613,8 +613,13 @@ def test_05_cotizar_no_mueve_un_centavo_y_separa_lo_que_cobra_ris_app():
     from decimal import Decimal
     bloque = datos["a_pagar_en_risapp"]
     total = Decimal(bloque["total_estimado_ris"])
-    assert total == Decimal(bloque["subtotal_ris"]) + Decimal(bloque["margen_ris"]), (
+    # El desglose se lee de la base y no de la respuesta: la respuesta ya no
+    # lo trae, porque con el subtotal a la vista el margen es una resta.
+    guardado = corre(DB.envios.find_one({"envio_id": datos["envio_id"]}))["cotizacion"]
+    assert total == Decimal(guardado["subtotal_ris"]) + Decimal(guardado["margen_ris"]), (
         "el total lleva algo que no es el servicio de RIS App")
+    assert set(bloque) == {"concepto", "total_estimado_ris"}, (
+        f"el cliente no ve el desglose, y menos el margen: {sorted(bloque)}")
 
     assert len(datos["referencias"]) == 2, "faltó alguna referencia"
     for r in datos["referencias"]:

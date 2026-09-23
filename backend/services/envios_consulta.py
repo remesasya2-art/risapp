@@ -19,6 +19,7 @@ ACA SI VAN LOS DATOS DEL USUARIO
 
 import logging
 
+from models.envios_salida import retiro_para_el_cliente
 from services.envios_estados import partidas_impagas
 from services.money import to_decimal
 
@@ -186,8 +187,8 @@ async def _detalle(envio: dict, base) -> dict:
         "modalidad_flete": envio.get("modalidad_flete"),
         # La dirección congelada: es la que el usuario tiene que usar, y tiene
         # que decir lo mismo que dijo cuando la leyó.
-        "retiro": {k: v for k, v in despacho.items()
-                   if k not in ("retirador_id", "retirador_motivo", "congelado_at")},
+        # Lista de lo permitido, compartida con la cotización y la confirmación.
+        "retiro": retiro_para_el_cliente(despacho),
         "comprobante": {
             "codigo_objeto": origen.get("codigo_objeto"),
             "posteado_at": origen.get("posteado_at"),

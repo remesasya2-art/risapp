@@ -611,8 +611,10 @@ def test_lo_que_escribe_el_cotizador_es_lo_que_lee_el_que_cobra():
     cobro = estados.cobro_inicial(guardado, con_seguro, "2.30", "40", "30", "20")
 
     assert cobro["monto"] == Decimal(r["a_pagar_en_risapp"]["total_estimado_ris"])
+    # Contra lo GUARDADO y no contra la respuesta: la respuesta ya no trae el
+    # desglose (con él a la vista, el margen es una resta).
     assert [s["codigo"] for s in cobro["desglose"]["cotizacion"]["sobrecargos"]] \
-        == [s["codigo"] for s in r["a_pagar_en_risapp"]["sobrecargos"]]
+        == [s["codigo"] for s in guardado["cotizacion"]["sobrecargos"]] == ["seguro"]
     # Y el desglose que ve el usuario no dice "declarado: 0 kg".
     declarado = cobro["desglose"]["declarado"]
     assert declarado["peso_kg"] == Decimal("2.30")

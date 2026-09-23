@@ -160,11 +160,6 @@ GET /api/credits/deposit/{order_id}/status
 GET /api/credits/history
 GET /api/credits/min-amount
 GET /api/credits/networks
-GET /api/envios
-GET /api/envios/catalogo
-GET /api/envios/limites
-GET /api/envios/seguimiento/{token}
-GET /api/envios/{envio_id}
 GET /api/envios/{envio_id}/foto/{asset_id}
 GET /api/gestor/pix/active
 GET /api/gestor/pix/history
@@ -182,9 +177,6 @@ GET /api/primeros-pasos
 GET /api/push/web/status
 GET /api/push/web/vapid-public-key
 GET /api/rate
-GET /api/soporte/casos
-GET /api/soporte/casos/{caso_id}
-GET /api/soporte/motivos
 GET /api/transactions
 GET /api/transactions/export
 GET /api/transactions/{transaction_id}
