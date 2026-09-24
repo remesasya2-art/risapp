@@ -132,10 +132,14 @@ function AppRoutes() {
       <Route path="/" element={<HomeGate />} />
       <Route path="/send" element={<ProtectedRoute><ConTema><Send /></ConTema></ProtectedRoute>} />
       <Route path="/send-reais" element={<ProtectedRoute><ConTema><SendReais /></ConTema></ProtectedRoute>} />
-      <Route path="/send-crypto" element={<ProtectedRoute><PuertaCripto tipo="envio"><ConTema><SendCrypto /></ConTema></PuertaCripto></ProtectedRoute>} />
+      {/* La marca del tema va POR FUERA de la puerta cripto, no adentro: un
+          test lee esta línea buscando la puerta pegada a su pantalla, y la
+          puerta no dibuja nada propio (nada, o una redirección), así que
+          envolverla no cambia cómo se ve. */}
+      <Route path="/send-crypto" element={<ProtectedRoute><ConTema><PuertaCripto tipo="envio"><SendCrypto /></PuertaCripto></ConTema></ProtectedRoute>} />
       <Route path="/recharge" element={<ProtectedRoute><PuertaRecarga><ConTema><Recharge /></ConTema></PuertaRecarga></ProtectedRoute>} />
       <Route path="/recharge-ves" element={<ProtectedRoute><PuertaRecarga><ConTema><RechargeVES /></ConTema></PuertaRecarga></ProtectedRoute>} />
-      <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><ConTema><CreditsDeposit /></ConTema></PuertaCripto></ProtectedRoute>} />
+      <Route path="/credits/deposit" element={<ProtectedRoute><ConTema><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ConTema></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/referidos" element={<ProtectedRoute><ConTema><Referidos /></ConTema></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><ConTema><History /></ConTema></ProtectedRoute>} />
@@ -157,7 +161,7 @@ function AppRoutes() {
       <Route path="/force-change-password" element={<ProtectedRoute><ConTema><ForceChangePassword /></ConTema></ProtectedRoute>} />
 
       {/* BTC Lightning Route */}
-              <Route path="/btc-lightning" element={<ProtectedRoute><PuertaCripto tipo="deposito"><ConTema><BTCLightning /></ConTema></PuertaCripto></ProtectedRoute>} />
+              <Route path="/btc-lightning" element={<ProtectedRoute><ConTema><PuertaCripto tipo="deposito"><BTCLightning /></PuertaCripto></ConTema></ProtectedRoute>} />
       {/* Mockup Route - Temporal */}
       <Route path="/mockup-gestor" element={<ProtectedRoute><GestorFlowMockup /></ProtectedRoute>} />
       
