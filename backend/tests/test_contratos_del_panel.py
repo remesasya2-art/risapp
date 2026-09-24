@@ -249,3 +249,54 @@ def test_LA_FICHA_COMPLETA_TRAE_LO_QUE_EL_PANEL_MUESTRA_Y_NADA_DE_LO_INTERNO(pan
         assert interno not in r.text, f"la ficha dejó salir «{interno}»"
     # Las fotos van UNA vez, en el perfil: la verificación ya no las repite.
     assert r.text.count("base64,SELFIE") == 1
+
+
+def test_LOS_TOTALES_DE_LA_FICHA_SE_SUMAN_CON_DECIMAL128_DE_VERDAD():
+    """Los tests de arriba corren con `Decimal128` sabiendo sumar, porque
+    mongomock lo necesita (tests/conftest.py) y esa lección vale para todo el
+    proceso. En producción no sabe: `sum()` sobre montos guardados así daba
+    500. Esto se comprueba en un Python aparte, sin la lección."""
+    import subprocess
+    import textwrap
+    codigo = textwrap.dedent("""
+        import asyncio, os, sys
+        os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
+        os.environ.setdefault("DB_NAME", "ris_test")
+        from bson.decimal128 import Decimal128
+        try:
+            0 + Decimal128("1")
+            sys.exit("este Python ya sabe sumar Decimal128: la prueba no probaria nada")
+        except TypeError:
+            pass
+
+        class Cursor:
+            def __init__(self, filas): self.filas = filas
+            def sort(self, *a, **k): return self
+            async def to_list(self, n): return self.filas
+
+        class Coleccion:
+            def __init__(self, filas): self.filas = filas
+            async def find_one(self, *a, **k): return dict(self.filas[0]) if self.filas else None
+            def find(self, *a, **k): return Cursor([dict(f) for f in self.filas])
+
+        class Base:
+            users = Coleccion([{"user_id": "u", "name": "Ana"}])
+            verifications = Coleccion([])
+            beneficiaries = Coleccion([])
+            transactions = Coleccion([
+                {"transaction_id": "r", "type": "recharge", "status": "completed",
+                 "amount_ris": Decimal128("100.00")},
+                {"transaction_id": "w", "type": "withdrawal", "status": "completed",
+                 "amount_ris": Decimal128("40.00"), "amount_ves": Decimal128("4400.00")},
+            ])
+
+        from routes import admin
+        admin.db = Base()
+        r = asyncio.run(admin.get_user_complete_history("u", admin=None))
+        print(r["stats"]["total_recharged_ris"], r["stats"]["total_withdrawn_ris"], r["stats"]["total_ves_sent"])
+    """)
+    backend = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    salida = subprocess.run([sys.executable, "-c", codigo], cwd=backend, capture_output=True, text=True,
+                            env={**os.environ, "PYTHONPATH": backend})
+    assert salida.returncode == 0, salida.stderr[-2000:]
+    assert salida.stdout.strip().splitlines()[-1] == "100.0 40.0 4400.0"

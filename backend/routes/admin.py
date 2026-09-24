@@ -19,7 +19,7 @@ from services import estado_de_la_cuenta
 from services import las_fotos
 from services import quien_es
 from services.ledger import create_closing_entries
-from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
+from services.money import ZERO, from_db, money_add, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveReiniciada,
                                        CuentaVetada, RolCambiado)
@@ -669,10 +669,16 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
     recharges = [t for t in all_transactions if t.get("type") == "recharge"]
     withdrawals = [t for t in all_transactions if t.get("type") in ["withdrawal", "send"]]
     
-    # Calculate stats
-    total_recharged = sum(t.get("amount_ris", 0) or t.get("amount_output", 0) for t in recharges if t.get("status") == "completed")
-    total_withdrawn = sum(t.get("amount_ris", 0) or t.get("amount_input", 0) for t in withdrawals if t.get("status") == "completed")
-    total_ves_sent = sum(t.get("amount_ves", 0) or t.get("amount_output", 0) for t in withdrawals if t.get("status") == "completed")
+    # Los totales, con la suma de la plata del proyecto. Con `sum()` a secas
+    # esto daba 500 para cualquier cliente con una operación completada cuyo
+    # monto estuviera guardado en Decimal128: `0 + Decimal128` no existe
+    # fuera de los tests. Los tests no lo veían porque `mongomock` necesita
+    # que se le enseñe aritmética a ese tipo (tests/conftest.py), y esa
+    # lección vale para todo el proceso de pruebas.
+    completadas = lambda filas: [t for t in filas if t.get("status") == "completed"]    # noqa: E731
+    total_recharged = to_float(money_add(*(t.get("amount_ris") or t.get("amount_output") for t in completadas(recharges))))
+    total_withdrawn = to_float(money_add(*(t.get("amount_ris") or t.get("amount_input") for t in completadas(withdrawals))))
+    total_ves_sent = to_float(money_add(*(t.get("amount_ves") or t.get("amount_output") for t in completadas(withdrawals))))
     
     # Get beneficiaries
     beneficiaries = await db.beneficiaries.find({"user_id": user_id}, {"_id": 0}).to_list(50)
