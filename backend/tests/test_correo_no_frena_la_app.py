@@ -73,7 +73,7 @@ def resend_falso(monkeypatch):
     doble = _ResendDeMentira()
     monkeypatch.setitem(sys.modules, "resend", doble)
     monkeypatch.setattr(correo, "RESEND_API_KEY", "re_de_mentira")
-    monkeypatch.setattr(correo, "REMITENTE", "RIS App <noreply@risappbr.com>")
+    monkeypatch.setattr(correo, "REMITENTE", "RISApp <noreply@risappbr.com>")
     return doble
 
 
@@ -132,7 +132,7 @@ def test_mientras_sale_un_correo_el_servidor_sigue_atendiendo(resend_falso):
 
 def test_el_remitente_es_uno_solo_y_sale_del_correo(resend_falso):
     corre(correo.enviar("quien@ejemplo.com", "Hola", "<p>Hola</p>"))
-    assert resend_falso.enviados[0]["from"] == "RIS App <noreply@risappbr.com>"
+    assert resend_falso.enviados[0]["from"] == "RISApp <noreply@risappbr.com>"
 
 
 def test_el_remitente_lleva_el_nombre_de_la_aplicacion(monkeypatch):
@@ -142,7 +142,7 @@ def test_el_remitente_lleva_el_nombre_de_la_aplicacion(monkeypatch):
     sustituido, esto pasaría igual con el armado roto.
     """
     monkeypatch.setattr(correo, "FROM_EMAIL", "noreply@risappbr.com")
-    assert correo._remitente() == "RIS App <noreply@risappbr.com>"
+    assert correo._remitente() == "RISApp <noreply@risappbr.com>"
 
 
 def test_si_ya_viene_con_nombre_no_se_le_pone_otro(monkeypatch):
@@ -155,7 +155,7 @@ def test_sin_FROM_EMAIL_se_usa_SENDER_EMAIL(monkeypatch):
     la vieja."""
     monkeypatch.setattr(correo, "FROM_EMAIL", "")
     monkeypatch.setenv("SENDER_EMAIL", "avisos@risappbr.com")
-    assert correo._remitente() == "RIS App <avisos@risappbr.com>"
+    assert correo._remitente() == "RISApp <avisos@risappbr.com>"
 
 
 def test_los_dos_servicios_de_correo_usan_la_misma_puerta(resend_falso):
@@ -168,7 +168,7 @@ def test_los_dos_servicios_de_correo_usan_la_misma_puerta(resend_falso):
     assert len(resend_falso.enviados) == 2, (
         f"Salieron {len(resend_falso.enviados)} de 2 correos.")
     remitentes = {e["from"] for e in resend_falso.enviados}
-    assert remitentes == {"RIS App <noreply@risappbr.com>"}, (
+    assert remitentes == {"RISApp <noreply@risappbr.com>"}, (
         f"Salieron desde {remitentes}.")
 
 
@@ -191,8 +191,8 @@ def test_sin_llave_no_se_intenta_y_queda_registrado(monkeypatch, caplog):
 
 
 @pytest.mark.parametrize("remitente", [
-    "RIS App <noreply@example.com>",
-    "RIS App <notificaciones@risapp.com>",
+    "RISApp <noreply@example.com>",
+    "RISApp <notificaciones@risapp.com>",
 ])
 def test_un_remitente_de_ejemplo_no_pasa(monkeypatch, caplog, remitente):
     """Los dos valores de ejemplo que traía el proyecto.
@@ -213,7 +213,7 @@ def test_un_remitente_de_ejemplo_no_pasa(monkeypatch, caplog, remitente):
 
 def test_bien_configurado_revisar_dice_que_si(monkeypatch, caplog):
     monkeypatch.setattr(correo, "RESEND_API_KEY", "re_de_mentira")
-    monkeypatch.setattr(correo, "REMITENTE", "RIS App <noreply@risappbr.com>")
+    monkeypatch.setattr(correo, "REMITENTE", "RISApp <noreply@risappbr.com>")
     with caplog.at_level(logging.INFO):
         assert correo.revisar()
 

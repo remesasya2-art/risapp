@@ -198,7 +198,7 @@ def limites_efectivos(transportistas, limites_propios=None) -> dict:
     peso maximo, el resultado no tiene peso maximo y el formulario no lo valida.
     Es preferible a inventar un techo que despues nadie puede explicar.
 
-    'limites_propios' son los del vehiculo de RIS App, que viven en la version de
+    'limites_propios' son los del vehiculo de RISApp, que viven en la version de
     tarifa. Entran en la interseccion como uno mas.
 
     Los transportistas DESACTIVADOS no restringen nada: un limite que sobrevive

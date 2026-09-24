@@ -2,7 +2,7 @@
  * Matrices.jsx — Los precios de referencia de cada tramo.
  *
  * QUE SON ESTOS NUMEROS Y QUE NO SON
- *   Es lo que cada transportista cobraría por SU tramo. RIS App no los cobra:
+ *   Es lo que cada transportista cobraría por SU tramo. RISApp no los cobra:
  *   los dos tramos los contrata y los paga el usuario por su cuenta, y estos
  *   montos se le muestran como ORIENTACIÓN. Ninguno entra en ningún total.
  *
@@ -82,7 +82,7 @@ export default function Matrices() {
         <h3 style={titulo}>Precios de referencia de cada tramo</h3>
         <p style={bajada}>
           Es lo que cada transportista cobraría por su tramo, y se le muestra al usuario como
-          orientación. <strong>RIS App no cobra nada de esto</strong>: esos dos tramos los
+          orientación. <strong>RISApp no cobra nada de esto</strong>: esos dos tramos los
           contrata y los paga él por su cuenta, y ninguno de estos números entra en ningún
           total.
         </p>

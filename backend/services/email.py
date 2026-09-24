@@ -89,10 +89,10 @@ async def send_staff_invitation_email(email: str, nombre: str, cargo: str,
     enlace = f"{FRONTEND_URL.rstrip('/')}/personal/activar?token={token}"
 
     salio = await correo.enviar(
-        email, "Activa tu acceso a RIS App",
+        email, "Activa tu acceso a RISApp",
         _cuerpo("Activa tu acceso", f"""
             <p>Hola {nombre},</p>
-            <p>Se creó tu perfil de <strong>{cargo}</strong> en RIS App.
+            <p>Se creó tu perfil de <strong>{cargo}</strong> en RISApp.
                Para entrar por primera vez tenés que configurar tu contraseña
                y activar la verificación en dos pasos.</p>
             <div style="text-align: center; margin: 28px 0;">

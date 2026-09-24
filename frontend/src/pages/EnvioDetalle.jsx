@@ -262,7 +262,7 @@ function Cobros({ envio }) {
   const cobros = envio.cobros || [];
   return (
     <div style={tarjeta}>
-      <h3 style={titulo}>Lo que cobra RIS App</h3>
+      <h3 style={titulo}>Lo que cobra RISApp</h3>
       <p style={bajada}>
         Solo el servicio: retiro en Pacaraima, repesaje y traslado hasta la oficina del
         transportista en Santa Elena. <strong>Los tramos de transporte no están acá</strong>:

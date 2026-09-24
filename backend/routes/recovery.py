@@ -120,7 +120,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
         try:
             await send_email(
                 to_email=data.email,
-                subject="🔐 RIS App - Código de Recuperación",
+                subject="🔐 RISApp - Código de Recuperación",
                 html_content=f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #6366f1;">Recuperación de Contraseña</h2>
@@ -281,7 +281,7 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
     try:
         await send_email(
             to_email=data.email,
-            subject="✅ RIS App - Contraseña Actualizada",
+            subject="✅ RISApp - Contraseña Actualizada",
             html_content=f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #16a34a;">Contraseña Actualizada</h2>
@@ -349,7 +349,7 @@ async def support_contact(data: SupportContactRequest, request: Request):
     try:
         await send_email(
             to_email=data.email,
-            subject="📩 RIS App - Solicitud de Soporte Recibida",
+            subject="📩 RISApp - Solicitud de Soporte Recibida",
             html_content=f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #6366f1;">Solicitud Recibida</h2>

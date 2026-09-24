@@ -56,7 +56,7 @@ from config import RESEND_API_KEY, FROM_EMAIL
 
 logger = logging.getLogger(__name__)
 
-APP = "RIS App"
+APP = "RISApp"
 
 # Los valores de ejemplo que trae el proyecto. Que quede uno de éstos puesto es
 # lo mismo que no haber configurado nada, y hay que decirlo igual de fuerte.

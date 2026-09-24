@@ -292,7 +292,7 @@ async def cambiar_cuenta(transportista_id: str, cambio: CambioDeCuenta,
         raise HTTPException(404, "Transportista no encontrado")
     if t.get("rol") != "venezuela":
         raise HTTPException(
-            400, "Solo el transportista de Venezuela cobra flete a través de RIS App.")
+            400, "Solo el transportista de Venezuela cobra flete a través de RISApp.")
 
     numero = cambio.cuenta.numero
     tipeado = cambio.confirmacion_numero.replace("-", "").replace(" ", "")
@@ -478,7 +478,7 @@ async def importar_agencias(transportista_id: str, archivo: UploadFile = File(..
         raise HTTPException(
             400,
             f"El archivo marca {len(marcadas)} filas como punto de entrega y solo puede "
-            f"haber una: es la única oficina donde RIS App deja los paquetes. Están en "
+            f"haber una: es la única oficina donde RISApp deja los paquetes. Están en "
             f"las líneas {muestra}{y_mas}. No se importó nada. Dejá la columna "
             f"`es_punto_entrega` en verdadero en una sola fila —o vacía en todas, y "
             f"marcala después desde el panel— y volvé a subirlo.")
@@ -1571,7 +1571,7 @@ async def cargar_flete(envio_id: str, datos: Flete,
     """Registra lo que el transportista de destino pidió por el tramo final.
 
     Lo carga el operador parado en el mostrador, porque hasta ese momento el
-    precio no existe: nadie puede cotizarlo antes. **No es un cobro de RIS App**
+    precio no existe: nadie puede cotizarlo antes. **No es un cobro de RISApp**
     — es el número que el usuario tiene que enviar como remesa.
     """
     try:

@@ -553,7 +553,7 @@ async def _nombre_de_transportista(base, transportista_id) -> str | None:
 
 async def entregar(operador, envio_id: str, *, guia: str, foto: bytes = None,
                    db=None, ahora=None) -> dict:
-    """Entregado en la oficina del transportista. El servicio de RIS App terminó.
+    """Entregado en la oficina del transportista. El servicio de RISApp terminó.
 
     La guía es obligatoria: es el único comprobante de que el paquete cambió de
     manos, y sin ella la única prueba de la entrega es la palabra del operador.
@@ -752,7 +752,7 @@ async def cargar_flete(operador, envio_id: str, *, monto, db=None, ahora=None) -
 
     Lo carga el operador que está parado en el mostrador, porque hasta ese
     momento el precio no existe: nadie puede cotizarlo antes. Y no es un cobro de
-    RIS App — es el número que el usuario tiene que enviar como remesa.
+    RISApp — es el número que el usuario tiene que enviar como remesa.
     """
     ahora = ahora or datetime.now(timezone.utc)
     base = await _db(db)

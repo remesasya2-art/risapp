@@ -5,7 +5,7 @@ ESTADO (PR G)
     Lectura, cotización, confirmación y el pago de una partida pendiente.
 
     Cotizar y confirmar NO mueven un centavo: el usuario paga el tramo 1
-    directamente al transportista de origen, y RIS App recién cobra cuando puede
+    directamente al transportista de origen, y RISApp recién cobra cuando puede
     verificar contra una medición ajena —el peso que figura en el comprobante de
     despacho—. La única ruta de este archivo que toca saldo es
     `/{envio_id}/cobros/{partida}/pagar`, y solo salda algo ya emitido.

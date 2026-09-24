@@ -4,7 +4,7 @@ services/envios_crear.py — Confirmar una cotizacion. NO cobra.
 QUE CAMBIO Y POR QUE IMPORTA
     En el diseno original, confirmar era cobrar: se debitaba el saldo y si no
     alcanzaba, el envio no se creaba. Ya no. El usuario paga el tramo 1
-    directamente al transportista de origen, y RIS App recien cobra cuando puede
+    directamente al transportista de origen, y RISApp recien cobra cuando puede
     verificar contra una medicion ajena: el peso que figura en el comprobante de
     despacho.
 

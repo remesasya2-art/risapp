@@ -16,7 +16,7 @@ QUE SE CUBRE
     2. Sin el costo del viaje no hay resultado, y se dice que falta.
     3. Pocas muestras o mucha dispersion no son un precio: se marcan.
     4. `observaciones()` no escribe una sola fila.
-    5. Lo observado no toca lo que RIS App factura.
+    5. Lo observado no toca lo que RISApp factura.
 """
 import asyncio
 import importlib.util

@@ -3,9 +3,9 @@ services/envios_tarifas.py — El motor de precios del modulo de traslado transf
 
 POR QUE EXISTE ESTE MODULO
     Un paquete no tiene un peso: tiene tres. El transportista de Brasil lo cubica
-    con su divisor, el de Venezuela con el suyo, y RIS App con el propio. La misma
+    con su divisor, el de Venezuela con el suyo, y RISApp con el propio. La misma
     caja "pesa" distinto en cada tramo, y solo uno de esos tres numeros decide un
-    cobro: el de RIS App. Los otros dos se muestran como orientacion y sirven para
+    cobro: el de RISApp. Los otros dos se muestran como orientacion y sirven para
     validar el formulario.
 
     Este modulo concentra ese calculo. Es PURO: no toca Mongo, no sale a la red,
@@ -101,7 +101,7 @@ def _activo(fila) -> bool:
 #   {"divisor": 5000, "escalon_kg": "0.5", "minimo_kg": "1.0",
 #    "umbral_cubado_kg": None}      # None = el cubado se aplica siempre
 #
-# La unica excepcion es la regla propia de RIS App, que vive dentro de la version
+# La unica excepcion es la regla propia de RISApp, que vive dentro de la version
 # de tarifa porque cambia junto con los precios y se versiona con ellos.
 
 def peso_volumetrico(largo_cm, ancho_cm, alto_cm, divisor) -> Decimal:
@@ -428,7 +428,7 @@ def _bloque(tarifa, clave_nueva, clave_vieja):
 
 def cotizar_servicio(tarifa, peso_real_kg, largo_cm, ancho_cm, alto_cm,
                      valor_declarado=0, bultos: int = 1, fecha=None) -> dict:
-    """El unico numero que RIS App cobra: retiro, repesaje y traslado.
+    """El unico numero que RISApp cobra: retiro, repesaje y traslado.
 
     NO recibe zona, ni destino, ni transportista, y eso es a proposito. El
     servicio termina siempre en el mismo mostrador de Santa Elena, asi que su

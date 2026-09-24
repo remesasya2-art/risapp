@@ -150,7 +150,7 @@ def test_la_lista_de_prohibidos_no_puede_quedar_vacia():
 
 
 def test_el_cep_del_punto_de_origen_tiene_ocho_digitos():
-    base = {"nombre": "Agencia", "razon_social": "RIS App LTDA",
+    base = {"nombre": "Agencia", "razon_social": "RISApp LTDA",
             "plantilla_direccion": "x" * 20}
     _, errores = cfg.validar("punto_origen", {**base, "cep": "1234"})
     assert errores
@@ -170,7 +170,7 @@ def test_el_codigo_de_transportista_tiene_forma_de_codigo():
 
 
 def test_el_rol_solo_puede_ser_brasil_o_venezuela():
-    """RIS App no es una fila de esta tabla: el tramo propio nunca se terceriza."""
+    """RISApp no es una fila de esta tabla: el tramo propio nunca se terceriza."""
     for malo in ("propio", "risapp", "origen", "destino"):
         with pytest.raises(Exception):
             Transportista(codigo="TRP-1111", nombre="Empresa", rol=malo,

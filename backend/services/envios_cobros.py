@@ -1,7 +1,7 @@
 """
 services/envios_cobros.py — El unico lugar del modulo que mueve plata.
 
-QUE COBRA RIS APP Y CUANDO
+QUE COBRA RISApp Y CUANDO
     Un solo servicio —retiro en Pacaraima, repesaje y traslado hasta la oficina
     del transportista en Santa Elena— en dos partidas:
 

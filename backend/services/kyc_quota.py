@@ -135,7 +135,7 @@ async def check_amount(db, user_doc: dict | None, monto_ris) -> str | None:
     if ops >= max_ops:
         return (
             f"Ya usaste las {max_ops} operaciones disponibles sin verificar tu cuenta. "
-            "Completá la verificación para seguir operando en RIS App."
+            "Completá la verificación para seguir operando en RISApp."
         )
     if ris + monto > max_ris:
         restante = max(max_ris - ris, Decimal("0"))
@@ -233,7 +233,7 @@ async def notify_if_exhausted(user_doc_despues: dict | None) -> bool:
     titulo = "Verificá tu cuenta para seguir operando"
     mensaje = (
         f"Alcanzaste el límite de {max_ops} operaciones o {max_ris:.0f} RIS "
-        "que permite una cuenta sin verificar. Completá la verificación para seguir usando RIS App."
+        "que permite una cuenta sin verificar. Completá la verificación para seguir usando RISApp."
     )
 
     try:

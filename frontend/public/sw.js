@@ -1,4 +1,4 @@
-// RIS App - Service Worker for Web Push Notifications
+// RISApp - Service Worker for Web Push Notifications
 // This file handles push notifications in the browser
 
 const CACHE_NAME = 'ris-app-v2';

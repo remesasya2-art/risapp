@@ -1,4 +1,4 @@
-# Políticas de RIS App
+# Políticas de RISApp
 
 ## 1. POLÍTICA DE PRIVACIDAD Y PROTECCIÓN DE DATOS
 
@@ -10,7 +10,7 @@ RIS ("nosotros", "nuestra" o "la Aplicación") se compromete a proteger la priva
 
 ### 1.2 CONTROLADOR DE DATOS
 
-**RIS App**
+**RISApp**
 - Responsable del tratamiento de datos personales
 - Contacto del Encarregado de Proteção de Dados (DPO): dpo@risapp.com
 
@@ -111,18 +111,18 @@ Implementamos medidas técnicas y organizativas para proteger sus datos:
 
 ### 2.1 ACEPTACIÓN DE LOS TÉRMINOS
 
-Al registrarse y utilizar RIS App, usted acepta estos Términos y Condiciones en su totalidad. Si no está de acuerdo, no debe utilizar nuestros servicios.
+Al registrarse y utilizar RISApp, usted acepta estos Términos y Condiciones en su totalidad. Si no está de acuerdo, no debe utilizar nuestros servicios.
 
 ### 2.2 DESCRIPCIÓN DEL SERVICIO
 
-RIS App es una plataforma que permite:
+RISApp es una plataforma que permite:
 - Recargar saldo en RIS (moneda interna) utilizando tarjetas de crédito/débito en Reales Brasileños (BRL)
 - Enviar transferencias a beneficiarios en Venezuela en Bolívares (VES)
 - Gestionar beneficiarios y ver historial de transacciones
 
 ### 2.3 REQUISITOS DE ELEGIBILIDAD
 
-Para utilizar RIS App, usted debe:
+Para utilizar RISApp, usted debe:
 - Ser mayor de 18 años
 - Residir legalmente en Brasil
 - Poseer CPF válido y activo
@@ -147,7 +147,7 @@ Usted se compromete a:
 
 ### 2.6 DECLARACIÓN DE ORIGEN DE FONDOS
 
-Al utilizar RIS App, usted declara bajo juramento que:
+Al utilizar RISApp, usted declara bajo juramento que:
 - Los fondos utilizados para recargas provienen de fuentes lícitas
 - Las tarjetas de crédito/débito utilizadas son de su titularidad
 - No está utilizando la plataforma para lavado de dinero u otras actividades ilícitas
@@ -176,7 +176,7 @@ Usted es responsable de:
 
 ### 2.10 LIMITACIÓN DE RESPONSABILIDAD
 
-RIS App no será responsable por:
+RISApp no será responsable por:
 - Errores en datos de beneficiarios proporcionados por el usuario
 - Retrasos causados por terceros (bancos, reguladores)
 - Fluctuaciones en la tasa de cambio después de confirmada la operación
@@ -204,7 +204,7 @@ Estos términos se rigen por las leyes de la República Federativa de Brasil. Cu
 
 ### 3.1 COMPROMISO
 
-RIS App está comprometida con la prevención del lavado de dinero y financiamiento del terrorismo, en cumplimiento con:
+RISApp está comprometida con la prevención del lavado de dinero y financiamiento del terrorismo, en cumplimiento con:
 - Lei N° 9.613/1998 (Lavado de Dinero)
 - Circular BACEN N° 3.978/2020
 - Normas del COAF

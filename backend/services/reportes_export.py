@@ -83,7 +83,7 @@ def _encabezado(reporte: dict, pedido_por: str) -> list:
     huso = f"UTC{signo}{abs(tz) // 60:02d}:{abs(tz) % 60:02d}"
 
     lineas = [
-        ["RIS App — Reporte de operaciones"],
+        ["RISApp — Reporte de operaciones"],
         ["Periodo", f"{criterios.get('desde')} a {criterios.get('hasta')}"],
         # El huso NO es cosmético: define dónde corta el día. Dos reportes del
         # mismo periodo en husos distintos no cuadran, y sin esta línea nadie

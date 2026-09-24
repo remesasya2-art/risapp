@@ -1,7 +1,7 @@
 """
 centro_gestion.py - Servicio de registro administrativo para CentroGestionCont-Byte
 
-Registra cada transaccion ejecutada en RisApp en la coleccion 'centro_gestion_log'
+Registra cada transaccion ejecutada en RISApp en la coleccion 'centro_gestion_log'
 para consulta y auditoria por parte de centrogestioncont-byte.
 
 Tipos de eventos registrados:

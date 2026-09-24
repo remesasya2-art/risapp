@@ -134,7 +134,7 @@ PUNTO_ORIGEN = {
     "setting_id": "envios_punto_origen",
     "nombre": "Agencia Centro", "cep": "69350000", "ciudad": "Pacaraima", "uf": "RR",
     "modalidad": "caixa_postal", "caixa_postal": "123", "direccion": None,
-    "razon_social": "RIS App LTDA",
+    "razon_social": "RISApp LTDA",
     "plantilla_direccion": "{razon_social}\n{retirador_nombre}\n{agencia_linea}",
     "retirador_activo_id": "col_1",
 }

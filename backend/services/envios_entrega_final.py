@@ -8,7 +8,7 @@ EL PROBLEMA QUE RESUELVE
     familiar tiene la caja en la mano, y eso pasa dias despues, en un mostrador
     al que no tenemos acceso.
 
-    El equipo de RIS App SI lo averigua: entra a la pagina del transportista,
+    El equipo de RISApp SI lo averigua: entra a la pagina del transportista,
     ve que la guia figura retirada y por quien. Hasta ahora esa informacion se
     quedaba en la cabeza de quien la miro. Aca se registra y se le avisa.
 
@@ -17,7 +17,7 @@ ESTO NO ES UN ESTADO NUEVO, Y ES A PROPOSITO
     Estaria mal por dos motivos:
 
     1. **No lo movimos nosotros.** Un estado del envio dice donde lo pusimos.
-       Esto es una OBSERVACION de tercero: alguien de RIS App leyo una pagina
+       Esto es una OBSERVACION de tercero: alguien de RISApp leyo una pagina
        web. Si manana el transportista corrige su propia pagina, lo que cambia
        es lo que observamos, no lo que hicimos.
 

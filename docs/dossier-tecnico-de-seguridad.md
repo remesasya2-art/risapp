@@ -1,4 +1,4 @@
-# Dossier técnico de seguridad — RIS App
+# Dossier técnico de seguridad — RISApp
 
 **Operador:** SAIPHA Servicios Digitais
 **Plataforma:** risappbr.com
@@ -49,7 +49,7 @@ La identificación completa está publicada en el documento legal del sitio
 
 ## 2. Qué es la plataforma, en una página
 
-RIS App es una plataforma de **soluciones digitales** que opera entre Brasil y
+RISApp es una plataforma de **soluciones digitales** que opera entre Brasil y
 Venezuela. Sus funciones principales:
 
 - **Cuenta y saldo del usuario**, con verificación de identidad (KYC) escalonada.

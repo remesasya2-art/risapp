@@ -59,7 +59,7 @@ def _huso(tz_min: int) -> str:
 
 def _encabezado(resumen: dict, pedido_por: str) -> list:
     lineas = [
-        ["RIS App — Balance de comprobación"],
+        ["RISApp — Balance de comprobación"],
         ["Periodo", f"{resumen.get('desde')} a {resumen.get('hasta')}"],
         ["Huso horario del corte", _huso(resumen.get("tz_min"))],
         ["Generado", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")],

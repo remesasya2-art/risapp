@@ -399,7 +399,7 @@ TARIFA = {
 PUNTO_ORIGEN = {
     "nombre": "Agencia Centro", "cep": "69355000", "ciudad": "Pacaraima", "uf": "RR",
     "modalidad": "caixa_postal", "caixa_postal": "123", "direccion": None,
-    "razon_social": "RIS App LTDA",
+    "razon_social": "RISApp LTDA",
     "plantilla_direccion": ("{razon_social}\nA/C {retirador_nombre}\n{linea_agencia}\n"
                            "{ciudad} - {uf}\nCEP {cep}"),
 }
@@ -445,7 +445,7 @@ AGENCIA = {"codigo": "001", "nombre": "Santa Elena Centro", "estado": "Bolívar"
 # cargan de verdad: no hay contrato ni API con ningún transportista—.
 #
 # El precio del tramo venezolano está puesto EXACTAMENTE igual al total que
-# cobra RIS App (112.00) y no por casualidad: es el único valor con el que
+# cobra RISApp (112.00) y no por casualidad: es el único valor con el que
 # «la referencia no entra en el total» se puede probar de verdad. Con cualquier
 # otro número, un sistema que sumara la referencia daría un total distinto por
 # accidente y el test pasaría sin haber mirado nada.
@@ -603,7 +603,7 @@ def test_05_cotizar_no_mueve_un_centavo_y_separa_lo_que_cobra_ris_app():
     ESTADO["terminos"] = datos["terminos_version"]
     ESTADO["total_estimado"] = datos["a_pagar_en_risapp"]["total_estimado_ris"]
 
-    # LA REGLA QUE MAS IMPORTA: lo que cobra RIS App va en su bloque, y las
+    # LA REGLA QUE MAS IMPORTA: lo que cobra RISApp va en su bloque, y las
     # referencias en otro. Ninguna referencia entra en el total.
     #
     # Y se prueba como EXCLUSION DE LA SUMA, no comparando números. La versión
@@ -617,7 +617,7 @@ def test_05_cotizar_no_mueve_un_centavo_y_separa_lo_que_cobra_ris_app():
     # lo trae, porque con el subtotal a la vista el margen es una resta.
     guardado = corre(DB.envios.find_one({"envio_id": datos["envio_id"]}))["cotizacion"]
     assert total == Decimal(guardado["subtotal_ris"]) + Decimal(guardado["margen_ris"]), (
-        "el total lleva algo que no es el servicio de RIS App")
+        "el total lleva algo que no es el servicio de RISApp")
     assert set(bloque) == {"concepto", "total_estimado_ris"}, (
         f"el cliente no ve el desglose, y menos el margen: {sorted(bloque)}")
 
@@ -631,7 +631,7 @@ def test_05_cotizar_no_mueve_un_centavo_y_separa_lo_que_cobra_ris_app():
     assert total == Decimal("112.00")
     assert datos["es_estimado"] is True
     assert datos["aviso_estimado"], "el aviso del estimado va siempre, sin condición"
-    assert datos["retiro"]["texto_copiable"].startswith("RIS App LTDA")
+    assert datos["retiro"]["texto_copiable"].startswith("RISApp LTDA")
     assert "Ana Pérez" in datos["retiro"]["texto_copiable"]
 
     # Y la respuesta serializa: un Decimal128 suelto acá tumba la ruta entera.

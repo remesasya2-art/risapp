@@ -20,7 +20,7 @@ from models.reglas_publicas import LaTasa, RaizDeLaApi
 @router.get("/", response_model=RaizDeLaApi)
 async def root():
     """Root endpoint"""
-    return {"message": "RIS App API", "version": "2.0.0"}
+    return {"message": "RISApp API", "version": "2.0.0"}
 
 class PingDeVida(BaseModel):
     status: str

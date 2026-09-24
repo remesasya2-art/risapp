@@ -2,13 +2,13 @@
 La cotizacion: un precio, dos orientaciones, y ni un centavo movido.
 
 CONTEXTO
-    RIS App cobra UN solo servicio: retirar el paquete en Pacaraima, repesarlo y
+    RISApp cobra UN solo servicio: retirar el paquete en Pacaraima, repesarlo y
     llevarlo hasta la oficina del transportista en Santa Elena. Los dos tramos
     de transporte —Brasil hasta la frontera, Venezuela desde Santa Elena— los
     contrata y los paga el usuario por su cuenta.
 
 EL RIESGO QUE ORGANIZA ESTE ARCHIVO
-    Que el usuario crea que pagando en RIS App ya cubrio el envio entero. No se
+    Que el usuario crea que pagando en RISApp ya cubrio el envio entero. No se
     arregla con soporte: se arregla en la forma de la respuesta. Por eso hay
     tests que verifican que NINGUNA referencia entra en el total, que el aviso
     esta siempre, y que el bloque de lo que se paga adentro esta separado del de
@@ -182,7 +182,7 @@ MATRIZ = [
 PUNTO = {"setting_id": "envios_punto_origen",
          "nombre": "AC Pacaraima", "cep": "69355000", "ciudad": "Pacaraima", "uf": "RR",
          "modalidad": "caixa_postal", "caixa_postal": "123", "direccion": None,
-         "razon_social": "RIS App LTDA",
+         "razon_social": "RISApp LTDA",
          "plantilla_direccion": ret.PLANTILLA_POR_DEFECTO,
          "retirador_activo_id": "col_aaaa1111"}
 
@@ -277,7 +277,7 @@ def test_cada_transportista_factura_un_peso_distinto_y_se_ve():
 def test_ninguna_referencia_entra_en_el_total():
     """LA INVARIANTE. Son dos contratos distintos, con dos empresas distintas, en
     dos monedas distintas. Un número que los sume parece un total y no lo es, y
-    ese número terminaría algún día al lado del que RIS App sí cobra."""
+    ese número terminaría algún día al lado del que RISApp sí cobra."""
     r = corre(cot.cotizar(_Usuario(), pedido(), db=db_completa(), ahora=AHORA))
 
     total = Decimal(r["a_pagar_en_risapp"]["total_estimado_ris"])
@@ -315,7 +315,7 @@ def test_las_referencias_no_se_guardan_como_si_fueran_un_precio():
 # ─── 3. Lo que falta no puede romper ──────────────────────────────────────
 
 def test_sin_ninguna_matriz_la_cotizacion_se_completa_igual():
-    """El precio que RIS App cobra no depende de ninguna orientación."""
+    """El precio que RISApp cobra no depende de ninguna orientación."""
     r = corre(cot.cotizar(_Usuario(), pedido(),
                           db=db_completa(matrices_referencia=[]), ahora=AHORA))
     assert Decimal(r["a_pagar_en_risapp"]["total_estimado_ris"]) > 0
@@ -551,7 +551,7 @@ def test_la_banda_de_variacion_sale_en_porcentaje():
 
 def test_al_usuario_le_llega_la_direccion_lista_para_copiar():
     r = corre(cot.cotizar(_Usuario(), pedido(), db=db_completa(), ahora=AHORA))
-    assert r["retiro"]["texto_copiable"].startswith("RIS App LTDA\nA/C María Gómez")
+    assert r["retiro"]["texto_copiable"].startswith("RISApp LTDA\nA/C María Gómez")
     assert r["retiro"]["cep"] == "69355-000"
 
 

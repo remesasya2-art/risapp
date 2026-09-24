@@ -2,7 +2,7 @@
 models/envios_cotizacion.py — Lo que el formulario manda para cotizar.
 
 UN SOLO FORMULARIO ALIMENTA TRES COTIZACIONES
-    La del servicio que RIS App cobra, y las dos ORIENTATIVAS de los
+    La del servicio que RISApp cobra, y las dos ORIENTATIVAS de los
     transportistas que el usuario contrata por su cuenta. El usuario carga los
     datos una vez.
 
@@ -62,7 +62,7 @@ class Origen(_Base):
     # La UF es la clave con la que se busca la orientación del tramo 1. Es
     # opcional a proposito: sin ella la referencia vuelve como "sin_clave" y la
     # cotizacion se completa igual. Una orientacion ausente no puede impedir
-    # cotizar el servicio, que es lo unico que RIS App cobra.
+    # cotizar el servicio, que es lo unico que RISApp cobra.
     uf: Optional[str] = Field(default=None, min_length=2, max_length=2)
 
     @field_validator("cep")
@@ -143,7 +143,7 @@ class PedidoDeCotizacion(_Base):
     origen: Origen
     destino: Destino
     paquete: Paquete
-    # Como se paga el tramo 3 (§4.6). "destino": lo paga quien recibe y RIS App
+    # Como se paga el tramo 3 (§4.6). "destino": lo paga quien recibe y RISApp
     # no toca esa plata. "prepago": lo paga el usuario, por el mismo camino de
     # remesas que ya existe, como FONDOS DE TERCEROS y nunca como ingreso.
     #

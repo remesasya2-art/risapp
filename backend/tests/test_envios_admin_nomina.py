@@ -166,7 +166,7 @@ MARIA = {"colaborador_id": "col_aaaa1111", "nombre": "María Gómez",
 PUNTO = {"setting_id": "envios_punto_origen",
          "nombre": "AC Pacaraima", "cep": "69355000", "ciudad": "Pacaraima", "uf": "RR",
          "modalidad": "caixa_postal", "caixa_postal": "123", "direccion": None,
-         "razon_social": "RIS App LTDA",
+         "razon_social": "RISApp LTDA",
          "plantilla_direccion": ret.PLANTILLA_POR_DEFECTO,
          "retirador_activo_id": "col_aaaa1111"}
 
@@ -240,7 +240,7 @@ def test_el_listado_no_baja_el_bloque_de_configuracion_crudo():
     inconsistencia que después se cita como precedente."""
     r = corre(ra.ver_retiro(admin=_Admin()))
     assert "punto_origen" not in r
-    assert r["vista_previa"]["destinatario"] == "RIS App LTDA - A/C María Gómez"
+    assert r["vista_previa"]["destinatario"] == "RISApp LTDA - A/C María Gómez"
 
 
 def test_el_cpf_no_llega_al_log_de_auditoria():
@@ -361,7 +361,7 @@ def test_designar_devuelve_la_vista_previa_ya_renderizada():
     r = corre(ra.designar_retirador(ra.Designacion(colaborador_id="col_aaaa1111"),
                                     admin=_Admin()))
     assert r["de_turno"] == "María Gómez"
-    assert r["vista_previa"]["texto_copiable"].startswith("RIS App LTDA\nA/C María Gómez")
+    assert r["vista_previa"]["texto_copiable"].startswith("RISApp LTDA\nA/C María Gómez")
 
 
 def test_una_clave_desconocida_en_el_bloque_guardado_no_bloquea_designar():

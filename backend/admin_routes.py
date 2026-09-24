@@ -1,4 +1,4 @@
-# Admin Panel Routes for RIS App
+# Admin Panel Routes for RISApp
 # This module contains all admin-related endpoints for the RIS application
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Header

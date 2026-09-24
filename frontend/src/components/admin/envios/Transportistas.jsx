@@ -7,7 +7,7 @@
  *   auditoría lo referencian, y renombrarlo rompe la trazabilidad hacia atrás sin
  *   avisar a nadie.
  *
- * LOS DOS TRAMOS NO LOS COBRA RIS APP
+ * LOS DOS TRAMOS NO LOS COBRA RISApp
  *   Estos transportistas los contrata y los paga el usuario. Lo que se carga acá
  *   —reglas de cubaje, límites— sirve para MOSTRARLE una orientación y para saber
  *   qué paquete no entra. Ninguna de estas cifras entra en ningún total.
@@ -118,7 +118,7 @@ export default function Transportistas() {
         El de <strong>Brasil</strong> lleva el paquete hasta Pacaraima; el de{' '}
         <strong>Venezuela</strong>, desde Santa Elena hasta el destino. Los dos los contrata y
         los paga el usuario: lo que cargues acá sirve para orientarlo y para saber qué paquete
-        no entra, y no entra en ningún total que RIS App cobre.
+        no entra, y no entra en ningún total que RISApp cobre.
       </Aviso>
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -652,7 +652,7 @@ function Agencias({ transportista }) {
         no aborta la importación, y el informe dice cuáles fallaron y por qué.
         {transportista.rol === 'venezuela' ? (
           <> Exactamente una tiene que estar marcada como <strong>punto de entrega</strong>: es
-          la oficina de Santa Elena donde RIS App deja los paquetes, y sin ella el traslado no
+          la oficina de Santa Elena donde RISApp deja los paquetes, y sin ella el traslado no
           sabe dónde termina.</>
         ) : null}
       </p>

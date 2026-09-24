@@ -2,7 +2,7 @@
  * EnvioNuevo.jsx — Cotizar y confirmar un envío.
  *
  * LO QUE ESTA PANTALLA TIENE QUE DEJAR CLARISIMO
- *   RIS App cobra UN SOLO servicio: retiro en Pacaraima, repesaje y traslado
+ *   RISApp cobra UN SOLO servicio: retiro en Pacaraima, repesaje y traslado
  *   hasta la oficina del transportista en Santa Elena. Los dos tramos de
  *   transporte los contrata y los paga el usuario, y lo que se le muestra de
  *   esos dos es ORIENTATIVO.
@@ -271,7 +271,7 @@ export default function EnvioNuevo() {
         <h3 style={titulo}>Desde dónde despachás</h3>
         <p style={bajada}>
           Tu ciudad en Brasil. Sirve para estimar lo que te va a cobrar el transportista
-          hasta Pacaraima — un monto que <strong>no cobra RIS App</strong>.
+          hasta Pacaraima — un monto que <strong>no cobra RISApp</strong>.
         </p>
         <Origen catalogo={catalogo} datos={datos.origen} problemas={problemas}
           onCambio={(origen) => setDatos((d) => ({ ...d, origen }))} />
@@ -287,7 +287,7 @@ export default function EnvioNuevo() {
         ) : null}
         <div style={grilla('200px')}>
           <Campo etiqueta="Transportista en Venezuela"
-            ayuda="Lo contratás y lo pagás vos. RIS App deja el paquete en su oficina de Santa Elena.">
+            ayuda="Lo contratás y lo pagás vos. RISApp deja el paquete en su oficina de Santa Elena.">
             <Seleccion value={datos.destino.transportista_id}
               onChange={(e) => setDatos((d) => ({
                 ...d,
@@ -351,11 +351,11 @@ export default function EnvioNuevo() {
       <div style={tarjeta}>
         <h3 style={titulo}>El tramo final, hasta el domicilio</h3>
         <p style={bajada}>
-          Lo cobra el transportista de Venezuela, <strong>no RIS App</strong>. Elegí quién lo
+          Lo cobra el transportista de Venezuela, <strong>no RISApp</strong>. Elegí quién lo
           paga — no cambia ni un centavo de lo que cotizamos acá.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {[['destino', 'Lo paga quien recibe', 'Al retirar en la agencia. RIS App no toca esa plata.'],
+          {[['destino', 'Lo paga quien recibe', 'Al retirar en la agencia. RISApp no toca esa plata.'],
             ['prepago', 'Lo pago yo', 'Se lo mandás como remesa cuando el operador te diga el monto — recién se sabe en el mostrador.']]
             .map(([valor, etiqueta, ayuda]) => (
               <label key={valor} style={{ display: 'flex', gap: '10px', cursor: 'pointer',
@@ -565,7 +565,7 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
         border: 'none', color: '#fff' }}>
         <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em',
           textTransform: 'uppercase', opacity: 0.85 }}>
-          {pago.concepto || 'El servicio de RIS App'}
+          {pago.concepto || 'El servicio de RISApp'}
         </p>
         <p style={{ margin: '6px 0 0 0', fontSize: '34px', fontWeight: 800,
           fontVariantNumeric: 'tabular-nums' }}>
@@ -589,7 +589,7 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
       <div style={tarjeta}>
         <h3 style={titulo}>Lo que vas a pagar por fuera</h3>
         <p style={bajada}>
-          Estos <strong>no los cobra RIS App</strong> y no están sumados arriba: los contratás
+          Estos <strong>no los cobra RISApp</strong> y no están sumados arriba: los contratás
           y los pagás vos. Los montos son una orientación para que sepas con qué contar.
         </p>
         {(cotizacion.referencias || []).length === 0 ? (

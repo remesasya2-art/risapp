@@ -148,7 +148,7 @@ MINUTOS_DE_LA_RESERVA = 15
 # medio confirmar, tiene que ir a su correo. Un mensaje único mandaría a la
 # mitad de la gente al lugar equivocado.
 _YA_TIENE_CUENTA = (
-    "Ese CPF ya tiene una cuenta en RIS App. Iniciá sesión con ella, o "
+    "Ese CPF ya tiene una cuenta en RISApp. Iniciá sesión con ella, o "
     "recuperá tu contraseña si no la recordás.")
 
 _TOMADO_HACE_UN_RATO = (
@@ -593,7 +593,7 @@ async def atar(db, user_id: str, valor) -> str:
     if await ya_es_de_otra_cuenta(db, n, salvo=user_id):
         raise CpfEnUso(
             "Ese CPF ya está registrado en otra cuenta. Un CPF puede tener una "
-            "sola cuenta en RIS App.")
+            "sola cuenta en RISApp.")
 
     # El anclaje va ANTES de escribir la cuenta, porque es lo único atómico de
     # los dos. Si algo sale mal después, se suelta más abajo.
@@ -615,7 +615,7 @@ async def atar(db, user_id: str, valor) -> str:
         logger.warning("dos cuentas intentaron atar el mismo CPF a la vez")
         raise CpfEnUso(
             "Ese CPF ya está registrado en otra cuenta. Un CPF puede tener una "
-            "sola cuenta en RIS App.")
+            "sola cuenta en RISApp.")
 
     if getattr(resultado, "modified_count", 0) == 1:
         return n

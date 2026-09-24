@@ -466,7 +466,7 @@ function Entregar({ envio, onListo }) {
     <div>
       <h4 style={titulo}><PackageCheck size={16} /> Entrega en la oficina del transportista</h4>
       <p style={bajada}>
-        Acá termina el servicio de RIS App. La guía es obligatoria: sin ella, la única prueba
+        Acá termina el servicio de RISApp. La guía es obligatoria: sin ella, la única prueba
         de la entrega es la palabra del operador.
       </p>
       {fleteTrabado ? (
@@ -546,7 +546,7 @@ function Flete({ envio, onListo }) {
           <h4 style={titulo}><Send size={16} /> El flete del tramo final</h4>
           <p style={bajada}>
             Lo que el transportista de destino pide por llevar el paquete hasta el domicilio.
-            <strong> No es un cobro de RIS App</strong>: es el número que el usuario tiene que
+            <strong> No es un cobro de RISApp</strong>: es el número que el usuario tiene que
             mandar como remesa, y hasta que el operador está en el mostrador no existe —
             nadie puede cotizarlo antes.
           </p>

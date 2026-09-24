@@ -280,7 +280,7 @@ def envio(i=1, **cambios):
         "destino_brasil": {"retirador_nombre": "María Gómez",
                            "retirador_id": "col_aaaa1111",
                            "retirador_motivo": "designado",
-                           "texto_copiable": "RIS App LTDA\nA/C María Gómez"},
+                           "texto_copiable": "RISApp LTDA\nA/C María Gómez"},
         "destino": {"ciudad": "Caracas", "estado_ve": "Miranda",
                     "agencia_nombre": "Centro",
                     "destinatario": {"nombre": "Ana Pérez", "documento": "V-1",
