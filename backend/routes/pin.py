@@ -18,6 +18,7 @@ from services.notifications import create_notification
 
 logger = logging.getLogger(__name__)
 from models.cuenta import EstadoDelPin
+from models.acciones_de_seguridad import MiResultado, MiSugerenciaDePin
 router = APIRouter(prefix="/pin", tags=["pin"])
 
 SEVERE_ATTEMPTS = 9  # invalida el PIN y obliga a restablecerlo desde el perfil
@@ -76,7 +77,7 @@ async def pin_status(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.post("/set")
+@router.post("/set", response_model=MiResultado, response_model_exclude_unset=True)
 async def pin_set(data: PinSetRequest, current_user: User = Depends(get_verified_user)):
     """Crea, cambia o restablece el PIN. Requiere la contraseña de la cuenta
     (re-autenticación). Sirve también como restablecimiento desde el perfil."""
@@ -111,7 +112,7 @@ async def pin_set(data: PinSetRequest, current_user: User = Depends(get_verified
     return {"success": True, "message": "PIN configurado correctamente"}
 
 
-@router.post("/verify")
+@router.post("/verify", response_model=MiResultado, response_model_exclude_unset=True)
 async def pin_verify(data: PinVerifyRequest, current_user: User = Depends(get_verified_user)):
     """Verifica el PIN para confirmar una operación. Bloqueo escalonado:
     3 fallos → 15 min, 6 → 1 h, 9 → 24 h + invalidación (restablecer)."""
@@ -169,7 +170,7 @@ async def pin_verify(data: PinVerifyRequest, current_user: User = Depends(get_ve
     raise HTTPException(status_code=401, detail="PIN incorrecto")
 
 
-@router.post("/hint-check")
+@router.post("/hint-check", response_model=MiSugerenciaDePin, response_model_exclude_unset=True)
 async def pin_hint_check(current_user: User = Depends(get_verified_user)):
     """Tras un envío: decide si mostrar el aviso suave para configurar el PIN.
 
@@ -200,7 +201,7 @@ async def pin_hint_check(current_user: User = Depends(get_verified_user)):
     return {"hint": True, "message": msg}
 
 
-@router.post("/disable")
+@router.post("/disable", response_model=MiResultado, response_model_exclude_unset=True)
 async def pin_disable(data: PinDisableRequest, current_user: User = Depends(get_verified_user)):
     """Desactiva el PIN. Requiere la contraseña de la cuenta."""
     doc = await _get_user_doc(current_user.user_id)

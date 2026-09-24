@@ -14,6 +14,8 @@ from services import codigos
 from services import registro
 from services import sesiones
 from services.email_notifications import send_email
+from models.acciones_de_seguridad import (MiCodigoDeRecuperacionComprobado, MiIdentidadComprobada,
+                                         MiPedidoDeAyuda, MiResultado)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recovery", tags=["recovery"])
@@ -45,7 +47,7 @@ class SupportContactRequest(BaseModel):
     message: str  # Max 200 characters
 
 
-@router.post("/verify-identity")
+@router.post("/verify-identity", response_model=MiIdentidadComprobada, response_model_exclude_unset=True)
 async def verify_identity(data: VerifyIdentityRequest, request: Request):
     """Step 1: Verify user identity with personal data"""
     from routes.security_2fa import frenar
@@ -147,7 +149,7 @@ async def verify_identity(data: VerifyIdentityRequest, request: Request):
     return await _do_verify(request, data)
 
 
-@router.post("/verify-code")
+@router.post("/verify-code", response_model=MiCodigoDeRecuperacionComprobado, response_model_exclude_unset=True)
 async def verify_code(data: VerifyCodeRequest, request: Request):
     """Step 2: Verify the code sent to email"""
     from routes.security_2fa import frenar
@@ -209,7 +211,7 @@ async def verify_code(data: VerifyCodeRequest, request: Request):
     }
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=MiResultado, response_model_exclude_unset=True)
 async def reset_password(data: ResetPasswordRequest, request: Request):
     """Step 3: Set new password"""
     from routes.security_2fa import frenar
@@ -302,7 +304,7 @@ async def reset_password(data: ResetPasswordRequest, request: Request):
     }
 
 
-@router.post("/support-contact")
+@router.post("/support-contact", response_model=MiPedidoDeAyuda, response_model_exclude_unset=True)
 async def support_contact(data: SupportContactRequest, request: Request):
     """Send support contact request"""
     from routes.security_2fa import frenar
