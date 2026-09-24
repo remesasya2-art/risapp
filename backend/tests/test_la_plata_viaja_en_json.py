@@ -318,3 +318,25 @@ def test_UN_MONTO_CRUDO_DE_LA_BASE_PASA_POR_UN_CONTRATO_Y_SALE_COMO_NUMERO():
     r = TestClient(app, raise_server_exceptions=False).get("/monto")
     assert r.status_code == 200, r.text
     assert r.json() == {"reales": 1234.56, "cripto": 0.00123456}
+
+
+def test_UN_DECIMAL_DE_PYTHON_PASA_POR_UN_CONTRATO_Y_SALE_COMO_NUMERO_IGUAL_QUE_SIN_CONTRATO():
+    """Sin contrato FastAPI manda el `Decimal` como número; con contrato salía
+    como texto («"12.50"»), y una pantalla que suma un texto concatena."""
+    from decimal import Decimal as D
+    from pydantic import create_model
+    from models.escalar import Escalar
+
+    Monto = create_model("MontoDecimal", reales=(Escalar, None), entero=(Escalar, None))
+    app = FastAPI()
+
+    @app.get("/con", response_model=Monto)
+    def con():
+        return {"reales": D("12.50"), "entero": D("3")}
+
+    @app.get("/sin")
+    def sin():
+        return {"reales": D("12.50"), "entero": D("3")}
+
+    c = TestClient(app)
+    assert c.get("/con").json() == c.get("/sin").json() == {"reales": 12.5, "entero": 3}
