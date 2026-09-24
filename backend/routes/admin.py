@@ -21,6 +21,8 @@ from services import quien_es
 from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
+from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveReiniciada,
+                                       CuentaVetada, RolCambiado)
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
@@ -711,7 +713,7 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
         "beneficiaries": beneficiaries
     }
 
-@router.post("/change-role")
+@router.post("/change-role", response_model=RolCambiado, response_model_exclude_unset=True)
 async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get_super_admin)):
     """Change user role"""
     user = await db.users.find_one({"user_id": request.user_id})
@@ -756,7 +758,7 @@ async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get
 class SetAgentRequest(BaseModel):
     is_agent: bool
 
-@router.post("/users/{user_id}/set-agent")
+@router.post("/users/{user_id}/set-agent", response_model=AgenteAsignado, response_model_exclude_unset=True)
 async def set_user_agent(user_id: str, data: SetAgentRequest, admin: User = Depends(get_super_admin)):
     """Promueve a un usuario a agente de soporte, o le quita el rol (solo super admin)."""
     target = await db.users.find_one({"user_id": user_id})
@@ -772,7 +774,7 @@ async def set_user_agent(user_id: str, data: SetAgentRequest, admin: User = Depe
     logger.info(f"User {user_id} agent role set to {data.is_agent} by {admin.user_id}")
     return {"success": True, "role": new_role}
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=ClaveReiniciada, response_model_exclude_unset=True)
 async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User = Depends(get_super_admin)):
     """Admin reset user password"""
     user = await db.users.find_one({"user_id": request.user_id})
@@ -883,7 +885,7 @@ async def get_all_withdrawals(
     pagina["counters"] = await retiros.contadores(db)
     return pagina
 
-@router.post("/withdrawals/process")
+@router.post("/withdrawals/process", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def process_withdrawal(
     request: dict,
     peticion: Request,
@@ -2664,7 +2666,7 @@ async def get_pending_verifications(admin: User = Depends(get_super_admin)):
     return result
 
 
-@router.post("/verifications/decide")
+@router.post("/verifications/decide", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def decide_verification(
     request: dict,
     peticion: Request,
@@ -2757,7 +2759,7 @@ async def decide_verification(
 
 
 # Keep old endpoint for backward compatibility
-@router.post("/verifications/process")
+@router.post("/verifications/process", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def process_verification(user_id: str, action: str, reason: str = None, admin: User = Depends(get_super_admin)):
     """Process KYC verification (legacy endpoint)"""
     user = await db.users.find_one({"user_id": user_id})
@@ -2979,7 +2981,7 @@ async def get_agent_ratings(admin: User = Depends(get_super_admin)):
 
 
 
-@router.post("/users/{user_id}/suspend")
+@router.post("/users/{user_id}/suspend", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def suspend_user(user_id: str, data: dict, peticion: Request,
                        admin: User = Depends(get_super_admin)):
     """Suspend or reactivate a user"""
@@ -3009,7 +3011,7 @@ async def suspend_user(user_id: str, data: dict, peticion: Request,
     return {"message": f"Usuario {action} exitosamente"}
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def delete_user(user_id: str, admin: User = Depends(get_super_admin)):
     """Borrado lógico: conserva el historial para auditoría y libera el correo.
 
@@ -3132,7 +3134,7 @@ class BanUserRequest(BaseModel):
     scope: str = "full"   # "email" | "full"
     reason: str = ""
 
-@router.post("/ban")
+@router.post("/ban", response_model=CuentaVetada, response_model_exclude_unset=True)
 async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_crm_user)):
     """Banea a un usuario a partir de su verificación.
 
