@@ -67,7 +67,8 @@ from models.acciones_de_dinero import (
     MiRecargaVes,
     MiRetiroPedido,
 )
-from models.acciones_del_cliente import MiBeneficiarioCreado, MiBeneficiarioEliminado
+from models.acciones_del_cliente import (MiBeneficiarioCreado, MiBeneficiarioEliminado,
+                                        MiBeneficiarioEnBrasilCreado)
 router = APIRouter(tags=["transactions"])
 
 # ============== ENVIO CRIPTO: PAGOS INCOMPLETOS (3 NIVELES) ==============
@@ -261,7 +262,12 @@ async def create_beneficiary(request: BeneficiaryCreate, current_user: User = De
 
     await db.beneficiaries.insert_one(beneficiary)
 
-    return {"message": "Beneficiario creado", "beneficiary_id": beneficiary_id}
+    # El beneficiario va entero, igual que sale en la lista. Antes volvía sólo
+    # el identificador, y la pantalla de envío tomaba ESTA respuesta como el
+    # beneficiario elegido: la confirmación —justo el paso que dice «revisá el
+    # nombre y los datos»— salía con un «?» y sin banco, cédula ni teléfono.
+    return {"message": "Beneficiario creado", "beneficiary_id": beneficiary_id,
+            "beneficiario": _como_se_lista(beneficiary)}
 
 @router.get("/beneficiaries", response_model=List[MiBeneficiario])
 async def get_beneficiaries(current_user: User = Depends(get_current_user)):
@@ -270,20 +276,24 @@ async def get_beneficiaries(current_user: User = Depends(get_current_user)):
         {"user_id": current_user.user_id}
     ).to_list(100)
 
-    return [
-        {
-            "beneficiary_id": b.get("beneficiary_id"),
-            "full_name": b.get("full_name"),
-            "id_document": b.get("id_document"),
-            "bank": b.get("bank"),
-            "bank_code": b.get("bank_code"),
-            "phone_number": b.get("phone_number"),
-            "account_number": b.get("account_number"),
-            "payment_type": b.get("payment_type", "transferencia"),
-            "created_at": b.get("created_at")
-        }
-        for b in beneficiaries
-    ]
+    return [_como_se_lista(b) for b in beneficiaries]
+
+
+def _como_se_lista(b: dict) -> dict:
+    """Un beneficiario de Venezuela tal como lo ve su dueño. UNA sola forma
+    para la lista y para la respuesta de guardarlo: si fueran dos, la pantalla
+    mostraría distinto al mismo beneficiario según de dónde lo sacó."""
+    return {
+        "beneficiary_id": b.get("beneficiary_id"),
+        "full_name": b.get("full_name"),
+        "id_document": b.get("id_document"),
+        "bank": b.get("bank"),
+        "bank_code": b.get("bank_code"),
+        "phone_number": b.get("phone_number"),
+        "account_number": b.get("account_number"),
+        "payment_type": b.get("payment_type", "transferencia"),
+        "created_at": b.get("created_at")
+    }
 
 @router.delete("/beneficiaries/{beneficiary_id}", response_model=MiBeneficiarioEliminado, response_model_exclude_unset=True)
 async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(get_current_user)):
@@ -312,7 +322,7 @@ class ReaisSendRequest(BaseModel):
     amount: float   # en RIS (1 RIS = 1 R$)
     idempotency_key: Optional[str] = None
 
-@router.post("/beneficiaries/br", response_model=MiBeneficiarioCreado, response_model_exclude_unset=True)
+@router.post("/beneficiaries/br", response_model=MiBeneficiarioEnBrasilCreado, response_model_exclude_unset=True)
 async def create_br_beneficiary(request: BrBeneficiaryCreate, current_user: User = Depends(get_current_user)):
     """Crea un beneficiario en Brasil (pago por PIX en reais)."""
     beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"
@@ -327,7 +337,10 @@ async def create_br_beneficiary(request: BrBeneficiaryCreate, current_user: User
         "created_at": datetime.now(timezone.utc),
     }
     await db.beneficiaries.insert_one(beneficiary)
-    return {"message": "Beneficiario (Brasil) creado", "beneficiary_id": beneficiary_id}
+    # Entero, por lo mismo que el de Venezuela: la pantalla lo elige con esta
+    # respuesta, y sin los datos la confirmación salía sin nombre, CPF ni llave.
+    return {"message": "Beneficiario (Brasil) creado", "beneficiary_id": beneficiary_id,
+            "beneficiario": _como_se_lista_en_brasil(beneficiary)}
 
 @router.get("/beneficiaries/br", response_model=List[MiBeneficiarioEnBrasil])
 async def get_br_beneficiaries(current_user: User = Depends(get_current_user)):
@@ -335,17 +348,20 @@ async def get_br_beneficiaries(current_user: User = Depends(get_current_user)):
     rows = await db.beneficiaries.find(
         {"user_id": current_user.user_id, "pais": "BR"}
     ).to_list(100)
-    return [
-        {
-            "beneficiary_id": b.get("beneficiary_id"),
-            "full_name": b.get("full_name"),
-            "cpf": b.get("cpf"),
-            "pix_key": b.get("pix_key"),
-            "payment_type": "pix_br",
-            "created_at": b.get("created_at"),
-        }
-        for b in rows
-    ]
+    return [_como_se_lista_en_brasil(b) for b in rows]
+
+
+def _como_se_lista_en_brasil(b: dict) -> dict:
+    """Un beneficiario de Brasil tal como lo ve su dueño: la misma forma en la
+    lista y al guardarlo (ver `_como_se_lista`)."""
+    return {
+        "beneficiary_id": b.get("beneficiary_id"),
+        "full_name": b.get("full_name"),
+        "cpf": b.get("cpf"),
+        "pix_key": b.get("pix_key"),
+        "payment_type": "pix_br",
+        "created_at": b.get("created_at"),
+    }
 
 @router.post("/reais/send", response_model=MiEnvioDeReais, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def create_reais_send(request: ReaisSendRequest, current_user: User = Depends(get_current_user)):

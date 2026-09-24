@@ -422,7 +422,10 @@ export default function Send() {
       const r = await api.post('/beneficiaries', datos);
       toast.success('Beneficiario guardado');
       await cargarBeneficiarios();
-      setSelectedBeneficiary(r.data);
+      // `beneficiario` y no la respuesta entera: la respuesta es el mensaje y
+      // el identificador, y con eso la confirmación salía con un «?» y sin
+      // banco, cédula ni teléfono.
+      setSelectedBeneficiary(r.data.beneficiario);
       setShowNewBeneficiary(false);
       setNewBeneficiaryPM({ full_name: '', cedula: '', bank_code: '', bank: '', phone: '' });
       setNewBeneficiaryTR({ full_name: '', cedula: '', bank_code: '', bank: '', account_number: '' });

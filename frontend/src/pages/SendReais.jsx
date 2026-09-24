@@ -261,7 +261,8 @@ export default function SendReais() {
       setMostrarNuevo(false);
       setNuevo({ full_name: '', cpf: '', pix_key: '' });
       await cargarBeneficiarios();
-      if (res.data?.beneficiary_id) setElegido(res.data);
+      // El beneficiario entero, no la respuesta: ver el mismo comentario en Send.jsx.
+      if (res.data?.beneficiario) setElegido(res.data.beneficiario);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo guardar el beneficiario');
     } finally {
