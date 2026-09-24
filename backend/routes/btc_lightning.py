@@ -23,6 +23,7 @@ from models.movimientos import beneficiario_para_la_orden
 from models.btc_salida import LO_QUE_VE_EL_PANEL_DE_UNA_ORDEN, OrdenesBtcPendientes
 from models.btc_salida import (EstadoDeMiRemesa, LimiteDiarioBtc, MiBilleteraBtc, MiHistorialBtc,
                                MiRemesaActiva, PrecioBtc)
+from models.acciones_de_dinero import MiFacturaBtc, MiRemesaCancelada
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/btc", tags=["btc-lightning"])
@@ -281,7 +282,7 @@ def _blink_rechazo_el_vencimiento(respuesta):
     return False
 
 
-@router.post("/generar-invoice", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/generar-invoice", response_model=MiFacturaBtc, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def generar_invoice(body: GenerarInvoiceRequest, current_user: User = Depends(get_current_user)):
     # Generar una factura Lightning es ENTRADA de cripto nueva, aunque la
     # remesa se despache en bolivares: el usuario va a pagar en BTC. Con la via
@@ -693,7 +694,7 @@ async def get_remesa_status(remesa_id: str, current_user: User = Depends(get_cur
     return remesa
 
 
-@router.post("/cancelar/{remesa_id}")
+@router.post("/cancelar/{remesa_id}", response_model=MiRemesaCancelada, response_model_exclude_unset=True)
 async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_current_user)):
     """Permite al usuario cancelar un envío pendiente."""
     remesa = await db.btc_remesas.find_one(
