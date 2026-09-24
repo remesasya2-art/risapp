@@ -147,7 +147,7 @@ def carga_del_qr(*, referencia: str, tipo: str = "", monto: str = "",
 
     def armar(el_tipo, el_estado):
         return "\n".join([p for p in (
-            "RISAPP", referencia, el_tipo, monto, _dia(cuando),
+            "RISApp", referencia, el_tipo, monto, _dia(cuando),
             el_estado) if p])
 
     def entra(texto):
@@ -240,7 +240,7 @@ def nota(*, titulo: str, detalle: str = "", tipo: str = "Aviso") -> str:
           <td style="background:{ORO};padding:14px 22px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RISAPP</td>
+                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RISApp</td>
                 <td align="right" style="color:#4a3806;font-size:10px;font-weight:700;
                                          letter-spacing:2px;">{tipo.upper()}</td>
               </tr>
@@ -256,7 +256,7 @@ def nota(*, titulo: str, detalle: str = "", tipo: str = "Aviso") -> str:
         <tr>
           <td style="background:#fafafa;border-top:1px solid {LINEA};padding:14px 22px;">
             <div style="color:{GRIS};font-size:11px;line-height:1.6;">
-              Este es un aviso automático de RIS App; no respondas a este correo.
+              Este es un aviso automático de RISApp; no respondas a este correo.
               Podés ver el detalle en la aplicación.
             </div>
           </td>
@@ -318,7 +318,7 @@ def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
           <td colspan="2" style="background:{ORO};padding:14px 22px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RISAPP</td>
+                <td style="color:#3b2c05;font-size:16px;font-weight:800;letter-spacing:2px;">RISApp</td>
                 <td align="right" style="color:#4a3806;font-size:10px;font-weight:700;
                                          letter-spacing:2px;">{tipo.upper()}</td>
               </tr>
@@ -374,7 +374,7 @@ def armar(*, titulo: str, detalle: str = "", tipo: str = "COMPROBANTE",
           <td colspan="2" style="background:#fafafa;border-top:1px solid {LINEA};padding:14px 22px;">
             <div style="color:{GRIS};font-size:11px;line-height:1.6;">
               Guardá el número del comprobante: es el que te vamos a pedir si hacés un
-              reclamo. Este es un aviso automático de RIS App; no respondas a este correo.
+              reclamo. Este es un aviso automático de RISApp; no respondas a este correo.
             </div>
           </td>
         </tr>

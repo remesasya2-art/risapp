@@ -66,7 +66,7 @@ def armar(user_data: dict) -> bytes:
     pdf.set_y(8)
     pdf.cell(0, 12, 'FICHA DE CLIENTE', align='C', new_x="LMARGIN", new_y="NEXT")
     pdf.set_font('Helvetica', '', 11)
-    pdf.cell(0, 8, 'RIS App - Registro KYC', align='C', new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, 'RISApp - Registro KYC', align='C', new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_y(48)
     pdf.set_text_color(0, 0, 0)
@@ -158,7 +158,7 @@ def armar(user_data: dict) -> bytes:
     pdf.ln(8)
     pdf.set_font('Helvetica', 'I', 9)
     pdf.set_text_color(156, 163, 175)
-    pdf.cell(0, 6, f'Generado por RIS App - {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")}', align='C')
+    pdf.cell(0, 6, f'Generado por RISApp - {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")}', align='C')
     
     # A memoria, no a disco.
     salida = bytes(pdf.output())

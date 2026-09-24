@@ -46,12 +46,12 @@ def un_envio(**cambios):
         "estado": "en_transito_int", "tracking_token": TOKEN, "created_at": AHORA,
         "modalidad_flete": "destino",
         "destino_brasil": {
-            "destinatario": "RIS App LTDA - A/C María Gómez", "razon_social": "RIS App LTDA",
+            "destinatario": "RISApp LTDA - A/C María Gómez", "razon_social": "RISApp LTDA",
             "retirador_nombre": "María Gómez", "retirador_id": "col_aaaa1111",
             "retirador_motivo": "designado", "congelado_at": AHORA,
             "agencia": "Agencia Centro", "linea_agencia": "Agencia Centro - Pacaraima",
             "modalidad": "caixa_postal", "caixa_postal": "123", "ciudad": "Pacaraima",
-            "uf": "RR", "cep": "69345-000", "texto_copiable": "RIS App LTDA\nA/C María Gómez",
+            "uf": "RR", "cep": "69345-000", "texto_copiable": "RISApp LTDA\nA/C María Gómez",
             **CAMPO_NUEVO,
         },
         "destino": {"ciudad": "Caracas", "estado_ve": "Miranda", "agencia_nombre": "Centro",
@@ -114,7 +114,7 @@ def test_EL_DETALLE_NO_MUESTRA_LO_QUE_NO_ESTA_EN_LA_LISTA_DEL_RETIRO(base):
     r = cliente().get("/api/envios/env_001")
     assert r.status_code == 200, r.text
     retiro = r.json()["retiro"]
-    assert retiro["texto_copiable"] == "RIS App LTDA\nA/C María Gómez", "lo que la etiqueta copia sigue"
+    assert retiro["texto_copiable"] == "RISApp LTDA\nA/C María Gómez", "lo que la etiqueta copia sigue"
     assert retiro["retirador_nombre"] == "María Gómez", "el «A/C» de la etiqueta es a propósito"
     for interno in ("retirador_id", "retirador_motivo", "congelado_at", "retirador_telefono"):
         assert interno not in retiro, interno

@@ -159,7 +159,7 @@ async def _paso_agencias(base, vivos):
         return _paso("agencias", "Agencias de destino", FALTA,
                      f"Hay {total} agencia(s) activa(s), pero ninguna **activa y "
                      f"marcada como punto de entrega**: es la oficina de Santa Elena "
-                     f"donde RIS App deja los paquetes, y es lo que después le dice "
+                     f"donde RISApp deja los paquetes, y es lo que después le dice "
                      f"al operador dónde termina el traslado.",
                      "transportistas", {"total": total, "punto_entrega": 0})
     # EXACTAMENTE una, no "al menos una". Con varias marcadas el operador no
@@ -170,7 +170,7 @@ async def _paso_agencias(base, vivos):
     if entrega > 1:
         return _paso("agencias", "Agencias de destino", FALTA,
                      f"Hay {entrega} agencias activas marcadas como punto de entrega, y "
-                     f"solo puede haber **una**: es la oficina donde RIS App deja los "
+                     f"solo puede haber **una**: es la oficina donde RISApp deja los "
                      f"paquetes. Suele venir de un CSV con esa columna en verdadero en "
                      f"todas las filas. Abrí la que corresponda y guardala marcada: eso "
                      f"desmarca las demás.",

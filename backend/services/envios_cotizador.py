@@ -7,8 +7,8 @@ QUE ES UNA COTIZACION ACA
     (§4). Por eso `es_estimado: true` viaja en la respuesta y `aviso_estimado`
     tambien, siempre, sin excepcion.
 
-LO QUE RIS APP COBRA, Y LO QUE NO
-    RIS App cobra UN solo servicio: retirar el paquete en Pacaraima, repesarlo y
+LO QUE RISApp COBRA, Y LO QUE NO
+    RISApp cobra UN solo servicio: retirar el paquete en Pacaraima, repesarlo y
     llevarlo hasta la oficina del transportista en Santa Elena. Nada mas.
 
     Los dos tramos de transporte —el de Brasil hasta Pacaraima y el de Venezuela
@@ -20,7 +20,7 @@ LO QUE RIS APP COBRA, Y LO QUE NO
     darse una idea del total del viaje". Son dos contratos distintos, con dos
     empresas distintas, en dos monedas distintas, y un numero que los sume
     parece un total y no lo es — y ese numero terminaria algun dia al lado del
-    que RIS App si cobra. Hay un test que lo verifica sumando todo lo que
+    que RISApp si cobra. Hay un test que lo verifica sumando todo lo que
     aparece en la respuesta.
 
 QUE SE CONGELA Y QUE NO
@@ -58,11 +58,11 @@ TTL_HORAS_POR_DEFECTO = 48
 
 # Lo que se le dice al usuario, siempre, con el mismo peso visual que el precio.
 # No es un tooltip ni una nota al pie en gris claro: es lo que evita el peor
-# malentendido posible, que es creer que pagando en RIS App ya cubrio el envio
+# malentendido posible, que es creer que pagando en RISApp ya cubrio el envio
 # entero. El texto real lo edita el super administrador (bloque `contenido`);
 # este es el piso, para que nunca falte.
 AVISO_POR_DEFECTO = (
-    "RIS App cobra un solo servicio: retirar tu paquete en Pacaraima, repesarlo y "
+    "RISApp cobra un solo servicio: retirar tu paquete en Pacaraima, repesarlo y "
     "llevarlo hasta la oficina del transportista en Santa Elena. Ese precio es una "
     "estimación sobre lo que declaraste y se confirma al repesar. El envío dentro de "
     "Brasil y el tramo dentro de Venezuela los contratás y los pagás vos aparte: los "
@@ -166,7 +166,7 @@ async def cotizar(usuario, pedido: dict, db=None, ahora=None,
     agencia = await _agencia(base, (pedido.get("destino") or {}),
                              contexto["transportistas"])
 
-    # 4. El precio del servicio. Es lo único que RIS App cobra.
+    # 4. El precio del servicio. Es lo único que RISApp cobra.
     try:
         servicio = cotizar_servicio(
             tarifa, paquete.get("peso_kg"), paquete.get("largo_cm"),
@@ -613,7 +613,7 @@ def _payload(envio, servicio, referencias, despacho, contexto, limites) -> dict:
     afuera, y lo dice con palabras, no con un color.
 
     Es la parte más importante del diseño de esta respuesta. El peor
-    malentendido posible es que el usuario crea que pagando en RIS App ya cubrió
+    malentendido posible es que el usuario crea que pagando en RISApp ya cubrió
     el envío entero, y eso no se arregla después: se arregla acá, poniendo el
     concepto del servicio escrito y las referencias en otro bloque, con su
     etiqueta de quién las cobra.
@@ -639,7 +639,7 @@ def _payload(envio, servicio, referencias, despacho, contexto, limites) -> dict:
             ],
         },
 
-        # LO ÚNICO QUE COBRA RIS APP: el concepto y el total. Nada más.
+        # LO ÚNICO QUE COBRA RISApp: el concepto y el total. Nada más.
         #
         # Antes salía el desglose entero —servicio, sobrecargos, subtotal y
         # `margen_ris`—, y la pantalla sólo lee el concepto y el total. El
@@ -707,7 +707,7 @@ def _referencia_visible(r: dict) -> dict:
         # sin enterarse del otro.
         "codigo": r.get("codigo"),
         "rol": r.get("rol"),
-        "etiqueta": _ETIQUETAS.get(r.get("rol"), "Lo pagás vos, por fuera de RIS App"),
+        "etiqueta": _ETIQUETAS.get(r.get("rol"), "Lo pagás vos, por fuera de RISApp"),
         "monto": None if monto is None else str(monto),
         "moneda": r.get("moneda"),
         "fuente": r.get("fuente"),

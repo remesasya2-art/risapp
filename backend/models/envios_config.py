@@ -180,7 +180,7 @@ class Agencia(_Base):
     zona: Optional[str] = Field(default=None, max_length=40)
     codigo_postal: Optional[str] = Field(default=None, max_length=20)
     activa: bool = True
-    # Marca la oficina donde RIS App entrega. Solo una puede tenerla, y la ruta
+    # Marca la oficina donde RISApp entrega. Solo una puede tenerla, y la ruta
     # lo verifica: dos puntos de entrega es un envío que no sabe a dónde va.
     es_punto_entrega: bool = False
 

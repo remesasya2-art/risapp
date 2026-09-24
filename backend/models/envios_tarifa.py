@@ -2,7 +2,7 @@
 models/envios_tarifa.py — El esquema de una version de tarifa.
 
 QUE ES ESTE DOCUMENTO
-    El precio del unico servicio que RIS App cobra: retiro en Pacaraima,
+    El precio del unico servicio que RISApp cobra: retiro en Pacaraima,
     repesaje y traslado hasta la oficina del transportista en Santa Elena. Una
     tabla de escalones por peso facturable, y un puñado de palancas alrededor.
 
@@ -88,7 +88,7 @@ class Escalon(_Base):
 
 
 class ReglaPesoPropia(_Base):
-    """La regla de RIS App. Vive acá y no en una ficha de transportista porque
+    """La regla de RISApp. Vive acá y no en una ficha de transportista porque
     cambia junto con los precios y se versiona con ellos."""
     divisor: int = Field(gt=0, le=100000)
     escalon_kg: str = "0.5"

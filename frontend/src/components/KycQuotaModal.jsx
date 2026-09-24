@@ -46,7 +46,7 @@ export default function KycQuotaModal() {
             <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #4b5563)', margin: '8px 0 0 0', lineHeight: 1.5 }}>
               Alcanzaste el límite de {cupo.max_ops} operaciones o {cupo.max_ris} RIS que permite
               una cuenta sin verificar. Completá la verificación para levantar el límite y seguir
-              usando RIS App.
+              usando RISApp.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '10px 0 0 0' }}>
               Usaste {cupo.ops_usadas} de {cupo.max_ops} operaciones y {cupo.ris_usados} de {cupo.max_ris} RIS.

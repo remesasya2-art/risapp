@@ -4,7 +4,7 @@ tests/test_sin_cuenta_bancaria_inventada.py — `/ves-payment-info` no vuelve.
 Era una ruta pública, sin sesión, que devolvía el documento entero de
 `settings` con `{"_id": 0}`. Ningún código escribía ese documento, así que lo
 que salía siempre era el relleno escrito en el código: una cuenta de un banco
-real, un titular «RIS APP C.A.» y un RIF «J-00000000-0». Parecía una cuenta
+real, un titular «RISAPP C.A.» y un RIF «J-00000000-0». Parecía una cuenta
 de verdad para transferir, y ninguna pantalla la pedía.
 
 Se borró. Si hace falta publicar los datos de pago, que salgan de la

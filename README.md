@@ -1,4 +1,4 @@
-# RIS App
+# RISApp
 
 Aplicación de negocios digitales (risappbr.com).
 

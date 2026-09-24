@@ -2702,7 +2702,7 @@ async def decide_verification(
         await create_notification(
             user_id=user_id,
             title="✅ Verificación Aprobada",
-            message="Tu identidad ha sido verificada exitosamente. Ya puedes usar todas las funciones de RIS App.",
+            message="Tu identidad ha sido verificada exitosamente. Ya puedes usar todas las funciones de RISApp.",
             notification_type="verification_approved"
         )
 
@@ -2848,7 +2848,7 @@ async def reply_support_request(request_id: str, data: SupportReplyRequest, admi
     safe_reply = text.replace("\n", "<br>")
     html_content = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #6366f1;">Respuesta de soporte - RIS App</h2>
+        <h2 style="color: #6366f1;">Respuesta de soporte - RISApp</h2>
         <p>Hola,</p>
         <p>Gracias por contactarnos. En respuesta a tu solicitud <strong>"{subject_orig}"</strong>:</p>
         <div style="background: #f3f4f6; border-left: 4px solid #6366f1; padding: 14px 16px; border-radius: 8px; margin: 16px 0; color: #1f2937;">
@@ -2857,14 +2857,14 @@ async def reply_support_request(request_id: str, data: SupportReplyRequest, admi
         <p style="color: #6b7280; font-size: 13px;">Tu mensaje original: "{original_msg}"</p>
         <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px 14px; margin: 18px 0 8px;">
             <p style="color: #92400e; font-size: 13px; margin: 0; line-height: 1.5;">
-                <strong>No respondas este correo</strong>, no podemos leer las respuestas por esta via. El equipo de RisApp se pondra en contacto contigo directamente a traves de los numeros de contacto y el correo que nos dejaste.
+                <strong>No respondas este correo</strong>, no podemos leer las respuestas por esta via. El equipo de RISApp se pondra en contacto contigo directamente a traves de los numeros de contacto y el correo que nos dejaste.
             </p>
         </div>
     </div>
     """
     email_sent = await send_email(
         to_email=to_email,
-        subject=f"Re: {subject_orig} - Soporte RIS App",
+        subject=f"Re: {subject_orig} - Soporte RISApp",
         html_content=html_content,
     )
     reply_doc = {

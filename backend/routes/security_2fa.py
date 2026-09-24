@@ -65,7 +65,7 @@ USER_SESSION_DAYS = 7                # normal users (unchanged)
 TWOFA_PENDING_MINUTES = 5            # short-lived intermediate token
 BACKUP_CODES_COUNT = 10
 BACKUP_CODE_LENGTH = 10
-ISSUER_NAME = "RIS App"
+ISSUER_NAME = "RISApp"
 ADMIN_ROLES = {"admin", "super_admin"}
 SUPER_ADMIN_ROLE = "super_admin"
 

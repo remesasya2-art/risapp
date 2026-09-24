@@ -294,7 +294,7 @@ ENVIO = {
     "origen": {"cep": "01310100", "ciudad": "São Paulo", "uf": "SP",
                "codigo_objeto": "AA123456789BR"},
     "destino_brasil": {"retirador_nombre": "María Gómez",
-                       "texto_copiable": "RIS App LTDA\nA/C María Gómez\n"
+                       "texto_copiable": "RISApp LTDA\nA/C María Gómez\n"
                                          "Caixa Postal 123"},
     "destino": {
         "ciudad": "Caracas", "estado_ve": "Miranda", "agencia_nombre": "Centro",

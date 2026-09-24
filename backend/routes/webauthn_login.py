@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webauthn", tags=["webauthn"])
 
 RP_ID = "risappbr.com"
-RP_NAME = "RIS App"
+RP_NAME = "RISApp"
 ALLOWED_ORIGINS = ["https://risappbr.com", "https://www.risappbr.com"]
 CHALLENGE_TTL_SECONDS = 300  # 5 minutos
 

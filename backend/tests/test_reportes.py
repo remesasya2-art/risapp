@@ -383,7 +383,7 @@ def test_el_csv_lleva_encabezado_con_los_criterios_y_los_totales():
                                    hasta="2026-08-15", tz_min=-240))
     csv = exp.a_csv(r, "super@risapp.com")
 
-    assert "RIS App — Reporte de operaciones" in csv
+    assert "RISApp — Reporte de operaciones" in csv
     assert "2026-08-15 a 2026-08-15" in csv
     assert "UTC-04:00" in csv
     assert "super@risapp.com" in csv
@@ -426,7 +426,7 @@ def test_el_xlsx_guarda_los_montos_como_NUMEROS():
 
     valores = [c.value for fila in hoja.iter_rows() for c in fila]
     assert 1234.5 in valores, "el monto no quedó como número"
-    assert "RIS App — Reporte de operaciones" in valores
+    assert "RISApp — Reporte de operaciones" in valores
 
 
 def test_el_xlsx_tampoco_deja_pasar_una_formula():

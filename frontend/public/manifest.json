@@ -1,6 +1,6 @@
 {
-  "name": "RIS App",
-  "short_name": "RIS App",
+  "name": "RISApp",
+  "short_name": "RISApp",
   "description": "Rápido, seguro y confiable. Tus operaciones en minutos.",
   "start_url": "/",
   "scope": "/",

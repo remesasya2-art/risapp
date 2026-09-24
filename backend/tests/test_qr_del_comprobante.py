@@ -34,7 +34,7 @@ sys.path.insert(0, _BACKEND)
 from services import comprobante as comp             # noqa: E402
 from services import qr                              # noqa: E402
 
-CARGA = ("RISAPP\nRIS-8827194\nRetiro a bolívares\n"
+CARGA = ("RISApp\nRIS-8827194\nRetiro a bolívares\n"
          "4.500,00 Bs\n11/09/2026 21:40\nCOMPLETADO")
 
 
@@ -237,7 +237,7 @@ CUANDO = datetime(2026, 9, 11, 21, 40, tzinfo=timezone.utc)
 def test_la_carga_lleva_las_seis_lineas_que_se_pidieron():
     carga = comp.carga_del_qr(referencia="RIS-8827194", tipo="Retiro a bolívares",
                               monto="4.500,00 Bs", cuando=CUANDO, estado="Completado")
-    assert carga.split("\n") == ["RISAPP", "RIS-8827194", "Retiro a bolívares",
+    assert carga.split("\n") == ["RISApp", "RIS-8827194", "Retiro a bolívares",
                                  "4.500,00 Bs", "11/09/2026 21:40", "COMPLETADO"]
 
 
@@ -370,7 +370,7 @@ def test_una_descripcion_larga_acorta_el_tipo_y_no_el_numero(tipo):
     carga = comp.carga_del_qr(referencia="RIS-9930571", tipo=tipo,
                               monto="1.200,00 VES", cuando=CUANDO, estado="Rechazada")
     assert len(carga.encode("utf-8")) <= comp.TOPE_DEL_QR
-    for imprescindible in ("RISAPP", "RIS-9930571", "1.200,00 VES",
+    for imprescindible in ("RISApp", "RIS-9930571", "1.200,00 VES",
                            "11/09/2026 21:40", "RECHAZADA"):
         assert imprescindible in carga
 
@@ -445,7 +445,7 @@ def test_la_cascada_baja_hasta_donde_haga_falta(caso, datos):
         assert "INTERNACIONALIZADO" not in carga
     if caso == "se_corta":
         # se corta acá, donde se ve, y no en el dibujo
-        assert carga.startswith("RISAPP")
+        assert carga.startswith("RISApp")
 
 
 @pytest.mark.parametrize("datos", EXTREMOS)
@@ -458,7 +458,7 @@ def test_cuando_acortar_el_tipo_no_alcanza_el_tipo_se_va_del_todo(datos):
     assert len(carga.encode("utf-8")) <= comp.TOPE_DEL_QR
     assert len(qr.matriz(carga)) <= 37
     # lo que no se negocia sigue ahí
-    for imprescindible in ("RISAPP", datos["referencia"], datos["monto"]):
+    for imprescindible in ("RISApp", datos["referencia"], datos["monto"]):
         assert imprescindible in carga
 
 

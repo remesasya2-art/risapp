@@ -142,7 +142,7 @@ export default function LegalPage() {
             lineHeight: 1.7, maxWidth: 640,
           }}
           >
-            RIS App es una plataforma de <strong>soluciones digitales</strong> operada
+            RISApp es una plataforma de <strong>soluciones digitales</strong> operada
             por SAIPHA Servicios Digitais. En este documento están, completas y
             sin letra chica, las reglas con las que trabajamos: qué datos
             tratamos, cómo se usa el saldo, cuándo corresponde un reembolso y
@@ -260,7 +260,7 @@ export default function LegalPage() {
           titulo="Política de privacidad"
           icono={<ShieldCheck size={19} style={{ color: MORADO }} />}>
           <p style={p}>
-            SAIPHA Servicios Digitais, operadora de la plataforma RIS App
+            SAIPHA Servicios Digitais, operadora de la plataforma RISApp
             (risappbr.com), protege la privacidad de sus usuarios. Esta Política
             explica qué datos se recopilan, con qué finalidad y cómo se
             resguardan, conforme a la <i>Lei Geral de Proteção de Dados</i>
@@ -321,7 +321,7 @@ export default function LegalPage() {
           titulo="Términos y condiciones de uso"
           icono={<FileText size={19} style={{ color: MORADO }} />}>
           <p style={p}>
-            Estos Términos regulan el uso de la plataforma RIS App
+            Estos Términos regulan el uso de la plataforma RISApp
             (risappbr.com), operada por SAIPHA Servicios Digitais. Al
             registrarse y utilizar la plataforma, el usuario los acepta.
           </p>
@@ -464,7 +464,7 @@ export default function LegalPage() {
           n={5}
           titulo="Información de la empresa"
           icono={<Building2 size={19} style={{ color: MORADO }} />}>
-          <p style={p}>La plataforma RIS App es operada por:</p>
+          <p style={p}>La plataforma RISApp es operada por:</p>
           <div style={{
             border: '1px solid var(--en-oscuro-linea, #ececf3)', borderRadius: 12, overflow: 'hidden',
             marginBottom: 16,

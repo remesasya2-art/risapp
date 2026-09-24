@@ -3,7 +3,7 @@ Confirmar una cotizacion. El boton que NO cobra.
 
 CONTEXTO
     En el diseno original confirmar era cobrar. Ya no: el usuario paga el tramo 1
-    directamente al transportista de origen, y RIS App recien cobra cuando puede
+    directamente al transportista de origen, y RISApp recien cobra cuando puede
     verificar contra una medicion ajena —el peso del comprobante de despacho—.
 
     Eso cambia el manejo del error de raiz. Antes, sin saldo, no habia envio y un
@@ -258,7 +258,7 @@ AGENCIA = {"transportista_id": "trp_ve1", "codigo": "agc_001", "nombre": "Centro
 PUNTO = {"setting_id": "envios_punto_origen",
          "nombre": "AC Pacaraima", "cep": "69355000", "ciudad": "Pacaraima", "uf": "RR",
          "modalidad": "caixa_postal", "caixa_postal": "123", "direccion": None,
-         "razon_social": "RIS App LTDA",
+         "razon_social": "RISApp LTDA",
          "plantilla_direccion": ret.PLANTILLA_POR_DEFECTO,
          "retirador_activo_id": "col_aaaa1111"}
 
@@ -342,7 +342,7 @@ def cotizado(base=None, **cambios):
 
 def test_confirmar_no_debita_ni_un_centavo():
     """El botón que en cualquier otra app de este rubro sacaría plata. El usuario
-    paga el tramo 1 directamente al transportista de origen; RIS App recién cobra
+    paga el tramo 1 directamente al transportista de origen; RISApp recién cobra
     contra el comprobante."""
     base, envio_id = cotizado()
     saldo_antes = base.users.filas[0]["balance_ris"]

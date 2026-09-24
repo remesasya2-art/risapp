@@ -82,8 +82,8 @@ export default function MiCodigoDeReferido() {
   const compartir = async () => {
     try {
       await navigator.share({
-        title: 'RIS App',
-        text: 'Mandá plata a Venezuela con RIS App. Entrá con mi invitación:',
+        title: 'RISApp',
+        text: 'Mandá plata a Venezuela con RISApp. Entrá con mi invitación:',
         url: datos.enlace,
       });
     } catch {

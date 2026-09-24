@@ -113,7 +113,7 @@ PUNTO = {
     "setting_id": ret.SETTING_PUNTO_ORIGEN,
     "nombre": "AC Pacaraima", "cep": "69355000", "ciudad": "Pacaraima", "uf": "RR",
     "modalidad": "caixa_postal", "caixa_postal": "123",
-    "razon_social": "RIS App LTDA",
+    "razon_social": "RISApp LTDA",
     "plantilla_direccion": ret.PLANTILLA_POR_DEFECTO,
     "retirador_activo_id": "col_aaaa1111",
 }
@@ -138,9 +138,9 @@ def db_completa(punto=None, nomina=None):
 def test_el_bloque_se_arma_entero_y_se_puede_copiar():
     b = corre(ret.bloque_de_despacho(db=db_completa(), ahora=AHORA))
     assert b["disponible"] is True
-    assert b["destinatario"] == "RIS App LTDA - A/C María Gómez"
+    assert b["destinatario"] == "RISApp LTDA - A/C María Gómez"
     assert b["texto_copiable"] == (
-        "RIS App LTDA\n"
+        "RISApp LTDA\n"
         "A/C María Gómez\n"
         "Caixa Postal 123 - AC Pacaraima\n"
         "Pacaraima - RR\n"
@@ -157,7 +157,7 @@ def test_el_cep_se_copia_con_guion_aunque_se_guarde_sin_el():
 def test_la_plantilla_es_editable_y_no_se_concatena_en_el_codigo():
     punto = {**PUNTO, "plantilla_direccion": "{razon_social} / {ciudad} ({uf}) / CEP {cep}"}
     b = corre(ret.bloque_de_despacho(db=db_completa(punto=punto), ahora=AHORA))
-    assert b["texto_copiable"] == "RIS App LTDA / Pacaraima (RR) / CEP 69355-000"
+    assert b["texto_copiable"] == "RISApp LTDA / Pacaraima (RR) / CEP 69355-000"
 
 
 @pytest.mark.parametrize("modalidad,extra,esperado", [
@@ -191,14 +191,14 @@ def test_la_plantilla_no_se_renderiza_con_format():
     # 'object'>)". El token queda literal, que es lo correcto.
     assert "{razon_social.__class__.__mro__}" in b["texto_copiable"]
     assert "class" not in b["texto_copiable"].replace("__class__", "")
-    assert "RIS App LTDA" in b["texto_copiable"]
+    assert "RISApp LTDA" in b["texto_copiable"]
 
 
 def test_una_llave_suelta_en_la_plantilla_no_rompe_la_cotizacion():
     punto = {**PUNTO, "plantilla_direccion": "{razon_social} — 50 % { descuento"}
     b = corre(ret.bloque_de_despacho(db=db_completa(punto=punto), ahora=AHORA))
     assert b["disponible"] is True
-    assert "RIS App LTDA" in b["texto_copiable"]
+    assert "RISApp LTDA" in b["texto_copiable"]
 
 
 def test_un_token_que_no_existe_queda_a_la_vista():
@@ -218,7 +218,7 @@ def test_sin_nomina_se_despacha_igual_a_nombre_de_la_empresa():
     mostrador no sabe a quién llamar."""
     b = corre(ret.bloque_de_despacho(db=db_completa(nomina=[]), ahora=AHORA))
     assert b["disponible"] is True
-    assert b["destinatario"] == "RIS App LTDA"
+    assert b["destinatario"] == "RISApp LTDA"
     assert b["retirador_nombre"] is None
     assert b["retirador_motivo"] == "sin_nomina"
 
@@ -227,7 +227,7 @@ def test_sin_nombre_no_queda_una_linea_ac_colgada():
     """"A/C" a secas en una etiqueta es peor que no poner nada."""
     b = corre(ret.bloque_de_despacho(db=db_completa(nomina=[]), ahora=AHORA))
     assert "A/C" not in b["texto_copiable"]
-    assert b["texto_copiable"].startswith("RIS App LTDA\nCaixa Postal")
+    assert b["texto_copiable"].startswith("RISApp LTDA\nCaixa Postal")
 
 
 def test_si_el_designado_no_puede_retirar_se_usa_un_suplente_y_se_avisa():
@@ -321,7 +321,7 @@ def test_un_token_sin_valor_no_deja_un_renglon_en_blanco():
     punto = {**PUNTO, "modalidad": "posta_restante", "caixa_postal": None,
              "plantilla_direccion": "{razon_social}\n{caixa_postal}\n{ciudad} - {uf}"}
     b = corre(ret.bloque_de_despacho(db=db_completa(punto=punto), ahora=AHORA))
-    assert b["texto_copiable"] == "RIS App LTDA\nPacaraima - RR"
+    assert b["texto_copiable"] == "RISApp LTDA\nPacaraima - RR"
     assert "\n\n" not in b["texto_copiable"]
 
 
@@ -335,7 +335,7 @@ def test_el_token_del_nombre_se_saca_sin_llevarse_la_razon_social():
     punto = {**PUNTO, "plantilla_direccion":
              "{razon_social} A/C {retirador_nombre}\n{linea_agencia}\nCEP {cep}"}
     b = corre(ret.bloque_de_despacho(db=db_completa(punto=punto, nomina=[]), ahora=AHORA))
-    assert b["texto_copiable"].startswith("RIS App LTDA")
+    assert b["texto_copiable"].startswith("RISApp LTDA")
     assert "A/C" not in b["texto_copiable"]
     assert "CEP 69355-000" in b["texto_copiable"]
 
@@ -345,7 +345,7 @@ def test_una_plantilla_de_una_sola_linea_no_queda_vacia_sin_nomina():
              "{razon_social}, A/C {retirador_nombre}, {linea_agencia}, CEP {cep}"}
     b = corre(ret.bloque_de_despacho(db=db_completa(punto=punto, nomina=[]), ahora=AHORA))
     assert b["texto_copiable"]
-    assert "RIS App LTDA" in b["texto_copiable"]
+    assert "RISApp LTDA" in b["texto_copiable"]
 
 
 @pytest.mark.parametrize("activo", [False, 0, "false", "no", "0", "off", "False"])

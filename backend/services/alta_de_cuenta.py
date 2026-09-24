@@ -123,7 +123,7 @@ async def crear(db, *, email: str, name: str, password_hash, referred_by,
         logger.warning("registro rechazado por la base: el CPF ya es de otra cuenta")
         await cpf_de_la_cuenta.soltar_el_ancla(db, cpf_number, user_id)
         raise NoSePudoCrear(
-            "Ese CPF ya tiene una cuenta en RIS App. Iniciá sesión con "
+            "Ese CPF ya tiene una cuenta en RISApp. Iniciá sesión con "
             "ella, o recuperá tu contraseña si no la recordás.")
 
     # El bono de bienvenida, si se registró con el código de alguien. Va

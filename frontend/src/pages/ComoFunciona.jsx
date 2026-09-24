@@ -87,7 +87,7 @@ export default function ComoFunciona() {
       }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link to="/" style={{ fontWeight: 800, fontSize: 17, color: '#111827', textDecoration: 'none' }}>
-            RIS App
+            RISApp
           </Link>
           <div style={{ flex: 1 }} />
           <Link to="/legal" style={{ fontSize: 14, color: '#374151', textDecoration: 'none' }}>Legal</Link>

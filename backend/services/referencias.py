@@ -2,14 +2,14 @@
 services/referencias.py — Lo que le van a cobrar los transportistas, como orientacion.
 
 QUE ES UNA REFERENCIA Y QUE NO ES
-    El usuario contrata y paga por su cuenta dos servicios que RIS App no factura:
+    El usuario contrata y paga por su cuenta dos servicios que RISApp no factura:
     el transportista de Brasil que lleva el paquete hasta Pacaraima, y el de
     Venezuela que lo lleva desde Santa Elena hasta su destino. La app igual
     necesita mostrarle un numero aproximado de cada uno, porque sin eso el
     usuario no puede decidir si le conviene mandar el paquete.
 
     Ese numero es una ORIENTACION. No se factura, no se concilia, no se ajusta y
-    **jamas entra en el total que RIS App cobra**. Por eso cada referencia sale de
+    **jamas entra en el total que RISApp cobra**. Por eso cada referencia sale de
     aca marcada con `facturable: False` y con el monto como Decimal o None, nunca
     como float: no es decoracion, es lo que hace que un `sum()` distraido en la
     ruta de cotizacion sea un test que falla y no un cobro indebido.
@@ -28,7 +28,7 @@ NINGUN NOMBRE DE EMPRESA
 
 LA REGLA QUE GOBIERNA TODO EL MODULO
     **Una referencia que falta no puede romper una cotizacion.** El precio que
-    RIS App cobra no depende de estos numeros; si la matriz no tiene la fila, si
+    RISApp cobra no depende de estos numeros; si la matriz no tiene la fila, si
     la base no responde, si tarda demasiado o si el peso se sale de la tabla, se
     devuelve `None` con el motivo y la cotizacion sigue. Preferimos mostrar
     "consultá en el mostrador" antes que un error donde el usuario esperaba un
@@ -367,7 +367,7 @@ async def referencias_para(clave_brasil: str, clave_venezuela: str, peso_kg,
     administrador y el otro no.
 
     Las consultas van en paralelo: en serie, cinco lecturas de 200 ms le agregan
-    un segundo entero a la cotización, y el precio que RIS App cobra no depende de
+    un segundo entero a la cotización, y el precio que RISApp cobra no depende de
     ninguna de ellas.
 
     `solo_transportista` acota el rol de Venezuela a uno. Es necesario y no una
@@ -426,7 +426,7 @@ def resumen(referencias: list[dict]) -> dict:
     Deliberadamente NO devuelve una suma de montos, ni en Decimal ni en float.
     Sumarlos daría un número que parece un total y no lo es —son dos contratos
     distintos, con dos empresas distintas, en dos monedas distintas—, y ese número
-    terminaría algún día al lado del que RIS App sí cobra.
+    terminaría algún día al lado del que RISApp sí cobra.
     """
     refs = referencias or []
     con_dato = [r for r in refs if r.get("monto") is not None]

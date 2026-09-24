@@ -462,7 +462,7 @@ async def approve_kyc(verification_id: str, payload: dict = Body(default={}), ad
     await create_notification(
         user_id=user_id,
         title="✅ Verificación Aprobada",
-        message="Tu identidad ha sido verificada exitosamente. Ya puedes usar todas las funciones de RIS App.",
+        message="Tu identidad ha sido verificada exitosamente. Ya puedes usar todas las funciones de RISApp.",
         notification_type="verification_approved"
     )
 

@@ -1,5 +1,5 @@
 """
-RIS App Backend - Clean Server
+RISApp Backend - Clean Server
 Main FastAPI application entry point.
 All endpoints are now in modular routers under /routes/
 """
@@ -365,7 +365,7 @@ async def lifespan(app):
 _DOCS_ABIERTAS = os.getenv("EXPONER_DOCUMENTACION_API", "").strip().lower() in ("1", "true", "si", "yes")
 
 app = FastAPI(
-    title="RIS App API",
+    title="RISApp API",
     version="2.1.0",
     lifespan=lifespan,
     docs_url="/docs" if _DOCS_ABIERTAS else None,

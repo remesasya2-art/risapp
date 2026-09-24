@@ -22,7 +22,7 @@ NINGUNA SUGERENCIA SE ESCRIBE SOLA
     exige que alguien la llame con un valor concreto.
 
 LO OBSERVADO NO ES LO FACTURADO
-    Ninguno de estos numeros toca lo que RIS App cobra. Son los dos tramos que
+    Ninguno de estos numeros toca lo que RISApp cobra. Son los dos tramos que
     el usuario paga por su cuenta, y sirven para que la ORIENTACION que se le
     muestra al proximo se parezca a la realidad. La tarifa propia se edita en su
     consola y no sale de aca.

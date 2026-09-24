@@ -4,11 +4,11 @@ Las orientaciones de los transportistas: numeros que se muestran y no se cobran.
 CONTEXTO
     El usuario contrata y paga por su cuenta los dos tramos de los extremos: el
     transportista brasileño que lleva el paquete hasta Pacaraima y el venezolano
-    que lo lleva desde Santa Elena. RIS App igual le muestra un aproximado de cada
+    que lo lleva desde Santa Elena. RISApp igual le muestra un aproximado de cada
     uno, porque sin eso no puede decidir si le conviene mandar el paquete.
 
     Esos numeros son ORIENTACION. No se facturan, no se concilian y jamas entran
-    en el total que RIS App cobra. Y como no se cobran, que falten no puede
+    en el total que RISApp cobra. Y como no se cobran, que falten no puede
     romper nada: el precio propio no depende de ellos.
 
 QUE SE CUBRE
@@ -271,7 +271,7 @@ def test_se_devuelven_todas_las_orientaciones_de_los_dos_roles():
 
 
 def test_la_cotizacion_se_completa_igual_sin_ninguna_referencia():
-    """Es LA regla del módulo: el precio que RIS App cobra no depende de estos
+    """Es LA regla del módulo: el precio que RISApp cobra no depende de estos
     números. Con la base caída la cotización sigue, y la lista lo DICE."""
     caida = _Db(TODOS, MATRICES, rompe=True)
     refs = corre(ref.referencias_para("SP", "ZONA-A", 2, 40, 30, 20, db=caida))
@@ -324,7 +324,7 @@ def test_absolutamente_toda_referencia_sale_marcada_como_no_facturable():
 def test_el_resumen_no_suma_montos():
     """Sumarlos daría un número que parece un total y no lo es: son dos contratos
     con dos empresas distintas, en dos monedas distintas. Y ese número terminaría
-    algún día al lado del que RIS App sí cobra.
+    algún día al lado del que RISApp sí cobra.
 
     Se comprueba el conjunto EXACTO de claves y que ningún valor sea un monto —en
     Decimal o en float—, porque "no hay una clave que se llame total" lo esquiva

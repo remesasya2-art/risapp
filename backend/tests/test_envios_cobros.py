@@ -2,7 +2,7 @@
 El unico modulo del sistema de envios que mueve plata.
 
 CONTEXTO
-    RIS App cobra un solo servicio, en dos partidas: la INICIAL al verificar el
+    RISApp cobra un solo servicio, en dos partidas: la INICIAL al verificar el
     comprobante de despacho —calculada con el peso que midio el transportista de
     origen, una medicion ajena— y el AJUSTE al repesar con balanza propia en
     Pacaraima.

@@ -177,7 +177,7 @@ export default function PuntoOrigen() {
         <div style={grilla()}>
           <Campo etiqueta="Razón social" ayuda="A nombre de quién se recibe. Va primero en la etiqueta.">
             <Texto value={datos.razon_social} onChange={cambiar('razon_social')}
-              placeholder="RIS App LTDA" maxLength={120} />
+              placeholder="RISApp LTDA" maxLength={120} />
           </Campo>
           <Campo etiqueta="Nombre de la agencia" ayuda="Como la conoce el mostrador.">
             <Texto value={datos.nombre} onChange={cambiar('nombre')}

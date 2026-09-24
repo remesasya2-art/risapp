@@ -76,7 +76,7 @@ COMO_QUEDO = {
 
 # Qué es cada moneda, para el pie de la ruta del pasaje.
 MONEDAS = {
-    "RIS":  "Tu saldo en RIS App",
+    "RIS":  "Tu saldo en RISApp",
     "VES":  "Bolívares, Venezuela",
     "BRL":  "Reales, Brasil",
     "USDT": "Cripto (USDT)",

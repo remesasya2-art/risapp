@@ -193,7 +193,7 @@ configuración, el instructivo cambia solo, sin tocar código.**
 Reglas de negocio que ya están implementadas y verificadas. Si algún cambio de
 arriba las contradice, **preguntá antes de romperlas**:
 
-- **RIS App cobra UN servicio.** Los dos tramos de transporte los contrata y
+- **RISApp cobra UN servicio.** Los dos tramos de transporte los contrata y
   paga el usuario; sus montos son ORIENTATIVOS y **no entran en ningún total**.
 - **Nadie paga por adelantado.** El cobro inicial se emite cuando el operador
   verifica el comprobante. El precio se cierra en el repesaje.

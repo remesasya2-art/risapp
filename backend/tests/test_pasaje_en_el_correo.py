@@ -367,10 +367,10 @@ def test_sin_numero_de_operacion_el_correo_sale_igual_como_parrafo(monkeypatch):
     cuerpo = salidas[0][2]
     assert cuerpo.find("Recibimos tu pago por PIX") != -1
     assert cuerpo.find("Escaneá para ver los datos") == -1
-    # pero con la MISMA identidad: la banda dorada y RISAPP. Antes éste salía
+    # pero con la MISMA identidad: la banda dorada y RISApp. Antes éste salía
     # como un `<h2>` violeta sobre blanco, y al lado del pasaje dorado no
     # parecía el mismo remitente.
-    assert cuerpo.find("RISAPP") != -1
+    assert cuerpo.find("RISApp") != -1
     assert cuerpo.find(comprobante.ORO) != -1
 
 
@@ -381,7 +381,7 @@ def test_los_dos_correos_se_parecen_entre_si():
     con = comprobante.armar(titulo="Tu retiro se completó", tipo="Retiro",
                             referencia="RIS-1", cuando=CUANDO)
     sin = comprobante.nota(titulo="Recibimos tu pago por PIX")
-    for igual in ("RISAPP", comprobante.ORO, comprobante.FONDO,
+    for igual in ("RISApp", comprobante.ORO, comprobante.FONDO,
                   'width="600"', "border-radius:14px",
                   "no respondas a este correo"):
         assert con.find(igual) != -1 and sin.find(igual) != -1, igual
