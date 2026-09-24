@@ -294,3 +294,27 @@ def test_el_defecto_no_se_comio_la_precision_de_los_reales():
     assert jsonable_encoder(to_decimal128("0.01")) == 0.01
     assert jsonable_encoder(to_decimal128("99999.99")) == 99999.99
     assert Decimal(str(jsonable_encoder(to_decimal128("10.00")))) == Decimal("10")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La plata también pasa por los contratos
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_UN_MONTO_CRUDO_DE_LA_BASE_PASA_POR_UN_CONTRATO_Y_SALE_COMO_NUMERO():
+    """Con contrato, la respuesta la arma el modelo y la red de arriba no
+    llega: un `Decimal128` en un campo del contrato daba 500 donde la misma
+    ruta sin contrato contestaba el número. Poner un contrato no puede voltear
+    una pantalla que andaba. Y sin redondear: la cripto lleva ocho decimales."""
+    from pydantic import create_model
+    from models.escalar import Escalar
+
+    Monto = create_model("Monto", reales=(Escalar, None), cripto=(Escalar, None))
+    app = FastAPI()
+
+    @app.get("/monto", response_model=Monto)
+    def monto():
+        return {"reales": to_decimal128("1234.56"), "cripto": Decimal128("0.00123456")}
+
+    r = TestClient(app, raise_server_exceptions=False).get("/monto")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"reales": 1234.56, "cripto": 0.00123456}
