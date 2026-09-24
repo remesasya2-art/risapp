@@ -226,15 +226,15 @@ export default function Notifications() {
 
   const pageStyle = {
     minHeight: '100vh',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    background: 'var(--en-oscuro-fondo, radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%))',
     fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '20px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #e5e7eb'
+    border: '1px solid var(--en-oscuro-linea, #e5e7eb)'
   };
 
   return (
@@ -247,17 +247,17 @@ export default function Notifications() {
               onClick={() => navigate('/')} 
               style={{ 
                 width: '40px', height: '40px', borderRadius: '12px', border: 'none', 
-                backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', 
+                backgroundColor: 'var(--en-oscuro-superficie, rgba(255,255,255,0.8))', cursor: 'pointer', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center' 
               }}
               data-testid="back-button"
             >
-              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+              <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
             </button>
             <div>
-              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Notificaciones</h1>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Notificaciones</h1>
               {unreadCount > 0 && (
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{unreadCount} sin leer</p>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>{unreadCount} sin leer</p>
               )}
             </div>
           </div>
@@ -267,7 +267,7 @@ export default function Notifications() {
                 onClick={markAllAsRead}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-                  backgroundColor: '#dbeafe', color: '#2563eb', border: 'none',
+                  backgroundColor: 'var(--en-oscuro-acento-suave, #dbeafe)', color: 'var(--en-oscuro-acento, #2563eb)', border: 'none',
                   borderRadius: '12px', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
                 }}
                 data-testid="mark-all-read"
@@ -281,8 +281,8 @@ export default function Notifications() {
                 onClick={limpiarLeidas}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
-                  backgroundColor: 'rgba(255,255,255,0.8)', color: '#6b7280',
-                  border: '1px solid #e5e7eb', borderRadius: '12px', fontSize: '14px',
+                  backgroundColor: 'var(--en-oscuro-superficie, rgba(255,255,255,0.8))', color: 'var(--en-oscuro-texto-2, #6b7280)',
+                  border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '12px', fontSize: '14px',
                   fontWeight: '500', cursor: 'pointer'
                 }}
                 data-testid="limpiar-leidas"
@@ -303,9 +303,9 @@ export default function Notifications() {
               style={{
                 padding: '8px 16px', borderRadius: '10px', fontSize: '14px',
                 fontWeight: 600, cursor: 'pointer',
-                border: soloSinLeer === valor ? '1px solid #6366f1' : '1px solid #e5e7eb',
-                backgroundColor: soloSinLeer === valor ? '#eef2ff' : 'rgba(255,255,255,0.8)',
-                color: soloSinLeer === valor ? '#4F46E5' : '#6b7280',
+                border: soloSinLeer === valor ? '1px solid var(--en-oscuro-acento, #6366f1)' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                backgroundColor: soloSinLeer === valor ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, rgba(255,255,255,0.8))',
+                color: soloSinLeer === valor ? 'var(--en-oscuro-acento, #4F46E5)' : 'var(--en-oscuro-texto-2, #6b7280)',
               }}
               data-testid={valor ? 'filtro-sin-leer' : 'filtro-todas'}
             >
@@ -319,7 +319,7 @@ export default function Notifications() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
             <div style={{ 
               width: '32px', height: '32px', borderRadius: '50%', 
-              border: '3px solid #e5e7eb', borderTopColor: '#6366f1',
+              border: '3px solid var(--en-oscuro-linea, #e5e7eb)', borderTopColor: 'var(--en-oscuro-acento, #6366f1)',
               animation: 'spin 1s linear infinite'
             }} />
           </div>
@@ -327,12 +327,12 @@ export default function Notifications() {
           <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}>
             <div style={{ 
               width: '64px', height: '64px', borderRadius: '50%', 
-              backgroundColor: '#f3f4f6', margin: '0 auto 16px',
+              backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', margin: '0 auto 16px',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              <Bell style={{ width: '32px', height: '32px', color: '#9ca3af' }} />
+              <Bell style={{ width: '32px', height: '32px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
             </div>
-            <p style={{ color: '#6b7280', fontSize: '16px', margin: 0 }}>No tienes notificaciones</p>
+            <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '16px', margin: 0 }}>No tienes notificaciones</p>
           </div>
         ) : (
           <div style={{ ...cardStyle, overflow: 'hidden' }}>
@@ -343,8 +343,8 @@ export default function Notifications() {
                 style={{
                   padding: '16px 20px',
                   cursor: 'pointer',
-                  backgroundColor: notification.read ? '#ffffff' : '#eff6ff',
-                  borderBottom: index < notifications.length - 1 ? '1px solid #e5e7eb' : 'none',
+                  backgroundColor: notification.read ? 'var(--en-oscuro-superficie, #ffffff)' : 'var(--en-oscuro-acento-suave, #eff6ff)',
+                  borderBottom: index < notifications.length - 1 ? '1px solid var(--en-oscuro-linea, #e5e7eb)' : 'none',
                   transition: 'background-color 0.2s'
                 }}
                 data-testid={`notification-${notification.notification_id}`}
@@ -355,17 +355,17 @@ export default function Notifications() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                       <p style={{ 
                         fontWeight: notification.read ? '500' : '600', 
-                        color: notification.read ? '#6b7280' : '#111827',
+                        color: notification.read ? 'var(--en-oscuro-texto-2, #6b7280)' : 'var(--en-oscuro-texto, #111827)',
                         margin: 0, fontSize: '15px'
                       }}>
                         {notification.title}
                       </p>
-                      <span style={{ fontSize: '12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', whiteSpace: 'nowrap' }}>
                         {formatTime(notification.created_at)}
                       </span>
                     </div>
                     <p style={{ 
-                      fontSize: '14px', color: notification.read ? '#9ca3af' : '#6b7280',
+                      fontSize: '14px', color: notification.read ? 'var(--en-oscuro-texto-3, #9ca3af)' : 'var(--en-oscuro-texto-2, #6b7280)',
                       margin: '4px 0 0 0', lineHeight: '1.4',
                       overflow: 'hidden', textOverflow: 'ellipsis', 
                       display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
@@ -376,7 +376,7 @@ export default function Notifications() {
                   {!notification.read && (
                     <div style={{ 
                       width: '8px', height: '8px', borderRadius: '50%', 
-                      backgroundColor: '#6366f1', flexShrink: 0, marginTop: '6px'
+                      backgroundColor: 'var(--en-oscuro-acento, #6366f1)', flexShrink: 0, marginTop: '6px'
                     }} />
                   )}
                   {/* Borrar uno se puede aunque esté sin leer: la persona lo
@@ -388,7 +388,7 @@ export default function Notifications() {
                     title="Borrar este aviso"
                     style={{
                       border: 'none', background: 'transparent', cursor: 'pointer',
-                      padding: '2px', color: '#c4c7cf', flexShrink: 0,
+                      padding: '2px', color: 'var(--en-oscuro-texto-3, #c4c7cf)', flexShrink: 0,
                     }}
                     data-testid={`borrar-${notification.notification_id}`}
                   >
@@ -403,8 +403,8 @@ export default function Notifications() {
                 disabled={trayendoMas}
                 style={{
                   display: 'block', width: '100%', padding: '14px', border: 'none',
-                  borderTop: '1px solid #e5e7eb', backgroundColor: '#fafafa',
-                  color: '#4F46E5', fontSize: '14px', fontWeight: 600,
+                  borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', backgroundColor: 'var(--en-oscuro-superficie-2, #fafafa)',
+                  color: 'var(--en-oscuro-acento, #4F46E5)', fontSize: '14px', fontWeight: 600,
                   cursor: trayendoMas ? 'default' : 'pointer',
                 }}
                 data-testid="ver-mas"
@@ -430,7 +430,7 @@ export default function Notifications() {
         >
           <div 
             style={{
-              backgroundColor: '#ffffff', borderRadius: '20px', width: '100%',
+              backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '20px', width: '100%',
               maxWidth: '480px', maxHeight: '80vh', overflow: 'hidden',
               boxShadow: '0 20px 50px rgba(0,0,0,0.2)'
             }}
@@ -439,16 +439,16 @@ export default function Notifications() {
           >
             {/* Modal Header */}
             <div style={{ 
-              padding: '20px', borderBottom: '1px solid #e5e7eb',
+              padding: '20px', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ fontSize: '32px' }}>{getNotificationIcon(selectedNotification.type)}</div>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                     {selectedNotification.title}
                   </h3>
-                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '4px 0 0 0' }}>
                     {formatFullDate(selectedNotification.created_at)}
                   </p>
                 </div>
@@ -457,31 +457,31 @@ export default function Notifications() {
                 onClick={closeNotification}
                 style={{
                   width: '36px', height: '36px', borderRadius: '50%',
-                  border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  border: 'none', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
                 data-testid="close-notification-modal"
               >
-                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                <X style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
               </button>
             </div>
 
             {/* Modal Body */}
             <div style={{ padding: '20px', overflowY: 'auto', maxHeight: 'calc(80vh - 160px)' }}>
-              <p style={{ fontSize: '15px', color: '#374151', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
+              <p style={{ fontSize: '15px', color: 'var(--en-oscuro-texto, #374151)', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
                 {selectedNotification.message}
               </p>
               
               {selectedNotification.data && Object.keys(selectedNotification.data).length > 0 && (
-                <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
-                  <p style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', margin: '0 0 8px 0' }}>Detalles:</p>
+                <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '12px' }}>
+                  <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 8px 0' }}>Detalles:</p>
                   {selectedNotification.data.amount && (
-                    <p style={{ fontSize: '14px', color: '#111827', margin: '4px 0' }}>
+                    <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '4px 0' }}>
                       Monto: <strong>RI$ {fmt(parseFloat(selectedNotification.data.amount))}</strong>
                     </p>
                   )}
                   {selectedNotification.data.transaction_id && (
-                    <p style={{ fontSize: '14px', color: '#111827', margin: '4px 0' }}>
+                    <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '4px 0' }}>
                       ID: <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{selectedNotification.data.transaction_id}</span>
                     </p>
                   )}
@@ -491,14 +491,14 @@ export default function Notifications() {
 
             {/* Modal Footer with Action */}
             {getNotificationAction(selectedNotification) && (
-              <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
+              <div style={{ padding: '16px 20px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                 <button
                   onClick={() => {
                     closeNotification();
                     navigate(getNotificationAction(selectedNotification).path);
                   }}
                   style={{
-                    width: '100%', padding: '14px', backgroundColor: '#6366f1',
+                    width: '100%', padding: '14px', backgroundColor: 'var(--en-oscuro-acento, #6366f1)',
                     color: '#ffffff', border: 'none', borderRadius: '12px',
                     fontSize: '15px', fontWeight: '600', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'

@@ -389,7 +389,7 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
       )}
 
       {processing && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'var(--en-oscuro-superficie, rgba(255,255,255,0.7))', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
           <Loader2 size={32} className="animate-spin" style={{ color: 'var(--en-oscuro-acento, #6366f1)' }} />
         </div>
       )}

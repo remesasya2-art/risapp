@@ -138,7 +138,7 @@ function AppRoutes() {
       <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/referidos" element={<ProtectedRoute><ConTema><Referidos /></ConTema></ProtectedRoute>} />
-      <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+      <Route path="/history" element={<ProtectedRoute><ConTema><History /></ConTema></ProtectedRoute>} />
       <Route path="/envios" element={<ProtectedRoute><ConTema><EnviosMis /></ConTema></ProtectedRoute>} />
       <Route path="/envios/nuevo" element={<ProtectedRoute><PuertaEncomiendas><ConTema><EnvioNuevo /></ConTema></PuertaEncomiendas></ProtectedRoute>} />
       {/* VA ANTES QUE `/envios/:envioId`, y el orden importa: si fuera al
@@ -147,7 +147,7 @@ function AppRoutes() {
       <Route path="/envios/:transactionId/pagar" element={<ProtectedRoute><ConTema><RetomarPago /></ConTema></ProtectedRoute>} />
       <Route path="/envios/:envioId" element={<ProtectedRoute><ConTema><EnvioDetalle /></ConTema></ProtectedRoute>} />
       <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
-      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><ConTema><Notifications /></ConTema></ProtectedRoute>} />
       <Route path="/support" element={<ProtectedRoute><ConTema><Support /></ConTema></ProtectedRoute>} />
       
       {/* Admin Routes */}

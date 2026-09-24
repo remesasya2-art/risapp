@@ -230,6 +230,7 @@ RUTAS_CON_TEMA = [
     '"/send"', '"/send-reais"', '"/referidos"', '"/envios"', '"/envios/nuevo"',
     '"/envios/:transactionId/pagar"', '"/envios/:envioId"', '"/support"',
     '"/btc-lightning"', '"/seguimiento/:token"',
+    '"/history"', '"/notifications"',
 ]
 
 

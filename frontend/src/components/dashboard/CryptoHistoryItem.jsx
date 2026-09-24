@@ -4,37 +4,42 @@
 // que acá solo cambia la presentación.
 
 const STATUS_STYLES = {
-  finished: { label: 'Acreditado', bg: '#dcfce7', color: '#16a34a' },
-  manual: { label: 'Acreditado', bg: '#dcfce7', color: '#16a34a' },
-  pending: { label: 'Pendiente', bg: '#fef3c7', color: '#d97706' },
-  waiting: { label: 'Pendiente', bg: '#fef3c7', color: '#d97706' },
-  confirming: { label: 'Confirmando', bg: '#fef3c7', color: '#d97706' },
-  sending: { label: 'Procesando', bg: '#fef3c7', color: '#d97706' },
-  partially_paid: { label: 'Pago parcial', bg: '#fef3c7', color: '#d97706' },
-  failed: { label: 'Fallido', bg: '#fee2e2', color: '#dc2626' },
-  expired: { label: 'Expirado', bg: '#fee2e2', color: '#dc2626' },
-  refunded: { label: 'Reembolsado', bg: '#fee2e2', color: '#dc2626' },
-  error: { label: 'Error', bg: '#fee2e2', color: '#dc2626' },
+  finished: { label: 'Acreditado', bg: 'var(--en-oscuro-exito-suave, #dcfce7)', color: 'var(--en-oscuro-exito, #16a34a)' },
+  manual: { label: 'Acreditado', bg: 'var(--en-oscuro-exito-suave, #dcfce7)', color: 'var(--en-oscuro-exito, #16a34a)' },
+  pending: { label: 'Pendiente', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  waiting: { label: 'Pendiente', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  confirming: { label: 'Confirmando', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  sending: { label: 'Procesando', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  partially_paid: { label: 'Pago parcial', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  failed: { label: 'Fallido', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
+  expired: { label: 'Expirado', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
+  refunded: { label: 'Reembolsado', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
+  error: { label: 'Error', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
 };
 
 // Los envíos tienen su propia máquina de estados; `pending` acá no significa
 // "esperando el depósito" sino "en cola para pagarse en VES".
 const SEND_STATUS_STYLES = {
-  pending: { label: 'En proceso', bg: '#fef3c7', color: '#d97706' },
-  awaiting_payment: { label: 'Esperando pago', bg: '#fef3c7', color: '#d97706' },
-  awaiting_topup: { label: 'Falta completar', bg: '#fef3c7', color: '#d97706' },
-  underpaid_review: { label: 'En revisión', bg: '#fef3c7', color: '#d97706' },
-  processing: { label: 'Procesando', bg: '#fef3c7', color: '#d97706' },
-  completed: { label: 'Enviado', bg: '#dcfce7', color: '#16a34a' },
-  rejected: { label: 'Rechazado', bg: '#fee2e2', color: '#dc2626' },
-  cancelled: { label: 'Cancelado', bg: '#fee2e2', color: '#dc2626' },
-  payment_failed: { label: 'Pago fallido', bg: '#fee2e2', color: '#dc2626' },
-  expired: { label: 'Expirado', bg: '#fee2e2', color: '#dc2626' },
+  pending: { label: 'En proceso', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  awaiting_payment: { label: 'Esperando pago', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  awaiting_topup: { label: 'Falta completar', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  underpaid_review: { label: 'En revisión', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  processing: { label: 'Procesando', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' },
+  completed: { label: 'Enviado', bg: 'var(--en-oscuro-exito-suave, #dcfce7)', color: 'var(--en-oscuro-exito, #16a34a)' },
+  rejected: { label: 'Rechazado', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
+  cancelled: { label: 'Cancelado', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
+  payment_failed: { label: 'Pago fallido', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
+  expired: { label: 'Expirado', bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' },
 };
 
+// El fondo del ícono va escrito entero (el color con `18` de transparencia)
+// y no armado pegándole «18» al final del color en una plantilla: la guarda de la
+// paleta prohíbe ese patrón, porque con una variable adentro el valor queda
+// inválido y el fondo desaparece sin que nada avise. Son colores de marca,
+// de tono medio, y se leen bien en los dos modos.
 const CURRENCY_META = {
-  usdt: { label: 'USDT', color: '#26A17B' },
-  usdc: { label: 'USDC', color: '#2775CA' },
+  usdt: { label: 'USDT', color: '#26A17B', fondo: '#26A17B18' },
+  usdc: { label: 'USDC', color: '#2775CA', fondo: '#2775CA18' },
 };
 
 const fmtCrypto = (n) =>
@@ -44,11 +49,11 @@ const fmtVes = (n) =>
   Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function CryptoHistoryItem({ item, formatDate }) {
-  const meta = CURRENCY_META[item.currency] || { label: (item.currency || '').toUpperCase(), color: '#6b7280' };
+  const meta = CURRENCY_META[item.currency] || { label: (item.currency || '').toUpperCase(), color: '#6b7280', fondo: '#6b728018' };
   const isSend = item.kind === 'send';
 
   const styleMap = isSend ? SEND_STATUS_STYLES : STATUS_STYLES;
-  const statusInfo = styleMap[item.status] || { label: item.status || 'Desconocido', bg: '#f3f4f6', color: '#6b7280' };
+  const statusInfo = styleMap[item.status] || { label: item.status || 'Desconocido', bg: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: '#6b7280' };
 
   const shownAmount = isSend
     ? item.amount
@@ -68,7 +73,7 @@ export default function CryptoHistoryItem({ item, formatDate }) {
   return (
     <div
       style={{
-        backgroundColor: '#ffffff', borderRadius: '16px', padding: '16px',
+        backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', padding: '16px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
       }}
       data-testid={`crypto-history-${isSend ? 'send' : 'deposit'}`}
@@ -76,7 +81,7 @@ export default function CryptoHistoryItem({ item, formatDate }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: 12, backgroundColor: `${meta.color}18`,
+            width: 40, height: 40, borderRadius: 12, backgroundColor: meta.fondo,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             fontSize: 12, fontWeight: 800, color: meta.color,
           }}>
@@ -84,22 +89,22 @@ export default function CryptoHistoryItem({ item, formatDate }) {
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{
-              margin: '0 0 2px 0', fontSize: '14px', fontWeight: 700, color: '#111827',
+              margin: '0 0 2px 0', fontSize: '14px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {isSend ? `Envío ${meta.label} · ${destino}` : `Depósito ${meta.label}`}
             </p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#8E8E9A' }}>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--en-oscuro-texto-2, #8E8E9A)' }}>
               {subtitle}
             </p>
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <p style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: 700, color: '#111827' }}>
+          <p style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)' }}>
             {isSend ? '−' : ''}{fmtCrypto(shownAmount)} {meta.label}
           </p>
           {isSend && item.amount_output ? (
-            <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#8E8E9A' }}>
+            <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: 'var(--en-oscuro-texto-2, #8E8E9A)' }}>
               {fmtVes(item.amount_output)} {item.currency_output || 'VES'}
             </p>
           ) : null}
@@ -115,8 +120,8 @@ export default function CryptoHistoryItem({ item, formatDate }) {
       {refunded && (
         <p
           style={{
-            margin: '12px 0 0 0', paddingTop: '10px', borderTop: '1px solid #F1F2F6',
-            fontSize: '12px', fontWeight: 600, color: '#16a34a',
+            margin: '12px 0 0 0', paddingTop: '10px', borderTop: '1px solid var(--en-oscuro-linea, #F1F2F6)',
+            fontSize: '12px', fontWeight: 600, color: 'var(--en-oscuro-exito, #16a34a)',
           }}
           data-testid="crypto-history-refund-note"
         >
