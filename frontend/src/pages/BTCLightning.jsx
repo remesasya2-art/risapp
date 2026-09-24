@@ -106,8 +106,11 @@ const PASOS = [
    las fichas viejas guardan el CODIGO en `bank`, y mostrarlo crudo daba
    «0134 -» en pantalla. */
 const banco = (b) => nombreDelBanco(b, VENEZUELAN_BANKS);
+/* El teléfono se guarda como `phone_number`, igual que en el otro flujo;
+   `phone` queda sólo por si alguna ficha vieja lo tiene así. Leyendo sólo
+   `phone`, el Pago Móvil salía sin teléfono en la lista y en el resumen. */
 const destino = (b) => (b?.payment_type === 'pago_movil'
-  ? telefonoLegible(b?.phone) : cuentaAbreviada(b?.account_number));
+  ? telefonoLegible(b?.phone_number || b?.phone) : cuentaAbreviada(b?.account_number));
 
 /* La ficha del beneficiario. Una sola definición para los tres lugares donde
    aparece: la lista, el encabezado del monto y el resumen del pago. Antes
@@ -404,10 +407,14 @@ export default function BTCLightning() {
     if (paymentType === 'transferencia' && !newBenef.account_number) return toast.error('Numero de cuenta requerido');
     setLoading(true);
     try {
-      const payload = { full_name: newBenef.full_name, cedula: newBenef.cedula, bank_code: newBenef.bank_code, bank: newBenef.bank, payment_type: paymentType, ...(paymentType === 'pago_movil' ? { phone: newBenef.phone } : { account_number: newBenef.account_number }) };
+      // Con los nombres que pide el servidor (`id_document`, `phone_number`).
+      // Iba `cedula` y `phone`: el servidor contestaba que faltaba la cédula y
+      // no guardaba nada, siempre. El formulario sigue llamándolos como antes.
+      const payload = { full_name: newBenef.full_name, id_document: newBenef.cedula, bank_code: newBenef.bank_code, bank: newBenef.bank, payment_type: paymentType, ...(paymentType === 'pago_movil' ? { phone_number: newBenef.phone } : { account_number: newBenef.account_number }) };
       const res = await api.post('/beneficiaries', payload);
-      setBeneficiaries(p => [...p, res.data]);
-      setSelectedBeneficiary(res.data);
+      // El beneficiario entero, no la respuesta: ver el mismo comentario en Send.jsx.
+      setBeneficiaries(p => [...p, res.data.beneficiario]);
+      setSelectedBeneficiary(res.data.beneficiario);
       setShowNewBeneficiary(false);
       setNewBenef({ full_name: '', cedula: '', bank_code: '', bank: '', phone: '', account_number: '' });
       toast.success('Beneficiario agregado');
