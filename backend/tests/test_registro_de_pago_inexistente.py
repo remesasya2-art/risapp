@@ -41,7 +41,9 @@ def test_LA_GUARDA_NO_TAPA_UN_REGISTRO_QUE_SI_EXISTE(cliente, monkeypatch):
     import admin_routes
     from bson import ObjectId
     _id = ObjectId()
-    ya(admin_routes.db.admin_payment_records.insert_one({"_id": _id, "nota": "hola"}))
+    # Un campo que el registro de verdad tiene: la ruta tiene contrato y deja
+    # pasar sólo lo que escribe `approve_recharge` (models/panel_recargas.py).
+    ya(admin_routes.db.admin_payment_records.insert_one({"_id": _id, "transaction_id": "tx_hola"}))
     r = cliente.get(f"/api/admin/payment-records/{_id}")
     assert r.status_code == 200, r.text
-    assert r.json()["nota"] == "hola"
+    assert r.json()["transaction_id"] == "tx_hola"

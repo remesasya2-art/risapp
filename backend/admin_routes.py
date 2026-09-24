@@ -82,6 +82,8 @@ from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 #     función, no su nombre—, en `test_una_sola_puerta.py`.
 from models.user import User as Usuario   # noqa: E402
 from models.acciones_del_panel import EstadoCambiado, SaldoAjustado  # noqa: E402
+from models.panel_recargas import (FotoDeLaRecarga, RecargasPendientes, RegistroDePago,  # noqa: E402
+                                   RegistrosDePago)
 from routes.dependencies import (        # noqa: E402
     get_admin_user,
     get_current_user as get_current_user_from_request,
@@ -409,7 +411,7 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
 # RECHARGES MANAGEMENT
 # =======================
 
-@admin_router.get("/recharges/pending")
+@admin_router.get("/recharges/pending", response_model=RecargasPendientes, response_model_exclude_unset=True)
 async def get_pending_recharges(admin_user: Usuario = Depends(get_admin_user)):
     """Get all recharges pending review"""
     if not has_permission(admin_user, "recharges.view"):
@@ -440,7 +442,7 @@ async def get_pending_recharges(admin_user: Usuario = Depends(get_admin_user)):
     
     return {"recharges": result}
 
-@admin_router.get("/recharges/{transaction_id}/proof")
+@admin_router.get("/recharges/{transaction_id}/proof", response_model=FotoDeLaRecarga, response_model_exclude_unset=True)
 async def get_recharge_proof(transaction_id: str, admin_user: Usuario = Depends(get_admin_user)):
     """Get proof image for a specific recharge"""
     if not has_permission(admin_user, "recharges.view"):
@@ -715,7 +717,7 @@ async def get_transaction_detail(transaction_id: str, admin_user: Usuario = Depe
 # PAYMENT RECORDS
 # =======================
 
-@admin_router.get("/payment-records")
+@admin_router.get("/payment-records", response_model=RegistrosDePago, response_model_exclude_unset=True)
 async def get_admin_payment_records(admin_user: Usuario = Depends(get_admin_user)):
     """Get all payment records with proof images"""
     if not has_permission(admin_user, "transactions.view"):
@@ -731,7 +733,7 @@ async def get_admin_payment_records(admin_user: Usuario = Depends(get_admin_user
     
     return {"records": records}
 
-@admin_router.get("/payment-records/{record_id}")
+@admin_router.get("/payment-records/{record_id}", response_model=RegistroDePago, response_model_exclude_unset=True)
 async def get_admin_payment_record_detail(record_id: str, admin_user: Usuario = Depends(get_admin_user)):
     """Get a specific payment record with full details including proof image"""
     if not has_permission(admin_user, "transactions.view"):

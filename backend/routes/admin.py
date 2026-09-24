@@ -27,6 +27,7 @@ from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveRein
                                        RecargaProcesada, RolCambiado)
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.panel_retiros import ColaDeRetiros, RetirosPendientes
+from models.panel_recargas import ColaDeRecargasVes, ControlDeReferencia, RecargasVesPendientes
 from models.panel_ordenes import (ArchivoDelLote, BancosParaPagar, ComprobanteDelLote, ComprobanteDescartado,
                                    ComprobantesCargados, ComprobantesDelLote, ImagenDelComprobante,
                                    ListaDeLotes, LoteArmado, LoteCancelado, LoteCerrado, OrdenDevuelta,
@@ -1059,7 +1060,7 @@ async def process_withdrawal(
 
 # ============== VES RECHARGES ADMIN ==============
 
-@router.get("/recharges/ves/pending")
+@router.get("/recharges/ves/pending", response_model=RecargasVesPendientes, response_model_exclude_unset=True)
 async def get_pending_ves_recharges(admin: User = Depends(get_super_admin)):
     """Get pending VES recharge requests"""
     # `proof_image` SI se pide acá: es la foto que el operador viene a mirar
@@ -2228,7 +2229,7 @@ async def reporte_procesados(
     }
 
 
-@router.get("/recharges/ves")
+@router.get("/recharges/ves", response_model=ColaDeRecargasVes, response_model_exclude_unset=True)
 async def get_all_ves_recharges(
     status: str = "pending",
     q: str = "",
@@ -2264,7 +2265,7 @@ async def get_all_ves_recharges(
     return pagina
 
 
-@router.get("/recharges/ves/check-reference")
+@router.get("/recharges/ves/check-reference", response_model=ControlDeReferencia, response_model_exclude_unset=True)
 async def check_ves_reference(
     digits: str,
     exclude_transaction_id: str = "",

@@ -605,3 +605,102 @@ def test_LOS_CONTRATOS_DE_ORDENES_Y_LOTES_TIENEN_TODO_LO_QUE_LAS_PANTALLAS_LEEN(
     from models import panel_ordenes
     faltan = LO_QUE_LEEN_ORDENES_Y_LOTES[modelo] - set(getattr(panel_ordenes, modelo).model_fields)
     assert not faltan, f"la pantalla lee {modelo}.{sorted(faltan)} y el contrato no lo deja pasar"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. Las recargas
+# ══════════════════════════════════════════════════════════════════════════
+
+def _sin_reloj(pagina):
+    """La antigüedad se calcula con el reloj en cada llamada: puede diferir
+    en un segundo entre dos llamadas. Se saca, comprobando que esté."""
+    for fila in pagina.get("recharges", []):
+        assert fila.pop("antiguedad")["nivel"]
+    if "counters" in pagina:
+        assert pagina["counters"].pop("mas_vieja")["nivel"]
+    return pagina
+
+
+def test_LA_COLA_DE_RECARGAS_EN_BOLIVARES_SALE_IGUAL_QUE_LA_ARMA_LA_RUTA(ordenes):
+    import asyncio
+    from fastapi.encoders import jsonable_encoder
+    from routes import admin as rutas_admin
+    from services import json_de_mongo
+    json_de_mongo.ensenarle_decimal128_a_fastapi()
+    r = ordenes.get("/api/admin/recharges/ves")
+    assert r.status_code == 200, r.text
+    directo = asyncio.run(rutas_admin.get_all_ves_recharges(
+        status="pending", q="", limit=50, skip=0, admin=_jefe()))
+    assert _sin_reloj(r.json()) == _sin_reloj(jsonable_encoder(directo))
+    assert r.json()["recharges"][0]["amount_ves"] == 1100.0
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/recharges/ves/pending"),
+                              asyncio.run(rutas_admin.get_pending_ves_recharges(admin=_jefe())))
+
+
+def test_EL_CONTROL_DE_REFERENCIA_CONTESTA_IGUAL_CON_Y_SIN_COINCIDENCIAS(ordenes):
+    import asyncio
+    from routes import admin as rutas_admin
+    for digitos in ("12", "345"):
+        _igual_a_llamarla_directo(
+            ordenes.get("/api/admin/recharges/ves/check-reference", params={"digits": digitos}),
+            asyncio.run(rutas_admin.check_ves_reference(digits=digitos, admin=_jefe())))
+
+
+LO_QUE_LEE_RECARGAS_VES = {
+    "RecargaEnLaCola": {"transaction_id", "status", "user_name", "user_email", "amount_ris", "amount_ves",
+                        "rate_used", "proof_image", "falta_banco", "falta_comprobante", "assigned_to",
+                        "assigned_to_name", "rejection_reason", "reference_digits", "processed_at",
+                        "processed_by", "posicion", "created_at", "destination_bank", "destination_bank_name",
+                        "referencia", "banco_elegido_a_mano", "antiguedad"},
+    "ContadoresDeRecargas": {"pendientes", "aprobadas", "rechazadas", "total", "ves_pendiente", "sin_banco",
+                             "sin_comprobante", "mas_vieja"},
+    "ControlDeReferencia": {"has_collision", "first_registered"},
+}
+
+
+@pytest.mark.parametrize("modelo", sorted(LO_QUE_LEE_RECARGAS_VES))
+def test_LOS_CONTRATOS_DE_RECARGAS_TIENEN_TODO_LO_QUE_LA_PANTALLA_LEE(modelo):
+    """RecargasVES.jsx."""
+    from models import panel_recargas
+    faltan = LO_QUE_LEE_RECARGAS_VES[modelo] - set(getattr(panel_recargas, modelo).model_fields)
+    assert not faltan, f"la pantalla lee {modelo}.{sorted(faltan)} y el contrato no lo deja pasar"
+
+
+@pytest.fixture
+def rutas_viejas(monkeypatch):
+    """Las rutas de `admin_routes.py`, que abren su propia conexión."""
+    import asyncio
+    from datetime import datetime, timezone
+    import admin_routes
+    from _lote_c_comun import app_con, SUPER
+    from routes import dependencies as deps
+    from services.money import to_decimal128
+    c, base = app_con(admin_routes.admin_router, deps.get_admin_user, SUPER, "rutas_viejas")
+    monkeypatch.setattr(admin_routes, "db", base)
+    t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    asyncio.run(base.transactions.insert_one({
+        "transaction_id": "tx_r9", "user_id": "u_ana", "type": "recharge", "status": "pending",
+        "amount_input": to_decimal128("100.00"), "currency_input": "BRL", "created_at": t0,
+        "proof_image": "data:image/jpeg;base64," + "PIX" * 12,
+        "mp_payment_id": "123456789", "nota_interna": "revisar el titular", "ip_del_cliente": "10.0.0.7"}))
+    asyncio.run(base.admin_payment_records.insert_one({
+        "record_type": "recharge", "transaction_id": "tx_r8", "user_id": "u_ana", "amount_ris": to_decimal128("50.00"),
+        "proof_image": "data:image/jpeg;base64," + "PIX" * 12, "approved_by": "u_jefe", "created_at": t0,
+        "nota_interna": "revisar el titular"}))
+    return c
+
+
+def test_LAS_RUTAS_VIEJAS_DE_RECARGAS_YA_NO_DEVUELVEN_EL_DOCUMENTO_ENTERO(rutas_viejas):
+    r = rutas_viejas.get("/api/admin/recharges/pending")
+    assert r.status_code == 200, r.text
+    (rec,) = r.json()["recharges"]
+    assert rec["transaction_id"] == "tx_r9" and rec["amount_input"] == 100.0
+    r_lista = rutas_viejas.get("/api/admin/payment-records")
+    assert r_lista.status_code == 200, r_lista.text
+    assert r_lista.json()["records"][0]["amount_ris"] == 50.0
+    for texto in (r.text, r_lista.text):
+        for interno in ("nota_interna", "revisar el titular", "ip_del_cliente", "10.0.0.7", "mp_payment_id", "base64"):
+            assert interno not in texto, f"salió «{interno}»"
+    r = rutas_viejas.get("/api/admin/recharges/tx_r9/proof")
+    assert r.status_code == 200, r.text
+    assert r.json()["proof_image"].startswith("data:image/jpeg;base64,") and "nota_interna" not in r.text
