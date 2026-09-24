@@ -20,6 +20,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, create_model
 
+from models.cuenta import MiBeneficiario, MiBeneficiarioEnBrasil
 from models.envios_salida import RetiroQueVeElCliente
 from models.escalar import Escalar
 from models.soporte import CasoQueVeElCliente
@@ -102,7 +103,23 @@ MiComprobanteDeEncomienda = _simple("MiComprobanteDeEncomienda", (
 
 # ── Beneficiarios ─────────────────────────────────────────────────────────
 
-MiBeneficiarioCreado = _simple("MiBeneficiarioCreado", ("message", "beneficiary_id"))
+# El beneficiario recién guardado va entero, con el MISMO contrato que la
+# lista: la pantalla lo elige con esta respuesta y lo muestra en la
+# confirmación del envío.
+
+
+class MiBeneficiarioCreado(BaseModel):
+    message: Escalar = None
+    beneficiary_id: Escalar = None
+    beneficiario: Optional[MiBeneficiario] = None
+
+
+class MiBeneficiarioEnBrasilCreado(BaseModel):
+    message: Escalar = None
+    beneficiary_id: Escalar = None
+    beneficiario: Optional[MiBeneficiarioEnBrasil] = None
+
+
 MiBeneficiarioEliminado = _simple("MiBeneficiarioEliminado", ("message",))
 
 # ── Soporte ───────────────────────────────────────────────────────────────

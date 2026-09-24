@@ -312,6 +312,41 @@ def test_SUS_BENEFICIARIOS_SALEN_ENTEROS_Y_SIN_NADA_INTERNO(base):
     assert r.json()[0]["pix_key"] == "pedro@ejemplo.test" and "nota_interna" not in r.text
 
 
+def test_EL_BENEFICIARIO_RECIEN_GUARDADO_VUELVE_ENTERO_E_IGUAL_QUE_EN_LA_LISTA(base):
+    """La pantalla de envío elige al beneficiario con la respuesta de
+    guardarlo. Cuando esa respuesta traía sólo el identificador, la
+    confirmación salía con un «?» y sin banco, cédula ni teléfono: justo el
+    paso que le pide al cliente que revise los datos."""
+    from routes.transactions import router
+    c = cliente_con(router)
+    r = c.post("/api/beneficiaries", json={
+        "full_name": "José Pérez", "id_document": "12345678", "bank": "Banesco", "bank_code": "0134",
+        "phone_number": "04141234567", "payment_type": "pago_movil"})
+    assert r.status_code == 200
+    guardado = r.json()["beneficiario"]
+    assert guardado["beneficiary_id"] == r.json()["beneficiary_id"]
+    assert (guardado["full_name"], guardado["bank"], guardado["id_document"], guardado["phone_number"]) == \
+        ("José Pérez", "Banesco", "12345678", "04141234567")
+    assert "user_id" not in r.text
+    (en_la_lista,) = c.get("/api/beneficiaries").json()
+    # Todo igual menos la fecha de alta: la base la guarda recortada a
+    # milisegundos y sin zona, y la respuesta sale de lo que se mandó a
+    # guardar. La pantalla no la muestra en ninguno de los dos lados.
+    sin_fecha = lambda b: {k: v for k, v in b.items() if k != "created_at"}    # noqa: E731
+    assert sin_fecha(guardado) == sin_fecha(en_la_lista), \
+        "el mismo beneficiario no puede verse distinto según de dónde salga"
+
+    r = c.post("/api/beneficiaries/br", json={
+        "full_name": "Pedro Souza", "cpf": "111.444.777-35", "pix_key": "pedro@ejemplo.test"})
+    assert r.status_code == 200
+    guardado = r.json()["beneficiario"]
+    assert (guardado["full_name"], guardado["cpf"], guardado["pix_key"]) == \
+        ("Pedro Souza", "111.444.777-35", "pedro@ejemplo.test")
+    assert "user_id" not in r.text and "pais" not in r.text
+    (en_la_lista,) = c.get("/api/beneficiaries/br").json()
+    assert sin_fecha(guardado) == sin_fecha(en_la_lista)
+
+
 def test_SUS_HUELLAS_SIN_LA_CLAVE_PUBLICA(base):
     ya(base.users.insert_one({"user_id": "u_ana", "webauthn_credentials": [
         {"credential_id": "c1", "label": "Mi teléfono", "created_at": datetime(2026, 6, 1, tzinfo=timezone.utc),

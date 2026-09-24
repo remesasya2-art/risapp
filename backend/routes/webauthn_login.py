@@ -58,6 +58,7 @@ from models.user import User
 from routes.dependencies import get_current_user
 from services.perfil import para_su_dueno
 from models.cuenta import MisHuellas
+from models.acciones_de_acceso import MiEntrada
 from services import personal
 
 logger = logging.getLogger(__name__)
@@ -284,7 +285,7 @@ async def login_options(body: LoginOptionsBody, request: Request):
     return json.loads(options_to_json(options))
 
 
-@router.post("/login/verify")
+@router.post("/login/verify", response_model=MiEntrada, response_model_exclude_unset=True)
 async def login_verify(body: LoginVerifyBody, request: Request):
     from routes.security_2fa import frenar
 

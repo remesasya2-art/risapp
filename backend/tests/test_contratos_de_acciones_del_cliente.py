@@ -37,7 +37,7 @@ RUTAS = [
     ("routes/envios.py", "POST", "/{envio_id}/comprobante", "MiComprobanteDeEncomienda",
      ("services/envios_comprobante.py", ("_resultado",))),
     ("routes/transactions.py", "POST", "/beneficiaries", "MiBeneficiarioCreado", None),
-    ("routes/transactions.py", "POST", "/beneficiaries/br", "MiBeneficiarioCreado", None),
+    ("routes/transactions.py", "POST", "/beneficiaries/br", "MiBeneficiarioEnBrasilCreado", None),
     ("routes/transactions.py", "DELETE", "/beneficiaries/{beneficiary_id}", "MiBeneficiarioEliminado", None),
     ("routes/soporte.py", "POST", "/soporte/casos", "MiCasoAbierto", None),
     ("routes/soporte.py", "POST", "/soporte/casos/{caso_id}/mensajes", "MiRespuestaEnviada", None),

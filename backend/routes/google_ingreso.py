@@ -39,6 +39,7 @@ from database import db
 from routes.dependencies import set_session_cookie
 from services import alta_de_cuenta, codigos, cpf_de_la_cuenta, google_ingreso
 from models.reglas_publicas import ConfigDelBotonDeGoogle
+from models.acciones_de_acceso import MiEntrada
 from services import personal as _personal
 from services.email_notifications import notify_login
 from services.perfil import para_su_dueno
@@ -82,7 +83,7 @@ async def config():
     return {"client_id": google_ingreso.id_de_cliente()}
 
 
-@router.post("")
+@router.post("", response_model=MiEntrada, response_model_exclude_unset=True)
 async def entrar(request: Request, response: Response, body: EntrarConGoogleRequest):
     from routes.security_2fa import frenar
 
@@ -203,7 +204,7 @@ async def _empezar_el_registro(quien: dict) -> dict:
     }
 
 
-@router.post("/completar")
+@router.post("/completar", response_model=MiEntrada, response_model_exclude_unset=True)
 async def completar(request: Request, response: Response,
                     body: CompletarRegistroGoogleRequest):
     from routes.security_2fa import _consume_pending_token, frenar, issue_session_token

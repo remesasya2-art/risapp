@@ -170,12 +170,19 @@ def test_EL_INFORME_SEMESTRAL_DE_LA_OUVIDORIA():
     ya(ouvidoria.responder(r["id"], actor="ouv", respuesta="ok", resultado="procedente", ahora=abril + timedelta(days=3)))
     ya(ouvidoria.abrir(canal="panel", asunto="y", descripcion="y", actor="ouv", ahora=abril))
     ya(ouvidoria.abrir(canal="panel", asunto="z", descripcion="z", actor="ouv", ahora=T0))   # 2º semestre: no entra
+    # Con la fecha fija: sin ella, el 1 de enero de 2027 el segundo semestre
+    # ya habría terminado y la primera comprobación fallaría sola.
     with pytest.raises(ReporteInvalido, match="terminó"):
-        ya(registro.generar("ouvidoria", "2026-S2", actor="t"))
-    archivo = json.loads(ya(registro.generar("ouvidoria", "2026-S1", actor="t"))["archivo"])
+        ya(registro.generar("ouvidoria", "2026-S2", actor="t", ahora=T0))
+    archivo = json.loads(ya(registro.generar("ouvidoria", "2026-S1", actor="t", ahora=T0))["archivo"])
     assert archivo["total"] == 2 and archivo["por_canal"] == {"procon": 1, "panel": 1}
     assert archivo["respondidos"] == 1 and archivo["respondidos_no_prazo"] == 1 and archivo["abertos_ao_fim"] == 1
     assert archivo["dias_medios_de_resposta"] == 3.0 and archivo["prazo_em_dias_uteis"] == 10
+    # Y la fecha que se le pasa es la que manda: con una de enero de 2027, el
+    # segundo semestre ya terminó. Si el control volviera a mirar el reloj de
+    # verdad, esto fallaría hoy y no recién en enero.
+    enero = datetime(2027, 1, 5, 12, 0, tzinfo=timezone.utc)
+    assert json.loads(ya(registro.generar("ouvidoria", "2026-S2", actor="t", ahora=enero))["archivo"])["total"] == 1
 
 
 # ─── el calendario ────────────────────────────────────────────────────────
