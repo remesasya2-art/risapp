@@ -49,20 +49,21 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { fmt } from '../../utils/format';
+import conAlfa from '../../tema/conAlfa';
 
 const C = {
-  linea: '#e5e7eb',
-  fondo: '#f9fafb',
-  tinta: '#111827',
-  suave: '#6b7280',
-  tenue: '#9ca3af',
-  verde: '#047857',
-  verdeFondo: '#ecfdf5',
+  linea: 'var(--en-oscuro-linea, #e5e7eb)',
+  fondo: 'var(--en-oscuro-superficie-2, #f9fafb)',
+  tinta: 'var(--en-oscuro-texto, #111827)',
+  suave: 'var(--en-oscuro-texto-2, #6b7280)',
+  tenue: 'var(--en-oscuro-texto-3, #9ca3af)',
+  verde: 'var(--en-oscuro-exito, #047857)',
+  verdeFondo: 'var(--en-oscuro-exito-suave, #ecfdf5)',
   ambar: '#b45309',
-  ambarFondo: '#fffbeb',
-  rojo: '#b91c1c',
-  rojoFondo: '#fef2f2',
-  azul: '#14395e',
+  ambarFondo: 'var(--en-oscuro-alerta-suave, #fffbeb)',
+  rojo: 'var(--en-oscuro-error, #b91c1c)',
+  rojoFondo: 'var(--en-oscuro-error-suave, #fef2f2)',
+  azul: 'var(--en-oscuro-acento, #14395e)',
 };
 
 // Cuánta ventana se puede pedir. Los mismos topes que hace cumplir el
@@ -103,7 +104,7 @@ const Aviso = ({ tono, children }) => {
     <div style={{
       display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px',
       borderRadius: 10, backgroundColor: paleta.fondo, color: paleta.color,
-      fontSize: 13, lineHeight: 1.5, border: `1px solid ${paleta.color}22`,
+      fontSize: 13, lineHeight: 1.5, border: `1px solid ${conAlfa(paleta.color, '22')}`,
     }}>
       <Icono size={15} style={{ flexShrink: 0, marginTop: 2 }} />
       <div>{children}</div>
@@ -241,7 +242,7 @@ export default function CobrosSinAcreditar() {
               disabled={revisando}
               style={{
                 padding: '7px 8px', borderRadius: 8, border: `1px solid ${C.linea}`,
-                fontSize: 13, color: C.tinta, backgroundColor: '#fff',
+                fontSize: 13, color: C.tinta, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               }}
             >
               {VENTANAS.map((d) => <option key={d} value={d}>{d} días</option>)}
@@ -282,7 +283,7 @@ export default function CobrosSinAcreditar() {
               `text-align` del padre. Se iba solo al margen izquierdo mientras
               el texto quedaba centrado. */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-            <HelpCircle size={22} color={C.tenue} />
+            <HelpCircle size={22} style={{ color: C.tenue }} />
           </div>
           <div>Todavía no se revisó nada. Pulsá «Revisar».</div>
         </div>
