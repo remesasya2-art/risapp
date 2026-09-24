@@ -58,7 +58,7 @@ export function cargarGoogle() {
  * Dibuja el botón adentro de `elemento`. `alRecibirCredencial` recibe el
  * token firmado por Google, que es lo único que viaja al servidor.
  */
-export async function dibujarBotonDeGoogle(elemento, clientId, alRecibirCredencial, { texto = 'continue_with', ancho = 340 } = {}) {
+export async function dibujarBotonDeGoogle(elemento, clientId, alRecibirCredencial, { texto = 'continue_with', ancho = 340, oscuro = false } = {}) {
   const id = await cargarGoogle();
   id.initialize({
     client_id: clientId,
@@ -67,8 +67,13 @@ export async function dibujarBotonDeGoogle(elemento, clientId, alRecibirCredenci
     auto_select: false,
     itp_support: true,
   });
+  // Al cambiar de claro a oscuro se vuelve a dibujar en el mismo lugar: sin
+  // vaciarlo antes, quedarían los dos botones, uno encima del otro.
+  elemento.replaceChildren();
   id.renderButton(elemento, {
-    type: 'standard', theme: 'outline', size: 'large', shape: 'pill',
+    // `filled_black` es la variante oscura que ofrece Google; el botón vive
+    // en un marco suyo y no toma los colores de la página.
+    type: 'standard', theme: oscuro ? 'filled_black' : 'outline', size: 'large', shape: 'pill',
     text: texto, width: ancho, locale: 'es',
   });
 }

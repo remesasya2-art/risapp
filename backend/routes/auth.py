@@ -63,6 +63,29 @@ async def get_me(current_user: User = Depends(get_current_user)):
         terminar_de_armar(user)
     return user
 
+
+from models.cuenta import MiApariencia                              # noqa: E402
+
+
+@router.put("/me/apariencia", response_model=MiApariencia)
+async def guardar_apariencia(pedido: MiApariencia,
+                             current_user: User = Depends(get_current_user)):
+    """Guarda en la cuenta si la persona quiere la app clara, oscura o como
+    diga su aparato.
+
+    EN LA CUENTA Y NO SOLO EN EL NAVEGADOR, por pedido expreso: quien la
+    eligió en el celular la encuentra igual en la computadora. El navegador
+    guarda además una copia, pero sólo para pintar bien la portada y el login,
+    que se ven antes de saber de quién es la cuenta.
+
+    Se escribe con `$set` sobre un único campo y el filtro es el `user_id` de
+    la sesión: por acá no se puede tocar otro dato de la cuenta ni la cuenta
+    de otro, y el contrato de entrada no acepta más que los tres valores."""
+    await db.users.update_one({"user_id": current_user.user_id},
+                              {"$set": {"apariencia": pedido.apariencia}})
+    return {"apariencia": pedido.apariencia}
+
+
 @router.post("/logout")
 async def logout(request: Request, response: Response, current_user: User = Depends(get_current_user)):
     """Logout current session"""

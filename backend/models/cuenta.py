@@ -26,7 +26,7 @@ LOS TIPOS SON LOS DE LA RESPUESTA DE HOY, NO LOS IDEALES
     documentos son fecha y en otros texto), el campo es `Any`.
 """
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, create_model
 
@@ -72,6 +72,16 @@ def _perfil_del_dueno():
 
 
 PerfilDelDueno = _perfil_del_dueno()
+
+
+class MiApariencia(BaseModel):
+    """Claro, oscuro o automático (lo que diga el aparato).
+
+    Una lista cerrada y no un texto libre: el valor termina escrito en un
+    atributo del `<html>`, y la hoja de estilos sólo sabe de estos tres. Un
+    valor que no conoce dejaría la pantalla sin colores, no con los de antes.
+    """
+    apariencia: Literal["auto", "claro", "oscuro"]
 
 
 class EstadoDeLaClave(BaseModel):

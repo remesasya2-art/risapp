@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { configDeGoogle, dibujarBotonDeGoogle } from '../../utils/google';
 
-export default function EntrarConGoogle({ onSesion, onDosPasos, onRegistroIncompleto, texto = 'continue_with' }) {
+export default function EntrarConGoogle({ onSesion, onDosPasos, onRegistroIncompleto, texto = 'continue_with', oscuro = false }) {
   const [clientId, setClientId] = useState('');
   const [falla, setFalla] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -50,8 +50,8 @@ export default function EntrarConGoogle({ onSesion, onDosPasos, onRegistroIncomp
         setOcupado(false);
       }
     };
-    dibujarBotonDeGoogle(caja.current, clientId, alRecibir, { texto }).catch(() => setFalla(true));
-  }, [clientId, texto]);
+    dibujarBotonDeGoogle(caja.current, clientId, alRecibir, { texto, oscuro }).catch(() => setFalla(true));
+  }, [clientId, texto, oscuro]);
 
   if (!clientId) return null;
 
@@ -59,7 +59,7 @@ export default function EntrarConGoogle({ onSesion, onDosPasos, onRegistroIncomp
     <div data-testid="entrar-con-google" style={{ marginBottom: '24px' }}>
       <div ref={caja} style={{ display: 'flex', justifyContent: 'center', minHeight: '44px', opacity: ocupado ? 0.6 : 1 }} />
       {falla ? (
-        <p style={{ fontSize: '13px', color: '#6b7280', textAlign: 'center', margin: '8px 0 0 0' }}>
+        <p style={{ fontSize: '13px', color: 'var(--t-texto-2)', textAlign: 'center', margin: '8px 0 0 0' }}>
           No se pudo cargar el botón de Google. Podés entrar con tu correo.
         </p>
       ) : null}
