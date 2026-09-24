@@ -45,6 +45,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 from models.cuenta import EstadoDeLaClave, PerfilDelDueno                  # noqa: E402
 from models.acciones_de_acceso import (MiCodigoReenviado, MiEntrada, MiInvitacion,  # noqa: E402
                                        MiLatido, MiMensaje, MiRegistroEmpezado)
+from models.acciones_de_seguridad import MiClaveCambiada, MiCodigoDeCambioPedido  # noqa: E402
 from services.perfil import (                                      # noqa: E402
     LO_QUE_VE_SU_DUENO, LOS_SALDOS, para_su_dueno, terminar_de_armar)
 
@@ -590,7 +591,7 @@ _MINUTOS_DEL_CODIGO = 10
 _INTENTOS_DEL_CODIGO = 3
 
 
-@router.post("/change-password/pedir-codigo")
+@router.post("/change-password/pedir-codigo", response_model=MiCodigoDeCambioPedido, response_model_exclude_unset=True)
 async def pedir_codigo_de_cambio(request: PedirCodigoDeCambioRequest, pedido: Request,
                                  current_user: User = Depends(get_current_user)):
     """Primer paso para cambiar la contraseña: manda un código al correo.
@@ -659,7 +660,7 @@ async def pedir_codigo_de_cambio(request: PedirCodigoDeCambioRequest, pedido: Re
             "minutos": _MINUTOS_DEL_CODIGO}
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=MiClaveCambiada, response_model_exclude_unset=True)
 async def change_password(request: ChangePasswordRequest, pedido: Request,
                           current_user: User = Depends(get_current_user)):
     """Cambia la contraseña. Pide la actual Y el código que llegó al correo."""
@@ -743,7 +744,7 @@ async def change_password(request: ChangePasswordRequest, pedido: Request,
     return {"message": "Contraseña cambiada exitosamente",
             "sesiones_cerradas": cerradas}
 
-@router.post("/set-new-password")
+@router.post("/set-new-password", response_model=MiClaveCambiada, response_model_exclude_unset=True)
 async def set_new_password(request: SetNewPasswordRequest, pedido: Request,
                            current_user: User = Depends(get_current_user)):
     """La contraseña nueva de quien entró con una temporal puesta por un admin.
@@ -862,7 +863,7 @@ async def get_password_status(current_user: User = Depends(get_current_user)):
         "must_change_password": user.get("must_change_password", False)
     }
 
-@router.post("/register-fcm-token")
+@router.post("/register-fcm-token", response_model=MiMensaje, response_model_exclude_unset=True)
 async def register_fcm_token(request: Request, current_user: User = Depends(get_current_user)):
     """Register FCM token for push notifications"""
     data = await request.json()

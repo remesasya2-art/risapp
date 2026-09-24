@@ -54,6 +54,8 @@ from routes.dependencies import get_current_user, set_session_cookie
 from services.perfil import para_su_dueno
 from models.cuenta import EstadoDeDosPasos
 from models.acciones_de_acceso import MiAltaDeDosPasos, MiEntradaConDosPasos
+from models.acciones_de_acceso import MiMensaje
+from models.acciones_de_seguridad import MisCodigosDeRespaldo
 from utils.security import hash_password_async, verify_password_async
 
 logger = logging.getLogger(__name__)
@@ -635,7 +637,7 @@ class ActivarDosPasosConfirm(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
 
-@router.post("/activar-init")
+@router.post("/activar-init", response_model=MiAltaDeDosPasos, response_model_exclude_unset=True)
 async def activar_dos_pasos_init(current_user: User = Depends(get_current_user)):
     """Le muestra el código QR a quien quiere activarlo desde su perfil.
 
@@ -664,7 +666,7 @@ async def activar_dos_pasos_init(current_user: User = Depends(get_current_user))
     }
 
 
-@router.post("/activar-confirm")
+@router.post("/activar-confirm", response_model=MisCodigosDeRespaldo, response_model_exclude_unset=True)
 async def activar_dos_pasos_confirm(request: Request, datos: ActivarDosPasosConfirm,
                                     current_user: User = Depends(get_current_user)):
     """Confirma con el primer código y lo enciende. Devuelve los de respaldo.
@@ -717,7 +719,7 @@ async def activar_dos_pasos_confirm(request: Request, datos: ActivarDosPasosConf
     }
 
 
-@router.post("/disable")
+@router.post("/disable", response_model=MiMensaje, response_model_exclude_unset=True)
 async def twofa_disable(
     data: TwoFADisableRequest,
     current_user: User = Depends(get_current_user),
@@ -843,7 +845,7 @@ class TwoFARegenerateBackupRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
 
-@router.post("/regenerate-backup-codes")
+@router.post("/regenerate-backup-codes", response_model=MisCodigosDeRespaldo, response_model_exclude_unset=True)
 async def twofa_regenerate_backup_codes(
     data: TwoFARegenerateBackupRequest,
     current_user: User = Depends(get_current_user),

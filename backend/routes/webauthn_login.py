@@ -59,6 +59,7 @@ from routes.dependencies import get_current_user
 from services.perfil import para_su_dueno
 from models.cuenta import MisHuellas
 from models.acciones_de_acceso import MiEntrada
+from models.acciones_de_seguridad import MiResultado
 from services import personal
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ async def register_options(current_user: User = Depends(get_current_user)):
     return json.loads(options_to_json(options))
 
 
-@router.post("/register/verify")
+@router.post("/register/verify", response_model=MiResultado, response_model_exclude_unset=True)
 async def register_verify(body: RegisterVerifyBody, current_user: User = Depends(get_current_user)):
     doc = await db.users.find_one({"user_id": current_user.user_id})
     if not doc:
@@ -232,7 +233,7 @@ async def list_credentials(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.delete("/credentials/{credential_id}")
+@router.delete("/credentials/{credential_id}", response_model=MiResultado, response_model_exclude_unset=True)
 async def delete_credential(credential_id: str, current_user: User = Depends(get_current_user)):
     doc = await db.users.find_one({"user_id": current_user.user_id})
     creds = (doc or {}).get("webauthn_credentials", []) or []
