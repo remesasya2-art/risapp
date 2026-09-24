@@ -81,7 +81,7 @@ from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 #     mientras no lo estaban. Ahora se reconocen por identidad —el objeto
 #     función, no su nombre—, en `test_una_sola_puerta.py`.
 from models.user import User as Usuario   # noqa: E402
-from models.acciones_del_panel import SaldoAjustado  # noqa: E402
+from models.acciones_del_panel import EstadoCambiado, SaldoAjustado  # noqa: E402
 from routes.dependencies import (        # noqa: E402
     get_admin_user,
     get_current_user as get_current_user_from_request,
@@ -458,7 +458,7 @@ async def get_recharge_proof(transaction_id: str, admin_user: Usuario = Depends(
         "status": transaction.get("status")
     }
 
-@admin_router.post("/recharges/approve")
+@admin_router.post("/recharges/approve", response_model=EstadoCambiado, response_model_exclude_unset=True)
 async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
                            admin_user: Usuario = Depends(get_admin_user)):
     """Approve or reject a recharge with uploaded proof"""

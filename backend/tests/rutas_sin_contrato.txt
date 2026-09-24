@@ -152,8 +152,6 @@ POST /api/admin/accounting/wipe
 POST /api/admin/bcv-rates/refresh
 POST /api/admin/blacklist
 POST /api/admin/btc/marcar-enviado
-POST /api/admin/credits/manual-credit
-POST /api/admin/envios-reais/{transaction_id}/verificar
 POST /api/admin/envios/almacen/migrar
 POST /api/admin/envios/almacen/probar
 POST /api/admin/envios/envios/observado/aprobar
@@ -188,14 +186,8 @@ POST /api/admin/lotes/{lote_id}/comprobantes
 POST /api/admin/lotes/{lote_id}/comprobantes/{comprobante_id}/asignar
 POST /api/admin/lotes/{lote_id}/comprobantes/{comprobante_id}/descartar
 POST /api/admin/lotes/{lote_id}/ordenes/{orden_id}/devolver
-POST /api/admin/ordenes/liberar
-POST /api/admin/ordenes/tomar
-POST /api/admin/ordenes/{transaction_id}/aprobar-con-diferencia
-POST /api/admin/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo
 POST /api/admin/quick-replies
 POST /api/admin/rates
-POST /api/admin/recharges/approve
-POST /api/admin/recharges/ves/process/{transaction_id}
 POST /api/admin/restore-transactions
 POST /api/admin/rrhh
 POST /api/admin/rrhh/{user_id}/reenviar-invitacion

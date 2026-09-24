@@ -22,7 +22,9 @@ from services.ledger import create_closing_entries
 from services.money import ZERO, from_db, money_add, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveReiniciada,
-                                       CuentaVetada, RolCambiado)
+                                       CuentaVetada, EstadoCambiado, OrdenLiberada,
+                                       OrdenRechazadaYReembolsada, OrdenTomada,
+                                       RecargaProcesada, RolCambiado)
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.panel_retiros import ColaDeRetiros, RetirosPendientes
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
@@ -1120,7 +1122,7 @@ def _resolver_coleccion_orden(flujo: str, orden_id: str):
     return None, None
 
 
-@router.post("/ordenes/tomar")
+@router.post("/ordenes/tomar", response_model=OrdenTomada, response_model_exclude_unset=True)
 async def tomar_orden(data: OrdenClaimRequest, admin: User = Depends(get_super_admin)):
     """El operador 'reclama' una orden pendiente para dejar claro que él la está
     procesando y evitar que otro administrador la trabaje en simultáneo."""
@@ -1151,7 +1153,7 @@ async def tomar_orden(data: OrdenClaimRequest, admin: User = Depends(get_super_a
     return {"success": True, "assigned_to": admin.user_id, "assigned_to_name": admin_name}
 
 
-@router.post("/ordenes/liberar")
+@router.post("/ordenes/liberar", response_model=OrdenLiberada, response_model_exclude_unset=True)
 async def liberar_orden(data: OrdenClaimRequest, admin: User = Depends(get_super_admin)):
     """Libera una orden previamente reclamada, para que cualquier operador
     pueda tomarla de nuevo."""
@@ -1675,7 +1677,7 @@ async def get_ordenes_revision_pago(admin: User = Depends(get_super_admin)):
     return {"ordenes": ordenes, "total": len(ordenes), "vencidas_ahora": vencidas}
 
 
-@router.post("/ordenes/{transaction_id}/aprobar-con-diferencia")
+@router.post("/ordenes/{transaction_id}/aprobar-con-diferencia", response_model=EstadoCambiado, response_model_exclude_unset=True)
 async def aprobar_orden_con_diferencia(transaction_id: str, admin: User = Depends(get_super_admin)):
     """Acepta la orden aunque haya llegado menos dinero: pasa a 'pending' y entra
     al mismo pipeline que un pago completo (nivel 1)."""
@@ -1705,7 +1707,7 @@ async def aprobar_orden_con_diferencia(transaction_id: str, admin: User = Depend
     return {"message": "Orden aprobada. Pasó a la cola de procesamiento.", "status": "pending"}
 
 
-@router.post("/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo")
+@router.post("/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo", response_model=OrdenRechazadaYReembolsada, response_model_exclude_unset=True)
 async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = Depends(get_super_admin)):
     """Cancela la orden y acredita al usuario, como saldo cripto, todo lo que si
     llego (pago original + diferencia), para que pueda reusarlo o pedir retiro."""
@@ -2306,7 +2308,7 @@ async def check_ves_reference(
     }
 
 
-@router.post("/recharges/ves/process/{transaction_id}")
+@router.post("/recharges/ves/process/{transaction_id}", response_model=RecargaProcesada, response_model_exclude_unset=True)
 async def process_ves_recharge(
     transaction_id: str, 
     request: dict,
@@ -3227,7 +3229,7 @@ class VerificarPagoEnBolivares(BaseModel):
     motivo: Optional[str] = None         # obligatorio al rechazar
 
 
-@router.post("/envios-reais/{transaction_id}/verificar")
+@router.post("/envios-reais/{transaction_id}/verificar", response_model=EstadoCambiado, response_model_exclude_unset=True)
 async def verificar_pago_en_bolivares(
     transaction_id: str,
     body: VerificarPagoEnBolivares,

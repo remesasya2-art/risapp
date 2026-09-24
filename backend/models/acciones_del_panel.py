@@ -54,3 +54,15 @@ TipoDeDocumento = _simple("TipoDeDocumento", ("code", "label", "requires_back"))
 MotivoDeRechazo = _simple("MotivoDeRechazo", ("code", "label"))
 TiposDeDocumento = List[TipoDeDocumento]
 MotivosDeRechazo = List[MotivoDeRechazo]
+
+
+# ── Órdenes, recargas y créditos ──────────────────────────────────────────
+
+# Quién tomó la orden: la pantalla lo muestra para que dos operadores no
+# paguen la misma.
+OrdenTomada = _simple("OrdenTomada", ("success", "assigned_to", "assigned_to_name"))
+OrdenLiberada = _simple("OrdenLiberada", ("success",))
+EstadoCambiado = _simple("EstadoCambiado", ("message", "status"))
+OrdenRechazadaYReembolsada = _simple("OrdenRechazadaYReembolsada", ("message", "status", "refunded", "currency"))
+RecargaProcesada = _simple("RecargaProcesada", ("message", "already_processed"))
+CreditoManual = _simple("CreditoManual", ("ok", "order_id", "user_email", "currency", "amount", "field"))

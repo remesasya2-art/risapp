@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from database import db
 from services import cripto_abierta
+from models.acciones_del_panel import CreditoManual
 from models.user import User
 from routes.dependencies import get_super_admin
 from services.credits import normalize_currency, credit_user
@@ -227,7 +228,7 @@ class ManualCreditRequest(BaseModel):
     note: Optional[str] = Field(None, max_length=300)
 
 
-@router.post("/manual-credit")
+@router.post("/manual-credit", response_model=CreditoManual, response_model_exclude_unset=True)
 async def manual_credit(data: ManualCreditRequest, admin: User = Depends(get_super_admin)):
     """Acredita balance_usdt/balance_usdc manualmente a un usuario (soporte/pruebas).
 

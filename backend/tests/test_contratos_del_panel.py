@@ -36,6 +36,15 @@ ACCIONES = [
     ("routes/kyc_admin.py", "router", "POST", "/{verification_id}/reject", "VerificacionRechazada"),
     ("routes/kyc_admin.py", "router", "PATCH", "/{verification_id}/note", "NotaGuardada"),
     ("admin_routes.py", "admin_router", "PUT", "/users/{user_id}/balance", "SaldoAjustado"),
+    ("routes/admin.py", "router", "POST", "/ordenes/tomar", "OrdenTomada"),
+    ("routes/admin.py", "router", "POST", "/ordenes/liberar", "OrdenLiberada"),
+    ("routes/admin.py", "router", "POST", "/ordenes/{transaction_id}/aprobar-con-diferencia", "EstadoCambiado"),
+    ("routes/admin.py", "router", "POST", "/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo",
+     "OrdenRechazadaYReembolsada"),
+    ("routes/admin.py", "router", "POST", "/recharges/ves/process/{transaction_id}", "RecargaProcesada"),
+    ("routes/admin.py", "router", "POST", "/envios-reais/{transaction_id}/verificar", "EstadoCambiado"),
+    ("admin_routes.py", "admin_router", "POST", "/recharges/approve", "EstadoCambiado"),
+    ("routes/credits_admin.py", "router", "POST", "/manual-credit", "CreditoManual"),
 ]
 _IDS = [f"{m} {a.split('/')[-1][:-3]}{c}" for a, _, m, c, _ in ACCIONES]
 
