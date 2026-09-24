@@ -53,6 +53,7 @@ from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
 from services.perfil import para_su_dueno
 from models.cuenta import EstadoDeDosPasos
+from models.acciones_de_acceso import MiAltaDeDosPasos, MiEntradaConDosPasos
 from utils.security import hash_password_async, verify_password_async
 
 logger = logging.getLogger(__name__)
@@ -507,7 +508,7 @@ class TwoFASetupConfirmFromPendingRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
 
-@router.post("/enroll-init")
+@router.post("/enroll-init", response_model=MiAltaDeDosPasos, response_model_exclude_unset=True)
 async def twofa_enroll_init(data: TwoFASetupInitFromPendingRequest):
     """Initial enrollment using a pending_token from login (no session needed)."""
     user = await _user_from_pending_token(data.pending_token, expected_purpose="2fa_enroll")
@@ -531,7 +532,7 @@ async def twofa_enroll_init(data: TwoFASetupInitFromPendingRequest):
     }
 
 
-@router.post("/enroll-confirm")
+@router.post("/enroll-confirm", response_model=MiEntradaConDosPasos, response_model_exclude_unset=True)
 async def twofa_enroll_confirm(request: Request, response: Response, data: TwoFASetupConfirmFromPendingRequest):
     """Confirm enrollment with first TOTP code + consume pending_token + issue session."""
     pending = await _consume_pending_token(data.pending_token)
@@ -753,7 +754,7 @@ async def twofa_disable(
 # ============================================================
 # Endpoints — Login Verify (post-password)
 # ============================================================
-@router.post("/verify")
+@router.post("/verify", response_model=MiEntradaConDosPasos, response_model_exclude_unset=True)
 async def twofa_verify(request: Request, response: Response, data: TwoFAVerifyRequest):
     """Exchange pending_token + TOTP/backup code for a real session_token."""
     await frenar(request, "auth.2fa_verify", "10/15minutes")

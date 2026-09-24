@@ -43,6 +43,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 #
 # Se reexportan los nombres porque los tests y otras rutas los buscan acá.
 from models.cuenta import EstadoDeLaClave, PerfilDelDueno                  # noqa: E402
+from models.acciones_de_acceso import (MiCodigoReenviado, MiEntrada, MiInvitacion,  # noqa: E402
+                                       MiLatido, MiMensaje, MiRegistroEmpezado)
 from services.perfil import (                                      # noqa: E402
     LO_QUE_VE_SU_DUENO, LOS_SALDOS, para_su_dueno, terminar_de_armar)
 
@@ -86,7 +88,7 @@ async def guardar_apariencia(pedido: MiApariencia,
     return {"apariencia": pedido.apariencia}
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=MiMensaje, response_model_exclude_unset=True)
 async def logout(request: Request, response: Response, current_user: User = Depends(get_current_user)):
     """Logout current session"""
     # Resolver el token igual que get_current_user: cookie -> Authorization: Bearer -> X-Session-ID
@@ -104,7 +106,7 @@ async def logout(request: Request, response: Response, current_user: User = Depe
     clear_session_cookie(response)
     return {"message": "Sesión cerrada exitosamente"}
 
-@router.post("/register")
+@router.post("/register", response_model=MiRegistroEmpezado, response_model_exclude_unset=True)
 async def register_user(request: RegisterUserRequest, pedido: Request):
     """Register new user with email verification"""
     from routes.security_2fa import frenar
@@ -255,7 +257,7 @@ async def register_user(request: RegisterUserRequest, pedido: Request):
         "code_expires_in_minutes": 15
     }
 
-@router.post("/verify-email")
+@router.post("/verify-email", response_model=MiEntrada, response_model_exclude_unset=True)
 async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
                             pedido: Request):
     """Verify email code and complete registration"""
@@ -357,7 +359,7 @@ async def verify_email_code(request: VerifyEmailCodeRequest, response: Response,
         }
     }
 
-@router.post("/resend-verification-code")
+@router.post("/resend-verification-code", response_model=MiCodigoReenviado, response_model_exclude_unset=True)
 async def resend_verification_code(request: Request, body: ResendVerificationCodeRequest):
     """Resend verification code"""
     from routes.security_2fa import frenar
@@ -400,7 +402,7 @@ async def resend_verification_code(request: Request, body: ResendVerificationCod
 
     return await _do_resend(request, body)
 
-@router.post("/login-password")
+@router.post("/login-password", response_model=MiEntrada, response_model_exclude_unset=True)
 async def login_with_password(request: Request, response: Response, body: LoginWithPasswordRequest):
     """Login with email and password.
 
@@ -876,7 +878,7 @@ async def register_fcm_token(request: Request, current_user: User = Depends(get_
     
     return {"message": "Token registrado"}
 
-@router.post("/heartbeat")
+@router.post("/heartbeat", response_model=MiLatido, response_model_exclude_unset=True)
 async def heartbeat(current_user: User = Depends(get_current_user)):
     """Update user online status"""
     await db.users.update_one(
@@ -885,7 +887,7 @@ async def heartbeat(current_user: User = Depends(get_current_user)):
     )
     return {"status": "ok"}
 
-@router.post("/offline")
+@router.post("/offline", response_model=MiLatido, response_model_exclude_unset=True)
 async def mark_offline(current_user: User = Depends(get_current_user)):
     """Mark user as offline"""
     await db.users.update_one(
@@ -937,7 +939,7 @@ async def _persona_invitada(user_id: str) -> dict:
     return user
 
 
-@router.post("/personal/invitacion")
+@router.post("/personal/invitacion", response_model=MiInvitacion, response_model_exclude_unset=True)
 async def verificar_invitacion(request: Request, body: VerificarInvitacionRequest):
     """Mira si el token sirve, SIN gastarlo, para que la pantalla salude.
 
@@ -971,7 +973,7 @@ async def verificar_invitacion(request: Request, body: VerificarInvitacionReques
     return await _verificar(request, body)
 
 
-@router.post("/personal/activar")
+@router.post("/personal/activar", response_model=MiEntrada, response_model_exclude_unset=True)
 async def activar_personal(request: Request, body: ActivarPersonalRequest):
     """Configura la contraseña del personal y lo manda a activar el 2FA.
 
