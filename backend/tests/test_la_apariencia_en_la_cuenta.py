@@ -190,9 +190,12 @@ def test_LO_OSCURO_NO_SE_ESCAPA_A_LAS_PANTALLAS_QUE_NO_PASARON():
     for selector, cuerpo in reglas:
         selector = " ".join(selector.split())
         if 'data-tema="oscuro"' in selector or "color-scheme: dark" in cuerpo:
-            # `body:has(.con-tema)` también vale: pinta el fondo del documento
-            # sólo mientras se ve una pantalla preparada.
-            assert selector.endswith((".con-tema", ":has(.con-tema)")), (
+            # Vale todo lo que quede DENTRO de `.con-tema` (la marca y lo que
+            # cuelga de ella, como los campos) y `body:has(.con-tema)`, que
+            # pinta el fondo del documento sólo mientras se ve una pantalla
+            # preparada. Lo que no nombra la marca se aplica a todas.
+            despues = selector.split('data-tema="oscuro"]', 1)[-1]
+            assert ".con-tema" in despues, (
                 f"«{selector}» pinta de oscuro fuera de las pantallas preparadas")
     assert any('data-tema="oscuro"' in s for s, _ in reglas), "no hay modo oscuro"
 
@@ -231,6 +234,7 @@ RUTAS_CON_TEMA = [
     '"/envios/:transactionId/pagar"', '"/envios/:envioId"', '"/support"',
     '"/btc-lightning"', '"/seguimiento/:token"',
     '"/history"', '"/notifications"',
+    '"/recharge"', '"/recharge-ves"', '"/credits/deposit"', '"/send-crypto"',
 ]
 
 

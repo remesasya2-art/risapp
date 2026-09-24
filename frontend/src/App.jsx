@@ -132,10 +132,10 @@ function AppRoutes() {
       <Route path="/" element={<HomeGate />} />
       <Route path="/send" element={<ProtectedRoute><ConTema><Send /></ConTema></ProtectedRoute>} />
       <Route path="/send-reais" element={<ProtectedRoute><ConTema><SendReais /></ConTema></ProtectedRoute>} />
-      <Route path="/send-crypto" element={<ProtectedRoute><PuertaCripto tipo="envio"><SendCrypto /></PuertaCripto></ProtectedRoute>} />
-      <Route path="/recharge" element={<ProtectedRoute><PuertaRecarga><Recharge /></PuertaRecarga></ProtectedRoute>} />
-      <Route path="/recharge-ves" element={<ProtectedRoute><PuertaRecarga><RechargeVES /></PuertaRecarga></ProtectedRoute>} />
-      <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ProtectedRoute>} />
+      <Route path="/send-crypto" element={<ProtectedRoute><PuertaCripto tipo="envio"><ConTema><SendCrypto /></ConTema></PuertaCripto></ProtectedRoute>} />
+      <Route path="/recharge" element={<ProtectedRoute><PuertaRecarga><ConTema><Recharge /></ConTema></PuertaRecarga></ProtectedRoute>} />
+      <Route path="/recharge-ves" element={<ProtectedRoute><PuertaRecarga><ConTema><RechargeVES /></ConTema></PuertaRecarga></ProtectedRoute>} />
+      <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><ConTema><CreditsDeposit /></ConTema></PuertaCripto></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/referidos" element={<ProtectedRoute><ConTema><Referidos /></ConTema></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><ConTema><History /></ConTema></ProtectedRoute>} />
