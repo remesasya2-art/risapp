@@ -2641,29 +2641,20 @@ async def refresh_bcv_rates(admin: User = Depends(get_admin_user)):
 
 # ============== KYC ==============
 
-@router.get("/verifications/pending")
-async def get_pending_verifications(admin: User = Depends(get_super_admin)):
-    """Get pending KYC verifications with documents"""
-    # Get users with pending verification
-    users = await db.users.find(
-        {"verification_status": "pending"}, 
-        {"_id": 0, "password_hash": 0}
-    ).to_list(100)
-    
-    # Get verification documents for each user
-    result = []
-    for user in users:
-        verification = await db.verifications.find_one(
-            {"user_id": user["user_id"]},
-            {"_id": 0},
-            sort=[("submitted_at", -1)],
-        )
-        result.append({
-            **user,
-            "verification": verification
-        })
-    
-    return result
+# ACA VIVIA `GET /verifications/pending`, Y SE FUE
+#
+#   Devolvía cada usuario con la verificación pendiente con la proyección
+#   `{"_id": 0, "password_hash": 0}` —una lista de lo PROHIBIDO de un solo
+#   nombre—, o sea el documento entero menos la contraseña: la semilla del
+#   segundo factor, el hash del PIN y las credenciales de la huella de cada
+#   cliente en plena verificación, y al lado el documento entero de su
+#   verificación. Comprobado corriéndola. Es el mismo defecto que tuvo
+#   `/users`, en otra puerta.
+#
+#   Ninguna pantalla la usaba: el panel lee las verificaciones de
+#   `/kyc/list` y `/kyc/{id}` (routes/kyc_admin.py), que arman la respuesta
+#   campo por campo. Una ruta que nadie mira y que sólo sirve para llevarse
+#   lo que no hay que mostrar no se arregla: se saca.
 
 
 @router.post("/verifications/decide", response_model=AccionDelPanel, response_model_exclude_unset=True)

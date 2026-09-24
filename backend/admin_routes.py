@@ -179,7 +179,7 @@ class AdjustBalanceRequest(BaseModel):
 #     GET  /admin/dashboard                 -> routes.misc.get_admin_dashboard
 #     GET  /admin/users                     -> routes.admin.get_all_users
 #     GET  /admin/users/{user_id}           -> routes.admin.get_user_detail
-#     GET  /admin/verifications/pending     -> routes.admin.get_pending_verifications
+#     GET  /admin/verifications/pending     -> routes.admin (retirado: devolvía documentos enteros)
 #     POST /admin/verifications/decide      -> routes.admin.decide_verification
 #     GET  /admin/support/chats             -> routes.support (retirado)
 #     GET  /admin/support/chat/{user_id}    -> routes.support (retirado)
