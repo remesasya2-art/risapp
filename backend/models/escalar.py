@@ -16,7 +16,10 @@ Vive acá, y no en uno de los contratos, porque lo usan varios.
 """
 from typing import Annotated, Any, Optional
 
+from decimal import Decimal
+
 from bson.decimal128 import Decimal128
+from fastapi.encoders import decimal_encoder
 from pydantic import BeforeValidator
 
 from services.json_de_mongo import _a_float
@@ -39,6 +42,12 @@ def _sin_estructura(valor):
     """
     if isinstance(valor, Decimal128):
         return _a_float(valor)
+    # Y el `Decimal` de Python, por lo mismo del otro lado: sin contrato
+    # FastAPI lo manda como número; con contrato salía como TEXTO («"12.50"»),
+    # comprobado. La pantalla que suma un texto concatena. Se convierte con la
+    # misma función que usa FastAPI sin contrato, para que salga idéntico.
+    if isinstance(valor, Decimal):
+        return decimal_encoder(valor)
     return None if isinstance(valor, (dict, list, tuple, set)) else valor
 
 

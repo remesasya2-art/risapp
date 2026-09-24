@@ -110,7 +110,7 @@ def test_ninguna_consulta_de_lista_va_sin_proyeccion():
         "fotos del comprobante en base64 adentro:\n\n"
         + "\n".join(f"    {x}" for x in sueltas)
         + "\n\nUsá `las_fotos.solo(...)` con los campos que la pantalla "
-          "escribe, o `las_fotos.SIN_LAS_FOTOS` si el documento se le pasa "
+          "escribe, o `las_fotos.sin_las_fotos()` si el documento se le pasa "
           "entero a la vista."
     )
 
@@ -207,7 +207,7 @@ def test_toda_lista_de_lo_prohibido_saca_TODAS_las_fotos():
     incompletas = []
     for rel, ln, proy, txt in _consultas_de_lista():
         if not isinstance(proy, ast.Dict):
-            continue                      # `las_fotos.SIN_LAS_FOTOS`, o `solo(...)`
+            continue                      # `las_fotos.sin_las_fotos()`, o `solo(...)`
         excluidos = {k.value for k, v in zip(proy.keys, proy.values)
                      if isinstance(k, ast.Constant) and isinstance(v, ast.Constant)
                      and v.value == 0}
@@ -219,7 +219,7 @@ def test_toda_lista_de_lo_prohibido_saca_TODAS_las_fotos():
     assert not incompletas, (
         "Proyecciones de lo PROHIBIDO que no sacan todas las fotos:\n\n"
         + "\n".join(f"    {x}" for x in incompletas)
-        + "\n\nUsá `las_fotos.SIN_LAS_FOTOS`, que las nombra a todas en un "
+        + "\n\nUsá `las_fotos.sin_las_fotos()`, que las nombra a todas en un "
           "solo lugar."
     )
 
@@ -277,6 +277,31 @@ def test_el_campo_viejo_y_el_nuevo_cuentan_los_dos(base):
 def test_sin_las_fotos_es_de_lo_prohibido_y_las_nombra_a_todas():
     assert set(las_fotos.SIN_LAS_FOTOS) == set(las_fotos.LAS_FOTOS)
     assert all(v == 0 for v in las_fotos.SIN_LAS_FOTOS.values())
+
+
+def test_nadie_le_pasa_a_la_base_la_constante_compartida():
+    """`SIN_LAS_FOTOS` se pide con `sin_las_fotos()`, que da una copia.
+
+    El doble de Mongo de los tests le agrega `_id` a la proyección que
+    recibe. Tres rutas le pasaban la constante misma, y el primer test que
+    las llamó la dejó cambiada para el resto: falló
+    `test_sin_las_fotos_es_de_lo_prohibido_y_las_nombra_a_todas`, que no
+    tenía nada que ver, y sólo si corría después.
+    """
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    la_nombran = []
+    for archivo in raiz.rglob("*.py"):
+        rel = archivo.relative_to(raiz).as_posix()
+        if rel.startswith(("tests/", "services/las_fotos.py")) or "/node_modules/" in rel:
+            continue
+        for n, linea in enumerate(archivo.read_text(encoding="utf-8").splitlines(), 1):
+            if "SIN_LAS_FOTOS" in linea:
+                la_nombran.append(f"{rel}:{n}  {linea.strip()}")
+    assert not la_nombran, (
+        "Estas líneas usan la constante compartida en vez de una copia:\n\n"
+        + "\n".join(f"    {x}" for x in la_nombran)
+        + "\n\nUsá `las_fotos.sin_las_fotos()`."
+    )
 
 
 def test_solo_es_de_lo_permitido_y_no_deja_pasar_fotos():

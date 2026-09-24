@@ -36,6 +36,15 @@ ACCIONES = [
     ("routes/kyc_admin.py", "router", "POST", "/{verification_id}/reject", "VerificacionRechazada"),
     ("routes/kyc_admin.py", "router", "PATCH", "/{verification_id}/note", "NotaGuardada"),
     ("admin_routes.py", "admin_router", "PUT", "/users/{user_id}/balance", "SaldoAjustado"),
+    ("routes/admin.py", "router", "POST", "/ordenes/tomar", "OrdenTomada"),
+    ("routes/admin.py", "router", "POST", "/ordenes/liberar", "OrdenLiberada"),
+    ("routes/admin.py", "router", "POST", "/ordenes/{transaction_id}/aprobar-con-diferencia", "EstadoCambiado"),
+    ("routes/admin.py", "router", "POST", "/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo",
+     "OrdenRechazadaYReembolsada"),
+    ("routes/admin.py", "router", "POST", "/recharges/ves/process/{transaction_id}", "RecargaProcesada"),
+    ("routes/admin.py", "router", "POST", "/envios-reais/{transaction_id}/verificar", "EstadoCambiado"),
+    ("admin_routes.py", "admin_router", "POST", "/recharges/approve", "EstadoCambiado"),
+    ("routes/credits_admin.py", "router", "POST", "/manual-credit", "CreditoManual"),
 ]
 _IDS = [f"{m} {a.split('/')[-1][:-3]}{c}" for a, _, m, c, _ in ACCIONES]
 
@@ -474,3 +483,283 @@ def test_LA_HISTORIA_DEL_KYC_DICE_QUIEN_POR_SU_NOMBRE_Y_NO_POR_SU_CORREO(kyc):
     assert nota["admin_name"] == "Revisora" and nota["details"]["new_value"] == "mirar la foto"
     for interno in ("revisora@ejemplo.com", "admin_email", "u_revisora"):
         assert interno not in r.text, f"la historia dejó salir «{interno}»"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. Las órdenes por pagar y los lotes
+# ══════════════════════════════════════════════════════════════════════════
+
+def _igual_a_llamarla_directo(respuesta, directo, sin=()):
+    """La ruta, por HTTP con su contrato, contesta lo mismo que su función
+    llamada a mano: el contrato no se comió nada. `sin` son las claves que el
+    contrato deja afuera A PROPOSITO."""
+    from fastapi.encoders import jsonable_encoder
+    from services import json_de_mongo
+    # Lo directo trae la plata cruda de la base: se traduce con la red, como
+    # la traduce el servidor de verdad cuando una ruta no tiene contrato.
+    json_de_mongo.ensenarle_decimal128_a_fastapi()
+    esperado = {k: v for k, v in jsonable_encoder(directo).items() if k not in sin}
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json() == esperado
+
+
+@pytest.fixture
+def ordenes(panel):
+    """Un retiro a Venezuela y una recarga en bolívares, esperando."""
+    import asyncio
+    from datetime import datetime, timezone
+    from routes import admin as rutas_admin
+    from services.money import to_decimal128
+    base = rutas_admin.db
+    t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    asyncio.run(base.transactions.insert_many([
+        {"transaction_id": "tx_o1", "display_id": "000201", "user_id": "u_ana", "type": "withdrawal",
+         "status": "pending", "currency_input": "RIS", "currency_output": "VES",
+         "amount_input": to_decimal128("50.00"), "amount_output": to_decimal128("5500.00"),
+         "beneficiary_data": {"full_name": "José Pérez", "id_document": "V12345678", "bank": "Banesco",
+                              "bank_code": "0134", "account_number": "01340000000000000001",
+                              "payment_type": "transferencia", "nota_interna": "no sale"},
+         "created_at": t0},
+        {"transaction_id": "tx_o2", "display_id": "000202", "user_id": "u_ana", "type": "recharge_ves",
+         "status": "pending", "amount_ves": to_decimal128("1100.00"), "amount_ris": to_decimal128("10.00"),
+         "proof_image": "data:image/jpeg;base64," + "PAGO" * 10, "created_at": t0},
+    ]))
+    return panel
+
+
+def _jefe():
+    from models.user import User
+    return User(user_id="u_jefe", name="Jefe", email="jefe@ejemplo.com", role="super_admin")
+
+
+def test_LAS_ORDENES_POR_PROCESAR_SALEN_IGUAL_QUE_LAS_ARMA_LA_RUTA(ordenes):
+    import asyncio
+    from routes import admin as rutas_admin
+    r = ordenes.get("/api/admin/ordenes/pendientes")
+    _igual_a_llamarla_directo(r, asyncio.run(rutas_admin.get_ordenes_pendientes(admin=_jefe())))
+    assert {o["orden_id"] for o in r.json()["ordenes"]} == {"tx_o1", "tx_o2"}
+    assert "nota_interna" not in r.text
+
+
+def test_LA_REVISION_DE_PAGO_Y_LOS_BANCOS_SALEN_IGUAL_QUE_LOS_ARMA_LA_RUTA(ordenes):
+    import asyncio
+    from routes import admin as rutas_admin
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/ordenes/revision-pago"),
+                              asyncio.run(rutas_admin.get_ordenes_revision_pago(admin=_jefe())))
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/ordenes/bancos-para-pagar"),
+                              asyncio.run(rutas_admin.bancos_para_pagar(admin=_jefe())))
+
+
+def test_UN_LOTE_SE_ARMA_SE_LISTA_SE_BAJA_Y_SE_CANCELA_SIN_PERDER_NADA(ordenes):
+    """El ciclo del lote por HTTP. Cada lectura, igual a su servicio; armarlo
+    no devuelve las órdenes con sus beneficiarios (ya están en el archivo)."""
+    import asyncio
+    from routes import admin as rutas_admin
+    from services import comprobantes_del_lote, lotes_de_pago
+    base = rutas_admin.db
+    r = ordenes.post("/api/admin/lotes", json={"orden_ids": ["tx_o1"], "banco_pagador": "0102"})
+    assert r.status_code == 200, r.text
+    lote = r.json()
+    assert lote["total"] == 1 and lote["texto"] and lote["banco_pagador"]["codigo"] == "0102"
+    assert "ordenes" not in lote and "creado_por" not in lote
+    lote_id = lote["lote_id"]
+
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/lotes"), {"lotes": asyncio.run(lotes_de_pago.abiertos(base))})
+    _igual_a_llamarla_directo(ordenes.get(f"/api/admin/lotes/{lote_id}/archivo"),
+                              asyncio.run(lotes_de_pago.archivo(base, lote_id)))
+    _igual_a_llamarla_directo(ordenes.get(f"/api/admin/lotes/{lote_id}/comprobantes"),
+                              asyncio.run(comprobantes_del_lote.listar(base, lote_id)))
+
+    r = ordenes.post(f"/api/admin/lotes/{lote_id}/cancelar")
+    assert r.status_code == 200, r.text
+    assert r.json()["devueltas"] == 1
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/lotes/cerrados"),
+                              {"lotes": asyncio.run(lotes_de_pago.cerrados(base))})
+
+
+LO_QUE_LEEN_ORDENES_Y_LOTES = {
+    "OrdenPorProcesar": {"orden_id", "flujo", "flujo_label", "accion", "display_id", "created_at", "user_name",
+                         "origen", "destino", "comprobante_usuario", "assigned_to", "assigned_to_name",
+                         "beneficiario"},
+    "BeneficiarioDeLaOrden": {"nombre", "documento", "banco", "telefono", "cuenta", "tipo_pago", "pix_key"},
+    "OrdenEnRevisionDePago": {"orden_id", "display_id", "topup_expired", "user_name", "user_email", "created_at",
+                              "paid_ratio", "pay_amount", "moneda", "actually_paid", "topup_actually_paid",
+                              "faltante", "recibido_total", "red", "amount_output", "currency_output",
+                              "beneficiario"},
+    "LoteEnLaLista": {"lote_id", "numero", "total", "banco_pagador", "creado_por_nombre", "creado_en",
+                      "sin_datos", "cerrado_por_nombre", "cerrado_en"},
+    "LoteArmado": {"texto", "numero", "banco_pagador", "total", "por_seccion", "sin_datos",
+                   "no_se_pudieron_tomar", "ya_no_estan"},
+    "ComprobanteDelLote": {"orden_id", "comprobante_id", "estado", "motivo", "leido"},
+    "OrdenDelLote": {"orden_id", "display_id", "beneficiario", "monto", "tiene_comprobante", "listo_para_registrar"},
+    "ComprobantesDelLote": {"estado", "hay_lector", "por_que_no_hay_lector", "descartadas", "comprobantes",
+                            "ordenes"},
+    "LoLeido": {"cuentas", "telefonos", "montos"},
+}
+
+
+@pytest.mark.parametrize("modelo", sorted(LO_QUE_LEEN_ORDENES_Y_LOTES))
+def test_LOS_CONTRATOS_DE_ORDENES_Y_LOTES_TIENEN_TODO_LO_QUE_LAS_PANTALLAS_LEEN(modelo):
+    """OrdenesPorProcesar.jsx, DiferenciasPago.jsx, LotesDePago y
+    ComprobantesDelLote.jsx."""
+    from models import panel_ordenes
+    faltan = LO_QUE_LEEN_ORDENES_Y_LOTES[modelo] - set(getattr(panel_ordenes, modelo).model_fields)
+    assert not faltan, f"la pantalla lee {modelo}.{sorted(faltan)} y el contrato no lo deja pasar"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. Las recargas
+# ══════════════════════════════════════════════════════════════════════════
+
+def _sin_reloj(pagina):
+    """La antigüedad se calcula con el reloj en cada llamada: puede diferir
+    en un segundo entre dos llamadas. Se saca, comprobando que esté."""
+    for fila in pagina.get("recharges", []):
+        assert fila.pop("antiguedad")["nivel"]
+    if "counters" in pagina:
+        assert pagina["counters"].pop("mas_vieja")["nivel"]
+    return pagina
+
+
+def test_LA_COLA_DE_RECARGAS_EN_BOLIVARES_SALE_IGUAL_QUE_LA_ARMA_LA_RUTA(ordenes):
+    import asyncio
+    from fastapi.encoders import jsonable_encoder
+    from routes import admin as rutas_admin
+    from services import json_de_mongo
+    json_de_mongo.ensenarle_decimal128_a_fastapi()
+    r = ordenes.get("/api/admin/recharges/ves")
+    assert r.status_code == 200, r.text
+    directo = asyncio.run(rutas_admin.get_all_ves_recharges(
+        status="pending", q="", limit=50, skip=0, admin=_jefe()))
+    assert _sin_reloj(r.json()) == _sin_reloj(jsonable_encoder(directo))
+    assert r.json()["recharges"][0]["amount_ves"] == 1100.0
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/recharges/ves/pending"),
+                              asyncio.run(rutas_admin.get_pending_ves_recharges(admin=_jefe())))
+
+
+def test_EL_CONTROL_DE_REFERENCIA_CONTESTA_IGUAL_CON_Y_SIN_COINCIDENCIAS(ordenes):
+    import asyncio
+    from routes import admin as rutas_admin
+    for digitos in ("12", "345"):
+        _igual_a_llamarla_directo(
+            ordenes.get("/api/admin/recharges/ves/check-reference", params={"digits": digitos}),
+            asyncio.run(rutas_admin.check_ves_reference(digits=digitos, admin=_jefe())))
+
+
+LO_QUE_LEE_RECARGAS_VES = {
+    "RecargaEnLaCola": {"transaction_id", "status", "user_name", "user_email", "amount_ris", "amount_ves",
+                        "rate_used", "proof_image", "falta_banco", "falta_comprobante", "assigned_to",
+                        "assigned_to_name", "rejection_reason", "reference_digits", "processed_at",
+                        "processed_by", "posicion", "created_at", "destination_bank", "destination_bank_name",
+                        "referencia", "banco_elegido_a_mano", "antiguedad"},
+    "ContadoresDeRecargas": {"pendientes", "aprobadas", "rechazadas", "total", "ves_pendiente", "sin_banco",
+                             "sin_comprobante", "mas_vieja"},
+    "ControlDeReferencia": {"has_collision", "first_registered"},
+}
+
+
+@pytest.mark.parametrize("modelo", sorted(LO_QUE_LEE_RECARGAS_VES))
+def test_LOS_CONTRATOS_DE_RECARGAS_TIENEN_TODO_LO_QUE_LA_PANTALLA_LEE(modelo):
+    """RecargasVES.jsx."""
+    from models import panel_recargas
+    faltan = LO_QUE_LEE_RECARGAS_VES[modelo] - set(getattr(panel_recargas, modelo).model_fields)
+    assert not faltan, f"la pantalla lee {modelo}.{sorted(faltan)} y el contrato no lo deja pasar"
+
+
+@pytest.fixture
+def rutas_viejas(monkeypatch):
+    """Las rutas de `admin_routes.py`, que abren su propia conexión."""
+    import asyncio
+    from datetime import datetime, timezone
+    import admin_routes
+    from _lote_c_comun import app_con, SUPER
+    from routes import dependencies as deps
+    from services.money import to_decimal128
+    c, base = app_con(admin_routes.admin_router, deps.get_admin_user, SUPER, "rutas_viejas")
+    monkeypatch.setattr(admin_routes, "db", base)
+    t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    asyncio.run(base.transactions.insert_one({
+        "transaction_id": "tx_r9", "user_id": "u_ana", "type": "recharge", "status": "pending",
+        "amount_input": to_decimal128("100.00"), "currency_input": "BRL", "created_at": t0,
+        "proof_image": "data:image/jpeg;base64," + "PIX" * 12,
+        "mp_payment_id": "123456789", "nota_interna": "revisar el titular", "ip_del_cliente": "10.0.0.7"}))
+    asyncio.run(base.admin_payment_records.insert_one({
+        "record_type": "recharge", "transaction_id": "tx_r8", "user_id": "u_ana", "amount_ris": to_decimal128("50.00"),
+        "proof_image": "data:image/jpeg;base64," + "PIX" * 12, "approved_by": "u_jefe", "created_at": t0,
+        "nota_interna": "revisar el titular"}))
+    return c
+
+
+def test_LAS_RUTAS_VIEJAS_DE_RECARGAS_YA_NO_DEVUELVEN_EL_DOCUMENTO_ENTERO(rutas_viejas):
+    r = rutas_viejas.get("/api/admin/recharges/pending")
+    assert r.status_code == 200, r.text
+    (rec,) = r.json()["recharges"]
+    assert rec["transaction_id"] == "tx_r9" and rec["amount_input"] == 100.0
+    r_lista = rutas_viejas.get("/api/admin/payment-records")
+    assert r_lista.status_code == 200, r_lista.text
+    assert r_lista.json()["records"][0]["amount_ris"] == 50.0
+    for texto in (r.text, r_lista.text):
+        for interno in ("nota_interna", "revisar el titular", "ip_del_cliente", "10.0.0.7", "mp_payment_id", "base64"):
+            assert interno not in texto, f"salió «{interno}»"
+    r = rutas_viejas.get("/api/admin/recharges/tx_r9/proof")
+    assert r.status_code == 200, r.text
+    assert r.json()["proof_image"].startswith("data:image/jpeg;base64,") and "nota_interna" not in r.text
+    # Estas rutas le pasaban a la base la proyección compartida, y el doble
+    # de Mongo se la dejaba con un `_id` de más (ver `services/las_fotos.py`).
+    from services import las_fotos
+    assert las_fotos.SIN_LAS_FOTOS == {campo: 0 for campo in las_fotos.LAS_FOTOS}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. Los depósitos en cripto
+# ══════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def creditos():
+    import asyncio
+    from datetime import datetime, timezone
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from conftest import usar_base, ensenarle_decimal128_a_mongomock
+    from routes import credits_admin, dependencies as deps
+
+    ensenarle_decimal128_a_mongomock()
+    base = mongomock_motor.AsyncMongoMockClient()["contratos_creditos"]
+    usar_base(base)
+    t0 = datetime(2026, 9, 20, 12, tzinfo=timezone.utc)
+    asyncio.run(base.users.insert_one({"user_id": "u_ana", "email": "ana@ejemplo.com", "name": "Ana"}))
+    asyncio.run(base.crypto_deposits.insert_one({
+        "order_id": "cr_1", "user_id": "u_ana", "currency": "usdt", "pay_currency": "usdttrc20", "network": "TRC20",
+        # Como float, igual que lo guardan `routes/credits.py` y la acreditación
+        # manual: acá la plata no se guarda en Decimal128.
+        "amount": 25.0, "credit_amount": 25.0, "status": "finished", "credited": True, "created_at": t0,
+        "credited_at": t0, "source": "nowpayments", "admin_note": "",
+        "pay_address": "TQ4ZDireccionDePago", "payin_extra_id": "memo-777",
+        "credit_error": "Traceback interno", "webhook_last_seen": t0, "admin_id": "u_jefe"}))
+    app = FastAPI()
+    app.include_router(credits_admin.router, prefix="/api")
+    app.dependency_overrides[deps.get_super_admin] = _jefe
+    return TestClient(app)
+
+
+def test_LOS_DEPOSITOS_CRIPTO_SALEN_CON_LO_QUE_LA_PANTALLA_MUESTRA_Y_SIN_LO_INTERNO(creditos):
+    r = creditos.get("/api/admin/credits/deposits")
+    assert r.status_code == 200, r.text
+    (d,) = r.json()["items"]
+    lee = {"order_id", "created_at", "user_name", "user_email", "amount", "currency", "source", "admin_note", "status"}
+    assert lee <= set(d), f"la pantalla lee {sorted(lee - set(d))} y no vino"
+    assert d["amount"] == 25.0 and d["user_email"] == "ana@ejemplo.com"
+    r2 = creditos.get("/api/admin/credits/report", params={"date_from": "2026-09-20", "date_to": "2026-09-20"})
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["totals"]["usdt"] == 25.0 and r2.json()["by_day"][0]["count"] == 1
+    for texto in (r.text, r2.text):
+        for interno in ("TQ4ZDireccionDePago", "memo-777", "Traceback interno", "webhook_last_seen", "u_jefe"):
+            assert interno not in texto, f"salió «{interno}»"
+
+
+def test_EL_REPORTE_EN_CSV_SIGUE_SIENDO_UN_ARCHIVO(creditos):
+    """El contrato no toca un archivo: FastAPI lo devuelve tal cual."""
+    r = creditos.get("/api/admin/credits/report",
+                     params={"date_from": "2026-09-20", "date_to": "2026-09-20", "format": "csv"})
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/csv") and "cr_1" in r.text
