@@ -10,6 +10,7 @@ import {
   ChevronRight, Settings, User, HelpCircle, Menu, X, Clock, CheckCircle, XCircle, Eye, Download, Zap, Package
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
+import SelectorDeApariencia from '../components/tema/SelectorDeApariencia';
 import SupportChat from '../components/SupportChat';
 import KycQuotaModal from '../components/KycQuotaModal';
 import BalanceCard from '../components/dashboard/BalanceCard';
@@ -114,11 +115,11 @@ export default function Dashboard() {
   // Transaction helper functions
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'completed': return <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a' }} />;
+      case 'completed': return <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-exito, #16a34a)' }} />;
       case 'pending':
-      case 'pending_manual_approval': return <Clock style={{ width: '16px', height: '16px', color: '#d97706' }} />;
-      case 'rejected': return <XCircle style={{ width: '16px', height: '16px', color: '#dc2626' }} />;
-      default: return <Clock style={{ width: '16px', height: '16px', color: '#9ca3af' }} />;
+      case 'pending_manual_approval': return <Clock style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-alerta, #d97706)' }} />;
+      case 'rejected': return <XCircle style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-error, #dc2626)' }} />;
+      default: return <Clock style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />;
     }
   };
 
@@ -134,11 +135,11 @@ export default function Dashboard() {
 
   const getStatusStyle = (status) => {
     switch (status) {
-      case 'completed': return { backgroundColor: '#dcfce7', color: '#16a34a' };
+      case 'completed': return { backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', color: 'var(--en-oscuro-exito, #16a34a)' };
       case 'pending':
-      case 'pending_manual_approval': return { backgroundColor: '#fef3c7', color: '#d97706' };
-      case 'rejected': return { backgroundColor: '#fee2e2', color: '#dc2626' };
-      default: return { backgroundColor: '#f3f4f6', color: '#6b7280' };
+      case 'pending_manual_approval': return { backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)' };
+      case 'rejected': return { backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)' };
+      default: return { backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: 'var(--en-oscuro-texto-2, #6b7280)' };
     }
   };
 
@@ -209,14 +210,14 @@ export default function Dashboard() {
   const isActive = (path) => location.pathname === path;
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '20px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
   };
 
   const buttonPrimaryStyle = {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'var(--en-oscuro-acento, #6366f1)',
     color: 'white',
     borderRadius: '14px',
     height: '52px',
@@ -233,8 +234,8 @@ export default function Dashboard() {
   };
 
   const buttonSecondaryStyle = {
-    backgroundColor: '#ffffff',
-    color: '#374151',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
+    color: 'var(--en-oscuro-texto, #374151)',
     borderRadius: '14px',
     height: '52px',
     padding: '0 24px',
@@ -245,21 +246,32 @@ export default function Dashboard() {
     justifyContent: 'center',
     gap: '8px',
     textDecoration: 'none',
-    border: '1px solid #d1d5db',
+    border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
     transition: 'all 0.2s',
     flex: isMobile ? 1 : 'none'
   };
 
   return (
     <div 
+      className="con-tema"
       style={{ 
         minHeight: '100vh', 
-        backgroundColor: '#F4F5F9', 
+        backgroundColor: 'var(--en-oscuro-fondo, #F4F5F9)', 
         display: 'flex',
-        fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, Helvetica, sans-serif',
+        position: 'relative'
       }}
       data-testid="dashboard-page"
     >
+      {/* La pared de colores del estilo nuevo, fija detrás de todo: el menú
+          lateral y la barra de arriba son de vidrio, y el vidrio necesita algo
+          detrás para verse. Las tarjetas siguen siendo sólidas: encima de
+          ellas va la plata, y una cifra se lee mejor sobre un fondo liso. */}
+      <div className="t-pared" aria-hidden="true" style={{ position: 'fixed' }}>
+        <i style={{ width: 560, height: 560, left: -160, top: -180, background: 'var(--t-mancha-1)', opacity: 0.55 }} />
+        <i style={{ width: 480, height: 480, right: -140, top: 80, background: 'var(--t-mancha-2)', opacity: 0.45 }} />
+        <i style={{ width: 520, height: 520, left: '35%', bottom: -220, background: 'var(--t-mancha-3)', opacity: 0.45 }} />
+      </div>
       <KycQuotaModal />
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
@@ -279,8 +291,10 @@ export default function Dashboard() {
       <aside 
         style={{
           width: isMobile ? '260px' : (desktopCollapsed ? '76px' : '260px'),
-          backgroundColor: '#ffffff',
-          borderRight: '1px solid #f3f4f6',
+          background: 'var(--t-vidrio-fuerte)',
+          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+          backdropFilter: 'blur(28px) saturate(180%)',
+          borderRight: '1px solid var(--t-borde-vidrio)',
           display: 'flex',
           flexDirection: 'column',
           position: 'fixed',
@@ -292,11 +306,12 @@ export default function Dashboard() {
         }}
       >
         {/* Logo */}
-        <div style={{ padding: '24px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '24px', borderBottom: '1px solid var(--en-oscuro-linea, #f3f4f6)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <img 
-            src="/logo-ris.jpeg" 
-            alt="RIS" 
-            style={{ height: '40px', width: 'auto', borderRadius: '10px' }}
+            src="/logo-ris.png" 
+            alt="RISApp" 
+            className="t-logo"
+            style={{ height: '40px', width: '40px', borderRadius: '10px' }}
           />
           {isMobile && (
             <button
@@ -306,14 +321,14 @@ export default function Dashboard() {
                 height: '36px',
                 borderRadius: '10px',
                 border: 'none',
-                backgroundColor: '#f3f4f6',
+                backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}
             >
-              <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+              <X style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
             </button>
           )}
         </div>
@@ -342,7 +357,7 @@ export default function Dashboard() {
                         background: 'transparent',
                         border: 'none',
                         cursor: 'pointer',
-                        color: '#6b7280',
+                        color: 'var(--en-oscuro-texto-2, #6b7280)',
                         fontSize: '14px',
                         justifyContent: collapsedDesktop ? 'center' : 'flex-start'
                       }}
@@ -366,8 +381,8 @@ export default function Dashboard() {
                       borderRadius: '12px',
                       textDecoration: 'none',
                       transition: 'all 0.2s',
-                      backgroundColor: isActive(item.path) ? '#6366f1' : 'transparent',
-                      color: isActive(item.path) ? '#ffffff' : '#6b7280',
+                      backgroundColor: isActive(item.path) ? 'var(--en-oscuro-acento, #6366f1)' : 'transparent',
+                      color: isActive(item.path) ? '#ffffff' : 'var(--en-oscuro-texto-2, #6b7280)',
                       fontWeight: isActive(item.path) ? '600' : '400',
                       fontSize: '14px',
                       justifyContent: collapsedDesktop ? 'center' : 'flex-start'
@@ -383,13 +398,13 @@ export default function Dashboard() {
         </nav>
 
         {/* User Section */}
-        <div style={{ padding: '16px', borderTop: '1px solid #f3f4f6' }}>
+        <div style={{ padding: '16px', borderTop: '1px solid var(--en-oscuro-linea, #f3f4f6)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', marginBottom: '12px' }}>
             <div 
               style={{
                 width: '40px',
                 height: '40px',
-                backgroundColor: '#6366f1',
+                backgroundColor: 'var(--en-oscuro-acento, #6366f1)',
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
@@ -402,10 +417,10 @@ export default function Dashboard() {
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, color: '#111827', fontSize: '14px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ margin: 0, color: 'var(--en-oscuro-texto, #111827)', fontSize: '14px', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.name || 'Usuario'}
               </p>
-              <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ margin: 0, color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.email}
               </p>
             </div>
@@ -422,7 +437,7 @@ export default function Dashboard() {
               border: 'none',
               borderRadius: '12px',
               cursor: 'pointer',
-              color: '#6b7280',
+              color: 'var(--en-oscuro-texto-2, #6b7280)',
               fontSize: '14px',
               transition: 'all 0.2s'
             }}
@@ -437,6 +452,9 @@ export default function Dashboard() {
       {/* Main Content */}
       <main style={{ 
         flex: 1, 
+        position: 'relative',
+        zIndex: 1,
+        minWidth: 0,
         marginLeft: isMobile ? 0 : (desktopCollapsed ? '76px' : '260px'), 
         padding: isMobile ? '16px' : '32px',
         paddingTop: isMobile ? '72px' : '32px',
@@ -450,8 +468,10 @@ export default function Dashboard() {
             left: 0,
             right: 0,
             height: '56px',
-            backgroundColor: '#ffffff',
-            borderBottom: '1px solid #e5e7eb',
+            background: 'var(--t-vidrio-fuerte)',
+            WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+            backdropFilter: 'blur(28px) saturate(180%)',
+            borderBottom: '1px solid var(--t-borde-vidrio)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -465,7 +485,7 @@ export default function Dashboard() {
                 height: '40px',
                 borderRadius: '10px',
                 border: 'none',
-                backgroundColor: '#f3f4f6',
+                backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -473,10 +493,13 @@ export default function Dashboard() {
               }}
               data-testid="menu-button"
             >
-              <Menu style={{ width: '22px', height: '22px', color: '#374151' }} />
+              <Menu style={{ width: '22px', height: '22px', color: 'var(--en-oscuro-texto, #374151)' }} />
             </button>
-            <img src="/logo-ris.jpeg" alt="RIS" style={{ height: '32px', borderRadius: '8px' }} />
-            <NotificationBell />
+            <img src="/logo-ris.png" alt="RISApp" className="t-logo" style={{ height: '32px', width: '32px', borderRadius: '8px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <SelectorDeApariencia />
+              <NotificationBell />
+            </div>
           </div>
         )}
 
@@ -484,24 +507,27 @@ export default function Dashboard() {
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
             <div>
-              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: '0 0 4px 0' }}>
+              <h1 style={{ fontSize: '32px', fontWeight: '700', letterSpacing: '-.035em', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 4px 0' }}>
                 ¡Bienvenido, {user?.name?.split(' ')[0] || 'Usuario'}!
               </h1>
-              <p style={{ fontSize: '16px', color: '#9ca3af', margin: 0 }}>
+              <p style={{ fontSize: '16px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>
                 Aquí está el resumen de tu billetera.
               </p>
             </div>
-            <NotificationBell />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <SelectorDeApariencia />
+              <NotificationBell />
+            </div>
           </div>
         )}
 
         {/* Mobile greeting */}
         {isMobile && (
           <div style={{ marginBottom: '20px' }}>
-            <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 4px 0' }}>
+            <h1 style={{ fontSize: '28px', fontWeight: '700', letterSpacing: '-.03em', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 4px 0' }}>
               ¡Hola, {user?.name?.split(' ')[0] || 'Usuario'}!
             </h1>
-            <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>
+            <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>
               Resumen de tu billetera
             </p>
           </div>
@@ -554,18 +580,18 @@ export default function Dashboard() {
         ) : null}
 
         {/* Recent Transactions */}
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: isMobile ? '20px' : '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '20px', padding: isMobile ? '20px' : '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: '16px', paddingBottom: '14px',
-            borderBottom: '1px solid #EFEFF5',
+            borderBottom: '1px solid var(--en-oscuro-linea, #EFEFF5)',
           }}>
-            <h2 style={{ fontSize: isMobile ? '17px' : '18px', fontWeight: 700, color: '#1A1A2E', margin: 0, letterSpacing: '-0.01em' }}>
+            <h2 style={{ fontSize: isMobile ? '17px' : '18px', fontWeight: 700, color: 'var(--en-oscuro-texto, #1A1A2E)', margin: 0, letterSpacing: '-0.01em' }}>
               Transacciones Recientes
             </h2>
             <Link to="/history" style={{
               display: 'inline-flex', alignItems: 'center', gap: '4px',
-              color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600,
+              color: 'var(--en-oscuro-acento, #5B4FE9)', textDecoration: 'none', fontSize: '14px', fontWeight: 600,
             }}>
               Ver todo
               <ChevronRight style={{ width: '16px', height: '16px' }} />
@@ -574,17 +600,17 @@ export default function Dashboard() {
 
           {loadingTransactions ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
-              <div style={{ width: '32px', height: '32px', border: '3px solid #e5e7eb', borderTopColor: '#5B4FE9', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <div style={{ width: '32px', height: '32px', border: '3px solid var(--en-oscuro-linea, #e5e7eb)', borderTopColor: 'var(--en-oscuro-acento, #5B4FE9)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
             </div>
           ) : recentTransactions.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
-              <p style={{ color: '#8E8E9A', fontSize: '14px', margin: '0 0 12px 0', textAlign: 'center' }}>No hay transacciones aún.</p>
+              <p style={{ color: 'var(--en-oscuro-texto-2, #8E8E9A)', fontSize: '14px', margin: '0 0 12px 0', textAlign: 'center' }}>No hay transacciones aún.</p>
               {recarga.abierta ? (
-                <Link to="/recharge" style={{ color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+                <Link to="/recharge" style={{ color: 'var(--en-oscuro-acento, #5B4FE9)', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
                   Recarga saldo para comenzar
                 </Link>
               ) : (
-                <Link to="/send" style={{ color: '#5B4FE9', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+                <Link to="/send" style={{ color: 'var(--en-oscuro-acento, #5B4FE9)', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
                   Hacé tu primer envío
                 </Link>
               )}
@@ -617,24 +643,24 @@ export default function Dashboard() {
         >
           <div 
             style={{ 
-              backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', 
+              backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '24px', padding: '24px', 
               width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' 
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                 Comprobante{(selectedVoucher.proof_images?.length || 1) > 1 ? 's' : ''} de Pago
               </h3>
               <button 
                 onClick={() => setShowVoucherModal(false)}
                 style={{ 
                   width: '36px', height: '36px', borderRadius: '10px', 
-                  border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  border: 'none', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
               >
-                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                <X style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
               </button>
             </div>
 
@@ -643,15 +669,15 @@ export default function Dashboard() {
                 (`TransactionItem.jsx`): acá decía «VES» fijo, y una recarga de
                 50 RIS se mostraba como «50,00 VES», y un envío a Brasil en
                 bolívares. El equivalente BCV sólo tiene sentido en bolívares. */}
-            <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
+            <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '14px', marginBottom: '20px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto enviado</p>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} ${selectedVoucher.currency_input || 'RIS'}`}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Monto enviado</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} ${selectedVoucher.currency_input || 'RIS'}`}</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Monto recibido</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>
                     {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} {selectedVoucher.currency_output || 'VES'}
                     {(selectedVoucher.currency_output || 'VES') === 'VES' && rates?.bcv_usd_ves > 0 && (
                       <span style={{ fontSize: '14px', marginLeft: 6 }}>= $ {fmt((selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0) / rates.bcv_usd_ves, 2)} BCV</span>
@@ -660,22 +686,22 @@ export default function Dashboard() {
                 </div>
               </div>
               {(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data) && (
-                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).full_name}</p>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank || (selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank_code || ''}</p>
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Beneficiario</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).full_name}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank || (selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank_code || ''}</p>
                 </div>
               )}
               <div style={{ marginTop: '12px' }}>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Fecha de proceso</p>
-                <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>{formatDateFull(selectedVoucher.completed_at || selectedVoucher.created_at)}</p>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Fecha de proceso</p>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>{formatDateFull(selectedVoucher.completed_at || selectedVoucher.created_at)}</p>
               </div>
             </div>
 
             {/* Imágenes del comprobante */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>
                   📷 {estadoDelComprobante === 'listo'
                     ? <>{(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''}</>
                     : 'Comprobante'}
@@ -692,7 +718,7 @@ export default function Dashboard() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
                       padding: '8px 14px', borderRadius: '10px', border: 'none',
-                      backgroundColor: '#6366f1', color: 'white', cursor: 'pointer',
+                      backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: 'white', cursor: 'pointer',
                       fontSize: '13px', fontWeight: '500'
                     }}
                   >
@@ -714,7 +740,7 @@ export default function Dashboard() {
                         alt={`Comprobante ${index + 1}`}
                         style={{ 
                           width: '100%', borderRadius: '12px', 
-                          border: '1px solid #e5e7eb', cursor: 'pointer' 
+                          border: '1px solid var(--en-oscuro-linea, #e5e7eb)', cursor: 'pointer' 
                         }}
                         onClick={() => abrirArchivo(img)}
                       />
@@ -727,13 +753,13 @@ export default function Dashboard() {
                       alt="Comprobante"
                       style={{ 
                         width: '100%', borderRadius: '12px', 
-                        border: '1px solid #e5e7eb', cursor: 'pointer' 
+                        border: '1px solid var(--en-oscuro-linea, #e5e7eb)', cursor: 'pointer' 
                       }}
                       onClick={() => abrirArchivo(selectedVoucher.proof_image)}
                     />
                   </div>
                 ) : (
-                  <p style={{ color: '#9ca3af', fontSize: '14px', textAlign: 'center', padding: '20px' }}>
+                  <p style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '14px', textAlign: 'center', padding: '20px' }}>
                     No hay imágenes disponibles
                   </p>
                 )}

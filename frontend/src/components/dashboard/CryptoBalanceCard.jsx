@@ -20,30 +20,30 @@ export default function CryptoBalanceCard({ usdt = 0, usdc = 0, isMobile = false
 function CryptoMini({ label, color, amount, currency }) {
   return (
     <div style={{
-      backgroundColor: '#ffffff', borderRadius: '16px', padding: '16px',
-      border: '1px solid #eef0f4', boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', padding: '16px',
+      border: '1px solid var(--en-oscuro-linea, #eef0f4)', boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
       display: 'flex', flexDirection: 'column', gap: '8px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280' }}>{label}</span>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{label}</span>
         <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: color }} />
       </div>
-      <span style={{ fontSize: '22px', fontWeight: 700, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', fontVariantNumeric: 'tabular-nums' }}>
         {amount}
       </span>
-      <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+      <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>
         Disponible por reembolso
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Link
           to={`/send-crypto?currency=${currency}`}
-          style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          style={{ fontSize: '12px', fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
           <ArrowUpRight size={12} strokeWidth={3} /> Enviar
         </Link>
         <Link
           to={`/history?filter=cripto&currency=${currency}`}
-          style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          style={{ fontSize: '12px', fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
           <Clock size={12} strokeWidth={3} /> Historial
         </Link>

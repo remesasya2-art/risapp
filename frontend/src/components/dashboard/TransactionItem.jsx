@@ -6,15 +6,15 @@ import { fmt, formatAccountNumber } from '../../utils/format';
  * Status pill (Pendiente / Aprobado / Rechazado / En revisión)
  */
 const STATUS_CONFIG = {
-  completed:                { label: 'Aprobado',  bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
-  approved:                 { label: 'Aprobado',  bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
-  verified:                 { label: 'Aprobado',  bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
-  pending:                  { label: 'Pendiente', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
-  pending_manual_approval:  { label: 'En revisión', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
-  rejected:                 { label: 'Rechazado', bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
-  failed:                   { label: 'Fallida',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  completed:                { label: 'Aprobado',  bg: 'var(--en-oscuro-exito-suave, #ECFDF5)', fg: 'var(--en-oscuro-exito, #10B981)', Icon: CheckCircle2 },
+  approved:                 { label: 'Aprobado',  bg: 'var(--en-oscuro-exito-suave, #ECFDF5)', fg: 'var(--en-oscuro-exito, #10B981)', Icon: CheckCircle2 },
+  verified:                 { label: 'Aprobado',  bg: 'var(--en-oscuro-exito-suave, #ECFDF5)', fg: 'var(--en-oscuro-exito, #10B981)', Icon: CheckCircle2 },
+  pending:                  { label: 'Pendiente', bg: 'var(--en-oscuro-alerta-suave, #FFF8E1)', fg: 'var(--en-oscuro-alerta, #F59E0B)', Icon: Clock },
+  pending_manual_approval:  { label: 'En revisión', bg: 'var(--en-oscuro-alerta-suave, #FFF8E1)', fg: 'var(--en-oscuro-alerta, #F59E0B)', Icon: Clock },
+  rejected:                 { label: 'Rechazado', bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
+  failed:                   { label: 'Fallida',   bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
   // Envios cripto pagados via NOWPayments: ciclo de vida del pago
-  awaiting_payment:         { label: 'Esperando pago',    bg: '#EFF6FF', fg: '#2563EB', Icon: Hourglass },
+  awaiting_payment:         { label: 'Esperando pago',    bg: 'var(--en-oscuro-acento-suave, #EFF6FF)', fg: '#2563EB', Icon: Hourglass },
   // ESTOS TRES FALTABAN, Y NO ERA UN DETALLE.
   //
   //   `StatusBadge` cae a «Pendiente» cuando no encuentra el estado. Así que
@@ -24,21 +24,21 @@ const STATUS_CONFIG = {
   //
   //   Al primero le decía que espere algo que ya no va a pasar. Al tercero,
   //   que estaba todo bien cuando hay plata suya esperando una decisión.
-  payment_expired:          { label: 'Expirado',           bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
-  awaiting_review:          { label: 'Revisando tu pago',  bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
-  payment_late:             { label: 'Pago a revisar',     bg: '#FFF7ED', fg: '#C2410C', Icon: AlertCircle },
-  awaiting_topup:           { label: 'Falta completar',   bg: '#FFF7ED', fg: '#C2410C', Icon: AlertCircle },
-  underpaid_review:         { label: 'En revisión',       bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
-  payment_failed:           { label: 'Pago no completado', bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
-  payment_error:            { label: 'Error de pago',     bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  payment_expired:          { label: 'Expirado',           bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
+  awaiting_review:          { label: 'Revisando tu pago',  bg: 'var(--en-oscuro-alerta-suave, #FFF8E1)', fg: 'var(--en-oscuro-alerta, #F59E0B)', Icon: Clock },
+  payment_late:             { label: 'Pago a revisar',     bg: 'var(--en-oscuro-alerta-suave, #FFF7ED)', fg: 'var(--en-oscuro-alerta, #C2410C)', Icon: AlertCircle },
+  awaiting_topup:           { label: 'Falta completar',   bg: 'var(--en-oscuro-alerta-suave, #FFF7ED)', fg: 'var(--en-oscuro-alerta, #C2410C)', Icon: AlertCircle },
+  underpaid_review:         { label: 'En revisión',       bg: 'var(--en-oscuro-alerta-suave, #FFF8E1)', fg: 'var(--en-oscuro-alerta, #F59E0B)', Icon: Clock },
+  payment_failed:           { label: 'Pago no completado', bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
+  payment_error:            { label: 'Error de pago',     bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
   // Estados en español (transacciones BTC y otras que guardan 'estado' en español)
-  procesando:               { label: 'Procesando', bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
-  pendiente:                { label: 'Pendiente',  bg: '#FFF8E1', fg: '#F59E0B', Icon: Clock },
-  completado:               { label: 'Enviado',    bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
-  enviado:                  { label: 'Enviado',    bg: '#ECFDF5', fg: '#10B981', Icon: CheckCircle2 },
-  cancelado:                { label: 'Cancelado',  bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
-  expirado:                 { label: 'Expirado',   bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
-  fallido:                  { label: 'Fallida',    bg: '#FEF2F2', fg: '#EF4444', Icon: XCircle },
+  procesando:               { label: 'Procesando', bg: 'var(--en-oscuro-alerta-suave, #FFF8E1)', fg: 'var(--en-oscuro-alerta, #F59E0B)', Icon: Clock },
+  pendiente:                { label: 'Pendiente',  bg: 'var(--en-oscuro-alerta-suave, #FFF8E1)', fg: 'var(--en-oscuro-alerta, #F59E0B)', Icon: Clock },
+  completado:               { label: 'Enviado',    bg: 'var(--en-oscuro-exito-suave, #ECFDF5)', fg: 'var(--en-oscuro-exito, #10B981)', Icon: CheckCircle2 },
+  enviado:                  { label: 'Enviado',    bg: 'var(--en-oscuro-exito-suave, #ECFDF5)', fg: 'var(--en-oscuro-exito, #10B981)', Icon: CheckCircle2 },
+  cancelado:                { label: 'Cancelado',  bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
+  expirado:                 { label: 'Expirado',   bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
+  fallido:                  { label: 'Fallida',    bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
 };
 
 export function StatusBadge({ status }) {
@@ -85,7 +85,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
   const isRecharge = txType.startsWith('recharge') || txType.startsWith('recarga');
   const sign = isWithdrawal ? '-' : '+';
   const amountColor = isWithdrawal ? '#E53E3E' : '#38A169';
-  const iconBg = isWithdrawal ? '#FFF0F0' : '#F0FFF4';
+  const iconBg = isWithdrawal ? 'var(--en-oscuro-error-suave, #FFF0F0)' : 'var(--en-oscuro-exito-suave, #F0FFF4)';
   const iconColor = isWithdrawal ? '#E53E3E' : '#38A169';
   const IconArrow = isWithdrawal ? ArrowUpRight : ArrowDownLeft;
 
@@ -168,14 +168,14 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
       <div
         data-testid={`recent-tx-${tx.transaction_id}`}
         style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
           borderRadius: '12px',
           padding: '10px 12px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           transition: 'background-color 0.15s',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8F8FF'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--en-oscuro-superficie-2, #F8F8FF)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--en-oscuro-superficie, #ffffff)'; }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
@@ -189,7 +189,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <span style={{
-                fontSize: '13.5px', fontWeight: 700, color: '#1A1A2E',
+                fontSize: '13.5px', fontWeight: 700, color: 'var(--en-oscuro-texto, #1A1A2E)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {title}
@@ -202,7 +202,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '2px' }}>
-              <span style={{ fontSize: '11px', color: '#8E8E9A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-2, #8E8E9A)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatShort(tx.created_at)} · <span style={{ color: statusCfg.fg, fontWeight: 600 }}>{statusCfg.label}</span>
                 {numero && <> · <span data-testid={`numero-tx-${tx.transaction_id}`} style={{ userSelect: 'text' }}>#{numero}</span></>}
               </span>
@@ -213,7 +213,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
                   style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: '22px', height: '22px', borderRadius: '50%',
-                    backgroundColor: '#EEF2FF', color: '#5B4FE9', border: 'none', cursor: 'pointer',
+                    backgroundColor: 'var(--en-oscuro-acento-suave, #EEF2FF)', color: 'var(--en-oscuro-acento, #5B4FE9)', border: 'none', cursor: 'pointer',
                     flexShrink: 0,
                   }}
                   title="Ver comprobante"
@@ -232,15 +232,15 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
     <div
       data-testid={`recent-tx-${tx.transaction_id}`}
       style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
         borderRadius: '12px',
         padding: '12px',
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
         transition: 'background-color 0.2s, transform 0.05s',
         cursor: showVoucher ? 'default' : 'default',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8F8FF'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; }}
+      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--en-oscuro-superficie-2, #F8F8FF)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--en-oscuro-superficie, #ffffff)'; }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
         {/* Category icon */}
@@ -259,12 +259,12 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{
-                fontSize: '14px', fontWeight: 700, color: '#1A1A2E',
+                fontSize: '14px', fontWeight: 700, color: 'var(--en-oscuro-texto, #1A1A2E)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {title}
               </div>
-              <div style={{ fontSize: '11.5px', color: '#8E8E9A', marginTop: '1px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--en-oscuro-texto-2, #8E8E9A)', marginTop: '1px' }}>
                 {formatShort(tx.created_at)}
                 {numero && (
                   <> · <span
@@ -282,7 +282,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
                 {sign}{fmt(mainAmount)} {mainUnit}
               </div>
               {isWithdrawal && !isBtc && tx.amount_output && (
-                <div style={{ fontSize: '10.5px', color: '#8E8E9A', marginTop: '1px', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: '10.5px', color: 'var(--en-oscuro-texto-2, #8E8E9A)', marginTop: '1px', whiteSpace: 'nowrap' }}>
                   {fmt(tx.amount_output)} {monedaSalida}
                   {/* La equivalencia en dólares BCV sólo tiene sentido sobre
                       bolívares: dividir reales por la tasa del BCV da un
@@ -299,19 +299,19 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
           {isWithdrawal && (beneficiary.bank || account) && (
             <div style={{
               marginTop: '8px', padding: '8px 10px',
-              backgroundColor: '#FAFAFC', borderRadius: '9px',
-              border: '1px solid #EFEFF5',
+              backgroundColor: 'var(--en-oscuro-superficie-2, #FAFAFC)', borderRadius: '9px',
+              border: '1px solid var(--en-oscuro-linea, #EFEFF5)',
               display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
             }}>
               {beneficiary.bank && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#8E8E9A' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: 'var(--en-oscuro-texto-2, #8E8E9A)' }}>
                   <Building2 size={12} />
-                  <span style={{ color: '#374151', fontWeight: 500 }}>{beneficiary.bank}</span>
+                  <span style={{ color: 'var(--en-oscuro-texto, #374151)', fontWeight: 500 }}>{beneficiary.bank}</span>
                 </span>
               )}
               {account && (
                 <span style={{
-                  fontSize: '11.5px', color: '#374151', fontVariantNumeric: 'tabular-nums',
+                  fontSize: '11.5px', color: 'var(--en-oscuro-texto, #374151)', fontVariantNumeric: 'tabular-nums',
                   letterSpacing: '0.04em', fontWeight: 500,
                 }}>
                   {formatAccountNumber(account) || account}
@@ -331,7 +331,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
                   display: 'inline-flex', alignItems: 'center', gap: '5px',
                   padding: '3px 9px', borderRadius: '20px',
                   fontSize: '11.5px', fontWeight: 600, textDecoration: 'none',
-                  backgroundColor: '#EEF2FF', color: '#5B4FE9',
+                  backgroundColor: 'var(--en-oscuro-acento-suave, #EEF2FF)', color: 'var(--en-oscuro-acento, #5B4FE9)',
                   lineHeight: 1,
                 }}
               >
@@ -347,7 +347,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
                   display: 'inline-flex', alignItems: 'center', gap: '5px',
                   padding: '3px 9px', borderRadius: '20px',
                   fontSize: '11.5px', fontWeight: 600, cursor: 'pointer',
-                  backgroundColor: '#EEF2FF', color: '#5B4FE9', border: 'none',
+                  backgroundColor: 'var(--en-oscuro-acento-suave, #EEF2FF)', color: 'var(--en-oscuro-acento, #5B4FE9)', border: 'none',
                   lineHeight: 1,
                 }}
               >

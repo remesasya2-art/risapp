@@ -30,14 +30,18 @@ _ESTILOS = _SRC / "components" / "flujo" / "estilos.js"
 
 
 def _los_que_usan_la_paleta():
+    """Los que importan la paleta, y también los que escriben sus colores
+    «en oscuro» a mano (`var(--en-oscuro-...)`, como el inicio del cliente):
+    las dos reglas valen igual para ellos, y así una pantalla que se convierta
+    mañana queda vigilada sin que nadie tenga que agregarla a una lista."""
     usan = []
     for f in _SRC.rglob("*.js*"):
         if f == _ESTILOS or "node_modules" in f.parts:
             continue
         texto = f.read_text(encoding="utf-8")
-        if "flujo/estilos" in texto or "from './estilos'" in texto:
+        if "flujo/estilos" in texto or "from './estilos'" in texto or "var(--en-oscuro-" in texto:
             usan.append((f, texto))
-    assert len(usan) >= 15, "la búsqueda de quién usa la paleta dejó de encontrarlos"
+    assert len(usan) >= 25, "la búsqueda de quién usa la paleta dejó de encontrarlos"
     return usan
 
 
@@ -85,7 +89,10 @@ def test_CADA_VARIABLE_DE_LA_PALETA_TIENE_SU_VALOR_OSCURO():
 def test_NADIE_LE_PEGA_TEXTO_A_UN_COLOR_DE_LA_PALETA():
     malos = []
     for f, texto in _los_que_usan_la_paleta():
-        for m in re.finditer(r"\bC\.\w+\s*\+|\+\s*C\.\w+\b|\$\{C\.\w+\}[0-9A-Fa-f]{2}\b", texto):
+        # Cualquier cosa + dos cifras hexadecimales es agregarle transparencia
+        # a un color; con una variable adentro queda inválido. No sólo los de
+        # la paleta: una constante local (`acento`) puede valer una variable.
+        for m in re.finditer(r"\bC\.\w+\s*\+|\+\s*C\.\w+\b|[\w.\])]\s*\+\s*['\"][0-9A-Fa-f]{2}['\"]|\$\{[^}]+\}[0-9A-Fa-f]{2}\b", texto):
             malos.append(f"{f.relative_to(_SRC)}: {m.group(0)}")
     assert not malos, malos
 

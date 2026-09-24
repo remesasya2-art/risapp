@@ -212,3 +212,10 @@ def test_EL_PERFIL_OFRECE_ELEGIR_LA_APARIENCIA():
     control = (_FRONT / "components" / "tema" / "ControlDeApariencia.jsx").read_text(encoding="utf-8")
     assert "onClick={() => elegir(o.valor)}" in control
     assert [v for v in ("'auto'", "'claro'", "'oscuro'") if f"valor: {v}" in control] == ["'auto'", "'claro'", "'oscuro'"]
+
+
+def test_EL_INICIO_DEL_CLIENTE_TIENE_MODO_OSCURO_Y_EL_BOTON():
+    inicio = (_FRONT / "pages" / "Dashboard.jsx").read_text(encoding="utf-8")
+    assert 'className="con-tema"' in inicio
+    # En computadora y en celular: la barra de arriba es distinta en cada uno.
+    assert inicio.count("<SelectorDeApariencia />") == 2
