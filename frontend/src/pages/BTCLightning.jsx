@@ -624,7 +624,7 @@ export default function BTCLightning() {
 
             {filteredBenef.length === 0 && !showNewBeneficiary ? (
               <div style={{ textAlign: 'center', padding: '26px 8px' }}>
-                <User size={30} color={C.tenue} />
+                <User size={30} style={{ color: C.tenue }} />
                 <p style={{ margin: '10px 0 0 0', fontSize: '14px', color: C.suave }}>
                   Todavía no tenés beneficiarios de{' '}
                   {paymentType === 'pago_movil' ? 'Pago Móvil' : 'Transferencia'}.
@@ -859,7 +859,7 @@ export default function BTCLightning() {
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: '14px',
           }}>
-            <Check size={28} color={C.exito} strokeWidth={2.5} />
+            <Check size={28} strokeWidth={2.5} style={{ color: C.exito }} />
           </span>
           <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 700, color: C.tinta }}>
             Recibimos tu pago
@@ -915,7 +915,7 @@ export default function BTCLightning() {
             <p style={{ ...ayuda, textAlign: 'center', padding: '30px 0' }}>Cargando…</p>
           ) : btcHistorial.length === 0 ? (
             <section style={{ ...tarjeta, padding: '34px 22px', textAlign: 'center' }}>
-              <ListOrdered size={28} color={C.tenue} />
+              <ListOrdered size={28} style={{ color: C.tenue }} />
               <p style={{ margin: '11px 0 0 0', fontSize: '15px', fontWeight: 600, color: C.texto }}>
                 Todavía no hiciste ningún envío con Bitcoin
               </p>

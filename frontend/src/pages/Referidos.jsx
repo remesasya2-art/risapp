@@ -84,7 +84,7 @@ export default function Referidos() {
               border: `1px solid ${C.linea}`, background: C.lienzo, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            <ArrowLeft size={19} color={C.texto} />
+            <ArrowLeft size={19} style={{ color: C.texto }} />
           </button>
           <h1 style={{
             fontSize: '21px', fontWeight: 700, color: C.tinta, margin: 0,
@@ -120,7 +120,7 @@ export default function Referidos() {
           </p>
         ) : !datos?.referidos?.length ? (
           <section style={{ ...tarjeta, padding: '32px 20px', textAlign: 'center' }}>
-            <Users size={26} color={C.tenue} />
+            <Users size={26} style={{ color: C.tenue }} />
             <p style={{ margin: '10px 0 0', fontSize: '15px', fontWeight: 600, color: C.tinta }}>
               Todavía no invitaste a nadie
             </p>
@@ -144,8 +144,8 @@ export default function Referidos() {
                   border: `1px solid ${r.cobrado ? C.exitoBorde : C.linea}`,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  {r.cobrado ? <Check size={16} color={C.exito} />
-                             : <Clock size={15} color={C.suave} />}
+                  {r.cobrado ? <Check size={16} style={{ color: C.exito }} />
+                             : <Clock size={15} style={{ color: C.suave }} />}
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{

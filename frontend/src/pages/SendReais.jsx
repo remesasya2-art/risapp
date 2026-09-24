@@ -398,7 +398,7 @@ export default function SendReais() {
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: '14px',
           }}>
-            <Check size={28} color={C.exito} strokeWidth={2.5} />
+            <Check size={28} strokeWidth={2.5} style={{ color: C.exito }} />
           </span>
           {/* LO QUE DICE ACA DEPENDE DE COMO SE PAGO, Y NO ES UN DETALLE.
               Pagando con saldo, el envío está cobrado y sólo falta
@@ -447,7 +447,7 @@ export default function SendReais() {
         ...tarjeta, background: C.fondo, padding: '13px 16px', marginBottom: '16px',
         display: 'flex', alignItems: 'center', gap: '11px',
       }}>
-        <Wallet size={17} color={C.suave} />
+        <Wallet size={17} style={{ color: C.suave }} />
         <span style={{ ...microEtiqueta, margin: 0 }}>Saldo disponible</span>
         <span style={{ flex: 1 }} />
         <strong style={{ fontSize: '16px', fontWeight: 700, color: C.tinta }}>
@@ -537,7 +537,7 @@ export default function SendReais() {
 
             {beneficiarios.length === 0 && !mostrarNuevo ? (
               <div style={{ textAlign: 'center', padding: '26px 8px' }}>
-                <User size={30} color={C.tenue} />
+                <User size={30} style={{ color: C.tenue }} />
                 <p style={{ margin: '10px 0 0 0', fontSize: '14px', color: C.suave }}>
                   Todavía no tenés beneficiarios en Brasil.
                 </p>

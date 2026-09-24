@@ -94,7 +94,7 @@ export default function ConfirmacionHost() {
             background: peligro ? C.errorSuave : C.marcaSuave,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <AlertTriangle size={18} color={peligro ? C.error : C.marca} />
+            <AlertTriangle size={18} style={{ color: peligro ? C.error : C.marca }} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 id="cf-titulo" style={{

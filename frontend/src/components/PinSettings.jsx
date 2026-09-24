@@ -42,7 +42,7 @@ function Encabezado() {
         background: C.marcaSuave, display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center',
       }}>
-        <Lock size={18} color={C.marca} />
+        <Lock size={18} style={{ color: C.marca }} />
       </span>
       <span>
         <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>

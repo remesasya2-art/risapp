@@ -39,7 +39,7 @@ function Encabezado({ activo }) {
         width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
         background: C.fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <ShieldCheck size={18} color={activo ? '#16a34a' : C.suave} />
+        <ShieldCheck size={18} style={{ color: activo ? '#16a34a' : C.suave }} />
       </span>
       <span style={{ flex: 1, minWidth: '160px' }}>
         <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>

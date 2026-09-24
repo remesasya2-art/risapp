@@ -127,7 +127,7 @@ function Dato(props) {
       display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 14px',
       background: C.fondo, borderRadius: '12px', minWidth: 0,
     }}>
-      <Icono size={18} color={C.tenue} style={{ flexShrink: 0 }} />
+      <Icono size={18} style={{ flexShrink: 0, color: C.tenue }} />
       <span style={{ minWidth: 0 }}>
         <span style={{ ...microEtiqueta, display: 'block' }}>{titulo}</span>
         <span style={{
@@ -153,7 +153,7 @@ function Fila(props) {
           width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
           background: fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Icono size={18} color={color} />
+          <Icono size={18} style={{ color: color }} />
         </span>
         <span style={{ minWidth: 0, textAlign: 'left' }}>
           <span style={{
@@ -169,7 +169,7 @@ function Fila(props) {
           ) : null}
         </span>
       </span>
-      {flecha ? <ChevronRight size={18} color={C.tenue} style={{ flexShrink: 0 }} /> : null}
+      {flecha ? <ChevronRight size={18} style={{ flexShrink: 0, color: C.tenue }} /> : null}
     </>
   );
 
@@ -452,7 +452,7 @@ export default function Profile() {
               border: `1px solid ${C.linea}`, background: C.lienzo, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            <ArrowLeft size={19} color={C.texto} />
+            <ArrowLeft size={19} style={{ color: C.texto }} />
           </button>
           <h1 style={{
             fontSize: '21px', fontWeight: 700, color: C.tinta, margin: 0,
@@ -535,7 +535,7 @@ export default function Profile() {
               background: pushActivo ? C.exitoSuave : C.fondo,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              {pushActivo ? <Bell size={18} color={C.exito} /> : <BellOff size={18} color={C.suave} />}
+              {pushActivo ? <Bell size={18} style={{ color: C.exito }} /> : <BellOff size={18} style={{ color: C.suave }} />}
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
@@ -576,7 +576,7 @@ export default function Profile() {
                 width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
                 background: C.fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Shield size={18} color={C.suave} />
+                <Shield size={18} style={{ color: C.suave }} />
               </span>
               <span style={{ flex: 1, minWidth: '160px' }}>
                 <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>

@@ -170,7 +170,7 @@ export default function RetomarPago() {
           style={{ background: '#fff', border: `1px solid ${C.linea}`,
             borderRadius: '12px', width: '40px', height: '40px', cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ArrowLeft size={18} color={C.tinta} />
+          <ArrowLeft size={18} style={{ color: C.tinta }} />
         </button>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: '19px', fontWeight: 700, color: C.tinta, margin: 0 }}>
@@ -251,7 +251,7 @@ export default function RetomarPago() {
           <section style={{ ...tarjeta, padding: '14px 18px', marginBottom: '14px',
             display: 'flex', alignItems: 'center', gap: '10px' }}
             data-testid="retomar-reloj">
-            <Clock size={18} color={quedan < 60 ? '#DC2626' : C.marca} />
+            <Clock size={18} style={{ color: quedan < 60 ? '#DC2626' : C.marca }} />
             <p style={{ margin: 0, fontSize: '13.5px', color: C.tinta }}>
               Te quedan <strong style={{ fontVariantNumeric: 'tabular-nums',
                 color: quedan < 60 ? '#DC2626' : C.tinta }}>{reloj(quedan)}</strong> para

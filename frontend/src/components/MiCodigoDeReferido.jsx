@@ -102,7 +102,7 @@ export default function MiCodigoDeReferido() {
           background: C.marcaSuave,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Gift size={18} color={C.marca} />
+          <Gift size={18} style={{ color: C.marca }} />
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
@@ -133,7 +133,7 @@ export default function MiCodigoDeReferido() {
           }}>
             {datos.codigo}
           </span>
-          <Copy size={17} color={C.suave} style={{ flexShrink: 0 }} />
+          <Copy size={17} style={{ flexShrink: 0, color: C.suave }} />
         </button>
       </div>
 
@@ -151,12 +151,12 @@ export default function MiCodigoDeReferido() {
           textDecoration: 'none',
         }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
-          <Users size={16} color={C.suave} />
+          <Users size={16} style={{ color: C.suave }} />
           <span style={{ fontSize: '14px', fontWeight: 600, color: C.tinta }}>
             A quién invité
           </span>
         </span>
-        <ChevronRight size={17} color={C.tenue} />
+        <ChevronRight size={17} style={{ color: C.tenue }} />
       </Link>
 
       {/* ── El enlace ──────────────────────────────────────────────────── */}

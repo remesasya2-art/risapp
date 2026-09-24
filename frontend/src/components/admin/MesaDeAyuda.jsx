@@ -91,7 +91,7 @@ function FilaDeCaso({ caso, elegido, onClick, ahora }) {
         background: elegido ? C.marcaSuave : 'transparent',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
-        {caso.escalado ? <AlertTriangle size={13} color={C.error} /> : null}
+        {caso.escalado ? <AlertTriangle size={13} style={{ color: C.error }} /> : null}
         {luz ? (
           <span title="Tiempo sin primera respuesta" style={{
             width: '8px', height: '8px', borderRadius: '50%', background: luz, flexShrink: 0,
@@ -326,7 +326,7 @@ function Pedidos({ pedidos, areas, onResponder, ocupado }) {
   if (areas.length === 0) {
     return (
       <div style={{ ...tarjeta, padding: '40px 20px', textAlign: 'center' }}>
-        <Inbox size={44} color={C.tenue} style={{ opacity: 0.4 }} />
+        <Inbox size={44} style={{ opacity: 0.4, color: C.tenue }} />
         <p style={{ ...ayuda, marginTop: '10px' }}>
           Los pedidos los contesta el área que puede resolverlos. No tenés
           ninguna a cargo, así que acá no te va a llegar nada.
@@ -345,7 +345,7 @@ function Pedidos({ pedidos, areas, onResponder, ocupado }) {
 
       {pedidos.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '34px 16px' }}>
-          <Inbox size={44} color={C.tenue} style={{ opacity: 0.4 }} />
+          <Inbox size={44} style={{ opacity: 0.4, color: C.tenue }} />
           <p style={{ ...ayuda, marginTop: '10px' }}>No hay pedidos pendientes.</p>
         </div>
       ) : pedidos.map((p) => {
@@ -655,7 +655,7 @@ export default function MesaDeAyuda({ usuario }) {
         <div style={{ ...tarjeta, width: '310px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.linea}` }}>
             <div style={{ position: 'relative', marginBottom: '10px' }}>
-              <Search size={15} color={C.tenue} style={{ position: 'absolute', left: '11px', top: '13px' }} />
+              <Search size={15} style={{ position: 'absolute', left: '11px', top: '13px', color: C.tenue }} />
               <input className="env-campo" placeholder="Número, nombre o correo"
                 value={buscar} onChange={(e) => setBuscar(e.target.value)}
                 style={{ ...campo, padding: '9px 12px 9px 32px', fontSize: '13.5px' }} />
@@ -709,7 +709,7 @@ export default function MesaDeAyuda({ usuario }) {
             <>
               <div style={{ padding: '13px 18px', borderBottom: `1px solid ${C.linea}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
-                  <Hash size={14} color={C.tenue} />
+                  <Hash size={14} style={{ color: C.tenue }} />
                   <strong style={{ fontSize: '13px', color: C.tenue }}>{caso.numero}</strong>
                   <Etiqueta tono={tonoDeEstado(caso.estado)}>{nombreDeEstado(caso.estado)}</Etiqueta>
                   {caso.escalado ? <Etiqueta tono="error"><AlertTriangle size={11} /> Escalado</Etiqueta> : null}
@@ -841,7 +841,7 @@ export default function MesaDeAyuda({ usuario }) {
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '9px 11px', background: C.fondo, borderRadius: '10px',
                 }}>
-                  <Icono size={15} color={C.tenue} style={{ flexShrink: 0 }} />
+                  <Icono size={15} style={{ flexShrink: 0, color: C.tenue }} />
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: '10.5px', color: C.tenue, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>
                       {titulo}

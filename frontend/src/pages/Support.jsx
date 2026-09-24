@@ -67,7 +67,7 @@ export default function Support() {
             background: C.marcaSuave, display: 'inline-flex',
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <LifeBuoy size={19} color={C.marca} />
+            <LifeBuoy size={19} style={{ color: C.marca }} />
           </span>
           <span>
             <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
