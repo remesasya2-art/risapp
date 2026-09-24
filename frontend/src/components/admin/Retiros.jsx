@@ -37,19 +37,19 @@ import { fmt, formatAccountNumber } from '../../utils/format';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 
 const COLOR = {
-  borde: '#e5e7eb', bordeFuerte: '#d1d5db',
-  suave: '#6b7280', tenue: '#9ca3af', texto: '#111827',
-  primario: '#4F46E5', primarioSuave: '#eef0ff', primarioBorde: '#c7d2fe',
-  bien: '#15803d', bienSuave: '#f0fdf4', bienBorde: '#bbf7d0',
-  alerta: '#b45309', alertaSuave: '#fffbeb', alertaBorde: '#fde68a',
-  malo: '#b91c1c', maloSuave: '#fef2f2', maloBorde: '#fecaca',
+  borde: 'var(--en-oscuro-linea, #e5e7eb)', bordeFuerte: 'var(--en-oscuro-linea-fuerte, #d1d5db)',
+  suave: 'var(--en-oscuro-texto-2, #6b7280)', tenue: 'var(--en-oscuro-texto-3, #9ca3af)', texto: 'var(--en-oscuro-texto, #111827)',
+  primario: 'var(--en-oscuro-acento, #4F46E5)', primarioSuave: 'var(--en-oscuro-acento-suave, #eef0ff)', primarioBorde: 'var(--en-oscuro-acento-borde, #c7d2fe)',
+  bien: 'var(--en-oscuro-exito, #15803d)', bienSuave: 'var(--en-oscuro-exito-suave, #f0fdf4)', bienBorde: 'var(--en-oscuro-exito-borde, #bbf7d0)',
+  alerta: 'var(--en-oscuro-alerta, #b45309)', alertaSuave: 'var(--en-oscuro-alerta-suave, #fffbeb)', alertaBorde: 'var(--en-oscuro-alerta-borde, #fde68a)',
+  malo: 'var(--en-oscuro-error, #b91c1c)', maloSuave: 'var(--en-oscuro-error-suave, #fef2f2)', maloBorde: 'var(--en-oscuro-error-borde, #fecaca)',
 };
 
 const CIFRAS = { fontVariantNumeric: 'tabular-nums', fontFeatureSettings: '"tnum"' };
 const MONO = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
 
 const tarjeta = {
-  backgroundColor: '#fff', borderRadius: '14px',
+  backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '14px',
   border: `1px solid ${COLOR.borde}`,
 };
 
@@ -64,7 +64,7 @@ const SEMAFORO = {
   normal: { fondo: COLOR.bienSuave, borde: COLOR.bienBorde, texto: COLOR.bien },
   atencion: { fondo: COLOR.alertaSuave, borde: COLOR.alertaBorde, texto: COLOR.alerta },
   urgente: { fondo: COLOR.maloSuave, borde: COLOR.maloBorde, texto: COLOR.malo },
-  desconocida: { fondo: '#f3f4f6', borde: COLOR.borde, texto: COLOR.suave },
+  desconocida: { fondo: 'var(--en-oscuro-superficie-2, #f3f4f6)', borde: COLOR.borde, texto: COLOR.suave },
 };
 
 const POR_PAGINA = 50;
@@ -292,7 +292,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
           <button type="button" onClick={() => cargar({ silencioso: true })} style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',
             padding: '8px 14px', borderRadius: '9px', cursor: 'pointer',
-            border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+            border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             color: COLOR.suave, fontSize: '13px', fontWeight: 600,
           }}>
             <RefreshCw size={14} style={refrescando ? { animation: 'spin 1s linear infinite' } : undefined} />
@@ -305,13 +305,13 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
         }}>
           {porMoneda.length === 0 ? (
-            <div style={{ backgroundColor: '#fff', padding: '16px' }}>
+            <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '16px' }}>
               <p style={{ fontSize: '13px', color: COLOR.suave, margin: 0 }}>
                 No hay nada por pagar.
               </p>
             </div>
           ) : porMoneda.map((m) => (
-            <div key={m.moneda} style={{ backgroundColor: '#fff', padding: '14px 16px' }}>
+            <div key={m.moneda} style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '14px 16px' }}>
               <p style={{
                 fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.6px',
                 textTransform: 'uppercase', color: COLOR.tenue, margin: 0,
@@ -326,7 +326,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
             </div>
           ))}
 
-          <div style={{ backgroundColor: '#fff', padding: '14px 16px' }}>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '14px 16px' }}>
             <p style={{
               fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.6px',
               textTransform: 'uppercase', color: COLOR.tenue, margin: 0,
@@ -340,7 +340,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
             </p>
           </div>
 
-          <div style={{ backgroundColor: '#fff', padding: '14px 16px' }}>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '14px 16px' }}>
             <p style={{
               fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.6px',
               textTransform: 'uppercase', color: COLOR.tenue, margin: 0,
@@ -385,7 +385,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
                   padding: '8px 13px', borderRadius: '9px', cursor: 'pointer',
                   fontSize: '13px', fontWeight: 700,
                   border: `1px solid ${activo ? COLOR.primarioBorde : COLOR.borde}`,
-                  backgroundColor: activo ? COLOR.primarioSuave : '#fff',
+                  backgroundColor: activo ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                   color: activo ? COLOR.primario : COLOR.suave,
                 }}
                 data-testid={`filtro-${clave}`}
@@ -395,7 +395,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
                   <span style={{
                     ...CIFRAS, padding: '1px 7px', borderRadius: '999px',
                     fontSize: '11px', fontWeight: 700,
-                    backgroundColor: activo ? '#fff' : '#f3f4f6',
+                    backgroundColor: activo ? 'var(--en-oscuro-superficie, #fff)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
                     color: activo ? COLOR.primario : COLOR.suave,
                   }}>{n}</span>
                 ) : null}
@@ -409,7 +409,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
               style={{
                 padding: '8px 11px', borderRadius: '9px', fontSize: '13px',
                 fontWeight: 600, border: `1px solid ${COLOR.borde}`,
-                backgroundColor: '#fff', color: COLOR.suave, cursor: 'pointer',
+                backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: COLOR.suave, cursor: 'pointer',
               }}
               data-testid="filtro-moneda"
             >
@@ -474,7 +474,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb' }}>
+                <tr style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }}>
                   {[
                     { t: '#', ancho: '38px', der: false },
                     { t: 'Orden', ancho: '104px', der: false },
@@ -557,7 +557,7 @@ export default function Retiros({ accountingBanks = [], user, onProcesada }) {
 function botonPagina(apagado) {
   return {
     padding: '7px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-    border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+    border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
     color: apagado ? COLOR.tenue : COLOR.texto,
     cursor: apagado ? 'not-allowed' : 'pointer',
   };
@@ -592,7 +592,7 @@ function Fila(props) {
     <>
       <tr onClick={onAbrir} style={{
         cursor: 'pointer',
-        backgroundColor: abierta ? COLOR.primarioSuave : deOtro ? '#fafafa' : '#fff',
+        backgroundColor: abierta ? COLOR.primarioSuave : deOtro ? 'var(--en-oscuro-superficie-2, #fafafa)' : 'var(--en-oscuro-superficie, #fff)',
       }} data-testid={`withdrawal-${w.transaction_id}`}>
         <td style={{ ...celda, color: COLOR.tenue, ...CIFRAS, fontSize: '12px' }}>
           {pendiente && w.posicion ? w.posicion : ''}
@@ -692,7 +692,7 @@ function Fila(props) {
                 disabled={ocupado} style={{
                   display: 'inline-flex', alignItems: 'center', gap: '4px',
                   padding: '4px 9px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 700,
-                  border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                  border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                   color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
                 }} data-testid={`tomar-${w.transaction_id}`}>
                 <Lock size={11} />Tomar
@@ -705,7 +705,7 @@ function Fila(props) {
       {abierta ? (
         <tr>
           <td colSpan={8} style={{
-            padding: 0, borderBottom: `1px solid ${COLOR.borde}`, backgroundColor: '#fbfbfd',
+            padding: 0, borderBottom: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie-2, #fbfbfd)',
           }}>
             <Detalle {...props} />
           </td>
@@ -782,7 +782,7 @@ function Detalle(props) {
           <button type="button" onClick={onLiberar} disabled={ocupado} style={{
             display: 'inline-flex', alignItems: 'center', gap: '4px',
             padding: '3px 9px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 600,
-            border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+            border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
           }}><LockOpen size={11} />Liberar</button>
         ) : null}
@@ -804,7 +804,7 @@ function Detalle(props) {
 
       {!pendiente && (
         <div style={{
-          padding: '9px 12px', borderRadius: '9px', backgroundColor: '#fff',
+          padding: '9px 12px', borderRadius: '9px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
           border: `1px solid ${COLOR.borde}`, fontSize: '12px', color: COLOR.suave,
         }}>
           <div>
@@ -840,7 +840,7 @@ function Detalle(props) {
             {comprobantes.map((img, i) => (
               <div key={`${i}-${String(img).slice(-24)}`} style={{
                 position: 'relative', borderRadius: '9px', overflow: 'hidden',
-                border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               }}>
                 <a href={rutaDeArchivo(img)} target="_blank" rel="noreferrer" title="Abrir">
                   <img src={rutaDeArchivo(img)} alt={`Comprobante ${i + 1}`}
@@ -877,7 +877,7 @@ function Detalle(props) {
           <select value={bancoElegido} onChange={(e) => onBanco(e.target.value)}
             style={{
               width: '100%', maxWidth: '340px', padding: '8px 11px', borderRadius: '8px',
-              border: `1px solid ${COLOR.borde}`, fontSize: '13px', backgroundColor: '#fff',
+              border: `1px solid ${COLOR.borde}`, fontSize: '13px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             }}
             data-testid={`banco-${w.transaction_id}`}
           >
@@ -895,7 +895,7 @@ function Detalle(props) {
             title={comprobantes.length === 0 ? 'Subí el comprobante de la transferencia' : undefined}
             style={{
               flex: '0 1 240px', padding: '10px', borderRadius: '9px', border: 'none',
-              backgroundColor: puedePagar ? COLOR.bien : '#d1d5db', color: '#fff',
+              backgroundColor: puedePagar ? COLOR.bien : 'var(--en-oscuro-superficie-3, #d1d5db)', color: '#fff',
               fontSize: '13px', fontWeight: 700,
               cursor: puedePagar ? 'pointer' : 'not-allowed',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
@@ -906,7 +906,7 @@ function Detalle(props) {
           </button>
           <button type="button" onClick={onPedirRechazo} style={{
             flex: '0 1 150px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
-            border: `1px solid ${COLOR.maloBorde}`, backgroundColor: '#fff',
+            border: `1px solid ${COLOR.maloBorde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             color: COLOR.malo, fontSize: '13px', fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
           }} data-testid={`rechazar-${w.transaction_id}`}>
@@ -938,7 +938,7 @@ function Detalle(props) {
             </button>
             <button type="button" onClick={onCancelarConfirmacion} disabled={ocupado} style={{
               flex: '0 1 110px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
-              border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+              border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               color: COLOR.suave, fontSize: '13px', fontWeight: 600,
             }}>Volver</button>
           </div>
@@ -971,7 +971,7 @@ function Detalle(props) {
           <div style={{ display: 'flex', gap: '9px', marginTop: '9px', flexWrap: 'wrap' }}>
             <button type="button" onClick={onRechazar} disabled={ocupado || !motivo.trim()} style={{
               flex: '0 1 220px', padding: '10px', borderRadius: '9px', border: 'none',
-              backgroundColor: motivo.trim() ? COLOR.malo : '#d1d5db', color: '#fff',
+              backgroundColor: motivo.trim() ? COLOR.malo : 'var(--en-oscuro-superficie-3, #d1d5db)', color: '#fff',
               fontSize: '13px', fontWeight: 700,
               cursor: (ocupado || !motivo.trim()) ? 'not-allowed' : 'pointer',
             }} data-testid={`confirmar-rechazo-${w.transaction_id}`}>
@@ -979,7 +979,7 @@ function Detalle(props) {
             </button>
             <button type="button" onClick={onCancelarRechazo} disabled={ocupado} style={{
               flex: '0 1 110px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
-              border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+              border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               color: COLOR.suave, fontSize: '13px', fontWeight: 600,
             }}>Volver</button>
           </div>
@@ -993,7 +993,7 @@ function Dato(props) {
   const { etiqueta, valor, falta, mono } = props;
   const Icono = props.Icono;
   return (
-    <div style={{ backgroundColor: '#fff', padding: '10px 13px', minWidth: 0 }}>
+    <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '10px 13px', minWidth: 0 }}>
       <p style={{
         fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
         textTransform: 'uppercase', color: COLOR.tenue, margin: 0,

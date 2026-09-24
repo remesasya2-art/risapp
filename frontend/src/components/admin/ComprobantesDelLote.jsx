@@ -7,6 +7,7 @@ import {
   Upload, CheckCircle, AlertTriangle, XCircle, Eye, X, Loader2, HelpCircle, Trash2,
   Undo2,
 } from 'lucide-react';
+import conAlfa from '../../tema/conAlfa';
 
 // Una sola carga para todo el lote. Es la razón de ser de esta pantalla: el
 // agente vuelve de la banca en línea con once capturas en el teléfono, las
@@ -17,10 +18,10 @@ import {
 // elige, está explicado en `backend/services/comprobantes_del_lote.py`.
 
 const C = {
-  border: '#e5e7eb', bgSubtle: '#f9fafb', ink: '#111827', soft: '#6b7280',
-  faint: '#9ca3af', primary: '#4338ca', primaryBg: '#eef2ff',
-  green: '#047857', greenBg: '#ecfdf5', amber: '#b45309', amberBg: '#fffbeb',
-  red: '#dc2626', redBg: '#fef2f2',
+  border: 'var(--en-oscuro-linea, #e5e7eb)', bgSubtle: 'var(--en-oscuro-superficie-2, #f9fafb)', ink: 'var(--en-oscuro-texto, #111827)', soft: 'var(--en-oscuro-texto-2, #6b7280)',
+  faint: 'var(--en-oscuro-texto-3, #9ca3af)', primary: 'var(--en-oscuro-acento, #4338ca)', primaryBg: 'var(--en-oscuro-acento-suave, #eef2ff)',
+  green: 'var(--en-oscuro-exito, #047857)', greenBg: 'var(--en-oscuro-exito-suave, #ecfdf5)', amber: 'var(--en-oscuro-alerta, #b45309)', amberBg: 'var(--en-oscuro-alerta-suave, #fffbeb)',
+  red: 'var(--en-oscuro-error, #dc2626)', redBg: 'var(--en-oscuro-error-suave, #fef2f2)',
 };
 
 // Cómo se ve cada resultado. El texto dice QUE PASA, no cómo se llama el
@@ -37,8 +38,8 @@ const ESTADOS = {
 
 const chip = {
   display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px',
-  borderRadius: '7px', border: '1px solid ' + C.border, fontSize: '12.5px',
-  fontWeight: 600, color: '#374151', cursor: 'pointer', backgroundColor: '#fff',
+  borderRadius: '7px', border: `1px solid ${C.border}`, fontSize: '12.5px',
+  fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', cursor: 'pointer', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
 };
 
 // COMO VIENE EL LECTOR
@@ -89,7 +90,7 @@ function ComoVieneElLector({ d }) {
   return (
     <div style={{
       padding: '10px 12px', marginBottom: '12px', borderRadius: '8px',
-      border: '1px solid ' + C.border, backgroundColor: C.bgSubtle,
+      border: `1px solid ${C.border}`, backgroundColor: C.bgSubtle,
     }} data-testid="desempeno-del-lector">
       <div style={{ fontSize: '11.5px', color: C.soft, marginBottom: '7px' }}>
         <b style={{ color: C.ink, fontSize: '12.5px' }}>Cómo viene el lector</b>
@@ -269,7 +270,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
       {texto}
       <span style={{
         padding: '1px 8px', borderRadius: '999px', fontSize: '12px',
-        color, backgroundColor: color + '18',
+        color, backgroundColor: conAlfa(color, '18'),
       }}>{cuanto}</span>
     </div>
   );
@@ -281,7 +282,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
       onChange={(ev) => asignar(c.comprobante_id, ev.target.value)}
       style={{
         padding: '6px 8px', borderRadius: '7px', fontSize: '12.5px',
-        border: '1px solid ' + C.border, backgroundColor: '#fff', maxWidth: '260px',
+        border: `1px solid ${C.border}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)', maxWidth: '260px',
       }}>
       <option value="">— sin asignar —</option>
       {ordenes.map((o) => (
@@ -306,7 +307,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
   return (
     <div style={{
       padding: '14px', marginBottom: '12px', borderRadius: '10px',
-      border: '1px solid ' + C.border, backgroundColor: '#fff',
+      border: `1px solid ${C.border}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
         <b style={{ fontSize: '14px', color: C.ink }}>
@@ -346,7 +347,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
       {abiertoElLote && (
       <div style={{
         display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
-        padding: '12px', borderRadius: '9px', border: '1px dashed ' + C.border,
+        padding: '12px', borderRadius: '9px', border: `1px dashed ${C.border}`,
         backgroundColor: C.bgSubtle, marginBottom: '14px',
       }}>
         <input ref={entrada} type="file" accept="image/*" multiple
@@ -385,7 +386,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
               {listas.map((o) => (
                 <div key={o.orden_id} style={{
                   display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
-                  padding: '7px 10px', borderTop: '1px solid ' + C.border, fontSize: '12.5px',
+                  padding: '7px 10px', borderTop: `1px solid ${C.border}`, fontSize: '12.5px',
                 }}>
                   <CheckCircle size={14} style={{ color: C.green, flexShrink: 0 }} />
                   <b style={{ color: C.ink }}>{o.display_id || o.orden_id}</b>
@@ -410,7 +411,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
         <div style={bloque}>
           {tituloBloque('Las mira una persona', porResolver.length, C.amber)}
           <div style={{
-            border: '1px solid ' + C.amber + '33', borderRadius: '9px',
+            border: `1px solid ${conAlfa(C.amber, '33')}`, borderRadius: '9px',
             backgroundColor: C.amberBg, overflow: 'hidden',
           }}>
             {porResolver.map((o, i) => {
@@ -419,7 +420,7 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
                 <div key={o.orden_id} style={{
                   display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
                   padding: '9px 11px', fontSize: '12.5px',
-                  borderTop: i ? '1px solid ' + C.amber + '22' : 'none',
+                  borderTop: i ? `1px solid ${conAlfa(C.amber, '22')}` : 'none',
                 }}>
                   <b style={{ color: C.ink }}>{o.display_id || o.orden_id}</b>
                   <span style={{ color: C.soft }}>{o.beneficiario}</span>
@@ -450,15 +451,15 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
                             corresponde. */}
                         {abiertoElLote && (
                           <button onClick={() => asignar(c.comprobante_id, o.orden_id)}
-                            style={{ ...chip, color: C.green, borderColor: C.green + '55' }}
+                            style={{ ...chip, color: C.green, borderColor: conAlfa(C.green, '55') }}
                             title="La miré y el comprobante es de esta orden">
                             <CheckCircle size={13} /> Confirmar el monto
                           </button>
                         )}
                         {abiertoElLote && (
-                          <ConMotivo etiqueta="Descartar la foto" color={C.red} icono={Trash2}
+                          <ConMotivo etiqueta="Descartar la foto" icono={Trash2}
                             marcador="¿Por qué? No corresponde, es de otro pago…"
-                            onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} />
+                            onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} tono={C.red} />
                         )}
                       </div>
                     </>
@@ -469,9 +470,9 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
                       foto está mal, primero se descarta la foto. */}
                   {!c && abiertoElLote && (
                     <div style={{ marginLeft: 'auto' }}>
-                      <ConMotivo etiqueta="Vuelve a la cola" color={C.red} icono={Undo2}
+                      <ConMotivo etiqueta="Vuelve a la cola" icono={Undo2}
                         marcador="¿Por qué? El banco la rechazó, la cuenta no existe…"
-                        onConfirmar={(motivo) => devolver(o.orden_id, motivo)} />
+                        onConfirmar={(motivo) => devolver(o.orden_id, motivo)} tono={C.red} />
                     </div>
                   )}
                 </div>
@@ -495,8 +496,8 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
               const Icono = e.icono;
               return (
                 <div key={c.comprobante_id} style={{
-                  width: '270px', border: '1px solid ' + C.border, borderRadius: '9px',
-                  overflow: 'hidden', backgroundColor: '#fff',
+                  width: '270px', border: `1px solid ${C.border}`, borderRadius: '9px',
+                  overflow: 'hidden', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                 }}>
                   <Miniatura loteId={lote.lote_id} comprobanteId={c.comprobante_id}
                     onAmpliar={setMirando} />
@@ -518,9 +519,9 @@ export default function ComprobantesDelLote({ lote, onCerrar, onCambio }) {
                       <div style={{ marginTop: '8px' }}>{selectDeOrden(c)}</div>
                     )}
                     {abiertoElLote && (
-                      <ConMotivo etiqueta="Descartar" color={C.red} icono={Trash2}
+                      <ConMotivo etiqueta="Descartar" icono={Trash2}
                         marcador="¿Por qué? Repetida, comprobante errado…"
-                        onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} />
+                        onConfirmar={(motivo) => descartar(c.comprobante_id, motivo)} tono={C.red} />
                     )}
                   </div>
                 </div>
@@ -576,7 +577,7 @@ function Miniatura({ loteId, comprobanteId, onAmpliar }) {
   const marco = {
     height: '150px', display: 'flex', alignItems: 'center',
     justifyContent: 'center', backgroundColor: C.bgSubtle,
-    borderBottom: '1px solid ' + C.border, overflow: 'hidden',
+    borderBottom: `1px solid ${C.border}`, overflow: 'hidden',
   };
 
   if (fallo) {
@@ -609,14 +610,18 @@ function Miniatura({ loteId, comprobanteId, onAmpliar }) {
 // Un botón suelto que lo hace de una es un clic de más en una pantalla de
 // pagos. Y el motivo no es trámite: sin él, quien mire dentro de seis meses no
 // puede distinguir una foto repetida de un cobro que no correspondía.
-function ConMotivo({ etiqueta, marcador, color, icono: Icono, onConfirmar }) {
+// Recibe `tono` y no `color` a propósito: una etiqueta con mayúscula y
+// `color=` se lee como un ícono, y la herramienta que pasó los íconos a
+// `style` para el modo oscuro le movió el dato a un estilo que nadie lee: la
+// barra salía violeta en vez de celeste, también en claro.
+function ConMotivo({ etiqueta, marcador, tono: color, icono: Icono, onConfirmar }) {
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState('');
 
   if (!abierto) {
     return (
       <button onClick={() => setAbierto(true)}
-        style={{ ...chip, marginTop: '8px', color, borderColor: color + '55' }}>
+        style={{ ...chip, marginTop: '8px', color, borderColor: conAlfa(color, '55') }}>
         <Icono size={13} /> {etiqueta}
       </button>
     );
@@ -627,7 +632,7 @@ function ConMotivo({ etiqueta, marcador, color, icono: Icono, onConfirmar }) {
         placeholder={marcador}
         style={{
           width: '100%', padding: '7px 9px', borderRadius: '7px', fontSize: '12.5px',
-          border: '1px solid ' + C.border, boxSizing: 'border-box',
+          border: `1px solid ${C.border}`, boxSizing: 'border-box',
         }} />
       <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
         <button disabled={motivo.trim().length < 4}

@@ -7,31 +7,32 @@ import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 import { useAuth } from '../../contexts/AuthContext';
 import { RefreshCw, Paperclip, CheckCircle, CheckCircle2, XCircle, Clock, LayoutGrid, Table as TableIcon, UserCheck, UserX, Lock, Download, AlertTriangle, Package, Undo2, Images, Archive } from 'lucide-react';
 import ComprobantesDelLote from './ComprobantesDelLote';
+import conAlfa from '../../tema/conAlfa';
 
 // ---- Paleta profesional / corporativa (plana, sin sombras decorativas) ----
 const C = {
-  border: '#e5e7eb',
+  border: 'var(--en-oscuro-linea, #e5e7eb)',
   borderLight: '#eef0f3',
-  bgSubtle: '#f9fafb',
-  ink: '#111827',
-  soft: '#6b7280',
-  faint: '#9ca3af',
-  primary: '#4338ca',
-  primaryBg: '#eef2ff',
-  green: '#047857',
-  greenBg: '#ecfdf5',
-  amber: '#b45309',
-  amberBg: '#fffbeb',
-  red: '#dc2626',
-  redBg: '#fef2f2',
+  bgSubtle: 'var(--en-oscuro-superficie-2, #f9fafb)',
+  ink: 'var(--en-oscuro-texto, #111827)',
+  soft: 'var(--en-oscuro-texto-2, #6b7280)',
+  faint: 'var(--en-oscuro-texto-3, #9ca3af)',
+  primary: 'var(--en-oscuro-acento, #4338ca)',
+  primaryBg: 'var(--en-oscuro-acento-suave, #eef2ff)',
+  green: 'var(--en-oscuro-exito, #047857)',
+  greenBg: 'var(--en-oscuro-exito-suave, #ecfdf5)',
+  amber: 'var(--en-oscuro-alerta, #b45309)',
+  amberBg: 'var(--en-oscuro-alerta-suave, #fffbeb)',
+  red: 'var(--en-oscuro-error, #dc2626)',
+  redBg: 'var(--en-oscuro-error-suave, #fef2f2)',
 };
 
 // Colores por flujo (identidad visual sobria, no saturada)
 const FLUJO_STYLE = {
-  ris_ves: { bg: '#EEF2FF', fg: '#4338CA' },
-  btc_ves: { bg: '#FFF7ED', fg: '#C2410C' },
-  ves_ris: { bg: '#ECFDF5', fg: '#047857' },
-  ris_reais: { bg: '#FEFCE8', fg: '#A16207' },
+  ris_ves: { bg: 'var(--en-oscuro-acento-suave, #EEF2FF)', fg: 'var(--en-oscuro-acento, #4338CA)' },
+  btc_ves: { bg: 'var(--en-oscuro-alerta-suave, #FFF7ED)', fg: 'var(--en-oscuro-error, #C2410C)' },
+  ves_ris: { bg: 'var(--en-oscuro-exito-suave, #ECFDF5)', fg: 'var(--en-oscuro-exito, #047857)' },
+  ris_reais: { bg: 'var(--en-oscuro-alerta-suave, #FEFCE8)', fg: 'var(--en-oscuro-alerta, #A16207)' },
 };
 
 // Los flujos que terminan en un pago en BOLIVARES a una cuenta venezolana. Son
@@ -398,7 +399,7 @@ export default function OrdenesPorProcesar() {
   const btnGhost = (active) => ({
     display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px',
     borderRadius: '7px', border: '1px solid ' + (active ? C.primary : C.border),
-    backgroundColor: active ? C.primary : '#fff', color: active ? '#fff' : '#374151',
+    backgroundColor: active ? C.primary : 'var(--en-oscuro-superficie, #fff)', color: active ? '#fff' : 'var(--en-oscuro-texto, #374151)',
     fontWeight: 600, fontSize: '13px', cursor: 'pointer',
   });
   const badge = (st) => ({
@@ -411,14 +412,14 @@ export default function OrdenesPorProcesar() {
   });
   const chip = {
     display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '7px',
-    border: '1px solid ' + C.border, fontSize: '12.5px', fontWeight: 600, color: '#374151', cursor: 'pointer',
+    border: `1px solid ${C.border}`, fontSize: '12.5px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', cursor: 'pointer',
   };
 
   const Separador = () => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0' }}>
-      <div style={{ flex: 1, height: '1px', background: '#d1d5db' }} />
+      <div style={{ flex: 1, height: '1px', background: 'var(--en-oscuro-superficie-3, #d1d5db)' }} />
       <span style={{ fontSize: '11px', fontWeight: 600, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.5px' }}>nuevas órdenes</span>
-      <div style={{ flex: 1, height: '1px', background: '#d1d5db' }} />
+      <div style={{ flex: 1, height: '1px', background: 'var(--en-oscuro-superficie-3, #d1d5db)' }} />
     </div>
   );
 
@@ -433,7 +434,7 @@ export default function OrdenesPorProcesar() {
           disabled={busy === o.orden_id}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px',
-            borderRadius: '6px', border: '1px dashed ' + C.faint, backgroundColor: '#fff',
+            borderRadius: '6px', border: `1px dashed ${C.faint}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             color: C.soft, fontSize: '11.5px', fontWeight: 600, cursor: 'pointer',
           }}
           title="Reclamar esta orden para procesarla"
@@ -458,7 +459,7 @@ export default function OrdenesPorProcesar() {
             disabled={busy === o.orden_id}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px',
-              borderRadius: '6px', border: '1px solid ' + C.border, backgroundColor: '#fff',
+              borderRadius: '6px', border: `1px solid ${C.border}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               color: C.soft, fontSize: '11px', fontWeight: 600, cursor: 'pointer',
             }}
             title="Liberar esta orden"
@@ -486,14 +487,14 @@ export default function OrdenesPorProcesar() {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {o.comprobante_usuario && (
             <img src={rutaDeArchivo(o.comprobante_usuario)} alt="comp" onClick={() => setVerImg(o.comprobante_usuario)}
-              style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid ' + C.border }} />
+              style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: `1px solid ${C.border}` }} />
           )}
           <button disabled={busy === o.orden_id} onClick={() => resolverRecarga(o, 'approve')}
             style={{ padding: '6px 12px', borderRadius: '7px', border: 'none', backgroundColor: C.green, color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
             Aprobar
           </button>
           <button disabled={busy === o.orden_id} onClick={() => resolverRecarga(o, 'reject')}
-            style={{ padding: '6px 12px', borderRadius: '7px', backgroundColor: '#fff', color: C.red, border: '1.5px solid ' + C.red, fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+            style={{ padding: '6px 12px', borderRadius: '7px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: C.red, border: `1.5px solid ${C.red}`, fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
             Rechazar
           </button>
         </div>
@@ -510,7 +511,7 @@ export default function OrdenesPorProcesar() {
         </label>
         {tiene && (
           <img src={rutaDeArchivo(comprobantes[o.orden_id])} alt="comp" onClick={() => setVerImg(comprobantes[o.orden_id])}
-            style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: '1px solid ' + C.border }} />
+            style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', cursor: 'pointer', border: `1px solid ${C.border}` }} />
         )}
         <button disabled={busy === o.orden_id || !tiene} onClick={() => procesarPago(o)} style={btnPrimary(tiene && busy !== o.orden_id)}>
           {busy === o.orden_id ? '…' : 'Procesar pago'}
@@ -520,10 +521,10 @@ export default function OrdenesPorProcesar() {
   };
 
   const Tarjeta = ({ o }) => {
-    const st = FLUJO_STYLE[o.flujo] || { bg: '#F3F4F6', fg: '#374151' };
+    const st = FLUJO_STYLE[o.flujo] || { bg: 'var(--en-oscuro-superficie-2, #F3F4F6)', fg: 'var(--en-oscuro-texto, #374151)' };
     const bl = beneficiarioLinea(o.beneficiario);
     return (
-      <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '12px 14px', border: '1px solid ' + C.borderLight }}>
+      <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '10px', padding: '12px 14px', border: `1px solid ${C.borderLight}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
             {/* Sólo las que terminan en un pago en bolívares llevan casilla. En
@@ -540,7 +541,7 @@ export default function OrdenesPorProcesar() {
               />
             )}
             <span style={badge(st)}>{o.flujo_label}</span>
-            <span style={{ fontSize: '13px', color: '#374151' }}>
+            <span style={{ fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)' }}>
               {fmt(o.origen?.valor)} {o.origen?.unidad} <span style={{ color: C.faint }}>→</span>{' '}
               <b style={{ color: st.fg }}>{fmt(o.destino?.valor)} {o.destino?.unidad}</b>
             </span>
@@ -553,7 +554,7 @@ export default function OrdenesPorProcesar() {
         <div style={{ fontSize: '12.5px', color: C.soft, margin: '6px 0 10px 0' }}>
           {bl ? bl : `Usuario: ${o.user_name}`}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', paddingTop: '10px', borderTop: '1px solid ' + C.borderLight }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', paddingTop: '10px', borderTop: `1px solid ${C.borderLight}` }}>
           <Asignacion o={o} />
           <Accion o={o} />
         </div>
@@ -571,7 +572,7 @@ export default function OrdenesPorProcesar() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div style={{ display: 'inline-flex', borderRadius: '7px', border: '1px solid ' + C.border, overflow: 'hidden' }}>
+          <div style={{ display: 'inline-flex', borderRadius: '7px', border: `1px solid ${C.border}`, overflow: 'hidden' }}>
             <button onClick={() => setVista('tarjetas')} title="Tarjetas"
               style={{ ...btnGhost(vista === 'tarjetas'), border: 'none', borderRadius: 0 }}>
               <LayoutGrid size={15} /> Tarjetas
@@ -598,12 +599,12 @@ export default function OrdenesPorProcesar() {
               <div key={l.lote_id} style={{
                 display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
                 padding: '9px 12px', borderRadius: '9px', backgroundColor: C.amberBg,
-                border: '1px solid ' + C.amber + '33',
+                border: `1px solid ${conAlfa(C.amber, '33')}`,
               }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: C.amber, fontSize: '13px' }}>
                   <Package size={14} /> {l.numero}
                 </span>
-                <span style={{ fontSize: '13px', color: '#374151' }}>
+                <span style={{ fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)' }}>
                   <b>{l.total}</b> orden(es) · {l.banco_pagador?.nombre}
                 </span>
                 <span style={{ fontSize: '12px', color: C.soft }}>
@@ -627,11 +628,11 @@ export default function OrdenesPorProcesar() {
                     <Images size={13} /> Comprobantes
                   </button>
                   <button onClick={() => cerrarLote(l)}
-                    style={{ ...chip, color: C.green, borderColor: C.green + '55' }}
+                    style={{ ...chip, color: C.green, borderColor: conAlfa(C.green, '55') }}
                     title="Asentar el pago de todas sus órdenes y sacar el lote de la lista">
                     <CheckCircle2 size={13} /> Cerrar el lote
                   </button>
-                  <button onClick={() => cancelarLote(l)} style={{ ...chip, color: C.red, borderColor: C.red + '55' }}
+                  <button onClick={() => cancelarLote(l)} style={{ ...chip, color: C.red, borderColor: conAlfa(C.red, '55') }}
                     title="Devolver sus órdenes a la cola">
                     <Undo2 size={13} /> Cancelar
                   </button>
@@ -666,7 +667,7 @@ export default function OrdenesPorProcesar() {
               <div key={l.lote_id} style={{
                 display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
                 padding: '8px 11px', marginBottom: '5px', borderRadius: '8px',
-                border: '1px solid ' + C.borderLight, backgroundColor: '#fff',
+                border: `1px solid ${C.borderLight}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                 fontSize: '12.5px',
               }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: C.soft }}>
@@ -710,9 +711,9 @@ export default function OrdenesPorProcesar() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
           padding: '10px 12px', marginBottom: '12px', borderRadius: '9px',
-          border: '1px solid ' + C.border, backgroundColor: C.bgSubtle,
+          border: `1px solid ${C.border}`, backgroundColor: C.bgSubtle,
         }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', cursor: 'pointer' }}>
             <input type="checkbox" checked={todasElegidas} onChange={alternarTodas}
               style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: C.primary }} />
             Todas las de bolívares ({seleccionables.length})
@@ -723,7 +724,7 @@ export default function OrdenesPorProcesar() {
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: C.soft }}>
             Pago desde
             <select value={bancoPagador} onChange={(e) => setBancoPagador(e.target.value)}
-              style={{ padding: '6px 8px', borderRadius: '7px', border: '1px solid ' + C.border, fontSize: '13px', backgroundColor: '#fff' }}>
+              style={{ padding: '6px 8px', borderRadius: '7px', border: `1px solid ${C.border}`, fontSize: '13px', backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
               <option value="">elegí el banco…</option>
               {bancos.map((b) => <option key={b.codigo} value={b.codigo}>{b.nombre} · {b.codigo}</option>)}
             </select>
@@ -749,7 +750,7 @@ export default function OrdenesPorProcesar() {
       {resumen && (
         <div style={{
           padding: '10px 12px', marginBottom: '12px', borderRadius: '9px',
-          border: '1px solid ' + C.border, backgroundColor: '#fff', fontSize: '13px', color: '#374151',
+          border: `1px solid ${C.border}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)', fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
             <span>
@@ -805,9 +806,9 @@ export default function OrdenesPorProcesar() {
       {loading ? (
         <p style={{ color: C.soft }}>Cargando órdenes…</p>
       ) : visibles.length === 0 ? (
-        <div style={{ padding: '36px', textAlign: 'center', backgroundColor: C.bgSubtle, borderRadius: '12px', border: '1px dashed ' + C.border }}>
-          <CheckCircle size={30} color={C.green} style={{ marginBottom: '6px' }} />
-          <p style={{ color: '#374151', fontWeight: 600, margin: 0 }}>No hay órdenes en esta vista</p>
+        <div style={{ padding: '36px', textAlign: 'center', backgroundColor: C.bgSubtle, borderRadius: '12px', border: `1px dashed ${C.border}` }}>
+          <CheckCircle size={30} style={{ marginBottom: '6px', color: C.green }} />
+          <p style={{ color: 'var(--en-oscuro-texto, #374151)', fontWeight: 600, margin: 0 }}>No hay órdenes en esta vista</p>
         </div>
       ) : vista === 'tarjetas' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -819,7 +820,7 @@ export default function OrdenesPorProcesar() {
           ))}
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', border: '1px solid ' + C.borderLight, borderRadius: '10px' }}>
+        <div style={{ overflowX: 'auto', border: `1px solid ${C.borderLight}`, borderRadius: '10px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ backgroundColor: C.bgSubtle, textAlign: 'left' }}>
@@ -830,14 +831,14 @@ export default function OrdenesPorProcesar() {
             </thead>
             <tbody>
               {visibles.map((o, i) => {
-                const st = FLUJO_STYLE[o.flujo] || { bg: '#F3F4F6', fg: '#374151' };
+                const st = FLUJO_STYLE[o.flujo] || { bg: 'var(--en-oscuro-superficie-2, #F3F4F6)', fg: 'var(--en-oscuro-texto, #374151)' };
                 const bl = beneficiarioLinea(o.beneficiario);
                 return (
                   <Fragment key={idDe(o)}>
                     {i === firstNewIdx && firstNewIdx > -1 && (
                       <tr><td colSpan={7} style={{ padding: 0 }}><Separador /></td></tr>
                     )}
-                    <tr style={{ borderTop: '1px solid ' + C.borderLight }}>
+                    <tr style={{ borderTop: `1px solid ${C.borderLight}` }}>
                       <td style={{ padding: '8px 10px' }}><span style={badge(st)}>{o.flujo_label}</span></td>
                       <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
                         {fmt(o.origen?.valor)} {o.origen?.unidad} → <b style={{ color: st.fg }}>{fmt(o.destino?.valor)} {o.destino?.unidad}</b>

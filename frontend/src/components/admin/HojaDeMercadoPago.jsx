@@ -42,18 +42,18 @@ import api from '../../utils/api';
 import { fmt } from '../../utils/format';
 
 const C = {
-  linea: '#e5e7eb',
-  fondo: '#f9fafb',
-  tinta: '#111827',
-  suave: '#6b7280',
-  tenue: '#9ca3af',
-  verde: '#047857',
-  verdeFondo: '#ecfdf5',
+  linea: 'var(--en-oscuro-linea, #e5e7eb)',
+  fondo: 'var(--en-oscuro-superficie-2, #f9fafb)',
+  tinta: 'var(--en-oscuro-texto, #111827)',
+  suave: 'var(--en-oscuro-texto-2, #6b7280)',
+  tenue: 'var(--en-oscuro-texto-3, #9ca3af)',
+  verde: 'var(--en-oscuro-exito, #047857)',
+  verdeFondo: 'var(--en-oscuro-exito-suave, #ecfdf5)',
   ambar: '#b45309',
-  ambarFondo: '#fffbeb',
-  rojo: '#b91c1c',
-  rojoFondo: '#fef2f2',
-  azul: '#14395e',
+  ambarFondo: 'var(--en-oscuro-alerta-suave, #fffbeb)',
+  rojo: 'var(--en-oscuro-error, #b91c1c)',
+  rojoFondo: 'var(--en-oscuro-error-suave, #fef2f2)',
+  azul: 'var(--en-oscuro-acento, #14395e)',
 };
 
 /* Los mismos cuatro desenlaces que guarda `services/hoja_de_mercadopago.py`.
@@ -161,8 +161,7 @@ export default function HojaDeMercadoPago() {
             Buscar por referencia
           </span>
           <div style={{ position: 'relative' }}>
-            <Search size={14} color={C.tenue} style={{
-              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.tenue }} />
             <input
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
@@ -278,7 +277,7 @@ export default function HojaDeMercadoPago() {
               <button onClick={() => traer(pagina - 1)} disabled={pagina <= 1}
                 data-testid="hoja-anterior"
                 style={{ padding: '6px 14px', fontSize: 13, borderRadius: 8,
-                  border: `1px solid ${C.linea}`, background: '#fff',
+                  border: `1px solid ${C.linea}`, background: 'var(--en-oscuro-superficie, #fff)',
                   cursor: pagina <= 1 ? 'default' : 'pointer' }}>
                 Anterior
               </button>
@@ -288,7 +287,7 @@ export default function HojaDeMercadoPago() {
               <button onClick={() => traer(pagina + 1)} disabled={pagina >= paginas}
                 data-testid="hoja-siguiente"
                 style={{ padding: '6px 14px', fontSize: 13, borderRadius: 8,
-                  border: `1px solid ${C.linea}`, background: '#fff',
+                  border: `1px solid ${C.linea}`, background: 'var(--en-oscuro-superficie, #fff)',
                   cursor: pagina >= paginas ? 'default' : 'pointer' }}>
                 Siguiente
               </button>

@@ -52,7 +52,7 @@ function VigenciaDeLaTasa({ cfg }) {
   }
 
   return (
-    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 16px 0' }}>
+    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 16px 0' }}>
       Tasa vigente por {restantes} horas más. Después de {limite} horas sin
       actualizarse, los envíos con Bitcoin se cortan en vez de usarla.
     </p>
@@ -61,16 +61,16 @@ function VigenciaDeLaTasa({ cfg }) {
 
 function Franja({ tono, titulo, children }) {
   const [fondo, borde, color] = tono === 'error'
-    ? ['#FEF2F2', '#FECACA', '#B42318']
-    : ['#FFFBEB', '#FDE68A', '#B54708'];
+    ? ['var(--en-oscuro-error-suave, #FEF2F2)', 'var(--en-oscuro-error-borde, #FECACA)', 'var(--en-oscuro-error, #B42318)']
+    : ['var(--en-oscuro-alerta-suave, #FFFBEB)', 'var(--en-oscuro-alerta-borde, #FDE68A)', 'var(--en-oscuro-alerta, #B54708)'];
   return (
     <div style={{
       display: 'flex', gap: '10px', alignItems: 'flex-start',
       background: fondo, border: `1px solid ${borde}`,
       borderRadius: '12px', padding: '13px 15px', marginBottom: '16px',
     }}>
-      <Info size={17} color={color} style={{ flexShrink: 0, marginTop: '1px' }} />
-      <div style={{ fontSize: '13px', lineHeight: 1.55, color: '#374151' }}>
+      <Info size={17} style={{ flexShrink: 0, marginTop: '1px', color: color }} />
+      <div style={{ fontSize: '13px', lineHeight: 1.55, color: 'var(--en-oscuro-texto, #374151)' }}>
         <strong style={{ display: 'block', color, marginBottom: '2px' }}>{titulo}</strong>
         {children}
       </div>
@@ -133,18 +133,18 @@ export default function TasasBtcSection() {
     toast('Valores por defecto cargados (recuerda Guardar)', { icon: 'ℹ️' });
   };
 
-  const card = { backgroundColor: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #eef0f4', marginBottom: '16px' };
-  const input = { width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', boxSizing: 'border-box' };
-  const help = { fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' };
-  const lbl = { display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' };
+  const card = { backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '16px', padding: '20px', border: '1px solid var(--en-oscuro-linea, #eef0f4)', marginBottom: '16px' };
+  const input = { width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', boxSizing: 'border-box' };
+  const help = { fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '6px 0 0 0' };
+  const lbl = { display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' };
   const ej = cfg?.example;
 
   return (
-    <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '24px', marginTop: '24px' }}>
-      <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#374151', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Bitcoin size={18} color="#EA580C" /> Ruta BTC → USDI → VES
+    <div style={{ borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', paddingTop: '24px', marginTop: '24px' }}>
+      <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Bitcoin size={18} style={{ color: 'var(--en-oscuro-alerta, #EA580C)' }} /> Ruta BTC → USDI → VES
       </h4>
-      <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 16px 0' }}>
+      <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 16px 0' }}>
         Estos valores se aplican a cada nueva transacción BTC. La BCV y el precio BTC son solo de referencia.
       </p>
 
@@ -152,21 +152,21 @@ export default function TasasBtcSection() {
 
       {/* Referencias informativas (solo lectura) */}
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ ...card, backgroundColor: '#FFF7ED', border: '1px solid #FED7AA' }}>
+        <div style={{ ...card, backgroundColor: 'var(--en-oscuro-alerta-suave, #FFF7ED)', border: '1px solid var(--en-oscuro-alerta-borde, #FED7AA)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Bitcoin size={22} color="#EA580C" />
+              <Bitcoin size={22} style={{ color: 'var(--en-oscuro-alerta, #EA580C)' }} />
               <div>
-                <p style={{ fontSize: '12px', color: '#9A3412', fontWeight: 700, margin: 0, letterSpacing: '0.5px' }}>PRECIO BTC ACTUAL (informativo)</p>
-                <p style={{ fontSize: '24px', fontWeight: 800, color: '#9A3412', margin: '2px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #9A3412)', fontWeight: 700, margin: 0, letterSpacing: '0.5px' }}>PRECIO BTC ACTUAL (informativo)</p>
+                <p style={{ fontSize: '24px', fontWeight: 800, color: 'var(--en-oscuro-error, #9A3412)', margin: '2px 0 0 0' }}>
                   {cfg?.btc_price_usd ? `$${Number(cfg.btc_price_usd).toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '—'} <span style={{ fontSize: '13px', fontWeight: 600 }}>USDI</span>
                 </p>
-                <p style={{ fontSize: '11px', color: '#C2410C', margin: '2px 0 0 0' }}>Fuente: blockchain.info/ticker</p>
+                <p style={{ fontSize: '11px', color: 'var(--en-oscuro-error, #C2410C)', margin: '2px 0 0 0' }}>Fuente: blockchain.info/ticker</p>
               </div>
             </div>
             <button onClick={cargar} disabled={loading} style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px',
-              border: '1px solid #FB923C', backgroundColor: '#fff', color: '#EA580C', fontWeight: 600, cursor: 'pointer',
+              border: '1px solid var(--en-oscuro-alerta, #FB923C)', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-alerta, #EA580C)', fontWeight: 600, cursor: 'pointer',
             }}><RefreshCw size={14} /> Refrescar</button>
           </div>
         </div>
@@ -177,7 +177,7 @@ export default function TasasBtcSection() {
 
       {/* Parámetros editables */}
       <div style={card}>
-        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827', margin: '0 0 16px 0' }}>Parámetros editables</p>
+        <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 16px 0' }}>Parámetros editables</p>
 
         <label style={lbl}>Margen (interno)</label>
         <input type="number" step="0.01" value={margen} onChange={(e) => setMargen(e.target.value)} style={input} placeholder="0.99" />
@@ -197,8 +197,8 @@ export default function TasasBtcSection() {
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
           <button onClick={restablecer} disabled={busy} style={{
-            padding: '12px 16px', borderRadius: '10px', border: '1px solid #e5e7eb', backgroundColor: '#fff',
-            color: '#374151', fontWeight: 600, cursor: 'pointer',
+            padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
+            color: 'var(--en-oscuro-texto, #374151)', fontWeight: 600, cursor: 'pointer',
           }}>Restablecer defaults</button>
           <button onClick={guardar} disabled={busy} style={{
             flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: '#16a34a',
@@ -209,27 +209,27 @@ export default function TasasBtcSection() {
 
       {/* Vista previa con los valores actuales */}
       {ej && (
-        <div style={{ ...card, backgroundColor: '#F9FAFB' }}>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: '#374151', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ ...card, backgroundColor: 'var(--en-oscuro-superficie-2, #F9FAFB)' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Info size={15} /> Vista previa: un cliente paga 1 USDI
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: '#fff', border: '1px solid #eef0f4' }}>
-              <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>CLIENTE PAGA</p>
-              <p style={{ fontSize: '18px', fontWeight: 800, color: '#EA580C', margin: '2px 0 0 0' }}>{ej.usd} USDI</p>
+            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #eef0f4)' }}>
+              <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>CLIENTE PAGA</p>
+              <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--en-oscuro-alerta, #EA580C)', margin: '2px 0 0 0' }}>{ej.usd} USDI</p>
             </div>
-            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: '#fff', border: '1px solid #eef0f4' }}>
-              <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>BTC A ENVIAR</p>
-              <p style={{ fontSize: '16px', fontWeight: 800, color: '#EA580C', margin: '2px 0 0 0' }}>{ej.sats} sats</p>
+            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #eef0f4)' }}>
+              <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>BTC A ENVIAR</p>
+              <p style={{ fontSize: '16px', fontWeight: 800, color: 'var(--en-oscuro-alerta, #EA580C)', margin: '2px 0 0 0' }}>{ej.sats} sats</p>
             </div>
-            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: '#fff', border: '1px solid #eef0f4' }}>
-              <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>BENEFICIARIO RECIBE</p>
-              <p style={{ fontSize: '18px', fontWeight: 800, color: '#16a34a', margin: '2px 0 0 0' }}>{Number(ej.ves).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
-              <p style={{ fontSize: '11px', color: '#9ca3af', margin: '2px 0 0 0' }}>Tasa {tasaUsdiVes} Bs/USDI</p>
+            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #eef0f4)' }}>
+              <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>BENEFICIARIO RECIBE</p>
+              <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--en-oscuro-exito, #16a34a)', margin: '2px 0 0 0' }}>{Number(ej.ves).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
+              <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '2px 0 0 0' }}>Tasa {tasaUsdiVes} Bs/USDI</p>
             </div>
-            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: '#fff', border: '1px solid #eef0f4' }}>
-              <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>PRECIO CON MARGEN</p>
-              <p style={{ fontSize: '18px', fontWeight: 800, color: '#2563eb', margin: '2px 0 0 0' }}>${Number(ej.precio_con_margen).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
+            <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #eef0f4)' }}>
+              <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>PRECIO CON MARGEN</p>
+              <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--en-oscuro-acento, #2563eb)', margin: '2px 0 0 0' }}>${Number(ej.precio_con_margen).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
         </div>

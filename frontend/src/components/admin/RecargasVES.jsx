@@ -40,13 +40,13 @@ import { fmt } from '../../utils/format';
 import { rutaDeArchivo, sePuedeAbrir } from '../../utils/urlDeArchivo';
 
 const COLOR = {
-  fondo: '#f7f8fa',
-  borde: '#e5e7eb', bordeFuerte: '#d1d5db',
-  suave: '#6b7280', tenue: '#9ca3af', texto: '#111827',
-  primario: '#4F46E5', primarioSuave: '#eef0ff', primarioBorde: '#c7d2fe',
-  bien: '#15803d', bienSuave: '#f0fdf4', bienBorde: '#bbf7d0',
-  alerta: '#b45309', alertaSuave: '#fffbeb', alertaBorde: '#fde68a',
-  malo: '#b91c1c', maloSuave: '#fef2f2', maloBorde: '#fecaca',
+  fondo: 'var(--en-oscuro-superficie-2, #f7f8fa)',
+  borde: 'var(--en-oscuro-linea, #e5e7eb)', bordeFuerte: 'var(--en-oscuro-linea-fuerte, #d1d5db)',
+  suave: 'var(--en-oscuro-texto-2, #6b7280)', tenue: 'var(--en-oscuro-texto-3, #9ca3af)', texto: 'var(--en-oscuro-texto, #111827)',
+  primario: 'var(--en-oscuro-acento, #4F46E5)', primarioSuave: 'var(--en-oscuro-acento-suave, #eef0ff)', primarioBorde: 'var(--en-oscuro-acento-borde, #c7d2fe)',
+  bien: 'var(--en-oscuro-exito, #15803d)', bienSuave: 'var(--en-oscuro-exito-suave, #f0fdf4)', bienBorde: 'var(--en-oscuro-exito-borde, #bbf7d0)',
+  alerta: 'var(--en-oscuro-alerta, #b45309)', alertaSuave: 'var(--en-oscuro-alerta-suave, #fffbeb)', alertaBorde: 'var(--en-oscuro-alerta-borde, #fde68a)',
+  malo: 'var(--en-oscuro-error, #b91c1c)', maloSuave: 'var(--en-oscuro-error-suave, #fef2f2)', maloBorde: 'var(--en-oscuro-error-borde, #fecaca)',
 };
 
 /* Los números de plata van con cifras de ancho fijo. Sin esto las columnas
@@ -57,7 +57,7 @@ const CIFRAS = { fontVariantNumeric: 'tabular-nums', fontFeatureSettings: '"tnum
 const MONO = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
 
 const tarjeta = {
-  backgroundColor: '#fff', borderRadius: '14px',
+  backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '14px',
   border: `1px solid ${COLOR.borde}`,
 };
 
@@ -72,7 +72,7 @@ const SEMAFORO = {
   normal: { fondo: COLOR.bienSuave, borde: COLOR.bienBorde, texto: COLOR.bien },
   atencion: { fondo: COLOR.alertaSuave, borde: COLOR.alertaBorde, texto: COLOR.alerta },
   urgente: { fondo: COLOR.maloSuave, borde: COLOR.maloBorde, texto: COLOR.malo },
-  desconocida: { fondo: '#f3f4f6', borde: COLOR.borde, texto: COLOR.suave },
+  desconocida: { fondo: 'var(--en-oscuro-superficie-2, #f3f4f6)', borde: COLOR.borde, texto: COLOR.suave },
 };
 
 const POR_PAGINA = 50;
@@ -314,7 +314,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
               padding: '8px 14px', borderRadius: '9px', cursor: 'pointer',
-              border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+              border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               color: COLOR.suave, fontSize: '13px', fontWeight: 600,
             }}
           >
@@ -327,19 +327,19 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
           display: 'grid', gap: '1px', backgroundColor: COLOR.borde,
           gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))',
         }}>
-          <div style={{ backgroundColor: '#fff' }}>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
             <Kpi etiqueta="Esperando" valor={contadores.pendientes ?? '—'}
               detalle="órdenes por aprobar" />
           </div>
-          <div style={{ backgroundColor: '#fff' }}>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
             <Kpi etiqueta="Plata en cola" valor={`${fmt(contadores.ves_pendiente || 0)}`}
               detalle="VES sin acreditar" />
           </div>
-          <div style={{ backgroundColor: '#fff' }}>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
             <Kpi etiqueta="La más vieja" valor={espera(masVieja)}
               detalle="sin atender" acento={semaforoCola.texto} />
           </div>
-          <div style={{ backgroundColor: '#fff' }}>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
             <Kpi etiqueta="Trabadas" valor={(contadores.sin_banco || 0) + (contadores.sin_comprobante || 0)}
               detalle={`${contadores.sin_banco || 0} sin banco · ${contadores.sin_comprobante || 0} sin comprobante`}
               acento={(contadores.sin_banco || contadores.sin_comprobante) ? COLOR.alerta : undefined} />
@@ -364,7 +364,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
                   padding: '8px 13px', borderRadius: '9px', cursor: 'pointer',
                   fontSize: '13px', fontWeight: 700,
                   border: `1px solid ${activo ? COLOR.primarioBorde : COLOR.borde}`,
-                  backgroundColor: activo ? COLOR.primarioSuave : '#fff',
+                  backgroundColor: activo ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                   color: activo ? COLOR.primario : COLOR.suave,
                 }}
                 data-testid={`filtro-${clave}`}
@@ -374,7 +374,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
                   <span style={{
                     ...CIFRAS, padding: '1px 7px', borderRadius: '999px',
                     fontSize: '11px', fontWeight: 700,
-                    backgroundColor: activo ? '#fff' : '#f3f4f6',
+                    backgroundColor: activo ? 'var(--en-oscuro-superficie, #fff)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
                     color: activo ? COLOR.primario : COLOR.suave,
                   }}>{n}</span>
                 ) : null}
@@ -445,7 +445,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
               fontSize: '13px',
             }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb' }}>
+                <tr style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }}>
                   {[
                     { t: '#', ancho: '38px', der: false },
                     { t: 'Orden', ancho: '116px', der: false },
@@ -526,7 +526,7 @@ export default function RecargasVES({ accountingBanks = [], user, onProcesada })
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '4px',
                   padding: '7px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                  border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                  border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                   color: off ? COLOR.tenue : COLOR.texto,
                   cursor: off ? 'not-allowed' : 'pointer',
                 }}
@@ -568,7 +568,7 @@ function Fila(props) {
         onClick={onAbrir}
         style={{
           cursor: 'pointer',
-          backgroundColor: abierta ? COLOR.primarioSuave : deOtro ? '#fafafa' : '#fff',
+          backgroundColor: abierta ? COLOR.primarioSuave : deOtro ? 'var(--en-oscuro-superficie-2, #fafafa)' : 'var(--en-oscuro-superficie, #fff)',
         }}
         data-testid={`recarga-${r.transaction_id}`}
       >
@@ -671,7 +671,7 @@ function Fila(props) {
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '4px',
                   padding: '4px 9px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 700,
-                  border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                  border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                   color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
                 }}
                 data-testid={`tomar-${r.transaction_id}`}
@@ -687,7 +687,7 @@ function Fila(props) {
         <tr>
           <td colSpan={8} style={{
             padding: 0, borderBottom: `1px solid ${COLOR.borde}`,
-            backgroundColor: '#fbfbfd',
+            backgroundColor: 'var(--en-oscuro-superficie-2, #fbfbfd)',
           }}>
             <Detalle {...props} />
           </td>
@@ -720,7 +720,7 @@ function Detalle(props) {
           style={{
             flexShrink: 0, display: 'block', width: '150px', height: '150px',
             borderRadius: '10px', overflow: 'hidden', cursor: 'zoom-in',
-            border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+            border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
           }}>
           <img src={rutaDeArchivo(r.proof_image)} alt="Comprobante"
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -757,7 +757,7 @@ function Detalle(props) {
             <button type="button" onClick={onLiberar} disabled={ocupado} style={{
               display: 'inline-flex', alignItems: 'center', gap: '4px',
               padding: '3px 9px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 600,
-              border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+              border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
               color: COLOR.suave, cursor: ocupado ? 'wait' : 'pointer',
             }}><LockOpen size={11} />Liberar</button>
           ) : null}
@@ -765,7 +765,7 @@ function Detalle(props) {
 
         {!pendiente && (
           <div style={{
-            padding: '9px 12px', borderRadius: '9px', backgroundColor: '#fff',
+            padding: '9px 12px', borderRadius: '9px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             border: `1px solid ${COLOR.borde}`, fontSize: '12px', color: COLOR.suave,
           }}>
             <div>Procesada {fechaHora(r.processed_at)}{r.processed_by ? ` · por ${r.processed_by}` : ''}</div>
@@ -807,7 +807,7 @@ function Detalle(props) {
                   style={{
                     marginTop: '8px', width: '100%', maxWidth: '340px',
                     padding: '8px 11px', borderRadius: '8px',
-                    border: `1px solid ${COLOR.alerta}`, fontSize: '13px', backgroundColor: '#fff',
+                    border: `1px solid ${COLOR.alerta}`, fontSize: '13px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                   }}
                   data-testid={`bank-select-${r.transaction_id}`}
                 >
@@ -864,7 +864,7 @@ function Detalle(props) {
                   title={!bancoResuelto ? 'Falta elegir el banco destino' : undefined}
                   style={{
                     flex: '0 1 220px', padding: '10px', borderRadius: '9px', border: 'none',
-                    backgroundColor: puedeAprobar ? COLOR.bien : '#d1d5db',
+                    backgroundColor: puedeAprobar ? COLOR.bien : 'var(--en-oscuro-superficie-3, #d1d5db)',
                     color: '#fff', fontSize: '13px', fontWeight: 700,
                     cursor: puedeAprobar ? 'pointer' : 'not-allowed',
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
@@ -877,7 +877,7 @@ function Detalle(props) {
                   type="button" onClick={onPedirRechazo}
                   style={{
                     flex: '0 1 150px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
-                    border: `1px solid ${COLOR.maloBorde}`, backgroundColor: '#fff',
+                    border: `1px solid ${COLOR.maloBorde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                     color: COLOR.malo, fontSize: '13px', fontWeight: 700,
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
                   }}
@@ -917,7 +917,7 @@ function Detalle(props) {
                     type="button" onClick={onCancelarConfirmacion} disabled={ocupado}
                     style={{
                       flex: '0 1 110px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
-                      border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                      border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                       color: COLOR.suave, fontSize: '13px', fontWeight: 600,
                     }}
                   >Volver</button>
@@ -948,7 +948,7 @@ function Detalle(props) {
                     type="button" onClick={onRechazar} disabled={ocupado || !motivo.trim()}
                     style={{
                       flex: '0 1 200px', padding: '10px', borderRadius: '9px', border: 'none',
-                      backgroundColor: motivo.trim() ? COLOR.malo : '#d1d5db', color: '#fff',
+                      backgroundColor: motivo.trim() ? COLOR.malo : 'var(--en-oscuro-superficie-3, #d1d5db)', color: '#fff',
                       fontSize: '13px', fontWeight: 700,
                       cursor: (ocupado || !motivo.trim()) ? 'not-allowed' : 'pointer',
                     }}
@@ -960,7 +960,7 @@ function Detalle(props) {
                     type="button" onClick={onCancelarRechazo} disabled={ocupado}
                     style={{
                       flex: '0 1 110px', padding: '10px', borderRadius: '9px', cursor: 'pointer',
-                      border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+                      border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
                       color: COLOR.suave, fontSize: '13px', fontWeight: 600,
                     }}
                   >Volver</button>

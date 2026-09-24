@@ -10,17 +10,17 @@ import { RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-re
 // como saldo lo que sí llegó.
 
 const C = {
-  border: '#e5e7eb',
-  bgSubtle: '#f9fafb',
-  ink: '#111827',
-  soft: '#6b7280',
-  faint: '#9ca3af',
-  green: '#047857',
-  greenBg: '#ecfdf5',
-  amber: '#b45309',
-  amberBg: '#fffbeb',
-  red: '#dc2626',
-  redBg: '#fef2f2',
+  border: 'var(--en-oscuro-linea, #e5e7eb)',
+  bgSubtle: 'var(--en-oscuro-superficie-2, #f9fafb)',
+  ink: 'var(--en-oscuro-texto, #111827)',
+  soft: 'var(--en-oscuro-texto-2, #6b7280)',
+  faint: 'var(--en-oscuro-texto-3, #9ca3af)',
+  green: 'var(--en-oscuro-exito, #047857)',
+  greenBg: 'var(--en-oscuro-exito-suave, #ecfdf5)',
+  amber: 'var(--en-oscuro-alerta, #b45309)',
+  amberBg: 'var(--en-oscuro-alerta-suave, #fffbeb)',
+  red: 'var(--en-oscuro-error, #dc2626)',
+  redBg: 'var(--en-oscuro-error-suave, #fef2f2)',
 };
 
 function formatDate(d) {
@@ -132,7 +132,7 @@ export default function DiferenciasPago() {
           disabled={loading}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-            borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: '#fff',
+            borderRadius: 10, border: `1px solid ${C.border}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
             color: C.soft, fontWeight: 600, fontSize: 13, cursor: loading ? 'default' : 'pointer',
           }}
         >
@@ -147,7 +147,7 @@ export default function DiferenciasPago() {
           padding: '32px 20px', textAlign: 'center', borderRadius: 12,
           border: `1px dashed ${C.border}`, backgroundColor: C.bgSubtle, color: C.soft, fontSize: 14,
         }}>
-          <CheckCircle size={22} color={C.green} style={{ marginBottom: 8 }} />
+          <CheckCircle size={22} style={{ marginBottom: 8, color: C.green }} />
           <div>No hay envíos con pago incompleto pendientes de revisión.</div>
         </div>
       ) : (
@@ -156,7 +156,7 @@ export default function DiferenciasPago() {
             const ratio = o.paid_ratio != null ? Number(o.paid_ratio) : null;
             const busy = busyId === o.orden_id;
             return (
-              <div key={o.orden_id} style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, backgroundColor: '#fff' }}>
+              <div key={o.orden_id} style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>
