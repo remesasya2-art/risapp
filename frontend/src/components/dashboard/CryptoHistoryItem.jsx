@@ -37,6 +37,9 @@ const SEND_STATUS_STYLES = {
 // paleta prohíbe ese patrón, porque con una variable adentro el valor queda
 // inválido y el fondo desaparece sin que nada avise. Son colores de marca,
 // de tono medio, y se leen bien en los dos modos.
+// Los estados que terminaron bien, en los dos catálogos de arriba.
+const TERMINADOS_BIEN = new Set(['finished', 'manual', 'completed']);
+
 const CURRENCY_META = {
   usdt: { label: 'USDT', color: '#26A17B', fondo: '#26A17B18' },
   usdc: { label: 'USDC', color: '#2775CA', fondo: '#2775CA18' },
@@ -108,10 +111,17 @@ export default function CryptoHistoryItem({ item, formatDate }) {
               {fmtVes(item.amount_output)} {item.currency_output || 'VES'}
             </p>
           ) : null}
-          <span style={{
-            display: 'inline-block', padding: '2px 10px', borderRadius: 9999,
-            fontSize: '11px', fontWeight: 700, backgroundColor: statusInfo.bg, color: statusInfo.color,
+          {/* Texto con un punto, como las demás filas del historial: lo que
+              salió bien en gris, y en color sólo lo que pide atención. Ver
+              `EstadoEnTexto` en TransactionItem.jsx. */}
+          <span data-testid="estado-en-texto" style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            fontSize: '12px', fontWeight: 600, lineHeight: 1,
+            color: TERMINADOS_BIEN.has(item.status) ? 'var(--en-oscuro-texto-2, #8E8E9A)' : statusInfo.color,
           }}>
+            <span aria-hidden="true" style={{
+              width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0, backgroundColor: statusInfo.color,
+            }} />
             {statusInfo.label}
           </span>
         </div>

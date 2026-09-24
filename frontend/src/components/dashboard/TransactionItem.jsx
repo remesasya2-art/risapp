@@ -1,4 +1,4 @@
-import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Eye, Building2, AlertCircle, Hourglass } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2, XCircle, Eye, Building2, AlertCircle, Hourglass, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { fmt, formatAccountNumber } from '../../utils/format';
 
@@ -14,7 +14,7 @@ const STATUS_CONFIG = {
   rejected:                 { label: 'Rechazado', bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
   failed:                   { label: 'Fallida',   bg: 'var(--en-oscuro-error-suave, #FEF2F2)', fg: 'var(--en-oscuro-error, #EF4444)', Icon: XCircle },
   // Envios cripto pagados via NOWPayments: ciclo de vida del pago
-  awaiting_payment:         { label: 'Esperando pago',    bg: 'var(--en-oscuro-acento-suave, #EFF6FF)', fg: '#2563EB', Icon: Hourglass },
+  awaiting_payment:         { label: 'Esperando pago',    bg: 'var(--en-oscuro-acento-suave, #EFF6FF)', fg: 'var(--en-oscuro-info, #2563EB)', Icon: Hourglass },
   // ESTOS TRES FALTABAN, Y NO ERA UN DETALLE.
   //
   //   `StatusBadge` cae a «Pendiente» cuando no encuentra el estado. Así que
@@ -60,6 +60,49 @@ export function StatusBadge({ status }) {
   );
 }
 
+// EN LA LISTA, EL ESTADO QUE SALIO BIEN NO SE PINTA.
+//
+//   El historial llevaba cuatro manchas de color por fila: la flecha, el
+//   monto, la pastilla del estado y la del comprobante. Como casi todo está
+//   «Aprobado», la lista era verde y roja de punta a punta —«un arbolito de
+//   navidad», dijo el dueño— y lo único que importaba, el pedido vencido o el
+//   que espera una revisión, no se distinguía del resto.
+//
+//   Ahora lo que terminó bien va en gris con un punto de color, y en color
+//   entero sólo lo que pide que alguien mire. El panel de administración
+//   sigue con `StatusBadge`: ahí se recorre la lista buscando por estado y la
+//   pastilla sirve.
+const TERMINADOS_BIEN = new Set(['completed', 'approved', 'verified', 'completado', 'enviado']);
+
+function EstadoEnTexto({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const bien = TERMINADOS_BIEN.has(status);
+  return (
+    <span
+      data-testid="estado-en-texto"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
+        fontSize: '12.5px', fontWeight: 600, lineHeight: 1,
+        color: bien ? 'var(--en-oscuro-texto-2, #8E8E9A)' : cfg.fg,
+      }}
+    >
+      <span aria-hidden="true" style={{
+        width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0, backgroundColor: cfg.fg,
+      }} />
+      {cfg.label}
+    </span>
+  );
+}
+
+// «Ver comprobante» y «Ver por qué» son enlaces, no pastillas: una segunda
+// pastilla de color al lado del estado competía con él.
+const ENLACE_DE_FILA = {
+  display: 'inline-flex', alignItems: 'center', gap: '2px',
+  padding: '2px 0', background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: '12.5px', fontWeight: 600, textDecoration: 'none', lineHeight: 1,
+  color: 'var(--en-oscuro-acento, #5B4FE9)', fontFamily: 'inherit',
+};
+
 function formatShort(dateString) {
   if (!dateString) return '';
   const d = new Date(dateString);
@@ -84,9 +127,15 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
   const isWithdrawal = ['withdrawal', 'send', 'envio', 'envío'].includes(txType) || isBtc;
   const isRecharge = txType.startsWith('recharge') || txType.startsWith('recarga');
   const sign = isWithdrawal ? '-' : '+';
-  const amountColor = isWithdrawal ? '#E53E3E' : '#38A169';
-  const iconBg = isWithdrawal ? 'var(--en-oscuro-error-suave, #FFF0F0)' : 'var(--en-oscuro-exito-suave, #F0FFF4)';
-  const iconColor = isWithdrawal ? '#E53E3E' : '#38A169';
+  // MANDAR PLATA NO ES UN ERROR.
+  //
+  //   Cada envío salía en rojo —el monto y el círculo de la flecha—, y el
+  //   rojo se lee como «algo salió mal». Lo que sale va en el color del
+  //   texto, con su signo menos; en verde, sólo la plata que entra. La
+  //   flecha ya dice hacia dónde va: no necesita además un color.
+  const amountColor = isWithdrawal ? 'var(--en-oscuro-texto, #1A1A2E)' : 'var(--en-oscuro-exito, #38A169)';
+  const iconBg = 'var(--en-oscuro-superficie-3, #F2F2F7)';
+  const iconColor = 'var(--en-oscuro-texto-2, #8E8E9A)';
   const IconArrow = isWithdrawal ? ArrowUpRight : ArrowDownLeft;
 
   const beneficiary = tx.beneficiary_data || {};
@@ -203,7 +252,7 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '2px' }}>
               <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-2, #8E8E9A)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatShort(tx.created_at)} · <span style={{ color: statusCfg.fg, fontWeight: 600 }}>{statusCfg.label}</span>
+                {formatShort(tx.created_at)} · <span style={{ color: TERMINADOS_BIEN.has(txStatus) ? 'var(--en-oscuro-texto-2, #8E8E9A)' : statusCfg.fg, fontWeight: 600 }}>{statusCfg.label}</span>
                 {numero && <> · <span data-testid={`numero-tx-${tx.transaction_id}`} style={{ userSelect: 'text' }}>#{numero}</span></>}
               </span>
               {showVoucher && (
@@ -320,40 +369,33 @@ export default function TransactionItem({ tx, rates, onViewVoucher, compact = fa
             </div>
           )}
 
-          {/* Bottom row: badge + voucher button */}
-          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            <StatusBadge status={txStatus} />
-            {sePuedeRetomar && (
-              <Link
-                to={`/envios/${tx.transaction_id}/pagar`}
-                data-testid={`retomar-${tx.transaction_id}`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '5px',
-                  padding: '3px 9px', borderRadius: '20px',
-                  fontSize: '11.5px', fontWeight: 600, textDecoration: 'none',
-                  backgroundColor: 'var(--en-oscuro-acento-suave, #EEF2FF)', color: 'var(--en-oscuro-acento, #5B4FE9)',
-                  lineHeight: 1,
-                }}
-              >
-                <Hourglass size={11} />
-                {txStatus === 'payment_expired' ? 'Ver por qué' : 'Ver cómo pagar'}
-              </Link>
-            )}
-            {showVoucher && (
-              <button
-                onClick={() => onViewVoucher?.(tx)}
-                data-testid={`view-voucher-${tx.transaction_id}`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '5px',
-                  padding: '3px 9px', borderRadius: '20px',
-                  fontSize: '11.5px', fontWeight: 600, cursor: 'pointer',
-                  backgroundColor: 'var(--en-oscuro-acento-suave, #EEF2FF)', color: 'var(--en-oscuro-acento, #5B4FE9)', border: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                <Eye size={11} />
-                Ver comprobante
-              </button>
+          {/* Abajo: el estado a la izquierda y lo que se puede hacer, a la derecha. */}
+          <div style={{ marginTop: '9px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <EstadoEnTexto status={txStatus} />
+            {(sePuedeRetomar || showVoucher) && (
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '14px' }}>
+                {sePuedeRetomar && (
+                  <Link
+                    to={`/envios/${tx.transaction_id}/pagar`}
+                    data-testid={`retomar-${tx.transaction_id}`}
+                    style={ENLACE_DE_FILA}
+                  >
+                    {txStatus === 'payment_expired' ? 'Ver por qué' : 'Ver cómo pagar'}
+                    <ChevronRight size={14} />
+                  </Link>
+                )}
+                {showVoucher && (
+                  <button
+                    type="button"
+                    onClick={() => onViewVoucher?.(tx)}
+                    data-testid={`view-voucher-${tx.transaction_id}`}
+                    style={ENLACE_DE_FILA}
+                  >
+                    Ver comprobante
+                    <ChevronRight size={14} />
+                  </button>
+                )}
+              </span>
             )}
           </div>
         </div>
