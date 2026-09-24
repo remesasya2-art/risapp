@@ -124,13 +124,18 @@ def test_QUIEN_PIDE_NO_APRUEBA_Y_APROBAR_EJECUTA(mongo):
     p = ya(aprobaciones.pedir(accion="configurar", objetivo="nucleo_umbral_operacion",
                               carga={"clave": "nucleo_umbral_operacion", "valor": "20000"}, actor="ana", motivo="Sube el ticket promedio", ahora=T0))
     assert p["estado"] == "pendiente" and p["vence_en"] == (T0 + timedelta(hours=72)).isoformat()
+    # CADA decisión lleva su hora, y no sólo la que se aprueba. Sin `ahora`,
+    # `decidir` usa el reloj de verdad contra un pedido fechado en T0: pasaba
+    # mientras el reloj estuviera dentro de las 72 horas de T0, y el 24 de
+    # septiembre de 2026 a las 15:00 el pedido «venció» y el test se rompió
+    # solo, sin que nadie tocara el código.
     with pytest.raises(aprobaciones.AprobacionInvalida, match="quien pidió"):
-        ya(aprobaciones.decidir(p["id"], actor="ana", aprobar=True))
+        ya(aprobaciones.decidir(p["id"], actor="ana", aprobar=True, ahora=T0 + timedelta(minutes=30)))
     d = ya(aprobaciones.decidir(p["id"], actor="jefa", aprobar=True, nota="De acuerdo", ahora=T0 + timedelta(hours=1)))
     assert d["estado"] == "ejecutado" and d["decidido_por"] == "jefa" and "→ 20000" in d["resultado"]
     assert str(ya(configuracion.leer(mongo, "nucleo_umbral_operacion"))) == "20000.00"
     with pytest.raises(aprobaciones.AprobacionInvalida, match="ya está ejecutado"):
-        ya(aprobaciones.decidir(p["id"], actor="jefa", aprobar=True))
+        ya(aprobaciones.decidir(p["id"], actor="jefa", aprobar=True, ahora=T0 + timedelta(hours=2)))
     acciones = [f["accion"] for f in ya(bitacora.listar())]
     assert acciones == ["aprobacion.ejecutado", "config.cambio", "aprobacion.aprobada", "aprobacion.pedida"]
     assert cadena()["ok"] is True
@@ -140,10 +145,10 @@ def test_rechazar_no_ejecuta_y_pedir_dos_veces_devuelve_el_mismo(mongo):
     ya(mongo.config.insert_one({"clave": modo.CLAVE, "valor": "1"}))
     p = ya(aprobaciones.pedir(accion="configurar", objetivo="nucleo_modo", carga={"clave": "nucleo_modo", "valor": "0"}, actor="ana", motivo="Apagar", ahora=T0))
     assert ya(aprobaciones.pedir(accion="configurar", objetivo="nucleo_modo", carga={"clave": "nucleo_modo", "valor": "2"}, actor="beto", motivo="Otro", ahora=T0))["id"] == p["id"]
-    d = ya(aprobaciones.decidir(p["id"], actor="jefa", aprobar=False, nota="Todavía no"))
+    d = ya(aprobaciones.decidir(p["id"], actor="jefa", aprobar=False, nota="Todavía no", ahora=T0 + timedelta(hours=1)))
     assert d["estado"] == "rechazado" and d["nota"] == "Todavía no"
     assert ya(modo.leer(mongo)) == modo.LABORATORIO
-    assert ya(aprobaciones.resumen())["rechazado"] == 1
+    assert ya(aprobaciones.resumen(ahora=T0 + timedelta(hours=1)))["rechazado"] == 1
 
 
 def test_UN_PEDIDO_VENCE_A_LAS_72_HORAS(mongo):

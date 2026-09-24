@@ -24,7 +24,6 @@ DELETE /api/admin/quick-replies/{qr_id}
 DELETE /api/admin/rrhh/{user_id}
 DELETE /api/admin/sub-admins/{user_id}
 DELETE /api/admin/users/{user_id}
-DELETE /api/beneficiaries/{beneficiary_id}
 DELETE /api/notifications/leidas
 DELETE /api/notifications/{notification_id}
 DELETE /api/webauthn/credentials/{credential_id}
@@ -267,17 +266,11 @@ POST /api/auth/register-fcm-token
 POST /api/auth/resend-verification-code
 POST /api/auth/set-new-password
 POST /api/auth/verify-email
-POST /api/beneficiaries
-POST /api/beneficiaries/br
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
 POST /api/credits/webhook
 POST /api/crypto-send/webhook
 POST /api/csp-reporte
-POST /api/envios/cotizar
-POST /api/envios/crear
-POST /api/envios/{envio_id}/cobros/{partida}/pagar
-POST /api/envios/{envio_id}/comprobante
 POST /api/gestor/pix/cancel/{payment_id}
 POST /api/gestor/pix/create
 POST /api/gestor/pix/simulate-payment/{payment_id}
@@ -295,10 +288,6 @@ POST /api/recovery/reset-password
 POST /api/recovery/support-contact
 POST /api/recovery/verify-code
 POST /api/recovery/verify-identity
-POST /api/soporte/casos
-POST /api/soporte/casos/{caso_id}/calificar
-POST /api/soporte/casos/{caso_id}/cerrar
-POST /api/soporte/casos/{caso_id}/mensajes
 POST /api/verification/submit
 POST /api/webauthn/login/options
 POST /api/webauthn/login/verify

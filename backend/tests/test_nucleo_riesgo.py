@@ -189,7 +189,11 @@ def test_UN_CASO_ABIERTO_POR_TITULAR_Y_LAS_ALERTAS_SE_ANEXAN():
 def test_LOS_PLAZOS_DE_LA_CIRCULAR():
     t = titular_aprobado("u_ana")
     c = ya(casos.abrir(titular=t, origen="manual", actor="jefa", ahora=T0))
-    assert c["analizar_hasta"].startswith("2026-11-05") and c["analisis_vencido"] is False
+    # El «no vencido» se pregunta en T0. Lo que devuelve `abrir` calcula el
+    # vencimiento con el reloj de verdad, y el plazo es el 5 de noviembre de
+    # 2026: desde el 6 este test se rompía solo.
+    assert c["analizar_hasta"].startswith("2026-11-05")
+    assert ya(casos.detalle(c["id"], ahora=T0))["analisis_vencido"] is False
     assert ya(casos.detalle(c["id"], ahora=T0 + timedelta(days=46)))["analisis_vencido"] is True
     ya(casos.tomar(c["id"], analista="ana"))
     d = ya(casos.concluir(c["id"], analista="ana", conclusion="indicios de fraccionamiento", comunicar=True, ahora=T0))
