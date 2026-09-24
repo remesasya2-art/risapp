@@ -193,8 +193,11 @@ body {
   --t-mancha-4: rgba(200, 60, 160, .20);
 }
 
-.con-tema {
-  color-scheme: light;
+/* `.con-tema` es SOLO la marca: habilita el modo oscuro y no cambia nada
+   más, para poder ponérsela a una pantalla de antes sin moverle un píxel en
+   claro. El aspecto de las pantallas nuevas va aparte, en `.t-base`. */
+.con-tema { color-scheme: light; }
+.t-base {
   background-color: var(--t-fondo);
   color: var(--t-texto);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", Arial, sans-serif;

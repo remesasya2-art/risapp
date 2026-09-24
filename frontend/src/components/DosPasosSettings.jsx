@@ -179,7 +179,7 @@ export default function DosPasosSettings() {
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
               <code data-testid="dos-pasos-clave" style={{
-                fontSize: '13px', wordBreak: 'break-all', background: '#fff',
+                fontSize: '13px', wordBreak: 'break-all', background: C.lienzo,
                 border: `1px solid ${C.linea}`, borderRadius: '8px', padding: '6px 8px',
               }}>{alta.secret}</code>
               <Boton tono="suave" onClick={() => {
