@@ -704,3 +704,58 @@ def test_LAS_RUTAS_VIEJAS_DE_RECARGAS_YA_NO_DEVUELVEN_EL_DOCUMENTO_ENTERO(rutas_
     r = rutas_viejas.get("/api/admin/recharges/tx_r9/proof")
     assert r.status_code == 200, r.text
     assert r.json()["proof_image"].startswith("data:image/jpeg;base64,") and "nota_interna" not in r.text
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. Los depósitos en cripto
+# ══════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def creditos():
+    import asyncio
+    from datetime import datetime, timezone
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from conftest import usar_base, ensenarle_decimal128_a_mongomock
+    from routes import credits_admin, dependencies as deps
+
+    ensenarle_decimal128_a_mongomock()
+    base = mongomock_motor.AsyncMongoMockClient()["contratos_creditos"]
+    usar_base(base)
+    t0 = datetime(2026, 9, 20, 12, tzinfo=timezone.utc)
+    asyncio.run(base.users.insert_one({"user_id": "u_ana", "email": "ana@ejemplo.com", "name": "Ana"}))
+    asyncio.run(base.crypto_deposits.insert_one({
+        "order_id": "cr_1", "user_id": "u_ana", "currency": "usdt", "pay_currency": "usdttrc20", "network": "TRC20",
+        # Como float, igual que lo guardan `routes/credits.py` y la acreditación
+        # manual: acá la plata no se guarda en Decimal128.
+        "amount": 25.0, "credit_amount": 25.0, "status": "finished", "credited": True, "created_at": t0,
+        "credited_at": t0, "source": "nowpayments", "admin_note": "",
+        "pay_address": "TQ4ZDireccionDePago", "payin_extra_id": "memo-777",
+        "credit_error": "Traceback interno", "webhook_last_seen": t0, "admin_id": "u_jefe"}))
+    app = FastAPI()
+    app.include_router(credits_admin.router, prefix="/api")
+    app.dependency_overrides[deps.get_super_admin] = _jefe
+    return TestClient(app)
+
+
+def test_LOS_DEPOSITOS_CRIPTO_SALEN_CON_LO_QUE_LA_PANTALLA_MUESTRA_Y_SIN_LO_INTERNO(creditos):
+    r = creditos.get("/api/admin/credits/deposits")
+    assert r.status_code == 200, r.text
+    (d,) = r.json()["items"]
+    lee = {"order_id", "created_at", "user_name", "user_email", "amount", "currency", "source", "admin_note", "status"}
+    assert lee <= set(d), f"la pantalla lee {sorted(lee - set(d))} y no vino"
+    assert d["amount"] == 25.0 and d["user_email"] == "ana@ejemplo.com"
+    r2 = creditos.get("/api/admin/credits/report", params={"date_from": "2026-09-20", "date_to": "2026-09-20"})
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["totals"]["usdt"] == 25.0 and r2.json()["by_day"][0]["count"] == 1
+    for texto in (r.text, r2.text):
+        for interno in ("TQ4ZDireccionDePago", "memo-777", "Traceback interno", "webhook_last_seen", "u_jefe"):
+            assert interno not in texto, f"salió «{interno}»"
+
+
+def test_EL_REPORTE_EN_CSV_SIGUE_SIENDO_UN_ARCHIVO(creditos):
+    """El contrato no toca un archivo: FastAPI lo devuelve tal cual."""
+    r = creditos.get("/api/admin/credits/report",
+                     params={"date_from": "2026-09-20", "date_to": "2026-09-20", "format": "csv"})
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/csv") and "cr_1" in r.text

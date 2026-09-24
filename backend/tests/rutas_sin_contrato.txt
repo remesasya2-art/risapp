@@ -48,8 +48,6 @@ GET /api/admin/btc/stats
 GET /api/admin/btc/transacciones
 GET /api/admin/btc/transacciones.csv
 GET /api/admin/configuracion
-GET /api/admin/credits/deposits
-GET /api/admin/credits/report
 GET /api/admin/dashboard
 GET /api/admin/envios/almacen
 GET /api/admin/envios/config

@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from database import db
 from services import cripto_abierta
 from models.acciones_del_panel import CreditoManual
+from models.panel_creditos import DepositosCripto, ReporteDeDepositosCripto
 from models.user import User
 from routes.dependencies import get_super_admin
 from services.credits import normalize_currency, credit_user
@@ -56,7 +57,7 @@ def _parse_date_range(date_from: Optional[str], date_to: Optional[str]) -> dict:
     return date_range
 
 
-@router.get("/deposits")
+@router.get("/deposits", response_model=DepositosCripto, response_model_exclude_unset=True)
 async def list_credit_deposits(
     status: Optional[str] = Query(None, description="pending | finished | failed | expired | refunded | manual | error | all"),
     search: Optional[str] = Query(None, description="Busca por email, nombre, order_id o user_id"),
@@ -130,7 +131,7 @@ async def list_credit_deposits(
     return {"total": total, "counts": counts, "items": items}
 
 
-@router.get("/report")
+@router.get("/report", response_model=ReporteDeDepositosCripto, response_model_exclude_unset=True)
 async def credits_report(
     date_from: str = Query(..., description="YYYY-MM-DD (usa la misma fecha en date_to para reporte diario)"),
     date_to: str = Query(..., description="YYYY-MM-DD"),
