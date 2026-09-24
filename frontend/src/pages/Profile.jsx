@@ -730,8 +730,11 @@ export default function Profile() {
                 </div>
               ) : null}
 
+              {/* Los dos anchos, como en las alertas del iPhone: en un
+                  celular angosto «Enviarme el código» baja a dos líneas, y con
+                  «Cancelar» también ancho crecen juntos y quedan parejos. */}
               <div style={{ display: 'flex', gap: '10px' }}>
-                <Boton onClick={cerrarCambioDeClave}>
+                <Boton onClick={cerrarCambioDeClave} ancho>
                   Cancelar
                 </Boton>
                 <Boton tipo="primario" ancho enviar

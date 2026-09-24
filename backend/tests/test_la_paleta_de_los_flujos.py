@@ -106,3 +106,19 @@ def test_NINGUN_ICONO_RECIBE_EL_COLOR_COMO_ATRIBUTO():
         "un ícono recibe el color como atributo; con la paleta de variables "
         "puede quedar invisible en Safari. Pasalo por style={{ color: ... }}:\n  "
         + "\n  ".join(malos))
+
+
+def test_UN_BOTON_ANCHO_NO_SE_SALE_DE_SU_LUGAR():
+    """El botón que ocupa el ancho que queda puede partir su texto en dos
+    líneas. Con `nowrap` y sin `minWidth: 0`, en un celular angosto se salía
+    de la ventana: «Enviarme el código», en el cambio de contraseña del
+    perfil, asomaba por el borde derecho (medido: terminaba en 368 píxeles
+    con la ventana terminando en 304)."""
+    fuente = (_SRC / "components" / "flujo" / "index.jsx").read_text(encoding="utf-8")
+    ancho = fuente[fuente.index("...(ancho ? {"):]
+    ancho = ancho[:ancho.index("} : {})")]
+    for regla in ("minWidth: 0", "whiteSpace: 'normal'", "height: 'auto'", "minHeight: '52px'"):
+        assert regla in ancho, regla
+    perfil = (_SRC / "pages" / "Profile.jsx").read_text(encoding="utf-8")
+    assert "<Boton onClick={cerrarCambioDeClave} ancho>" in perfil, (
+        "«Cancelar» tiene que ser ancho para crecer junto al otro y quedar parejo")
