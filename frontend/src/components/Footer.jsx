@@ -1,15 +1,22 @@
 import { Link } from 'react-router-dom';
 
+// Los colores son los nombres de index.css y no valores: el pie aparece en la
+// portada y en el login, que ya cambian entre claro y oscuro. Fuera de una
+// pantalla con `.con-tema` los nombres valen lo del modo claro, así que en
+// una pantalla que todavía no pasó el pie se sigue viendo como antes.
 export default function Footer() {
-  const linkStyle = { color: '#6b7280', textDecoration: 'none', fontSize: '13px' };
-  const colTitle = { color: '#374151', fontSize: '13px', fontWeight: 700, marginBottom: '10px' };
+  const linkStyle = { color: 'var(--t-texto-2)', textDecoration: 'none', fontSize: '13px' };
+  const colTitle = { color: 'var(--t-texto)', fontSize: '13px', fontWeight: 700, margin: '0 0 12px 0' };
 
   return (
-    <footer style={{ backgroundColor: '#f9fafb', borderTop: '1px solid #e5e7eb', padding: '32px 20px', marginTop: '40px' }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: '32px', justifyContent: 'space-between' }}>
+    <footer style={{ position: 'relative', zIndex: 1, borderTop: '1px solid var(--t-linea)', padding: '40px 20px 32px', marginTop: '40px' }}>
+      <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: '32px', justifyContent: 'space-between' }}>
         <div style={{ maxWidth: '320px' }}>
-          <p style={{ fontWeight: 800, fontSize: '16px', color: '#1f2937', margin: '0 0 6px 0' }}>RIS App</p>
-          <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Administrado por SAIPHA SERVICIOS DIGITAIS</p>
+          <p style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, fontSize: '15px', color: 'var(--t-texto)', margin: '0 0 8px 0' }}>
+            <img src="/logo-ris.png" alt="" width={28} height={28} className="t-logo" style={{ borderRadius: '7px' }} />
+            RISApp
+          </p>
+          <p style={{ fontSize: '12px', color: 'var(--t-texto-2)', margin: '0 0 4px 0' }}>Administrado por SAIPHA SERVICIOS DIGITAIS</p>
         </div>
         <div>
           <p style={colTitle}>Legal</p>
@@ -26,9 +33,9 @@ export default function Footer() {
           <Link to="/support" style={linkStyle}>Centro de ayuda</Link>
         </div>
       </div>
-      <div style={{ maxWidth: '1100px', margin: '24px auto 0', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-        <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, textAlign: 'center' }}>
-          © {new Date().getFullYear()} RIS App · Todos los derechos reservados.
+      <div style={{ maxWidth: '1120px', margin: '24px auto 0', borderTop: '1px solid var(--t-linea)', paddingTop: '16px' }}>
+        <p style={{ fontSize: '12px', color: 'var(--t-texto-3)', margin: 0, textAlign: 'center' }}>
+          © {new Date().getFullYear()} RISApp · Todos los derechos reservados.
         </p>
       </div>
     </footer>
