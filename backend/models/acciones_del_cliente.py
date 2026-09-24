@@ -131,3 +131,16 @@ class MiCasoAbierto(BaseModel):
 
 MiRespuestaEnviada = _simple("MiRespuestaEnviada", ("success", "reabierto"))
 MiCasoActualizado = _simple("MiCasoActualizado", ("success",))
+
+
+# ── Avisos, políticas y verificación ──────────────────────────────────────
+#
+# Las más chicas: contestan que sí, y a veces cuántos. Van con contrato igual,
+# porque la regla es TODA ruta y porque la que manda la verificación recibe
+# las fotos del documento y la selfie: el día que alguien conteste con el
+# documento que acaba de guardar, saldrían las fotos de vuelta.
+
+MiAvisoActualizado = _simple("MiAvisoActualizado", ("success",))
+MisAvisosMarcados = _simple("MisAvisosMarcados", ("success", "marcados"))
+MisAvisosBorrados = _simple("MisAvisosBorrados", ("success", "borrados"))
+MiVerificacionEnviada = _simple("MiVerificacionEnviada", ("success", "verification_id"))

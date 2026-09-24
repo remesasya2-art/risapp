@@ -24,8 +24,6 @@ DELETE /api/admin/quick-replies/{qr_id}
 DELETE /api/admin/rrhh/{user_id}
 DELETE /api/admin/sub-admins/{user_id}
 DELETE /api/admin/users/{user_id}
-DELETE /api/notifications/leidas
-DELETE /api/notifications/{notification_id}
 DELETE /{full_path:path}
 GET /api/admin/accounting/balance-check
 GET /api/admin/accounting/banks
@@ -251,13 +249,6 @@ POST /api/csp-reporte
 POST /api/gestor/pix/cancel/{payment_id}
 POST /api/gestor/pix/create
 POST /api/gestor/pix/simulate-payment/{payment_id}
-POST /api/notifications/mark-all-read
-POST /api/notifications/{notification_id}/read
-POST /api/policies/accept
-POST /api/push/web/subscribe
-POST /api/push/web/test
-POST /api/push/web/unsubscribe
-POST /api/verification/submit
 POST /api/webauthn/login/options
 POST /api/webauthn/register/options
 POST /api/webhook/mercadopago

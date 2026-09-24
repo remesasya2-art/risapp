@@ -43,6 +43,15 @@ RUTAS = [
     ("routes/soporte.py", "POST", "/soporte/casos/{caso_id}/mensajes", "MiRespuestaEnviada", None),
     ("routes/soporte.py", "POST", "/soporte/casos/{caso_id}/calificar", "MiCasoActualizado", None),
     ("routes/soporte.py", "POST", "/soporte/casos/{caso_id}/cerrar", "MiCasoActualizado", None),
+    ("routes/notifications.py", "POST", "/notifications/{notification_id}/read", "MiAvisoActualizado", None),
+    ("routes/notifications.py", "POST", "/notifications/mark-all-read", "MisAvisosMarcados", None),
+    ("routes/notifications.py", "DELETE", "/notifications/leidas", "MisAvisosBorrados", None),
+    ("routes/notifications.py", "DELETE", "/notifications/{notification_id}", "MiAvisoActualizado", None),
+    ("routes/push.py", "POST", "/subscribe", "MiAvisoActualizado", None),
+    ("routes/push.py", "POST", "/unsubscribe", "MiAvisoActualizado", None),
+    ("routes/push.py", "POST", "/test", "MiAvisoActualizado", None),
+    ("routes/misc.py", "POST", "/policies/accept", "MiAvisoActualizado", None),
+    ("routes/misc.py", "POST", "/verification/submit", "MiVerificacionEnviada", None),
 ]
 _IDS = [f"{m} {c}" for _, m, c, _, _ in RUTAS]
 
@@ -177,3 +186,59 @@ def test_LOS_LIMITES_SALEN_DE_LA_MISMA_LISTA_QUE_LA_REGLA():
     from models.acciones_del_cliente import LimitesDeLaCotizacion
     from services.envios_policy import _MAXIMOS, _MINIMOS
     assert set(LimitesDeLaCotizacion.model_fields) == set(_MAXIMOS) | set(_MINIMOS)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3. Avisos, políticas y verificación
+# ══════════════════════════════════════════════════════════════════════════
+
+_LAS_CHICAS = [r for r in RUTAS if r[0] in ("routes/notifications.py", "routes/push.py", "routes/misc.py")]
+
+# Lo que pasa por estas rutas y no tiene que volver: la verificación recibe
+# las fotos del documento y la selfie; el aviso al celular, sus claves.
+LO_QUE_NO_VUELVE = {
+    "selfie_image": "data:image/jpeg;base64,SELFIE", "id_document_image": "data:image/jpeg;base64,DOC",
+    "cpf_image": "data:image/jpeg;base64,CPF", "keys": {"auth": "s3cr3t", "p256dh": "CLAVE"},
+    "user_id": "u_ana", "message": "texto interno del aviso",
+}
+
+
+@pytest.mark.parametrize("archivo,metodo,camino,modelo,fuente", _LAS_CHICAS,
+                         ids=[f"{m} {c}" for _, m, c, _, _ in _LAS_CHICAS])
+def test_LO_QUE_RECIBIERON_NO_VUELVE_AUNQUE_LA_RUTA_LO_DEVUELVA(archivo, metodo, camino, modelo, fuente):
+    """Se le pasa al contrato lo que la ruta devuelve hoy MÁS lo que acaba de
+    recibir o guardar: lo primero sale entero, lo segundo no sale."""
+    from fastapi.encoders import jsonable_encoder
+    contrato = _ruta(archivo, metodo, camino).response_model
+    hoy = {k: "x" for k in _claves(archivo, metodo, camino, fuente)}
+    sale = jsonable_encoder(contrato.model_validate({**LO_QUE_NO_VUELVE, **hoy}).model_dump(exclude_unset=True))
+    assert sale == hoy, f"{camino} devolvió {sorted(set(sale) - set(hoy))} de más, o perdió algo de lo suyo"
+
+
+mongomock_motor = pytest.importorskip("mongomock_motor")
+
+
+def test_LOS_AVISOS_SE_MARCAN_Y_SE_BORRAN_CON_LAS_MISMAS_RESPUESTAS_DE_SIEMPRE():
+    """Por HTTP, con el contrato puesto: las claves exactas, sin un `null` de
+    más y sin perder la cuenta de cuántos se marcaron o borraron."""
+    import asyncio
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from conftest import usar_base
+    from models.user import User
+    from routes import dependencies as deps
+    from routes import notifications as rutas
+
+    base = mongomock_motor.AsyncMongoMockClient()["contratos_avisos_acciones"]
+    usar_base(base)
+    asyncio.run(base.notifications.insert_many([
+        {"notification_id": f"n{i}", "user_id": "u_ana", "title": "t", "message": "m", "read": False}
+        for i in range(3)]))
+    app = FastAPI()
+    app.include_router(rutas.router, prefix="/api")
+    app.dependency_overrides[deps.get_current_user] = lambda: User(user_id="u_ana", email="ana@ejemplo.com")
+    c = TestClient(app)
+    assert c.post("/api/notifications/n0/read").json() == {"success": True}
+    assert c.post("/api/notifications/mark-all-read").json() == {"success": True, "marcados": 2}
+    assert c.delete("/api/notifications/n0").json() == {"success": True}
+    assert c.delete("/api/notifications/leidas").json() == {"success": True, "borrados": 2}

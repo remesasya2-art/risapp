@@ -19,6 +19,7 @@ from services.limits import limits_payload
 from services.kyc_quota import quota_payload
 from models.user import User
 from models.cuenta import EstadoDeMiVerificacion, LO_QUE_VE_DE_SU_VERIFICACION, MiSaldo
+from models.acciones_del_cliente import MiAvisoActualizado, MiVerificacionEnviada
 from services import cofre, cpf_de_la_cuenta, las_fotos
 from services.money import from_db, to_float
 from services.notifications import avisar_al_personal
@@ -45,7 +46,7 @@ class EstadoDeMisPoliticas(BaseModel):
     accepted_policies: List[Escalar] = []
 
 
-@router.post("/policies/accept")
+@router.post("/policies/accept", response_model=MiAvisoActualizado, response_model_exclude_unset=True)
 async def accept_policy(data: AcceptPolicy, current_user: User = Depends(get_current_user)):
     """Accept a policy"""
     await db.users.update_one(
@@ -134,7 +135,7 @@ DOC_TYPES_REQUIRING_BACK = {"rg", "cnh", "rnm"}
 ALLOWED_DOC_TYPES = {"rg", "cnh", "rnm", "passport"}
 
 
-@router.post("/verification/submit")
+@router.post("/verification/submit", response_model=MiVerificacionEnviada, response_model_exclude_unset=True)
 async def submit_verification(data: VerificationSubmit, current_user: User = Depends(get_current_user)):
     """Submit identity verification.
 
