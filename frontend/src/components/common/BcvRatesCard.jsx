@@ -67,26 +67,26 @@ export const BcvRatesCard = () => {
 
   return (
     <div data-testid="bcv-rates-card" style={{
-      backgroundColor: '#fff',
+      backgroundColor: 'var(--en-oscuro-superficie, #fff)',
       borderRadius: '16px',
       padding: '20px',
-      border: '1px solid #e5e7eb',
+      border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
       marginTop: '16px'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TrendingUp style={{ width: '22px', height: '22px', color: '#ca8a04' }} />
+          <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <TrendingUp style={{ width: '22px', height: '22px', color: 'var(--en-oscuro-alerta, #ca8a04)' }} />
           </div>
           <div>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: 0 }}>Tasas BCV</h3>
-            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Tasas BCV</h3>
+            <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>
               Banco Central de Venezuela — auto-actualización cada hora
             </p>
           </div>
         </div>
         <button onClick={refresh} disabled={refreshing}
-          style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid #ca8a04', backgroundColor: '#fff', color: '#ca8a04', fontSize: '13px', fontWeight: '600', cursor: refreshing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          style={{ padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--en-oscuro-alerta, #ca8a04)', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-alerta, #ca8a04)', fontSize: '13px', fontWeight: '600', cursor: refreshing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
           data-testid="bcv-refresh-btn"
         >
           <RefreshCw style={{ width: '14px', height: '14px', animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
@@ -98,14 +98,14 @@ export const BcvRatesCard = () => {
         <div data-testid="bcv-vencida" style={{
           display: 'flex', alignItems: 'flex-start', gap: '10px',
           padding: '12px 14px', marginBottom: '14px', borderRadius: '10px',
-          backgroundColor: '#fef2f2', border: '1px solid #fecaca'
+          backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)'
         }}>
-          <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626', flexShrink: 0, marginTop: '1px' }} />
+          <AlertTriangle style={{ width: '18px', height: '18px', color: 'var(--en-oscuro-error, #dc2626)', flexShrink: 0, marginTop: '1px' }} />
           <div>
-            <p style={{ fontSize: '13px', fontWeight: 700, color: '#991b1b', margin: 0 }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-error, #991b1b)', margin: 0 }}>
               Este dato es {antiguedad} y dejó de usarse
             </p>
-            <p style={{ fontSize: '12px', color: '#b91c1c', margin: '4px 0 0 0', lineHeight: 1.45 }}>
+            <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #b91c1c)', margin: '4px 0 0 0', lineHeight: 1.45 }}>
               El límite está en {data?.horas_de_vigencia ?? 24}{(data?.horas_de_vigencia ?? 24) === 1 ? ' hora' : ' horas'}. La contabilidad
               está usando el dólar que vos cargás a mano en Tasas, no éste.
               Probá «Actualizar ahora»; si sigue sin traer nada, el registro del
@@ -116,9 +116,9 @@ export const BcvRatesCard = () => {
       )}
 
       {!hasData ? (
-        <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '10px' }}>
-          <DollarSign style={{ width: '40px', height: '40px', color: '#9ca3af', margin: '0 auto 8px' }} />
-          <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
+        <div style={{ padding: '24px', textAlign: 'center', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '10px' }}>
+          <DollarSign style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0 auto 8px' }} />
+          <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>
             Aún no hay datos. Haz click en Actualizar ahora para obtener las tasas.
           </p>
         </div>
@@ -128,15 +128,15 @@ export const BcvRatesCard = () => {
             {Object.entries(rates).map(([key, val]) => {
               const meta = CURRENCY_META[key] || { label: key.toUpperCase(), flag: '', name: key };
               return (
-                <div key={key} style={{ padding: '12px', backgroundColor: '#f9fafb', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
+                <div key={key} style={{ padding: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                     <span style={{ fontSize: '18px' }}>{meta.flag}</span>
-                    <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase' }}>{meta.name}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-2, #6b7280)', fontWeight: '600', textTransform: 'uppercase' }}>{meta.name}</span>
                   </div>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                     Bs. {fmt(val, 4)}
                   </p>
-                  <p style={{ fontSize: '10px', color: '#9ca3af', margin: '2px 0 0 0' }}>
+                  <p style={{ fontSize: '10px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '2px 0 0 0' }}>
                     1 {meta.label} = {fmt(val, 4)} VES
                   </p>
                 </div>
@@ -144,9 +144,9 @@ export const BcvRatesCard = () => {
             })}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6b7280', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--en-oscuro-texto-2, #6b7280)', paddingTop: '8px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
             <span>{data?.value_date ? `Valor: ${data.value_date}` : ''}</span>
-            <span style={{ color: vencida ? '#b91c1c' : '#6b7280', fontWeight: vencida ? 700 : 400 }}>
+            <span style={{ color: vencida ? 'var(--en-oscuro-error, #b91c1c)' : 'var(--en-oscuro-texto-2, #6b7280)', fontWeight: vencida ? 700 : 400 }}>
               Actualizado: {fetchedAt}{hasData ? ` · ${antiguedad}` : ''}
             </span>
           </div>

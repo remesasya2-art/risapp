@@ -123,7 +123,7 @@ function AppRoutes() {
       <Route path="/register" element={<PublicRoute><ConTema><Register /></ConTema></PublicRoute>} />
       <Route path="/legal" element={<ConTema><LegalPage /></ConTema>} />
       {/* Primer acceso del personal: llega por invitación, sin sesión previa. */}
-      <Route path="/personal/activar" element={<ActivarPersonal />} />
+      <Route path="/personal/activar" element={<ConTema><ActivarPersonal /></ConTema>} />
       {/* Publica a proposito: es el link que el usuario le manda a quien espera
           la caja. No muestra ningun dato personal — ver Seguimiento.jsx. */}
       <Route path="/seguimiento/:token" element={<ConTema><Seguimiento /></ConTema>} />
@@ -155,7 +155,7 @@ function AppRoutes() {
       <Route path="/support" element={<ProtectedRoute><ConTema><Support /></ConTema></ProtectedRoute>} />
       
       {/* Admin Routes */}
-      <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute adminOnly><ConTema><AdminPanel /></ConTema></ProtectedRoute>} />
       
       {/* Force Change Password Route */}
       <Route path="/force-change-password" element={<ProtectedRoute><ConTema><ForceChangePassword /></ConTema></ProtectedRoute>} />

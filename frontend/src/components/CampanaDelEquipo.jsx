@@ -171,20 +171,20 @@ export default function CampanaDelEquipo({ onIrA }) {
         onClick={alternar}
         style={{
           position: 'relative', width: '40px', height: '40px', borderRadius: '12px',
-          backgroundColor: abierta ? '#e0e7ff' : '#f3f4f6', border: 'none', cursor: 'pointer',
+          backgroundColor: abierta ? 'var(--en-oscuro-acento-suave, #e0e7ff)' : 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
         data-testid="campana-del-equipo"
         title="Avisos del equipo"
       >
-        <Bell style={{ width: '20px', height: '20px', color: abierta ? '#4338ca' : '#374151' }} />
+        <Bell style={{ width: '20px', height: '20px', color: abierta ? 'var(--en-oscuro-acento, #4338ca)' : 'var(--en-oscuro-texto, #374151)' }} />
         {sinLeer > 0 && (
           <span
             style={{
               position: 'absolute', top: '4px', right: '4px', minWidth: '18px', height: '18px',
               borderRadius: '9999px', backgroundColor: '#ef4444', color: '#ffffff',
               fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', padding: '0 4px', border: '2px solid #ffffff',
+              justifyContent: 'center', padding: '0 4px', border: '2px solid var(--en-oscuro-linea, #ffffff)',
             }}
             data-testid="campana-del-equipo-contador"
           >
@@ -197,25 +197,25 @@ export default function CampanaDelEquipo({ onIrA }) {
         <div
           style={{
             position: 'absolute', top: '48px', right: 0, width: '360px', maxWidth: 'calc(100vw - 32px)',
-            maxHeight: '420px', overflowY: 'auto', backgroundColor: '#ffffff',
-            borderRadius: '14px', border: '1px solid #e5e7eb',
+            maxHeight: '420px', overflowY: 'auto', backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
+            borderRadius: '14px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
             boxShadow: '0 12px 32px rgba(0,0,0,0.14)', zIndex: 60,
           }}
           data-testid="campana-del-equipo-panel"
         >
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 14px', borderBottom: '1px solid #f1f2f6', position: 'sticky',
-            top: 0, backgroundColor: '#ffffff',
+            padding: '12px 14px', borderBottom: '1px solid var(--en-oscuro-linea, #f1f2f6)', position: 'sticky',
+            top: 0, backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
           }}>
-            <strong style={{ fontSize: '14px', color: '#111827' }}>Avisos del equipo</strong>
+            <strong style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)' }}>Avisos del equipo</strong>
             <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {avisos.some((a) => !a.read) && (
                 <button
                   onClick={marcarTodas}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '6px', border: 'none',
-                    background: 'transparent', color: '#4338ca', fontSize: '12px',
+                    background: 'transparent', color: 'var(--en-oscuro-acento, #4338ca)', fontSize: '12px',
                     fontWeight: 600, cursor: 'pointer', padding: 0,
                   }}
                   data-testid="campana-del-equipo-marcar-todas"
@@ -228,7 +228,7 @@ export default function CampanaDelEquipo({ onIrA }) {
                   onClick={limpiarLeidos}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '6px', border: 'none',
-                    background: 'transparent', color: '#9ca3af', fontSize: '12px',
+                    background: 'transparent', color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '12px',
                     fontWeight: 600, cursor: 'pointer', padding: 0,
                   }}
                   data-testid="campana-del-equipo-limpiar"
@@ -240,7 +240,7 @@ export default function CampanaDelEquipo({ onIrA }) {
           </div>
 
           {avisos.length === 0 ? (
-            <p style={{ padding: '28px 14px', textAlign: 'center', color: '#9ca3af', fontSize: '13px', margin: 0 }}>
+            <p style={{ padding: '28px 14px', textAlign: 'center', color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '13px', margin: 0 }}>
               No hay nada pendiente del equipo.
             </p>
           ) : (
@@ -252,21 +252,21 @@ export default function CampanaDelEquipo({ onIrA }) {
                   onClick={() => abrirAviso(aviso)}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left', border: 'none',
-                    borderBottom: '1px solid #f6f7f9', padding: '12px 14px',
-                    backgroundColor: aviso.read ? '#ffffff' : '#f5f3ff',
+                    borderBottom: '1px solid var(--en-oscuro-linea, #f6f7f9)', padding: '12px 14px',
+                    backgroundColor: aviso.read ? 'var(--en-oscuro-superficie, #ffffff)' : 'var(--en-oscuro-acento-suave, #f5f3ff)',
                     cursor: saltaA ? 'pointer' : 'default',
                   }}
                   data-testid={`campana-del-equipo-aviso-${aviso.notification_id}`}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: aviso.read ? 500 : 700, color: '#111827' }}>
+                    <span style={{ fontSize: '13px', fontWeight: aviso.read ? 500 : 700, color: 'var(--en-oscuro-texto, #111827)' }}>
                       {aviso.title}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', whiteSpace: 'nowrap' }}>
                       {cuandoFue(aviso.created_at)}
                     </span>
                   </div>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#4b5563', whiteSpace: 'pre-line' }}>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--en-oscuro-texto-2, #4b5563)', whiteSpace: 'pre-line' }}>
                     {aviso.message}
                   </p>
                 </button>

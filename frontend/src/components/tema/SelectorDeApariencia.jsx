@@ -17,7 +17,10 @@ const OPCIONES = [
   { valor: 'oscuro', texto: 'Oscuro', icono: <Moon size={16} /> },
 ];
 
-export default function SelectorDeApariencia() {
+// `cuadrado`: en el panel de administración el botón va al lado de la campana
+// y de «Actualizar», que son cuadrados grises. El círculo de vidrio de la
+// portada ahí casi no se veía y parecía de otra aplicación.
+export default function SelectorDeApariencia({ cuadrado = false }) {
   const { apariencia, tema, elegir } = useTema();
   const [abierto, setAbierto] = useState(false);
   const caja = useRef(null);
@@ -40,7 +43,7 @@ export default function SelectorDeApariencia() {
     <div ref={caja} style={{ position: 'relative' }}>
       <button
         type="button"
-        className="t-vidrio t-vidrio-plano"
+        className={cuadrado ? undefined : 't-vidrio t-vidrio-plano'}
         aria-label={`Apariencia: ${actual.texto}`}
         title={`Apariencia: ${actual.texto}`}
         aria-haspopup="menu"
@@ -50,6 +53,11 @@ export default function SelectorDeApariencia() {
         style={{
           width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: 'var(--t-texto)', cursor: 'pointer', padding: 0,
+          ...(cuadrado ? {
+            borderRadius: '12px', border: 'none',
+            backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
+            color: 'var(--en-oscuro-texto, #374151)',
+          } : {}),
         }}
       >
         {tema === 'oscuro' ? <Moon size={18} /> : <Sun size={18} />}
