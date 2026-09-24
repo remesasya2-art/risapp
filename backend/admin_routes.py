@@ -424,7 +424,7 @@ async def get_pending_recharges(admin_user: Usuario = Depends(get_admin_user)):
         },
         # Lista de lo prohibido, y se tolera sólo porque el test obliga a que
         # las nombre a TODAS. Acá el documento se le pasa entero a la pantalla.
-        las_fotos.SIN_LAS_FOTOS
+        las_fotos.sin_las_fotos()
     ).sort("created_at", -1).to_list(1000)
     
     # UNA consulta para los clientes de las mil filas, no una por fila.
@@ -613,7 +613,7 @@ async def get_all_transactions(
     
     transactions = await db.transactions.find(
         query,
-        las_fotos.SIN_LAS_FOTOS
+        las_fotos.sin_las_fotos()
     ).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
     
     total = await db.transactions.count_documents(query)
@@ -725,7 +725,7 @@ async def get_admin_payment_records(admin_user: Usuario = Depends(get_admin_user
     
     records = await db.admin_payment_records.find(
         {},
-        las_fotos.SIN_LAS_FOTOS
+        las_fotos.sin_las_fotos()
     ).sort("recorded_at", -1).to_list(1000)
     
     for r in records:

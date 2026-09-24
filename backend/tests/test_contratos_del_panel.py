@@ -704,6 +704,10 @@ def test_LAS_RUTAS_VIEJAS_DE_RECARGAS_YA_NO_DEVUELVEN_EL_DOCUMENTO_ENTERO(rutas_
     r = rutas_viejas.get("/api/admin/recharges/tx_r9/proof")
     assert r.status_code == 200, r.text
     assert r.json()["proof_image"].startswith("data:image/jpeg;base64,") and "nota_interna" not in r.text
+    # Estas rutas le pasaban a la base la proyección compartida, y el doble
+    # de Mongo se la dejaba con un `_id` de más (ver `services/las_fotos.py`).
+    from services import las_fotos
+    assert las_fotos.SIN_LAS_FOTOS == {campo: 0 for campo in las_fotos.LAS_FOTOS}
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -31,7 +31,7 @@ POR QUE LA PROYECCION QUE HABIA NO ALCANZABA
 COMO SE EVITA QUE VUELVA A PASAR
 
     Los campos pesados se nombran UNA vez, acá. Una pantalla que los quiera
-    fuera usa `SIN_LAS_FOTOS`, no una lista escrita a mano; y hay un test que
+    fuera usa `sin_las_fotos()`, no una lista escrita a mano; y hay un test que
     recorre el código y exige que toda consulta de LISTA a `transactions`
     lleve proyección, y que si es de lo prohibido, las excluya a TODAS.
 
@@ -49,6 +49,13 @@ LAS_FOTOS = ("proof_image", "proof_images", "comprobante_pago")
 # Para las pantallas que pasan el documento entero a la vista y no se puede
 # saber desde acá qué campos les hacen falta. Es una lista de lo prohibido, y
 # se tolera SOLO porque el test la obliga a nombrarlas todas.
+#
+# NO SE LE PASA A LA BASE TAL CUAL: se pide con `sin_las_fotos()`, que da una
+# copia. Tres rutas le pasaban este diccionario a `find()`, y el doble de
+# Mongo de los tests le agrega `_id` a la proyección que recibe. La primera
+# vez que un test llamó a esas rutas, la constante quedó con un `_id` de más
+# para todos los que venían después, y falló un test que no tenía nada que
+# ver. Un test recorre el código y exige que nadie fuera de acá la nombre.
 SIN_LAS_FOTOS = {campo: 0 for campo in LAS_FOTOS}
 
 
