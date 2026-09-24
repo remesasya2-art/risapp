@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/push/web", tags=["push"])
 
 from models.reglas_publicas import ClavePublicaDeAvisos, EstadoDeMisAvisosAlCelular
+from models.acciones_del_cliente import MiAvisoActualizado
 
 
 class WebPushSubscription(BaseModel):
@@ -27,7 +28,7 @@ async def get_vapid_public_key():
     return {"public_key": web_push_service.get_public_key()}
 
 
-@router.post("/subscribe")
+@router.post("/subscribe", response_model=MiAvisoActualizado, response_model_exclude_unset=True)
 async def subscribe_web_push(subscription: WebPushSubscription, current_user: User = Depends(get_current_user)):
     """Subscribe to web push notifications"""
     sub_info = {
@@ -41,7 +42,7 @@ async def subscribe_web_push(subscription: WebPushSubscription, current_user: Us
     return {"success": True}
 
 
-@router.post("/unsubscribe")
+@router.post("/unsubscribe", response_model=MiAvisoActualizado, response_model_exclude_unset=True)
 async def unsubscribe_web_push(current_user: User = Depends(get_current_user)):
     """Unsubscribe from web push notifications"""
     await db.users.update_one(
@@ -77,7 +78,7 @@ async def get_web_push_status(current_user: User = Depends(get_current_user)):
     return {"subscribed": bool(sub), "endpoint": sub.get("endpoint")}
 
 
-@router.post("/test")
+@router.post("/test", response_model=MiAvisoActualizado, response_model_exclude_unset=True)
 async def test_web_push(current_user: User = Depends(get_current_user)):
     """Test web push notification"""
     user = await db.users.find_one({"user_id": current_user.user_id})

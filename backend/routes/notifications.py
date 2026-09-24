@@ -57,6 +57,7 @@ from routes.dependencies import get_current_user
 from models.user import User
 from typing import List
 from models.avisos import AvisosSinLeer, LO_QUE_VE_DE_UN_AVISO, UnAviso
+from models.acciones_del_cliente import MiAvisoActualizado, MisAvisosBorrados, MisAvisosMarcados
 from services.notifications import PERSONAL, TRABAJO
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,7 @@ async def get_unread_count(current_user: User = Depends(get_current_user),
     return {"unread_count": await db.notifications.count_documents(filtro)}
 
 
-@router.post("/notifications/{notification_id}/read")
+@router.post("/notifications/{notification_id}/read", response_model=MiAvisoActualizado, response_model_exclude_unset=True)
 async def mark_notification_read(notification_id: str,
                                  current_user: User = Depends(get_current_user)):
     """Marca uno como leído. Sin ámbito: un aviso concreto es de una bandeja
@@ -167,7 +168,7 @@ async def mark_notification_read(notification_id: str,
     return {"success": True}
 
 
-@router.post("/notifications/mark-all-read")
+@router.post("/notifications/mark-all-read", response_model=MisAvisosMarcados, response_model_exclude_unset=True)
 async def mark_all_read(current_user: User = Depends(get_current_user),
                         ambito: str | None = Query(None)):
     """«Marcar todas» de UNA bandeja.
@@ -181,7 +182,7 @@ async def mark_all_read(current_user: User = Depends(get_current_user),
     return {"success": True, "marcados": resultado.modified_count}
 
 
-@router.delete("/notifications/leidas")
+@router.delete("/notifications/leidas", response_model=MisAvisosBorrados, response_model_exclude_unset=True)
 async def borrar_leidas(current_user: User = Depends(get_current_user),
                         ambito: str | None = Query(None)):
     """«Limpiar leídas»: borra lo LEIDO de una bandeja. Nunca lo demás.
@@ -199,7 +200,7 @@ async def borrar_leidas(current_user: User = Depends(get_current_user),
     return {"success": True, "borrados": r.deleted_count}
 
 
-@router.delete("/notifications/{notification_id}")
+@router.delete("/notifications/{notification_id}", response_model=MiAvisoActualizado, response_model_exclude_unset=True)
 async def borrar_notificacion(notification_id: str,
                               current_user: User = Depends(get_current_user)):
     """Borra uno. El `user_id` del filtro es lo que impide borrar el de otro.
