@@ -93,10 +93,10 @@ export function Interruptor({ activo, onChange, etiqueta, ayuda }) {
 }
 
 const TONOS = {
-  info: { fondo: COLOR.primarioSuave, borde: '#c7d2fe', texto: '#3730a3', Icono: Info },
-  ok: { fondo: COLOR.okSuave, borde: '#a7f3d0', texto: '#065f46', Icono: Check },
-  alerta: { fondo: COLOR.alertaSuave, borde: '#fde68a', texto: '#92400e', Icono: AlertTriangle },
-  error: { fondo: COLOR.errorSuave, borde: '#fecaca', texto: '#991b1b', Icono: X },
+  info: { fondo: COLOR.primarioSuave, borde: 'var(--en-oscuro-acento-borde, #c7d2fe)', texto: 'var(--en-oscuro-acento, #3730a3)', Icono: Info },
+  ok: { fondo: COLOR.okSuave, borde: 'var(--en-oscuro-exito-borde, #a7f3d0)', texto: 'var(--en-oscuro-exito, #065f46)', Icono: Check },
+  alerta: { fondo: COLOR.alertaSuave, borde: 'var(--en-oscuro-alerta-borde, #fde68a)', texto: 'var(--en-oscuro-alerta, #92400e)', Icono: AlertTriangle },
+  error: { fondo: COLOR.errorSuave, borde: 'var(--en-oscuro-error-borde, #fecaca)', texto: 'var(--en-oscuro-error, #991b1b)', Icono: X },
 };
 
 export function Aviso({ tono = 'info', titulo: encabezado, children, style }) {
@@ -144,21 +144,21 @@ export function Vacio({ titulo: encabezado, children }) {
 export function NoSePudoLeer({ que, detalle, onReintentar, reintentando }) {
   return (
     <div style={{ padding: '36px 24px', borderRadius: '16px',
-      backgroundColor: COLOR.alertaSuave, border: '1px solid #fde68a',
+      backgroundColor: COLOR.alertaSuave, border: '1px solid var(--en-oscuro-alerta-borde, #fde68a)',
       textAlign: 'center' }}>
       <AlertTriangle size={26} style={{ color: COLOR.alerta }} />
       <p style={{ margin: '10px 0 0 0', fontSize: '16px', fontWeight: 700,
-        color: '#92400e' }}>
+        color: 'var(--en-oscuro-alerta, #92400e)' }}>
         No se pudo leer {que}
       </p>
-      <p style={{ margin: '8px auto 0 auto', fontSize: '13px', color: '#92400e',
+      <p style={{ margin: '8px auto 0 auto', fontSize: '13px', color: 'var(--en-oscuro-alerta, #92400e)',
         lineHeight: 1.6, maxWidth: '520px' }}>
         <strong>No lo cargues de nuevo hasta que vuelva.</strong> Lo que guardes ahora
         pisaría lo que ya había — y esta pantalla no puede mostrarte qué había,
         justamente porque no lo pudo leer.
       </p>
       {detalle ? (
-        <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#b45309',
+        <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--en-oscuro-alerta, #b45309)',
           fontFamily: 'monospace' }}>{detalle}</p>
       ) : null}
       <Boton variante="secundario" style={{ marginTop: '16px' }}

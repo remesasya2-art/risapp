@@ -15,9 +15,9 @@ import { COLOR } from './estilos';
 export default function Chrome({ titulo, volverA, ancho = '640px', accion, children }) {
   const navigate = useNavigate();
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F7F8FB' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--en-oscuro-fondo, #F7F8FB)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: '12px', padding: '14px 16px', backgroundColor: '#fff',
+        gap: '12px', padding: '14px 16px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
         borderBottom: `1px solid ${COLOR.borde}`, position: 'sticky', top: 0, zIndex: 10 }}>
         <button type="button" onClick={() => navigate(volverA || -1)}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', border: 'none',

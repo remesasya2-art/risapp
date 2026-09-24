@@ -56,8 +56,8 @@ export default function Seguimiento() {
   const tono = tonoDe(datos?.estado);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F7F8FB' }}>
-      <div style={{ padding: '18px 16px', backgroundColor: '#fff',
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--en-oscuro-superficie-2, #F7F8FB)' }}>
+      <div style={{ padding: '18px 16px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
         borderBottom: `1px solid ${COLOR.borde}`, textAlign: 'center' }}>
         <h1 style={{ fontSize: '17px', fontWeight: 700, color: COLOR.texto, margin: 0,
           display: 'inline-flex', alignItems: 'center', gap: '8px' }}>

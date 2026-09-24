@@ -17,11 +17,11 @@ export const PIDE_ALGO = {
   pago_pendiente: 'Hay un cobro pendiente. El paquete espera hasta que se salde.',
 };
 
-const VERDE = { fondo: COLOR.okSuave, borde: '#a7f3d0', texto: '#065f46' };
-const AZUL = { fondo: COLOR.primarioSuave, borde: '#c7d2fe', texto: '#3730a3' };
-const AMBAR = { fondo: COLOR.alertaSuave, borde: '#fde68a', texto: '#92400e' };
-const ROJO = { fondo: COLOR.errorSuave, borde: '#fecaca', texto: '#991b1b' };
-const GRIS = { fondo: '#f3f4f6', borde: COLOR.borde, texto: COLOR.suave };
+const VERDE = { fondo: COLOR.okSuave, borde: 'var(--en-oscuro-exito-borde, #a7f3d0)', texto: 'var(--en-oscuro-exito, #065f46)' };
+const AZUL = { fondo: COLOR.primarioSuave, borde: 'var(--en-oscuro-acento-borde, #c7d2fe)', texto: 'var(--en-oscuro-acento, #3730a3)' };
+const AMBAR = { fondo: COLOR.alertaSuave, borde: 'var(--en-oscuro-alerta-borde, #fde68a)', texto: 'var(--en-oscuro-alerta, #92400e)' };
+const ROJO = { fondo: COLOR.errorSuave, borde: 'var(--en-oscuro-error-borde, #fecaca)', texto: 'var(--en-oscuro-error, #991b1b)' };
+const GRIS = { fondo: 'var(--en-oscuro-superficie-2, #f3f4f6)', borde: COLOR.borde, texto: COLOR.suave };
 
 export const TONO = {
   cotizado: GRIS,

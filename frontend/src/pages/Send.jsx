@@ -949,7 +949,7 @@ export default function Send() {
                   onChange={(e) => setCpfPago(formatearCpf(e.target.value))}
                   style={{ width: '100%', padding: '11px 12px', fontSize: '14px',
                     borderRadius: '10px', border: `1px solid ${C.linea}`,
-                    background: '#fff', color: C.tinta, boxSizing: 'border-box' }} />
+                    background: 'var(--en-oscuro-superficie, #fff)', color: C.tinta, boxSizing: 'border-box' }} />
                 <p style={{ fontSize: '12.5px', color: C.suave, margin: '6px 0 0 0' }}>
                   Tiene que ser el tuyo: el pago lo hacés vos, no un tercero.
                 </p>

@@ -39,7 +39,9 @@ def _los_que_usan_la_paleta():
         if f == _ESTILOS or "node_modules" in f.parts:
             continue
         texto = f.read_text(encoding="utf-8")
-        if "flujo/estilos" in texto or "from './estilos'" in texto or "var(--en-oscuro-" in texto:
+        # La de las encomiendas (`envios/estilos`, `COLOR`) funciona igual.
+        if ("flujo/estilos" in texto or "envios/estilos" in texto or "from './estilos'" in texto
+                or "var(--en-oscuro-" in texto):
             usan.append((f, texto))
     assert len(usan) >= 25, "la búsqueda de quién usa la paleta dejó de encontrarlos"
     return usan
@@ -92,7 +94,7 @@ def test_NADIE_LE_PEGA_TEXTO_A_UN_COLOR_DE_LA_PALETA():
         # Cualquier cosa + dos cifras hexadecimales es agregarle transparencia
         # a un color; con una variable adentro queda inválido. No sólo los de
         # la paleta: una constante local (`acento`) puede valer una variable.
-        for m in re.finditer(r"\bC\.\w+\s*\+|\+\s*C\.\w+\b|[\w.\])]\s*\+\s*['\"][0-9A-Fa-f]{2}['\"]|\$\{[^}]+\}[0-9A-Fa-f]{2}\b", texto):
+        for m in re.finditer(r"\b(?:C|COLOR)\.\w+\s*\+|\+\s*(?:C|COLOR)\.\w+\b|[\w.\])]\s*\+\s*['\"][0-9A-Fa-f]{2}['\"]|\$\{[^}]+\}[0-9A-Fa-f]{2}\b", texto):
             malos.append(f"{f.relative_to(_SRC)}: {m.group(0)}")
     assert not malos, malos
 

@@ -190,7 +190,9 @@ def test_LO_OSCURO_NO_SE_ESCAPA_A_LAS_PANTALLAS_QUE_NO_PASARON():
     for selector, cuerpo in reglas:
         selector = " ".join(selector.split())
         if 'data-tema="oscuro"' in selector or "color-scheme: dark" in cuerpo:
-            assert selector.endswith(".con-tema"), (
+            # `body:has(.con-tema)` también vale: pinta el fondo del documento
+            # sólo mientras se ve una pantalla preparada.
+            assert selector.endswith((".con-tema", ":has(.con-tema)")), (
                 f"«{selector}» pinta de oscuro fuera de las pantallas preparadas")
     assert any('data-tema="oscuro"' in s for s, _ in reglas), "no hay modo oscuro"
 
@@ -219,3 +221,26 @@ def test_EL_INICIO_DEL_CLIENTE_TIENE_MODO_OSCURO_Y_EL_BOTON():
     assert 'className="con-tema"' in inicio
     # En computadora y en celular: la barra de arriba es distinta en cada uno.
     assert inicio.count("<SelectorDeApariencia />") == 2
+
+
+# Las pantallas que ya tienen modo oscuro por la ruta (ver
+# components/tema/ConTema.jsx). La lista crece con cada tramo; sacar una de
+# App.jsx la deja clara en medio de la app oscura sin que nada avise.
+RUTAS_CON_TEMA = [
+    '"/send"', '"/send-reais"', '"/referidos"', '"/envios"', '"/envios/nuevo"',
+    '"/envios/:transactionId/pagar"', '"/envios/:envioId"', '"/support"',
+    '"/btc-lightning"', '"/seguimiento/:token"',
+]
+
+
+def test_CADA_PANTALLA_PREPARADA_LLEVA_LA_MARCA_EN_SU_RUTA():
+    app = (_FRONT / "App.jsx").read_text(encoding="utf-8")
+    sin_marca = []
+    for ruta in RUTAS_CON_TEMA:
+        linea = next((l for l in app.splitlines() if f"path={ruta}" in l), None)
+        assert linea, f"no encuentro la ruta {ruta} en App.jsx"
+        if "<ConTema>" not in linea:
+            sin_marca.append(ruta)
+    assert not sin_marca, sin_marca
+    envoltorio = (_FRONT / "components" / "tema" / "ConTema.jsx").read_text(encoding="utf-8")
+    assert "<div className=\"con-tema\" style={{ display: 'contents' }}>" in envoltorio

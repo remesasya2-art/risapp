@@ -66,16 +66,16 @@ export default function PinConfirm({ open, onClose, onVerified }) {
       position: 'fixed', inset: 0, backgroundColor: 'rgba(17,24,39,0.55)', zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
     }}>
-      <div style={{ width: '100%', maxWidth: '360px', backgroundColor: '#fff', borderRadius: '18px', padding: '24px', position: 'relative' }}>
+      <div style={{ width: '100%', maxWidth: '360px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '18px', padding: '24px', position: 'relative' }}>
         <button onClick={() => onClose?.()} style={{
-          position: 'absolute', top: '14px', right: '14px', border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af',
+          position: 'absolute', top: '14px', right: '14px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--en-oscuro-texto-3, #9ca3af)',
         }}><X size={20} /></button>
         <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-          <div style={{ width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#EEF2FF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
-            <Lock size={24} color="#4F46E5" />
+          <div style={{ width: '52px', height: '52px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-acento-suave, #EEF2FF)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+            <Lock size={24} style={{ color: 'var(--en-oscuro-acento, #4F46E5)' }} />
           </div>
-          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>Confirma con tu PIN</h3>
-          <p style={{ fontSize: '13px', color: '#6b7280', margin: '6px 0 0 0' }}>Ingresa tu PIN de 4 dígitos para autorizar esta operación.</p>
+          <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Confirma con tu PIN</h3>
+          <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '6px 0 0 0' }}>Ingresa tu PIN de 4 dígitos para autorizar esta operación.</p>
         </div>
         <input
           type="password" inputMode="numeric" autoFocus value={pin}
@@ -84,12 +84,12 @@ export default function PinConfirm({ open, onClose, onVerified }) {
           placeholder="••••"
           style={{
             width: '100%', textAlign: 'center', letterSpacing: '12px', fontSize: '24px',
-            padding: '14px', borderRadius: '12px', border: '1px solid #e5e7eb', boxSizing: 'border-box',
+            padding: '14px', borderRadius: '12px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', boxSizing: 'border-box',
           }}
         />
         <button onClick={verificar} disabled={busy} style={{
           width: '100%', marginTop: '16px', padding: '13px', borderRadius: '12px', border: 'none',
-          backgroundColor: '#6366f1', color: '#fff', fontWeight: 700, fontSize: '15px', cursor: 'pointer',
+          backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: '#fff', fontWeight: 700, fontSize: '15px', cursor: 'pointer',
           opacity: busy ? 0.6 : 1,
         }}>
           {busy ? 'Verificando…' : 'Confirmar'}

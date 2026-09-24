@@ -126,7 +126,7 @@ function Fila({ envio }) {
   return (
     <Link to={`/envios/${envio.envio_id}`} style={{ textDecoration: 'none' }}>
       <div style={{ ...tarjeta, display: 'flex', gap: '12px', alignItems: 'center',
-        borderColor: envio.hay_algo_que_pagar ? '#fde68a' : COLOR.borde }}>
+        borderColor: envio.hay_algo_que_pagar ? 'var(--en-oscuro-alerta-borde, #fde68a)' : COLOR.borde }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '14px', fontWeight: 700, color: COLOR.texto,
@@ -145,11 +145,11 @@ function Fila({ envio }) {
           </p>
           {envio.hay_algo_que_pagar ? (
             <p style={{ margin: '6px 0 0 0', fontSize: '13px', fontWeight: 600,
-              color: '#92400e' }}>
+              color: 'var(--en-oscuro-alerta, #92400e)' }}>
               Falta pagar {num(envio.a_pagar_ris)} {envio.moneda}
             </p>
           ) : pide ? (
-            <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#92400e' }}>{pide}</p>
+            <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--en-oscuro-alerta, #92400e)' }}>{pide}</p>
           ) : null}
         </div>
         <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -160,7 +160,7 @@ function Fila({ envio }) {
             {envio.moneda}{envio.es_estimado ? ' · estimado' : ''}
           </span>
         </div>
-        <ChevronRight size={18} color={COLOR.suave} />
+        <ChevronRight size={18} style={{ color: COLOR.suave }} />
       </div>
     </Link>
   );

@@ -808,7 +808,7 @@ export default function SendReais() {
             onChange={(e) => setBancoElegido(e.target.value)}
             style={{ width: '100%', padding: '11px 12px', fontSize: '14px',
               borderRadius: '10px', border: `1px solid ${C.linea}`,
-              background: '#fff', color: C.tinta, marginBottom: '14px' }}>
+              background: 'var(--en-oscuro-superficie, #fff)', color: C.tinta, marginBottom: '14px' }}>
             <option value="">Elegí el banco</option>
             {(cotizacion.bancos || []).map((b) => (
               <option key={b} value={b}>{b}</option>
@@ -829,7 +829,7 @@ export default function SendReais() {
             display: 'block', padding: '11px 12px', textAlign: 'center',
             fontSize: '13.5px', fontWeight: 600, cursor: 'pointer',
             borderRadius: '10px', border: `1px dashed ${C.lineaFuerte}`,
-            color: comprobante ? C.exito : C.suave, background: '#fff',
+            color: comprobante ? C.exito : C.suave, background: 'var(--en-oscuro-superficie, #fff)',
             marginBottom: '16px',
           }}>
             {comprobante ? '✓ Comprobante cargado — tocá para cambiarlo'

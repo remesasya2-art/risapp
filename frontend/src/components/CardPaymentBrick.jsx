@@ -179,31 +179,31 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
   if (result && result.status === 'approved') {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
-        <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px' }} />
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>¡Pago aprobado!</h2>
+        <CheckCircle size={56} style={{ color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 auto 16px' }} />
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>¡Pago aprobado!</h2>
         {/* Decirle «se acreditaron X a tu saldo» a quien pagó un envío es
             mandarlo a buscar un saldo que nunca existió: la plata entró y
             salió en la misma operación. */}
-        <p style={{ color: '#6b7280', marginTop: 8 }} data-testid="card-aprobado-texto">
+        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: 8 }} data-testid="card-aprobado-texto">
           {envio
             ? <>Cobramos <b>{fmt(totalAPagar)} BRL</b> y tu envío ya está en camino.</>
             : <>Se acreditaron <b>{fmt(amountRis)} RIS</b> a tu saldo.</>}
         </p>
-        <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>ID: {result.payment_id}</p>
+        <p style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: 12, marginTop: 4 }}>ID: {result.payment_id}</p>
       </div>
     );
   }
   if (result && result.status !== 'approved') {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
-        <XCircle size={56} color="#dc2626" style={{ margin: '0 auto 16px' }} />
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>Pago no aprobado</h2>
-        <p style={{ color: '#6b7280', marginTop: 8, lineHeight: 1.5 }}>{friendlyReject(result.status_detail)}</p>
+        <XCircle size={56} style={{ color: 'var(--en-oscuro-error, #dc2626)', margin: '0 auto 16px' }} />
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Pago no aprobado</h2>
+        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: 8, lineHeight: 1.5 }}>{friendlyReject(result.status_detail)}</p>
         {country?.risk === 'high' && <InternationalTips />}
         <button
           onClick={() => { setResult(null); setConfirmedIntl(false); }}
           data-testid="card-retry-btn"
-          style={{ marginTop: 16, padding: '10px 20px', borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+          style={{ marginTop: 16, padding: '10px 20px', borderRadius: 10, border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', background: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer' }}
         >
           Intentar otra vez
         </button>
@@ -215,10 +215,10 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
   if (!country) {
     return (
       <div data-testid="card-country-selector">
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 6px' }}>
           ¿Desde qué país estás pagando?
         </h3>
-        <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+        <p style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 16px' }}>
           Esto nos ayuda a darte la mejor experiencia y avisarte si tu tarjeta podría tener problemas.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -230,12 +230,12 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '14px 16px', borderRadius: 12,
-                border: c.risk === 'low' ? '2px solid #16a34a' : '1px solid #e5e7eb',
-                background: c.risk === 'low' ? '#f0fdf4' : '#fff',
+                border: c.risk === 'low' ? '2px solid #16a34a' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                background: c.risk === 'low' ? 'var(--en-oscuro-exito-suave, #f0fdf4)' : 'var(--en-oscuro-superficie, #fff)',
                 cursor: 'pointer', textAlign: 'left',
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 600, color: '#111827' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)' }}>
                 <span style={{ fontSize: 22 }}>{c.flag}</span> {c.name}
               </span>
               {c.risk === 'low' && (
@@ -249,7 +249,7 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
         <button
           onClick={onBack}
           data-testid="card-country-back"
-          style={{ marginTop: 16, width: '100%', padding: 12, borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+          style={{ marginTop: 16, width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', background: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer' }}
         >
           Volver
         </button>
@@ -261,14 +261,14 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
   if (country.risk === 'high' && !confirmedIntl) {
     return (
       <div data-testid="card-intl-advisory">
-        <div style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 18, marginBottom: 16 }}>
+        <div style={{ background: 'var(--en-oscuro-alerta-suave, #fefce8)', border: '1.5px solid #facc15', borderRadius: 14, padding: 18, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-            <AlertTriangle size={22} color="#ca8a04" style={{ flexShrink: 0, marginTop: 2 }} />
+            <AlertTriangle size={22} style={{ color: 'var(--en-oscuro-alerta, #ca8a04)', flexShrink: 0, marginTop: 2 }} />
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#854d0e', margin: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--en-oscuro-alerta, #854d0e)', margin: 0 }}>
                 Aviso importante para tarjetas internacionales
               </h3>
-              <p style={{ fontSize: 13, color: '#713f12', marginTop: 6, lineHeight: 1.55 }}>
+              <p style={{ fontSize: 13, color: 'var(--en-oscuro-alerta, #713f12)', marginTop: 6, lineHeight: 1.55 }}>
                 Mercado Pago procesa principalmente tarjetas brasileñas. Tu tarjeta de <b>{country.name}</b> puede
                 ser rechazada por tu banco emisor o por el sistema anti-fraude de MP. La tasa de aprobación
                 internacional suele estar entre <b>10% y 25%</b>.
@@ -283,14 +283,14 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
           <button
             onClick={() => setConfirmedIntl(true)}
             data-testid="card-intl-continue"
-            style={{ padding: '14px', borderRadius: 12, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 15 }}
+            style={{ padding: '14px', borderRadius: 12, border: 'none', background: 'var(--en-oscuro-acento, #7c3aed)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 15 }}
           >
             Intentar igual con tarjeta
           </button>
           <button
             onClick={() => setCountry(null)}
             data-testid="card-intl-back"
-            style={{ padding: 12, borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+            style={{ padding: 12, borderRadius: 10, border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', background: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer' }}
           >
             Elegir otro país
           </button>
@@ -303,42 +303,42 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
   return (
     <div data-testid="card-payment-brick">
       {country.risk === 'high' && (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#854d0e' }}>
+        <div style={{ background: 'var(--en-oscuro-alerta-suave, #fffbeb)', border: '1px solid var(--en-oscuro-alerta-borde, #fde68a)', borderRadius: 10, padding: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--en-oscuro-alerta, #854d0e)' }}>
           <Info size={16} />
           Estás pagando con tarjeta de <b>{country.name}</b>. Si falla, usá las opciones del aviso anterior.
         </div>
       )}
 
       {/* Quote summary */}
-      <div style={{ background: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid #e5e7eb' }}>
+      <div style={{ background: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <CreditCard size={20} color="#6366f1" />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Resumen del pago</span>
+          <CreditCard size={20} style={{ color: 'var(--en-oscuro-acento, #6366f1)' }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)' }}>Resumen del pago</span>
         </div>
         {/* «Recibirás X RIS» es verdad cargando saldo y mentira pagando un
             envío: ahí no recibe nada, paga lo que ya cotizó. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
-          <span style={{ color: '#6b7280' }}>{envio ? 'Tu envío' : 'Recibirás'}</span>
+          <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{envio ? 'Tu envío' : 'Recibirás'}</span>
           <span style={{ fontWeight: 600 }}>
             {envio ? `R$ ${fmt(desglose?.envio_brl ?? 0)}` : `${fmt(amountRis)} RIS`}
           </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
-          <span style={{ color: '#6b7280' }}>Comisión Mercado Pago</span>
-          <span style={{ color: '#dc2626' }} data-testid="card-comision">
+          <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Comisión Mercado Pago</span>
+          <span style={{ color: 'var(--en-oscuro-error, #dc2626)' }} data-testid="card-comision">
             +R$ {fmt(envio ? (desglose?.comision_brl ?? 0) : (quote?.fee_brl ?? 0))}
           </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: 16 }}>
           <span style={{ fontWeight: 700 }}>Total a cobrar</span>
-          <span style={{ fontWeight: 700, color: '#111827' }} data-testid="card-total">
+          <span style={{ fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)' }} data-testid="card-total">
             R$ {fmt(totalAPagar ?? amountRis)}
           </span>
         </div>
         {/* Con PIX no hay comisión. Decirlo acá, con el número al lado, es lo
             que evita el «me cobraron de más» que llega después por soporte. */}
         {envio ? (
-          <p style={{ fontSize: 12, color: '#6b7280', margin: '10px 0 0 0', lineHeight: 1.5 }}
+          <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '10px 0 0 0', lineHeight: 1.5 }}
              data-testid="card-vs-pix">
             Con PIX este envío sale R$ {fmt(desglose?.envio_brl ?? 0)}, sin
             comisión. La tarjeta la cobra Mercado Pago, no nosotros.
@@ -353,8 +353,8 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
           data-testid="select-credit-card"
           style={{
             flex: 1, padding: 12, borderRadius: 10,
-            border: paymentType === 'credit_card' ? '2px solid #6366f1' : '1px solid #d1d5db',
-            background: paymentType === 'credit_card' ? '#eef2ff' : '#fff',
+            border: paymentType === 'credit_card' ? '2px solid var(--en-oscuro-acento, #6366f1)' : '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
+            background: paymentType === 'credit_card' ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)',
             fontWeight: 600, cursor: 'pointer', fontSize: 14,
           }}
         >Crédito</button>
@@ -363,8 +363,8 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
           data-testid="select-debit-card"
           style={{
             flex: 1, padding: 12, borderRadius: 10,
-            border: paymentType === 'debit_card' ? '2px solid #6366f1' : '1px solid #d1d5db',
-            background: paymentType === 'debit_card' ? '#eef2ff' : '#fff',
+            border: paymentType === 'debit_card' ? '2px solid var(--en-oscuro-acento, #6366f1)' : '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
+            background: paymentType === 'debit_card' ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)',
             fontWeight: 600, cursor: 'pointer', fontSize: 14,
           }}
         >Débito</button>
@@ -390,14 +390,14 @@ export default function CardPaymentBrick({ amountRis, userEmail, userCpf, onSucc
 
       {processing && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-          <Loader2 size={32} className="animate-spin" color="#6366f1" />
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--en-oscuro-acento, #6366f1)' }} />
         </div>
       )}
 
       <button
         onClick={() => { setCountry(null); setConfirmedIntl(false); setQuote(null); }}
         data-testid="card-back-btn"
-        style={{ marginTop: 16, width: '100%', padding: 12, borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+        style={{ marginTop: 16, width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', background: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer' }}
       >
         Volver
       </button>
@@ -425,11 +425,11 @@ function InternationalTips() {
     },
   ];
   return (
-    <div data-testid="intl-tips" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, padding: 16, marginTop: 12 }}>
-      <h4 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 700, color: '#075985', display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div data-testid="intl-tips" style={{ background: 'var(--en-oscuro-info-suave, #f0f9ff)', border: '1px solid var(--en-oscuro-info-borde, #bae6fd)', borderRadius: 12, padding: 16, marginTop: 12 }}>
+      <h4 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 700, color: 'var(--en-oscuro-info, #075985)', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Info size={16} /> Alternativas para clientes internacionales
       </h4>
-      <p style={{ fontSize: 12, color: '#0369a1', margin: '0 0 12px', lineHeight: 1.5 }}>
+      <p style={{ fontSize: 12, color: 'var(--en-oscuro-info, #0369a1)', margin: '0 0 12px', lineHeight: 1.5 }}>
         Si tu tarjeta falla, podés usar estos servicios para enviar PIX desde el exterior. Llega en minutos y
         casi siempre con mejor tasa que pagar con tarjeta extranjera.
       </p>
@@ -442,19 +442,19 @@ function InternationalTips() {
             rel="noopener noreferrer"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e0f2fe',
-              textDecoration: 'none', color: '#0c4a6e',
+              padding: '10px 12px', borderRadius: 8, background: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-info-borde, #e0f2fe)',
+              textDecoration: 'none', color: 'var(--en-oscuro-info, #0c4a6e)',
             }}
           >
             <span>
               <b style={{ display: 'block', fontSize: 13 }}>{t.title}</b>
-              <span style={{ fontSize: 11, color: '#0369a1' }}>{t.desc}</span>
+              <span style={{ fontSize: 11, color: 'var(--en-oscuro-info, #0369a1)' }}>{t.desc}</span>
             </span>
-            <ExternalLink size={14} color="#0284c7" />
+            <ExternalLink size={14} style={{ color: 'var(--en-oscuro-info, #0284c7)' }} />
           </a>
         ))}
       </div>
-      <p style={{ fontSize: 11, color: '#0c4a6e', marginTop: 10, marginBottom: 0, lineHeight: 1.4 }}>
+      <p style={{ fontSize: 11, color: 'var(--en-oscuro-info, #0c4a6e)', marginTop: 10, marginBottom: 0, lineHeight: 1.4 }}>
         💡 También podés pedirle a un familiar/amigo en Brasil que pague por PIX — es instantáneo y sin comisión.
       </p>
     </div>
