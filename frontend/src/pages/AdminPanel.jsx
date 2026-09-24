@@ -45,6 +45,8 @@ import CreditsAdminPanel from '../components/admin/CreditsAdminPanel';
 import EnviosPanel from '../components/admin/envios/EnviosPanel';
 import OperacionPanel from '../components/admin/envios/OperacionPanel';
 import { abrirArchivo, bajarArchivo, rutaDeArchivo, sePuedeAbrir } from '../utils/urlDeArchivo';
+import conAlfa from '../tema/conAlfa';
+import SelectorDeApariencia from '../components/tema/SelectorDeApariencia';
 
 
 // Función para enmascarar el CPF (solo muestra últimos 3 dígitos)
@@ -189,8 +191,8 @@ function Pendiente({ cuantos, activa }) {
         minWidth: '20px', height: '20px', padding: '0 6px', borderRadius: '9999px',
         fontSize: '11px', fontWeight: 700, display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center',
-        backgroundColor: activa ? 'rgba(255,255,255,0.28)' : '#fee2e2',
-        color: activa ? '#ffffff' : '#b91c1c',
+        backgroundColor: activa ? 'rgba(255,255,255,0.28)' : 'var(--en-oscuro-error-suave, #fee2e2)',
+        color: activa ? '#ffffff' : 'var(--en-oscuro-error, #b91c1c)',
       }}
       data-testid="pendiente"
     >
@@ -212,10 +214,10 @@ const NOMBRE_DEL_ROL = {
 };
 
 const COLOR_DEL_ROL = {
-  super_admin: { fondo: '#fee2e2', letra: '#b91c1c' },
-  admin:       { fondo: '#ffedd5', letra: '#c2410c' },
-  agent:       { fondo: '#e0e7ff', letra: '#4338ca' },
-  user:        { fondo: '#f3f4f6', letra: '#6b7280' },
+  super_admin: { fondo: 'var(--en-oscuro-error-suave, #fee2e2)', letra: 'var(--en-oscuro-error, #b91c1c)' },
+  admin:       { fondo: 'var(--en-oscuro-alerta-suave, #ffedd5)', letra: 'var(--en-oscuro-error, #c2410c)' },
+  agent:       { fondo: 'var(--en-oscuro-acento-suave, #e0e7ff)', letra: 'var(--en-oscuro-acento, #4338ca)' },
+  user:        { fondo: 'var(--en-oscuro-superficie-2, #f3f4f6)', letra: 'var(--en-oscuro-texto-2, #6b7280)' },
 };
 
 // Por qué esta cuenta no puede entrar, si no puede. Lo decide el servidor en
@@ -227,9 +229,9 @@ const NOMBRE_DEL_ESTADO = {
 };
 
 const COLOR_DEL_ESTADO = {
-  borrada:    { fondo: '#e5e7eb', letra: '#4b5563' },
-  vetada:     { fondo: '#fee2e2', letra: '#b91c1c' },
-  suspendida: { fondo: '#fef3c7', letra: '#b45309' },
+  borrada:    { fondo: 'var(--en-oscuro-superficie-3, #e5e7eb)', letra: 'var(--en-oscuro-texto-2, #4b5563)' },
+  vetada:     { fondo: 'var(--en-oscuro-error-suave, #fee2e2)', letra: 'var(--en-oscuro-error, #b91c1c)' },
+  suspendida: { fondo: 'var(--en-oscuro-alerta-suave, #fef3c7)', letra: 'var(--en-oscuro-alerta, #b45309)' },
 };
 
 const PRIORITY_COLORS = { baja: '#6b7280', normal: '#2563eb', alta: '#d97706', urgente: '#dc2626' };
@@ -635,9 +637,9 @@ const [searchParams, setSearchParams] = useSearchParams();
         <div>
           <p><strong>{response.data.message}</strong></p>
           <p style={{fontSize: '12px', marginTop: '4px'}}>
-            Contraseña temporal: <code style={{background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px'}}>{response.data.temp_password}</code>
+            Contraseña temporal: <code style={{background: 'var(--en-oscuro-superficie-2, #f3f4f6)', padding: '2px 6px', borderRadius: '4px'}}>{response.data.temp_password}</code>
           </p>
-          {response.data.email_sent && <p style={{fontSize: '11px', color: '#6b7280'}}>Email enviado al usuario</p>}
+          {response.data.email_sent && <p style={{fontSize: '11px', color: 'var(--en-oscuro-texto-2, #6b7280)'}}>Email enviado al usuario</p>}
         </div>,
         { duration: 10000 }
       );
@@ -847,11 +849,11 @@ const [searchParams, setSearchParams] = useSearchParams();
     }
   };
 
-  const pageStyle = { minHeight: '100vh', background: '#f8f9fc', fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' };
-  const cardStyle = { backgroundColor: '#ffffff', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' };
-  const btnPrimary = { backgroundColor: '#6366f1', color: 'white', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
+  const pageStyle = { minHeight: '100vh', background: 'var(--en-oscuro-fondo, #f8f9fc)', fontFamily: 'Inter, Helvetica, -apple-system, sans-serif' };
+  const cardStyle = { backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)' };
+  const btnPrimary = { backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: 'white', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
   const btnSuccess = { backgroundColor: '#16a34a', color: 'white', borderRadius: '10px', padding: '8px 16px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' };
-  const btnSecondary = { backgroundColor: '#f3f4f6', color: '#374151', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
+  const btnSecondary = { backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: 'var(--en-oscuro-texto, #374151)', borderRadius: '12px', padding: '10px 20px', border: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '14px' };
 
 
   // === BTC Orders Functions ===
@@ -921,23 +923,23 @@ const [searchParams, setSearchParams] = useSearchParams();
   return (
     <div style={pageStyle} data-testid="admin-panel">
       {/* Header */}
-      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 40 }}>
+      <header style={{ backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               {!esAncho && (
                 <button onClick={() => setMenuAbierto((a) => !a)}
                   data-testid="boton-menu"
-                  style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Menu style={{ width: '20px', height: '20px', color: '#374151' }} />
+                  style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Menu style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
                 </button>
               )}
-              <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="back-button">
-                <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+              <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="back-button">
+                <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
               </button>
               <div>
-                <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Panel de Control</h1>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'agent' ? 'Agente' : 'Admin'}</p>
+                <h1 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Panel de Control</h1>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>{user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'agent' ? 'Agente' : 'Admin'}</p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -945,10 +947,14 @@ const [searchParams, setSearchParams] = useSearchParams();
                   existía acá: para enterarse de un KYC nuevo había que salirse
                   del panel a una pantalla de cliente. */}
               <CampanaDelEquipo onIrA={setActiveTab} />
+              {/* El mismo sol y luna del inicio del cliente. La preferencia es
+                  de la cuenta, así que quien atiende desde el panel la elige
+                  acá sin tener que ir a su perfil. */}
+              <SelectorDeApariencia cuadrado />
               <RestoreButton userRole={user?.role} onSuccess={loadData} size="sm"
                 soloIcono={!esAncho} />
-              <button onClick={refrescarTodo} title="Actualizar esta sección" style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
-                <RefreshCw style={{ width: '20px', height: '20px', color: '#374151', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              <button onClick={refrescarTodo} title="Actualizar esta sección" style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="refresh-button">
+                <RefreshCw style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               </button>
             </div>
           </div>
@@ -966,8 +972,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                      backgroundColor: 'rgba(17,24,39,0.45)' }} />
         )}
         <aside style={{
-          width: '236px', flexShrink: 0, backgroundColor: '#ffffff',
-          borderRight: '1px solid #e5e7eb', padding: '18px 12px',
+          width: '236px', flexShrink: 0, backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
+          borderRight: '1px solid var(--en-oscuro-linea, #e5e7eb)', padding: '18px 12px',
           overflowY: 'auto',
           ...(esAncho ? {
             minHeight: 'calc(100vh - 64px)', position: 'sticky', top: '64px',
@@ -991,7 +997,7 @@ const [searchParams, setSearchParams] = useSearchParams();
               // aire no se lee como una división: los títulos en gris chiquito
               // se veían como espacio sobrante y el menú parecía una lista
               // larga y plana de veinte cosas sueltas.
-              borderBottom: '1px solid #f1f2f6',
+              borderBottom: '1px solid var(--en-oscuro-linea, #f1f2f6)',
             }}>
               <button onClick={() => desplegar(grupo.key)}
                 data-testid={`grupo-${grupo.key}`}
@@ -999,14 +1005,14 @@ const [searchParams, setSearchParams] = useSearchParams();
                   display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
                   padding: '7px 10px', marginBottom: '3px', borderRadius: '8px',
                   border: 'none', backgroundColor: 'transparent', cursor: 'pointer',
-                  fontSize: '11.5px', fontWeight: 800, color: '#111827',
+                  fontSize: '11.5px', fontWeight: 800, color: 'var(--en-oscuro-texto, #111827)',
                   textTransform: 'uppercase', letterSpacing: '0.06em',
                 }}>
-                <grupo.icon style={{ width: '14px', height: '14px', color: '#6366f1' }} />
+                <grupo.icon style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
                 <span style={{ flex: 1, textAlign: 'left' }}>{grupo.label}</span>
                 <Pendiente cuantos={pendientesDelGrupo(grupo)} activa={false} />
                 <ChevronRight style={{
-                  width: '14px', height: '14px', color: '#c2c6d0',
+                  width: '14px', height: '14px', color: 'var(--en-oscuro-texto-3, #c2c6d0)',
                   transform: abierto ? 'rotate(90deg)' : 'none',
                   transition: 'transform 0.15s',
                 }} />
@@ -1023,8 +1029,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                       padding: '8px 10px', marginBottom: '2px', borderRadius: '9px',
                       border: 'none', cursor: 'pointer', textAlign: 'left',
                       fontSize: '13.5px', fontWeight: activa ? 600 : 500,
-                      backgroundColor: activa ? '#eef2ff' : 'transparent',
-                      color: activa ? '#4338ca' : '#4b5563',
+                      backgroundColor: activa ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'transparent',
+                      color: activa ? 'var(--en-oscuro-acento, #4338ca)' : 'var(--en-oscuro-texto-2, #4b5563)',
                     }}
                   >
                     <s.icon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
@@ -1101,41 +1107,41 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {saludDeLaApp ? (
-              <div style={{ ...cardStyle, padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: '8px 18px', alignItems: 'center', borderLeft: `4px solid ${saludDeLaApp.ok ? '#16a34a' : '#dc2626'}` }} data-testid="salud-de-la-app">
-                <strong style={{ fontSize: '14px', color: saludDeLaApp.ok ? '#166534' : '#991b1b' }}>Salud de la aplicación · {saludDeLaApp.ok ? 'sana' : 'NO SANA'}</strong>
+              <div style={{ ...cardStyle, padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: '8px 18px', alignItems: 'center', borderLeft: `4px solid ${saludDeLaApp.ok ? 'var(--en-oscuro-exito, #16a34a)' : 'var(--en-oscuro-error, #dc2626)'}` }} data-testid="salud-de-la-app">
+                <strong style={{ fontSize: '14px', color: saludDeLaApp.ok ? 'var(--en-oscuro-exito, #166534)' : 'var(--en-oscuro-error, #991b1b)' }}>Salud de la aplicación · {saludDeLaApp.ok ? 'sana' : 'NO SANA'}</strong>
                 {saludDeLaApp.comprobaciones.map((c) => (
-                  <span key={c.nombre} style={{ fontSize: '13px', color: c.ok ? '#374151' : '#b91c1c' }} data-testid={`salud-de-la-app-${c.ok ? 'ok' : 'falla'}`}>
+                  <span key={c.nombre} style={{ fontSize: '13px', color: c.ok ? 'var(--en-oscuro-texto, #374151)' : 'var(--en-oscuro-error, #b91c1c)' }} data-testid={`salud-de-la-app-${c.ok ? 'ok' : 'falla'}`}>
                     {c.ok ? '✓' : '✗'} <strong>{c.nombre.replaceAll('_', ' ')}</strong>: {c.detalle}
                   </span>
                 ))}
-                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: 'auto' }}>el reloj revisa cada {Math.round(saludDeLaApp.vigilancia.cada_segundos / 60)} min y avisa al equipo cuando cambia</span>
+                <span style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', marginLeft: 'auto' }}>el reloj revisa cada {Math.round(saludDeLaApp.vigilancia.cada_segundos / 60)} min y avisa al equipo cuando cambia</span>
               </div>
             ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               {[
-                { icon: ArrowUpRight, value: pendientes.withdrawals ?? 0, label: 'Retiros pendientes', bg: '#fef3c7', iconColor: '#d97706' },
-                { icon: ArrowDownLeft, value: pendientes.recharges ?? 0, label: 'Recargas pendientes', bg: '#dcfce7', iconColor: '#16a34a' },
-                { icon: Users, value: usuariosTotales ?? 0, label: 'Usuarios activos', bg: '#dbeafe', iconColor: '#2563eb' },
-                { icon: Shield, value: pendientes.kyc ?? 0, label: 'KYC pendientes', bg: '#f3e8ff', iconColor: '#9333ea' },
+                { icon: ArrowUpRight, value: pendientes.withdrawals ?? 0, label: 'Retiros pendientes', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', iconColor: '#d97706' },
+                { icon: ArrowDownLeft, value: pendientes.recharges ?? 0, label: 'Recargas pendientes', bg: 'var(--en-oscuro-exito-suave, #dcfce7)', iconColor: '#16a34a' },
+                { icon: Users, value: usuariosTotales ?? 0, label: 'Usuarios activos', bg: 'var(--en-oscuro-acento-suave, #dbeafe)', iconColor: '#2563eb' },
+                { icon: Shield, value: pendientes.kyc ?? 0, label: 'KYC pendientes', bg: 'var(--en-oscuro-acento-suave, #f3e8ff)', iconColor: '#9333ea' },
               ].map((item, i) => (
                 <div key={i} style={{ ...cardStyle, padding: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <item.icon style={{ width: '22px', height: '22px', color: item.iconColor }} />
                     </div>
-                    <span style={{ fontSize: '28px', fontWeight: '700', color: '#111827' }}>{item.value}</span>
+                    <span style={{ fontSize: '28px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)' }}>{item.value}</span>
                   </div>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>{item.label}</p>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>{item.label}</p>
                 </div>
               ))}
             </div>
             
             {/* Maintenance Buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              <div style={{ ...cardStyle, padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fefce8', border: '1px solid #fef08a' }}>
+              <div style={{ ...cardStyle, padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--en-oscuro-alerta-suave, #fefce8)', border: '1px solid var(--en-oscuro-alerta-borde, #fef08a)' }}>
                 <div>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600', color: '#854d0e' }}>Reparar Imágenes</h4>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#a16207' }}>Convierte URLs de Twilio a base64 para que se vean correctamente</p>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-alerta, #854d0e)' }}>Reparar Imágenes</h4>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--en-oscuro-alerta, #a16207)' }}>Convierte URLs de Twilio a base64 para que se vean correctamente</p>
                 </div>
                 <button
                   onClick={async () => {
@@ -1160,11 +1166,11 @@ const [searchParams, setSearchParams] = useSearchParams();
             </div>
             
             <div style={{ ...cardStyle, padding: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>Tasa actual</h3>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 16px 0' }}>Tasa actual</h3>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                  <p style={{ fontSize: '32px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {fmt(rates?.ris_to_ves) || '0.00'} VES</p>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '32px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>1 RIS = {fmt(rates?.ris_to_ves) || '0.00'} VES</p>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                     Última actualización: {rates?.updated_at
                       ? new Date(rates.updated_at).toLocaleString('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'medium' })
                       : '—'}
@@ -1213,21 +1219,21 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'users' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {cpfRepetidos && (cpfRepetidos.repetidos.length > 0 || !cpfRepetidos.candado) ? (
-              <div style={{ ...cardStyle, padding: '16px', borderLeft: '4px solid #dc2626' }} data-testid="cpf-repetidos">
-                <h3 style={{ margin: '0 0 6px', fontSize: '15px', color: '#991b1b' }}>CPF repetidos: {cpfRepetidos.repetidos.length} documento{cpfRepetidos.repetidos.length === 1 ? '' : 's'} con más de una cuenta</h3>
-                <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#6b7280', lineHeight: 1.5 }}>
+              <div style={{ ...cardStyle, padding: '16px', borderLeft: '4px solid var(--en-oscuro-error, #dc2626)' }} data-testid="cpf-repetidos">
+                <h3 style={{ margin: '0 0 6px', fontSize: '15px', color: 'var(--en-oscuro-error, #991b1b)' }}>CPF repetidos: {cpfRepetidos.repetidos.length} documento{cpfRepetidos.repetidos.length === 1 ? '' : 's'} con más de una cuenta</h3>
+                <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', lineHeight: 1.5 }}>
                   Mientras haya repetidos no se puede crear el candado que impide registrar dos cuentas con el mismo CPF{cpfRepetidos.candado ? '' : ' (hoy falta)'}. Mirá las dos cuentas, decidí cuál es la buena, y liberá el CPF de la otra: no se borra ni se le toca el saldo, sólo pierde el documento, con tu motivo asentado en la auditoría.
                 </p>
                 {cpfRepetidos.repetidos.map((r) => (
-                  <div key={r.cpf} style={{ border: '1px solid #fecaca', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px' }} data-testid="cpf-repetido">
+                  <div key={r.cpf} style={{ border: '1px solid var(--en-oscuro-error-borde, #fecaca)', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px' }} data-testid="cpf-repetido">
                     <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', marginBottom: '6px' }}>CPF {r.cpf}</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '10px' }}>
                       {r.cuentas.map((c) => (
-                        <div key={c.user_id} style={{ background: '#fafafa', borderRadius: '8px', padding: '10px', fontSize: '13px' }} data-testid="cpf-repetido-cuenta">
+                        <div key={c.user_id} style={{ background: 'var(--en-oscuro-superficie-2, #fafafa)', borderRadius: '8px', padding: '10px', fontSize: '13px' }} data-testid="cpf-repetido-cuenta">
                           <div><strong>{c.nombre || '(sin nombre)'}</strong> · {c.email}</div>
-                          <div style={{ color: '#6b7280', fontSize: '12px' }}>creada {c.creada ? new Date(c.creada).toLocaleDateString('es-AR') : '—'} · último ingreso {c.ultimo_ingreso ? new Date(c.ultimo_ingreso).toLocaleDateString('es-AR') : 'nunca'} · verificación {c.verificacion || '—'} · saldo RIS {c.saldo_ris.toLocaleString('es-AR', { minimumFractionDigits: 2 })}{c.vetada ? ' · VETADA' : ''}{c.borrada ? ' · BORRADA' : ''}</div>
+                          <div style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '12px' }}>creada {c.creada ? new Date(c.creada).toLocaleDateString('es-AR') : '—'} · último ingreso {c.ultimo_ingreso ? new Date(c.ultimo_ingreso).toLocaleDateString('es-AR') : 'nunca'} · verificación {c.verificacion || '—'} · saldo RIS {c.saldo_ris.toLocaleString('es-AR', { minimumFractionDigits: 2 })}{c.vetada ? ' · VETADA' : ''}{c.borrada ? ' · BORRADA' : ''}</div>
                           <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                            <input value={motivoDeLiberacion[c.user_id] || ''} onChange={(e) => setMotivoDeLiberacion((m) => ({ ...m, [c.user_id]: e.target.value }))} placeholder="Motivo para liberar el CPF de esta cuenta" style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '12px' }} data-testid="cpf-motivo" />
+                            <input value={motivoDeLiberacion[c.user_id] || ''} onChange={(e) => setMotivoDeLiberacion((m) => ({ ...m, [c.user_id]: e.target.value }))} placeholder="Motivo para liberar el CPF de esta cuenta" style={{ flex: 1, padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '12px' }} data-testid="cpf-motivo" />
                             <button type="button" onClick={() => liberarCpf(c.user_id)} disabled={liberando} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }} data-testid="cpf-liberar">Liberar el CPF de esta cuenta</button>
                           </div>
                         </div>
@@ -1240,13 +1246,13 @@ const [searchParams, setSearchParams] = useSearchParams();
             {/* Search bar */}
             <div style={{ ...cardStyle, padding: '16px' }}>
               <div style={{ position: 'relative' }}>
-                <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#9ca3af' }} />
+                <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
                 <input 
                   type="text" 
                   placeholder="Buscar usuario por nombre o email..." 
                   value={userSearchQuery} 
                   onChange={(e) => setUserSearchQuery(e.target.value)}
-                  style={{ width: '100%', padding: '12px 12px 12px 40px', borderRadius: '12px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }} 
+                  style={{ width: '100%', padding: '12px 12px 12px 40px', borderRadius: '12px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '14px', outline: 'none' }} 
                 />
               </div>
             </div>
@@ -1259,10 +1265,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                 `services/estado_de_la_cuenta.py`. */}
             {resumenDeCuentas && (
               <div style={{ ...cardStyle, padding: '12px 16px', display: 'flex', flexWrap: 'wrap',
-                            gap: '16px', fontSize: '13px', color: '#6b7280' }}
+                            gap: '16px', fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}
                    data-testid="resumen-de-cuentas">
-                <span><strong style={{ color: '#111827' }}>{resumenDeCuentas.total}</strong> cuentas</span>
-                <span><strong style={{ color: '#111827' }}>{resumenDeCuentas.activa}</strong> activas</span>
+                <span><strong style={{ color: 'var(--en-oscuro-texto, #111827)' }}>{resumenDeCuentas.total}</strong> cuentas</span>
+                <span><strong style={{ color: 'var(--en-oscuro-texto, #111827)' }}>{resumenDeCuentas.activa}</strong> activas</span>
                 {resumenDeCuentas.vetada > 0 && <span>{resumenDeCuentas.vetada} en lista negra</span>}
                 {resumenDeCuentas.suspendida > 0 && <span>{resumenDeCuentas.suspendida} suspendidas</span>}
                 {resumenDeCuentas.borrada > 0 && <span>{resumenDeCuentas.borrada} borradas</span>}
@@ -1272,28 +1278,28 @@ const [searchParams, setSearchParams] = useSearchParams();
             {/* Users List */}
             <div style={{ ...cardStyle, overflow: 'hidden' }}>
               {loading ? (
-                <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} /></div>
+                <div style={{ padding: '48px', textAlign: 'center' }}><RefreshCw style={{ width: '32px', height: '32px', color: 'var(--en-oscuro-acento, #6366f1)', animation: 'spin 1s linear infinite' }} /></div>
               ) : filteredUsers.length === 0 ? (
-                <div style={{ padding: '48px', textAlign: 'center' }}><p style={{ color: '#6b7280' }}>No se encontraron usuarios</p></div>
+                <div style={{ padding: '48px', textAlign: 'center' }}><p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>No se encontraron usuarios</p></div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ backgroundColor: '#f8f9fa' }}>
+                    <thead style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)' }}>
                       <tr>
                         {['Usuario', 'Balance', 'Estado', 'Rol', 'Acciones'].map(h => (
-                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: 'var(--en-oscuro-texto-2, #6b7280)', textTransform: 'uppercase', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredUsers.map((u) => (
-                        <tr key={u.user_id} style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} 
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                        <tr key={u.user_id} style={{ borderBottom: '1px solid var(--en-oscuro-linea, #f3f4f6)', cursor: 'pointer', transition: 'background 0.2s' }} 
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--en-oscuro-superficie-2, #f9fafb)'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             data-testid={`user-${u.user_id}`}>
                           <td style={{ padding: '16px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{u.name}</p>
+                              <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{u.name}</p>
                               {/* Por qué esta cuenta no puede entrar. Antes las vetadas
                                   no aparecían y las borradas se veían como cualquiera. */}
                               {NOMBRE_DEL_ESTADO[u.estado] && (
@@ -1309,24 +1315,24 @@ const [searchParams, setSearchParams] = useSearchParams();
                                 </span>
                               )}
                             </div>
-                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{u.email}</p>
+                            <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>{u.email}</p>
                           </td>
-                          <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#111827' }}>{fmt(u.balance_ris)} RIS</td>
+                          <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>{fmt(u.balance_ris)} RIS</td>
                           <td style={{ padding: '16px' }}>
                             <span style={{ padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600',
-                              backgroundColor: u.verification_status === 'verified' ? '#dcfce7' : '#f3f4f6',
-                              color: u.verification_status === 'verified' ? '#16a34a' : '#6b7280' }}>
+                              backgroundColor: u.verification_status === 'verified' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                              color: u.verification_status === 'verified' ? 'var(--en-oscuro-exito, #16a34a)' : 'var(--en-oscuro-texto-2, #6b7280)' }}>
                               {u.verification_status === 'verified' ? 'Verificado' : 'Pendiente'}
                             </span>
                           </td>
-                          <td style={{ padding: '16px', fontSize: '14px', color: '#6b7280' }}>
+                          <td style={{ padding: '16px', fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                             <span style={{ 
                               padding: '4px 10px', 
                               borderRadius: '8px', 
                               fontSize: '12px', 
                               fontWeight: '600',
-                              backgroundColor: COLOR_DEL_ROL[u.role]?.fondo || '#f3f4f6',
-                              color: COLOR_DEL_ROL[u.role]?.letra || '#6b7280'
+                              backgroundColor: COLOR_DEL_ROL[u.role]?.fondo || 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                              color: COLOR_DEL_ROL[u.role]?.letra || 'var(--en-oscuro-texto-2, #6b7280)'
                             }}>
                               {NOMBRE_DEL_ROL[u.role] || 'Usuario'}
                             </span>
@@ -1343,7 +1349,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                 onClick={() => loadUserHistory(u.user_id)}
                                 style={{
                                   display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
-                                  backgroundColor: '#f3f4f6', color: '#6b7280', border: 'none',
+                                  backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: 'var(--en-oscuro-texto-2, #6b7280)', border: 'none',
                                   borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
                                 }}
                                 data-testid={`view-user-${u.user_id}`}
@@ -1356,7 +1362,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                               onClick={() => loadUserHistory(u.user_id)}
                               style={{ 
                                 display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
-                                backgroundColor: '#dbeafe', color: '#2563eb', border: 'none',
+                                backgroundColor: 'var(--en-oscuro-acento-suave, #dbeafe)', color: 'var(--en-oscuro-acento, #2563eb)', border: 'none',
                                 borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
                               }}
                               data-testid={`view-user-${u.user_id}`}
@@ -1369,7 +1375,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                 onClick={() => { setSelectedUserForRole(u); setShowRoleModal(true); }}
                                 style={{ 
                                   display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
-                                  backgroundColor: '#fef3c7', color: '#d97706', border: 'none',
+                                  backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)', border: 'none',
                                   borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
                                 }}
                                 data-testid={`change-role-${u.user_id}`}
@@ -1383,7 +1389,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                 onClick={() => handleResetPassword(u.user_id, u.name)}
                                 style={{ 
                                   display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
-                                  backgroundColor: '#fee2e2', color: '#dc2626', border: 'none',
+                                  backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #dc2626)', border: 'none',
                                   borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
                                 }}
                                 data-testid={`reset-password-${u.user_id}`}
@@ -1411,7 +1417,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                 onClick={() => handleSetAgent(u)}
                                 style={{ 
                                   display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
-                                  backgroundColor: u.role === 'agent' ? '#fef3c7' : '#ecfeff', color: u.role === 'agent' ? '#b45309' : '#0e7490', border: 'none',
+                                  backgroundColor: u.role === 'agent' ? 'var(--en-oscuro-alerta-suave, #fef3c7)' : 'var(--en-oscuro-info-suave, #ecfeff)', color: u.role === 'agent' ? 'var(--en-oscuro-alerta, #b45309)' : 'var(--en-oscuro-info, #0e7490)', border: 'none',
                                   borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer'
                                 }}
                                 data-testid={`set-agent-${u.user_id}`}
@@ -1445,51 +1451,51 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'rates' && (
           <div style={{ maxWidth: '700px' }}>
             <div style={{ ...cardStyle, padding: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 24px 0' }}>Configurar Tasas de Cambio</h3>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 24px 0' }}>Configurar Tasas de Cambio</h3>
               
               {/* Current Rates Display */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-                <div style={{ padding: '20px', backgroundColor: '#dbeafe', borderRadius: '14px' }}>
-                  <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>ENVÍOS (RIS → VES)</p>
-                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>1 RIS = {fmt(rates?.ris_to_ves) || '110.00'} VES</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para retiros a Venezuela</p>
+                <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-acento-suave, #dbeafe)', borderRadius: '14px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-acento, #2563eb)', margin: '0 0 4px 0', fontWeight: '600' }}>ENVÍOS (RIS → VES)</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>1 RIS = {fmt(rates?.ris_to_ves) || '110.00'} VES</p>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Tasa para retiros a Venezuela</p>
                 </div>
-                <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '14px' }}>
-                  <p style={{ fontSize: '12px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>RECARGAS VES (VES → RIS)</p>
-                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>{fmt(rates?.ves_to_ris_rate) || '140.00'} VES = 1 RIS</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para recargas con Bolívares</p>
+                <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', borderRadius: '14px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 4px 0', fontWeight: '600' }}>RECARGAS VES (VES → RIS)</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{fmt(rates?.ves_to_ris_rate) || '140.00'} VES = 1 RIS</p>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Tasa para recargas con Bolívares</p>
                 </div>
               </div>
               
               {/* BRL Rate Display */}
-              <div style={{ padding: '20px', backgroundColor: '#fef9c3', borderRadius: '14px', marginBottom: '24px' }}>
-                <p style={{ fontSize: '12px', color: '#ca8a04', margin: '0 0 4px 0', fontWeight: '600' }}>RECARGAS PIX (BRL → RIS)</p>
-                <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa para recargas con PIX Brasil</p>
+              <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef9c3)', borderRadius: '14px', marginBottom: '24px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-alerta, #ca8a04)', margin: '0 0 4px 0', fontWeight: '600' }}>RECARGAS PIX (BRL → RIS)</p>
+                <p style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Tasa para recargas con PIX Brasil</p>
               </div>
 
               {/* Update Rates Form - Independent */}
-              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '24px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#374151', margin: '0 0 16px 0' }}>Actualizar Tasas</h4>
+              <div style={{ borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', paddingTop: '24px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 16px 0' }}>Actualizar Tasas</h4>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                   {/* RIS → VES Rate */}
-                  <div style={{ padding: '20px', backgroundColor: '#f0f9ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#2563eb', marginBottom: '12px' }}>
+                  <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-info-suave, #f0f9ff)', borderRadius: '14px', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #2563eb)', marginBottom: '12px' }}>
                       RIS → VES (Envíos)
                     </label>
                     <input 
                       type="number" 
                       value={newRate} 
                       onChange={(e) => setNewRate(e.target.value)}
-                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
                       placeholder={rates?.ris_to_ves?.toString() || '0'} 
                       data-testid="new-rate-input" 
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>VES por cada 1 RIS enviado</p>
+                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>VES por cada 1 RIS enviado</p>
                     <button 
                       onClick={handleUpdateRate} 
-                      style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#2563eb' }} 
+                      style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: 'var(--en-oscuro-acento, #2563eb)' }} 
                       data-testid="update-rate-button"
                     >
                       Actualizar RIS → VES
@@ -1497,19 +1503,19 @@ const [searchParams, setSearchParams] = useSearchParams();
                   </div>
 
                   {/* VES → RIS Rate */}
-                  <div style={{ padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#16a34a', marginBottom: '12px' }}>
+                  <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdf4)', borderRadius: '14px', border: '1px solid var(--en-oscuro-exito-borde, #bbf7d0)' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-exito, #16a34a)', marginBottom: '12px' }}>
                       VES → RIS (Recargas)
                     </label>
                     <input 
                       type="number" 
                       value={newRateVesToRis} 
                       onChange={(e) => setNewRateVesToRis(e.target.value)}
-                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
                       placeholder={rates?.ves_to_ris?.toString() || '0'} 
                       data-testid="new-rate-ves-input" 
                     />
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>VES necesarios para obtener 1 RIS</p>
+                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>VES necesarios para obtener 1 RIS</p>
                     <button 
                       onClick={handleUpdateRateVesToRis} 
                       style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#16a34a' }} 
@@ -1521,8 +1527,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                 </div>
                 
                 {/* BRL → RIS Rate Form */}
-                <div style={{ marginTop: '24px', padding: '20px', backgroundColor: '#fefce8', borderRadius: '14px', border: '1px solid #fde68a' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#ca8a04', marginBottom: '12px' }}>
+                <div style={{ marginTop: '24px', padding: '20px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fefce8)', borderRadius: '14px', border: '1px solid var(--en-oscuro-alerta-borde, #fde68a)' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-alerta, #ca8a04)', marginBottom: '12px' }}>
                     BRL → RIS (Recargas PIX)
                   </label>
                   <input 
@@ -1530,11 +1536,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                     step="0.01"
                     value={newRateBrlToRis} 
                     onChange={(e) => setNewRateBrlToRis(e.target.value)}
-                    style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
                     placeholder={rates?.brl_to_ris?.toString() || '1'} 
                     data-testid="new-rate-brl-input" 
                   />
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>RIS que recibirá por cada 1 BRL pagado</p>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>RIS que recibirá por cada 1 BRL pagado</p>
                   <button 
                     onClick={handleUpdateRateBrlToRis} 
                     style={{ ...btnPrimary, width: '100%', height: '44px', backgroundColor: '#ca8a04' }} 
@@ -1562,32 +1568,32 @@ const [searchParams, setSearchParams] = useSearchParams();
 
         {/* Support Requests Tab */}
         {activeTab === 'ratings' && (
-          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: '0 0 4px 0' }}>Calificaciones por agente</h2>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 20px 0' }}>Uso interno · basado en las estrellas que dejan los clientes al cerrarse un caso</p>
+          <div style={{ backgroundColor: 'var(--en-oscuro-superficie, white)', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #1f2937)', margin: '0 0 4px 0' }}>Calificaciones por agente</h2>
+            <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 20px 0' }}>Uso interno · basado en las estrellas que dejan los clientes al cerrarse un caso</p>
             {(!agentRatings || agentRatings.length === 0) ? (
-              <p style={{ color: '#9ca3af', fontSize: '14px' }}>Aún no hay calificaciones.</p>
+              <p style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '14px' }}>Aún no hay calificaciones.</p>
             ) : (
               agentRatings.map((ag) => (
-                <div key={ag.agent_id} style={{ border: '1px solid #e5e7eb', borderRadius: '14px', padding: '18px', marginBottom: '16px' }}>
+                <div key={ag.agent_id} style={{ border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '14px', padding: '18px', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>{ag.agent_name}</span>
-                      <span style={{ fontSize: '13px', color: '#6b7280' }}>{ag.count} {ag.count === 1 ? 'calificación' : 'calificaciones'}</span>
+                      <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--en-oscuro-texto, #1f2937)' }}>{ag.agent_name}</span>
+                      <span style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{ag.count} {ag.count === 1 ? 'calificación' : 'calificaciones'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: '#f59e0b', fontSize: '18px', letterSpacing: '2px' }}>{'★'.repeat(Math.round(ag.average))}{'☆'.repeat(5 - Math.round(ag.average))}</span>
-                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>{ag.average.toFixed(2)}</span>
+                      <span style={{ color: 'var(--en-oscuro-alerta, #f59e0b)', fontSize: '18px', letterSpacing: '2px' }}>{'★'.repeat(Math.round(ag.average))}{'☆'.repeat(5 - Math.round(ag.average))}</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: 'var(--en-oscuro-texto, #1f2937)' }}>{ag.average.toFixed(2)}</span>
                     </div>
                   </div>
                   <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {ag.ratings.map((r, i) => (
-                      <div key={i} style={{ background: '#f9fafb', borderRadius: '10px', padding: '10px 12px' }}>
+                      <div key={i} style={{ background: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '10px', padding: '10px 12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                          <span style={{ color: '#f59e0b', fontSize: '14px', letterSpacing: '1px' }}>{'★'.repeat(r.stars || 0)}{'☆'.repeat(5 - (r.stars || 0))}</span>
-                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>{r.channel === 'chat' ? 'Chat' : 'Soporte'}{r.case_code ? ` · ${r.case_code}` : ''}{r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString('es-ES')}` : ''}</span>
+                          <span style={{ color: 'var(--en-oscuro-alerta, #f59e0b)', fontSize: '14px', letterSpacing: '1px' }}>{'★'.repeat(r.stars || 0)}{'☆'.repeat(5 - (r.stars || 0))}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>{r.channel === 'chat' ? 'Chat' : 'Soporte'}{r.case_code ? ` · ${r.case_code}` : ''}{r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString('es-ES')}` : ''}</span>
                         </div>
-                        {r.comment && <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#374151', whiteSpace: 'pre-wrap' }}>{r.comment}</p>}
+                        {r.comment && <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', whiteSpace: 'pre-wrap' }}>{r.comment}</p>}
                       </div>
                     ))}
                   </div>
@@ -1600,7 +1606,7 @@ const [searchParams, setSearchParams] = useSearchParams();
         {activeTab === 'support' && (
           <div style={{ padding: '0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+              <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #1f2937)', margin: 0 }}>
                 Solicitudes de Soporte
               </h2>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -1615,8 +1621,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                       fontSize: '14px', 
                       fontWeight: '600',
                       cursor: 'pointer',
-                      backgroundColor: supportFilter === filter ? '#6366f1' : '#f3f4f6',
-                      color: supportFilter === filter ? '#fff' : '#6b7280'
+                      backgroundColor: supportFilter === filter ? 'var(--en-oscuro-acento, #6366f1)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                      color: supportFilter === filter ? '#fff' : 'var(--en-oscuro-texto-2, #6b7280)'
                     }}
                     data-testid={`support-filter-${filter}`}
                   >
@@ -1626,19 +1632,19 @@ const [searchParams, setSearchParams] = useSearchParams();
               </div>
             </div>
 
-            <input value={supportSearch} onChange={(e) => setSupportSearch(e.target.value)} placeholder="Buscar por asunto, correo o mensaje…" style={{ width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }} />
+            <input value={supportSearch} onChange={(e) => setSupportSearch(e.target.value)} placeholder="Buscar por asunto, correo o mensaje…" style={{ width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: '14px', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }} />
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
               {[['all', 'Todos'], ['mine', 'Mis casos'], ['unassigned', 'Sin asignar']].map(([key, label]) => (
                 <button key={key} onClick={() => setSupportAssignFilter(key)} style={{
                   padding: '7px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                  border: supportAssignFilter === key ? '1px solid #6366f1' : '1px solid #e5e7eb',
-                  backgroundColor: supportAssignFilter === key ? '#eef2ff' : '#fff', color: supportAssignFilter === key ? '#4F46E5' : '#6b7280'
+                  border: supportAssignFilter === key ? '1px solid var(--en-oscuro-acento, #6366f1)' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                  backgroundColor: supportAssignFilter === key ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)', color: supportAssignFilter === key ? 'var(--en-oscuro-acento, #4F46E5)' : 'var(--en-oscuro-texto-2, #6b7280)'
                 }}>{label}</button>
               ))}
             </div>
             {loading ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
-                <RefreshCw className="animate-spin" style={{ width: '32px', height: '32px', color: '#6366f1' }} />
+                <RefreshCw className="animate-spin" style={{ width: '32px', height: '32px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1648,10 +1654,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                       key={request.support_id} 
                       style={{ 
                         padding: '20px', 
-                        backgroundColor: '#fff', 
+                        backgroundColor: 'var(--en-oscuro-superficie, #fff)', 
                         borderRadius: '16px', 
                         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                        border: request.status === 'pending' ? '2px solid #fbbf24' : '1px solid #e5e7eb'
+                        border: request.status === 'pending' ? '2px solid var(--en-oscuro-alerta, #fbbf24)' : '1px solid var(--en-oscuro-linea, #e5e7eb)'
                       }}
                       data-testid={`support-request-${request.support_id}`}
                     >
@@ -1663,16 +1669,16 @@ const [searchParams, setSearchParams] = useSearchParams();
                               borderRadius: '20px', 
                               fontSize: '12px', 
                               fontWeight: '600',
-                              backgroundColor: request.status === 'pending' ? '#fef3c7' : '#dcfce7',
-                              color: request.status === 'pending' ? '#b45309' : '#16a34a'
+                              backgroundColor: request.status === 'pending' ? 'var(--en-oscuro-alerta-suave, #fef3c7)' : 'var(--en-oscuro-exito-suave, #dcfce7)',
+                              color: request.status === 'pending' ? 'var(--en-oscuro-alerta, #b45309)' : 'var(--en-oscuro-exito, #16a34a)'
                             }}>
                               {request.status === 'pending' ? 'Pendiente' : 'Resuelta'}
                             </span>
-                            <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: 700 }}>
+                            <span style={{ fontSize: '12px', color: 'var(--en-oscuro-acento, #6366f1)', fontWeight: 700 }}>
                               {request.case_code || request.support_id}
                             </span>
                           </div>
-                          <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '8px 0 4px 0' }}>
+                          <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #1f2937)', margin: '8px 0 4px 0' }}>
                             {request.subject}
                           </h4>
                         </div>
@@ -1710,55 +1716,55 @@ const [searchParams, setSearchParams] = useSearchParams();
                       
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Mail style={{ width: '16px', height: '16px', color: '#6b7280' }} />
-                          <span style={{ fontSize: '14px', color: '#374151' }}>{request.email}</span>
+                          <Mail style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
+                          <span style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #374151)' }}>{request.email}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Phone style={{ width: '16px', height: '16px', color: '#6b7280' }} />
-                          <span style={{ fontSize: '14px', color: '#374151' }}>{request.phone_number || 'No proporcionado'}</span>
+                          <Phone style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
+                          <span style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #374151)' }}>{request.phone_number || 'No proporcionado'}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Clock style={{ width: '16px', height: '16px', color: '#6b7280' }} />
-                          <span style={{ fontSize: '14px', color: '#374151' }}>
+                          <Clock style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
+                          <span style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #374151)' }}>
                             {new Date(request.created_at).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Caracas' })}
                           </span>
                         </div>
                       </div>
                       
-                      <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderRadius: '10px' }}>
-                        <p style={{ fontSize: '14px', color: '#4b5563', margin: 0, lineHeight: '1.5' }}>
+                      <div style={{ padding: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '10px' }}>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #4b5563)', margin: 0, lineHeight: '1.5' }}>
                           {request.message}
                         </p>
                       </div>
                       <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                         {request.assigned_to ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#15803d', backgroundColor: '#dcfce7', padding: '6px 10px', borderRadius: '999px' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--en-oscuro-exito, #15803d)', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', padding: '6px 10px', borderRadius: '999px' }}>
                             <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
                             Atendido por {request.assigned_to_name || 'Operador'}
                             {(request.assigned_to === user?.user_id || user?.role === 'super_admin') && (
-                              <button onClick={() => releaseRequest(request)} style={{ marginLeft: '6px', background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>soltar</button>
+                              <button onClick={() => releaseRequest(request)} style={{ marginLeft: '6px', background: 'none', border: 'none', color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>soltar</button>
                             )}
                           </span>
                         ) : (
-                          <button onClick={() => claimRequest(request)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button onClick={() => claimRequest(request)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <UserCog style={{ width: '16px', height: '16px' }} />
                             Atender este caso
                           </button>
                         )}
                         <button
                           onClick={() => { setReplyingTo(replyingTo === request.support_id ? null : request.support_id); setSupportReplyText(''); }}
-                          style={{ padding: '8px 16px', borderRadius: '10px', border: '1px solid #6366f1', backgroundColor: replyingTo === request.support_id ? '#eef2ff' : '#fff', color: '#6366f1', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          style={{ padding: '8px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-acento, #6366f1)', backgroundColor: replyingTo === request.support_id ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-acento, #6366f1)', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                           data-testid={`reply-support-${request.support_id}`}
                         >
                           <Mail style={{ width: '16px', height: '16px' }} />
                           {replyingTo === request.support_id ? 'Cancelar' : 'Responder por correo'}
                         </button>
                         {request.responded_at && (
-                          <span style={{ fontSize: '12px', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--en-oscuro-exito, #16a34a)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <CheckCircle style={{ width: '14px', height: '14px' }} /> Respondida
                           </span>
                         )}
-                                              <select value={request.priority || 'normal'} onChange={(e) => setSupportPriority(request, e.target.value)} title="Prioridad" style={{ marginLeft: 'auto', padding: '7px 10px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '13px', cursor: 'pointer', color: PRIORITY_COLORS[request.priority || 'normal'], fontWeight: 700 }}>
+                                              <select value={request.priority || 'normal'} onChange={(e) => setSupportPriority(request, e.target.value)} title="Prioridad" style={{ marginLeft: 'auto', padding: '7px 10px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: '13px', cursor: 'pointer', color: PRIORITY_COLORS[request.priority || 'normal'], fontWeight: 700 }}>
                           <option value="baja">Prioridad: Baja</option>
                           <option value="normal">Prioridad: Normal</option>
                           <option value="alta">Prioridad: Alta</option>
@@ -1772,13 +1778,13 @@ const [searchParams, setSearchParams] = useSearchParams();
                             onChange={(e) => setSupportReplyText(e.target.value)}
                             rows={3}
                             placeholder={`Escribe tu respuesta para ${request.email}…`}
-                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
                           />
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
                             <button
                               onClick={() => sendSupportReply(request)}
                               disabled={sendingReply}
-                              style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', opacity: sendingReply ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}
+                              style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', opacity: sendingReply ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}
                             >
                               <Send style={{ width: '16px', height: '16px' }} />
                               {sendingReply ? 'Enviando…' : 'Enviar respuesta'}
@@ -1790,7 +1796,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                   ))}
                 
                 {filteredSupport.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                  <div style={{ textAlign: 'center', padding: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>
                     <MessageSquare style={{ width: '48px', height: '48px', margin: '0 auto 12px', opacity: 0.5 }} />
                     <p style={{ fontSize: '16px', fontWeight: '500' }}>No hay solicitudes {supportFilter === 'pending' ? 'pendientes' : supportFilter === 'resolved' ? 'resueltas' : ''}</p>
                   </div>
@@ -1806,9 +1812,9 @@ const [searchParams, setSearchParams] = useSearchParams();
           {/* Sub-tabs nav */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
             {[
-              { key: 'pendientes',    label: '⚡ Pendientes',     color: '#f59e0b' },
-              { key: 'historial',     label: '📊 Historial',       color: '#6366f1' },
-              { key: 'configuracion', label: '⚙️  Configuración', color: '#16a34a' },
+              { key: 'pendientes',    label: '⚡ Pendientes',     color: 'var(--en-oscuro-alerta, #f59e0b)' },
+              { key: 'historial',     label: '📊 Historial',       color: 'var(--en-oscuro-acento, #6366f1)' },
+              { key: 'configuracion', label: '⚙️  Configuración', color: 'var(--en-oscuro-exito, #16a34a)' },
             ].map((t) => {
               const active = btcSubTab === t.key;
               return (
@@ -1818,11 +1824,11 @@ const [searchParams, setSearchParams] = useSearchParams();
                   data-testid={`btc-subtab-${t.key}`}
                   style={{
                     padding: '10px 18px', borderRadius: '12px',
-                    border: active ? `2px solid ${t.color}` : '1.5px solid #e5e7eb',
-                    backgroundColor: active ? '#fff' : '#fff',
-                    color: active ? t.color : '#374151',
+                    border: active ? `2px solid ${t.color}` : '1.5px solid var(--en-oscuro-linea, #e5e7eb)',
+                    backgroundColor: active ? 'var(--en-oscuro-superficie, #fff)' : 'var(--en-oscuro-superficie, #fff)',
+                    color: active ? t.color : 'var(--en-oscuro-texto, #374151)',
                     fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-                    boxShadow: active ? `0 4px 10px ${t.color}40` : 'none',
+                    boxShadow: active ? `0 4px 10px ${conAlfa(t.color, '40')}` : 'none',
                     transition: 'all 0.15s',
                   }}
                 >
@@ -1842,8 +1848,8 @@ const [searchParams, setSearchParams] = useSearchParams();
           {btcSubTab === 'pendientes' && (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>⚡ Órdenes BTC Pendientes</h2>
-              <p style={{ color: '#6b7280', fontSize: '14px', margin: '4px 0 0' }}>Órdenes que requieren transferencia manual al beneficiario</p>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>⚡ Órdenes BTC Pendientes</h2>
+              <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '14px', margin: '4px 0 0' }}>Órdenes que requieren transferencia manual al beneficiario</p>
             </div>
             <button onClick={fetchBtcOrdenesPendientes} disabled={loadingBtcOrdenes}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '14px', opacity: loadingBtcOrdenes ? 0.7 : 1 }}>
@@ -1852,69 +1858,69 @@ const [searchParams, setSearchParams] = useSearchParams();
           </div>
 
           {btcOrdenesP.length === 0 && !loadingBtcOrdenes ? (
-            <div style={{ background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: '16px', padding: '48px', textAlign: 'center' }}>
+            <div style={{ background: 'var(--en-oscuro-superficie-2, #f9fafb)', border: '1px dashed var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: '16px', padding: '48px', textAlign: 'center' }}>
               <p style={{ fontSize: '48px', margin: '0 0 12px' }}>✅</p>
-              <h3 style={{ color: '#374151', fontWeight: '700', margin: '0 0 8px' }}>No hay órdenes pendientes</h3>
-              <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>Todas las órdenes BTC han sido procesadas</p>
+              <h3 style={{ color: 'var(--en-oscuro-texto, #374151)', fontWeight: '700', margin: '0 0 8px' }}>No hay órdenes pendientes</h3>
+              <p style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '14px', margin: 0 }}>Todas las órdenes BTC han sido procesadas</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {btcOrdenesP.map((orden) => (
-                <div key={orden.remesa_id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div key={orden.remesa_id} style={{ background: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                     <div>
-                      <span style={{ background: '#fef3c7', color: '#d97706', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>💰 PAGADO - PENDIENTE ENVÍO</span>
-                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#9ca3af', fontFamily: 'monospace' }}>ID: {orden.remesa_id}</p>
+                      <span style={{ background: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #d97706)', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>💰 PAGADO - PENDIENTE ENVÍO</span>
+                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--en-oscuro-texto-3, #9ca3af)', fontFamily: 'monospace' }}>ID: {orden.remesa_id}</p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontWeight: '800', fontSize: '18px', color: '#111827', margin: 0 }}>{Number(orden.ves_recibe || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
-                      <p style={{ color: '#6b7280', fontSize: '13px', margin: '2px 0 0' }}>{Number(orden.usd_cliente || 0).toFixed(2)} USDI · {Number(orden.sats || 0).toLocaleString()} sats</p>
+                      <p style={{ fontWeight: '800', fontSize: '18px', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{Number(orden.ves_recibe || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs</p>
+                      <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '13px', margin: '2px 0 0' }}>{Number(orden.usd_cliente || 0).toFixed(2)} USDI · {Number(orden.sats || 0).toLocaleString()} sats</p>
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: '700', color: '#166534', margin: '0 0 6px', letterSpacing: '0.05em' }}>BENEFICIARIO</p>
-                      <p style={{ fontWeight: '700', color: '#111827', margin: '0 0 2px', fontSize: '15px' }}>{orden.beneficiario_data?.full_name || 'N/A'}</p>
+                    <div style={{ background: 'var(--en-oscuro-exito-suave, #f0fdf4)', border: '1px solid var(--en-oscuro-exito-borde, #bbf7d0)', borderRadius: '12px', padding: '14px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--en-oscuro-exito, #166534)', margin: '0 0 6px', letterSpacing: '0.05em' }}>BENEFICIARIO</p>
+                      <p style={{ fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 2px', fontSize: '15px' }}>{orden.beneficiario_data?.full_name || 'N/A'}</p>
                       {/* `id_document` y `phone_number` son los nombres con que se guarda un
                           beneficiario (`BeneficiaryCreate`). Esta tarjeta leía `cedula` y
                           `phone`, que no existen: cada orden salía con «CI: N/A» y, en
                           pago móvil, sin teléfono, y quien pagaba tenía que ir a buscarlos
                           a otro lado. Los nombres viejos quedan como respaldo, igual que en
                           `routes/btc_admin.py`. */}
-                      <p style={{ color: '#374151', fontSize: '13px', margin: '0 0 2px' }}>CI: {orden.beneficiario_data?.id_document || orden.beneficiario_data?.cedula || 'N/A'}</p>
-                      <p style={{ color: '#374151', fontSize: '13px', margin: 0 }}>
+                      <p style={{ color: 'var(--en-oscuro-texto, #374151)', fontSize: '13px', margin: '0 0 2px' }}>CI: {orden.beneficiario_data?.id_document || orden.beneficiario_data?.cedula || 'N/A'}</p>
+                      <p style={{ color: 'var(--en-oscuro-texto, #374151)', fontSize: '13px', margin: 0 }}>
                         {orden.beneficiario_data?.payment_type === 'pago_movil' ? '📱 Pago Móvil' : '🏦 Transferencia'}
                       </p>
                     </div>
-                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '14px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', margin: '0 0 6px', letterSpacing: '0.05em' }}>DATOS PAGO</p>
+                    <div style={{ background: 'var(--en-oscuro-acento-suave, #eff6ff)', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)', borderRadius: '12px', padding: '14px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--en-oscuro-acento, #1e40af)', margin: '0 0 6px', letterSpacing: '0.05em' }}>DATOS PAGO</p>
                       {orden.beneficiario_data?.payment_type === 'pago_movil' ? (
                         <>
-                          <p style={{ fontWeight: '600', color: '#111827', margin: '0 0 2px', fontSize: '14px' }}>📱 {orden.beneficiario_data?.phone_number || orden.beneficiario_data?.phone || 'N/A'}</p>
-                          <p style={{ color: '#374151', fontSize: '13px', margin: 0 }}>{orden.beneficiario_data?.bank || 'N/A'}</p>
+                          <p style={{ fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 2px', fontSize: '14px' }}>📱 {orden.beneficiario_data?.phone_number || orden.beneficiario_data?.phone || 'N/A'}</p>
+                          <p style={{ color: 'var(--en-oscuro-texto, #374151)', fontSize: '13px', margin: 0 }}>{orden.beneficiario_data?.bank || 'N/A'}</p>
                         </>
                       ) : (
                         <>
-                          <p style={{ fontWeight: '600', color: '#111827', margin: '0 0 2px', fontSize: '14px' }}>🏦 {orden.beneficiario_data?.bank || 'N/A'}</p>
-                          <p style={{ color: '#374151', fontSize: '13px', margin: 0, fontFamily: 'monospace' }}>{orden.beneficiario_data?.account_number || 'N/A'}</p>
+                          <p style={{ fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 2px', fontSize: '14px' }}>🏦 {orden.beneficiario_data?.bank || 'N/A'}</p>
+                          <p style={{ color: 'var(--en-oscuro-texto, #374151)', fontSize: '13px', margin: 0, fontFamily: 'monospace' }}>{orden.beneficiario_data?.account_number || 'N/A'}</p>
                         </>
                       )}
                     </div>
                   </div>
 
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', cursor: 'pointer' }}>
                       📎 {comprobanteByOrden[orden.remesa_id] ? 'Comprobante adjunto ✓' : 'Adjuntar comprobante (opcional)'}
                       <input type="file" accept="image/*" style={{ display: 'none' }}
                         onChange={(e) => handleComprobanteSelect(orden.remesa_id, e.target.files?.[0])} />
                     </label>
                     {comprobanteByOrden[orden.remesa_id] && (
-                      <img src={rutaDeArchivo(comprobanteByOrden[orden.remesa_id])} alt="comprobante" style={{ display: 'block', marginTop: '8px', maxWidth: '160px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                      <img src={rutaDeArchivo(comprobanteByOrden[orden.remesa_id])} alt="comprobante" style={{ display: 'block', marginTop: '8px', maxWidth: '160px', borderRadius: '8px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)' }} />
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p style={{ color: '#9ca3af', fontSize: '12px', margin: 0 }}>
+                    <p style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontSize: '12px', margin: 0 }}>
                       📅 {orden.creado_en ? new Date(orden.creado_en).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                     </p>
                     <button onClick={() => handleMarcarBtcEnviado(orden.remesa_id)} disabled={marcandoBtc === orden.remesa_id}
@@ -1945,8 +1951,8 @@ const [searchParams, setSearchParams] = useSearchParams();
       {activeTab === 'credits' && user?.role === 'super_admin' && (
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 0' }}>
           <div style={{ marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>💰 Créditos Cripto (USDT/USDC)</h2>
-            <p style={{ color: '#6b7280', fontSize: '14px', margin: '4px 0 0' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>💰 Créditos Cripto (USDT/USDC)</h2>
+            <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '14px', margin: '4px 0 0' }}>
               Billetera de créditos cripto vía NOWPayments — totalmente separada de balance_ris
             </p>
           </div>
@@ -1965,17 +1971,17 @@ const [searchParams, setSearchParams] = useSearchParams();
           onClick={closeUserModal}
         >
           <div 
-            style={{ backgroundColor: '#ffffff', borderRadius: '24px', width: '100%', maxWidth: '800px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+            style={{ backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '24px', width: '100%', maxWidth: '800px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ padding: '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '24px', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedUser.name}</h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>{selectedUser.email}</p>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{selectedUser.name}</h3>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>{selectedUser.email}</p>
               </div>
-              <button onClick={closeUserModal} style={{ width: '36px', height: '36px', borderRadius: '10px', border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+              <button onClick={closeUserModal} style={{ width: '36px', height: '36px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
               </button>
             </div>
 
@@ -1983,106 +1989,106 @@ const [searchParams, setSearchParams] = useSearchParams();
             <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
               {loadingUser ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
-                  <RefreshCw style={{ width: '32px', height: '32px', color: '#6366f1', animation: 'spin 1s linear infinite' }} />
+                  <RefreshCw style={{ width: '32px', height: '32px', color: 'var(--en-oscuro-acento, #6366f1)', animation: 'spin 1s linear infinite' }} />
                 </div>
               ) : userHistory ? (
                 <>
                   {/* User Stats */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '14px', textAlign: 'center' }}>
-                      <p style={{ fontSize: '12px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600' }}>BALANCE ACTUAL</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                    <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdf4)', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 4px 0', fontWeight: '600' }}>BALANCE ACTUAL</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                         {fmt((userHistory.user?.balance_ris ?? 0))} RIS
                       </p>
                     </div>
-                    <div style={{ padding: '16px', backgroundColor: '#dbeafe', borderRadius: '14px', textAlign: 'center' }}>
-                      <p style={{ fontSize: '12px', color: '#2563eb', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL RECARGADO</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                    <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-acento-suave, #dbeafe)', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--en-oscuro-acento, #2563eb)', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL RECARGADO</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                         {fmt((userHistory.stats?.total_recharged ?? 0))} RIS
                       </p>
                     </div>
-                    <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '14px', textAlign: 'center' }}>
-                      <p style={{ fontSize: '12px', color: '#d97706', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL ENVIADO</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                    <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--en-oscuro-alerta, #d97706)', margin: '0 0 4px 0', fontWeight: '600' }}>TOTAL ENVIADO</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                         {fmt((userHistory.stats?.total_withdrawn ?? 0))} RIS
                       </p>
                     </div>
-                    <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '14px', textAlign: 'center' }}>
-                      <p style={{ fontSize: '12px', color: '#9333ea', margin: '0 0 4px 0', fontWeight: '600' }}>VES ENVIADOS</p>
-                      <p style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>
+                    <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-acento-suave, #f3e8ff)', borderRadius: '14px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--en-oscuro-acento, #9333ea)', margin: '0 0 4px 0', fontWeight: '600' }}>VES ENVIADOS</p>
+                      <p style={{ fontSize: '22px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                         {fmt((userHistory.stats?.total_ves_sent ?? 0))}
                       </p>
                     </div>
                   </div>
 
                   {/* User Info - COMPLETE REGISTRATION DATA */}
-                  <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '24px' }}>
-                    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', margin: '0 0 12px 0' }}>DATOS DE REGISTRO COMPLETOS</h4>
+                  <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '14px', marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>DATOS DE REGISTRO COMPLETOS</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Nombre Completo</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '600' }}>{userHistory.user?.full_name || userHistory.user?.name || 'No disponible'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Nombre Completo</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '600' }}>{userHistory.user?.full_name || userHistory.user?.name || 'No disponible'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Email</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.email || 'No disponible'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Email</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.email || 'No disponible'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Teléfono</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.phone_number || 'No disponible'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Teléfono</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.phone_number || 'No disponible'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>CPF</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.cpf_number || userHistory.user?.cpf || 'No disponible'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>CPF</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.cpf_number || userHistory.user?.cpf || 'No disponible'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>RNM / Documento</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.document_number || 'No disponible'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>RNM / Documento</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '500' }}>{userHistory.user?.document_number || 'No disponible'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Estado KYC</p>
-                        <p style={{ fontSize: '14px', margin: '2px 0 0 0', fontWeight: '600', color: userHistory.user?.verification_status === 'verified' ? '#16a34a' : '#d97706' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Estado KYC</p>
+                        <p style={{ fontSize: '14px', margin: '2px 0 0 0', fontWeight: '600', color: userHistory.user?.verification_status === 'verified' ? 'var(--en-oscuro-exito, #16a34a)' : 'var(--en-oscuro-alerta, #d97706)' }}>
                           {userHistory.user?.verification_status === 'verified' ? '✅ Verificado' : '⏳ Pendiente'}
                         </p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Fecha de Registro</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Fecha de Registro</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0' }}>
                           {userHistory.user?.created_at ? new Date(userHistory.user.created_at).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Caracas' }) : 'No disponible'}
                         </p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Último Login</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Último Login</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0' }}>
                           {userHistory.user?.last_login ? new Date(userHistory.user.last_login).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Caracas' }) : 'No disponible'}
                         </p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Rol</p>
-                        <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', textTransform: 'capitalize', fontWeight: '600' }}>{userHistory.user?.role || 'user'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Rol</p>
+                        <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', textTransform: 'capitalize', fontWeight: '600' }}>{userHistory.user?.role || 'user'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Email Verificado</p>
-                        <p style={{ fontSize: '14px', margin: '2px 0 0 0', fontWeight: '600', color: userHistory.user?.email_verified ? '#16a34a' : '#dc2626' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Email Verificado</p>
+                        <p style={{ fontSize: '14px', margin: '2px 0 0 0', fontWeight: '600', color: userHistory.user?.email_verified ? 'var(--en-oscuro-exito, #16a34a)' : 'var(--en-oscuro-error, #dc2626)' }}>
                           {userHistory.user?.email_verified ? '✅ Sí' : '❌ No'}
                         </p>
                       </div>
                       {userHistory.user?.gestor_code && (
                         <div>
-                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Código Gestor</p>
-                          <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '600' }}>{userHistory.user.gestor_code}</p>
+                          <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Código Gestor</p>
+                          <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '600' }}>{userHistory.user.gestor_code}</p>
                         </div>
                       )}
                       {userHistory.user?.referral_code && (
                         <div>
-                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Código Referido</p>
-                          <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '600' }}>{userHistory.user.referral_code}</p>
+                          <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Código Referido</p>
+                          <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '600' }}>{userHistory.user.referral_code}</p>
                         </div>
                       )}
                       {userHistory.user?.balance_ris_terceros > 0 && (
                         <div>
-                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0' }}>Balance Terceros</p>
-                          <p style={{ fontSize: '14px', color: '#111827', margin: '2px 0 0 0', fontWeight: '600' }}>{fmt(userHistory.user.balance_ris_terceros)} RIS</p>
+                          <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0' }}>Balance Terceros</p>
+                          <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', margin: '2px 0 0 0', fontWeight: '600' }}>{fmt(userHistory.user.balance_ris_terceros)} RIS</p>
                         </div>
                       )}
                     </div>
@@ -2090,8 +2096,8 @@ const [searchParams, setSearchParams] = useSearchParams();
 
                   {/* Admin Actions: Suspend / Delete */}
                   {user?.role === 'super_admin' && selectedUser.role !== 'super_admin' && (
-                    <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: '14px', marginBottom: '24px' }}>
-                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#991b1b', margin: '0 0 12px 0' }}>ACCIONES DE ADMINISTRADOR</h4>
+                    <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', borderRadius: '14px', marginBottom: '24px' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-error, #991b1b)', margin: '0 0 12px 0' }}>ACCIONES DE ADMINISTRADOR</h4>
                       <div style={{ display: 'flex', gap: '12px' }}>
                         <button
                           onClick={async () => {
@@ -2135,9 +2141,9 @@ const [searchParams, setSearchParams] = useSearchParams();
 
                   {/* KYC Documents Section */}
                   {(userHistory.user?.id_document_image || userHistory.user?.cpf_image || userHistory.user?.selfie_image || userHistory.user?.profile_picture) && (
-                    <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '14px', marginBottom: '24px' }}>
+                    <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', borderRadius: '14px', marginBottom: '24px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                        <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-alerta, #92400e)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Image style={{ width: '16px', height: '16px' }} />
                           DOCUMENTOS KYC
                         </h4>
@@ -2195,7 +2201,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                             }
                           }}
                           disabled={bajandoFicha}
-                          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: '#4f46e5', color: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: bajandoFicha ? 0.6 : 1 }}
+                          style={{ padding: '8px 14px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--en-oscuro-acento, #4f46e5)', color: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: bajandoFicha ? 0.6 : 1 }}
                           data-testid="descargar-ficha-btn"
                         >
                           <Download style={{ width: '14px', height: '14px' }} />
@@ -2209,10 +2215,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                               <img 
                                 src={rutaDeArchivo(userHistory.user.profile_picture)} 
                                 alt="Foto de Perfil" 
-                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
+                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid var(--en-oscuro-alerta, #fcd34d)', cursor: 'pointer' }}
                               />
                             </a>
-                            <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>Perfil</p>
+                            <p style={{ fontSize: '11px', color: 'var(--en-oscuro-alerta, #92400e)', margin: '6px 0 0 0', fontWeight: '600' }}>Perfil</p>
                           </div>
                         )}
                         {sePuedeAbrir(userHistory.user?.id_document_image) && (
@@ -2221,10 +2227,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                               <img 
                                 src={rutaDeArchivo(userHistory.user.id_document_image)} 
                                 alt="Documento" 
-                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
+                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid var(--en-oscuro-alerta, #fcd34d)', cursor: 'pointer' }}
                               />
                             </a>
-                            <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>Documento</p>
+                            <p style={{ fontSize: '11px', color: 'var(--en-oscuro-alerta, #92400e)', margin: '6px 0 0 0', fontWeight: '600' }}>Documento</p>
                           </div>
                         )}
                         {sePuedeAbrir(userHistory.user?.cpf_image) && (
@@ -2233,10 +2239,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                               <img 
                                 src={rutaDeArchivo(userHistory.user.cpf_image)} 
                                 alt="CPF" 
-                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
+                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid var(--en-oscuro-alerta, #fcd34d)', cursor: 'pointer' }}
                               />
                             </a>
-                            <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>CPF</p>
+                            <p style={{ fontSize: '11px', color: 'var(--en-oscuro-alerta, #92400e)', margin: '6px 0 0 0', fontWeight: '600' }}>CPF</p>
                           </div>
                         )}
                         {sePuedeAbrir(userHistory.user?.selfie_image) && (
@@ -2245,10 +2251,10 @@ const [searchParams, setSearchParams] = useSearchParams();
                               <img 
                                 src={rutaDeArchivo(userHistory.user.selfie_image)} 
                                 alt="Selfie" 
-                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fcd34d', cursor: 'pointer' }}
+                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid var(--en-oscuro-alerta, #fcd34d)', cursor: 'pointer' }}
                               />
                             </a>
-                            <p style={{ fontSize: '11px', color: '#92400e', margin: '6px 0 0 0', fontWeight: '600' }}>Selfie</p>
+                            <p style={{ fontSize: '11px', color: 'var(--en-oscuro-alerta, #92400e)', margin: '6px 0 0 0', fontWeight: '600' }}>Selfie</p>
                           </div>
                         )}
                       </div>
@@ -2257,16 +2263,16 @@ const [searchParams, setSearchParams] = useSearchParams();
 
                   {/* Transactions List */}
                   <div>
-                    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', margin: '0 0 12px 0' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>
                       HISTORIAL DE TRANSACCIONES ({(userHistory.recharges?.length || 0) + (userHistory.withdrawals?.length || 0)} total)
                     </h4>
                     
                     {(!userHistory.recharges?.length && !userHistory.withdrawals?.length) ? (
-                      <div style={{ padding: '32px', backgroundColor: '#f8f9fa', borderRadius: '14px', textAlign: 'center' }}>
-                        <p style={{ color: '#6b7280', margin: 0 }}>No hay transacciones</p>
+                      <div style={{ padding: '32px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '14px', textAlign: 'center' }}>
+                        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>No hay transacciones</p>
                       </div>
                     ) : (
-                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '14px', overflow: 'hidden' }}>
+                      <div style={{ border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '14px', overflow: 'hidden' }}>
                         {[...(userHistory.withdrawals || []), ...(userHistory.recharges || [])]
                           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                           .map((tx, index) => (
@@ -2274,37 +2280,37 @@ const [searchParams, setSearchParams] = useSearchParams();
                               key={tx.transaction_id || tx.recharge_id || index} 
                               style={{ 
                                 padding: '14px 16px', 
-                                borderBottom: index < (userHistory.withdrawals?.length || 0) + (userHistory.recharges?.length || 0) - 1 ? '1px solid #f3f4f6' : 'none',
+                                borderBottom: index < (userHistory.withdrawals?.length || 0) + (userHistory.recharges?.length || 0) - 1 ? '1px solid var(--en-oscuro-linea, #f3f4f6)' : 'none',
                               }}
                             >
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                   <div style={{ 
                                     width: '36px', height: '36px', borderRadius: '10px', 
-                                    backgroundColor: tx.type === 'withdrawal' ? '#fef3c7' : '#dcfce7',
+                                    backgroundColor: tx.type === 'withdrawal' ? 'var(--en-oscuro-alerta-suave, #fef3c7)' : 'var(--en-oscuro-exito-suave, #dcfce7)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                                   }}>
                                     {tx.type === 'withdrawal' ? (
-                                      <ArrowUpRight style={{ width: '18px', height: '18px', color: '#d97706' }} />
+                                      <ArrowUpRight style={{ width: '18px', height: '18px', color: 'var(--en-oscuro-alerta, #d97706)' }} />
                                     ) : (
-                                      <ArrowDownLeft style={{ width: '18px', height: '18px', color: '#16a34a' }} />
+                                      <ArrowDownLeft style={{ width: '18px', height: '18px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
                                     )}
                                   </div>
                                   <div>
-                                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                                    <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                                       {tx.type === 'withdrawal' ? 'Envío/Retiro' : 'Recarga'}
-                                      {tx.source && <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}> ({tx.source})</span>}
+                                      {tx.source && <span style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', fontWeight: '400' }}> ({tx.source})</span>}
                                     </p>
-                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>
                                       {new Date(tx.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Caracas' })}
                                     </p>
-                                    <p style={{ fontSize: '11px', color: '#9ca3af', margin: '2px 0 0 0', fontFamily: 'monospace' }}>
+                                    <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '2px 0 0 0', fontFamily: 'monospace' }}>
                                       ID: {tx.transaction_id || tx.recharge_id || 'N/A'}
                                     </p>
                                   </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                  <p style={{ fontSize: '15px', fontWeight: '700', color: tx.type === 'withdrawal' ? '#d97706' : '#16a34a', margin: 0 }}>
+                                  <p style={{ fontSize: '15px', fontWeight: '700', color: tx.type === 'withdrawal' ? 'var(--en-oscuro-alerta, #d97706)' : 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>
                                     {tx.type === 'withdrawal' ? '-' : '+'}
                                     {tx.type === 'withdrawal' 
                                       ? fmt((tx.amount_input || tx.amount || 0))
@@ -2312,19 +2318,19 @@ const [searchParams, setSearchParams] = useSearchParams();
                                     } RIS
                                   </p>
                                   {tx.type === 'withdrawal' && tx.amount_output > 0 && (
-                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>
                                       = {fmt(tx.amount_output)} VES
                                     </p>
                                   )}
                                   {tx.type !== 'withdrawal' && tx.amount_ves > 0 && (
-                                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>
                                       Pagó: {fmt(tx.amount_ves)} VES
                                     </p>
                                   )}
                                   <span style={{ 
                                     fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '9999px',
-                                    backgroundColor: tx.status === 'completed' ? '#dcfce7' : tx.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                                    color: tx.status === 'completed' ? '#16a34a' : tx.status === 'pending' ? '#d97706' : '#dc2626'
+                                    backgroundColor: tx.status === 'completed' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : tx.status === 'pending' ? 'var(--en-oscuro-alerta-suave, #fef3c7)' : 'var(--en-oscuro-error-suave, #fee2e2)',
+                                    color: tx.status === 'completed' ? 'var(--en-oscuro-exito, #16a34a)' : tx.status === 'pending' ? 'var(--en-oscuro-alerta, #d97706)' : 'var(--en-oscuro-error, #dc2626)'
                                   }}>
                                     {tx.status === 'completed' ? 'Completado' : tx.status === 'pending' ? 'Pendiente' : 'Rechazado'}
                                   </span>
@@ -2333,8 +2339,8 @@ const [searchParams, setSearchParams] = useSearchParams();
                               
                               {/* Voucher/Comprobante */}
                               {sePuedeAbrir(tx.proof_image || tx.voucher_url) && (
-                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #e5e7eb' }}>
-                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 6px 0' }}>Comprobante:</p>
+                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--en-oscuro-linea, #e5e7eb)' }}>
+                                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 6px 0' }}>Comprobante:</p>
                                   <img 
                                     src={rutaDeArchivo(tx.proof_image || tx.voucher_url)} 
                                     alt="Comprobante" 
@@ -2342,7 +2348,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                                       maxWidth: '200px', 
                                       maxHeight: '150px', 
                                       borderRadius: '8px', 
-                                      border: '1px solid #e5e7eb',
+                                      border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
                                       cursor: 'pointer'
                                     }}
                                     onClick={() => abrirArchivo(tx.proof_image || tx.voucher_url)}
@@ -2352,9 +2358,9 @@ const [searchParams, setSearchParams] = useSearchParams();
                               
                               {/* Beneficiario (para retiros) */}
                               {tx.type === 'withdrawal' && tx.beneficiary_name && (
-                                <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>
+                                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                                   <span>Beneficiario: </span>
-                                  <span style={{ fontWeight: '500', color: '#374151' }}>{tx.beneficiary_name}</span>
+                                  <span style={{ fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)' }}>{tx.beneficiary_name}</span>
                                   {tx.beneficiary_bank && <span> - {tx.beneficiary_bank}</span>}
                                 </div>
                               )}
@@ -2367,14 +2373,14 @@ const [searchParams, setSearchParams] = useSearchParams();
                   {/* Beneficiaries */}
                   {userHistory.beneficiaries?.length > 0 && (
                     <div style={{ marginTop: '24px' }}>
-                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280', margin: '0 0 12px 0' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>
                         BENEFICIARIOS ({userHistory.beneficiaries.length})
                       </h4>
                       <div style={{ display: 'grid', gap: '8px' }}>
                         {userHistory.beneficiaries.map((b, i) => (
-                          <div key={i} style={{ padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>{b.full_name}</p>
-                            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0 0' }}>{b.bank} • {b.account_number}</p>
+                          <div key={i} style={{ padding: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '10px' }}>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{b.full_name}</p>
+                            <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>{b.bank} • {b.account_number}</p>
                           </div>
                         ))}
                       </div>
@@ -2396,34 +2402,34 @@ const [searchParams, setSearchParams] = useSearchParams();
         }} onClick={() => { setShowRoleModal(false); setSelectedUserForRole(null); }}>
           <div 
             style={{ 
-              backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', 
+              backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '20px', width: '100%', 
               maxWidth: '400px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' 
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Cambiar Rol de Usuario</h3>
                 <button 
                   onClick={() => { setShowRoleModal(false); setSelectedUserForRole(null); }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
                 >
-                  <X style={{ width: '24px', height: '24px', color: '#6b7280' }} />
+                  <X style={{ width: '24px', height: '24px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
                 </button>
               </div>
             </div>
 
             <div style={{ padding: '20px' }}>
-              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '12px' }}>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '12px' }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 4px 0' }}>
                   {selectedUserForRole.name}
                 </p>
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>{selectedUserForRole.email}</p>
+                <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>{selectedUserForRole.email}</p>
                 <div style={{ marginTop: '8px' }}>
                   <span style={{ 
                     padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600',
-                    backgroundColor: COLOR_DEL_ROL[selectedUserForRole.role]?.fondo || '#f3f4f6',
-                    color: COLOR_DEL_ROL[selectedUserForRole.role]?.letra || '#6b7280'
+                    backgroundColor: COLOR_DEL_ROL[selectedUserForRole.role]?.fondo || 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                    color: COLOR_DEL_ROL[selectedUserForRole.role]?.letra || 'var(--en-oscuro-texto-2, #6b7280)'
                   }}>
                     {/* Acá también aplastaba `admin` y `agent` en «Usuario», y
                         acá es peor que en la tabla: esta es LA VENTANA DONDE SE
@@ -2435,7 +2441,7 @@ const [searchParams, setSearchParams] = useSearchParams();
                 </div>
               </div>
 
-              <p style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '12px' }}>
+              <p style={{ fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '12px' }}>
                 Selecciona el nuevo rol:
               </p>
 
@@ -2446,18 +2452,18 @@ const [searchParams, setSearchParams] = useSearchParams();
                   disabled={assigningRole || selectedUserForRole.role === 'user'}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
-                    backgroundColor: selectedUserForRole.role === 'user' ? '#f3f4f6' : '#ffffff',
-                    border: '2px solid #e5e7eb', borderRadius: '12px', cursor: selectedUserForRole.role === 'user' ? 'not-allowed' : 'pointer',
+                    backgroundColor: selectedUserForRole.role === 'user' ? 'var(--en-oscuro-superficie-2, #f3f4f6)' : 'var(--en-oscuro-superficie, #ffffff)',
+                    border: '2px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '12px', cursor: selectedUserForRole.role === 'user' ? 'not-allowed' : 'pointer',
                     opacity: selectedUserForRole.role === 'user' ? 0.5 : 1, textAlign: 'left'
                   }}
                   data-testid="role-user-btn"
                 >
-                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Users style={{ width: '22px', height: '22px', color: '#6b7280' }} />
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users style={{ width: '22px', height: '22px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
                   </div>
                   <div>
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0 }}>👤 Usuario Normal</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Acceso básico a la app</p>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>👤 Usuario Normal</p>
+                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Acceso básico a la app</p>
                   </div>
                 </button>
 
@@ -2471,26 +2477,26 @@ const [searchParams, setSearchParams] = useSearchParams();
                   disabled={assigningRole || selectedUserForRole.role === 'super_admin'}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
-                    backgroundColor: selectedUserForRole.role === 'super_admin' ? '#fef2f2' : '#ffffff',
-                    border: '2px solid #dc2626', borderRadius: '12px', cursor: selectedUserForRole.role === 'super_admin' ? 'not-allowed' : 'pointer',
+                    backgroundColor: selectedUserForRole.role === 'super_admin' ? 'var(--en-oscuro-error-suave, #fef2f2)' : 'var(--en-oscuro-superficie, #ffffff)',
+                    border: '2px solid var(--en-oscuro-error, #dc2626)', borderRadius: '12px', cursor: selectedUserForRole.role === 'super_admin' ? 'not-allowed' : 'pointer',
                     opacity: selectedUserForRole.role === 'super_admin' ? 0.5 : 1, textAlign: 'left'
                   }}
                   data-testid="role-super-admin-btn"
                 >
-                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Shield style={{ width: '22px', height: '22px', color: '#dc2626' }} />
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Shield style={{ width: '22px', height: '22px', color: 'var(--en-oscuro-error, #dc2626)' }} />
                   </div>
                   <div>
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#dc2626', margin: 0 }}>Super Administrador</p>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Acceso total al panel de administración</p>
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-error, #dc2626)', margin: 0 }}>Super Administrador</p>
+                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Acceso total al panel de administración</p>
                   </div>
                 </button>
               </div>
 
               {assigningRole && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '16px' }}>
-                  <RefreshCw style={{ width: '20px', height: '20px', color: '#6366f1', animation: 'spin 1s linear infinite' }} />
-                  <span style={{ marginLeft: '8px', fontSize: '14px', color: '#6b7280' }}>Cambiando rol...</span>
+                  <RefreshCw style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-acento, #6366f1)', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ marginLeft: '8px', fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Cambiando rol...</span>
                 </div>
               )}
             </div>

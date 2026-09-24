@@ -205,6 +205,13 @@ body {
 }
 :root[data-tema="oscuro"] .con-tema { color-scheme: dark; }
 
+/* EL TEXTO QUE NO DICE SU COLOR, EN OSCURO, ES CLARO.
+   Muchos títulos del panel de administración no tienen color propio: heredan
+   el negro de la página. En oscuro quedaban negro sobre negro, y los de
+   Recursos Humanos, Auditoría y Errores directamente no se veían. Sólo en
+   oscuro, así que en claro lo heredado sigue siendo lo de siempre. */
+:root[data-tema="oscuro"] .con-tema { color: var(--en-oscuro-texto); }
+
 /* El vidrio. `-webkit-` va aparte porque Safari todavía lo pide así, y
    Safari es justamente el navegador de quien tiene iPhone. */
 .t-vidrio {

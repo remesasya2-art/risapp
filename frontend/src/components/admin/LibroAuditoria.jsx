@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { RefreshCw, ScrollText, ChevronDown, ChevronRight, Filter } from 'lucide-react';
+import conAlfa from '../../tema/conAlfa';
 
 const COLOR_DE_CATEGORIA = {
   personal: '#7c3aed',
@@ -39,13 +40,13 @@ function fmtFecha(d) {
 }
 
 function Valor({ dato }) {
-  if (dato === null || dato === undefined) return <span style={{ color: '#9ca3af' }}>—</span>;
+  if (dato === null || dato === undefined) return <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>—</span>;
   if (typeof dato !== 'object') return <code>{String(dato)}</code>;
   return (
     <div style={{ display: 'grid', gap: 2 }}>
       {Object.entries(dato).map(([k, v]) => (
         <div key={k}>
-          <span style={{ color: '#6b7280' }}>{k}: </span>
+          <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{k}: </span>
           <code>{v === null || v === undefined ? '—' : (typeof v === 'object' ? JSON.stringify(v) : String(v))}</code>
         </div>
       ))}
@@ -116,15 +117,15 @@ export default function LibroAuditoria() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <ScrollText size={20} color="#7c3aed" />
+        <ScrollText size={20} style={{ color: 'var(--en-oscuro-acento, #7c3aed)' }} />
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Libro de auditoría</h2>
-        <span style={{ fontSize: 13, color: '#6b7280' }}>
+        <span style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
           {total.toLocaleString('es-VE')} {total === 1 ? 'movimiento' : 'movimientos'}
         </span>
         <div style={{ flex: 1 }} />
         <button onClick={recargar} disabled={cargando} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-          background: '#f3f4f6', border: 'none', borderRadius: 8, fontSize: 13,
+          background: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none', borderRadius: 8, fontSize: 13,
           fontWeight: 600, cursor: 'pointer',
         }}>
           <RefreshCw size={15} /> Actualizar
@@ -133,9 +134,9 @@ export default function LibroAuditoria() {
 
       <div style={{
         display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
-        background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12,
+        background: 'var(--en-oscuro-superficie-2, #f9fafb)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 8, padding: 12,
       }}>
-        <Filter size={15} color="#6b7280" />
+        <Filter size={15} style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
         <select value={filtros.categoria} onChange={(e) => cambiar('categoria', e.target.value)} style={selector}>
           <option value="">Todas las categorías</option>
           {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -152,77 +153,77 @@ export default function LibroAuditoria() {
                onChange={(e) => cambiar('objetivo_id', e.target.value)} style={{ ...selector, width: 200 }} />
         {(filtros.categoria || filtros.accion || filtros.actor_id || filtros.objetivo_id) && (
           <button onClick={() => { setPagina(0); setFiltros({ categoria: '', accion: '', actor_id: '', objetivo_id: '' }); }}
-                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 13, cursor: 'pointer' }}>
+                  style={{ background: 'none', border: 'none', color: 'var(--en-oscuro-acento, #2563eb)', fontSize: 13, cursor: 'pointer' }}>
             Limpiar
           </button>
         )}
       </div>
 
       {cargando ? (
-        <p style={{ color: '#6b7280' }}>Cargando…</p>
+        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Cargando…</p>
       ) : lineas.length === 0 ? (
-        <p style={{ color: '#6b7280' }}>
+        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
           No hay movimientos con esos filtros.
         </p>
       ) : (
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 8, overflow: 'hidden' }}>
           {lineas.map((l, i) => {
             const clave = `${l.cuando}-${i}`;
             const desplegada = abierta === clave;
             return (
-              <div key={clave} style={{ borderTop: i ? '1px solid #f3f4f6' : 'none' }}>
+              <div key={clave} style={{ borderTop: i ? '1px solid var(--en-oscuro-linea, #f3f4f6)' : 'none' }}>
                 <button
                   onClick={() => setAbierta(desplegada ? null : clave)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '10px 12px', background: desplegada ? '#f9fafb' : '#fff',
+                    padding: '10px 12px', background: desplegada ? 'var(--en-oscuro-superficie-2, #f9fafb)' : 'var(--en-oscuro-superficie, #fff)',
                     border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 13,
                   }}>
                   {desplegada ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                   <span style={{
-                    background: (COLOR_DE_CATEGORIA[l.categoria] || '#6b7280') + '20',
-                    color: COLOR_DE_CATEGORIA[l.categoria] || '#6b7280',
+                    background: conAlfa(COLOR_DE_CATEGORIA[l.categoria] || '#6b7280', '20'),
+                    color: COLOR_DE_CATEGORIA[l.categoria] || 'var(--en-oscuro-texto-2, #6b7280)',
                     padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                     whiteSpace: 'nowrap',
                   }}>
                     {l.categoria}
                   </span>
                   <strong style={{ whiteSpace: 'nowrap' }}>{l.etiqueta}</strong>
-                  <span style={{ color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {l.objetivo?.descripcion || l.objetivo?.id || ''}
                   </span>
                   <div style={{ flex: 1 }} />
-                  <span style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', whiteSpace: 'nowrap' }}>
                     {l.actor?.email || '—'}
                   </span>
-                  <span style={{ color: '#6b7280', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', whiteSpace: 'nowrap' }}>
                     {fmtFecha(l.cuando)}
                   </span>
                 </button>
 
                 {desplegada && (
-                  <div style={{ padding: '12px 12px 16px 37px', background: '#f9fafb', fontSize: 12 }}>
+                  <div style={{ padding: '12px 12px 16px 37px', background: 'var(--en-oscuro-superficie-2, #f9fafb)', fontSize: 12 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
                       <div>
                         <div style={rotulo}>Quién</div>
                         <div><strong>{l.actor?.nombre || '—'}</strong></div>
-                        <div style={{ color: '#6b7280' }}>{l.actor?.email || '—'}</div>
-                        <div style={{ color: '#9ca3af' }}>{l.actor?.rol} · {l.actor?.user_id || '—'}</div>
+                        <div style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{l.actor?.email || '—'}</div>
+                        <div style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>{l.actor?.rol} · {l.actor?.user_id || '—'}</div>
                       </div>
                       <div>
                         <div style={rotulo}>Sobre</div>
                         <div><strong>{l.objetivo?.descripcion || '—'}</strong></div>
-                        <div style={{ color: '#9ca3af' }}>{l.objetivo?.tipo} · {l.objetivo?.id || '—'}</div>
+                        <div style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>{l.objetivo?.tipo} · {l.objetivo?.id || '—'}</div>
                       </div>
                       <div>
                         <div style={rotulo}>Cuándo</div>
                         <div>{fmtFecha(l.cuando)}</div>
-                        <div style={{ color: '#9ca3af' }}>Caracas: {l.cuando_caracas || '—'}</div>
+                        <div style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>Caracas: {l.cuando_caracas || '—'}</div>
                       </div>
                       <div>
                         <div style={rotulo}>Desde dónde</div>
                         <div>{l.origen?.ip || '—'} {l.origen?.pais ? `· ${l.origen.pais}` : ''}</div>
-                        <div style={{ color: '#9ca3af', wordBreak: 'break-all' }}>{l.origen?.navegador || '—'}</div>
+                        <div style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', wordBreak: 'break-all' }}>{l.origen?.navegador || '—'}</div>
                       </div>
                     </div>
 
@@ -246,7 +247,7 @@ export default function LibroAuditoria() {
                       </div>
                     )}
 
-                    <div style={{ marginTop: 12, color: '#9ca3af' }}>
+                    <div style={{ marginTop: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>
                       <code>{l.accion}</code>{l.exito === false ? ' · falló' : ''}
                     </div>
                   </div>
@@ -262,7 +263,7 @@ export default function LibroAuditoria() {
           <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={pagina === 0} style={btnPagina}>
             Anterior
           </button>
-          <span style={{ fontSize: 13, color: '#6b7280' }}>
+          <span style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
             Página {pagina + 1} de {paginas}
           </span>
           <button onClick={() => setPagina((p) => Math.min(paginas - 1, p + 1))}
@@ -276,11 +277,11 @@ export default function LibroAuditoria() {
 }
 
 const selector = {
-  padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6,
-  fontSize: 13, background: '#fff',
+  padding: '6px 10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 6,
+  fontSize: 13, background: 'var(--en-oscuro-superficie, #fff)',
 };
-const rotulo = { color: '#6b7280', fontSize: 11, fontWeight: 600, marginBottom: 3 };
+const rotulo = { color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: 11, fontWeight: 600, marginBottom: 3 };
 const btnPagina = {
-  padding: '6px 14px', background: '#f3f4f6', border: '1px solid #e5e7eb',
+  padding: '6px 14px', background: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
   borderRadius: 6, fontSize: 13, cursor: 'pointer',
 };

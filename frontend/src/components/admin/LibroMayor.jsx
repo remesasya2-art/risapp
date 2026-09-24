@@ -29,15 +29,15 @@ import api from '../../utils/api';
 import ErrorBoundary from '../common/ErrorBoundary';
 
 const COLOR = {
-  borde: '#e5e7eb', suave: '#6b7280', texto: '#111827',
-  primario: '#4F46E5', primarioSuave: '#eef0ff',
-  alerta: '#b45309', alertaSuave: '#fffbeb', alertaBorde: '#fde68a',
-  malo: '#b91c1c', maloSuave: '#fef2f2', maloBorde: '#fecaca',
-  bien: '#15803d', bienSuave: '#f0fdf4', bienBorde: '#bbf7d0',
+  borde: 'var(--en-oscuro-linea, #e5e7eb)', suave: 'var(--en-oscuro-texto-2, #6b7280)', texto: 'var(--en-oscuro-texto, #111827)',
+  primario: 'var(--en-oscuro-acento, #4F46E5)', primarioSuave: 'var(--en-oscuro-acento-suave, #eef0ff)',
+  alerta: 'var(--en-oscuro-alerta, #b45309)', alertaSuave: 'var(--en-oscuro-alerta-suave, #fffbeb)', alertaBorde: 'var(--en-oscuro-alerta-borde, #fde68a)',
+  malo: 'var(--en-oscuro-error, #b91c1c)', maloSuave: 'var(--en-oscuro-error-suave, #fef2f2)', maloBorde: 'var(--en-oscuro-error-borde, #fecaca)',
+  bien: 'var(--en-oscuro-exito, #15803d)', bienSuave: 'var(--en-oscuro-exito-suave, #f0fdf4)', bienBorde: 'var(--en-oscuro-exito-borde, #bbf7d0)',
 };
 
 const tarjeta = {
-  backgroundColor: '#fff', borderRadius: '16px', padding: '18px',
+  backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '16px', padding: '18px',
   border: `1px solid ${COLOR.borde}`,
 };
 
@@ -165,7 +165,7 @@ export default function LibroMayor({ vistaInicial }) {
                 padding: '8px 14px', borderRadius: '10px', fontWeight: 700,
                 fontSize: '14px', cursor: 'pointer',
                 border: `1px solid ${activa ? COLOR.primario : COLOR.borde}`,
-                backgroundColor: activa ? COLOR.primarioSuave : '#fff',
+                backgroundColor: activa ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                 color: activa ? COLOR.primario : COLOR.suave }}>
               <Icono size={15} /> {etiqueta}
             </button>
@@ -471,7 +471,7 @@ function Integridad({ datos }) {
 
       {/* Lo que el libro TODAVIA no puede probar. Va acá y no escondido en una
           nota: son las cuatro cosas que un auditor va a pedir. */}
-      <div style={{ ...tarjeta, backgroundColor: '#f9fafb' }}>
+      <div style={{ ...tarjeta, backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }}>
         <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 700,
           display: 'flex', alignItems: 'center', gap: '7px' }}>
           <Info size={15} /> Lo que este libro todavía no puede probar
@@ -489,7 +489,7 @@ function Integridad({ datos }) {
 
 const entrada = {
   width: '100%', padding: '9px 11px', borderRadius: '10px',
-  border: `1px solid ${COLOR.borde}`, fontSize: '13px', backgroundColor: '#fff',
+  border: `1px solid ${COLOR.borde}`, fontSize: '13px', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
   boxSizing: 'border-box', color: COLOR.texto,
 };
 
@@ -510,7 +510,7 @@ function Boton({ children, onClick, cargando, disabled }) {
       style={{ display: 'inline-flex', alignItems: 'center', gap: '7px',
         padding: '9px 15px', borderRadius: '10px', fontSize: '13px',
         fontWeight: 600, cursor: inactivo ? 'not-allowed' : 'pointer',
-        border: `1px solid ${COLOR.borde}`, backgroundColor: '#fff',
+        border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
         color: COLOR.texto, opacity: inactivo ? 0.5 : 1 }}>
       {cargando ? 'Trabajando…' : children}
     </button>
@@ -529,7 +529,7 @@ function Aviso({ tono = 'info', titulo, children }) {
   return (
     <div style={{ ...tarjeta, backgroundColor: fondo, borderColor: borde }}>
       <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-        <Icono size={18} color={color} style={{ flexShrink: 0, marginTop: '1px' }} />
+        <Icono size={18} style={{ flexShrink: 0, marginTop: '1px', color: color }} />
         <div style={{ fontSize: '13px', color, lineHeight: 1.55 }}>
           <strong style={{ display: 'block', marginBottom: '3px' }}>{titulo}</strong>
           {children}
@@ -572,7 +572,7 @@ function Numero({ valor, fuerte, sufijo }) {
 function Etiqueta({ texto }) {
   return (
     <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px',
-      borderRadius: '999px', backgroundColor: '#f3f4f6', color: COLOR.suave,
+      borderRadius: '999px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: COLOR.suave,
       textTransform: 'uppercase', letterSpacing: '.3px' }}>{texto}</span>
   );
 }
@@ -583,7 +583,7 @@ function Tabla({ cabeceras, filas, pie }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
-            <tr style={{ backgroundColor: '#f9fafb' }}>
+            <tr style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }}>
               {cabeceras.map((c) => (
                 <th key={c} style={{ padding: '10px 12px', textAlign: 'left',
                   fontSize: '11px', fontWeight: 700, letterSpacing: '.4px',
@@ -611,7 +611,7 @@ function Tabla({ cabeceras, filas, pie }) {
           {pie ? (
             <tfoot>
               <tr style={{ borderTop: `2px solid ${COLOR.texto}`,
-                backgroundColor: '#f9fafb' }}>
+                backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }}>
                 {pie.map((celda, j) => (
                   <td key={j} style={{ padding: '10px 12px', fontWeight: 700 }}>
                     {celda}

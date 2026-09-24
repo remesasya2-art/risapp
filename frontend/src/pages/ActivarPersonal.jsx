@@ -28,19 +28,19 @@ import { KeyRound, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 import api from '../utils/api';
 import TwoFactorFlow from '../components/auth/TwoFactorFlow';
 
-const MORADO = '#5B4FE9';
+const MORADO = 'var(--en-oscuro-acento, #5B4FE9)';
 
 const caja = {
   minHeight: '100vh', display: 'flex', alignItems: 'center',
-  justifyContent: 'center', background: '#f7f7fb', padding: 20,
+  justifyContent: 'center', background: 'var(--en-oscuro-fondo, #f7f7fb)', padding: 20,
 };
 const tarjeta = {
-  width: '100%', maxWidth: 420, background: '#fff', borderRadius: 16,
-  padding: 30, border: '1px solid #ececf3',
+  width: '100%', maxWidth: 420, background: 'var(--en-oscuro-superficie, #fff)', borderRadius: 16,
+  padding: 30, border: '1px solid var(--en-oscuro-linea, #ececf3)',
 };
 const campo = {
   width: '100%', padding: '12px 14px', borderRadius: 10,
-  border: '1px solid #e5e7eb', fontSize: 15, boxSizing: 'border-box',
+  border: '1px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: 15, boxSizing: 'border-box',
 };
 const boton = {
   width: '100%', padding: '13px 16px', borderRadius: 10, border: 'none',
@@ -140,8 +140,8 @@ export default function ActivarPersonal() {
   if (mirando) {
     return (
       <div style={caja}>
-        <div style={{ ...tarjeta, textAlign: 'center', color: '#6b7280' }}>
-          <Loader2 size={26} color={MORADO} style={{ marginBottom: 10 }} />
+        <div style={{ ...tarjeta, textAlign: 'center', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
+          <Loader2 size={26} style={{ marginBottom: 10, color: MORADO }} />
           <div style={{ fontSize: 14 }}>Comprobando el enlace…</div>
         </div>
       </div>
@@ -153,12 +153,12 @@ export default function ActivarPersonal() {
       <div style={caja}>
         <div style={tarjeta}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <AlertCircle size={22} color="#dc2626" style={{ flexShrink: 0, marginTop: 2 }} />
+            <AlertCircle size={22} style={{ color: 'var(--en-oscuro-error, #dc2626)', flexShrink: 0, marginTop: 2 }} />
             <div>
-              <h2 style={{ margin: '0 0 8px', fontSize: 17, color: '#111827' }}>
+              <h2 style={{ margin: '0 0 8px', fontSize: 17, color: 'var(--en-oscuro-texto, #111827)' }}>
                 No pudimos abrir tu invitación
               </h2>
-              <p style={{ margin: 0, fontSize: 14, color: '#4b5563', lineHeight: 1.6 }}>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--en-oscuro-texto-2, #4b5563)', lineHeight: 1.6 }}>
                 {errorDeEnlace}
               </p>
             </div>
@@ -181,18 +181,18 @@ export default function ActivarPersonal() {
     <div style={caja}>
       <div style={tarjeta}>
         <div style={{
-          width: 44, height: 44, borderRadius: 12, background: '#f0eeff',
+          width: 44, height: 44, borderRadius: 12, background: 'var(--en-oscuro-acento-suave, #f0eeff)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           marginBottom: 16,
         }}
         >
-          <KeyRound size={22} color={MORADO} />
+          <KeyRound size={22} style={{ color: MORADO }} />
         </div>
 
-        <h1 style={{ margin: '0 0 6px', fontSize: 21, color: '#111827' }}>
+        <h1 style={{ margin: '0 0 6px', fontSize: 21, color: 'var(--en-oscuro-texto, #111827)' }}>
           Hola{invitacion?.nombre ? `, ${invitacion.nombre.split(' ')[0]}` : ''}
         </h1>
-        <p style={{ margin: '0 0 22px', fontSize: 14, color: '#6b7280', lineHeight: 1.6 }}>
+        <p style={{ margin: '0 0 22px', fontSize: 14, color: 'var(--en-oscuro-texto-2, #6b7280)', lineHeight: 1.6 }}>
           {invitacion?.cargo
             ? <>Se creó tu perfil de <strong>{invitacion.cargo}</strong>. </>
             : 'Se creó tu perfil. '}
@@ -201,7 +201,7 @@ export default function ActivarPersonal() {
 
         <form onSubmit={activar} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label htmlFor="clave" style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>
+            <label htmlFor="clave" style={{ fontSize: 13, color: 'var(--en-oscuro-texto, #374151)', fontWeight: 600 }}>
               Contraseña
             </label>
             <input
@@ -215,7 +215,7 @@ export default function ActivarPersonal() {
             />
           </div>
           <div>
-            <label htmlFor="repetida" style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>
+            <label htmlFor="repetida" style={{ fontSize: 13, color: 'var(--en-oscuro-texto, #374151)', fontWeight: 600 }}>
               Repetir contraseña
             </label>
             <input
@@ -231,8 +231,8 @@ export default function ActivarPersonal() {
 
           {error && (
             <div style={{
-              background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
-              padding: '10px 12px', fontSize: 13, color: '#b91c1c',
+              background: 'var(--en-oscuro-error-suave, #fef2f2)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)', borderRadius: 10,
+              padding: '10px 12px', fontSize: 13, color: 'var(--en-oscuro-error, #b91c1c)',
             }}
             >
               {error}
@@ -241,11 +241,11 @@ export default function ActivarPersonal() {
 
           <div style={{
             display: 'flex', gap: 9, alignItems: 'flex-start',
-            background: '#f7f7fb', borderRadius: 10, padding: '11px 12px',
-            fontSize: 12.5, color: '#4b5563', lineHeight: 1.55,
+            background: 'var(--en-oscuro-superficie-2, #f7f7fb)', borderRadius: 10, padding: '11px 12px',
+            fontSize: 12.5, color: 'var(--en-oscuro-texto-2, #4b5563)', lineHeight: 1.55,
           }}
           >
-            <ShieldCheck size={16} color={MORADO} style={{ flexShrink: 0, marginTop: 1 }} />
+            <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 1, color: MORADO }} />
             <span>
               Al continuar vas a activar la verificación en dos pasos. Es
               obligatoria para todo el personal: tené a mano tu app de

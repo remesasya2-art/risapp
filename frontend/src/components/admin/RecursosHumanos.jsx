@@ -212,8 +212,8 @@ export default function RecursosHumanos() {
   const cajaPermisos = (seleccion, alTocar) => (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
-      gap: 8, maxHeight: 260, overflowY: 'auto', border: '1px solid #e5e7eb',
-      borderRadius: 8, padding: 12, background: '#fafafa',
+      gap: 8, maxHeight: 260, overflowY: 'auto', border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
+      borderRadius: 8, padding: 12, background: 'var(--en-oscuro-superficie-2, #fafafa)',
     }}>
       {Object.entries(permisos).map(([clave, etiqueta]) => {
         // El catálogo del backend marca con "(MUEVE DINERO)" los tres
@@ -228,8 +228,8 @@ export default function RecursosHumanos() {
             style={{
               display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
               cursor: 'pointer', borderRadius: 6, padding: '4px 6px',
-              background: mueveDinero ? '#fff7ed' : 'transparent',
-              border: mueveDinero ? '1px solid #fed7aa' : '1px solid transparent',
+              background: mueveDinero ? 'var(--en-oscuro-alerta-suave, #fff7ed)' : 'transparent',
+              border: mueveDinero ? '1px solid var(--en-oscuro-alerta-borde, #fed7aa)' : '1px solid transparent',
             }}
           >
             <input
@@ -239,7 +239,7 @@ export default function RecursosHumanos() {
                 ? seleccion.filter((p) => p !== clave)
                 : [...seleccion, clave])}
             />
-            <span style={{ color: mueveDinero ? '#9a3412' : undefined }}>
+            <span style={{ color: mueveDinero ? 'var(--en-oscuro-error, #9a3412)' : undefined }}>
               {texto}
               {mueveDinero && (
                 <strong style={{ display: 'block', fontSize: 10.5, fontWeight: 700 }}>
@@ -247,7 +247,7 @@ export default function RecursosHumanos() {
                 </strong>
               )}
             </span>
-            <code style={{ fontSize: 11, color: '#9ca3af' }}>{clave}</code>
+            <code style={{ fontSize: 11, color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>{clave}</code>
           </label>
         );
       })}
@@ -257,9 +257,9 @@ export default function RecursosHumanos() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Users size={20} color="#2563eb" />
+        <Users size={20} style={{ color: 'var(--en-oscuro-acento, #2563eb)' }} />
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Recursos Humanos</h2>
-        <span style={{ fontSize: 13, color: '#6b7280' }}>
+        <span style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
           {personal.length} {personal.length === 1 ? 'persona' : 'personas'}
         </span>
         <div style={{ flex: 1 }} />
@@ -269,7 +269,7 @@ export default function RecursosHumanos() {
           Ver bajas
         </label>
         <button onClick={cargar} disabled={cargando}
-                style={btn('#f3f4f6', '#111827')}>
+                style={btn('var(--en-oscuro-superficie-2, #f3f4f6)', 'var(--en-oscuro-texto, #111827)')}>
           <RefreshCw size={15} className={cargando ? 'spin' : ''} /> Actualizar
         </button>
         <button onClick={() => setAlta({ ...VACIO })} style={btn('#2563eb', '#fff')}>
@@ -278,8 +278,8 @@ export default function RecursosHumanos() {
       </div>
 
       <div style={{
-        background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
-        padding: '10px 14px', fontSize: 13, color: '#1e3a8a',
+        background: 'var(--en-oscuro-acento-suave, #eff6ff)', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)', borderRadius: 8,
+        padding: '10px 14px', fontSize: 13, color: 'var(--en-oscuro-acento, #1e3a8a)',
       }}>
         Las cuentas del personal <strong>no pueden hacer transacciones a título
         personal</strong>. Por eso no se puede dar de alta a alguien que tenga
@@ -287,16 +287,16 @@ export default function RecursosHumanos() {
       </div>
 
       {cargando ? (
-        <p style={{ color: '#6b7280' }}>Cargando…</p>
+        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Cargando…</p>
       ) : personal.length === 0 ? (
-        <p style={{ color: '#6b7280' }}>
+        <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
           Todavía no hay personal dado de alta.
         </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ background: '#f9fafb', textAlign: 'left' }}>
+              <tr style={{ background: 'var(--en-oscuro-superficie-2, #f9fafb)', textAlign: 'left' }}>
                 {['Persona', 'Cargo', 'Área', 'Permisos', 'Acceso', 'Alta', 'Estado', ''].map((h) => (
                   <th key={h} style={celdaCabecera}>{h}</th>
                 ))}
@@ -304,17 +304,17 @@ export default function RecursosHumanos() {
             </thead>
             <tbody>
               {personal.map((p) => (
-                <tr key={p.user_id} style={{ borderTop: '1px solid #f3f4f6' }}>
+                <tr key={p.user_id} style={{ borderTop: '1px solid var(--en-oscuro-linea, #f3f4f6)' }}>
                   <td style={celda}>
                     <div style={{ fontWeight: 600 }}>{p.legajo?.nombre_completo || p.nombre || '—'}</div>
-                    <div style={{ color: '#6b7280', fontSize: 12 }}>{p.email}</div>
+                    <div style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: 12 }}>{p.email}</div>
                   </td>
                   <td style={celda}>{p.legajo?.cargo || '—'}</td>
                   <td style={celda}>{p.legajo?.area || '—'}</td>
                   <td style={celda}>
                     <span style={{
-                      background: p.permisos.length ? '#dbeafe' : '#f3f4f6',
-                      color: p.permisos.length ? '#1e40af' : '#6b7280',
+                      background: p.permisos.length ? 'var(--en-oscuro-acento-suave, #dbeafe)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                      color: p.permisos.length ? 'var(--en-oscuro-acento, #1e40af)' : 'var(--en-oscuro-texto-2, #6b7280)',
                       padding: '2px 8px', borderRadius: 999, fontSize: 12,
                     }}>
                       {p.permisos.length}
@@ -324,9 +324,9 @@ export default function RecursosHumanos() {
                   <td style={celda}>{fmtFecha(p.alta)}</td>
                   <td style={celda}>
                     {p.activo ? (
-                      <span style={{ color: '#15803d' }}>Activo</span>
+                      <span style={{ color: 'var(--en-oscuro-exito, #15803d)' }}>Activo</span>
                     ) : (
-                      <span style={{ color: '#b91c1c' }}>Baja {fmtFecha(p.baja)}</span>
+                      <span style={{ color: 'var(--en-oscuro-error, #b91c1c)' }}>Baja {fmtFecha(p.baja)}</span>
                     )}
                   </td>
                   <td style={{ ...celda, whiteSpace: 'nowrap' }}>
@@ -361,13 +361,13 @@ export default function RecursosHumanos() {
                             era siempre verdadera y no filtraba nada.) */}
                         {p.acceso?.dos_pasos && p.rol !== 'super_admin' && (
                           <button onClick={() => reiniciarDosPasos(p)}
-                                  style={{ ...btnChico, color: '#b45309' }}
+                                  style={{ ...btnChico, color: 'var(--en-oscuro-alerta, #b45309)' }}
                                   data-testid={`reiniciar-2fa-${p.user_id}`}>
                             <KeyRound size={13} /> Reiniciar 2FA
                           </button>
                         )}
                         <button onClick={() => darDeBaja(p)}
-                                style={{ ...btnChico, color: '#b91c1c' }}>
+                                style={{ ...btnChico, color: 'var(--en-oscuro-error, #b91c1c)' }}>
                           <Trash2 size={13} /> Baja
                         </button>
                       </>
@@ -418,7 +418,7 @@ export default function RecursosHumanos() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-            <button onClick={() => setAlta(null)} style={btn('#f3f4f6', '#111827')}>Cancelar</button>
+            <button onClick={() => setAlta(null)} style={btn('var(--en-oscuro-superficie-2, #f3f4f6)', 'var(--en-oscuro-texto, #111827)')}>Cancelar</button>
             <button onClick={darDeAlta} disabled={guardando} style={btn('#2563eb', '#fff')}>
               <Save size={15} /> {guardando ? 'Guardando…' : 'Dar de alta'}
             </button>
@@ -442,7 +442,7 @@ export default function RecursosHumanos() {
             />
           </label>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-            <button onClick={() => setEditandoPermisos(null)} style={btn('#f3f4f6', '#111827')}>Cancelar</button>
+            <button onClick={() => setEditandoPermisos(null)} style={btn('var(--en-oscuro-superficie-2, #f3f4f6)', 'var(--en-oscuro-texto, #111827)')}>Cancelar</button>
             <button onClick={guardarPermisos} disabled={guardando} style={btn('#2563eb', '#fff')}>
               <Save size={15} /> {guardando ? 'Guardando…' : 'Guardar'}
             </button>
@@ -465,13 +465,13 @@ export default function RecursosHumanos() {
               ['Permisos', (detalle.ficha?.permisos || []).length],
             ].map(([k, v]) => (
               <div key={k}>
-                <div style={{ color: '#6b7280', fontSize: 12 }}>{k}</div>
+                <div style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: 12 }}>{k}</div>
                 <div style={{ fontWeight: 600 }}>{v || '—'}</div>
               </div>
             ))}
           </div>
           {detalle.ficha?.legajo?.notas && (
-            <p style={{ fontSize: 13, marginTop: 12, color: '#374151' }}>
+            <p style={{ fontSize: 13, marginTop: 12, color: 'var(--en-oscuro-texto, #374151)' }}>
               {detalle.ficha.legajo.notas}
             </p>
           )}
@@ -479,18 +479,18 @@ export default function RecursosHumanos() {
             Historial · {(detalle.historial || []).length} movimientos
           </h4>
           {(detalle.historial || []).length === 0 ? (
-            <p style={{ color: '#6b7280', fontSize: 13 }}>Sin movimientos registrados.</p>
+            <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: 13 }}>Sin movimientos registrados.</p>
           ) : (
             <div style={{ maxHeight: 300, overflowY: 'auto', fontSize: 12 }}>
               {detalle.historial.map((l, i) => (
-                <div key={i} style={{ borderTop: '1px solid #f3f4f6', padding: '8px 0' }}>
+                <div key={i} style={{ borderTop: '1px solid var(--en-oscuro-linea, #f3f4f6)', padding: '8px 0' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
                     <strong>{l.etiqueta}</strong>
-                    <span style={{ color: '#6b7280' }}>{fmtFecha(l.cuando)}</span>
-                    <span style={{ color: '#9ca3af' }}>por {l.actor?.email || '—'}</span>
+                    <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{fmtFecha(l.cuando)}</span>
+                    <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>por {l.actor?.email || '—'}</span>
                   </div>
                   {(l.antes || l.despues) && (
-                    <div style={{ color: '#6b7280', marginTop: 2 }}>
+                    <div style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: 2 }}>
                       <code>{JSON.stringify(l.antes)}</code> → <code>{JSON.stringify(l.despues)}</code>
                     </div>
                   )}
@@ -508,7 +508,7 @@ export default function RecursosHumanos() {
 // todavía no terminó de asegurar su cuenta. Una persona con permisos y sin
 // dos pasos es exactamente lo que hay que poder ver desde acá.
 function Acceso({ acceso }) {
-  if (!acceso) return <span style={{ color: '#6b7280' }}>—</span>;
+  if (!acceso) return <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>—</span>;
 
   const estado = acceso.invitacion?.estado;
   let texto;
@@ -541,7 +541,7 @@ function Modal({ titulo, alCerrar, ancho = 620, children }) {
       zIndex: 1000, padding: 16,
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#fff', borderRadius: 12, padding: 20,
+        background: 'var(--en-oscuro-superficie, #fff)', borderRadius: 12, padding: 20,
         width: '100%', maxWidth: ancho, maxHeight: '90vh', overflowY: 'auto',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
@@ -556,14 +556,14 @@ function Modal({ titulo, alCerrar, ancho = 620, children }) {
   );
 }
 
-const celdaCabecera = { padding: '8px 10px', fontWeight: 600, color: '#374151', fontSize: 12 };
+const celdaCabecera = { padding: '8px 10px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', fontSize: 12 };
 const celda = { padding: '10px' };
 const entrada = {
-  padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13,
+  padding: '8px 10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 6, fontSize: 13,
 };
 const btnChico = {
   display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px',
-  marginRight: 6, background: '#f3f4f6', border: '1px solid #e5e7eb',
+  marginRight: 6, background: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
   borderRadius: 6, fontSize: 12, cursor: 'pointer',
 };
 function btn(fondo, color) {

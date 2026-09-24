@@ -351,17 +351,17 @@ function Vigente({ vigente, origen }) {
     );
   }
   return (
-    <div style={{ ...tarjeta, background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-      borderColor: '#c7d2fe' }}>
+    <div style={{ ...tarjeta, background: 'var(--en-oscuro-acento-suave, linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%))',
+      borderColor: 'var(--en-oscuro-acento-borde, #c7d2fe)' }}>
       <p style={{ fontSize: '12px', margin: 0, fontWeight: 700, letterSpacing: '0.04em',
-        textTransform: 'uppercase', color: '#3730a3' }}>
+        textTransform: 'uppercase', color: 'var(--en-oscuro-acento, #3730a3)' }}>
         Versión vigente
       </p>
-      <p style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: '#312e81',
+      <p style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--en-oscuro-acento, #312e81)',
         fontFamily: 'monospace' }}>
         {vigente.version_id}
       </p>
-      <p style={{ fontSize: '13px', margin: '4px 0 0 0', color: '#4338ca', lineHeight: 1.5 }}>
+      <p style={{ fontSize: '13px', margin: '4px 0 0 0', color: 'var(--en-oscuro-acento, #4338ca)', lineHeight: 1.5 }}>
         {vigente.nota || 'Sin nota.'}
         {origen === 'copia_de_vigente'
           ? ' · El borrador es una copia idéntica de esta versión: editá algo antes de publicar.'
@@ -383,7 +383,7 @@ function EnPorciento({ valor }) {
   if (!Number.isFinite(n)) return null;
   const pct = n * 100;
   return (
-    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+    <div style={{ fontSize: '12px', color: 'var(--en-oscuro-acento, #64748b)', marginTop: '4px' }}>
       = {Number.isInteger(pct) ? pct : pct.toFixed(2).replace(/\.?0+$/, '')} %
     </div>
   );
@@ -614,7 +614,7 @@ function Historial({ filas }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {filas.map((f) => (
             <div key={f.version_id} style={{ padding: '12px 14px', borderRadius: '12px',
-              border: `1px solid ${COLOR.borde}`, backgroundColor: f.anulada ? '#f9fafb' : '#fff',
+              border: `1px solid ${COLOR.borde}`, backgroundColor: f.anulada ? 'var(--en-oscuro-superficie-2, #f9fafb)' : 'var(--en-oscuro-superficie, #fff)',
               opacity: f.anulada ? 0.6 : 1 }}>
               <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, fontFamily: 'monospace',
                 color: COLOR.texto, display: 'flex', alignItems: 'center', gap: '8px',
@@ -622,7 +622,7 @@ function Historial({ filas }) {
                 {f.version_id}
                 {f.anulada ? (
                   <span style={{ fontFamily: 'inherit', fontSize: '11px', padding: '2px 8px',
-                    borderRadius: '999px', backgroundColor: '#f3f4f6', color: COLOR.suave }}>
+                    borderRadius: '999px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: COLOR.suave }}>
                     anulada — nunca rigió
                   </span>
                 ) : null}

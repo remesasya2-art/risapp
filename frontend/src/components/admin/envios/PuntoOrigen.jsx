@@ -222,7 +222,7 @@ export default function PuntoOrigen() {
               }))}
               style={{ fontSize: '12px', fontFamily: 'monospace', padding: '4px 10px',
                 borderRadius: '999px', border: `1px solid ${COLOR.borde}`,
-                backgroundColor: '#f9fafb', color: COLOR.primarioOscuro, cursor: 'pointer' }}>
+                backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', color: COLOR.primarioOscuro, cursor: 'pointer' }}>
               {'{'}{t}{'}'}
             </button>
           ))}
@@ -244,7 +244,7 @@ export default function PuntoOrigen() {
 
       <div style={{ ...tarjeta, backgroundColor: '#0f172a', borderColor: '#0f172a' }}>
         <h3 style={{ ...titulo, color: '#fff' }}>Lo que va a ver el usuario</h3>
-        <p style={{ ...bajada, color: '#94a3b8' }}>
+        <p style={{ ...bajada, color: 'var(--en-oscuro-acento, #94a3b8)' }}>
           Renderizado por el servidor, con la misma función que usa la cotización. Si acá se ve
           mal, se ve mal sobre la caja.
         </p>

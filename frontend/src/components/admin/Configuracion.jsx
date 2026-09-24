@@ -102,22 +102,22 @@ export default function Configuracion() {
   if (cargando) {
     return (
       <div style={{ padding: '48px', textAlign: 'center' }}>
-        <RefreshCw size={26} style={{ color: '#6366f1', animation: 'spin 1s linear infinite' }} />
+        <RefreshCw size={26} style={{ color: 'var(--en-oscuro-acento, #6366f1)', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
 
   if (!ajustes?.length) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
         No hay ajustes configurables todavía.
       </div>
     );
   }
 
   const tarjeta = {
-    backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px',
-    border: '1px solid #e5e7eb',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', padding: '24px',
+    border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
   };
 
   return (
@@ -125,16 +125,16 @@ export default function Configuracion() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
         <span style={{
           width: '40px', height: '40px', borderRadius: '12px', flexShrink: 0,
-          background: '#eef2ff', display: 'inline-flex',
+          background: 'var(--en-oscuro-acento-suave, #eef2ff)', display: 'inline-flex',
           alignItems: 'center', justifyContent: 'center',
         }}>
-          <SlidersHorizontal size={19} color="#4f46e5" />
+          <SlidersHorizontal size={19} style={{ color: 'var(--en-oscuro-acento, #4f46e5)' }} />
         </span>
         <div>
-          <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: '#111827' }}>
+          <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)' }}>
             Configuración
           </h2>
-          <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#6b7280' }}>
+          <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
             Cambiar estos números no requiere desplegar nada. Queda anotado en Auditoría.
           </p>
         </div>
@@ -147,14 +147,14 @@ export default function Configuracion() {
             style={{
               paddingTop: i === 0 ? 0 : '20px',
               marginTop: i === 0 ? 0 : '20px',
-              borderTop: i === 0 ? 'none' : '1px solid #f3f4f6',
+              borderTop: i === 0 ? 'none' : '1px solid var(--en-oscuro-linea, #f3f4f6)',
             }}>
             <label htmlFor={`aj-${a.clave}`} style={{
-              display: 'block', fontSize: '14px', fontWeight: 600, color: '#111827',
+              display: 'block', fontSize: '14px', fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)',
             }}>
               {a.etiqueta}
             </label>
-            <p style={{ margin: '4px 0 10px', fontSize: '12.5px', color: '#6b7280', lineHeight: 1.5 }}>
+            <p style={{ margin: '4px 0 10px', fontSize: '12.5px', color: 'var(--en-oscuro-texto-2, #6b7280)', lineHeight: 1.5 }}>
               {a.ayuda}
             </p>
 
@@ -168,15 +168,15 @@ export default function Configuracion() {
                 onChange={(e) => setEscrito({ ...escrito, [a.clave]: e.target.value })}
                 style={{
                   width: '160px', height: '44px', padding: '0 12px',
-                  borderRadius: '10px', border: '1px solid #d1d5db',
-                  fontSize: '15px', fontWeight: 600, color: '#111827',
+                  borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
+                  fontSize: '15px', fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)',
                   fontVariantNumeric: 'tabular-nums',
                 }}
               />
               {a.unidad ? (
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>{a.unidad}</span>
+                <span style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{a.unidad}</span>
               ) : null}
-              <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: 'auto' }}>
+              <span style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginLeft: 'auto' }}>
                 entre {a.minimo} y {a.maximo} · de fábrica {a.defecto}
               </span>
             </div>
@@ -189,7 +189,7 @@ export default function Configuracion() {
           data-testid="guardar-config"
           style={{
             height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
-            background: hayCambios ? '#4f46e5' : '#c7d2fe', color: '#fff',
+            background: hayCambios ? 'var(--en-oscuro-acento, #4f46e5)' : 'var(--en-oscuro-acento-suave, #c7d2fe)', color: '#fff',
             fontSize: '14.5px', fontWeight: 600,
             cursor: guardando || !hayCambios ? 'not-allowed' : 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: '8px',
@@ -202,7 +202,7 @@ export default function Configuracion() {
           data-testid="fabrica-config"
           style={{
             height: '46px', padding: '0 18px', borderRadius: '11px',
-            border: '1px solid #d1d5db', background: '#fff', color: '#374151',
+            border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', background: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-texto, #374151)',
             fontSize: '14.5px', fontWeight: 600, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: '8px',
           }}>

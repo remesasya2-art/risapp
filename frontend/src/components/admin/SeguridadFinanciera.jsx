@@ -72,15 +72,15 @@ import {
  * informe no se pinta, se lee— y ninguno aparece nunca sin su palabra al lado.
  */
 const C = {
-  tinta: '#0B1F33',
-  texto: '#1F2D3D',
+  tinta: 'var(--en-oscuro-acento, #0B1F33)',
+  texto: 'var(--en-oscuro-texto, #1F2D3D)',
   segundo: '#5A6B7B',
-  tenue: '#8A99A8',
-  linea: '#DEE4EA',
-  lineaFuerte: '#C3CEDA',
-  lienzo: '#FFFFFF',
-  fondo: '#F6F8FA',
-  acento: '#14395E',
+  tenue: 'var(--en-oscuro-texto-3, #8A99A8)',
+  linea: 'var(--en-oscuro-linea, #DEE4EA)',
+  lineaFuerte: 'var(--en-oscuro-linea-fuerte, #C3CEDA)',
+  lienzo: 'var(--en-oscuro-superficie, #FFFFFF)',
+  fondo: 'var(--en-oscuro-superficie-2, #F6F8FA)',
+  acento: 'var(--en-oscuro-acento, #14395E)',
   conforme: '#0F6B41',
   excepcion: '#A11B1B',
   reparo: '#8A5A00',
@@ -258,7 +258,11 @@ function Tabla({ cabeceras, filas, vacio = 'Sin registros.' }) {
   );
 }
 
-function Cifra({ etiqueta, valor, sufijo, destacada, color }) {
+// Recibe `tono` y no `color` a propósito: una etiqueta con mayúscula y
+// `color=` se lee como un ícono, y la herramienta que pasó los íconos a
+// `style` para el modo oscuro le movió el dato a un estilo que nadie lee: la
+// barra salía violeta en vez de celeste, también en claro.
+function Cifra({ etiqueta, valor, sufijo, destacada, tono: color }) {
   return (
     <div>
       <p style={microEtiqueta}>{etiqueta}</p>
@@ -381,7 +385,7 @@ function Pozo({ bloque }) {
         <Cifra etiqueta={`Pasivo · ${v.moneda || ''}`} valor={monto(v.pasivo?.total)} />
         <Cifra etiqueta={`Activo de respaldo · ${v.moneda || ''}`} valor={monto(v.activo?.total)} />
         <Cifra etiqueta="Diferencia" valor={monto(v.diferencia)} destacada
-          color={cubre ? C.conforme : C.excepcion} sufijo={v.moneda} />
+          sufijo={v.moneda} tono={cubre ? C.conforme : C.excepcion} />
       </div>
 
       <p style={{ margin: 0, fontSize: '12.5px', color: C.segundo, lineHeight: 1.65 }}>
@@ -465,8 +469,7 @@ function Descuadres({ bloque, irAlLibro }) {
         gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <Cifra etiqueta="Usuarios revisados" valor={entero(v.usuarios_revisados)} />
         <Cifra etiqueta="Asientos leídos" valor={entero(v.lineas_leidas)} />
-        <Cifra etiqueta="Cuentas sin cuadrar" valor={entero(v.descuadres_totales)} destacada
-          color={cuadra ? C.conforme : C.excepcion} />
+        <Cifra etiqueta="Cuentas sin cuadrar" valor={entero(v.descuadres_totales)} destacada tono={cuadra ? C.conforme : C.excepcion} />
       </div>
 
       <p style={{ margin: 0, fontSize: '12.5px', color: C.segundo, lineHeight: 1.65 }}>
@@ -530,8 +533,7 @@ function Integridad({ bloque, irAlLibro }) {
       <div style={{ display: 'grid', gap: '16px',
         gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <Cifra etiqueta="Asientos revisados" valor={entero(v.lineas_revisadas)} />
-        <Cifra etiqueta="Tipos de defecto" valor={entero(hallazgos.length)} destacada
-          color={v.sano ? C.conforme : C.excepcion} />
+        <Cifra etiqueta="Tipos de defecto" valor={entero(hallazgos.length)} destacada tono={v.sano ? C.conforme : C.excepcion} />
       </div>
 
       <p style={{ margin: 0, fontSize: '12.5px', color: C.segundo, lineHeight: 1.65 }}>
@@ -568,8 +570,7 @@ function Llaves({ bloque }) {
       <div style={{ display: 'grid', gap: '16px',
         gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <Cifra etiqueta="Con llaves del dinero" valor={entero(llaveros.length)} destacada />
-        <Cifra etiqueta="Acceso sin terminar" valor={entero(aMedias.length)}
-          color={aMedias.length > 0 ? C.reparo : C.conforme} />
+        <Cifra etiqueta="Acceso sin terminar" valor={entero(aMedias.length)} tono={aMedias.length > 0 ? C.reparo : C.conforme} />
       </div>
 
       {aMedias.length > 0 ? (
@@ -932,7 +933,7 @@ function Renglon({ si, texto }) {
   return (
     <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px',
       fontSize: '12.5px', color: C.texto }}>
-      <Icono size={15} color={color} style={{ flexShrink: 0 }} />
+      <Icono size={15} style={{ flexShrink: 0, color: color }} />
       {texto}
       {si === null || si === undefined ? (
         <span style={{ color: C.tenue }}>· no se pudo comprobar</span>

@@ -20,9 +20,9 @@ import api from '../../utils/api';
 
 const PERIODOS = [7, 30, 90];
 
-const tarjeta = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px' };
-const rotulo = { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: '#6b7280', marginBottom: 4 };
-const titulo = { fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 10px 0' };
+const tarjeta = { background: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 12, padding: '14px 16px' };
+const rotulo = { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: 4 };
+const titulo = { fontSize: 15, fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 10px 0' };
 
 const fmtDia = (iso) => {
   if (!iso) return '—';
@@ -32,10 +32,14 @@ const fmtDia = (iso) => {
 
 const porcentaje = (parte, todo) => (todo ? Math.round((parte / todo) * 100) : 0);
 
-function Barra({ valor, maximo, color = '#6366f1' }) {
+// Recibe `tono` y no `color` a propósito: una etiqueta con mayúscula y
+// `color=` se lee como un ícono, y la herramienta que pasó los íconos a
+// `style` para el modo oscuro le movió el dato a un estilo que nadie lee: la
+// barra salía violeta en vez de celeste, también en claro.
+function Barra({ valor, maximo, tono: color = '#6366f1' }) {
   const ancho = maximo ? Math.max(2, Math.round((valor / maximo) * 100)) : 0;
   return (
-    <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+    <div style={{ height: 8, background: 'var(--en-oscuro-superficie-2, #f3f4f6)', borderRadius: 4, overflow: 'hidden' }}>
       <div style={{ width: `${ancho}%`, height: '100%', background: color, borderRadius: 4 }} />
     </div>
   );
@@ -45,8 +49,8 @@ function Cifra({ etiqueta, valor, detalle, testid }) {
   return (
     <div style={tarjeta} data-testid={testid}>
       <div style={rotulo}>{etiqueta}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: '#111827', lineHeight: 1.1 }}>{valor ?? '—'}</div>
-      {detalle ? <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{detalle}</div> : null}
+      <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', lineHeight: 1.1 }}>{valor ?? '—'}</div>
+      {detalle ? <div style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: 4 }}>{detalle}</div> : null}
     </div>
   );
 }
@@ -85,8 +89,8 @@ export default function Uso() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="uso">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <BarChart3 size={20} color="#6366f1" />
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: 0 }}>Uso</h2>
+        <BarChart3 size={20} style={{ color: 'var(--en-oscuro-acento, #6366f1)' }} />
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Uso</h2>
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
           {PERIODOS.map((p) => (
             <button
@@ -96,9 +100,9 @@ export default function Uso() {
               data-testid={`uso-dias-${p}`}
               style={{
                 padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                border: '1px solid ' + (dias === p ? '#6366f1' : '#d1d5db'),
-                background: dias === p ? '#eef2ff' : '#fff',
-                color: dias === p ? '#4338ca' : '#374151',
+                border: '1px solid ' + (dias === p ? 'var(--en-oscuro-acento, #6366f1)' : 'var(--en-oscuro-linea-fuerte, #d1d5db)'),
+                background: dias === p ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)',
+                color: dias === p ? 'var(--en-oscuro-acento, #4338ca)' : 'var(--en-oscuro-texto, #374151)',
               }}
             >
               {p} días
@@ -108,7 +112,7 @@ export default function Uso() {
             type="button"
             onClick={() => setVuelta((v) => v + 1)}
             title="Volver a leer"
-            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', background: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer' }}
           >
             <RefreshCw size={14} />
           </button>
@@ -116,7 +120,7 @@ export default function Uso() {
       </div>
 
       {cargando && !datos ? (
-        <div style={{ color: '#6b7280', fontSize: 14 }}>Leyendo…</div>
+        <div style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: 14 }}>Leyendo…</div>
       ) : null}
 
       {datos ? (
@@ -142,28 +146,28 @@ export default function Uso() {
               ].map(([nombre, valor, color]) => (
                 <div key={nombre} style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <span style={{ color: '#374151' }}>{nombre}</span>
-                    <span style={{ color: '#111827', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--en-oscuro-texto, #374151)' }}>{nombre}</span>
+                    <span style={{ color: 'var(--en-oscuro-texto, #111827)', fontWeight: 600 }}>
                       {valor ?? 0}
-                      <span style={{ color: '#9ca3af', fontWeight: 400 }}> · {porcentaje(valor, embudo.registrados)}%</span>
+                      <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontWeight: 400 }}> · {porcentaje(valor, embudo.registrados)}%</span>
                     </span>
                   </div>
-                  <Barra valor={valor || 0} maximo={embudo.registrados || 0} color={color} />
+                  <Barra valor={valor || 0} maximo={embudo.registrados || 0} tono={color} />
                 </div>
               ))}
-              <div style={{ fontSize: 12, color: '#6b7280' }}>
+              <div style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                 En revisión: {embudo.en_revision ?? 0} · Rechazadas: {embudo.rechazados ?? 0}
               </div>
             </div>
 
             <div style={tarjeta} data-testid="uso-altas-semana">
               <h3 style={titulo}>Altas por semana</h3>
-              {semanas.length === 0 ? <div style={{ fontSize: 13, color: '#6b7280' }}>Sin altas en el período.</div> : null}
+              {semanas.length === 0 ? <div style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Sin altas en el período.</div> : null}
               {semanas.map((s) => (
                 <div key={s.semana} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 40px', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: '#6b7280' }}>{fmtDia(s.semana)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{fmtDia(s.semana)}</span>
                   <Barra valor={s.cuantos} maximo={maxSemana} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', textAlign: 'right' }}>{s.cuantos}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)', textAlign: 'right' }}>{s.cuantos}</span>
                 </div>
               ))}
             </div>
@@ -171,15 +175,15 @@ export default function Uso() {
 
           <div style={tarjeta} data-testid="uso-operaciones">
             <h3 style={titulo}>Operaciones en {dias} días</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) 2fr 80px 90px', gap: 8, fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) 2fr 80px 90px', gap: 8, fontSize: 11, color: 'var(--en-oscuro-texto-2, #6b7280)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
               <span>Operación</span><span /><span style={{ textAlign: 'right' }}>Iniciadas</span><span style={{ textAlign: 'right' }}>Terminadas</span>
             </div>
             {operaciones.map((o) => (
               <div key={o.nombre} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) 2fr 80px 90px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: '#111827' }}>{o.nombre}</span>
-                <Barra valor={o.iniciadas} maximo={maxOperacion} color="#0ea5e9" />
+                <span style={{ fontSize: 13, color: 'var(--en-oscuro-texto, #111827)' }}>{o.nombre}</span>
+                <Barra valor={o.iniciadas} maximo={maxOperacion} tono="var(--en-oscuro-info, #0ea5e9)" />
                 <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right' }}>{o.iniciadas}</span>
-                <span style={{ fontSize: 13, color: '#6b7280', textAlign: 'right' }}>{o.terminadas ?? '—'}</span>
+                <span style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', textAlign: 'right' }}>{o.terminadas ?? '—'}</span>
               </div>
             ))}
           </div>
@@ -187,21 +191,21 @@ export default function Uso() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
             <div style={tarjeta} data-testid="uso-funciones">
               <h3 style={titulo}>Funciones más usadas</h3>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: 10 }}>
                 Pedidos de clientes con sesión, desde el {fmtDia(datos.desde)}. Sin el personal ni los sondeos automáticos.
               </div>
               {funciones.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#6b7280' }}>Todavía no hay nada contado en este período.</div>
+                <div style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Todavía no hay nada contado en este período.</div>
               ) : null}
               {funciones.map((f) => (
                 <div key={`${f.metodo} ${f.ruta}`} style={{ marginBottom: 10 }} data-testid={`uso-funcion-${f.metodo}-${f.ruta}`}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 4 }}>
-                    <span style={{ color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: 'var(--en-oscuro-texto, #111827)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {f.nombre || <code style={{ fontSize: 12 }}>{f.metodo} {f.ruta}</code>}
                     </span>
-                    <span style={{ whiteSpace: 'nowrap', color: '#111827', fontWeight: 600 }}>
+                    <span style={{ whiteSpace: 'nowrap', color: 'var(--en-oscuro-texto, #111827)', fontWeight: 600 }}>
                       {f.pedidos}
-                      <span style={{ color: '#9ca3af', fontWeight: 400 }}> · {f.cuentas} {f.cuentas === 1 ? 'cuenta' : 'cuentas'}</span>
+                      <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontWeight: 400 }}> · {f.cuentas} {f.cuentas === 1 ? 'cuenta' : 'cuentas'}</span>
                     </span>
                   </div>
                   <Barra valor={f.pedidos} maximo={maxFuncion} />
@@ -209,13 +213,13 @@ export default function Uso() {
               ))}
 
               {sinUso.length > 0 ? (
-                <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 14, paddingTop: 12 }} data-testid="uso-sin-uso">
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 4 }}>
+                <div style={{ borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', marginTop: 14, paddingTop: 12 }} data-testid="uso-sin-uso">
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)', marginBottom: 4 }}>
                     Nadie las usó en {dias} días
                   </div>
                   {/* El aviso va ARRIBA de la lista y no debajo: leído después,
                       la lista ya se interpretó como «esto sobra». */}
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: 10 }}>
                     Una función en cero puede ser una que nadie necesita, o una a la que no se
                     llega porque el botón quedó escondido. El número no distingue las dos.
                   </div>
@@ -225,8 +229,8 @@ export default function Uso() {
                         key={n}
                         data-testid={`uso-sin-uso-${n}`}
                         style={{
-                          fontSize: 12, color: '#6b7280', background: '#f9fafb',
-                          border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 8px',
+                          fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', background: 'var(--en-oscuro-superficie-2, #f9fafb)',
+                          border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 6, padding: '3px 8px',
                         }}
                       >
                         {n}
@@ -245,13 +249,13 @@ export default function Uso() {
                     key={d.dia}
                     title={`${fmtDia(d.dia)}: ${d.pedidos} pedidos, ${d.cuentas} cuentas`}
                     style={{
-                      flex: 1, minWidth: 2, borderRadius: '3px 3px 0 0', background: d.pedidos ? '#6366f1' : '#e5e7eb',
+                      flex: 1, minWidth: 2, borderRadius: '3px 3px 0 0', background: d.pedidos ? 'var(--en-oscuro-acento, #6366f1)' : 'var(--en-oscuro-superficie-3, #e5e7eb)',
                       height: `${maxDia ? Math.max(3, Math.round((d.pedidos / maxDia) * 100)) : 3}%`,
                     }}
                   />
                 ))}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--en-oscuro-texto-3, #9ca3af)', marginTop: 6 }}>
                 <span>{fmtDia(datos.desde)}</span>
                 <span>{fmtDia(datos.hasta)}</span>
               </div>

@@ -58,16 +58,16 @@ export default function TasasCriptoSection() {
   if (loading) return null;
 
   return (
-    <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e5e7eb' }}>
-      <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#374151', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
+      <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <Wallet size={18} /> Envíos con saldo cripto (USDT / USDC → VES)
       </h4>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        <div style={{ padding: '20px', backgroundColor: '#f0fdfa', borderRadius: '14px', border: '1px solid #99f6e4' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0d9488', marginBottom: '12px' }}>
+        <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdfa)', borderRadius: '14px', border: '1px solid var(--en-oscuro-exito-borde, #99f6e4)' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-info, #0d9488)', marginBottom: '12px' }}>
             USDT → VES
           </label>
-          <p style={{ fontSize: '13px', color: '#374151', margin: '0 0 12px 0' }}>
+          <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 12px 0' }}>
             Actual: {rates?.usdtris_to_ves ? `1 USDT = ${rates.usdtris_to_ves} VES` : 'sin configurar'}
           </p>
           <input
@@ -75,18 +75,18 @@ export default function TasasCriptoSection() {
             value={usdtInput}
             onChange={(e) => setUsdtInput(e.target.value)}
             placeholder={rates?.usdtris_to_ves != null ? String(rates.usdtris_to_ves) : '0'}
-            style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
           />
           <button onClick={guardarUsdt} disabled={busyUsdt}
             style={{ width: '100%', height: '44px', borderRadius: '10px', border: 'none', backgroundColor: '#0d9488', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busyUsdt ? 'not-allowed' : 'pointer', opacity: busyUsdt ? 0.6 : 1 }}>
             Actualizar USDT → VES
           </button>
         </div>
-        <div style={{ padding: '20px', backgroundColor: '#eff6ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#2563eb', marginBottom: '12px' }}>
+        <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', borderRadius: '14px', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #2563eb)', marginBottom: '12px' }}>
             USDC → VES
           </label>
-          <p style={{ fontSize: '13px', color: '#374151', margin: '0 0 12px 0' }}>
+          <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 12px 0' }}>
             Actual: {rates?.usdcris_to_ves ? `1 USDC = ${rates.usdcris_to_ves} VES` : 'sin configurar'}
           </p>
           <input
@@ -94,15 +94,15 @@ export default function TasasCriptoSection() {
             value={usdcInput}
             onChange={(e) => setUsdcInput(e.target.value)}
             placeholder={rates?.usdcris_to_ves != null ? String(rates.usdcris_to_ves) : '0'}
-            style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
           />
           <button onClick={guardarUsdc} disabled={busyUsdc}
-            style={{ width: '100%', height: '44px', borderRadius: '10px', border: 'none', backgroundColor: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busyUsdc ? 'not-allowed' : 'pointer', opacity: busyUsdc ? 0.6 : 1 }}>
+            style={{ width: '100%', height: '44px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--en-oscuro-acento, #2563eb)', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busyUsdc ? 'not-allowed' : 'pointer', opacity: busyUsdc ? 0.6 : 1 }}>
             Actualizar USDC → VES
           </button>
         </div>
       </div>
-      <p style={{ fontSize: '12px', color: '#9ca3af', margin: '12px 0 0 0' }}>
+      <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '12px 0 0 0' }}>
         Esta tasa no aplica el ajuste automático fuera de horario (a diferencia de RIS → VES). Es un valor fijo que configuras aquí, y mientras no la configures los usuarios no podrán enviar con ese saldo.
       </p>
     </div>

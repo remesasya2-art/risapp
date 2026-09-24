@@ -66,14 +66,14 @@ export const WipeButton = ({ mode = 'all', label, onSuccess, userRole, size = 'm
         onClick={() => setOpen(true)}
         style={{
           ...btnStyle,
-          borderRadius: '10px', border: '1px solid #dc2626',
-          backgroundColor: '#fff', color: '#dc2626',
+          borderRadius: '10px', border: '1px solid var(--en-oscuro-error, #dc2626)',
+          backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-error, #dc2626)',
           fontWeight: '600', cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: '6px',
           transition: 'all 0.15s'
         }}
-        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#fef2f2'; }}
-        onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff'; }}
+        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--en-oscuro-error-suave, #fef2f2)'; }}
+        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'var(--en-oscuro-superficie, #fff)'; }}
         data-testid={`wipe-${mode}-btn`}
       >
         <Trash2 style={{ width: '14px', height: '14px' }} /> {label || config.defaultLabel}
@@ -87,7 +87,7 @@ export const WipeButton = ({ mode = 'all', label, onSuccess, userRole, size = 'm
         }} onClick={() => !loading && setOpen(false)}>
           <div onClick={e => e.stopPropagation()}
             style={{
-              backgroundColor: '#fff', borderRadius: '16px', padding: '28px',
+              backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '16px', padding: '28px',
               maxWidth: '480px', width: '100%',
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
             }}
@@ -96,27 +96,27 @@ export const WipeButton = ({ mode = 'all', label, onSuccess, userRole, size = 'm
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <div style={{
                 width: '48px', height: '48px', borderRadius: '12px',
-                backgroundColor: '#fef2f2', display: 'flex',
+                backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', display: 'flex',
                 alignItems: 'center', justifyContent: 'center'
               }}>
-                <AlertTriangle style={{ width: '24px', height: '24px', color: '#dc2626' }} />
+                <AlertTriangle style={{ width: '24px', height: '24px', color: 'var(--en-oscuro-error, #dc2626)' }} />
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                 {config.title}
               </h3>
             </div>
 
-            <p style={{ fontSize: '14px', color: '#374151', lineHeight: '1.5', margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #374151)', lineHeight: '1.5', margin: '0 0 16px 0' }}>
               {config.warning}
             </p>
 
-            <div style={{ padding: '12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', marginBottom: '16px' }}>
-              <p style={{ fontSize: '13px', color: '#991b1b', fontWeight: '600', margin: 0 }}>
+            <div style={{ padding: '12px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)', borderRadius: '10px', marginBottom: '16px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-error, #991b1b)', fontWeight: '600', margin: 0 }}>
                 Esta acción NO se puede deshacer.
               </p>
             </div>
 
-            <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', fontWeight: '500', display: 'block', marginBottom: '6px' }}>
               Para confirmar, escribe <strong>CONFIRMAR</strong> a continuación:
             </label>
             <input
@@ -125,7 +125,7 @@ export const WipeButton = ({ mode = 'all', label, onSuccess, userRole, size = 'm
               placeholder="CONFIRMAR"
               style={{
                 width: '100%', padding: '12px', borderRadius: '10px',
-                border: '1px solid #d1d5db', fontSize: '15px',
+                border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '15px',
                 boxSizing: 'border-box', marginBottom: '16px',
                 fontFamily: 'monospace', letterSpacing: '1px'
               }}
@@ -138,8 +138,8 @@ export const WipeButton = ({ mode = 'all', label, onSuccess, userRole, size = 'm
                 disabled={loading}
                 style={{
                   padding: '10px 18px', borderRadius: '10px',
-                  border: '1px solid #d1d5db', backgroundColor: '#fff',
-                  color: '#374151', fontSize: '13px', fontWeight: '600',
+                  border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
+                  color: 'var(--en-oscuro-texto, #374151)', fontSize: '13px', fontWeight: '600',
                   cursor: loading ? 'not-allowed' : 'pointer'
                 }}
                 data-testid="wipe-cancel-btn"

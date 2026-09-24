@@ -139,7 +139,7 @@ export default function OperacionPanel({ onTrabajoHecho }) {
               style={{ padding: '8px 14px', borderRadius: '10px', fontSize: '14px',
                 fontWeight: 600, cursor: 'pointer',
                 border: `1px solid ${activa ? COLOR.primario : COLOR.borde}`,
-                backgroundColor: activa ? COLOR.primarioSuave : '#fff',
+                backgroundColor: activa ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                 color: activa ? COLOR.primarioOscuro : COLOR.suave }}>
               {p.etiqueta}
             </button>
@@ -158,7 +158,7 @@ export default function OperacionPanel({ onTrabajoHecho }) {
             {parada.mueveSaldo ? (
               <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 9px',
                 borderRadius: '999px', backgroundColor: COLOR.alertaSuave,
-                color: '#92400e', border: '1px solid #fde68a' }}>
+                color: 'var(--en-oscuro-alerta, #92400e)', border: '1px solid var(--en-oscuro-alerta-borde, #fde68a)' }}>
                 mueve saldo
               </span>
             ) : null}
@@ -239,7 +239,7 @@ function Fila({ envio, parada, abierto, setAbierto, onListo, borrador, onBorrado
 
   return (
     <div style={{ ...tarjeta, padding: 0, overflow: 'hidden', marginBottom: '10px',
-      borderColor: frena ? '#fecaca' : COLOR.borde }}>
+      borderColor: frena ? 'var(--en-oscuro-error-borde, #fecaca)' : COLOR.borde }}>
       <button type="button"
         onClick={() => setAbierto(expandido ? null : envio.envio_id)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
@@ -261,8 +261,8 @@ function Fila({ envio, parada, abierto, setAbierto, onListo, borrador, onBorrado
         {dias !== null && dias !== undefined ? (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px',
             fontSize: '12px', fontWeight: 700, padding: '4px 10px', borderRadius: '999px',
-            backgroundColor: apremia ? COLOR.errorSuave : '#f3f4f6',
-            color: apremia ? '#991b1b' : COLOR.suave }}>
+            backgroundColor: apremia ? COLOR.errorSuave : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+            color: apremia ? 'var(--en-oscuro-error, #991b1b)' : COLOR.suave }}>
             <Clock size={12} />
             {dias < 0 ? `guarda vencida hace ${-dias} d` : `${dias} d de guarda`}
           </span>
@@ -270,19 +270,19 @@ function Fila({ envio, parada, abierto, setAbierto, onListo, borrador, onBorrado
 
         {envio.foto_repetida_en ? (
           <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px',
-            borderRadius: '999px', backgroundColor: COLOR.errorSuave, color: '#991b1b' }}>
+            borderRadius: '999px', backgroundColor: COLOR.errorSuave, color: 'var(--en-oscuro-error, #991b1b)' }}>
             foto repetida
           </span>
         ) : null}
 
         {frena ? (
           <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px',
-            borderRadius: '999px', backgroundColor: COLOR.errorSuave, color: '#991b1b' }}>
+            borderRadius: '999px', backgroundColor: COLOR.errorSuave, color: 'var(--en-oscuro-error, #991b1b)' }}>
             no puede salir
           </span>
         ) : !envio.puede_salir ? (
           <span style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px',
-            borderRadius: '999px', backgroundColor: '#f3f4f6', color: COLOR.suave }}>
+            borderRadius: '999px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: COLOR.suave }}>
             con partida pendiente
           </span>
         ) : null}

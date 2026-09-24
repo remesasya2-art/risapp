@@ -44,12 +44,12 @@ const primeroDelMes = () => {
 };
 
 const COLOR = {
-  borde: '#e5e7eb', suave: '#6b7280', texto: '#111827',
-  primario: '#5B4FE9', primarioSuave: '#eef0ff',
+  borde: 'var(--en-oscuro-linea, #e5e7eb)', suave: 'var(--en-oscuro-texto-2, #6b7280)', texto: 'var(--en-oscuro-texto, #111827)',
+  primario: 'var(--en-oscuro-acento, #5B4FE9)', primarioSuave: 'var(--en-oscuro-acento-suave, #eef0ff)',
 };
 
 const tarjeta = {
-  backgroundColor: '#fff', borderRadius: '16px', padding: '18px',
+  backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '16px', padding: '18px',
   border: `1px solid ${COLOR.borde}`,
 };
 
@@ -183,7 +183,7 @@ export default function Reportes() {
                   style={{ padding: '7px 13px', borderRadius: '999px', fontSize: '13px',
                     fontWeight: 600, cursor: 'pointer',
                     border: `1px solid ${activo ? COLOR.primario : COLOR.borde}`,
-                    backgroundColor: activo ? COLOR.primarioSuave : '#fff',
+                    backgroundColor: activo ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                     color: activo ? COLOR.primario : COLOR.suave }}>
                   {f.etiqueta}
                 </button>
@@ -246,10 +246,10 @@ export default function Reportes() {
       </div>
 
       {datos?.truncado ? (
-        <div style={{ ...tarjeta, backgroundColor: '#fef2f2', borderColor: '#fecaca',
+        <div style={{ ...tarjeta, backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', borderColor: 'var(--en-oscuro-error-borde, #fecaca)',
           display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-          <AlertTriangle size={18} color="#b91c1c" style={{ flexShrink: 0 }} />
-          <div style={{ fontSize: '13px', color: '#991b1b' }}>
+          <AlertTriangle size={18} style={{ color: 'var(--en-oscuro-error, #b91c1c)', flexShrink: 0 }} />
+          <div style={{ fontSize: '13px', color: 'var(--en-oscuro-error, #991b1b)' }}>
             <strong>Estos números están incompletos.</strong> El periodo superó el
             tope de lectura, así que los totales de abajo <strong>no son el total
             real</strong>. Pedí el reporte en tramos más cortos.
@@ -298,7 +298,7 @@ export default function Reportes() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb' }}>
+                <tr style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }}>
                   {['Fecha', 'Flujo', 'Referencia', 'Usuario', 'Contraparte',
                     'Monto', 'Destino', 'Tasa', 'Operador', 'Compr.'].map((t) => (
                     <th key={t} style={celdaCabecera}>{t}</th>
@@ -362,7 +362,7 @@ export default function Reportes() {
 const entrada = {
   width: '100%', padding: '9px 11px', borderRadius: '10px',
   border: `1px solid ${COLOR.borde}`, fontSize: '13px', color: COLOR.texto,
-  backgroundColor: '#fff', boxSizing: 'border-box',
+  backgroundColor: 'var(--en-oscuro-superficie, #fff)', boxSizing: 'border-box',
 };
 
 const celdaCabecera = {
@@ -395,7 +395,7 @@ function Boton({ children, onClick, cargando, disabled, principal }) {
         padding: '9px 15px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
         cursor: inactivo ? 'not-allowed' : 'pointer',
         border: principal ? 'none' : `1px solid ${COLOR.borde}`,
-        backgroundColor: principal ? COLOR.primario : '#fff',
+        backgroundColor: principal ? COLOR.primario : 'var(--en-oscuro-superficie, #fff)',
         color: principal ? '#fff' : COLOR.texto,
         opacity: inactivo ? 0.5 : 1 }}>
       {cargando ? 'Trabajando…' : children}

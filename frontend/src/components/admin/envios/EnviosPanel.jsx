@@ -93,7 +93,7 @@ export default function EnviosPanel() {
                 padding: '8px 14px', borderRadius: '10px', fontSize: '14px', fontWeight: 600,
                 cursor: 'pointer',
                 border: `1px solid ${activa ? COLOR.primario : COLOR.borde}`,
-                backgroundColor: activa ? COLOR.primarioSuave : '#fff',
+                backgroundColor: activa ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                 color: activa ? COLOR.primarioOscuro : COLOR.suave }}>
               <Icono size={15} /> {etiqueta}
             </button>

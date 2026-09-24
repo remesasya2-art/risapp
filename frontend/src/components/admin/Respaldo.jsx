@@ -22,12 +22,12 @@ import { Archive, FileCheck, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
-const tarjeta = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 16px' };
-const campo = { width: '100%', padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14 };
-const boton = { padding: '9px 14px', borderRadius: 8, border: 'none', background: '#5B4FE9', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 };
-const botonSuave = { ...boton, background: '#eef2ff', color: '#3B3A9E' };
-const th = { textAlign: 'left', fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 8px', borderBottom: '1px solid #e5e7eb' };
-const td = { padding: '7px 8px', borderBottom: '1px solid #f3f4f6', fontSize: 13, verticalAlign: 'top' };
+const tarjeta = { background: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 12, padding: '14px 16px' };
+const campo = { width: '100%', padding: '9px 10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 8, fontSize: 14 };
+const boton = { padding: '9px 14px', borderRadius: 8, border: 'none', background: 'var(--en-oscuro-acento, #5B4FE9)', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 };
+const botonSuave = { ...boton, background: 'var(--en-oscuro-acento-suave, #eef2ff)', color: 'var(--en-oscuro-acento, #3B3A9E)' };
+const th = { textAlign: 'left', fontSize: 11, color: 'var(--en-oscuro-texto-2, #6b7280)', textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 8px', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)' };
+const td = { padding: '7px 8px', borderBottom: '1px solid var(--en-oscuro-linea, #f3f4f6)', fontSize: 13, verticalAlign: 'top' };
 const mono = { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 };
 const fechaYHora = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 
@@ -167,11 +167,11 @@ export default function Respaldo() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <strong style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}><Archive size={18} /> Respaldo de la base de la aplicación</strong>
           <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {datos ? <span style={{ fontSize: 12, color: datos.llave_configurada ? '#6b7280' : '#b45309' }}>{datos.llave_configurada ? 'llave configurada: los respaldos salen firmados' : 'SIN llave (LLAVE_DE_RESPALDO): los respaldos salen sin firma'} · {datos.colecciones_que_se_conservan.length} colecciones</span> : null}
+            {datos ? <span style={{ fontSize: 12, color: datos.llave_configurada ? 'var(--en-oscuro-texto-2, #6b7280)' : 'var(--en-oscuro-alerta, #b45309)' }}>{datos.llave_configurada ? 'llave configurada: los respaldos salen firmados' : 'SIN llave (LLAVE_DE_RESPALDO): los respaldos salen sin firma'} · {datos.colecciones_que_se_conservan.length} colecciones</span> : null}
             <button type="button" onClick={cargar} style={{ ...botonSuave, padding: '6px 9px' }} title="Actualizar"><RefreshCw size={14} /></button>
           </span>
         </div>
-        <p style={{ margin: '8px 0 0', fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+        <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', lineHeight: 1.5 }}>
           Mongo está en Railway, que no respalda la base por su cuenta. Este botón exporta las cuentas, las verificaciones, los envíos, los cobros, los libros, la configuración y la auditoría (no las sesiones ni lo que se regenera solo) en un archivo de una línea por documento, con hash de cierre y firma. <strong>El archivo se baja a tu computadora y se guarda afuera, en un lugar tan protegido como la base</strong>: lleva los datos de todos los clientes. La base sólo registra que se hizo, y quién. Y un respaldo que no se probó es una esperanza: la comprobación de la derecha lo lee entero.
         </p>
       </div>
@@ -179,13 +179,13 @@ export default function Respaldo() {
         <div style={tarjeta}>
           <button type="button" onClick={crear} disabled={ocupado} style={boton} data-testid="respaldo-crear"><Archive size={14} /> Crear y bajar un respaldo ahora</button>
           {ultimo ? (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#374151' }} data-testid="respaldo-ultimo">
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--en-oscuro-texto, #374151)' }} data-testid="respaldo-ultimo">
               <div>{ultimo.documentos} documentos · hash <span style={mono}>{ultimo.hash.slice(0, 16)}…</span></div>
-              <div>{ultimo.firmado ? <>Firmado. La firma viaja en la última línea del archivo: no hay nada que copiar. <span style={{ ...mono, wordBreak: 'break-all', color: '#9ca3af' }} data-testid="respaldo-firma">{ultimo.firma.slice(0, 16)}…</span></> : 'Sin firma: falta la llave de respaldo.'}</div>
+              <div>{ultimo.firmado ? <>Firmado. La firma viaja en la última línea del archivo: no hay nada que copiar. <span style={{ ...mono, wordBreak: 'break-all', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} data-testid="respaldo-firma">{ultimo.firma.slice(0, 16)}…</span></> : 'Sin firma: falta la llave de respaldo.'}</div>
             </div>
           ) : null}
           {datos ? (
-            <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: datos.automatico.configurado && datos.automatico.encendido ? '#f0fdf4' : '#fffbeb', fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }} data-testid="respaldo-automatico">
+            <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: datos.automatico.configurado && datos.automatico.encendido ? 'var(--en-oscuro-exito-suave, #f0fdf4)' : 'var(--en-oscuro-alerta-suave, #fffbeb)', fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }} data-testid="respaldo-automatico">
               <span>
                 <strong>Respaldo automático</strong>{' · '}
                 {!datos.automatico.configurado ? 'sin almacén de objetos: no tiene dónde guardar (ENVIOS_R2_* en Railway)'
@@ -200,16 +200,16 @@ export default function Respaldo() {
             <tbody>
               {!datos || datos.respaldos.length === 0 ? <tr><td style={td} colSpan={6}>Ningún respaldo todavía.</td></tr> : datos.respaldos.map((r) => (
                 <tr key={r.id} data-testid="respaldo-fila">
-                  <td style={{ ...td, fontSize: 12 }}>{fechaYHora(r.momento)}<div style={{ ...mono, fontSize: 10, color: '#9ca3af' }}>{r.hash.slice(0, 16)}…</div></td>
+                  <td style={{ ...td, fontSize: 12 }}>{fechaYHora(r.momento)}<div style={{ ...mono, fontSize: 10, color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>{r.hash.slice(0, 16)}…</div></td>
                   <td style={{ ...td, fontSize: 12 }}>{r.actor}</td>
                   <td style={{ ...td, fontSize: 12 }}>{r.documentos} · {(r.bytes / 1024).toFixed(1)} KB</td>
-                  <td style={{ ...td, fontSize: 12, color: r.firmado ? '#166534' : '#b45309' }}>{r.firmado ? 'sí' : 'no'}</td>
-                  <td style={{ ...td, fontSize: 12 }}>{r.comprobacion ? <span style={{ color: r.comprobacion.ok ? '#166534' : '#b91c1c' }} data-testid={`respaldo-comprobado-${r.comprobacion.ok ? 'ok' : 'falla'}`}>{r.comprobacion.ok ? 'íntegro' : 'NO PASA'} · {fechaYHora(r.comprobado_en)}</span> : <span style={{ color: '#9ca3af' }}>sin comprobar</span>}</td>
+                  <td style={{ ...td, fontSize: 12, color: r.firmado ? 'var(--en-oscuro-exito, #166534)' : 'var(--en-oscuro-alerta, #b45309)' }}>{r.firmado ? 'sí' : 'no'}</td>
+                  <td style={{ ...td, fontSize: 12 }}>{r.comprobacion ? <span style={{ color: r.comprobacion.ok ? 'var(--en-oscuro-exito, #166534)' : 'var(--en-oscuro-error, #b91c1c)' }} data-testid={`respaldo-comprobado-${r.comprobacion.ok ? 'ok' : 'falla'}`}>{r.comprobacion.ok ? 'íntegro' : 'NO PASA'} · {fechaYHora(r.comprobado_en)}</span> : <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>sin comprobar</span>}</td>
                   <td style={{ ...td, fontSize: 12 }}>
-                    {r.error ? <span style={{ color: '#b91c1c' }} data-testid="respaldo-con-error">falló: {r.error}</span>
-                      : r.almacen ? (r.almacen.borrado_en ? <span style={{ color: '#9ca3af' }}>estuvo en el almacén; R2 lo borró (se supo el {fechaYHora(r.almacen.borrado_en)})</span>
+                    {r.error ? <span style={{ color: 'var(--en-oscuro-error, #b91c1c)' }} data-testid="respaldo-con-error">falló: {r.error}</span>
+                      : r.almacen ? (r.almacen.borrado_en ? <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>estuvo en el almacén; R2 lo borró (se supo el {fechaYHora(r.almacen.borrado_en)})</span>
                         : <span>en el almacén <button type="button" onClick={() => bajarDelAlmacen(r)} style={{ ...botonSuave, padding: '3px 8px', marginLeft: 6 }} data-testid="respaldo-bajar">Bajar</button></span>)
-                        : <span style={{ color: '#6b7280' }}>bajado al navegador</span>}
+                        : <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>bajado al navegador</span>}
                   </td>
                 </tr>
               ))}
@@ -220,14 +220,14 @@ export default function Respaldo() {
           <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}><FileCheck size={14} /> Comprobar un respaldo guardado</strong>
           <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
             <input type="file" accept=".jsonl,.txt,application/x-ndjson" onChange={elegirArchivo} style={{ fontSize: 13 }} data-testid="respaldo-archivo" />
-            {aComprobar.nombre ? <div style={{ fontSize: 12, color: '#6b7280' }}>{aComprobar.nombre} · {(aComprobar.tamano / 1024).toFixed(1)} KB · se lee acá, en tu navegador; no se sube</div> : null}
+            {aComprobar.nombre ? <div style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{aComprobar.nombre} · {(aComprobar.tamano / 1024).toFixed(1)} KB · se lee acá, en tu navegador; no se sube</div> : null}
             <input style={campo} placeholder="Firma aparte (sólo para respaldos viejos que no la traen adentro; opcional)" value={aComprobar.firma} onChange={(e) => setAComprobar({ ...aComprobar, firma: e.target.value })} data-testid="respaldo-firma-a-comprobar" />
             <button type="button" onClick={comprobar} disabled={ocupado || !aComprobar.archivo} style={botonSuave} data-testid="respaldo-comprobar">{progreso ? `Comprobando: ${progreso}` : 'Comprobar'}</button>
           </div>
           {comprobacion ? (
-            <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: comprobacion.ok ? '#f0fdf4' : '#fef2f2', fontSize: 13 }} data-testid={`respaldo-resultado-${comprobacion.ok ? 'ok' : 'falla'}`}>
+            <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: comprobacion.ok ? 'var(--en-oscuro-exito-suave, #f0fdf4)' : 'var(--en-oscuro-error-suave, #fef2f2)', fontSize: 13 }} data-testid={`respaldo-resultado-${comprobacion.ok ? 'ok' : 'falla'}`}>
               <div><strong>{comprobacion.ok ? 'Íntegro' : 'NO PASA'}</strong>{comprobacion.motivo ? ` · ${comprobacion.motivo}` : ''}</div>
-              <div style={{ color: '#374151', marginTop: 4 }}>hash del cierre {comprobacion.hash_ok ? 'coincide' : 'NO coincide'} · firma {comprobacion.firma.replaceAll('_', ' ')} · {comprobacion.documentos} documentos en {Object.keys(comprobacion.colecciones).length} colecciones{comprobacion.registrado ? ' · es uno de los registrados' : ' · no figura entre los registrados'}</div>
+              <div style={{ color: 'var(--en-oscuro-texto, #374151)', marginTop: 4 }}>hash del cierre {comprobacion.hash_ok ? 'coincide' : 'NO coincide'} · firma {comprobacion.firma.replaceAll('_', ' ')} · {comprobacion.documentos} documentos en {Object.keys(comprobacion.colecciones).length} colecciones{comprobacion.registrado ? ' · es uno de los registrados' : ' · no figura entre los registrados'}</div>
             </div>
           ) : null}
         </div>

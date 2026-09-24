@@ -9,10 +9,10 @@ import { formatRelativeTime, formatAbsoluteTime } from '../../utils/dates';
 import { rutaDeArchivo } from '../../utils/urlDeArchivo';
 
 const STATUS_BADGE = {
-  pending:  { bg: '#fef3c7', fg: '#92400e', label: 'Pendiente' },
-  approved: { bg: '#dcfce7', fg: '#166534', label: 'Aprobado' },
-  verified: { bg: '#dcfce7', fg: '#166534', label: 'Aprobado' },
-  rejected: { bg: '#fee2e2', fg: '#991b1b', label: 'Rechazado' },
+  pending:  { bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', fg: 'var(--en-oscuro-alerta, #92400e)', label: 'Pendiente' },
+  approved: { bg: 'var(--en-oscuro-exito-suave, #dcfce7)', fg: 'var(--en-oscuro-exito, #166534)', label: 'Aprobado' },
+  verified: { bg: 'var(--en-oscuro-exito-suave, #dcfce7)', fg: 'var(--en-oscuro-exito, #166534)', label: 'Aprobado' },
+  rejected: { bg: 'var(--en-oscuro-error-suave, #fee2e2)', fg: 'var(--en-oscuro-error, #991b1b)', label: 'Rechazado' },
 };
 
 const CHECK_ITEMS = [
@@ -26,9 +26,9 @@ const CHECK_ITEMS = [
 const EMPTY_CHECKS = { rostro: false, legible: false, vigente: false, nombre: false, edad: false };
 
 const RISK_OPTIONS = [
-  { key: 'low',    label: 'Bajo',  bg: '#dcfce7', fg: '#166534' },
-  { key: 'medium', label: 'Medio', bg: '#fef3c7', fg: '#92400e' },
-  { key: 'high',   label: 'Alto',  bg: '#fee2e2', fg: '#991b1b' },
+  { key: 'low',    label: 'Bajo',  bg: 'var(--en-oscuro-exito-suave, #dcfce7)', fg: 'var(--en-oscuro-exito, #166534)' },
+  { key: 'medium', label: 'Medio', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', fg: 'var(--en-oscuro-alerta, #92400e)' },
+  { key: 'high',   label: 'Alto',  bg: 'var(--en-oscuro-error-suave, #fee2e2)', fg: 'var(--en-oscuro-error, #991b1b)' },
 ];
 
 function maskCPF(cpf) {
@@ -46,15 +46,15 @@ function maskCPF(cpf) {
 function DocTile({ label, url, onOpen, autoRotate = 0 }) {
   const ok = !!url;
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: '14px', overflow: 'hidden', backgroundColor: '#fff' }}>
-      <div style={{ padding: '10px 12px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>{label}</span>
+    <div style={{ border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '14px', overflow: 'hidden', backgroundColor: 'var(--en-oscuro-superficie, #fff)' }}>
+      <div style={{ padding: '10px 12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)' }}>{label}</span>
         {ok ? (
-          <span style={{ fontSize: '11px', color: '#166534', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+          <span style={{ fontSize: '11px', color: 'var(--en-oscuro-exito, #166534)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
             <CheckCircle2 size={14} /> Cargado
           </span>
         ) : (
-          <span style={{ fontSize: '11px', color: '#991b1b', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+          <span style={{ fontSize: '11px', color: 'var(--en-oscuro-error, #991b1b)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
             <AlertCircle size={14} /> Faltante
           </span>
         )}
@@ -82,7 +82,7 @@ function DocTile({ label, url, onOpen, autoRotate = 0 }) {
           />
         </button>
       ) : (
-        <div style={{ height: '210px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', backgroundColor: '#f9fafb', gap: '8px' }}>
+        <div style={{ height: '210px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--en-oscuro-texto-3, #9ca3af)', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', gap: '8px' }}>
           <ImageIcon size={28} />
           <span style={{ fontSize: '12px' }}>No disponible</span>
         </div>
@@ -285,12 +285,12 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
         style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}
         onClick={(e) => { if (e.target === e.currentTarget && !rejectOpen) onClose?.(); }}
       >
-        <div style={{ backgroundColor: '#fff', borderRadius: '20px', width: '100%', maxWidth: '960px', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '20px', width: '100%', maxWidth: '960px', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
           {/* Header */}
-          <div style={{ position: 'sticky', top: 0, backgroundColor: '#fff', zIndex: 5, padding: '20px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{ position: 'sticky', top: 0, backgroundColor: 'var(--en-oscuro-superficie, #fff)', zIndex: 5, padding: '20px 24px', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <h2 style={{ fontSize: '19px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                <h2 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                   {v.full_name || 'Usuario'}
                 </h2>
                 <span style={{
@@ -306,43 +306,43 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
                     display: 'inline-flex', alignItems: 'center', gap: '4px',
                     padding: '4px 10px', borderRadius: '999px',
                     fontSize: '12px', fontWeight: 600,
-                    backgroundColor: '#eef2ff', color: '#4338ca',
-                    border: '1px solid #c7d2fe'
+                    backgroundColor: 'var(--en-oscuro-acento-suave, #eef2ff)', color: 'var(--en-oscuro-acento, #4338ca)',
+                    border: '1px solid var(--en-oscuro-acento-borde, #c7d2fe)'
                   }}>
                     {v.document_type_label}
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                 {v.email || '—'} {v.phone_number ? ` • ${v.phone_number}` : ''}
               </p>
               {v.submitted_at && (
-                <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '4px 0 0 0' }}>
                   Enviado {formatRelativeTime(v.submitted_at)} • {formatAbsoluteTime(v.submitted_at)}
                 </p>
               )}
             </div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8, marginLeft: 'auto', position: 'relative', zIndex: 10 }} aria-label="Cerrar">
-              <X size={22} color="#6b7280" />
+              <X size={22} style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
             </button>
           </div>
 
           <div style={{ padding: '20px 24px' }}>
             {/* Documents */}
-            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '0 0 12px 0' }}>Documentos</h3>
+            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>Documentos</h3>
             {v.selfie_image && v.id_document_image && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px', backgroundColor: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8fafc)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '14px', padding: '14px' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Selfie</p>
-                  <img src={rutaDeArchivo(v.selfie_image)} alt="Selfie" onClick={() => openLightbox('Selfie')} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--en-oscuro-texto-2, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Selfie</p>
+                  <img src={rutaDeArchivo(v.selfie_image)} alt="Selfie" onClick={() => openLightbox('Selfie')} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', background: 'var(--en-oscuro-superficie, #fff)' }} />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Documento (frente)</p>
-                  <img src={rutaDeArchivo(v.id_document_image)} alt="Documento" onClick={() => openLightbox(`${v.document_type_label || 'Documento'} (frente)`)} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid #e5e7eb', background: '#fff' }} />
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--en-oscuro-texto-2, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Documento (frente)</p>
+                  <img src={rutaDeArchivo(v.id_document_image)} alt="Documento" onClick={() => openLightbox(`${v.document_type_label || 'Documento'} (frente)`)} style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', cursor: 'zoom-in', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', background: 'var(--en-oscuro-superficie, #fff)' }} />
                 </div>
               </div>
             )}
-            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 12px' }}>Compara el rostro de la selfie con el del documento. Haz click para ampliar.</p>
+            <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0 0 12px' }}>Compara el rostro de la selfie con el del documento. Haz click para ampliar.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
               {docs.map((d) => (
                 <DocTile
@@ -354,31 +354,31 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
                 />
               ))}
             </div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', textAlign: 'right' }}>
+            <div style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginTop: '8px', textAlign: 'right' }}>
               Tip: haz click en una imagen para ampliar, hacer zoom y rotar.
             </div>
 
             {/* User data */}
-            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '24px 0 12px 0' }}>Nivel de riesgo</h3>
+            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '24px 0 12px 0' }}>Nivel de riesgo</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               {RISK_OPTIONS.map((r) => {
                 const active = riskLevel === r.key;
                 return (
                   <button key={r.key} onClick={() => setRisk(r.key)}
-                    style={{ padding: '8px 16px', borderRadius: '10px', border: active ? `2px solid ${r.fg}` : '1px solid #e5e7eb', backgroundColor: active ? r.bg : '#fff', color: active ? r.fg : '#6b7280', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+                    style={{ padding: '8px 16px', borderRadius: '10px', border: active ? `2px solid ${r.fg}` : '1px solid var(--en-oscuro-linea, #e5e7eb)', backgroundColor: active ? r.bg : 'var(--en-oscuro-superficie, #fff)', color: active ? r.fg : 'var(--en-oscuro-texto-2, #6b7280)', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
                     {r.label}
                   </button>
                 );
               })}
             </div>
             {!riskLevel && v.risk_suggested && (
-              <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 0 0' }}>
-                Sugerencia automática: <strong style={{ color: v.risk_suggested === 'high' ? '#991b1b' : '#166534' }}>{v.risk_suggested === 'high' ? 'Alto' : 'Bajo'}</strong>{v.blacklist_match ? ' (coincide con lista negra)' : ''}.
+              <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '8px 0 0' }}>
+                Sugerencia automática: <strong style={{ color: v.risk_suggested === 'high' ? 'var(--en-oscuro-error, #991b1b)' : 'var(--en-oscuro-exito, #166534)' }}>{v.risk_suggested === 'high' ? 'Alto' : 'Bajo'}</strong>{v.blacklist_match ? ' (coincide con lista negra)' : ''}.
               </p>
             )}
 
-            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '24px 0 12px 0' }}>Datos del Usuario</h3>
-            <div style={{ backgroundColor: '#f9fafb', borderRadius: '14px', padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', fontSize: '14px' }}>
+            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '24px 0 12px 0' }}>Datos del Usuario</h3>
+            <div style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '14px', padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', fontSize: '14px' }}>
               <Field icon={UserIcon} label="Nombre completo" value={v.full_name} />
               <Field icon={FileText} label="Número de documento" value={v.document_number} />
               <Field icon={FileText} label="CPF" value={maskCPF(v.cpf_number)} />
@@ -389,11 +389,11 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
         {/* Coincidencia con lista negra */}
         {v.blacklist_match && (
-          <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: '#fef2f2', border: '1.5px solid #fca5a5' }}>
-            <p style={{ fontSize: '13px', fontWeight: 700, color: '#b91c1c', margin: 0 }}>
+          <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', border: '1.5px solid var(--en-oscuro-error-borde, #fca5a5)' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-error, #b91c1c)', margin: 0 }}>
               ⚠ Coincidencia con la lista negra
             </p>
-            <p style={{ fontSize: '13px', color: '#7f1d1d', margin: '4px 0 0 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--en-oscuro-error, #7f1d1d)', margin: '4px 0 0 0' }}>
               El CPF o documento de este usuario coincide con una identidad baneada. Revisa con atención y rechaza o banea si corresponde.
             </p>
           </div>
@@ -401,31 +401,31 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
         {/* Rejection reason (if any) */}
             {status === 'rejected' && v.rejection_reason && (
-              <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
-                <p style={{ fontSize: '12px', fontWeight: 700, color: '#991b1b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)' }}>
+                <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--en-oscuro-error, #991b1b)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Motivo del rechazo
                 </p>
-                <p style={{ fontSize: '14px', color: '#7f1d1d', margin: '6px 0 0 0' }}>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-error, #7f1d1d)', margin: '6px 0 0 0' }}>
                   {v.rejection_reason}
                 </p>
                 {v.processed_by_name && (
-                  <p style={{ fontSize: '12px', color: '#9b1c1c', margin: '6px 0 0 0' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #9b1c1c)', margin: '6px 0 0 0' }}>
                     Por {v.processed_by_name} — {v.processed_at ? formatRelativeTime(v.processed_at) : '—'}
                   </p>
                 )}
               </div>
             )}
             {(status === 'approved' || status === 'verified') && v.processed_by_name && (
-              <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                <p style={{ fontSize: '13px', color: '#166534', margin: 0 }}>
+              <div style={{ marginTop: '16px', padding: '14px 16px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdf4)', border: '1px solid var(--en-oscuro-exito-borde, #bbf7d0)' }}>
+                <p style={{ fontSize: '13px', color: 'var(--en-oscuro-exito, #166534)', margin: 0 }}>
                   <strong>Aprobado</strong> por {v.processed_by_name} — {v.processed_at ? formatRelativeTime(v.processed_at) : ''}
                 </p>
               </div>
             )}
 
             {/* Internal note */}
-            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '24px 0 8px 0' }}>
-              Nota interna <span style={{ textTransform: 'none', letterSpacing: 0, color: '#9ca3af' }}>(solo visible para admins)</span>
+            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '24px 0 8px 0' }}>
+              Nota interna <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>(solo visible para admins)</span>
             </h3>
             <textarea
               value={note}
@@ -433,12 +433,12 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
               rows={3}
               maxLength={2000}
               placeholder="Comentarios internos sobre este KYC…"
-              style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb', fontSize: '14px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1.5px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: '14px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
               <button
                 onClick={loadHistory}
-                style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: 0 }}
+                style={{ background: 'none', border: 'none', color: 'var(--en-oscuro-acento, #6366f1)', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: 0 }}
               >
                 <History size={14} /> Ver historial de auditoría
               </button>
@@ -453,16 +453,16 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
             </div>
 
             {showHistory && (
-              <div style={{ marginTop: '14px', padding: '14px', borderRadius: '12px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
-                <p style={{ fontSize: '12px', fontWeight: 700, color: '#374151', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Historial</p>
+              <div style={{ marginTop: '14px', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
+                <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Historial</p>
                 {history.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>Sin eventos.</p>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>Sin eventos.</p>
                 ) : (
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {history.map((h) => (
-                      <li key={h.audit_id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#374151', paddingBottom: '10px', borderBottom: '1px dashed #e5e7eb' }}>
+                      <li key={h.audit_id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', paddingBottom: '10px', borderBottom: '1px dashed var(--en-oscuro-linea, #e5e7eb)' }}>
                         <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
-                          <span style={{ minWidth: '90px', color: '#6b7280' }}>{formatRelativeTime(h.created_at)}</span>
+                          <span style={{ minWidth: '90px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{formatRelativeTime(h.created_at)}</span>
                           <span>
                             <strong>{ACTION_LABEL[h.action] || h.action}</strong>
                             {h.admin_name ? ` — ${h.admin_name}` : ''}
@@ -471,16 +471,16 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
                         </div>
                         {h.action === 'note_updated' && (h.details?.previous_value !== undefined || h.details?.new_value !== undefined) && (
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginLeft: '100px', marginTop: '4px' }}>
-                            <div style={{ padding: '8px 10px', backgroundColor: '#fef2f2', borderLeft: '3px solid #ef4444', borderRadius: '6px', fontSize: '12px' }}>
-                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Antes</div>
-                              <div style={{ color: '#7f1d1d', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                                {h.details.previous_value || <em style={{ color: '#9ca3af' }}>(vacío)</em>}
+                            <div style={{ padding: '8px 10px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', borderLeft: '3px solid var(--en-oscuro-error, #ef4444)', borderRadius: '6px', fontSize: '12px' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--en-oscuro-error, #991b1b)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Antes</div>
+                              <div style={{ color: 'var(--en-oscuro-error, #7f1d1d)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {h.details.previous_value || <em style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>(vacío)</em>}
                               </div>
                             </div>
-                            <div style={{ padding: '8px 10px', backgroundColor: '#f0fdf4', borderLeft: '3px solid #22c55e', borderRadius: '6px', fontSize: '12px' }}>
-                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Después</div>
-                              <div style={{ color: '#14532d', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                                {h.details.new_value || <em style={{ color: '#9ca3af' }}>(vacío)</em>}
+                            <div style={{ padding: '8px 10px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdf4)', borderLeft: '3px solid var(--en-oscuro-exito, #22c55e)', borderRadius: '6px', fontSize: '12px' }}>
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--en-oscuro-exito, #166534)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Después</div>
+                              <div style={{ color: 'var(--en-oscuro-exito, #14532d)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {h.details.new_value || <em style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>(vacío)</em>}
                               </div>
                             </div>
                           </div>
@@ -494,13 +494,13 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
           </div>
 
           {/* Danger zone: baneo */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #fee2e2', backgroundColor: '#fff7f7' }}>
-          <p style={{ fontSize: '12px', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Zona de baneo</p>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--en-oscuro-error-borde, #fee2e2)', backgroundColor: 'var(--en-oscuro-error-suave, #fff7f7)' }}>
+          <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--en-oscuro-error, #991b1b)', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Zona de baneo</p>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button
               onClick={() => banUser('email')}
               disabled={working}
-              style={{ padding: '10px 16px', borderRadius: '10px', backgroundColor: '#fff', color: '#b91c1c', border: '1.5px solid #fca5a5', fontWeight: 600, cursor: 'pointer', fontSize: '13px', opacity: working ? 0.6 : 1 }}
+              style={{ padding: '10px 16px', borderRadius: '10px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-error, #b91c1c)', border: '1.5px solid var(--en-oscuro-error-borde, #fca5a5)', fontWeight: 600, cursor: 'pointer', fontSize: '13px', opacity: working ? 0.6 : 1 }}
             >
               Banear solo correo
             </button>
@@ -516,17 +516,17 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
           {status === 'pending' && (
             <div style={{ padding: '0 24px 8px' }}>
-              <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6b7280', margin: '8px 0 12px 0' }}>Checklist de verificación</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '14px' }}>
+              <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '8px 0 12px 0' }}>Checklist de verificación</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '12px', padding: '14px' }}>
                 {CHECK_ITEMS.map((c) => (
-                  <label key={c.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13.5px', color: '#374151', cursor: 'pointer' }}>
+                  <label key={c.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13.5px', color: 'var(--en-oscuro-texto, #374151)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={!!checks[c.key]} onChange={(e) => setChecks((prev) => ({ ...prev, [c.key]: e.target.checked }))} style={{ marginTop: '2px', width: '16px', height: '16px', cursor: 'pointer' }} />
                     <span>{c.label}</span>
                   </label>
                 ))}
               </div>
               {!allChecked && (
-                <p style={{ fontSize: '12px', color: '#d97706', margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-alerta, #d97706)', margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <AlertCircle size={14} /> Marca todas las casillas para habilitar la aprobación.
                 </p>
               )}
@@ -535,22 +535,22 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
           {/* Footer actions */}
           {status === 'pending' && (
-            <div style={{ position: 'sticky', bottom: 0, backgroundColor: '#fff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'sticky', bottom: 0, backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '16px 24px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 <button
                   onClick={goNextOrClose}
                   title="Saltar al siguiente sin decidir"
-                  style={{ padding: '10px 16px', borderRadius: '12px', backgroundColor: '#fff', color: '#6b7280', border: '1px solid #e5e7eb', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                  style={{ padding: '10px 16px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-texto-2, #6b7280)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
                 >
                   Siguiente ▸
                 </button>
-                <span style={{ fontSize: '10.5px', color: '#9ca3af' }}>Atajos: A aprobar · R rechazar · → siguiente</span>
+                <span style={{ fontSize: '10.5px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>Atajos: A aprobar · R rechazar · → siguiente</span>
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={() => setRejectOpen(true)}
                 disabled={working}
-                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: '#fff', color: '#dc2626', border: '1.5px solid #dc2626', fontWeight: 600, cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-error, #dc2626)', border: '1.5px solid var(--en-oscuro-error, #dc2626)', fontWeight: 600, cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               >
                 <XCircle size={18} /> Rechazar
               </button>
@@ -568,11 +568,11 @@ export default function KycDetailModal({ verification, onClose, onChanged, onNex
 
           {/* Footer action for already-approved users: send to re-review */}
           {(status === 'approved' || status === 'verified') && (
-            <div style={{ position: 'sticky', bottom: 0, backgroundColor: '#fff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ position: 'sticky', bottom: 0, backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '16px 24px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={reReview}
                 disabled={working}
-                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: '#fff', color: '#7c3aed', border: '1.5px solid #7c3aed', fontWeight: 600, cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: working ? 0.7 : 1 }}
+                style={{ padding: '12px 22px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-acento, #7c3aed)', border: '1.5px solid var(--en-oscuro-acento, #7c3aed)', fontWeight: 600, cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: working ? 0.7 : 1 }}
               >
                 {working ? <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> : '🔁'}
                 Re-verificar
@@ -611,10 +611,10 @@ const ACTION_LABEL = {
 function Field({ icon: Icon, label, value }) {
   return (
     <div>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#6b7280', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
         {Icon && <Icon size={13} />} {label}
       </div>
-      <div style={{ color: '#111827', fontWeight: 500, fontSize: '14px', wordBreak: 'break-word' }}>{value || '—'}</div>
+      <div style={{ color: 'var(--en-oscuro-texto, #111827)', fontWeight: 500, fontSize: '14px', wordBreak: 'break-word' }}>{value || '—'}</div>
     </div>
   );
 }

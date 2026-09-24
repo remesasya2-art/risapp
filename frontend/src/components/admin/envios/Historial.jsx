@@ -120,7 +120,7 @@ export default function Historial() {
                 style={{ padding: '6px 12px', borderRadius: '999px', fontSize: '13px',
                   fontWeight: 600, cursor: 'pointer',
                   border: `1px solid ${estado === f.valor ? COLOR.primario : COLOR.borde}`,
-                  backgroundColor: estado === f.valor ? COLOR.primarioSuave : '#fff',
+                  backgroundColor: estado === f.valor ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
                   color: estado === f.valor ? COLOR.primarioOscuro : COLOR.suave }}>
                 {f.etiqueta}
               </button>
@@ -169,7 +169,7 @@ function Envio({ envio, onListo }) {
   const tono = tonoDe(envio.estado);
   return (
     <div style={{ ...tarjeta, padding: '14px 16px',
-      borderColor: envio.espera_retiro ? '#fde68a' : COLOR.borde }}>
+      borderColor: envio.espera_retiro ? 'var(--en-oscuro-alerta-borde, #fde68a)' : COLOR.borde }}>
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start',
         flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '220px' }}>
@@ -195,12 +195,12 @@ function Envio({ envio, onListo }) {
 
           {envio.retirado_por ? (
             <p style={{ margin: '8px 0 0 0', fontSize: '13px', fontWeight: 600,
-              color: '#166534' }}>
+              color: 'var(--en-oscuro-exito, #166534)' }}>
               <UserCheck size={13} style={{ display: 'inline', verticalAlign: '-2px' }} />
               {' '}Retirado por {envio.retirado_por} · {fecha(envio.retirado_at)}
             </p>
           ) : envio.espera_retiro ? (
-            <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#92400e' }}>
+            <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: 'var(--en-oscuro-alerta, #92400e)' }}>
               Todavía nadie registró quién lo retiró.
             </p>
           ) : null}

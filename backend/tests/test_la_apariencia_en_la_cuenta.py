@@ -236,6 +236,7 @@ RUTAS_CON_TEMA = [
     '"/history"', '"/notifications"',
     '"/recharge"', '"/recharge-ves"', '"/credits/deposit"', '"/send-crypto"',
     '"/login"', '"/register"', '"/legal"', '"/verification"', '"/force-change-password"',
+    '"/admin"', '"/personal/activar"',
 ]
 
 

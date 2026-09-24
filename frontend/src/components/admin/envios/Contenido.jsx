@@ -146,13 +146,13 @@ export default function Contenido() {
           ) : contenido.prohibidos.map((p) => (
             <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px',
               fontSize: '13px', padding: '6px 10px', borderRadius: '999px',
-              backgroundColor: COLOR.errorSuave, border: '1px solid #fecaca', color: '#991b1b' }}>
+              backgroundColor: COLOR.errorSuave, border: '1px solid var(--en-oscuro-error-borde, #fecaca)', color: 'var(--en-oscuro-error, #991b1b)' }}>
               {p}
               <button type="button" aria-label={`Quitar ${p}`}
                 onClick={() => setContenido((c) => ({
                   ...c, prohibidos: c.prohibidos.filter((x) => x !== p),
                 }))}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#991b1b',
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--en-oscuro-error, #991b1b)',
                   display: 'inline-flex', padding: 0 }}>
                 <X size={13} />
               </button>

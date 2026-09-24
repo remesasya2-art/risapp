@@ -33,7 +33,7 @@ function Dato({ etiqueta, valor, tono }) {
   const largo = String(valor ?? '').length;
   return (
     <div style={{ padding: '12px 14px', borderRadius: '12px',
-      border: `1px solid ${COLOR.borde}`, backgroundColor: '#f9fafb', minWidth: 0 }}>
+      border: `1px solid ${COLOR.borde}`, backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', minWidth: 0 }}>
       <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em',
         textTransform: 'uppercase', color: COLOR.suave }}>{etiqueta}</p>
       <p style={{ margin: '4px 0 0 0', fontWeight: 800, color: tono || COLOR.texto,

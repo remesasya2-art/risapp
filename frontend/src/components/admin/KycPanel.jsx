@@ -10,16 +10,16 @@ import KycRejectModal from './KycRejectModal';
 import { formatRelativeTime } from '../../utils/dates';
 
 const TABS = [
-  { key: 'pending',  label: 'Pendientes',  icon: Clock,         color: '#d97706', bg: '#fef3c7' },
-  { key: 'approved', label: 'Aprobados',   icon: ShieldCheck,   color: '#16a34a', bg: '#dcfce7' },
-  { key: 'rejected', label: 'Rechazados',  icon: ShieldX,       color: '#dc2626', bg: '#fee2e2' },
+  { key: 'pending',  label: 'Pendientes',  icon: Clock,         color: 'var(--en-oscuro-alerta, #d97706)', bg: 'var(--en-oscuro-alerta-suave, #fef3c7)' },
+  { key: 'approved', label: 'Aprobados',   icon: ShieldCheck,   color: 'var(--en-oscuro-exito, #16a34a)', bg: 'var(--en-oscuro-exito-suave, #dcfce7)' },
+  { key: 'rejected', label: 'Rechazados',  icon: ShieldX,       color: 'var(--en-oscuro-error, #dc2626)', bg: 'var(--en-oscuro-error-suave, #fee2e2)' },
 ];
 
 const STATUS_BADGE = {
-  pending:  { bg: '#fef3c7', fg: '#92400e', label: 'Pendiente' },
-  approved: { bg: '#dcfce7', fg: '#166534', label: 'Aprobado' },
-  verified: { bg: '#dcfce7', fg: '#166534', label: 'Aprobado' },
-  rejected: { bg: '#fee2e2', fg: '#991b1b', label: 'Rechazado' },
+  pending:  { bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', fg: 'var(--en-oscuro-alerta, #92400e)', label: 'Pendiente' },
+  approved: { bg: 'var(--en-oscuro-exito-suave, #dcfce7)', fg: 'var(--en-oscuro-exito, #166534)', label: 'Aprobado' },
+  verified: { bg: 'var(--en-oscuro-exito-suave, #dcfce7)', fg: 'var(--en-oscuro-exito, #166534)', label: 'Aprobado' },
+  rejected: { bg: 'var(--en-oscuro-error-suave, #fee2e2)', fg: 'var(--en-oscuro-error, #991b1b)', label: 'Rechazado' },
 };
 
 function maskCPF(cpf) {
@@ -116,9 +116,9 @@ export default function KycPanel({ onChange }) {
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '20px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
   };
 
@@ -138,9 +138,9 @@ export default function KycPanel({ onChange }) {
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '8px',
                   padding: '10px 16px', borderRadius: '12px',
-                  border: active ? `2px solid ${t.color}` : '1px solid #e5e7eb',
-                  backgroundColor: active ? t.bg : '#fff',
-                  color: active ? t.color : '#374151',
+                  border: active ? `2px solid ${t.color}` : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                  backgroundColor: active ? t.bg : 'var(--en-oscuro-superficie, #fff)',
+                  color: active ? t.color : 'var(--en-oscuro-texto, #374151)',
                   fontWeight: 600, fontSize: '14px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
@@ -151,8 +151,8 @@ export default function KycPanel({ onChange }) {
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   minWidth: '22px', height: '22px', borderRadius: '999px',
                   padding: '0 7px', fontSize: '12px', fontWeight: 700,
-                  backgroundColor: active ? '#fff' : '#f3f4f6',
-                  color: active ? t.color : '#6b7280',
+                  backgroundColor: active ? 'var(--en-oscuro-superficie, #fff)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                  color: active ? t.color : 'var(--en-oscuro-texto-2, #6b7280)',
                 }}>
                   {counts[t.key] ?? 0}
                 </span>
@@ -163,7 +163,7 @@ export default function KycPanel({ onChange }) {
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -172,7 +172,7 @@ export default function KycPanel({ onChange }) {
               style={{
                 width: '320px', maxWidth: '50vw',
                 padding: '10px 12px 10px 38px',
-                borderRadius: '12px', border: '1.5px solid #e5e7eb',
+                borderRadius: '12px', border: '1.5px solid var(--en-oscuro-linea, #e5e7eb)',
                 fontSize: '14px', outline: 'none',
               }}
             />
@@ -182,9 +182,9 @@ export default function KycPanel({ onChange }) {
             title="Recargar"
             style={{
               padding: '10px 12px', borderRadius: '12px',
-              backgroundColor: '#fff', border: '1.5px solid #e5e7eb',
+              backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: '1.5px solid var(--en-oscuro-linea, #e5e7eb)',
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px',
-              color: '#374151', fontSize: '13px', fontWeight: 600,
+              color: 'var(--en-oscuro-texto, #374151)', fontSize: '13px', fontWeight: 600,
             }}
           >
             <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
@@ -197,10 +197,10 @@ export default function KycPanel({ onChange }) {
             disabled={items.length === 0}
             style={{
               padding: '10px 14px', borderRadius: '12px',
-              backgroundColor: items.length === 0 ? '#f3f4f6' : '#1f2937',
+              backgroundColor: items.length === 0 ? 'var(--en-oscuro-superficie-2, #f3f4f6)' : '#1f2937',
               border: 'none', cursor: items.length === 0 ? 'not-allowed' : 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: '6px',
-              color: items.length === 0 ? '#9ca3af' : '#fff',
+              color: items.length === 0 ? 'var(--en-oscuro-texto-3, #9ca3af)' : '#fff',
               fontSize: '13px', fontWeight: 600,
             }}
           >
@@ -212,12 +212,12 @@ export default function KycPanel({ onChange }) {
       {/* List */}
       {loading ? (
         <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}>
-          <RefreshCw size={28} style={{ color: '#6366f1', animation: 'spin 1s linear infinite' }} />
+          <RefreshCw size={28} style={{ color: 'var(--en-oscuro-acento, #6366f1)', animation: 'spin 1s linear infinite' }} />
         </div>
       ) : items.length === 0 ? (
         <div style={{ ...cardStyle, padding: '48px', textAlign: 'center' }}>
-          <ShieldAlert size={32} style={{ color: '#9ca3af', marginBottom: '8px' }} />
-          <p style={{ color: '#6b7280', margin: 0 }}>
+          <ShieldAlert size={32} style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '8px' }} />
+          <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>
             {debouncedSearch
               ? `No se encontraron resultados para "${debouncedSearch}"`
               : status === 'pending' ? 'No hay verificaciones pendientes'
@@ -235,7 +235,7 @@ export default function KycPanel({ onChange }) {
                 <div style={{
                   width: '72px', height: '72px', borderRadius: '14px',
                   overflow: 'hidden', flexShrink: 0,
-                  border: '2px solid #e5e7eb', backgroundColor: '#f3f4f6',
+                  border: '2px solid var(--en-oscuro-linea, #e5e7eb)', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                 }}
@@ -243,17 +243,17 @@ export default function KycPanel({ onChange }) {
                 title="Ver documentos"
                 >
                   {v.has_selfie ? (
-                    <span style={{ fontSize: '24px', fontWeight: 700, color: '#6b7280' }}>
+                    <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                       {(v.full_name || '?').trim().charAt(0).toUpperCase()}
                     </span>
                   ) : (
-                    <ImageOff size={22} color="#9ca3af" />
+                    <ImageOff size={22} style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
                   )}
                 </div>
 
                 <div style={{ flex: 1, minWidth: '220px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0 }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                       {v.full_name || 'Sin nombre'}
                     </h3>
                     <span style={{
@@ -264,24 +264,24 @@ export default function KycPanel({ onChange }) {
                       {badge.label}
                     </span>
                     {v.blacklist_match && (
-                      <span style={{ display: 'inline-flex', padding: '3px 9px', borderRadius: '999px', fontSize: '11px', fontWeight: 700, backgroundColor: '#fee2e2', color: '#b91c1c' }}>
+                      <span style={{ display: 'inline-flex', padding: '3px 9px', borderRadius: '999px', fontSize: '11px', fontWeight: 700, backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #b91c1c)' }}>
                         ⚠ Lista negra
                       </span>
                     )}
                   </div>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 6px 0' }}>{v.email || '—'}</p>
-                  <p style={{ fontSize: '13px', color: '#374151', margin: 0 }}>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 6px 0' }}>{v.email || '—'}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>
                     CPF: <strong>{maskCPF(v.cpf_number)}</strong>
                     {v.document_number ? <> &nbsp;•&nbsp; Doc: <strong>{v.document_number}</strong></> : null}
                     {v.phone_number ? <> &nbsp;•&nbsp; Tel: {v.phone_number}</> : null}
                   </p>
                   {v.submitted_at && (
-                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '6px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <Clock size={12} /> Enviado {formatRelativeTime(v.submitted_at)}
                     </p>
                   )}
                   {v.status === 'rejected' && v.rejection_reason && (
-                    <p style={{ fontSize: '12px', color: '#991b1b', margin: '6px 0 0 0', fontStyle: 'italic' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #991b1b)', margin: '6px 0 0 0', fontStyle: 'italic' }}>
                       ✗ {v.rejection_reason}
                     </p>
                   )}
@@ -348,6 +348,6 @@ const btnBase = {
   fontSize: '13px', fontWeight: 600, cursor: 'pointer',
   border: 'none', transition: 'transform 0.05s',
 };
-const btnPrimary = { ...btnBase, backgroundColor: '#6366f1', color: '#fff' };
+const btnPrimary = { ...btnBase, backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: '#fff' };
 const btnSuccess = { ...btnBase, backgroundColor: '#16a34a', color: '#fff' };
-const btnDanger  = { ...btnBase, backgroundColor: '#fff', color: '#dc2626', border: '1.5px solid #dc2626' };
+const btnDanger  = { ...btnBase, backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-error, #dc2626)', border: '1.5px solid var(--en-oscuro-error, #dc2626)' };

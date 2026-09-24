@@ -157,7 +157,7 @@ export default function Nomina() {
             ...tarjeta,
             borderColor: esDeTurno ? COLOR.primario : COLOR.borde,
             borderWidth: esDeTurno ? '2px' : '1px',
-            backgroundColor: esDeTurno ? COLOR.primarioSuave : '#fff',
+            backgroundColor: esDeTurno ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)',
             opacity: c.activo ? 1 : 0.6,
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px',
@@ -169,14 +169,14 @@ export default function Nomina() {
                   {esDeTurno ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                       fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '999px',
-                      backgroundColor: '#fff', color: COLOR.primarioOscuro,
+                      backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: COLOR.primarioOscuro,
                       border: `1px solid ${COLOR.primario}` }}>
                       <BadgeCheck size={12} /> de turno
                     </span>
                   ) : null}
                   {!c.activo ? (
                     <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 9px',
-                      borderRadius: '999px', backgroundColor: '#f3f4f6', color: COLOR.suave }}>
+                      borderRadius: '999px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: COLOR.suave }}>
                       inactivo
                     </span>
                   ) : null}
@@ -214,7 +214,7 @@ export default function Nomina() {
 
       <div style={{ ...tarjeta, backgroundColor: '#0f172a', borderColor: '#0f172a' }}>
         <h3 style={{ ...titulo, color: '#fff' }}>La etiqueta con quien está de turno</h3>
-        <p style={{ ...bajada, color: '#94a3b8' }}>
+        <p style={{ ...bajada, color: 'var(--en-oscuro-acento, #94a3b8)' }}>
           Es la dirección exacta que el usuario va a copiar sobre su caja.
         </p>
         {previa?.disponible ? (
