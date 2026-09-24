@@ -300,3 +300,75 @@ def test_LOS_TOTALES_DE_LA_FICHA_SE_SUMAN_CON_DECIMAL128_DE_VERDAD():
                             env={**os.environ, "PYTHONPATH": backend})
     assert salida.returncode == 0, salida.stderr[-2000:]
     assert salida.stdout.strip().splitlines()[-1] == "100.0 40.0 4400.0"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4. La cola de pagos
+# ══════════════════════════════════════════════════════════════════════════
+
+BENEFICIARIO_QUE_SE_PAGA = {"full_name": "José Pérez", "cedula": "V12345678", "bank": "Banesco",
+                            "account_number": "01340000000000000001", "phone": "04141234567",
+                            "payment_type": "transferencia"}
+
+
+@pytest.fixture
+def cola(panel):
+    """Dos retiros: uno con el beneficiario limpio, otro con el documento
+    entero copiado —como lo guardaba el envío por Bitcoin—."""
+    import asyncio
+    from datetime import datetime, timezone
+    from services.money import to_decimal128
+    from routes import admin as rutas_admin
+    base = rutas_admin.db    # la misma base que sembró `panel`
+    t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
+
+    async def sembrar():
+        await base.transactions.insert_many([
+            {"transaction_id": "tx_p1", "display_id": "000101", "user_id": "u_ana", "type": "withdrawal",
+             "status": "pending", "amount_input": to_decimal128("50.00"), "currency_input": "RIS",
+             "amount_output": to_decimal128("5500.00"), "currency_output": "VES", "rate": to_decimal128("110.00"),
+             "beneficiary_data": dict(BENEFICIARIO_QUE_SE_PAGA), "created_at": t0},
+            {"transaction_id": "tx_p2", "display_id": "000102", "user_id": "u_ana", "type": "withdrawal",
+             "status": "pending", "amount_input": to_decimal128("20.00"), "currency_input": "RIS",
+             "amount_output": to_decimal128("2200.00"), "currency_output": "VES", "rate": to_decimal128("110.00"),
+             "beneficiary_data": {**BENEFICIARIO_QUE_SE_PAGA, "user_id": "u_ana", "nota_interna": "revisar",
+                                  "creado_por_ip": "10.0.0.7", "_etiqueta": "copia-entera"},
+             "created_at": t0},
+        ])
+    asyncio.run(sembrar())
+    return panel
+
+
+def test_LA_COLA_DE_PAGOS_SALE_IGUAL_QUE_LA_ARMA_EL_SERVICIO(cola):
+    """Nada de lo que la cola arma se pierde en el contrato: la respuesta de la
+    ruta es la del servicio, salvo lo que sobra del beneficiario."""
+    import asyncio
+    from fastapi.encoders import jsonable_encoder
+    from routes import admin as rutas_admin
+    from services import retiros
+    r = cola.get("/api/admin/withdrawals/all")
+    assert r.status_code == 200, r.text
+    pagina = asyncio.run(retiros.cola(rutas_admin.db))
+    pagina["counters"] = asyncio.run(retiros.contadores(rutas_admin.db))
+    esperado = jsonable_encoder(pagina)
+    for fila in esperado["withdrawals"]:
+        fila["beneficiary_data"] = {k: v for k, v in fila["beneficiary_data"].items() if k in BENEFICIARIO_QUE_SE_PAGA}
+    recibido = r.json()
+    # La antigüedad se calcula con el reloj en cada llamada: puede diferir en
+    # un segundo entre las dos. Se compara aparte, sólo que esté.
+    for a in (recibido, esperado):
+        for fila in a["withdrawals"]:
+            assert fila.pop("antiguedad")["nivel"]
+        assert a["counters"].pop("mas_vieja")["nivel"]
+    assert recibido == esperado
+
+
+def test_EL_BENEFICIARIO_DE_LA_COLA_SALE_CON_LO_QUE_SE_PAGA_Y_NADA_MAS(cola):
+    for camino in ("/api/admin/withdrawals/all", "/api/admin/withdrawals/pending"):
+        r = cola.get(camino)
+        assert r.status_code == 200, r.text
+        filas = r.json()["withdrawals"] if camino.endswith("all") else r.json()
+        assert {f["transaction_id"]: f["beneficiary_data"] for f in filas}["tx_p2"] == BENEFICIARIO_QUE_SE_PAGA
+        for interno in ("nota_interna", "creado_por_ip", "10.0.0.7", "copia-entera"):
+            assert interno not in r.text, f"{camino} dejó salir «{interno}»"
+        assert {f["transaction_id"]: f["amount_output"] for f in filas} == {"tx_p1": 5500.0, "tx_p2": 2200.0}

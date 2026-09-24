@@ -24,6 +24,7 @@ from models.user import User
 from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveReiniciada,
                                        CuentaVetada, RolCambiado)
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
+from models.panel_retiros import ColaDeRetiros, RetirosPendientes
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
@@ -819,7 +820,7 @@ async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User =
 
 # ============== WITHDRAWALS ==============
 
-@router.get("/withdrawals/pending")
+@router.get("/withdrawals/pending", response_model=RetirosPendientes, response_model_exclude_unset=True)
 async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     """Get pending withdrawals"""
     # EL TOPE, que no estaba.
@@ -861,7 +862,7 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     
     return withdrawals
 
-@router.get("/withdrawals/all")
+@router.get("/withdrawals/all", response_model=ColaDeRetiros, response_model_exclude_unset=True)
 async def get_all_withdrawals(
     status: str = "pending",
     q: str = "",
