@@ -156,7 +156,7 @@ export default function PuestaEnMarcha({ onIr }) {
               <div style={{ width: '30px', height: '30px', borderRadius: '9px', flexShrink: 0,
                 backgroundColor: '#fff', border: `1px solid ${t.borde}`,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icono size={16} color={t.color} />
+                <Icono size={16} style={{ color: t.color }} />
               </div>
               <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: COLOR.texto }}>

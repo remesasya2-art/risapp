@@ -42,7 +42,7 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, FileText, ScrollText, RotateCcw, UserMinus, Building2 } from 'lucide-react';
 
-const MORADO = '#5B4FE9';
+const MORADO = 'var(--en-oscuro-acento, #5B4FE9)';
 
 const SECCIONES = [
   { id: 'privacidad', n: 1, titulo: 'Política de privacidad' },
@@ -67,18 +67,18 @@ function Seccion({ id, n, titulo, icono, children }) {
     <section id={id} style={{ scrollMarginTop: 24, marginTop: 44 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        paddingBottom: 14, borderBottom: '2px solid #f1f0fb', marginBottom: 22,
+        paddingBottom: 14, borderBottom: '2px solid var(--en-oscuro-acento-borde, #f1f0fb)', marginBottom: 22,
       }}
       >
         <div style={{
-          width: 38, height: 38, borderRadius: 10, background: '#f0eeff',
+          width: 38, height: 38, borderRadius: 10, background: 'var(--en-oscuro-acento-suave, #f0eeff)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}
         >
           {icono}
         </div>
         <h2 style={{
-          margin: 0, fontSize: 20, fontWeight: 700, color: '#111827',
+          margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)',
           letterSpacing: '-0.01em',
         }}
         >
@@ -102,22 +102,22 @@ export default function LegalPage() {
   }, []);
 
   const h3 = {
-    fontSize: 15, fontWeight: 700, margin: '24px 0 8px', color: '#374151',
+    fontSize: 15, fontWeight: 700, margin: '24px 0 8px', color: 'var(--en-oscuro-texto, #374151)',
   };
   const p = {
-    fontSize: 15, color: '#4b5563', margin: '0 0 14px', lineHeight: 1.75,
+    fontSize: 15, color: 'var(--en-oscuro-texto-2, #4b5563)', margin: '0 0 14px', lineHeight: 1.75,
   };
   const li = {
-    fontSize: 15, color: '#4b5563', margin: '0 0 8px', lineHeight: 1.7,
+    fontSize: 15, color: 'var(--en-oscuro-texto-2, #4b5563)', margin: '0 0 8px', lineHeight: 1.7,
   };
   const ul = { margin: '0 0 14px', paddingLeft: 22 };
 
   return (
-    <div style={{ background: '#fff', minHeight: '100vh' }}>
+    <div style={{ background: 'var(--en-oscuro-fondo, #fff)', minHeight: '100vh' }}>
       {/* ── Encabezado ─────────────────────────────────────────────────── */}
       <header style={{
-        background: 'linear-gradient(180deg, #faf9ff 0%, #ffffff 100%)',
-        borderBottom: '1px solid #f1f0fb',
+        background: 'var(--en-oscuro-fondo, linear-gradient(180deg, #faf9ff 0%, #ffffff 100%))',
+        borderBottom: '1px solid var(--en-oscuro-acento-borde, #f1f0fb)',
       }}
       >
         <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 24px 40px' }}>
@@ -131,14 +131,14 @@ export default function LegalPage() {
           </Link>
 
           <h1 style={{
-            fontSize: 34, fontWeight: 800, color: '#111827',
+            fontSize: 34, fontWeight: 800, color: 'var(--en-oscuro-texto, #111827)',
             margin: '20px 0 12px', letterSpacing: '-0.02em', lineHeight: 1.2,
           }}
           >
             Marco legal y políticas
           </h1>
           <p style={{
-            fontSize: 16, color: '#4b5563', margin: '0 0 26px',
+            fontSize: 16, color: 'var(--en-oscuro-texto-2, #4b5563)', margin: '0 0 26px',
             lineHeight: 1.7, maxWidth: 640,
           }}
           >
@@ -154,14 +154,14 @@ export default function LegalPage() {
           }}
           >
             <span style={{
-              fontSize: 12.5, color: '#6b7280', background: '#f4f4f7',
+              fontSize: 12.5, color: 'var(--en-oscuro-texto-2, #6b7280)', background: 'var(--en-oscuro-superficie-2, #f4f4f7)',
               padding: '5px 11px', borderRadius: 999,
             }}
             >
               Última actualización: 4 de septiembre de 2026
             </span>
             <span style={{
-              fontSize: 12.5, color: '#6b7280', background: '#f4f4f7',
+              fontSize: 12.5, color: 'var(--en-oscuro-texto-2, #6b7280)', background: 'var(--en-oscuro-superficie-2, #f4f4f7)',
               padding: '5px 11px', borderRadius: 999,
             }}
             >
@@ -201,17 +201,17 @@ export default function LegalPage() {
             <div
               key={c.t}
               style={{
-                border: '1px solid #ececf3', borderRadius: 12, padding: '16px 18px',
-                background: '#fff',
+                border: '1px solid var(--en-oscuro-linea, #ececf3)', borderRadius: 12, padding: '16px 18px',
+                background: 'var(--en-oscuro-superficie, #fff)',
               }}
             >
               <p style={{
-                margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: '#111827',
+                margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)',
               }}
               >
                 {c.t}
               </p>
-              <p style={{ margin: 0, fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', lineHeight: 1.6 }}>
                 {c.d}
               </p>
             </div>
@@ -222,12 +222,12 @@ export default function LegalPage() {
         <nav
           aria-label="Índice del documento"
           style={{
-            marginTop: 34, border: '1px solid #ececf3', borderRadius: 14,
-            padding: '20px 22px', background: '#fcfcfe',
+            marginTop: 34, border: '1px solid var(--en-oscuro-linea, #ececf3)', borderRadius: 14,
+            padding: '20px 22px', background: 'var(--en-oscuro-superficie-2, #fcfcfe)',
           }}
         >
           <p style={{
-            margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#9ca3af',
+            margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: 'var(--en-oscuro-texto-3, #9ca3af)',
             textTransform: 'uppercase', letterSpacing: '0.06em',
           }}
           >
@@ -239,7 +239,7 @@ export default function LegalPage() {
                 <a
                   href={`#${s.id}`}
                   style={{
-                    fontSize: 14.5, color: '#374151', textDecoration: 'none',
+                    fontSize: 14.5, color: 'var(--en-oscuro-texto, #374151)', textDecoration: 'none',
                     display: 'flex', gap: 10,
                   }}
                 >
@@ -258,8 +258,7 @@ export default function LegalPage() {
           id="privacidad"
           n={1}
           titulo="Política de privacidad"
-          icono={<ShieldCheck size={19} color={MORADO} />}
-        >
+          icono={<ShieldCheck size={19} style={{ color: MORADO }} />}>
           <p style={p}>
             SAIPHA Servicios Digitais, operadora de la plataforma RIS App
             (risappbr.com), protege la privacidad de sus usuarios. Esta Política
@@ -320,8 +319,7 @@ export default function LegalPage() {
           id="terminos"
           n={2}
           titulo="Términos y condiciones de uso"
-          icono={<FileText size={19} color={MORADO} />}
-        >
+          icono={<FileText size={19} style={{ color: MORADO }} />}>
           <p style={p}>
             Estos Términos regulan el uso de la plataforma RIS App
             (risappbr.com), operada por SAIPHA Servicios Digitais. Al
@@ -379,8 +377,7 @@ export default function LegalPage() {
           id="reembolsos"
           n={3}
           titulo="Política de reembolsos y devoluciones"
-          icono={<RotateCcw size={19} color={MORADO} />}
-        >
+          icono={<RotateCcw size={19} style={{ color: MORADO }} />}>
           <h3 style={h3}>3.1. Principio general</h3>
           <p style={p}>
             Las recargas de saldo se acreditan para el consumo de soluciones
@@ -426,8 +423,7 @@ export default function LegalPage() {
           id="cancelacion"
           n={4}
           titulo="Política de cancelación de cuenta"
-          icono={<UserMinus size={19} color={MORADO} />}
-        >
+          icono={<UserMinus size={19} style={{ color: MORADO }} />}>
           <p style={p}>
             El usuario puede solicitar la cancelación de su cuenta en cualquier
             momento.
@@ -467,11 +463,10 @@ export default function LegalPage() {
           id="empresa"
           n={5}
           titulo="Información de la empresa"
-          icono={<Building2 size={19} color={MORADO} />}
-        >
+          icono={<Building2 size={19} style={{ color: MORADO }} />}>
           <p style={p}>La plataforma RIS App es operada por:</p>
           <div style={{
-            border: '1px solid #ececf3', borderRadius: 12, overflow: 'hidden',
+            border: '1px solid var(--en-oscuro-linea, #ececf3)', borderRadius: 12, overflow: 'hidden',
             marginBottom: 16,
           }}
           >
@@ -484,12 +479,12 @@ export default function LegalPage() {
                 key={k}
                 style={{
                   display: 'flex', flexWrap: 'wrap', gap: 12, padding: '12px 16px',
-                  borderTop: i === 0 ? 'none' : '1px solid #f3f3f7',
-                  background: i % 2 ? '#fcfcfe' : '#fff',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--en-oscuro-linea, #f3f3f7)',
+                  background: i % 2 ? 'var(--en-oscuro-superficie-2, #fcfcfe)' : 'var(--en-oscuro-superficie, #fff)',
                 }}
               >
-                <span style={{ fontSize: 13, color: '#9ca3af', minWidth: 130 }}>{k}</span>
-                <span style={{ fontSize: 14.5, color: '#111827', flex: 1 }}>{v}</span>
+                <span style={{ fontSize: 13, color: 'var(--en-oscuro-texto-3, #9ca3af)', minWidth: 130 }}>{k}</span>
+                <span style={{ fontSize: 14.5, color: 'var(--en-oscuro-texto, #111827)', flex: 1 }}>{v}</span>
               </div>
             ))}
           </div>
@@ -505,7 +500,7 @@ export default function LegalPage() {
             datos están completos en el dossier interno §1 y se entregan a quien
             los pida por el canal de atención.
           */}
-          <p style={{ ...p, fontSize: 13.5, color: '#6b7280' }}>
+          <p style={{ ...p, fontSize: 13.5, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
             Los datos registrales completos del operador se entregan a quien los
             solicite por <Soporte />, y a cualquier autoridad que los requiera.
           </p>
@@ -522,12 +517,12 @@ export default function LegalPage() {
 
         {/* ── Cierre ───────────────────────────────────────────────────── */}
         <div style={{
-          marginTop: 48, paddingTop: 22, borderTop: '1px solid #f1f0fb',
+          marginTop: 48, paddingTop: 22, borderTop: '1px solid var(--en-oscuro-acento-borde, #f1f0fb)',
           display: 'flex', flexWrap: 'wrap', gap: 14,
           alignItems: 'center', justifyContent: 'space-between',
         }}
         >
-          <p style={{ margin: 0, fontSize: 13, color: '#9ca3af', lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--en-oscuro-texto-3, #9ca3af)', lineHeight: 1.6 }}>
             Este documento se revisa periódicamente. La fecha del encabezado
             indica la última versión vigente.
           </p>

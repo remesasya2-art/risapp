@@ -361,7 +361,7 @@ export default function EnvioNuevo() {
               <label key={valor} style={{ display: 'flex', gap: '10px', cursor: 'pointer',
                 padding: '12px', borderRadius: '10px',
                 border: `1px solid ${datos.modalidad_flete === valor ? COLOR.primario : COLOR.borde}`,
-                backgroundColor: datos.modalidad_flete === valor ? COLOR.primarioSuave : '#fff' }}>
+                backgroundColor: datos.modalidad_flete === valor ? COLOR.primarioSuave : 'var(--en-oscuro-superficie, #fff)' }}>
                 <input type="radio" name="modalidad" checked={datos.modalidad_flete === valor}
                   onChange={() => setDatos((d) => ({ ...d, modalidad_flete: valor }))}
                   style={{ marginTop: '2px', accentColor: COLOR.primario }} />
@@ -490,22 +490,22 @@ function Prohibidos({ limites }) {
   const lista = limites?.prohibidos || [];
   if (!lista.length) return null;
   return (
-    <div style={{ ...tarjeta, backgroundColor: COLOR.errorSuave, borderColor: '#fecaca' }}>
+    <div style={{ ...tarjeta, backgroundColor: COLOR.errorSuave, borderColor: 'var(--en-oscuro-error-borde, #fecaca)' }}>
       <button type="button" onClick={() => setAbierto((a) => !a)}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
           border: 'none', background: 'none', cursor: 'pointer', padding: 0,
           textAlign: 'left' }}>
-        <ShieldAlert size={16} color="#991b1b" />
-        <span style={{ fontSize: '14px', fontWeight: 700, color: '#991b1b', flex: 1 }}>
+        <ShieldAlert size={16} style={{ color: 'var(--en-oscuro-error, #991b1b)' }} />
+        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--en-oscuro-error, #991b1b)', flex: 1 }}>
           Qué no se puede mandar
         </span>
-        <span style={{ fontSize: '12px', color: '#991b1b' }}>
+        <span style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #991b1b)' }}>
           {abierto ? 'ocultar' : `ver los ${lista.length}`}
         </span>
       </button>
       {abierto ? (
         <ul style={{ margin: '10px 0 0 0', paddingLeft: '20px', fontSize: '13px',
-          color: '#991b1b', lineHeight: 1.7 }}>
+          color: 'var(--en-oscuro-error, #991b1b)', lineHeight: 1.7 }}>
           {lista.map((p) => <li key={p}>{p}</li>)}
         </ul>
       ) : null}
@@ -599,7 +599,7 @@ function Cotizacion({ cotizacion, onVolver, onCreado }) {
             {cotizacion.referencias.map((r) => (
               <div key={`${r.rol}-${r.codigo}`} style={{ display: 'flex', gap: '12px',
                 alignItems: 'flex-start', padding: '12px', borderRadius: '10px',
-                backgroundColor: '#f9fafb', border: `1px solid ${COLOR.borde}` }}>
+                backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', border: `1px solid ${COLOR.borde}` }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: COLOR.texto }}>
                     {r.etiqueta}

@@ -402,7 +402,7 @@ function Confirmar({ envio, onListo }) {
   }
 
   return (
-    <div style={{ ...tarjeta, borderColor: '#f5d787', backgroundColor: '#fffdf5' }}>
+    <div style={{ ...tarjeta, borderColor: 'var(--en-oscuro-alerta-borde, #f5d787)', backgroundColor: 'var(--en-oscuro-alerta-suave, #fffdf5)' }}>
       <h3 style={titulo}><CheckCircle2 size={16} /> Falta confirmar este envío</h3>
       <p style={bajada}>
         <strong>No despaches nada hasta confirmarlo.</strong> Una cotización sin
@@ -412,7 +412,7 @@ function Confirmar({ envio, onListo }) {
 
       <div style={{
         display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap',
-        margin: '4px 0 16px', paddingBottom: '14px', borderBottom: '1px solid #f1e9cf',
+        margin: '4px 0 16px', paddingBottom: '14px', borderBottom: '1px solid var(--en-oscuro-alerta-borde, #f1e9cf)',
       }}
       >
         <span style={{ fontSize: '13px', color: COLOR.suave }}>Precio estimado</span>
@@ -501,16 +501,16 @@ function Pagar({ envio, partidas, onListo }) {
   };
 
   return (
-    <div style={{ ...tarjeta, backgroundColor: COLOR.alertaSuave, borderColor: '#fde68a' }}>
-      <h3 style={{ ...titulo, color: '#92400e' }}><CreditCard size={16} /> Hay algo por pagar</h3>
-      <p style={{ ...bajada, color: '#92400e' }}>
+    <div style={{ ...tarjeta, backgroundColor: COLOR.alertaSuave, borderColor: 'var(--en-oscuro-alerta-borde, #fde68a)' }}>
+      <h3 style={{ ...titulo, color: 'var(--en-oscuro-alerta, #92400e)' }}><CreditCard size={16} /> Hay algo por pagar</h3>
+      <p style={{ ...bajada, color: 'var(--en-oscuro-alerta, #92400e)' }}>
         Son {num(total)} {envio.moneda} en total. <strong>Un paquete con un cobro impago
         no sale de Pacaraima</strong> — no es una multa ni un error: es la regla, y hasta
         que se salde el paquete espera ahí.
       </p>
       <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '10px',
-        backgroundColor: '#fff', border: '1px solid #fde68a', fontSize: '13px',
-        color: '#92400e', display: 'flex', justifyContent: 'space-between', gap: '10px',
+        backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: '1px solid var(--en-oscuro-alerta-borde, #fde68a)', fontSize: '13px',
+        color: 'var(--en-oscuro-alerta, #92400e)', display: 'flex', justifyContent: 'space-between', gap: '10px',
         flexWrap: 'wrap' }}>
         <span>Tu saldo: <strong>{num(saldo)} {envio.moneda}</strong></span>
         {alcanza
@@ -529,12 +529,12 @@ function Pagar({ envio, partidas, onListo }) {
             </Boton>
           ) : null}
           {recarga.abierta ? (
-            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#92400e' }}>
+            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--en-oscuro-alerta, #92400e)' }}>
               Cuando la recarga se acredite, volvé acá y pagá. El paquete te espera en
               Pacaraima mientras tanto.
             </p>
           ) : (
-            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#92400e' }}
+            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--en-oscuro-alerta, #92400e)' }}
                data-testid="sin-recarga-escribinos">
               Cargar saldo no está disponible por ahora. Escribinos por el chat de
               soporte y coordinamos el pago. El paquete te espera en Pacaraima
@@ -552,7 +552,7 @@ function Pagar({ envio, partidas, onListo }) {
         return (
           <div key={p.partida} style={{ display: 'flex', gap: '12px', alignItems: 'center',
             marginTop: '10px', flexWrap: 'wrap' }}>
-            <span style={{ flex: 1, fontSize: '14px', color: '#92400e' }}>
+            <span style={{ flex: 1, fontSize: '14px', color: 'var(--en-oscuro-alerta, #92400e)' }}>
               {p.concepto || p.partida} · <strong>{num(p.monto_ris)} {envio.moneda}</strong>
             </span>
             <Boton cargando={pagando === p.partida} disabled={!alcanzaEsta}

@@ -297,4 +297,20 @@ body {
   --en-oscuro-error: #ff6961;
   --en-oscuro-error-suave: rgba(255, 69, 58, .16);
   --en-oscuro-error-borde: rgba(255, 69, 58, .40);
+  --en-oscuro-info: #64d2ff;
+  --en-oscuro-info-suave: rgba(100, 210, 255, .14);
+  --en-oscuro-info-borde: rgba(100, 210, 255, .38);
 }
+
+/* EL FONDO DEL DOCUMENTO, CUANDO LA PANTALLA ES OSCURA. En el iPhone, al
+   estirar la pantalla más allá del borde asoma el fondo del documento, que
+   es claro: una franja blanca arriba de la app negra. Sólo mientras se ve
+   una pantalla preparada; en las demás, el de siempre. */
+:root[data-tema="oscuro"] body:has(.con-tema) { background-color: #000000; }
+
+/* LOS CAMPOS SIN COLOR PROPIO. Muchos campos de las pantallas de antes no
+   declaran color de letra ni de texto de ejemplo, y los del navegador en
+   modo oscuro salen apagados: «Ej: 50000» casi no se leía. El color escrito
+   en el propio campo (`style`) sigue mandando sobre esto. */
+:root[data-tema="oscuro"] .con-tema :is(input, select, textarea) { color: var(--en-oscuro-texto); }
+:root[data-tema="oscuro"] .con-tema :is(input, textarea)::placeholder { color: var(--en-oscuro-texto-3); opacity: 1; }

@@ -39,7 +39,9 @@ def _los_que_usan_la_paleta():
         if f == _ESTILOS or "node_modules" in f.parts:
             continue
         texto = f.read_text(encoding="utf-8")
-        if "flujo/estilos" in texto or "from './estilos'" in texto or "var(--en-oscuro-" in texto:
+        # La de las encomiendas (`envios/estilos`, `COLOR`) funciona igual.
+        if ("flujo/estilos" in texto or "envios/estilos" in texto or "from './estilos'" in texto
+                or "var(--en-oscuro-" in texto):
             usan.append((f, texto))
     assert len(usan) >= 25, "la búsqueda de quién usa la paleta dejó de encontrarlos"
     return usan
@@ -92,7 +94,7 @@ def test_NADIE_LE_PEGA_TEXTO_A_UN_COLOR_DE_LA_PALETA():
         # Cualquier cosa + dos cifras hexadecimales es agregarle transparencia
         # a un color; con una variable adentro queda inválido. No sólo los de
         # la paleta: una constante local (`acento`) puede valer una variable.
-        for m in re.finditer(r"\bC\.\w+\s*\+|\+\s*C\.\w+\b|[\w.\])]\s*\+\s*['\"][0-9A-Fa-f]{2}['\"]|\$\{[^}]+\}[0-9A-Fa-f]{2}\b", texto):
+        for m in re.finditer(r"\b(?:C|COLOR)\.\w+\s*\+|\+\s*(?:C|COLOR)\.\w+\b|[\w.\])]\s*\+\s*['\"][0-9A-Fa-f]{2}['\"]|\$\{[^}]+\}[0-9A-Fa-f]{2}\b", texto):
             malos.append(f"{f.relative_to(_SRC)}: {m.group(0)}")
     assert not malos, malos
 
@@ -106,3 +108,19 @@ def test_NINGUN_ICONO_RECIBE_EL_COLOR_COMO_ATRIBUTO():
         "un ícono recibe el color como atributo; con la paleta de variables "
         "puede quedar invisible en Safari. Pasalo por style={{ color: ... }}:\n  "
         + "\n  ".join(malos))
+
+
+def test_UN_BOTON_ANCHO_NO_SE_SALE_DE_SU_LUGAR():
+    """El botón que ocupa el ancho que queda puede partir su texto en dos
+    líneas. Con `nowrap` y sin `minWidth: 0`, en un celular angosto se salía
+    de la ventana: «Enviarme el código», en el cambio de contraseña del
+    perfil, asomaba por el borde derecho (medido: terminaba en 368 píxeles
+    con la ventana terminando en 304)."""
+    fuente = (_SRC / "components" / "flujo" / "index.jsx").read_text(encoding="utf-8")
+    ancho = fuente[fuente.index("...(ancho ? {"):]
+    ancho = ancho[:ancho.index("} : {})")]
+    for regla in ("minWidth: 0", "whiteSpace: 'normal'", "height: 'auto'", "minHeight: '52px'"):
+        assert regla in ancho, regla
+    perfil = (_SRC / "pages" / "Profile.jsx").read_text(encoding="utf-8")
+    assert "<Boton onClick={cerrarCambioDeClave} ancho>" in perfil, (
+        "«Cancelar» tiene que ser ancho para crecer junto al otro y quedar parejo")

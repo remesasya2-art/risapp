@@ -111,17 +111,13 @@ export default function Login() {
 
   // LAS PANTALLAS INTERMEDIAS VAN SOBRE EL MISMO FONDO QUE EL LOGIN.
   //
-  //   El segundo factor y el alta con Google todavía no pasaron al estilo
-  //   nuevo: sus tarjetas son blancas y sus letras oscuras, escritas a mano.
-  //   Por eso el fondo es la pared de colores pero la tarjeta sigue blanca en
-  //   los dos modos. Si se pintara oscura, esas letras oscuras quedarían
-  //   sobre negro. Cuando pasen, se quita el `background: '#fff'`.
+  //   El segundo factor y el alta con Google escriben sus colores como «en
+  //   oscuro, tal; si no, el de siempre» (ver components/flujo/estilos.js), así
+  //   que siguen al modo como el resto de la pantalla.
   const intermedia = (contenido) => (
     <div className="con-tema t-base" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <Pared />
-      {/* `colorScheme: light` por lo mismo: sin él, en modo oscuro el
-          navegador pintaría oscuros los campos de esa tarjeta blanca. */}
-      <div style={{ position: 'relative', zIndex: 1, colorScheme: 'light' }}>{contenido}</div>
+      <div style={{ position: 'relative', zIndex: 1 }}>{contenido}</div>
     </div>
   );
 
@@ -141,7 +137,7 @@ export default function Login() {
 
   if (googlePendiente) {
     return intermedia(
-      <div className="w-full max-w-md" style={{ background: '#fff', color: '#111827', borderRadius: '28px', boxShadow: 'var(--t-sombra)', padding: '40px 32px' }}>
+      <div className="w-full max-w-md" style={{ background: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-texto, #111827)', borderRadius: '28px', boxShadow: 'var(--t-sombra)', padding: '40px 32px' }}>
         <CompletarRegistroGoogle pendiente={googlePendiente} onVolver={() => setGooglePendiente(null)} />
       </div>,
     );

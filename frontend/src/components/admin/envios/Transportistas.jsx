@@ -157,7 +157,7 @@ export default function Transportistas() {
               padding: '16px 20px', background: 'none', border: 'none', cursor: 'pointer',
               textAlign: 'left' }}>
             {abierto === t.transportista_id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            <Building2 size={18} color={COLOR.suave} />
+            <Building2 size={18} style={{ color: COLOR.suave }} />
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontSize: '14px', fontWeight: 700, color: COLOR.texto }}>
                 {t.nombre}

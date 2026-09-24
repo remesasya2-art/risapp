@@ -16,20 +16,26 @@
  */
 
 
+// CADA COLOR ES «EN OSCURO, TAL; SI NO, EL DE SIEMPRE», igual que la paleta
+// de los flujos (ver components/flujo/estilos.js, que explica el porqué y las
+// dos cosas que esto exige). En claro, y en toda pantalla sin la marca del
+// modo oscuro —el panel, por ahora—, cada valor es exactamente el de antes.
+const oscuro = (nombre, deSiempre) => `var(--en-oscuro-${nombre}, ${deSiempre})`;
+
 export const COLOR = {
-  texto: '#111827',
-  suave: '#6b7280',
-  borde: '#e5e7eb',
-  fondo: '#ffffff',
-  primario: '#6366f1',
-  primarioOscuro: '#4F46E5',
-  primarioSuave: '#eef2ff',
-  ok: '#059669',
-  okSuave: '#ecfdf5',
-  alerta: '#d97706',
-  alertaSuave: '#fffbeb',
-  error: '#dc2626',
-  errorSuave: '#fef2f2',
+  texto: oscuro('texto', '#111827'),
+  suave: oscuro('texto-2', '#6b7280'),
+  borde: oscuro('linea', '#e5e7eb'),
+  fondo: oscuro('superficie', '#ffffff'),
+  primario: oscuro('acento', '#6366f1'),
+  primarioOscuro: oscuro('acento', '#4F46E5'),
+  primarioSuave: oscuro('acento-suave', '#eef2ff'),
+  ok: oscuro('exito', '#059669'),
+  okSuave: oscuro('exito-suave', '#ecfdf5'),
+  alerta: oscuro('alerta', '#d97706'),
+  alertaSuave: oscuro('alerta-suave', '#fffbeb'),
+  error: oscuro('error', '#dc2626'),
+  errorSuave: oscuro('error-suave', '#fef2f2'),
 };
 
 export const tarjeta = {
@@ -61,18 +67,18 @@ export const botonPrimario = {
   ...botonBase, backgroundColor: COLOR.primario, color: '#fff',
 };
 export const botonSecundario = {
-  ...botonBase, backgroundColor: '#fff', color: COLOR.suave, borderColor: COLOR.borde,
+  ...botonBase, backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: COLOR.suave, borderColor: COLOR.borde,
 };
 export const botonPeligro = {
-  ...botonBase, backgroundColor: '#fff', color: COLOR.error, borderColor: '#fecaca',
+  ...botonBase, backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: COLOR.error, borderColor: 'var(--en-oscuro-error-borde, #fecaca)',
 };
 export const deshabilitado = { opacity: 0.5, cursor: 'not-allowed' };
 
 /** El estilo de un campo de entrada. En rojo suave cuando el valor no sirve. */
 export const entrada = (invalido) => ({
   padding: '10px 12px', borderRadius: '10px', fontSize: '14px', width: '100%',
-  border: `1.5px solid ${invalido ? '#fca5a5' : COLOR.borde}`,
-  backgroundColor: invalido ? COLOR.errorSuave : '#fff',
+  border: `1.5px solid ${invalido ? 'var(--en-oscuro-error-borde, #fca5a5)' : COLOR.borde}`,
+  backgroundColor: invalido ? COLOR.errorSuave : 'var(--en-oscuro-superficie, #fff)',
   color: COLOR.texto, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
 });
 

@@ -45,7 +45,7 @@ export default function Etiqueta({ retiro, previa = false }) {
       <h3 style={{ ...titulo, color: '#fff' }}>
         {previa ? 'A dónde vas a despachar' : 'Rotulá la caja así'}
       </h3>
-      <p style={{ ...bajada, color: '#94a3b8' }}>
+      <p style={{ ...bajada, color: 'var(--en-oscuro-acento, #94a3b8)' }}>
         {previa
           ? 'Esto es lo que vas a rotular sobre la caja. Mirá el nombre: en el mostrador de Pacaraima lo comparan contra un documento, y si no coincide no la entregan.'
           : 'Copiá esto tal cual sobre la caja. En el mostrador de Pacaraima comparan esta etiqueta contra un documento: si el nombre no coincide, no la entregan.'}
@@ -56,7 +56,7 @@ export default function Etiqueta({ retiro, previa = false }) {
         {retiro.texto_copiable}
       </pre>
       {previa ? (
-        <p style={{ margin: '12px 0 0 0', fontSize: '13px', color: '#fbbf24' }}>
+        <p style={{ margin: '12px 0 0 0', fontSize: '13px', color: 'var(--en-oscuro-alerta, #fbbf24)' }}>
           Todavía no despaches. Confirmá el envío acá abajo primero: si mandás la caja sin
           confirmar, esta cotización vence en 48 horas y el paquete llega a Pacaraima sin
           ningún envío que lo reclame.

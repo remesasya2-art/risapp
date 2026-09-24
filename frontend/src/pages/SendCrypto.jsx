@@ -20,9 +20,13 @@ function formatCountdown(ms) {
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
+// El fondo de la opción elegida va escrito entero (el color con `14` de
+// transparencia) y no armado pegándole texto al color: la guarda de la
+// paleta prohíbe ese patrón, porque con una variable adentro el valor queda
+// inválido. Son colores de marca, de tono medio, sin variable a propósito.
 const CURRENCIES = [
-  { key: 'usdt', label: 'USDT', color: '#26A17B' },
-  { key: 'usdc', label: 'USDC', color: '#2775CA' },
+  { key: 'usdt', label: 'USDT', color: '#26A17B', fondo: '#26A17B14' },
+  { key: 'usdc', label: 'USDC', color: '#2775CA', fondo: '#2775CA14' },
 ];
 
 export default function SendCrypto() {
@@ -270,17 +274,17 @@ export default function SendCrypto() {
   };
 
   const feeRowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6 };
-  const feeLabelStyle = { fontSize: '13px', color: '#6b7280', lineHeight: 1.4 };
-  const feeValueStyle = { fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' };
-  const cardStyle = { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #eef0f4', padding: 20 };
+  const feeLabelStyle = { fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', lineHeight: 1.4 };
+  const feeValueStyle = { fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', whiteSpace: 'nowrap' };
+  const cardStyle = { backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: 16, border: '1px solid var(--en-oscuro-linea, #eef0f4)', padding: 20 };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', paddingBottom: '40px' }}>
-      <header style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button onClick={() => (order ? resetFlow() : navigate('/'))} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--en-oscuro-fondo, #f9fafb)', paddingBottom: '40px' }}>
+      <header style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button onClick={() => (order ? resetFlow() : navigate('/'))} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
         </button>
-        <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Enviar con {order ? order.currency : cfg.label}</h1>
+        <h1 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Enviar con {order ? order.currency : cfg.label}</h1>
       </header>
 
       <div style={{ maxWidth: '600px', margin: '24px auto', padding: '0 20px' }}>
@@ -293,9 +297,9 @@ export default function SendCrypto() {
                   onClick={() => setCurrency(c.key)}
                   style={{
                     flex: 1, padding: '14px', borderRadius: '14px', cursor: 'pointer',
-                    border: currency === c.key ? `2px solid ${c.color}` : '1px solid #e5e7eb',
-                    backgroundColor: currency === c.key ? `${c.color}14` : '#fff',
-                    fontWeight: 700, fontSize: '14px', color: currency === c.key ? c.color : '#6b7280',
+                    border: currency === c.key ? `2px solid ${c.color}` : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                    backgroundColor: currency === c.key ? c.fondo : 'var(--en-oscuro-superficie, #fff)',
+                    fontWeight: 700, fontSize: '14px', color: currency === c.key ? c.color : 'var(--en-oscuro-texto-2, #6b7280)',
                   }}
                 >
                   {c.label}
@@ -305,7 +309,7 @@ export default function SendCrypto() {
 
             {hasBalance && (
               <div style={{ ...cardStyle, marginBottom: '16px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '12px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: '12px' }}>
                   ¿Cómo querés enviar?
                 </label>
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -314,37 +318,37 @@ export default function SendCrypto() {
                     onClick={() => { userToggledRef.current = true; setUseBalance(true); }}
                     style={{
                       flex: 1, padding: '12px', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
-                      border: useBalance ? `2px solid ${cfg.color}` : '1px solid #e5e7eb',
-                      backgroundColor: useBalance ? `${cfg.color}14` : '#fff',
+                      border: useBalance ? `2px solid ${cfg.color}` : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                      backgroundColor: useBalance ? cfg.fondo : 'var(--en-oscuro-superficie, #fff)',
                     }}
                   >
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: useBalance ? cfg.color : '#111827' }}>Usar mi saldo</div>
-                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>{fmt(availableBalance)} {cfg.label} disponibles</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: useBalance ? cfg.color : 'var(--en-oscuro-texto, #111827)' }}>Usar mi saldo</div>
+                    <div style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: '2px' }}>{fmt(availableBalance)} {cfg.label} disponibles</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => { userToggledRef.current = true; setUseBalance(false); }}
                     style={{
                       flex: 1, padding: '12px', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
-                      border: !useBalance ? `2px solid ${cfg.color}` : '1px solid #e5e7eb',
-                      backgroundColor: !useBalance ? `${cfg.color}14` : '#fff',
+                      border: !useBalance ? `2px solid ${cfg.color}` : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                      backgroundColor: !useBalance ? cfg.fondo : 'var(--en-oscuro-superficie, #fff)',
                     }}
                   >
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: !useBalance ? cfg.color : '#111827' }}>Pagar con cripto nueva</div>
-                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>Generás un pago nuevo</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: !useBalance ? cfg.color : 'var(--en-oscuro-texto, #111827)' }}>Pagar con cripto nueva</div>
+                    <div style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: '2px' }}>Generás un pago nuevo</div>
                   </button>
                 </div>
               </div>
             )}
 
             <div style={{ ...cardStyle, marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '12px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: '12px' }}>
                 Beneficiario en Venezuela
               </label>
               {beneficiaries.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#6b7280' }}>
+                <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                   No tienes beneficiarios guardados todavía. Puedes crear uno desde la pantalla de{' '}
-                  <a href="/send" style={{ color: '#4338ca', fontWeight: 600 }}>Enviar RIS</a> y luego volver aquí.
+                  <a href="/send" style={{ color: 'var(--en-oscuro-acento, #4338ca)', fontWeight: 600 }}>Enviar RIS</a> y luego volver aquí.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -354,15 +358,15 @@ export default function SendCrypto() {
                       onClick={() => setSelectedBeneficiary(b)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px',
-                        border: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '2px solid #4338ca' : '1px solid #e5e7eb',
-                        backgroundColor: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '#eef2ff' : '#fff',
+                        border: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? '2px solid var(--en-oscuro-acento, #4338ca)' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                        backgroundColor: selectedBeneficiary?.beneficiary_id === b.beneficiary_id ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)',
                         cursor: 'pointer', textAlign: 'left',
                       }}
                     >
-                      <User size={18} color="#6b7280" />
+                      <User size={18} style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
                       <div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{b.full_name}</div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.bank || b.payment_type} · {b.account_number || b.phone_number}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)' }}>{b.full_name}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{b.bank || b.payment_type} · {b.account_number || b.phone_number}</div>
                       </div>
                     </button>
                   ))}
@@ -371,7 +375,7 @@ export default function SendCrypto() {
             </div>
 
             <div style={{ ...cardStyle, marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: '8px' }}>
                 Monto en {cfg.label}
               </label>
               <input
@@ -379,24 +383,24 @@ export default function SendCrypto() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '20px', outline: 'none', boxSizing: 'border-box', fontWeight: 700 }}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '20px', outline: 'none', boxSizing: 'border-box', fontWeight: 700 }}
               />
               {minAmount != null && (
-                <p style={{ fontSize: '12px', color: belowMin ? '#dc2626' : '#9ca3af', margin: '8px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: belowMin ? 'var(--en-oscuro-error, #dc2626)' : 'var(--en-oscuro-texto-3, #9ca3af)', margin: '8px 0 0 0' }}>
                   Monto mínimo: {fmt(minAmount)} {cfg.label}
                 </p>
               )}
               {useBalance && exceedsBalance && (
-                <p style={{ fontSize: '12px', color: '#dc2626', margin: '8px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #dc2626)', margin: '8px 0 0 0' }}>
                   Supera tu saldo disponible ({fmt(availableBalance)} {cfg.label}).
                 </p>
               )}
               {!rateAvailable ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', padding: '10px 12px', backgroundColor: '#fef2f2', borderRadius: '10px', color: '#dc2626', fontSize: '13px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', padding: '10px 12px', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)', borderRadius: '10px', color: 'var(--en-oscuro-error, #dc2626)', fontSize: '13px' }}>
                   <AlertCircle size={16} /> La tasa de {cfg.label} → VES no está configurada todavía.
                 </div>
               ) : amountNum > 0 ? (
-                <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: '#f0fdf4', borderRadius: '10px', color: '#16a34a', fontSize: '14px', fontWeight: 600 }}>
+                <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdf4)', borderRadius: '10px', color: 'var(--en-oscuro-exito, #16a34a)', fontSize: '14px', fontWeight: 600 }}>
                   ≈ {fmt(amountVes)} VES
                 </div>
               ) : null}
@@ -404,7 +408,7 @@ export default function SendCrypto() {
 
             {!useBalance && (
               <div style={{ ...cardStyle, marginBottom: '20px', position: 'relative' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: '8px' }}>
                   Red
                 </label>
                 <button
@@ -413,24 +417,24 @@ export default function SendCrypto() {
                   disabled={networksLoading || networks.length === 0}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '14px 16px', borderRadius: '10px', border: '1px solid #d1d5db',
-                    backgroundColor: '#fff', cursor: networksLoading ? 'default' : 'pointer', fontSize: '14px', fontWeight: 600, color: '#111827',
+                    padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
+                    backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: networksLoading ? 'default' : 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)',
                   }}
                 >
                   <span>
                     {networksLoading ? 'Consultando redes disponibles...' : (selectedNetwork?.label || 'Selecciona una red')}
                     {!networksLoading && selectedNetwork?.min_amount != null && (
-                      <span style={{ fontWeight: 500, color: '#6b7280' }}>
+                      <span style={{ fontWeight: 500, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                         {' '}— mín. {fmt(selectedNetwork.min_amount)} {cfg.label}
                       </span>
                     )}
                   </span>
-                  <ChevronDown style={{ width: '18px', height: '18px', transform: networkMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: '#6b7280' }} />
+                  <ChevronDown style={{ width: '18px', height: '18px', transform: networkMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
                 </button>
                 {networkMenuOpen && networks.length > 0 && (
                   <div style={{
-                    position: 'absolute', left: 20, right: 20, marginTop: 6, backgroundColor: '#fff',
-                    border: '1px solid #e5e7eb', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    position: 'absolute', left: 20, right: 20, marginTop: 6, backgroundColor: 'var(--en-oscuro-superficie, #fff)',
+                    border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                     zIndex: 10, overflow: 'hidden', maxHeight: '260px', overflowY: 'auto',
                   }}>
                     {networks.map((n) => (
@@ -440,8 +444,8 @@ export default function SendCrypto() {
                         onClick={() => { setNetwork(n.ticker); setNetworkMenuOpen(false); }}
                         style={{
                           width: '100%', textAlign: 'left', padding: '12px 16px', border: 'none', cursor: 'pointer',
-                          backgroundColor: network === n.ticker ? '#eef2ff' : '#fff',
-                          color: network === n.ticker ? '#4338ca' : '#374151',
+                          backgroundColor: network === n.ticker ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'var(--en-oscuro-superficie, #fff)',
+                          color: network === n.ticker ? 'var(--en-oscuro-acento, #4338ca)' : 'var(--en-oscuro-texto, #374151)',
                           fontSize: '14px', fontWeight: network === n.ticker ? 700 : 500,
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         }}
@@ -449,12 +453,12 @@ export default function SendCrypto() {
                         <span>
                           {n.label}
                           {n.min_amount != null && (
-                            <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: '#6b7280', marginTop: '2px' }}>
+                            <span style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: '2px' }}>
                               mín. {fmt(n.min_amount)} {cfg.label}
                             </span>
                           )}
                         </span>
-                        {n.is_default && <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 500 }}>Por defecto</span>}
+                        {n.is_default && <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', fontWeight: 500 }}>Por defecto</span>}
                       </button>
                     ))}
                   </div>
@@ -464,7 +468,7 @@ export default function SendCrypto() {
 
             {!useBalance && amountNum > 0 && (
               <div style={{ ...cardStyle, marginBottom: '20px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', marginBottom: '10px' }}>
                   Lo que vas a pagar
                 </div>
 
@@ -487,14 +491,14 @@ export default function SendCrypto() {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid #eef0f4', marginTop: 10, paddingTop: 10 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>Total estimado a pagar</span>
-                  <span style={{ fontSize: '16px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid var(--en-oscuro-linea, #eef0f4)', marginTop: 10, paddingTop: 10 }}>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)' }}>Total estimado a pagar</span>
+                  <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', whiteSpace: 'nowrap' }}>
                     {networkFee === null ? 'desde ' : ''}{fmt(totalEstimado, 2)} {cfg.label}
                   </span>
                 </div>
 
-                <p style={{ fontSize: '11px', color: '#9ca3af', margin: '10px 0 0 0', lineHeight: 1.5 }}>
+                <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '10px 0 0 0', lineHeight: 1.5 }}>
                   Estimado, puede variar levemente según la congestión de la red.
                 </p>
               </div>
@@ -514,10 +518,10 @@ export default function SendCrypto() {
           </>
         ) : paid ? (
           <div style={{ ...cardStyle, textAlign: 'center' }}>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#16a34a', margin: '0 0 8px 0' }}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 8px 0' }}>
               {order.funded_from === 'balance' ? '¡Envío en camino!' : '¡Pago recibido!'}
             </h2>
-            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0' }}>
+            <p style={{ fontSize: 14, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 20px 0' }}>
               {order.funded_from === 'balance'
                 ? `Se descontaron ${order.amount_crypto} ${order.currency} de tu saldo disponible. `
                 : ''}
@@ -525,21 +529,21 @@ export default function SendCrypto() {
             </p>
             <button
               onClick={() => navigate('/history')}
-              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: 'var(--en-oscuro-acento, #2563eb)', cursor: 'pointer' }}
             >
               Ver historial
             </button>
           </div>
         ) : failed ? (
           <div style={{ ...cardStyle, textAlign: 'center' }}>
-            <XCircle size={40} color="#dc2626" style={{ marginBottom: 12 }} />
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#dc2626', margin: '0 0 8px 0' }}>El pago no se completó</h2>
-            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0' }}>
+            <XCircle size={40} style={{ color: 'var(--en-oscuro-error, #dc2626)', marginBottom: 12 }} />
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--en-oscuro-error, #dc2626)', margin: '0 0 8px 0' }}>El pago no se completó</h2>
+            <p style={{ fontSize: 14, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 20px 0' }}>
               La orden quedó cancelada. Podés generar un envío nuevo cuando quieras.
             </p>
             <button
               onClick={resetFlow}
-              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: 'var(--en-oscuro-acento, #2563eb)', cursor: 'pointer' }}
             >
               Empezar de nuevo
             </button>
@@ -549,11 +553,11 @@ export default function SendCrypto() {
             <div style={{ ...cardStyle, textAlign: 'center' }}>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-                borderRadius: 999, backgroundColor: '#ffedd5', color: '#c2410c', fontSize: 13, fontWeight: 600, marginBottom: 14,
+                borderRadius: 999, backgroundColor: 'var(--en-oscuro-alerta-suave, #ffedd5)', color: 'var(--en-oscuro-error, #c2410c)', fontSize: 13, fontWeight: 600, marginBottom: 14,
               }}>
                 <AlertCircle size={14} /> Falta completar tu pago
               </div>
-              <p style={{ fontSize: 13.5, color: '#6b7280', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 13.5, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
                 Tu pago llegó incompleto, probablemente por la comisión de tu wallet.
                 Enviá la diferencia a esta dirección y el envío se procesa automáticamente.
               </p>
@@ -561,7 +565,7 @@ export default function SendCrypto() {
               {topupCountdown && (
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                  borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e',
+                  borderRadius: 999, backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #92400e)',
                   fontSize: 12.5, fontWeight: 600, marginBottom: 16,
                 }}>
                   <Clock size={13} /> Te quedan {topupCountdown}
@@ -570,60 +574,60 @@ export default function SendCrypto() {
 
               {statusData?.topup_pay_address && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-                  <div style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16, border: '2px solid #e5e7eb' }}>
+                  <div style={{ padding: 16, backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: 16, border: '2px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                     <QRCodeSVG value={statusData.topup_pay_address} size={200} />
                   </div>
                 </div>
               )}
 
-              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
-              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+              <p style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Envía exactamente</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0' }}>
                 {statusData?.topup_pay_amount} {(statusData?.topup_pay_currency || '').toUpperCase()}
               </p>
               <button
                 onClick={() => handleCopy(String(statusData?.topup_pay_amount ?? ''), 'Monto')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 999, backgroundColor: '#eff6ff', cursor: 'pointer', marginBottom: 10 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--en-oscuro-acento, #2563eb)', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)', borderRadius: 999, backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', cursor: 'pointer', marginBottom: 10 }}
               >
                 <Copy size={12} /> Copiar monto exacto
               </button>
               {statusData?.topup_network && (
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {statusData.topup_network}</p>
+                <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0 0 16px 0' }}>Red: {statusData.topup_network}</p>
               )}
 
-              <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, textAlign: 'left' }}>
-                <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de pago</p>
-                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', margin: '0 0 10px 0' }}>
+              <div style={{ padding: 14, backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', borderRadius: 12, textAlign: 'left' }}>
+                <p style={{ fontSize: 11, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de pago</p>
+                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0' }}>
                   {statusData?.topup_pay_address}
                 </p>
                 <button
                   onClick={() => handleCopy(statusData?.topup_pay_address, 'Dirección')}
-                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 10, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
                   <Copy size={14} /> Copiar dirección
                 </button>
               </div>
 
               {statusData?.topup_payin_extra_id && (
-                <div style={{ padding: 14, backgroundColor: '#fee2e2', borderRadius: 12, textAlign: 'left', marginTop: 12 }}>
-                  <p style={{ fontSize: 11, color: '#991b1b', margin: '0 0 6px 0', fontWeight: 600 }}>Memo/Tag obligatorio</p>
-                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: '#374151', margin: '0 0 10px 0' }}>
+                <div style={{ padding: 14, backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', borderRadius: 12, textAlign: 'left', marginTop: 12 }}>
+                  <p style={{ fontSize: 11, color: 'var(--en-oscuro-error, #991b1b)', margin: '0 0 6px 0', fontWeight: 600 }}>Memo/Tag obligatorio</p>
+                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0' }}>
                     {statusData.topup_payin_extra_id}
                   </p>
                   <button
                     onClick={() => handleCopy(statusData.topup_payin_extra_id, 'Memo/Tag')}
-                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-error, #991b1b)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)', borderRadius: 10, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                   >
                     <Copy size={14} /> Copiar memo/tag
                   </button>
                 </div>
               )}
             </div>
-            <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+            <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', textAlign: 'center', margin: 0 }}>
               Si no completás la diferencia a tiempo, la orden pasa a revisión manual y te contactamos.
             </p>
             <button
               onClick={() => navigate('/history')}
-              style={{ padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
+              style={{ padding: 12, fontSize: 14, fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
             >
               Volver al historial
             </button>
@@ -632,20 +636,20 @@ export default function SendCrypto() {
           <div style={{ ...cardStyle, textAlign: 'center' }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-              borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600, marginBottom: 16,
+              borderRadius: 999, backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #92400e)', fontSize: 13, fontWeight: 600, marginBottom: 16,
             }}>
               <Clock size={14} /> En revisión
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0' }}>
               Estamos revisando tu pago
             </h2>
-            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0', lineHeight: 1.55 }}>
+            <p style={{ fontSize: 14, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 20px 0', lineHeight: 1.55 }}>
               Tu pago llegó incompleto y lo pasamos a revisión manual. No hace falta que hagas nada:
               te contactamos apenas lo resolvamos. Si aprobamos el envío, lo vas a ver en tu historial.
             </p>
             <button
               onClick={() => navigate('/history')}
-              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: 'var(--en-oscuro-acento, #2563eb)', cursor: 'pointer' }}
             >
               Ver historial
             </button>
@@ -655,73 +659,73 @@ export default function SendCrypto() {
             <div style={{ ...cardStyle, textAlign: 'center' }}>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-                borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600, marginBottom: 16,
+                borderRadius: 999, backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #92400e)', fontSize: 13, fontWeight: 600, marginBottom: 16,
               }}>
                 <Clock size={14} /> Esperando confirmación del pago...
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-                <div style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16, border: '2px solid #e5e7eb' }}>
+                <div style={{ padding: 16, backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: 16, border: '2px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                   <QRCodeSVG value={order.pay_address} size={200} />
                 </div>
               </div>
-              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
-              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+              <p style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Envía exactamente</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0' }}>
                 {order.pay_amount} {order.pay_currency?.toUpperCase()}
               </p>
               <button
                 onClick={() => handleCopy(String(order.pay_amount), 'Monto')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 999, backgroundColor: '#eff6ff', cursor: 'pointer', marginBottom: 10 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--en-oscuro-acento, #2563eb)', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)', borderRadius: 999, backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', cursor: 'pointer', marginBottom: 10 }}
               >
                 <Copy size={12} /> Copiar monto exacto
               </button>
-              <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px 0' }}>
+              <p style={{ fontSize: 12, color: 'var(--en-oscuro-error, #dc2626)', fontWeight: 600, margin: '0 0 8px 0' }}>
                 ⚠️ Envía el monto EXACTO. Si envías menos, el pago puede quedar pendiente sin confirmarse.
               </p>
               {order.network_label && (
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network_label}</p>
+                <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0 0 16px 0' }}>Red: {order.network_label}</p>
               )}
-              <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
-                <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de pago</p>
-                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', margin: '0 0 10px 0' }}>
+              <div style={{ padding: 14, backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
+                <p style={{ fontSize: 11, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de pago</p>
+                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0' }}>
                   {order.pay_address}
                 </p>
                 <button
                   onClick={() => handleCopy(order.pay_address, 'Dirección')}
-                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 10, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
                   <Copy size={14} /> Copiar dirección
                 </button>
               </div>
               {order.payin_extra_id && (
-                <div style={{ padding: 14, backgroundColor: '#fee2e2', borderRadius: 12, textAlign: 'left', marginTop: 12 }}>
-                  <p style={{ fontSize: 11, color: '#991b1b', margin: '0 0 6px 0', fontWeight: 600 }}>
+                <div style={{ padding: 14, backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', borderRadius: 12, textAlign: 'left', marginTop: 12 }}>
+                  <p style={{ fontSize: 11, color: 'var(--en-oscuro-error, #991b1b)', margin: '0 0 6px 0', fontWeight: 600 }}>
                     Memo/Tag obligatorio
                   </p>
-                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: '#374151', margin: '0 0 10px 0' }}>
+                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0' }}>
                     {order.payin_extra_id}
                   </p>
                   <button
                     onClick={() => handleCopy(order.payin_extra_id, 'Memo/Tag')}
-                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-error, #991b1b)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)', borderRadius: 10, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                   >
                     <Copy size={14} /> Copiar memo/tag
                   </button>
                 </div>
               )}
             </div>
-            <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+            <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', textAlign: 'center', margin: 0 }}>
               La app detecta el pago automáticamente. Puedes cerrar esta pantalla y volver más tarde.
             </p>
             <button
               onClick={handleCambiarMonto}
               disabled={cancelling}
-              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 12, backgroundColor: '#fff', cursor: cancelling ? 'default' : 'pointer', opacity: cancelling ? 0.6 : 1 }}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 12, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: cancelling ? 'default' : 'pointer', opacity: cancelling ? 0.6 : 1 }}
             >
               {cancelling ? 'Cancelando...' : 'Cambiar monto'}
             </button>
             <button
               onClick={resetFlow}
-              style={{ padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
+              style={{ padding: 12, fontSize: 14, fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
             >
               Cancelar y volver
             </button>

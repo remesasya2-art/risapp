@@ -16,7 +16,7 @@ const BANK_DATA = {
   'banco_venezuela': {
     name: 'Banco de Venezuela',
     code: '0102',
-    color: '#003876',
+    color: 'var(--en-oscuro-acento, #003876)',
     pago_movil: {
       ci: 'V-24560778',
       telefono: '04249311288',
@@ -32,7 +32,7 @@ const BANK_DATA = {
   'banesco': {
     name: 'Banesco',
     code: '0134',
-    color: '#00529B',
+    color: 'var(--en-oscuro-acento, #00529B)',
     pago_movil: {
       ci: 'V-24560778',
       telefono: '04249311288',
@@ -83,9 +83,9 @@ export default function RechargeVES() {
 
   const getStatusBadge = (status) => {
     const styles = {
-      pending: { bg: '#fef3c7', color: '#92400e', text: 'En Revisión' },
-      approved: { bg: '#dcfce7', color: '#166534', text: 'Aprobada' },
-      rejected: { bg: '#fee2e2', color: '#991b1b', text: 'Rechazada' }
+      pending: { bg: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #92400e)', text: 'En Revisión' },
+      approved: { bg: 'var(--en-oscuro-exito-suave, #dcfce7)', color: 'var(--en-oscuro-exito, #166534)', text: 'Aprobada' },
+      rejected: { bg: 'var(--en-oscuro-error-suave, #fee2e2)', color: 'var(--en-oscuro-error, #991b1b)', text: 'Rechazada' }
     };
     const style = styles[status] || styles.pending;
     return (
@@ -211,22 +211,22 @@ ${bankData.transferencia.ci}`;
 
   const pageStyle = {
     minHeight: '100vh',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    background: 'var(--en-oscuro-fondo, radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%))',
     fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '20px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #e5e7eb'
+    border: '1px solid var(--en-oscuro-linea, #e5e7eb)'
   };
 
   const inputStyle = {
     width: '100%',
     padding: '14px 16px',
     borderRadius: '12px',
-    border: '1px solid #d1d5db',
+    border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
     fontSize: '16px',
     outline: 'none',
     transition: 'border-color 0.2s'
@@ -248,7 +248,7 @@ ${bankData.transferencia.ci}`;
     padding: '16px',
     borderRadius: '14px',
     border: 'none',
-    backgroundColor: '#6366f1',
+    backgroundColor: 'var(--en-oscuro-acento, #6366f1)',
     color: '#ffffff',
     fontSize: '16px',
     fontWeight: '600',
@@ -263,8 +263,8 @@ ${bankData.transferencia.ci}`;
     padding: '8px 12px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#f3f4f6',
-    color: '#374151',
+    backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
+    color: 'var(--en-oscuro-texto, #374151)',
     fontSize: '13px',
     cursor: 'pointer',
     transition: 'all 0.2s'
@@ -278,44 +278,44 @@ ${bankData.transferencia.ci}`;
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+              <button onClick={() => navigate('/')} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--en-oscuro-superficie, rgba(255,255,255,0.8))', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
               </button>
-              <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Recarga con VES</h1>
+              <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recarga con VES</h1>
             </div>
             <NotificationBell />
           </div>
 
           {/* Status Card */}
           <div style={{ ...cardStyle, padding: '32px', textAlign: 'center' }}>
-            <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#fef3c7', margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock style={{ width: '40px', height: '40px', color: '#d97706' }} />
+            <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-alerta, #d97706)' }} />
             </div>
-            <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: '0 0 12px 0' }}>
+            <h2 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 12px 0' }}>
               Pago en Revisión
             </h2>
-            <p style={{ fontSize: '15px', color: '#6b7280', margin: '0 0 24px 0', lineHeight: '1.5' }}>
+            <p style={{ fontSize: '15px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 24px 0', lineHeight: '1.5' }}>
               Tu comprobante ha sido enviado y está siendo revisado por nuestro equipo. Te notificaremos cuando tu recarga sea aprobada.
             </p>
 
-            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '24px' }}>
+            <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '14px', marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ color: '#6b7280', fontSize: '14px' }}>Monto VES</span>
-                <span style={{ fontWeight: '600', color: '#111827' }}>{fmt(parseFloat(amountVES))} VES</span>
+                <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '14px' }}>Monto VES</span>
+                <span style={{ fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>{fmt(parseFloat(amountVES))} VES</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ color: '#6b7280', fontSize: '14px' }}>Recibirás</span>
-                <span style={{ fontWeight: '700', color: '#16a34a', fontSize: '18px' }}>{amountRIS} RIS</span>
+                <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '14px' }}>Recibirás</span>
+                <span style={{ fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', fontSize: '18px' }}>{amountRIS} RIS</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6b7280', fontSize: '14px' }}>ID Transacción</span>
-                <span style={{ fontWeight: '500', color: '#6366f1', fontSize: '12px' }}>{transactionId?.slice(0, 12)}...</span>
+                <span style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', fontSize: '14px' }}>ID Transacción</span>
+                <span style={{ fontWeight: '500', color: 'var(--en-oscuro-acento, #6366f1)', fontSize: '12px' }}>{transactionId?.slice(0, 12)}...</span>
               </div>
             </div>
 
-            <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <AlertCircle style={{ width: '20px', height: '20px', color: '#d97706', flexShrink: 0 }} />
-              <p style={{ fontSize: '13px', color: '#92400e', margin: 0, textAlign: 'left' }}>
+            <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <AlertCircle style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-alerta, #d97706)', flexShrink: 0 }} />
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-alerta, #92400e)', margin: 0, textAlign: 'left' }}>
                 El tiempo de aprobación puede variar entre 5 a 30 minutos en horario laboral.
               </p>
             </div>
@@ -338,12 +338,12 @@ ${bankData.transferencia.ci}`;
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="back-button">
-              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+            <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--en-oscuro-superficie, rgba(255,255,255,0.8))', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} data-testid="back-button">
+              <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
             </button>
             <div>
-              <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Recargar con VES</h1>
-              <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recargar con VES</h1>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                 Tasa: {fmt(rates?.ves_to_ris_rate) || '140'} VES = 1 RIS
               </p>
             </div>
@@ -364,8 +364,8 @@ ${bankData.transferencia.ci}`;
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Eye style={{ width: '20px', height: '20px', color: '#6366f1' }} />
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                <Eye style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
+                <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)' }}>
                   Mis Recargas VES ({myRecharges.length})
                 </span>
               </div>
@@ -373,7 +373,7 @@ ${bankData.transferencia.ci}`;
                 style={{ 
                   width: '20px', 
                   height: '20px', 
-                  color: '#6b7280',
+                  color: 'var(--en-oscuro-texto-2, #6b7280)',
                   transform: showRecharges ? 'rotate(180deg)' : 'rotate(0)',
                   transition: 'transform 0.2s'
                 }} 
@@ -392,10 +392,10 @@ ${bankData.transferencia.ci}`;
                       gap: '6px',
                       padding: '6px 12px',
                       borderRadius: '8px',
-                      border: '1px solid #e5e7eb',
-                      backgroundColor: '#ffffff',
+                      border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                      backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
                       fontSize: '12px',
-                      color: '#6b7280',
+                      color: 'var(--en-oscuro-texto-2, #6b7280)',
                       cursor: 'pointer'
                     }}
                   >
@@ -409,20 +409,20 @@ ${bankData.transferencia.ci}`;
                     key={recharge.transaction_id}
                     style={{
                       padding: '14px',
-                      backgroundColor: '#f9fafb',
+                      backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)',
                       borderRadius: '12px',
                       marginBottom: '10px',
-                      border: '1px solid #e5e7eb'
+                      border: '1px solid var(--en-oscuro-linea, #e5e7eb)'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>
                         {fmt(parseFloat(recharge.amount_ves || 0))} VES
                       </span>
                       {getStatusBadge(recharge.status)}
                     </div>
                     
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#6b7280' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)' }}>
                       <span>Recibirás: {fmt(parseFloat(recharge.amount_ris || 0))} RIS</span>
                       <span>{new Date(recharge.created_at).toLocaleDateString()}</span>
                     </div>
@@ -431,14 +431,14 @@ ${bankData.transferencia.ci}`;
                       <div style={{ 
                         marginTop: '10px', 
                         padding: '10px', 
-                        backgroundColor: '#dcfce7', 
+                        backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', 
                         borderRadius: '8px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        <CheckCircle style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                        <span style={{ fontSize: '13px', color: '#166534', fontWeight: '500' }}>
+                        <CheckCircle style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
+                        <span style={{ fontSize: '13px', color: 'var(--en-oscuro-exito, #166534)', fontWeight: '500' }}>
                           Recarga aprobada - Saldo acreditado
                         </span>
                       </div>
@@ -448,17 +448,17 @@ ${bankData.transferencia.ci}`;
                       <div style={{ 
                         marginTop: '10px', 
                         padding: '10px', 
-                        backgroundColor: '#fee2e2', 
+                        backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', 
                         borderRadius: '8px'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <X style={{ width: '16px', height: '16px', color: '#dc2626' }} />
-                          <span style={{ fontSize: '13px', color: '#991b1b', fontWeight: '500' }}>
+                          <X style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-error, #dc2626)' }} />
+                          <span style={{ fontSize: '13px', color: 'var(--en-oscuro-error, #991b1b)', fontWeight: '500' }}>
                             Recarga rechazada
                           </span>
                         </div>
                         {recharge.rejection_reason && (
-                          <p style={{ fontSize: '12px', color: '#b91c1c', margin: '4px 0 0 24px' }}>
+                          <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #b91c1c)', margin: '4px 0 0 24px' }}>
                             Motivo: {recharge.rejection_reason}
                           </p>
                         )}
@@ -469,14 +469,14 @@ ${bankData.transferencia.ci}`;
                       <div style={{ 
                         marginTop: '10px', 
                         padding: '10px', 
-                        backgroundColor: '#fef3c7', 
+                        backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', 
                         borderRadius: '8px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        <Clock style={{ width: '16px', height: '16px', color: '#d97706' }} />
-                        <span style={{ fontSize: '13px', color: '#92400e', fontWeight: '500' }}>
+                        <Clock style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-alerta, #d97706)' }} />
+                        <span style={{ fontSize: '13px', color: 'var(--en-oscuro-alerta, #92400e)', fontWeight: '500' }}>
                           En revisión - Esperando aprobación
                         </span>
                       </div>
@@ -491,13 +491,13 @@ ${bankData.transferencia.ci}`;
         {/* Step 1: Amount and Bank Selection */}
         {step === 1 && (
           <div style={{ ...cardStyle, padding: '24px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 20px 0' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 20px 0' }}>
               Paso 1: Datos de la recarga
             </h2>
 
             {/* Amount Input */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>
                 Monto a pagar (VES)
               </label>
               <input
@@ -509,7 +509,7 @@ ${bankData.transferencia.ci}`;
                 data-testid="amount-ves-input"
               />
               {amountVES && (
-                <p style={{ fontSize: '14px', color: '#16a34a', margin: '8px 0 0 0', fontWeight: '600' }}>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '8px 0 0 0', fontWeight: '600' }}>
                   Recibirás: {amountRIS} RIS
                 </p>
               )}
@@ -517,7 +517,7 @@ ${bankData.transferencia.ci}`;
 
             {/* Bank Selection */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>
                 Selecciona el banco
               </label>
               <select
@@ -534,7 +534,7 @@ ${bankData.transferencia.ci}`;
 
             {/* Payment Type Selection */}
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>
                 Tipo de pago
               </label>
               <select
@@ -574,7 +574,7 @@ ${bankData.transferencia.ci}`;
                 display: 'flex', alignItems: 'center', gap: '6px', 
                 padding: '8px 12px', marginBottom: '16px',
                 backgroundColor: 'transparent', border: 'none', 
-                color: '#6366f1', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
+                color: 'var(--en-oscuro-acento, #6366f1)', fontSize: '14px', fontWeight: '500', cursor: 'pointer'
               }}
             >
               <ArrowLeft style={{ width: '16px', height: '16px' }} />
@@ -585,12 +585,12 @@ ${bankData.transferencia.ci}`;
             <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto a pagar</p>
-                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>{fmt(parseFloat(amountVES))} VES</p>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Monto a pagar</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{fmt(parseFloat(amountVES))} VES</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 4px 0' }}>Recibirás</p>
-                  <p style={{ fontSize: '24px', fontWeight: '700', color: '#16a34a', margin: 0 }}>{amountRIS} RIS</p>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Recibirás</p>
+                  <p style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>{amountRIS} RIS</p>
                 </div>
               </div>
             </div>
@@ -606,10 +606,10 @@ ${bankData.transferencia.ci}`;
                   <Building2 style={{ width: '24px', height: '24px', color: '#ffffff' }} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                     {BANK_DATA[selectedBank].name}
                   </h3>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>
                     {paymentType === 'pago_movil' ? '📱 Pago Móvil' : '💳 Transferencia'}
                   </p>
                 </div>
@@ -618,55 +618,55 @@ ${bankData.transferencia.ci}`;
               {/* Payment Details */}
               {paymentType === 'pago_movil' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+                  <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Teléfono</p>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Teléfono</p>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                           {BANK_DATA[selectedBank].pago_movil.telefono}
                         </p>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(BANK_DATA[selectedBank].pago_movil.telefono, 'telefono')}
-                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'telefono' ? '#dcfce7' : '#f3f4f6' }}
+                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'telefono' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
-                        {copiedField === 'telefono' ? <CheckCircle style={{ width: '14px', height: '14px', color: '#16a34a' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
+                        {copiedField === 'telefono' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
                         {copiedField === 'telefono' ? 'Copiado' : 'Copiar'}
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+                  <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Cédula</p>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Cédula</p>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                           {BANK_DATA[selectedBank].pago_movil.ci}
                         </p>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(BANK_DATA[selectedBank].pago_movil.ci, 'ci')}
-                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'ci' ? '#dcfce7' : '#f3f4f6' }}
+                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'ci' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
-                        {copiedField === 'ci' ? <CheckCircle style={{ width: '14px', height: '14px', color: '#16a34a' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
+                        {copiedField === 'ci' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
                         {copiedField === 'ci' ? 'Copiado' : 'Copiar'}
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+                  <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Banco</p>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Banco</p>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                           {BANK_DATA[selectedBank].pago_movil.banco}
                         </p>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(BANK_DATA[selectedBank].code, 'banco')}
-                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'banco' ? '#dcfce7' : '#f3f4f6' }}
+                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'banco' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
-                        {copiedField === 'banco' ? <CheckCircle style={{ width: '14px', height: '14px', color: '#16a34a' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
+                        {copiedField === 'banco' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
                         {copiedField === 'banco' ? 'Copiado' : 'Copiar'}
                       </button>
                     </div>
@@ -674,55 +674,55 @@ ${bankData.transferencia.ci}`;
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+                  <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Titular</p>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Titular</p>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                           {BANK_DATA[selectedBank].transferencia.titular}
                         </p>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(BANK_DATA[selectedBank].transferencia.titular, 'titular')}
-                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'titular' ? '#dcfce7' : '#f3f4f6' }}
+                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'titular' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
-                        {copiedField === 'titular' ? <CheckCircle style={{ width: '14px', height: '14px', color: '#16a34a' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
+                        {copiedField === 'titular' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
                         {copiedField === 'titular' ? 'Copiado' : 'Copiar'}
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+                  <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Número de Cuenta</p>
-                        <p style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: 0, fontFamily: 'monospace' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Número de Cuenta</p>
+                        <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0, fontFamily: 'monospace' }}>
                           {BANK_DATA[selectedBank].transferencia.cuenta}
                         </p>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(BANK_DATA[selectedBank].transferencia.cuenta, 'cuenta')}
-                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'cuenta' ? '#dcfce7' : '#f3f4f6' }}
+                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'cuenta' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
-                        {copiedField === 'cuenta' ? <CheckCircle style={{ width: '14px', height: '14px', color: '#16a34a' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
+                        {copiedField === 'cuenta' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
                         {copiedField === 'cuenta' ? 'Copiado' : 'Copiar'}
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ padding: '14px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+                  <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Cédula</p>
-                        <p style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Cédula</p>
+                        <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                           {BANK_DATA[selectedBank].transferencia.ci}
                         </p>
                       </div>
                       <button 
                         onClick={() => copyToClipboard(BANK_DATA[selectedBank].transferencia.ci, 'ci_trans')}
-                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'ci_trans' ? '#dcfce7' : '#f3f4f6' }}
+                        style={{ ...copyBtnStyle, backgroundColor: copiedField === 'ci_trans' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
-                        {copiedField === 'ci_trans' ? <CheckCircle style={{ width: '14px', height: '14px', color: '#16a34a' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
+                        {copiedField === 'ci_trans' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
                         {copiedField === 'ci_trans' ? 'Copiado' : 'Copiar'}
                       </button>
                     </div>
@@ -739,8 +739,8 @@ ${bankData.transferencia.ci}`;
                   padding: '14px',
                   borderRadius: '12px',
                   border: 'none',
-                  backgroundColor: copiedField === 'all' ? '#dcfce7' : '#6366f1',
-                  color: copiedField === 'all' ? '#166534' : '#ffffff',
+                  backgroundColor: copiedField === 'all' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-acento, #6366f1)',
+                  color: copiedField === 'all' ? 'var(--en-oscuro-exito, #166534)' : '#ffffff',
                   fontSize: '15px',
                   fontWeight: '600',
                   cursor: 'pointer',
@@ -768,21 +768,21 @@ ${bankData.transferencia.ci}`;
 
             {/* Upload Proof */}
             <div style={{ ...cardStyle, padding: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 16px 0' }}>
                 Adjuntar comprobante de pago
               </h3>
               
               {!proofPreview ? (
                 <label style={{ 
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  padding: '32px', border: '2px dashed #d1d5db', borderRadius: '14px',
+                  padding: '32px', border: '2px dashed var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: '14px',
                   cursor: 'pointer', transition: 'all 0.2s'
                 }}>
-                  <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
-                  <p style={{ fontSize: '15px', fontWeight: '500', color: '#374151', margin: '0 0 4px 0' }}>
+                  <Upload style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '12px' }} />
+                  <p style={{ fontSize: '15px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 4px 0' }}>
                     Toca para subir imagen
                   </p>
-                  <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>
                     Capture del comprobante de pago
                   </p>
                   <input
@@ -798,7 +798,7 @@ ${bankData.transferencia.ci}`;
                   <img 
                     src={proofPreview} 
                     alt="Comprobante" 
-                    style={{ width: '100%', borderRadius: '14px', border: '1px solid #e5e7eb' }}
+                    style={{ width: '100%', borderRadius: '14px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}
                   />
                   <button
                     onClick={() => { setProofImage(null); setProofPreview(null); }}
@@ -812,11 +812,11 @@ ${bankData.transferencia.ci}`;
                     <X style={{ width: '18px', height: '18px', color: '#ffffff' }} />
                   </button>
                   <div style={{ 
-                    marginTop: '12px', padding: '12px', backgroundColor: '#dcfce7', 
+                    marginTop: '12px', padding: '12px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', 
                     borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px'
                   }}>
-                    <CheckCircle style={{ width: '18px', height: '18px', color: '#16a34a' }} />
-                    <span style={{ fontSize: '14px', color: '#166534', fontWeight: '500' }}>
+                    <CheckCircle style={{ width: '18px', height: '18px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
+                    <span style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #166534)', fontWeight: '500' }}>
                       Comprobante adjuntado
                     </span>
                   </div>
@@ -840,7 +840,7 @@ ${bankData.transferencia.ci}`;
               >
                 {loading ? (
                   <>
-                    <div style={{ width: '20px', height: '20px', border: '2px solid #ffffff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <div style={{ width: '20px', height: '20px', border: '2px solid var(--en-oscuro-linea, #ffffff)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                     Enviando...
                   </>
                 ) : (

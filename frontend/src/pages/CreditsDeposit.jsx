@@ -8,8 +8,10 @@ import { QRCodeSVG } from 'qrcode.react';
 
 // Monedas de credito disponibles (de cara al usuario: "Creditos")
 const CREDIT_OPTIONS = [
-  { key: 'usdt', label: 'USDT', desc: 'Deposita con USDT', color: '#26A17B' },
-  { key: 'usdc', label: 'USDC', desc: 'Deposita con USDC', color: '#2775CA' },
+  // `fondo` va escrito entero y no armado pegándole texto al color: ver la
+  // nota de CURRENCIES en SendCrypto.jsx.
+  { key: 'usdt', label: 'USDT', desc: 'Deposita con USDT', color: '#26A17B', fondo: '#26A17B20' },
+  { key: 'usdc', label: 'USDC', desc: 'Deposita con USDC', color: '#2775CA', fondo: '#2775CA20' },
 ];
 
 export default function CreditsDeposit() {
@@ -146,30 +148,30 @@ export default function CreditsDeposit() {
   };
 
   const cardStyle = {
-    backgroundColor: '#fff', borderRadius: 16, border: '1px solid #e5e7eb',
+    backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: 16, border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
     padding: 20,
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', paddingBottom: 40 }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--en-oscuro-fondo, #f9fafb)', paddingBottom: 40 }}>
       {/* Header */}
-      <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={() => (order ? resetFlow() : navigate(-1))} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
-          <ArrowLeft size={22} color="#374151" />
+          <ArrowLeft size={22} style={{ color: 'var(--en-oscuro-texto, #374151)' }} />
         </button>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: '#111827', margin: 0 }}>Recargar con cripto</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recargar con cripto</h1>
       </div>
 
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px' }}>
         {!order ? (
           <>
-            <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 20 }}>
+            <p style={{ fontSize: 14, color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: 20 }}>
               Deposita USDT o USDC y recibe creditos en tu cuenta. Se acreditan al confirmarse el pago,
               sin salir de la aplicación.
             </p>
 
             {/* Seleccion de moneda */}
-            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 8 }}>Tipo de credito</label>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: 8 }}>Tipo de credito</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
               {CREDIT_OPTIONS.map((opt) => (
                 <button
@@ -177,26 +179,26 @@ export default function CreditsDeposit() {
                   onClick={() => setCurrency(opt.key)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12, padding: 14, textAlign: 'left',
-                    borderRadius: 12, cursor: 'pointer', backgroundColor: '#fff',
-                    border: currency === opt.key ? `2px solid ${opt.color}` : '1px solid #e5e7eb',
+                    borderRadius: 12, cursor: 'pointer', backgroundColor: 'var(--en-oscuro-superficie, #fff)',
+                    border: currency === opt.key ? `2px solid ${opt.color}` : '1px solid var(--en-oscuro-linea, #e5e7eb)',
                   }}
                 >
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: `${opt.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Bitcoin size={20} color={opt.color} />
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: opt.fondo, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Bitcoin size={20} style={{ color: opt.color }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>{opt.label}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>{opt.desc}</div>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--en-oscuro-texto, #111827)' }}>{opt.label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{opt.desc}</div>
                   </div>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', border: currency === opt.key ? `5px solid ${opt.color}` : '2px solid #d1d5db' }} />
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', border: currency === opt.key ? `5px solid ${opt.color}` : '2px solid var(--en-oscuro-linea-fuerte, #d1d5db)' }} />
                 </button>
               ))}
             </div>
 
             {/* Seleccion de red */}
-            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 8 }}>Red</label>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: 8 }}>Red</label>
             {networksLoading ? (
-              <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>Consultando redes disponibles...</p>
+              <p style={{ fontSize: 13, color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: 20 }}>Consultando redes disponibles...</p>
             ) : (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                 {networks.map((n) => (
@@ -205,9 +207,9 @@ export default function CreditsDeposit() {
                     onClick={() => setNetwork(n.ticker)}
                     style={{
                       padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      border: network === n.ticker ? '2px solid #2563eb' : '1px solid #e5e7eb',
-                      backgroundColor: network === n.ticker ? '#eff6ff' : '#fff',
-                      color: network === n.ticker ? '#1d4ed8' : '#374151',
+                      border: network === n.ticker ? '2px solid var(--en-oscuro-acento, #2563eb)' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                      backgroundColor: network === n.ticker ? 'var(--en-oscuro-acento-suave, #eff6ff)' : 'var(--en-oscuro-superficie, #fff)',
+                      color: network === n.ticker ? 'var(--en-oscuro-acento, #1d4ed8)' : 'var(--en-oscuro-texto, #374151)',
                     }}
                   >
                     {n.label}
@@ -222,7 +224,7 @@ export default function CreditsDeposit() {
             )}
 
             {/* Monto */}
-            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 8 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--en-oscuro-texto, #374151)', display: 'block', marginBottom: 8 }}>
               Monto a depositar ({selected?.key.toUpperCase()})
             </label>
             <input
@@ -233,17 +235,17 @@ export default function CreditsDeposit() {
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               style={{
-                width: '100%', boxSizing: 'border-box', padding: '12px 14px', fontSize: 18, fontWeight: 500, color: '#111827',
-                border: belowMin ? '1px solid #dc2626' : '1px solid #d1d5db', borderRadius: 12, marginBottom: 6,
+                width: '100%', boxSizing: 'border-box', padding: '12px 14px', fontSize: 18, fontWeight: 500, color: 'var(--en-oscuro-texto, #111827)',
+                border: belowMin ? '1px solid #dc2626' : '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 12, marginBottom: 6,
               }}
             />
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
-              marginBottom: 20, backgroundColor: belowMin ? '#fee2e2' : '#eff6ff',
-              border: belowMin ? '1px solid #fecaca' : '1px solid #bfdbfe',
+              marginBottom: 20, backgroundColor: belowMin ? 'var(--en-oscuro-error-suave, #fee2e2)' : 'var(--en-oscuro-acento-suave, #eff6ff)',
+              border: belowMin ? '1px solid var(--en-oscuro-error-borde, #fecaca)' : '1px solid var(--en-oscuro-acento-borde, #bfdbfe)',
             }}>
-              <AlertTriangle size={16} color={belowMin ? '#dc2626' : '#2563eb'} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: belowMin ? '#dc2626' : '#1d4ed8' }}>
+              <AlertTriangle size={16} style={{ color: belowMin ? '#dc2626' : '#2563eb' }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: belowMin ? 'var(--en-oscuro-error, #dc2626)' : 'var(--en-oscuro-acento, #1d4ed8)' }}>
                 {minAmount != null
                   ? `Monto mínimo para depositar: ${fmt(minAmount)} ${selected?.key.toUpperCase()}`
                   : 'Consultando monto mínimo...'}
@@ -251,14 +253,14 @@ export default function CreditsDeposit() {
             </div>
 
             {/* Declaracion de jurisdiccion */}
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', backgroundColor: '#fef3c7', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
               <input
                 type="checkbox"
                 checked={declared}
                 onChange={(e) => setDeclared(e.target.checked)}
                 style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}
               />
-              <span style={{ fontSize: 12, color: '#854d0e', lineHeight: 1.5 }}>
+              <span style={{ fontSize: 12, color: 'var(--en-oscuro-alerta, #854d0e)', lineHeight: 1.5 }}>
                 Declaro que no soy residente ni ciudadano de Estados Unidos, la Union Europea o el Reino Unido.
               </span>
             </div>
@@ -269,29 +271,29 @@ export default function CreditsDeposit() {
               disabled={!canContinue}
               style={{
                 width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12,
-                backgroundColor: canContinue ? '#2563eb' : '#93c5fd', cursor: canContinue ? 'pointer' : 'not-allowed',
+                backgroundColor: canContinue ? 'var(--en-oscuro-acento, #2563eb)' : '#93c5fd', cursor: canContinue ? 'pointer' : 'not-allowed',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
               {loading ? (<><Loader2 size={18} className="animate-spin" /> Generando dirección...</>) : 'Generar dirección de pago'}
             </button>
-            <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <p style={{ fontSize: 11, color: 'var(--en-oscuro-texto-3, #9ca3af)', textAlign: 'center', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <ShieldCheck size={13} /> Pago procesado de forma segura por NOWPayments
             </p>
           </>
         ) : credited ? (
           /* Pantalla de exito */
           <div style={{ ...cardStyle, textAlign: 'center' }}>
-            <div style={{ width: 88, height: 88, borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-              <CheckCircle size={48} color="#16a34a" />
+            <div style={{ width: 88, height: 88, borderRadius: '50%', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+              <CheckCircle size={48} style={{ color: 'var(--en-oscuro-exito, #16a34a)' }} />
             </div>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#16a34a', margin: '0 0 8px 0' }}>¡Depósito acreditado!</h2>
-            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px 0' }}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 8px 0' }}>¡Depósito acreditado!</h2>
+            <p style={{ fontSize: 14, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 20px 0' }}>
               Se acreditaron {order.credit_amount ?? order.pay_amount} {currency.toUpperCase()} a tu cuenta.
             </p>
             <button
               onClick={() => navigate('/')}
-              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: '#2563eb', cursor: 'pointer' }}
+              style={{ width: '100%', padding: 14, fontSize: 15, fontWeight: 600, color: '#fff', border: 'none', borderRadius: 12, backgroundColor: 'var(--en-oscuro-acento, #2563eb)', cursor: 'pointer' }}
             >
               Ir al Dashboard
             </button>
@@ -302,90 +304,90 @@ export default function CreditsDeposit() {
             <div style={{ ...cardStyle, textAlign: 'center' }}>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-                borderRadius: 999, backgroundColor: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600, marginBottom: 16,
+                borderRadius: 999, backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', color: 'var(--en-oscuro-alerta, #92400e)', fontSize: 13, fontWeight: 600, marginBottom: 16,
               }}>
                 <Clock size={14} className="animate-spin" /> Esperando confirmación del pago...
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-                <div style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16, border: '2px solid #e5e7eb' }}>
+                <div style={{ padding: 16, backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: 16, border: '2px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                   <QRCodeSVG value={order.pay_address} size={200} />
                 </div>
               </div>
-              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px 0' }}>Envía exactamente</p>
-              <p style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: '0 0 8px 0' }}>
+              <p style={{ fontSize: 13, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Envía exactamente</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0' }}>
                 {order.pay_amount} {order.pay_currency?.toUpperCase()}
               </p>
               <button
                 onClick={() => handleCopy(String(order.pay_amount), 'Monto')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 999, backgroundColor: '#eff6ff', cursor: 'pointer', marginBottom: 10 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--en-oscuro-acento, #2563eb)', border: '1px solid var(--en-oscuro-acento-borde, #bfdbfe)', borderRadius: 999, backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', cursor: 'pointer', marginBottom: 10 }}
               >
                 <Copy size={12} /> Copiar monto exacto
               </button>
-              <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px 0' }}>
+              <p style={{ fontSize: 12, color: 'var(--en-oscuro-error, #dc2626)', fontWeight: 600, margin: '0 0 8px 0' }}>
                 ⚠️ Envía el monto EXACTO. Si envías menos, el pago puede quedar pendiente sin acreditarse.
               </p>
-              <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 12px 0' }}>
+              <p style={{ fontSize: 11, color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0 0 12px 0' }}>
                 Tu billetera o exchange de origen puede cobrarte una comisión adicional al retirar/enviar —
                 esa comisión es externa a esta app y no está incluida en el cálculo de arriba. Se acreditará
                 exactamente lo que llegue a esta dirección.
               </p>
               {order.network_label && (
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px 0' }}>Red: {order.network_label}</p>
+                <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: '0 0 16px 0' }}>Red: {order.network_label}</p>
               )}
               {order.fee_amount != null && (
-                <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, marginBottom: 16, textAlign: 'left' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
+                <div style={{ backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 10, padding: 12, marginBottom: 16, textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: 4 }}>
                     <span>Se acreditará en tu cuenta</span>
-                    <span style={{ fontWeight: 600, color: '#111827' }}>{order.credit_amount} {currency.toUpperCase()}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)' }}>{order.credit_amount} {currency.toUpperCase()}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: 4 }}>
                     <span>Comisión de red (la pagas tú)</span>
-                    <span style={{ fontWeight: 600, color: '#111827' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--en-oscuro-texto, #111827)' }}>
                       {order.fee_amount} {currency.toUpperCase()} ({order.fee_percentage}%)
                     </span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#374151', paddingTop: 6, borderTop: '1px dashed #e5e7eb' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--en-oscuro-texto, #374151)', paddingTop: 6, borderTop: '1px dashed var(--en-oscuro-linea, #e5e7eb)' }}>
                     <span style={{ fontWeight: 600 }}>Total a enviar</span>
                     <span style={{ fontWeight: 700 }}>{order.pay_amount} {order.pay_currency?.toUpperCase()}</span>
                   </div>
                 </div>
               )}
-              <div style={{ padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
-                <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de depósito</p>
-                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', margin: '0 0 10px 0' }}>
+              <div style={{ padding: 14, backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', borderRadius: 12, marginBottom: order.payin_extra_id ? 12 : 0, textAlign: 'left' }}>
+                <p style={{ fontSize: 11, color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 6px 0', fontWeight: 500 }}>Dirección de depósito</p>
+                <p style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0' }}>
                   {order.pay_address}
                 </p>
                 <button
                   onClick={() => handleCopy(order.pay_address, 'Dirección')}
-                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#374151', border: '1px solid #d1d5db', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', borderRadius: 10, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
                   <Copy size={14} /> Copiar dirección
                 </button>
               </div>
               {order.payin_extra_id && (
-                <div style={{ padding: 14, backgroundColor: '#fee2e2', borderRadius: 12, textAlign: 'left' }}>
-                  <p style={{ fontSize: 11, color: '#991b1b', margin: '0 0 6px 0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ padding: 14, backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', borderRadius: 12, textAlign: 'left' }}>
+                  <p style={{ fontSize: 11, color: 'var(--en-oscuro-error, #991b1b)', margin: '0 0 6px 0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <AlertTriangle size={13} /> Memo/Tag obligatorio
                   </p>
-                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: '#374151', margin: '0 0 10px 0' }}>
+                  <p style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 10px 0' }}>
                     {order.payin_extra_id}
                   </p>
                   <button
                     onClick={() => handleCopy(order.payin_extra_id, 'Memo/Tag')}
-                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600, color: 'var(--en-oscuro-error, #991b1b)', border: '1px solid var(--en-oscuro-error-borde, #fecaca)', borderRadius: 10, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                   >
                     <Copy size={14} /> Copiar memo/tag
                   </button>
                 </div>
               )}
             </div>
-            <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+            <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', textAlign: 'center', margin: 0 }}>
               La app detecta el pago automáticamente. Puedes cerrar esta pantalla y volver más tarde;
               el saldo se acreditará igual apenas se confirme.
             </p>
             <button
               onClick={resetFlow}
-              style={{ width: '100%', padding: 12, fontSize: 14, fontWeight: 600, color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 12, backgroundColor: '#fff', cursor: 'pointer' }}
+              style={{ width: '100%', padding: 12, fontSize: 14, fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)', border: '1px solid var(--en-oscuro-linea, #e5e7eb)', borderRadius: 12, backgroundColor: 'var(--en-oscuro-superficie, #fff)', cursor: 'pointer' }}
             >
               Cancelar y volver
             </button>

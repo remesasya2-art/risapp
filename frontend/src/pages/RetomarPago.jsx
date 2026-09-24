@@ -167,7 +167,7 @@ export default function RetomarPago() {
         marginBottom: '16px' }}>
         <button type="button" onClick={() => navigate('/history')}
           data-testid="retomar-volver"
-          style={{ background: '#fff', border: `1px solid ${C.linea}`,
+          style={{ background: 'var(--en-oscuro-superficie, #fff)', border: `1px solid ${C.linea}`,
             borderRadius: '12px', width: '40px', height: '40px', cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <ArrowLeft size={18} style={{ color: C.tinta }} />
@@ -199,7 +199,7 @@ export default function RetomarPago() {
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: '11.5px', color: C.suave, margin: 0,
               textTransform: 'uppercase', letterSpacing: '0.04em' }}>Recibe</p>
-            <p style={{ fontSize: '19px', fontWeight: 700, color: '#059669', margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: '19px', fontWeight: 700, color: 'var(--en-oscuro-exito, #059669)', margin: '2px 0 0 0' }}>
               {fmt(pago.amount_output)} <span style={{ fontSize: '13px', color: C.suave }}>{pago.currency_output}</span>
             </p>
           </div>
@@ -230,7 +230,7 @@ export default function RetomarPago() {
         <section style={{ ...tarjeta, padding: '22px' }} data-testid="retomar-vencido">
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start',
             marginBottom: '14px' }}>
-            <AlertCircle size={20} color="#DC2626" style={{ flexShrink: 0, marginTop: '1px' }} />
+            <AlertCircle size={20} style={{ color: 'var(--en-oscuro-error, #DC2626)', flexShrink: 0, marginTop: '1px' }} />
             <p style={{ fontSize: '14px', color: C.tinta, margin: 0, lineHeight: 1.6 }}>
               {pago.motivo}
             </p>
@@ -251,10 +251,10 @@ export default function RetomarPago() {
           <section style={{ ...tarjeta, padding: '14px 18px', marginBottom: '14px',
             display: 'flex', alignItems: 'center', gap: '10px' }}
             data-testid="retomar-reloj">
-            <Clock size={18} style={{ color: quedan < 60 ? '#DC2626' : C.marca }} />
+            <Clock size={18} style={{ color: quedan < 60 ? 'var(--en-oscuro-error, #DC2626)' : C.marca }} />
             <p style={{ margin: 0, fontSize: '13.5px', color: C.tinta }}>
               Te quedan <strong style={{ fontVariantNumeric: 'tabular-nums',
-                color: quedan < 60 ? '#DC2626' : C.tinta }}>{reloj(quedan)}</strong> para
+                color: quedan < 60 ? 'var(--en-oscuro-error, #DC2626)' : C.tinta }}>{reloj(quedan)}</strong> para
               pagarlo. La tasa de arriba te la respetamos hasta entonces.
             </p>
           </section>

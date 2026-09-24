@@ -103,12 +103,12 @@ export default function History() {
 
   const pageStyle = {
     minHeight: '100vh',
-    backgroundColor: '#F4F5F9',
+    backgroundColor: 'var(--en-oscuro-fondo, #F4F5F9)',
     fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '20px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   };
@@ -121,14 +121,14 @@ export default function History() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <button 
               onClick={() => navigate(-1)} 
-              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+              style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
               data-testid="back-button"
             >
-              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+              <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
             </button>
             <div>
-              <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#1A1A2E', margin: 0, letterSpacing: '-0.01em' }}>Historial</h1>
-              <p style={{ fontSize: '13px', color: '#8E8E9A', margin: '2px 0 0 0' }}>
+              <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--en-oscuro-texto, #1A1A2E)', margin: 0, letterSpacing: '-0.01em' }}>Historial</h1>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #8E8E9A)', margin: '2px 0 0 0' }}>
                 {totalCount} {totalCount === 1 ? 'transacción' : 'transacciones'}
               </p>
             </div>
@@ -138,8 +138,8 @@ export default function History() {
               onClick={() => setShowFilters(!showFilters)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
-                backgroundColor: '#ffffff', borderRadius: '12px', border: 'none',
-                cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#374151',
+                backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '12px', border: 'none',
+                cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
               }}
               data-testid="filter-button"
@@ -167,8 +167,8 @@ export default function History() {
                 style={{
                   padding: '10px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer',
                   fontSize: '14px', fontWeight: 600, transition: 'all 0.2s',
-                  backgroundColor: filter === f.key ? '#5B4FE9' : '#ffffff',
-                  color: filter === f.key ? '#ffffff' : '#374151',
+                  backgroundColor: filter === f.key ? 'var(--en-oscuro-acento, #5B4FE9)' : 'var(--en-oscuro-superficie, #ffffff)',
+                  color: filter === f.key ? '#ffffff' : 'var(--en-oscuro-texto, #374151)',
                   boxShadow: filter === f.key ? '0 4px 10px rgba(91,79,233,0.30)' : '0 1px 3px rgba(0,0,0,0.06)',
                 }}
                 data-testid={`filter-${f.key}`}
@@ -193,9 +193,9 @@ export default function History() {
                 style={{
                   padding: '8px 16px', borderRadius: '10px', cursor: 'pointer',
                   fontSize: '13px', fontWeight: 600, transition: 'all 0.2s',
-                  border: currency === c.key ? '1px solid #5B4FE9' : '1px solid #E5E7EB',
-                  backgroundColor: currency === c.key ? '#EEF0FE' : '#ffffff',
-                  color: currency === c.key ? '#5B4FE9' : '#6B7280',
+                  border: currency === c.key ? '1px solid var(--en-oscuro-acento, #5B4FE9)' : '1px solid var(--en-oscuro-linea, #E5E7EB)',
+                  backgroundColor: currency === c.key ? 'var(--en-oscuro-acento-suave, #EEF0FE)' : 'var(--en-oscuro-superficie, #ffffff)',
+                  color: currency === c.key ? 'var(--en-oscuro-acento, #5B4FE9)' : 'var(--en-oscuro-texto-2, #6B7280)',
                 }}
                 data-testid={`currency-${c.key}`}
               >
@@ -208,16 +208,16 @@ export default function History() {
         {/* Content */}
         {loading ? (
           <div style={{ ...cardStyle, padding: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: '40px', height: '40px', border: '4px solid #e5e7eb', borderTopColor: '#5B4FE9', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            <p style={{ color: '#8E8E9A', marginTop: '16px' }}>Cargando transacciones...</p>
+            <div style={{ width: '40px', height: '40px', border: '4px solid var(--en-oscuro-linea, #e5e7eb)', borderTopColor: 'var(--en-oscuro-acento, #5B4FE9)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <p style={{ color: 'var(--en-oscuro-texto-2, #8E8E9A)', marginTop: '16px' }}>Cargando transacciones...</p>
           </div>
         ) : transactions.length === 0 ? (
           <div style={{ ...cardStyle, padding: '64px', textAlign: 'center' }}>
-            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: '#F4F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: 'var(--en-oscuro-superficie-2, #F4F5F9)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <Clock style={{ width: '40px', height: '40px', color: '#C2C2D6' }} />
             </div>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1A1A2E', margin: '0 0 8px 0' }}>Sin transacciones</h3>
-            <p style={{ fontSize: '14px', color: '#8E8E9A', margin: '0 0 24px 0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--en-oscuro-texto, #1A1A2E)', margin: '0 0 8px 0' }}>Sin transacciones</h3>
+            <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #8E8E9A)', margin: '0 0 24px 0' }}>
               {filter !== 'all' ? 'Prueba cambiando el filtro' : 'Realiza tu primera operación para verla aquí'}
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -226,7 +226,7 @@ export default function History() {
                   <Plus style={{ width: '18px', height: '18px' }} /> Recargar saldo
                 </Link>
               ) : null}
-              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#5B4FE9', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
+              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: 'var(--en-oscuro-acento, #5B4FE9)', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
                 <ArrowUpRight style={{ width: '18px', height: '18px' }} /> Nuevo envío
               </Link>
             </div>
@@ -260,7 +260,7 @@ export default function History() {
               disabled={page === 1}
               style={{
                 padding: '10px 18px', borderRadius: '12px', border: 'none', cursor: page === 1 ? 'default' : 'pointer',
-                backgroundColor: page === 1 ? '#E5E7EB' : '#5B4FE9', color: page === 1 ? '#9CA3AF' : '#fff',
+                backgroundColor: page === 1 ? 'var(--en-oscuro-superficie-3, #E5E7EB)' : 'var(--en-oscuro-acento, #5B4FE9)', color: page === 1 ? 'var(--en-oscuro-texto-3, #9CA3AF)' : '#fff',
                 fontSize: '14px', fontWeight: 600, transition: 'all 0.2s',
                 boxShadow: page === 1 ? 'none' : '0 4px 10px rgba(91,79,233,0.30)',
               }}
@@ -268,7 +268,7 @@ export default function History() {
             >
               Anterior
             </button>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: '#374151', padding: '0 12px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', padding: '0 12px' }}>
               {page} / {totalPages}
             </span>
             <button
@@ -276,7 +276,7 @@ export default function History() {
               disabled={page === totalPages}
               style={{
                 padding: '10px 18px', borderRadius: '12px', border: 'none', cursor: page === totalPages ? 'default' : 'pointer',
-                backgroundColor: page === totalPages ? '#E5E7EB' : '#5B4FE9', color: page === totalPages ? '#9CA3AF' : '#fff',
+                backgroundColor: page === totalPages ? 'var(--en-oscuro-superficie-3, #E5E7EB)' : 'var(--en-oscuro-acento, #5B4FE9)', color: page === totalPages ? 'var(--en-oscuro-texto-3, #9CA3AF)' : '#fff',
                 fontSize: '14px', fontWeight: 600, transition: 'all 0.2s',
                 boxShadow: page === totalPages ? 'none' : '0 4px 10px rgba(91,79,233,0.30)',
               }}
@@ -300,24 +300,24 @@ export default function History() {
         >
           <div 
             style={{ 
-              backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px', 
+              backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '24px', padding: '24px', 
               width: '100%', maxWidth: '550px', maxHeight: '90vh', overflow: 'auto' 
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
                 Comprobante{(selectedVoucher.proof_images?.length || 1) > 1 ? 's' : ''} de Pago
               </h3>
               <button 
                 onClick={() => setShowVoucherModal(false)}
                 style={{ 
                   width: '36px', height: '36px', borderRadius: '10px', 
-                  border: 'none', backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  border: 'none', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
               >
-                <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                <X style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
               </button>
             </div>
 
@@ -326,39 +326,39 @@ export default function History() {
                 (`TransactionItem.jsx`): acá decía «VES» fijo, y una recarga de
                 50 RIS se mostraba como «50,00 VES», y un envío a Brasil en
                 bolívares. El equivalente BCV sólo tiene sentido en bolívares. */}
-            <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '20px' }}>
+            <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '14px', marginBottom: '20px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto enviado</p>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} ${selectedVoucher.currency_input || 'RIS'}`}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Monto enviado</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>{selectedVoucher.usd_cliente ? `$${fmt(selectedVoucher.usd_cliente)} USDI` : `${fmt(selectedVoucher.amount_input)} ${selectedVoucher.currency_input || 'RIS'}`}</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto recibido</p>
-                  <p style={{ fontSize: '18px', fontWeight: '700', color: '#16a34a', margin: 0 }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Monto recibido</p>
+                  <p style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>
                     {fmt(selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0)} {selectedVoucher.currency_output || 'VES'}
                     {(selectedVoucher.currency_output || 'VES') === 'VES' && rates?.bcv_usd_ves > 0 && (
-                      <span style={{ fontSize: '14px', color: '#16a34a', marginLeft: 6 }}>= $ {fmt((selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0) / rates.bcv_usd_ves, 2)} BCV</span>
+                      <span style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #16a34a)', marginLeft: 6 }}>= $ {fmt((selectedVoucher.amount_output ?? selectedVoucher.amount_ves ?? selectedVoucher.ves_recibe ?? 0) / rates.bcv_usd_ves, 2)} BCV</span>
                     )}
                   </p>
                 </div>
               </div>
               {(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data) && (
-                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Beneficiario</p>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).full_name}</p>
-                  <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank || (selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank_code || ''}</p>
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Beneficiario</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).full_name}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>{(selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank || (selectedVoucher.beneficiary_data || selectedVoucher.beneficiario_data).bank_code || ''}</p>
                 </div>
               )}
               <div style={{ marginTop: '12px' }}>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Fecha de proceso</p>
-                <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>{formatDate(selectedVoucher.completed_at || selectedVoucher.created_at)}</p>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Fecha de proceso</p>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>{formatDate(selectedVoucher.completed_at || selectedVoucher.created_at)}</p>
               </div>
             </div>
 
             {/* Imágenes del comprobante */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#374151', margin: 0 }}>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: 0 }}>
                   📷 {estadoDelComprobante === 'listo'
                     ? <>{(selectedVoucher.proof_images?.length || (selectedVoucher.proof_image ? 1 : 0))} Imagen{(selectedVoucher.proof_images?.length || 1) > 1 ? 'es' : ''} de comprobante</>
                     : 'Comprobante'}
@@ -376,7 +376,7 @@ export default function History() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
                       padding: '8px 14px', borderRadius: '10px', border: 'none',
-                      backgroundColor: '#6366f1', color: 'white', cursor: 'pointer',
+                      backgroundColor: 'var(--en-oscuro-acento, #6366f1)', color: 'white', cursor: 'pointer',
                       fontSize: '13px', fontWeight: '500', transition: 'all 0.2s'
                     }}
                     data-testid="download-all-images"
@@ -404,10 +404,10 @@ export default function History() {
                         style={{ 
                           width: '100%', 
                           borderRadius: '12px', 
-                          border: '1px solid #e5e7eb',
+                          border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
                           maxHeight: (selectedVoucher.proof_images?.length || 1) > 1 ? '200px' : '400px', 
                           objectFit: 'contain', 
-                          backgroundColor: '#f9fafb',
+                          backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)',
                           cursor: 'pointer'
                         }}
                         onClick={() => abrirArchivo(img)}
@@ -423,14 +423,14 @@ export default function History() {
                         style={{
                           position: 'absolute', top: '8px', right: '8px',
                           width: '32px', height: '32px', borderRadius: '8px',
-                          backgroundColor: 'rgba(255,255,255,0.9)', border: 'none',
+                          backgroundColor: 'var(--en-oscuro-superficie, rgba(255,255,255,0.9))', border: 'none',
                           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                           boxShadow: '0 2px 4px rgba(0,0,0,0.1)', transition: 'all 0.2s'
                         }}
                         title={`Descargar imagen ${idx + 1}`}
                         data-testid={`download-image-${idx}`}
                       >
-                        <Download style={{ width: '16px', height: '16px', color: '#6366f1' }} />
+                        <Download style={{ width: '16px', height: '16px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
                       </button>
                       {(selectedVoucher.proof_images?.length || 0) > 1 && (
                         <div style={{ 
@@ -450,8 +450,8 @@ export default function History() {
                   src={rutaDeArchivo(selectedVoucher.voucher_url)} 
                   alt="Comprobante"
                   style={{ 
-                    width: '100%', borderRadius: '12px', border: '1px solid #e5e7eb',
-                    maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f9fafb',
+                    width: '100%', borderRadius: '12px', border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                    maxHeight: '400px', objectFit: 'contain', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)',
                     cursor: 'pointer'
                   }}
                   onClick={() => abrirArchivo(selectedVoucher.voucher_url)}
@@ -459,19 +459,19 @@ export default function History() {
                 />
               ) : (
                 <div style={{ 
-                  padding: '40px', backgroundColor: '#f9fafb', borderRadius: '12px',
-                  textAlign: 'center', border: '1px dashed #d1d5db'
+                  padding: '40px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '12px',
+                  textAlign: 'center', border: '1px dashed var(--en-oscuro-linea-fuerte, #d1d5db)'
                 }}>
-                  <p style={{ color: '#6b7280', margin: 0 }}>No hay comprobante disponible</p>
+                  <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>No hay comprobante disponible</p>
                 </div>
               )}
               
-              <p style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', marginTop: '8px' }}>
+              <p style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', textAlign: 'center', marginTop: '8px' }}>
                 Toca una imagen para verla en tamaño completo
               </p>
             </div>
 
-            <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginTop: '16px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', textAlign: 'center', marginTop: '16px' }}>
               ID: {selectedVoucher.display_id || selectedVoucher.transaction_id?.slice(0, 8)}
             </p>
           </div>

@@ -7,6 +7,7 @@ import PuertaEncomiendas from './components/PuertaEncomiendas';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
 import { TemaProvider } from './contexts/TemaContext';
+import ConTema from './components/tema/ConTema';
 
 // Pages
 import Login from './pages/Login';
@@ -118,45 +119,49 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-      <Route path="/legal" element={<LegalPage />} />
+      <Route path="/login" element={<PublicRoute><ConTema><Login /></ConTema></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><ConTema><Register /></ConTema></PublicRoute>} />
+      <Route path="/legal" element={<ConTema><LegalPage /></ConTema>} />
       {/* Primer acceso del personal: llega por invitación, sin sesión previa. */}
       <Route path="/personal/activar" element={<ActivarPersonal />} />
       {/* Publica a proposito: es el link que el usuario le manda a quien espera
           la caja. No muestra ningun dato personal — ver Seguimiento.jsx. */}
-      <Route path="/seguimiento/:token" element={<Seguimiento />} />
+      <Route path="/seguimiento/:token" element={<ConTema><Seguimiento /></ConTema>} />
       
       {/* Protected Routes */}
       <Route path="/" element={<HomeGate />} />
-      <Route path="/send" element={<ProtectedRoute><Send /></ProtectedRoute>} />
-      <Route path="/send-reais" element={<ProtectedRoute><SendReais /></ProtectedRoute>} />
-      <Route path="/send-crypto" element={<ProtectedRoute><PuertaCripto tipo="envio"><SendCrypto /></PuertaCripto></ProtectedRoute>} />
-      <Route path="/recharge" element={<ProtectedRoute><PuertaRecarga><Recharge /></PuertaRecarga></ProtectedRoute>} />
-      <Route path="/recharge-ves" element={<ProtectedRoute><PuertaRecarga><RechargeVES /></PuertaRecarga></ProtectedRoute>} />
-      <Route path="/credits/deposit" element={<ProtectedRoute><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ProtectedRoute>} />
+      <Route path="/send" element={<ProtectedRoute><ConTema><Send /></ConTema></ProtectedRoute>} />
+      <Route path="/send-reais" element={<ProtectedRoute><ConTema><SendReais /></ConTema></ProtectedRoute>} />
+      {/* La marca del tema va POR FUERA de la puerta cripto, no adentro: un
+          test lee esta línea buscando la puerta pegada a su pantalla, y la
+          puerta no dibuja nada propio (nada, o una redirección), así que
+          envolverla no cambia cómo se ve. */}
+      <Route path="/send-crypto" element={<ProtectedRoute><ConTema><PuertaCripto tipo="envio"><SendCrypto /></PuertaCripto></ConTema></ProtectedRoute>} />
+      <Route path="/recharge" element={<ProtectedRoute><PuertaRecarga><ConTema><Recharge /></ConTema></PuertaRecarga></ProtectedRoute>} />
+      <Route path="/recharge-ves" element={<ProtectedRoute><PuertaRecarga><ConTema><RechargeVES /></ConTema></PuertaRecarga></ProtectedRoute>} />
+      <Route path="/credits/deposit" element={<ProtectedRoute><ConTema><PuertaCripto tipo="deposito"><CreditsDeposit /></PuertaCripto></ConTema></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      <Route path="/referidos" element={<ProtectedRoute><Referidos /></ProtectedRoute>} />
-      <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-      <Route path="/envios" element={<ProtectedRoute><EnviosMis /></ProtectedRoute>} />
-      <Route path="/envios/nuevo" element={<ProtectedRoute><PuertaEncomiendas><EnvioNuevo /></PuertaEncomiendas></ProtectedRoute>} />
+      <Route path="/referidos" element={<ProtectedRoute><ConTema><Referidos /></ConTema></ProtectedRoute>} />
+      <Route path="/history" element={<ProtectedRoute><ConTema><History /></ConTema></ProtectedRoute>} />
+      <Route path="/envios" element={<ProtectedRoute><ConTema><EnviosMis /></ConTema></ProtectedRoute>} />
+      <Route path="/envios/nuevo" element={<ProtectedRoute><PuertaEncomiendas><ConTema><EnvioNuevo /></ConTema></PuertaEncomiendas></ProtectedRoute>} />
       {/* VA ANTES QUE `/envios/:envioId`, y el orden importa: si fuera al
           revés, `:envioId` se comería «tx_xxx/pagar» y abriría el detalle de
           una encomienda que no existe. */}
-      <Route path="/envios/:transactionId/pagar" element={<ProtectedRoute><RetomarPago /></ProtectedRoute>} />
-      <Route path="/envios/:envioId" element={<ProtectedRoute><EnvioDetalle /></ProtectedRoute>} />
-      <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
-      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-      <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+      <Route path="/envios/:transactionId/pagar" element={<ProtectedRoute><ConTema><RetomarPago /></ConTema></ProtectedRoute>} />
+      <Route path="/envios/:envioId" element={<ProtectedRoute><ConTema><EnvioDetalle /></ConTema></ProtectedRoute>} />
+      <Route path="/verification" element={<ProtectedRoute><ConTema><Verification /></ConTema></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><ConTema><Notifications /></ConTema></ProtectedRoute>} />
+      <Route path="/support" element={<ProtectedRoute><ConTema><Support /></ConTema></ProtectedRoute>} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
       
       {/* Force Change Password Route */}
-      <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
+      <Route path="/force-change-password" element={<ProtectedRoute><ConTema><ForceChangePassword /></ConTema></ProtectedRoute>} />
 
       {/* BTC Lightning Route */}
-              <Route path="/btc-lightning" element={<ProtectedRoute><PuertaCripto tipo="deposito"><BTCLightning /></PuertaCripto></ProtectedRoute>} />
+              <Route path="/btc-lightning" element={<ProtectedRoute><ConTema><PuertaCripto tipo="deposito"><BTCLightning /></PuertaCripto></ConTema></ProtectedRoute>} />
       {/* Mockup Route - Temporal */}
       <Route path="/mockup-gestor" element={<ProtectedRoute><GestorFlowMockup /></ProtectedRoute>} />
       

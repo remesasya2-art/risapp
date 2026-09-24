@@ -357,12 +357,12 @@ export default function Recharge() {
 
   const pageStyle = {
     minHeight: '100vh',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)',
+    background: 'var(--en-oscuro-fondo, radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%))',
     fontFamily: 'Inter, Helvetica, -apple-system, sans-serif'
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '24px',
     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 12px 24px -8px rgba(0, 0, 0, 0.04)',
     padding: '32px'
@@ -372,14 +372,14 @@ export default function Recharge() {
     width: '100%',
     padding: '16px',
     borderRadius: '14px',
-    border: '1px solid #d1d5db',
+    border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
     fontSize: '16px',
     outline: 'none',
     transition: 'all 0.2s'
   };
 
   const buttonPrimaryStyle = {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'var(--en-oscuro-acento, #6366f1)',
     color: 'white',
     borderRadius: '14px',
     height: '56px',
@@ -397,8 +397,8 @@ export default function Recharge() {
   };
 
   const buttonSecondaryStyle = {
-    backgroundColor: '#f3f4f6',
-    color: '#374151',
+    backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
+    color: 'var(--en-oscuro-texto, #374151)',
     borderRadius: '14px',
     height: '56px',
     padding: '0 32px',
@@ -427,7 +427,7 @@ export default function Recharge() {
                 height: '40px',
                 borderRadius: '12px',
                 border: 'none',
-                backgroundColor: 'rgba(255,255,255,0.8)',
+                backgroundColor: 'var(--en-oscuro-superficie, rgba(255,255,255,0.8))',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -435,11 +435,11 @@ export default function Recharge() {
               }}
               data-testid="back-button"
             >
-              <ArrowLeft style={{ width: '20px', height: '20px', color: '#374151' }} />
+              <ArrowLeft style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto, #374151)' }} />
             </button>
             <div>
-              <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: 0 }}>Recargar Saldo</h1>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recargar Saldo</h1>
+              <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                 Saldo actual: {fmt((user?.balance_ris || 0))} RIS
               </p>
             </div>
@@ -450,10 +450,10 @@ export default function Recharge() {
         {/* Method Selection */}
         {!method && (
           <div style={cardStyle}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0', textAlign: 'center' }}>
               Selecciona el método de pago
             </h2>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px 0', textAlign: 'center' }}>
+            <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 24px 0', textAlign: 'center' }}>
               Elige cómo deseas recargar tu saldo RIS
             </p>
             
@@ -464,8 +464,8 @@ export default function Recharge() {
                 style={{
                   padding: '24px',
                   borderRadius: '16px',
-                  border: '2px solid #e5e7eb',
-                  backgroundColor: '#ffffff',
+                  border: '2px solid var(--en-oscuro-linea, #e5e7eb)',
+                  backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.2s'
@@ -473,18 +473,18 @@ export default function Recharge() {
                 data-testid="select-pix"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <QrCode style={{ width: '28px', height: '28px', color: '#16a34a' }} />
+                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <QrCode style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>PIX (Brasil)</span>
-                      <span style={{ padding: '2px 8px', backgroundColor: '#dcfce7', color: '#16a34a', borderRadius: '9999px', fontSize: '12px', fontWeight: '600' }}>Recomendado</span>
+                      <span style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>PIX (Brasil)</span>
+                      <span style={{ padding: '2px 8px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', color: 'var(--en-oscuro-exito, #16a34a)', borderRadius: '9999px', fontSize: '12px', fontWeight: '600' }}>Recomendado</span>
                     </div>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Pago instantáneo • Sin comisiones</p>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#16a34a', margin: '4px 0 0 0' }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
+                    <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>Pago instantáneo • Sin comisiones</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-exito, #16a34a)', margin: '4px 0 0 0' }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
                   </div>
-                  <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
+                  <ArrowRight style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
                 </div>
               </button>
 
@@ -494,8 +494,8 @@ export default function Recharge() {
                 style={{
                   padding: '24px',
                   borderRadius: '16px',
-                  border: '2px solid #e5e7eb',
-                  backgroundColor: '#ffffff',
+                  border: '2px solid var(--en-oscuro-linea, #e5e7eb)',
+                  backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.2s'
@@ -503,15 +503,15 @@ export default function Recharge() {
                 data-testid="select-ves"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Banknote style={{ width: '28px', height: '28px', color: '#2563eb' }} />
+                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-acento-suave, #dbeafe)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Banknote style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #2563eb)' }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Bolívares (Venezuela)</span>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Pago Móvil o Transferencia</p>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#2563eb', margin: '4px 0 0 0' }}>{fmt(rates?.ves_to_ris_rate) || '140'} VES = 1 RIS</p>
+                    <span style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>Bolívares (Venezuela)</span>
+                    <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Pago Móvil o Transferencia</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #2563eb)', margin: '4px 0 0 0' }}>{fmt(rates?.ves_to_ris_rate) || '140'} VES = 1 RIS</p>
                   </div>
-                  <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
+                  <ArrowRight style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
                 </div>
               </button>
 
@@ -521,8 +521,8 @@ export default function Recharge() {
                 style={{
                   padding: '24px',
                   borderRadius: '16px',
-                  border: '2px solid #e5e7eb',
-                  backgroundColor: '#ffffff',
+                  border: '2px solid var(--en-oscuro-linea, #e5e7eb)',
+                  backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.2s'
@@ -530,15 +530,15 @@ export default function Recharge() {
                 data-testid="select-card"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#f5e9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CreditCard style={{ width: '28px', height: '28px', color: '#7c3aed' }} />
+                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-acento-suave, #f5e9ff)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CreditCard style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #7c3aed)' }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Tarjeta de Crédito/Débito (Brasil)</span>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Pago en 1 cuota • Comisión MP incluida</p>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#7c3aed', margin: '4px 0 0 0' }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
+                    <span style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>Tarjeta de Crédito/Débito (Brasil)</span>
+                    <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Pago en 1 cuota • Comisión MP incluida</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #7c3aed)', margin: '4px 0 0 0' }}>1 BRL = {fmt(rates?.brl_to_ris) || '1.00'} RIS</p>
                   </div>
-                  <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
+                  <ArrowRight style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
                 </div>
               </button>
 
@@ -553,8 +553,8 @@ export default function Recharge() {
                 style={{
                   padding: '24px',
                   borderRadius: '16px',
-                  border: '2px solid #e5e7eb',
-                  backgroundColor: '#ffffff',
+                  border: '2px solid var(--en-oscuro-linea, #e5e7eb)',
+                  backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.2s'
@@ -562,15 +562,15 @@ export default function Recharge() {
                 data-testid="select-crypto"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Bitcoin style={{ width: '28px', height: '28px', color: '#d97706' }} />
+                  <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Bitcoin style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-alerta, #d97706)' }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#111827' }}>Cripto (USDT/USDC)</span>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Sin salir de la app • Acreditación automática</p>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#d97706', margin: '4px 0 0 0' }}>Créditos separados de tu saldo RIS</p>
+                    <span style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)' }}>Cripto (USDT/USDC)</span>
+                    <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Sin salir de la app • Acreditación automática</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-alerta, #d97706)', margin: '4px 0 0 0' }}>Créditos separados de tu saldo RIS</p>
                   </div>
-                  <ArrowRight style={{ width: '20px', height: '20px', color: '#9ca3af' }} />
+                  <ArrowRight style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }} />
                 </div>
               </button>
               ) : null}
@@ -582,12 +582,12 @@ export default function Recharge() {
         {method === 'pix' && step === 1 && (
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <QrCode style={{ width: '28px', height: '28px', color: '#16a34a' }} />
+              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <QrCode style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Recarga con PIX</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Ingresa los datos de pago</p>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recarga con PIX</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Ingresa los datos de pago</p>
               </div>
             </div>
 
@@ -598,15 +598,15 @@ export default function Recharge() {
                 entera al apretar, con el mensaje del servidor diciendo
                 exactamente cuánto le queda. */}
             {user?.verification_status !== 'verified' && (
-              <div style={{ padding: '16px', backgroundColor: '#eff6ff', borderRadius: '12px', marginBottom: '24px', display: 'flex', gap: '12px' }}>
-                <AlertCircle style={{ width: '20px', height: '20px', color: '#2563eb', flexShrink: 0 }} />
+              <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', borderRadius: '12px', marginBottom: '24px', display: 'flex', gap: '12px' }}>
+                <AlertCircle style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-acento, #2563eb)', flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontWeight: '600', color: '#1e40af', margin: 0 }}>Estás usando tu cupo inicial</p>
-                  <p style={{ fontSize: '14px', color: '#1d4ed8', margin: '4px 0 0 0' }}>
+                  <p style={{ fontWeight: '600', color: 'var(--en-oscuro-acento, #1e40af)', margin: 0 }}>Estás usando tu cupo inicial</p>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-acento, #1d4ed8)', margin: '4px 0 0 0' }}>
                     Podés recargar sin verificar tu cuenta hasta agotarlo. Después,
                     para seguir operando, hay que verificar la identidad.
                   </p>
-                  <button onClick={() => navigate('/verification')} style={{ marginTop: '8px', fontSize: '14px', fontWeight: '600', color: '#1e40af', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                  <button onClick={() => navigate('/verification')} style={{ marginTop: '8px', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #1e40af)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                     Verificar ahora
                   </button>
                 </div>
@@ -615,7 +615,7 @@ export default function Recharge() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Monto a recargar (BRL)</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>Monto a recargar (BRL)</label>
                 <input
                   type="number"
                   value={amount}
@@ -625,7 +625,7 @@ export default function Recharge() {
                   max={pixMax ?? undefined}
                   data-testid="pix-amount"
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '8px 0 0 0' }}>
                   {pixMin != null && pixMax != null
                     ? `Mínimo: R$ ${fmt(pixMin)} • Máximo: R$ ${fmt(pixMax)}`
                     : 'Consultando límites...'}
@@ -633,7 +633,7 @@ export default function Recharge() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>CPF del pagador</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>CPF del pagador</label>
                 {/* Si la cuenta ya tiene CPF, llega puesto y NO se edita: ya
                     lo declaró al registrarse y es el único con el que puede
                     pagar. Sólo lo tipea quien se registró antes de que el
@@ -646,29 +646,29 @@ export default function Recharge() {
                   placeholder="000.000.000-00"
                   style={{
                     ...inputStyle,
-                    borderColor: cpfError ? '#ef4444' : '#e5e7eb',
-                    backgroundColor: cpfError ? '#fef2f2' : (yaTieneCpf ? '#f3f4f6' : 'white'),
-                    color: yaTieneCpf ? '#6b7280' : undefined,
+                    borderColor: cpfError ? '#ef4444' : 'var(--en-oscuro-linea, #e5e7eb)',
+                    backgroundColor: cpfError ? 'var(--en-oscuro-error-suave, #fef2f2)' : (yaTieneCpf ? 'var(--en-oscuro-superficie-2, #f3f4f6)' : 'var(--en-oscuro-superficie, white)'),
+                    color: yaTieneCpf ? 'var(--en-oscuro-texto-2, #6b7280)' : undefined,
                     cursor: yaTieneCpf ? 'not-allowed' : undefined,
                   }}
                   data-testid="pix-cpf"
                 />
                 {cpfError && (
-                  <p style={{ fontSize: '12px', color: '#ef4444', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-error, #ef4444)', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <AlertCircle style={{ width: '14px', height: '14px' }} />
                     {cpfError}
                   </p>
                 )}
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                   {yaTieneCpf
                     ? 'Es el CPF de tu cuenta. La recarga la tenés que hacer vos, no un tercero.'
                     : 'Queda registrado como el CPF de tu cuenta: de acá en adelante es el único con el que vas a poder recargar.'}
                 </p>
               </div>
 
-              <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '14px' }}>
-                <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Recibirás en tu cuenta</p>
-                <p style={{ fontSize: '28px', fontWeight: '700', color: '#16a34a', margin: 0 }}>{fmt(amountRis)} RIS</p>
+              <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', borderRadius: '14px' }}>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 4px 0' }}>Recibirás en tu cuenta</p>
+                <p style={{ fontSize: '28px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>{fmt(amountRis)} RIS</p>
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -692,18 +692,18 @@ export default function Recharge() {
             {/* Payment Completed */}
             {paymentStatus === 'completed' && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                  <CheckCircle style={{ width: '56px', height: '56px', color: '#16a34a' }} />
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <CheckCircle style={{ width: '56px', height: '56px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
                 </div>
-                <h2 style={{ fontSize: '28px', fontWeight: '700', color: '#16a34a', margin: '0 0 8px 0' }}>¡Pago Exitoso!</h2>
-                <p style={{ fontSize: '16px', color: '#6b7280', margin: '0 0 16px 0' }}>Tu recarga PIX ha sido procesada automáticamente</p>
-                <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '14px', marginBottom: '16px' }}>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>Monto acreditado</p>
-                  <p style={{ fontSize: '36px', fontWeight: '700', color: '#16a34a', margin: 0 }}>+{fmt(pixData?.amount_ris) || fmt(amountRis)} RIS</p>
+                <h2 style={{ fontSize: '28px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 8px 0' }}>¡Pago Exitoso!</h2>
+                <p style={{ fontSize: '16px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 16px 0' }}>Tu recarga PIX ha sido procesada automáticamente</p>
+                <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '14px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Monto acreditado</p>
+                  <p style={{ fontSize: '36px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>+{fmt(pixData?.amount_ris) || fmt(amountRis)} RIS</p>
                 </div>
-                <div style={{ padding: '16px', backgroundColor: '#e0f2fe', borderRadius: '14px', marginBottom: '24px' }}>
-                  <p style={{ fontSize: '14px', color: '#0369a1', margin: '0 0 4px 0' }}>Tu nuevo saldo</p>
-                  <p style={{ fontSize: '28px', fontWeight: '700', color: '#0284c7', margin: 0 }}>{fmt(user?.balance_ris)} RIS</p>
+                <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-info-suave, #e0f2fe)', borderRadius: '14px', marginBottom: '24px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-info, #0369a1)', margin: '0 0 4px 0' }}>Tu nuevo saldo</p>
+                  <p style={{ fontSize: '28px', fontWeight: '700', color: 'var(--en-oscuro-info, #0284c7)', margin: 0 }}>{fmt(user?.balance_ris)} RIS</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button onClick={() => navigate('/')} style={buttonPrimaryStyle}>Ir al Dashboard</button>
@@ -714,11 +714,11 @@ export default function Recharge() {
             {/* Payment Expired */}
             {paymentStatus === 'expired' && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                  <XCircle style={{ width: '56px', height: '56px', color: '#dc2626' }} />
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <XCircle style={{ width: '56px', height: '56px', color: 'var(--en-oscuro-error, #dc2626)' }} />
                 </div>
-                <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#dc2626', margin: '0 0 8px 0' }}>Código Expirado</h2>
-                <p style={{ fontSize: '16px', color: '#6b7280', margin: '0 0 24px 0' }}>El código PIX ha expirado después de 10 minutos</p>
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-error, #dc2626)', margin: '0 0 8px 0' }}>Código Expirado</h2>
+                <p style={{ fontSize: '16px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 24px 0' }}>El código PIX ha expirado después de 10 minutos</p>
                 <button onClick={resetPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a' }}>
                   Generar nuevo PIX
                 </button>
@@ -728,11 +728,11 @@ export default function Recharge() {
             {/* Payment Cancelled */}
             {paymentStatus === 'cancelled' && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                  <X style={{ width: '56px', height: '56px', color: '#6b7280' }} />
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <X style={{ width: '56px', height: '56px', color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
                 </div>
-                <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#374151', margin: '0 0 8px 0' }}>Pago Cancelado</h2>
-                <p style={{ fontSize: '16px', color: '#6b7280', margin: '0 0 24px 0' }}>Has cancelado esta operación de pago</p>
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 8px 0' }}>Pago Cancelado</h2>
+                <p style={{ fontSize: '16px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 24px 0' }}>Has cancelado esta operación de pago</p>
                 <button onClick={resetPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a' }}>
                   Generar nuevo PIX
                 </button>
@@ -743,17 +743,17 @@ export default function Recharge() {
             {paymentStatus === 'pending' && (
               <>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                    <QrCode style={{ width: '40px', height: '40px', color: '#16a34a' }} />
+                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                    <QrCode style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
                   </div>
-                  <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>PIX generado</h2>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Escanea el QR o copia el código</p>
+                  <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0' }}>PIX generado</h2>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: 0 }}>Escanea el QR o copia el código</p>
                 </div>
 
                 {/* Timer */}
                 <div style={{ 
                   padding: '16px', 
-                  backgroundColor: timeRemaining <= 60 ? '#fee2e2' : '#fef3c7', 
+                  backgroundColor: timeRemaining <= 60 ? 'var(--en-oscuro-error-suave, #fee2e2)' : 'var(--en-oscuro-alerta-suave, #fef3c7)', 
                   borderRadius: '12px', 
                   marginBottom: '16px', 
                   display: 'flex', 
@@ -761,11 +761,11 @@ export default function Recharge() {
                   justifyContent: 'center',
                   gap: '12px'
                 }}>
-                  <Timer style={{ width: '24px', height: '24px', color: timeRemaining <= 60 ? '#dc2626' : '#d97706' }} />
-                  <span style={{ fontWeight: '700', fontSize: '20px', color: timeRemaining <= 60 ? '#dc2626' : '#92400e' }}>
+                  <Timer style={{ width: '24px', height: '24px', color: timeRemaining <= 60 ? 'var(--en-oscuro-error, #dc2626)' : 'var(--en-oscuro-alerta, #d97706)' }} />
+                  <span style={{ fontWeight: '700', fontSize: '20px', color: timeRemaining <= 60 ? 'var(--en-oscuro-error, #dc2626)' : 'var(--en-oscuro-alerta, #92400e)' }}>
                     {formatTime(timeRemaining)}
                   </span>
-                  <span style={{ fontWeight: '500', color: timeRemaining <= 60 ? '#dc2626' : '#92400e' }}>
+                  <span style={{ fontWeight: '500', color: timeRemaining <= 60 ? 'var(--en-oscuro-error, #dc2626)' : 'var(--en-oscuro-alerta, #92400e)' }}>
                     restantes
                   </span>
                 </div>
@@ -775,7 +775,7 @@ export default function Recharge() {
                   if (pixData?.qr_code_base64) {
                     return (
                       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                        <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '16px', border: '2px solid #e5e7eb' }}>
+                        <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', border: '2px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                           <img src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" style={{ width: '200px', height: '200px' }} />
                         </div>
                       </div>
@@ -783,7 +783,7 @@ export default function Recharge() {
                   } else if (pixCode) {
                     return (
                       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                        <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '16px', border: '2px solid #e5e7eb' }}>
+                        <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', border: '2px solid var(--en-oscuro-linea, #e5e7eb)' }}>
                           <QRCodeSVG value={pixCode} size={200} />
                         </div>
                       </div>
@@ -792,9 +792,9 @@ export default function Recharge() {
                   return null;
                 })()}
 
-                <div style={{ padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '12px', marginBottom: '16px' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px 0', fontWeight: '500' }}>Código PIX (Copia y Pega)</p>
-                  <p style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all', color: '#374151', backgroundColor: '#ffffff', padding: '12px', borderRadius: '8px', margin: '0 0 12px 0' }}>
+                <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', borderRadius: '12px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 8px 0', fontWeight: '500' }}>Código PIX (Copia y Pega)</p>
+                  <p style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all', color: 'var(--en-oscuro-texto, #374151)', backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', padding: '12px', borderRadius: '8px', margin: '0 0 12px 0' }}>
                     {(pixData?.qr_code || pixData?.pix_code || 'Código no disponible').substring(0, 60)}...
                   </p>
                   <button onClick={handleCopyPix} style={{ ...buttonPrimaryStyle, backgroundColor: '#16a34a', height: '48px' }} data-testid="copy-pix">
@@ -804,10 +804,10 @@ export default function Recharge() {
                 </div>
 
                 {/* Monto */}
-                <div style={{ padding: '16px', backgroundColor: '#dcfce7', borderRadius: '12px', marginBottom: '16px' }}>
-                  <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Monto a pagar</p>
-                  <p style={{ fontSize: '28px', fontWeight: '700', color: '#15803d', margin: 0 }}>R$ {fmt(parseFloat(amount))}</p>
-                  <p style={{ fontSize: '14px', color: '#16a34a', margin: '8px 0 0 0' }}>Recibirás: {fmt(amountRis)} RIS</p>
+                <div style={{ padding: '16px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', borderRadius: '12px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 4px 0' }}>Monto a pagar</p>
+                  <p style={{ fontSize: '28px', fontWeight: '700', color: 'var(--en-oscuro-exito, #15803d)', margin: 0 }}>R$ {fmt(parseFloat(amount))}</p>
+                  <p style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '8px 0 0 0' }}>Recibirás: {fmt(amountRis)} RIS</p>
                 </div>
 
                 {/* La misma línea que en las pantallas del envío: la pantalla
@@ -821,7 +821,7 @@ export default function Recharge() {
                   <button 
                     onClick={handleCancelPix} 
                     disabled={loading}
-                    style={{ ...buttonSecondaryStyle, color: '#dc2626', borderColor: '#fecaca', backgroundColor: '#fef2f2' }}
+                    style={{ ...buttonSecondaryStyle, color: 'var(--en-oscuro-error, #dc2626)', borderColor: 'var(--en-oscuro-error-borde, #fecaca)', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)' }}
                   >
                     <X style={{ width: '20px', height: '20px' }} />
                     Cancelar pago
@@ -836,17 +836,17 @@ export default function Recharge() {
         {method === 'card' && step === 1 && (
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#f5e9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CreditCard style={{ width: '28px', height: '28px', color: '#7c3aed' }} />
+              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-acento-suave, #f5e9ff)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CreditCard style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #7c3aed)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Recarga con Tarjeta</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Crédito o Débito • Brasil • R$ 5 - R$ 5.000</p>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recarga con Tarjeta</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Crédito o Débito • Brasil • R$ 5 - R$ 5.000</p>
               </div>
             </div>
 
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', marginBottom: 6 }}>
                 Monto a recargar (RIS)
               </label>
               <input
@@ -857,9 +857,9 @@ export default function Recharge() {
                 min="5"
                 max="5000"
                 data-testid="card-amount-input"
-                style={{ width: '100%', padding: '14px', fontSize: 18, borderRadius: 12, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '14px', fontSize: 18, borderRadius: 12, border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', boxSizing: 'border-box' }}
               />
-              <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>
+              <p style={{ fontSize: 12, color: 'var(--en-oscuro-texto-3, #9ca3af)', marginTop: 6 }}>
                 Recibirás {fmt(parseFloat(amount) || 0)} RIS (1 BRL = 1 RIS). La comisión MP se suma al total a cobrar.
               </p>
             </div>
@@ -923,18 +923,18 @@ export default function Recharge() {
         {method === 'ves' && (
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Banknote style={{ width: '28px', height: '28px', color: '#2563eb' }} />
+              <div style={{ width: '56px', height: '56px', borderRadius: '14px', backgroundColor: 'var(--en-oscuro-acento-suave, #dbeafe)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Banknote style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #2563eb)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>Recarga con Bolívares</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Tasa: {fmt(rates.ves_to_ris_rate) || '140'} VES = 1 RIS</p>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Recarga con Bolívares</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Tasa: {fmt(rates.ves_to_ris_rate) || '140'} VES = 1 RIS</p>
               </div>
             </div>
 
             {/* Bank Info */}
-            <div style={{ padding: '20px', backgroundColor: '#eff6ff', borderRadius: '14px', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1e40af', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', borderRadius: '14px', marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-acento, #1e40af)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Wallet style={{ width: '20px', height: '20px' }} />
                 Datos para transferencia
               </h3>
@@ -946,9 +946,9 @@ export default function Recharge() {
                   { label: 'Tipo', value: vesPaymentInfo.account_type },
                   { label: 'Cédula/RIF', value: vesPaymentInfo.id_document },
                 ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: i < 4 ? '1px solid #bfdbfe' : 'none' }}>
-                    <span style={{ fontSize: '14px', color: '#3b82f6' }}>{item.label}:</span>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e40af' }}>{item.value}</span>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: i < 4 ? '1px solid var(--en-oscuro-acento-borde, #bfdbfe)' : 'none' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--en-oscuro-acento, #3b82f6)' }}>{item.label}:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #1e40af)' }}>{item.value}</span>
                   </div>
                 ))}
               </div>
@@ -956,7 +956,7 @@ export default function Recharge() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Monto transferido (VES)</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>Monto transferido (VES)</label>
                 <input
                   type="number"
                   value={amount}
@@ -966,13 +966,13 @@ export default function Recharge() {
                 />
               </div>
 
-              <div style={{ padding: '20px', backgroundColor: '#dcfce7', borderRadius: '14px' }}>
-                <p style={{ fontSize: '14px', color: '#16a34a', margin: '0 0 4px 0' }}>Recibirás en tu cuenta</p>
-                <p style={{ fontSize: '28px', fontWeight: '700', color: '#16a34a', margin: 0 }}>{fmt(amountRis)} RIS</p>
+              <div style={{ padding: '20px', backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', borderRadius: '14px' }}>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '0 0 4px 0' }}>Recibirás en tu cuenta</p>
+                <p style={{ fontSize: '28px', fontWeight: '700', color: 'var(--en-oscuro-exito, #16a34a)', margin: 0 }}>{fmt(amountRis)} RIS</p>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Comprobante de pago *</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>Comprobante de pago *</label>
                 <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} id="proof-upload" />
                 <label
                   htmlFor="proof-upload"
@@ -983,23 +983,23 @@ export default function Recharge() {
                     justifyContent: 'center',
                     width: '100%',
                     height: '140px',
-                    border: `2px dashed ${proofImage ? '#16a34a' : '#d1d5db'}`,
+                    border: `2px dashed ${proofImage ? '#16a34a' : 'var(--en-oscuro-linea-fuerte, #d1d5db)'}`,
                     borderRadius: '14px',
                     cursor: 'pointer',
-                    backgroundColor: proofImage ? '#f0fdf4' : '#ffffff',
+                    backgroundColor: proofImage ? 'var(--en-oscuro-exito-suave, #f0fdf4)' : 'var(--en-oscuro-superficie, #ffffff)',
                     transition: 'all 0.2s'
                   }}
                 >
                   {proofImage ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#16a34a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--en-oscuro-exito, #16a34a)' }}>
                       <CheckCircle style={{ width: '32px', height: '32px' }} />
                       <span style={{ fontSize: '16px', fontWeight: '600' }}>Imagen cargada</span>
                     </div>
                   ) : (
                     <>
-                      <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '8px' }} />
-                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>Click para subir comprobante</span>
-                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>PNG, JPG hasta 5MB</span>
+                      <Upload style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '8px' }} />
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--en-oscuro-texto, #374151)' }}>Click para subir comprobante</span>
+                      <span style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>PNG, JPG hasta 5MB</span>
                     </>
                   )}
                 </label>

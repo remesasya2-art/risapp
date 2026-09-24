@@ -71,6 +71,19 @@ function Boton(props) {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         gap: '9px', flex: ancho ? 1 : undefined, whiteSpace: 'nowrap',
         opacity: disabled ? 0.5 : 1,
+        // EL QUE OCUPA EL ANCHO QUE QUEDA PUEDE PARTIR SU TEXTO.
+        //
+        //   Con `nowrap` y el mínimo de un elemento flexible (su texto entero),
+        //   en un celular angosto el botón no se achicaba y se salía de la
+        //   ventana: «Enviarme el código», al lado de «Cancelar» en el cambio
+        //   de contraseña del perfil, asomaba por el borde derecho. Donde el
+        //   texto entra, no cambia nada; donde no entra, baja a dos líneas.
+        ...(ancho ? {
+          //   Dos botones anchos en la misma fila crecen juntos (el alto es
+          //   mínimo y la fila los estira), así que quedan parejos.
+          height: 'auto', minHeight: '52px', minWidth: 0, whiteSpace: 'normal',
+          textAlign: 'center', padding: '6px 20px',
+        } : {}),
       }}>
       {Icono && !iconoDerecha ? <Icono size={18} /> : null}
       {children}
