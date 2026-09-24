@@ -43,6 +43,13 @@ TIPOS = {
     OUVIDORIA: (periodos.SEMESTRE, _ouvidoria.DOCUMENTO_DEL_INFORME, _ouvidoria.armar_informe),
 }
 
+# Los que sólo se arman con el período TERMINADO, y por eso preguntan la
+# fecha. Se les pasa la de quien pide el informe: sin ella miraban el reloj de
+# verdad, y `generar(..., ahora=...)` decía una fecha y el control usaba otra.
+# Así se escribió un test que pasaba sólo mientras el semestre siguiente no
+# hubiera terminado, y que el 1 de enero de 2027 se iba a poner rojo solo.
+_PIDEN_LA_FECHA = {INCIDENTES, OUVIDORIA}
+
 
 def _ahora():
     return datetime.now(timezone.utc)
@@ -79,7 +86,8 @@ async def _generar_en(sesion, tipo: str, periodo: str, *, actor: str, ahora: dat
         reportes.c.tipo == tipo, reportes.c.periodo == periodo))).scalar_one_or_none() or 0
     if solo_si_falta and ultima:
         return None
-    armado = await armar(sesion, periodo=periodo, version=ultima + 1)
+    extra = {"ahora": ahora} if tipo in _PIDEN_LA_FECHA else {}
+    armado = await armar(sesion, periodo=periodo, version=ultima + 1, **extra)
     if armado is None:
         raise ReporteInvalido(f"El {periodo} no hubo altas ni bajas: el CCS de ese día no se manda.")
     archivo, resumen = armado
