@@ -65,29 +65,29 @@ export default function KycRejectModal({ verification, onClose, onSuccess }) {
       style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
-      <div style={{ backgroundColor: '#fff', borderRadius: '20px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+      <div style={{ backgroundColor: 'var(--en-oscuro-superficie, #fff)', borderRadius: '20px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         {/* Header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <AlertCircle size={22} color="#dc2626" />
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-error-suave, #fee2e2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <AlertCircle size={22} style={{ color: 'var(--en-oscuro-error, #dc2626)' }} />
             </div>
             <div>
-              <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#111827', margin: 0 }}>Rechazar verificación</h2>
-              <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0 0' }}>
+              <h2 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Rechazar verificación</h2>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                 {verification?.full_name ? `Usuario: ${verification.full_name}` : 'Selecciona un motivo'}
               </p>
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8, position: 'relative', zIndex: 10 }} aria-label="Cerrar">
-            <X size={20} color="#6b7280" />
+            <X size={20} style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }} />
           </button>
         </div>
 
         {/* Body */}
         <div style={{ padding: '20px 24px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>
-            Motivo del rechazo <span style={{ color: '#dc2626' }}>*</span>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>
+            Motivo del rechazo <span style={{ color: 'var(--en-oscuro-error, #dc2626)' }}>*</span>
           </label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {reasons.map((r) => {
@@ -98,8 +98,8 @@ export default function KycRejectModal({ verification, onClose, onSuccess }) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px',
                     borderRadius: '12px', cursor: 'pointer',
-                    border: checked ? '2px solid #dc2626' : '1px solid #e5e7eb',
-                    backgroundColor: checked ? '#fef2f2' : '#fff',
+                    border: checked ? '2px solid var(--en-oscuro-error, #dc2626)' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                    backgroundColor: checked ? 'var(--en-oscuro-error-suave, #fef2f2)' : 'var(--en-oscuro-superficie, #fff)',
                     transition: 'all 0.15s'
                   }}
                 >
@@ -111,15 +111,15 @@ export default function KycRejectModal({ verification, onClose, onSuccess }) {
                     onChange={() => setCode(r.code)}
                     style={{ accentColor: '#dc2626', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '14px', color: '#111827' }}>{r.label}</span>
+                  <span style={{ fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)' }}>{r.label}</span>
                 </label>
               );
             })}
           </div>
 
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', margin: '18px 0 8px 0' }}>
-            Comentario {code === 'other' && <span style={{ color: '#dc2626' }}>* (obligatorio)</span>}
-            <span style={{ color: '#9ca3af', fontWeight: 400, marginLeft: '6px' }}>(visible para el usuario)</span>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto, #374151)', margin: '18px 0 8px 0' }}>
+            Comentario {code === 'other' && <span style={{ color: 'var(--en-oscuro-error, #dc2626)' }}>* (obligatorio)</span>}
+            <span style={{ color: 'var(--en-oscuro-texto-3, #9ca3af)', fontWeight: 400, marginLeft: '6px' }}>(visible para el usuario)</span>
           </label>
           <textarea
             value={text}
@@ -129,24 +129,24 @@ export default function KycRejectModal({ verification, onClose, onSuccess }) {
             placeholder={code === 'other' ? 'Describe el motivo del rechazo…' : 'Detalles adicionales (opcional)…'}
             style={{
               width: '100%', padding: '12px 14px', borderRadius: '12px',
-              border: '1.5px solid #e5e7eb', fontSize: '14px',
+              border: '1.5px solid var(--en-oscuro-linea, #e5e7eb)', fontSize: '14px',
               fontFamily: 'inherit', outline: 'none', resize: 'vertical',
               boxSizing: 'border-box'
             }}
           />
-          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px', textAlign: 'right' }}>
+          <div style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginTop: '4px', textAlign: 'right' }}>
             {text.length} / 500
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button
             onClick={onClose}
             disabled={submitting}
             style={{
               padding: '10px 20px', borderRadius: '12px',
-              backgroundColor: '#f3f4f6', color: '#374151',
+              backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)', color: 'var(--en-oscuro-texto, #374151)',
               border: 'none', fontWeight: 600, cursor: 'pointer',
               opacity: submitting ? 0.6 : 1, fontSize: '14px'
             }}
