@@ -77,6 +77,14 @@ const C = {
   errorBorde: oscuro('error-borde', '#FECDCA'),
 };
 
+/* LOS QUE NO CAMBIAN CON EL MODO.
+ *
+ *   Una superficie que tiene que ser oscura siempre —la tarjeta del rol en el
+ *   perfil, con letra blanca— no puede usar `C.tinta`: ése es el color del
+ *   TEXTO, y en modo oscuro el texto es claro. Con él, la tarjeta se volvía
+ *   clara y la letra blanca desaparecía. */
+const FIJO = { oscuro: '#101828' };
+
 const HOJA = `
 .env { color: ${C.texto}; font-variant-numeric: tabular-nums lining-nums; }
 .env * { box-sizing: border-box; }
@@ -135,4 +143,4 @@ export function iniciales(nombre) {
   return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
 }
 
-export { C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda };
+export { C, FIJO, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda };

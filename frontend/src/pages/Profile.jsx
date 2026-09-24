@@ -78,7 +78,7 @@ import MiCodigoDeReferido from '../components/MiCodigoDeReferido';
 import ControlDeApariencia from '../components/tema/ControlDeApariencia';
 import { Boton, Aviso } from '../components/flujo';
 import {
-  C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
+  C, FIJO, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
 } from '../components/flujo/estilos';
 import { confirmarCierreDeSesion } from '../components/flujo/confirmar.js';
 import {
@@ -602,11 +602,8 @@ export default function Profile() {
           <Link to={panel.destino} data-testid="role-panel-btn" style={{
             ...tarjeta, display: 'flex', alignItems: 'center', gap: '13px',
             padding: '18px 20px', marginBottom: '16px', textDecoration: 'none',
-            // Oscura en los dos modos, y por eso el color va escrito y no
-            // sale de la paleta: `C.tinta` es el color del TEXTO, y en modo
-            // oscuro el texto es claro. Con la paleta, esta tarjeta de letra
-            // blanca se volvía clara y la letra desaparecía.
-            background: '#101828', border: '1px solid #101828',
+            // Oscura en los dos modos: ver `FIJO` en flujo/estilos.js.
+            background: FIJO.oscuro, border: `1px solid ${FIJO.oscuro}`,
           }}>
             <span style={{
               width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0,
