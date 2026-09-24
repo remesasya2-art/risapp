@@ -81,6 +81,7 @@ from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 #     mientras no lo estaban. Ahora se reconocen por identidad —el objeto
 #     función, no su nombre—, en `test_una_sola_puerta.py`.
 from models.user import User as Usuario   # noqa: E402
+from models.acciones_del_panel import SaldoAjustado  # noqa: E402
 from routes.dependencies import (        # noqa: E402
     get_admin_user,
     get_current_user as get_current_user_from_request,
@@ -178,7 +179,7 @@ class AdjustBalanceRequest(BaseModel):
 #     GET  /admin/dashboard                 -> routes.misc.get_admin_dashboard
 #     GET  /admin/users                     -> routes.admin.get_all_users
 #     GET  /admin/users/{user_id}           -> routes.admin.get_user_detail
-#     GET  /admin/verifications/pending     -> routes.admin.get_pending_verifications
+#     GET  /admin/verifications/pending     -> routes.admin (retirado: devolvía documentos enteros)
 #     POST /admin/verifications/decide      -> routes.admin.decide_verification
 #     GET  /admin/support/chats             -> routes.support (retirado)
 #     GET  /admin/support/chat/{user_id}    -> routes.support (retirado)
@@ -320,7 +321,7 @@ async def delete_sub_admin(user_id: str, admin_user: Usuario = Depends(get_super
 
 
 
-@admin_router.put("/users/{user_id}/balance")
+@admin_router.put("/users/{user_id}/balance", response_model=SaldoAjustado, response_model_exclude_unset=True)
 async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
                               peticion: Request,
                               admin_user: Usuario = Depends(get_admin_user)):

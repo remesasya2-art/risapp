@@ -19,8 +19,12 @@ from services import estado_de_la_cuenta
 from services import las_fotos
 from services import quien_es
 from services.ledger import create_closing_entries
-from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to_decimal128
+from services.money import ZERO, from_db, money_add, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
+from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveReiniciada,
+                                       CuentaVetada, RolCambiado)
+from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
+from models.panel_retiros import ColaDeRetiros, RetirosPendientes
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
@@ -517,7 +521,7 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
 
 # ============== USERS ==============
 
-@router.get("/users")
+@router.get("/users", response_model=ListaDeUsuariosDelPanel, response_model_exclude_unset=True)
 async def get_all_users(admin: User = Depends(get_crm_user)):
     """Get all users"""
     # Lista de lo permitido. Acá había `{"_id": 0, "password_hash": 0}`, o sea
@@ -604,7 +608,7 @@ async def descargar_ficha_del_cliente(
     )
 
 
-@router.get("/users/{user_id}")
+@router.get("/users/{user_id}", response_model=DetalleDeUsuario, response_model_exclude_unset=True)
 async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
     """Get user details"""
     user = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)
@@ -635,7 +639,7 @@ async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
         ]
     }
 
-@router.get("/users/{user_id}/complete")
+@router.get("/users/{user_id}/complete", response_model=FichaCompletaDelUsuario, response_model_exclude_unset=True)
 async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_user)):
     """Get complete user history including profile, KYC, stats, transactions, and beneficiaries"""
     user = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)
@@ -666,10 +670,16 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
     recharges = [t for t in all_transactions if t.get("type") == "recharge"]
     withdrawals = [t for t in all_transactions if t.get("type") in ["withdrawal", "send"]]
     
-    # Calculate stats
-    total_recharged = sum(t.get("amount_ris", 0) or t.get("amount_output", 0) for t in recharges if t.get("status") == "completed")
-    total_withdrawn = sum(t.get("amount_ris", 0) or t.get("amount_input", 0) for t in withdrawals if t.get("status") == "completed")
-    total_ves_sent = sum(t.get("amount_ves", 0) or t.get("amount_output", 0) for t in withdrawals if t.get("status") == "completed")
+    # Los totales, con la suma de la plata del proyecto. Con `sum()` a secas
+    # esto daba 500 para cualquier cliente con una operación completada cuyo
+    # monto estuviera guardado en Decimal128: `0 + Decimal128` no existe
+    # fuera de los tests. Los tests no lo veían porque `mongomock` necesita
+    # que se le enseñe aritmética a ese tipo (tests/conftest.py), y esa
+    # lección vale para todo el proceso de pruebas.
+    completadas = lambda filas: [t for t in filas if t.get("status") == "completed"]    # noqa: E731
+    total_recharged = to_float(money_add(*(t.get("amount_ris") or t.get("amount_output") for t in completadas(recharges))))
+    total_withdrawn = to_float(money_add(*(t.get("amount_ris") or t.get("amount_input") for t in completadas(withdrawals))))
+    total_ves_sent = to_float(money_add(*(t.get("amount_ves") or t.get("amount_output") for t in completadas(withdrawals))))
     
     # Get beneficiaries
     beneficiaries = await db.beneficiaries.find({"user_id": user_id}, {"_id": 0}).to_list(50)
@@ -711,7 +721,7 @@ async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_
         "beneficiaries": beneficiaries
     }
 
-@router.post("/change-role")
+@router.post("/change-role", response_model=RolCambiado, response_model_exclude_unset=True)
 async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get_super_admin)):
     """Change user role"""
     user = await db.users.find_one({"user_id": request.user_id})
@@ -756,7 +766,7 @@ async def change_user_role(request: ChangeRoleRequest, admin: User = Depends(get
 class SetAgentRequest(BaseModel):
     is_agent: bool
 
-@router.post("/users/{user_id}/set-agent")
+@router.post("/users/{user_id}/set-agent", response_model=AgenteAsignado, response_model_exclude_unset=True)
 async def set_user_agent(user_id: str, data: SetAgentRequest, admin: User = Depends(get_super_admin)):
     """Promueve a un usuario a agente de soporte, o le quita el rol (solo super admin)."""
     target = await db.users.find_one({"user_id": user_id})
@@ -772,7 +782,7 @@ async def set_user_agent(user_id: str, data: SetAgentRequest, admin: User = Depe
     logger.info(f"User {user_id} agent role set to {data.is_agent} by {admin.user_id}")
     return {"success": True, "role": new_role}
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=ClaveReiniciada, response_model_exclude_unset=True)
 async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User = Depends(get_super_admin)):
     """Admin reset user password"""
     user = await db.users.find_one({"user_id": request.user_id})
@@ -810,7 +820,7 @@ async def admin_reset_password(request: ResetPasswordAdminRequest, admin: User =
 
 # ============== WITHDRAWALS ==============
 
-@router.get("/withdrawals/pending")
+@router.get("/withdrawals/pending", response_model=RetirosPendientes, response_model_exclude_unset=True)
 async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     """Get pending withdrawals"""
     # EL TOPE, que no estaba.
@@ -852,7 +862,7 @@ async def get_pending_withdrawals(admin: User = Depends(get_super_admin)):
     
     return withdrawals
 
-@router.get("/withdrawals/all")
+@router.get("/withdrawals/all", response_model=ColaDeRetiros, response_model_exclude_unset=True)
 async def get_all_withdrawals(
     status: str = "pending",
     q: str = "",
@@ -883,7 +893,7 @@ async def get_all_withdrawals(
     pagina["counters"] = await retiros.contadores(db)
     return pagina
 
-@router.post("/withdrawals/process")
+@router.post("/withdrawals/process", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def process_withdrawal(
     request: dict,
     peticion: Request,
@@ -2639,32 +2649,23 @@ async def refresh_bcv_rates(admin: User = Depends(get_admin_user)):
 
 # ============== KYC ==============
 
-@router.get("/verifications/pending")
-async def get_pending_verifications(admin: User = Depends(get_super_admin)):
-    """Get pending KYC verifications with documents"""
-    # Get users with pending verification
-    users = await db.users.find(
-        {"verification_status": "pending"}, 
-        {"_id": 0, "password_hash": 0}
-    ).to_list(100)
-    
-    # Get verification documents for each user
-    result = []
-    for user in users:
-        verification = await db.verifications.find_one(
-            {"user_id": user["user_id"]},
-            {"_id": 0},
-            sort=[("submitted_at", -1)],
-        )
-        result.append({
-            **user,
-            "verification": verification
-        })
-    
-    return result
+# ACA VIVIA `GET /verifications/pending`, Y SE FUE
+#
+#   Devolvía cada usuario con la verificación pendiente con la proyección
+#   `{"_id": 0, "password_hash": 0}` —una lista de lo PROHIBIDO de un solo
+#   nombre—, o sea el documento entero menos la contraseña: la semilla del
+#   segundo factor, el hash del PIN y las credenciales de la huella de cada
+#   cliente en plena verificación, y al lado el documento entero de su
+#   verificación. Comprobado corriéndola. Es el mismo defecto que tuvo
+#   `/users`, en otra puerta.
+#
+#   Ninguna pantalla la usaba: el panel lee las verificaciones de
+#   `/kyc/list` y `/kyc/{id}` (routes/kyc_admin.py), que arman la respuesta
+#   campo por campo. Una ruta que nadie mira y que sólo sirve para llevarse
+#   lo que no hay que mostrar no se arregla: se saca.
 
 
-@router.post("/verifications/decide")
+@router.post("/verifications/decide", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def decide_verification(
     request: dict,
     peticion: Request,
@@ -2757,7 +2758,7 @@ async def decide_verification(
 
 
 # Keep old endpoint for backward compatibility
-@router.post("/verifications/process")
+@router.post("/verifications/process", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def process_verification(user_id: str, action: str, reason: str = None, admin: User = Depends(get_super_admin)):
     """Process KYC verification (legacy endpoint)"""
     user = await db.users.find_one({"user_id": user_id})
@@ -2979,7 +2980,7 @@ async def get_agent_ratings(admin: User = Depends(get_super_admin)):
 
 
 
-@router.post("/users/{user_id}/suspend")
+@router.post("/users/{user_id}/suspend", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def suspend_user(user_id: str, data: dict, peticion: Request,
                        admin: User = Depends(get_super_admin)):
     """Suspend or reactivate a user"""
@@ -3009,7 +3010,7 @@ async def suspend_user(user_id: str, data: dict, peticion: Request,
     return {"message": f"Usuario {action} exitosamente"}
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def delete_user(user_id: str, admin: User = Depends(get_super_admin)):
     """Borrado lógico: conserva el historial para auditoría y libera el correo.
 
@@ -3132,7 +3133,7 @@ class BanUserRequest(BaseModel):
     scope: str = "full"   # "email" | "full"
     reason: str = ""
 
-@router.post("/ban")
+@router.post("/ban", response_model=CuentaVetada, response_model_exclude_unset=True)
 async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_crm_user)):
     """Banea a un usuario a partir de su verificación.
 

@@ -16,11 +16,29 @@ Vive acá, y no en uno de los contratos, porque lo usan varios.
 """
 from typing import Annotated, Any, Optional
 
+from bson.decimal128 import Decimal128
 from pydantic import BeforeValidator
+
+from services.json_de_mongo import _a_float
 
 
 def _sin_estructura(valor):
-    """Un valor suelto pasa; un documento o una lista, no."""
+    """Un valor suelto pasa; un documento o una lista, no.
+
+    LA PLATA DE LA BASE SE CONVIERTE ACA, Y NO ES UN DETALLE
+
+        Con contrato, la respuesta la arma el modelo, NO el traductor de
+        FastAPI: la red de `services/json_de_mongo.py` —que le enseña
+        `Decimal128` a ese traductor— no llega. Un monto crudo de la base en
+        un campo de un contrato daba 500, comprobado: la misma ruta, sin
+        contrato, contestaba el número. O sea que poner un contrato podía
+        voltear una pantalla que andaba.
+
+        Se convierte con la misma función de la red, sin redondear (ver el
+        porqué allá: redondear rompe la cripto).
+    """
+    if isinstance(valor, Decimal128):
+        return _a_float(valor)
     return None if isinstance(valor, (dict, list, tuple, set)) else valor
 
 

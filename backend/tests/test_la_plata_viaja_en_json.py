@@ -220,18 +220,23 @@ def test_la_ficha_de_un_usuario_contesta(base, cliente):
     assert r.json()["user"]["balance_ris"] == 150.25
 
 
-def test_las_verificaciones_pendientes_contestan(base, cliente):
-    """La otra ruta que devolvía documentos enteros."""
+def test_LA_RUTA_QUE_DEVOLVIA_DOCUMENTOS_ENTEROS_YA_NO_ESTA(base, cliente):
+    """`/verifications/pending` devolvía cada usuario pendiente entero, con la
+    semilla del segundo factor y el hash del PIN. Ninguna pantalla la usaba y
+    se sacó (ver el comentario en routes/admin.py). Si vuelve, que sea con un
+    contrato: este test se pone rojo para que alguien lo mire."""
     import asyncio
 
     async def sembrar():
         doc = _un_usuario(user_id="u_pendiente")
         doc["verification_status"] = "pending"
+        doc["two_factor_secret"] = "JBSWY3DPEHPK3PXP"
         await base.users.insert_one(doc)
     asyncio.run(sembrar())
 
     r = cliente.get("/api/admin/verifications/pending")
-    assert r.status_code == 200, r.text
+    assert r.status_code in (404, 405), r.text
+    assert "JBSWY3DPEHPK3PXP" not in r.text
 
 
 def test_SIN_LA_RED_LA_LISTA_SE_CAERIA(base):
@@ -289,3 +294,27 @@ def test_el_defecto_no_se_comio_la_precision_de_los_reales():
     assert jsonable_encoder(to_decimal128("0.01")) == 0.01
     assert jsonable_encoder(to_decimal128("99999.99")) == 99999.99
     assert Decimal(str(jsonable_encoder(to_decimal128("10.00")))) == Decimal("10")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La plata también pasa por los contratos
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_UN_MONTO_CRUDO_DE_LA_BASE_PASA_POR_UN_CONTRATO_Y_SALE_COMO_NUMERO():
+    """Con contrato, la respuesta la arma el modelo y la red de arriba no
+    llega: un `Decimal128` en un campo del contrato daba 500 donde la misma
+    ruta sin contrato contestaba el número. Poner un contrato no puede voltear
+    una pantalla que andaba. Y sin redondear: la cripto lleva ocho decimales."""
+    from pydantic import create_model
+    from models.escalar import Escalar
+
+    Monto = create_model("Monto", reales=(Escalar, None), cripto=(Escalar, None))
+    app = FastAPI()
+
+    @app.get("/monto", response_model=Monto)
+    def monto():
+        return {"reales": to_decimal128("1234.56"), "cripto": Decimal128("0.00123456")}
+
+    r = TestClient(app, raise_server_exceptions=False).get("/monto")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"reales": 1234.56, "cripto": 0.00123456}

@@ -23,6 +23,9 @@ from pydantic import BaseModel, Field
 from database import db
 from services import cofre
 from models.user import User
+from models.acciones_del_panel import (AccionDelPanel, MotivosDeRechazo, NotaGuardada, RiesgoMarcado,
+                                       TiposDeDocumento, VerificacionRechazada)
+from models.panel_kyc import DetalleDeVerificacion, HistoriaDeLaVerificacion, ListaDeVerificaciones
 from routes.dependencies import get_super_admin, get_crm_user
 from services.money import to_float
 from services.notifications import create_notification
@@ -179,7 +182,7 @@ async def _audit(verification_id: str, user_id: str, action: str,
 # ENDPOINTS
 # ============================================================================
 
-@router.get("/list")
+@router.get("/list", response_model=ListaDeVerificaciones, response_model_exclude_unset=True)
 async def list_kyc(
     status: str = Query("pending", pattern="^(pending|approved|rejected|all)$"),
     search: Optional[str] = Query(None, description="Match name, email or document number"),
@@ -277,7 +280,7 @@ async def list_kyc(
     return {"counts": counts, "items": items}
 
 
-@router.get("/document-types")
+@router.get("/document-types", response_model=TiposDeDocumento, response_model_exclude_unset=True)
 async def get_document_types(admin: User = Depends(get_crm_user)):
     """Catalog of accepted ID document types."""
     return DOCUMENT_TYPES
@@ -356,13 +359,13 @@ async def export_kyc_csv(
     )
 
 
-@router.get("/rejection-reasons")
+@router.get("/rejection-reasons", response_model=MotivosDeRechazo, response_model_exclude_unset=True)
 async def get_rejection_reasons(admin: User = Depends(get_crm_user)):
     """Predefined rejection reason catalog."""
     return [{"code": code, "label": label} for code, label in REJECTION_REASONS.items()]
 
 
-@router.get("/{verification_id}")
+@router.get("/{verification_id}", response_model=DetalleDeVerificacion, response_model_exclude_unset=True)
 async def get_kyc_detail(verification_id: str, admin: User = Depends(get_crm_user)):
     v = await db.verifications.find_one({"verification_id": verification_id}, {"_id": 0})
     if not v:
@@ -393,7 +396,7 @@ async def get_kyc_detail(verification_id: str, admin: User = Depends(get_crm_use
     }
 
 
-@router.get("/{verification_id}/history")
+@router.get("/{verification_id}/history", response_model=HistoriaDeLaVerificacion, response_model_exclude_unset=True)
 async def get_kyc_history(verification_id: str, admin: User = Depends(get_crm_user)):
     """Audit history for a verification."""
     # Resolve real id (allow user_id fallback)
@@ -428,7 +431,7 @@ async def get_kyc_history(verification_id: str, admin: User = Depends(get_crm_us
     return {"verification_id": real_id, "history": entries}
 
 
-@router.post("/{verification_id}/approve")
+@router.post("/{verification_id}/approve", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def approve_kyc(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_crm_user)):
     checklist = (payload or {}).get("checklist") or {}
     v = await db.verifications.find_one(
@@ -479,7 +482,7 @@ async def approve_kyc(verification_id: str, payload: dict = Body(default={}), ad
     return {"success": True, "message": "Verificación aprobada"}
 
 
-@router.post("/{verification_id}/risk")
+@router.post("/{verification_id}/risk", response_model=RiesgoMarcado, response_model_exclude_unset=True)
 async def set_kyc_risk(verification_id: str, payload: dict = Body(default={}), admin: User = Depends(get_crm_user)):
     """Asigna el nivel de riesgo (low/medium/high) a una verificación. No cambia
     el estado; es una clasificación del admin que queda registrada en auditoría."""
@@ -506,7 +509,7 @@ async def set_kyc_risk(verification_id: str, payload: dict = Body(default={}), a
     return {"success": True, "risk_level": level}
 
 
-@router.post("/{verification_id}/re-review")
+@router.post("/{verification_id}/re-review", response_model=AccionDelPanel, response_model_exclude_unset=True)
 async def re_review_kyc(verification_id: str, admin: User = Depends(get_crm_user)):
     """Marca una verificación ya aprobada para re-revisión: vuelve a 'pending'.
     Los documentos existentes se conservan, así que el admin puede re-revisarlos
@@ -553,7 +556,7 @@ async def re_review_kyc(verification_id: str, admin: User = Depends(get_crm_user
     return {"success": True, "message": "Usuario enviado a re-verificación"}
 
 
-@router.post("/{verification_id}/reject")
+@router.post("/{verification_id}/reject", response_model=VerificacionRechazada, response_model_exclude_unset=True)
 async def reject_kyc(verification_id: str, payload: RejectRequest,
                      admin: User = Depends(get_crm_user)):
     if payload.reason_code not in REJECTION_REASONS:
@@ -617,7 +620,7 @@ async def reject_kyc(verification_id: str, payload: RejectRequest,
     return {"success": True, "message": "Verificación rechazada", "reason": final_reason}
 
 
-@router.patch("/{verification_id}/note")
+@router.patch("/{verification_id}/note", response_model=NotaGuardada, response_model_exclude_unset=True)
 async def update_kyc_note(verification_id: str, payload: NoteRequest,
                           admin: User = Depends(get_crm_user)):
     """Update internal admin note (only visible to admins)."""

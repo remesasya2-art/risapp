@@ -23,7 +23,6 @@ DELETE /api/admin/blacklist/{blacklist_id}
 DELETE /api/admin/quick-replies/{qr_id}
 DELETE /api/admin/rrhh/{user_id}
 DELETE /api/admin/sub-admins/{user_id}
-DELETE /api/admin/users/{user_id}
 DELETE /{full_path:path}
 GET /api/admin/accounting/balance-check
 GET /api/admin/accounting/banks
@@ -71,12 +70,7 @@ GET /api/admin/envios/transportistas/{transportista_id}/agencias
 GET /api/admin/errores
 GET /api/admin/errores/resumen
 GET /api/admin/hidden-transactions
-GET /api/admin/kyc/document-types
 GET /api/admin/kyc/export.csv
-GET /api/admin/kyc/list
-GET /api/admin/kyc/rejection-reasons
-GET /api/admin/kyc/{verification_id}
-GET /api/admin/kyc/{verification_id}/history
 GET /api/admin/lector/desempeno
 GET /api/admin/ledger/balance
 GET /api/admin/ledger/cobros-sin-acreditar
@@ -128,15 +122,9 @@ GET /api/admin/support-requests
 GET /api/admin/transactions
 GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
-GET /api/admin/users
-GET /api/admin/users/{user_id}
-GET /api/admin/users/{user_id}/complete
 GET /api/admin/users/{user_id}/ficha
 GET /api/admin/uso
-GET /api/admin/verifications/pending
 GET /api/admin/wipe-all/preview
-GET /api/admin/withdrawals/all
-GET /api/admin/withdrawals/pending
 GET /api/auth/2fa/admin-access-log
 GET /api/centro-gestion/health
 GET /api/centro-gestion/log
@@ -151,7 +139,6 @@ PATCH /api/admin/btc/config
 PATCH /api/admin/envios/origenes/{cep}
 PATCH /api/admin/envios/transportistas/{transportista_id}
 PATCH /api/admin/envios/transportistas/{transportista_id}/agencias/{codigo}
-PATCH /api/admin/kyc/{verification_id}/note
 PATCH /{full_path:path}
 POST /api/admin/accounting/banks
 POST /api/admin/accounting/banks/ledger/manual
@@ -162,11 +149,9 @@ POST /api/admin/accounting/v2/p2p-sales
 POST /api/admin/accounting/v2/usdt-lots
 POST /api/admin/accounting/v2/webhook-conciliate
 POST /api/admin/accounting/wipe
-POST /api/admin/ban
 POST /api/admin/bcv-rates/refresh
 POST /api/admin/blacklist
 POST /api/admin/btc/marcar-enviado
-POST /api/admin/change-role
 POST /api/admin/credits/manual-credit
 POST /api/admin/envios-reais/{transaction_id}/verificar
 POST /api/admin/envios/almacen/migrar
@@ -193,10 +178,6 @@ POST /api/admin/envios/transportistas
 POST /api/admin/envios/transportistas/{transportista_id}/agencias
 POST /api/admin/envios/transportistas/{transportista_id}/agencias/csv
 POST /api/admin/fix-media-urls
-POST /api/admin/kyc/{verification_id}/approve
-POST /api/admin/kyc/{verification_id}/re-review
-POST /api/admin/kyc/{verification_id}/reject
-POST /api/admin/kyc/{verification_id}/risk
 POST /api/admin/ledger/cofre/cotejar
 POST /api/admin/ledger/cofre/llave-nueva
 POST /api/admin/ledger/opening
@@ -215,7 +196,6 @@ POST /api/admin/quick-replies
 POST /api/admin/rates
 POST /api/admin/recharges/approve
 POST /api/admin/recharges/ves/process/{transaction_id}
-POST /api/admin/reset-password
 POST /api/admin/restore-transactions
 POST /api/admin/rrhh
 POST /api/admin/rrhh/{user_id}/reenviar-invitacion
@@ -235,12 +215,7 @@ POST /api/admin/support-requests/{request_id}/priority
 POST /api/admin/support-requests/{request_id}/release
 POST /api/admin/support-requests/{request_id}/reply
 POST /api/admin/support-requests/{request_id}/resolve
-POST /api/admin/users/{user_id}/set-agent
-POST /api/admin/users/{user_id}/suspend
-POST /api/admin/verifications/decide
-POST /api/admin/verifications/process
 POST /api/admin/wipe-all
-POST /api/admin/withdrawals/process
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
 POST /api/credits/webhook
@@ -265,5 +240,4 @@ PUT /api/admin/envios/transportistas/{transportista_id}/cuenta
 PUT /api/admin/rrhh/{user_id}/legajo
 PUT /api/admin/rrhh/{user_id}/permisos
 PUT /api/admin/sub-admins/{user_id}
-PUT /api/admin/users/{user_id}/balance
 PUT /{full_path:path}
