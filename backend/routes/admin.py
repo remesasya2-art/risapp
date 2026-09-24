@@ -23,6 +23,7 @@ from services.money import ZERO, from_db, para_mostrar, to_float, to_decimal, to
 from models.user import User
 from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveReiniciada,
                                        CuentaVetada, RolCambiado)
+from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
@@ -519,7 +520,7 @@ async def fix_media_urls(admin: User = Depends(get_super_admin)):
 
 # ============== USERS ==============
 
-@router.get("/users")
+@router.get("/users", response_model=ListaDeUsuariosDelPanel, response_model_exclude_unset=True)
 async def get_all_users(admin: User = Depends(get_crm_user)):
     """Get all users"""
     # Lista de lo permitido. Acá había `{"_id": 0, "password_hash": 0}`, o sea
@@ -606,7 +607,7 @@ async def descargar_ficha_del_cliente(
     )
 
 
-@router.get("/users/{user_id}")
+@router.get("/users/{user_id}", response_model=DetalleDeUsuario, response_model_exclude_unset=True)
 async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
     """Get user details"""
     user = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)
@@ -637,7 +638,7 @@ async def get_user_detail(user_id: str, admin: User = Depends(get_crm_user)):
         ]
     }
 
-@router.get("/users/{user_id}/complete")
+@router.get("/users/{user_id}/complete", response_model=FichaCompletaDelUsuario, response_model_exclude_unset=True)
 async def get_user_complete_history(user_id: str, admin: User = Depends(get_crm_user)):
     """Get complete user history including profile, KYC, stats, transactions, and beneficiaries"""
     user = await db.users.find_one({"user_id": user_id}, perfil.LO_QUE_VE_EL_PANEL)

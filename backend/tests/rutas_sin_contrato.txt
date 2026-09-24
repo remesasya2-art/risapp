@@ -125,9 +125,6 @@ GET /api/admin/support-requests
 GET /api/admin/transactions
 GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
-GET /api/admin/users
-GET /api/admin/users/{user_id}
-GET /api/admin/users/{user_id}/complete
 GET /api/admin/users/{user_id}/ficha
 GET /api/admin/uso
 GET /api/admin/wipe-all/preview
