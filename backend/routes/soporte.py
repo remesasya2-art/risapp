@@ -53,6 +53,7 @@ from services import soporte
 from services.imagen_recibida import ImagenInvalida, limpiar_foto_del_chat
 from services.money import to_float
 from services.notifications import create_notification
+from models.acciones_del_cliente import MiCasoAbierto, MiCasoActualizado, MiRespuestaEnviada
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["soporte"])
@@ -279,7 +280,7 @@ async def mi_caso(caso_id: str, current_user: User = Depends(get_current_user)):
     return {"caso": _publico(caso), "mensajes": mensajes}
 
 
-@router.post("/soporte/casos")
+@router.post("/soporte/casos", response_model=MiCasoAbierto, response_model_exclude_unset=True)
 async def abrir_caso(datos: AbrirCaso, current_user: User = Depends(get_current_user)):
     """Abre un caso nuevo."""
     if not soporte.motivo_valido(datos.motivo):
@@ -358,7 +359,7 @@ async def abrir_caso(datos: AbrirCaso, current_user: User = Depends(get_current_
     return {"caso": _publico(caso)}
 
 
-@router.post("/soporte/casos/{caso_id}/mensajes")
+@router.post("/soporte/casos/{caso_id}/mensajes", response_model=MiRespuestaEnviada, response_model_exclude_unset=True)
 async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
                             current_user: User = Depends(get_current_user)):
     """El cliente escribe en un caso suyo.
@@ -423,7 +424,7 @@ async def responder_cliente(caso_id: str, datos: MensajeDelCliente,
     return {"success": True, "reabierto": reabierto}
 
 
-@router.post("/soporte/casos/{caso_id}/calificar")
+@router.post("/soporte/casos/{caso_id}/calificar", response_model=MiCasoActualizado, response_model_exclude_unset=True)
 async def calificar(caso_id: str, datos: Calificacion,
                     current_user: User = Depends(get_current_user)):
     """El cliente califica UN caso. Uno por caso, resuelto o cerrado."""
@@ -464,7 +465,7 @@ async def calificar(caso_id: str, datos: Calificacion,
     return {"success": True}
 
 
-@router.post("/soporte/casos/{caso_id}/cerrar")
+@router.post("/soporte/casos/{caso_id}/cerrar", response_model=MiCasoActualizado, response_model_exclude_unset=True)
 async def cerrar_el_cliente(caso_id: str, current_user: User = Depends(get_current_user)):
     """El cliente da por terminada SU consulta.
 

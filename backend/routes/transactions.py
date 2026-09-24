@@ -67,6 +67,7 @@ from models.acciones_de_dinero import (
     MiRecargaVes,
     MiRetiroPedido,
 )
+from models.acciones_del_cliente import MiBeneficiarioCreado, MiBeneficiarioEliminado
 router = APIRouter(tags=["transactions"])
 
 # ============== ENVIO CRIPTO: PAGOS INCOMPLETOS (3 NIVELES) ==============
@@ -240,7 +241,7 @@ async def _notificar_underpaid_review(
 
 # ============== BENEFICIARIES ==============
 
-@router.post("/beneficiaries")
+@router.post("/beneficiaries", response_model=MiBeneficiarioCreado, response_model_exclude_unset=True)
 async def create_beneficiary(request: BeneficiaryCreate, current_user: User = Depends(get_current_user)):
     """Create a new beneficiary"""
     beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"
@@ -284,7 +285,7 @@ async def get_beneficiaries(current_user: User = Depends(get_current_user)):
         for b in beneficiaries
     ]
 
-@router.delete("/beneficiaries/{beneficiary_id}")
+@router.delete("/beneficiaries/{beneficiary_id}", response_model=MiBeneficiarioEliminado, response_model_exclude_unset=True)
 async def delete_beneficiary(beneficiary_id: str, current_user: User = Depends(get_current_user)):
     """Delete a beneficiary"""
     result = await db.beneficiaries.delete_one({
@@ -311,7 +312,7 @@ class ReaisSendRequest(BaseModel):
     amount: float   # en RIS (1 RIS = 1 R$)
     idempotency_key: Optional[str] = None
 
-@router.post("/beneficiaries/br")
+@router.post("/beneficiaries/br", response_model=MiBeneficiarioCreado, response_model_exclude_unset=True)
 async def create_br_beneficiary(request: BrBeneficiaryCreate, current_user: User = Depends(get_current_user)):
     """Crea un beneficiario en Brasil (pago por PIX en reais)."""
     beneficiary_id = f"ben_{uuid.uuid4().hex[:12]}"

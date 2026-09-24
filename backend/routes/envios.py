@@ -49,6 +49,12 @@ from models.envios_cotizacion import PedidoDeCotizacion, PedidoDeCreacion
 from models.envios_salida import (CatalogoDeEnvios, DetalleDeMiEnvio, LimitesDeEnvio,
                                   MisEnvios, SeguimientoPublico)
 from models.user import User
+from models.acciones_del_cliente import (
+    MiCobroDeEncomienda,
+    MiComprobanteDeEncomienda,
+    MiCotizacionDeEncomienda,
+    MiEncomiendaCreada,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/envios", tags=["envios"])
@@ -135,7 +141,7 @@ def _ip_real(request) -> str | None:
     return ip_del_cliente(request) or None
 
 
-@router.post("/cotizar")
+@router.post("/cotizar", response_model=MiCotizacionDeEncomienda, response_model_exclude_unset=True)
 async def cotizar(pedido: PedidoDeCotizacion,
                   current_user: User = Depends(get_verified_user)):
     """El precio del servicio, más las dos orientaciones. **No cobra nada.**
@@ -162,7 +168,7 @@ async def cotizar(pedido: PedidoDeCotizacion,
             503, "No se pudo cotizar en este momento. Probá de nuevo en un minuto.")
 
 
-@router.post("/crear")
+@router.post("/crear", response_model=MiEncomiendaCreada, response_model_exclude_unset=True)
 async def crear(pedido: PedidoDeCreacion, request: Request,
                 current_user: User = Depends(get_verified_user)):
     """Confirma una cotización y entrega los datos de despacho. **No cobra nada.**
@@ -191,7 +197,7 @@ async def crear(pedido: PedidoDeCreacion, request: Request,
             503, "No se pudo confirmar el envío. Probá de nuevo en un minuto.")
 
 
-@router.post("/{envio_id}/cobros/{partida}/pagar")
+@router.post("/{envio_id}/cobros/{partida}/pagar", response_model=MiCobroDeEncomienda, response_model_exclude_unset=True)
 async def pagar_cobro(envio_id: str, partida: str,
                       current_user: User = Depends(get_verified_user)):
     """Salda una partida pendiente con el saldo RIS del usuario.
@@ -217,7 +223,7 @@ async def pagar_cobro(envio_id: str, partida: str,
             503, "No se pudo procesar el pago. Probá de nuevo en un minuto.")
 
 
-@router.post("/{envio_id}/comprobante")
+@router.post("/{envio_id}/comprobante", response_model=MiComprobanteDeEncomienda, response_model_exclude_unset=True)
 async def cargar_comprobante(envio_id: str,
                              codigo_objeto: str = Form(...),
                              posteado_at: str = Form(...),
