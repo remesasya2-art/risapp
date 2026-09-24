@@ -48,7 +48,7 @@ export default function Verification() {
   // Styles
   const pageStyle = {
     minHeight: '100vh',
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'var(--en-oscuro-fondo, #f8fafc)',
   };
 
   const headerStyle = {
@@ -58,29 +58,29 @@ export default function Verification() {
   };
 
   const cardStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
     borderRadius: '20px',
     padding: '24px',
     boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)',
-    border: '1px solid #f1f5f9',
+    border: '1px solid var(--en-oscuro-acento-borde, #f1f5f9)',
   };
 
   const inputStyle = {
     width: '100%',
     padding: '14px 16px',
     fontSize: '15px',
-    border: '2px solid #e2e8f0',
+    border: '2px solid var(--en-oscuro-acento-borde, #e2e8f0)',
     borderRadius: '14px',
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
   };
 
   const labelStyle = {
     display: 'block',
     fontSize: '14px',
     fontWeight: '600',
-    color: '#374151',
+    color: 'var(--en-oscuro-texto, #374151)',
     marginBottom: '8px',
   };
 
@@ -106,8 +106,8 @@ export default function Verification() {
     padding: '14px',
     fontSize: '15px',
     fontWeight: '600',
-    color: '#6366f1',
-    backgroundColor: '#eef2ff',
+    color: 'var(--en-oscuro-acento, #6366f1)',
+    backgroundColor: 'var(--en-oscuro-acento-suave, #eef2ff)',
     border: 'none',
     borderRadius: '14px',
     cursor: 'pointer',
@@ -124,10 +124,10 @@ export default function Verification() {
     justifyContent: 'center',
     width: '100%',
     height: '200px',
-    border: `2px dashed ${hasImage ? '#22c55e' : '#d1d5db'}`,
+    border: `2px dashed ${hasImage ? '#22c55e' : 'var(--en-oscuro-linea-fuerte, #d1d5db)'}`,
     borderRadius: '16px',
     cursor: 'pointer',
-    backgroundColor: hasImage ? '#f0fdf4' : '#fafafa',
+    backgroundColor: hasImage ? 'var(--en-oscuro-exito-suave, #f0fdf4)' : 'var(--en-oscuro-superficie-2, #fafafa)',
     transition: 'all 0.2s',
     overflow: 'hidden',
     position: 'relative',
@@ -266,13 +266,13 @@ export default function Verification() {
         <div style={{ ...cardStyle, textAlign: 'center', maxWidth: '400px' }}>
           <div style={{ 
             width: '80px', height: '80px', borderRadius: '50%', 
-            backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', 
+            backgroundColor: 'var(--en-oscuro-exito-suave, #dcfce7)', display: 'flex', alignItems: 'center', 
             justifyContent: 'center', margin: '0 auto 20px' 
           }}>
-            <CheckCircle style={{ width: '40px', height: '40px', color: '#16a34a' }} />
+            <CheckCircle style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>¡Cuenta verificada!</h2>
-          <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '24px' }}>Tu identidad ha sido verificada exitosamente.</p>
+          <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', marginBottom: '8px' }}>¡Cuenta verificada!</h2>
+          <p style={{ fontSize: '15px', color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: '24px' }}>Tu identidad ha sido verificada exitosamente.</p>
           <button onClick={() => navigate('/')} style={buttonPrimaryStyle}>
             Ir al inicio
           </button>
@@ -288,13 +288,13 @@ export default function Verification() {
         <div style={{ ...cardStyle, textAlign: 'center', maxWidth: '400px' }}>
           <div style={{ 
             width: '80px', height: '80px', borderRadius: '50%', 
-            backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', 
+            backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', display: 'flex', alignItems: 'center', 
             justifyContent: 'center', margin: '0 auto 20px' 
           }}>
-            <Loader style={{ width: '40px', height: '40px', color: '#d97706', animation: 'spin 1s linear infinite' }} />
+            <Loader style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-alerta, #d97706)', animation: 'spin 1s linear infinite' }} />
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>Verificación en proceso</h2>
-          <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '24px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', marginBottom: '8px' }}>Verificación en proceso</h2>
+          <p style={{ fontSize: '15px', color: 'var(--en-oscuro-texto-2, #6b7280)', marginBottom: '24px' }}>
             Tu documentación está siendo revisada. Te notificaremos cuando esté lista.
           </p>
           <button onClick={() => navigate('/')} style={buttonSecondaryStyle}>
@@ -313,7 +313,7 @@ export default function Verification() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button 
               onClick={() => navigate(-1)} 
-              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer', display: 'flex' }}
+              style={{ background: 'var(--en-oscuro-superficie, rgba(255,255,255,0.15))', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer', display: 'flex' }}
             >
               <ArrowLeft style={{ width: '20px', height: '20px', color: 'white' }} />
             </button>
@@ -339,7 +339,7 @@ export default function Verification() {
                 flex: 1,
                 height: '6px',
                 borderRadius: '3px',
-                backgroundColor: step >= s ? (step === 5 ? '#22c55e' : '#6366f1') : '#e2e8f0',
+                backgroundColor: step >= s ? (step === 5 ? '#22c55e' : 'var(--en-oscuro-acento, #6366f1)') : 'var(--en-oscuro-acento-suave, #e2e8f0)',
                 transition: 'background-color 0.3s',
               }}
             />
@@ -352,14 +352,14 @@ export default function Verification() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
               <div style={{ 
                 width: '56px', height: '56px', borderRadius: '16px', 
-                background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)', 
+                background: 'var(--en-oscuro-acento-suave, linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%))', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center' 
               }}>
-                <User style={{ width: '28px', height: '28px', color: '#6366f1' }} />
+                <User style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Datos personales</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Ingresa tu información personal</p>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Datos personales</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Ingresa tu información personal</p>
               </div>
             </div>
 
@@ -396,7 +396,7 @@ export default function Verification() {
                   ))}
                 </select>
                 {requiresBack && (
-                  <p style={{ fontSize: '12px', color: '#92400e', margin: '6px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-alerta, #92400e)', margin: '6px 0 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <AlertCircle style={{ width: '14px', height: '14px' }} />
                     Necesitarás subir <strong style={{ marginLeft: '3px' }}>frente y reverso</strong>
                   </p>
@@ -438,7 +438,7 @@ export default function Verification() {
                   placeholder="000.000.000-00"
                 />
                 {cpfDeLaCuenta && normalizarCpf(formData.cpf_number) !== cpfDeLaCuenta && (
-                  <p style={{ fontSize: '12px', color: '#b45309', margin: '6px 0 0 0' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--en-oscuro-alerta, #b45309)', margin: '6px 0 0 0' }}>
                     Cambiaste el CPF que registraste al crear tu cuenta. Está
                     bien si te habías equivocado: lo vamos a revisar contra tu
                     documento.
@@ -487,14 +487,14 @@ export default function Verification() {
 
             {/* Info Box */}
             <div style={{ 
-              marginTop: '20px', padding: '16px', backgroundColor: '#eff6ff', 
-              borderRadius: '14px', borderLeft: '4px solid #3b82f6' 
+              marginTop: '20px', padding: '16px', backgroundColor: 'var(--en-oscuro-acento-suave, #eff6ff)', 
+              borderRadius: '14px', borderLeft: '4px solid var(--en-oscuro-acento, #3b82f6)' 
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <AlertCircle style={{ width: '20px', height: '20px', color: '#3b82f6', flexShrink: 0, marginTop: '2px' }} />
+                <AlertCircle style={{ width: '20px', height: '20px', color: 'var(--en-oscuro-acento, #3b82f6)', flexShrink: 0, marginTop: '2px' }} />
                 <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e40af', margin: '0 0 6px 0' }}>Información importante</p>
-                  <ul style={{ fontSize: '13px', color: '#3b82f6', margin: 0, paddingLeft: '16px' }}>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-acento, #1e40af)', margin: '0 0 6px 0' }}>Información importante</p>
+                  <ul style={{ fontSize: '13px', color: 'var(--en-oscuro-acento, #3b82f6)', margin: 0, paddingLeft: '16px' }}>
                     <li>Tus documentos serán revisados manualmente</li>
                     <li>La verificación puede tomar de 5 a 30 minutos</li>
                     <li>Tu selfie será tu foto de perfil permanente</li>
@@ -511,14 +511,14 @@ export default function Verification() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
               <div style={{ 
                 width: '56px', height: '56px', borderRadius: '16px', 
-                background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)', 
+                background: 'var(--en-oscuro-acento-suave, linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%))', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center' 
               }}>
-                <CreditCard style={{ width: '28px', height: '28px', color: '#6366f1' }} />
+                <CreditCard style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Documento de identidad</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Documento de identidad</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>
                   {currentDocType.label}{requiresBack ? ' — frente y reverso' : ' — solo frente'}
                 </p>
               </div>
@@ -528,7 +528,7 @@ export default function Verification() {
               {/* FRONT */}
               <div>
                 <label style={{ ...labelStyle, marginBottom: '6px' }}>
-                  Frente del documento <span style={{ color: '#dc2626' }}>*</span>
+                  Frente del documento <span style={{ color: 'var(--en-oscuro-error, #dc2626)' }}>*</span>
                 </label>
                 <input type="file" accept="image/*" onChange={handleFileChange('id_document_image')} style={{ display: 'none' }} id="id-upload-front" />
                 <label htmlFor="id-upload-front" style={uploadAreaStyle(formData.id_document_image)} data-testid="upload-id-front">
@@ -541,9 +541,9 @@ export default function Verification() {
                     </>
                   ) : (
                     <>
-                      <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
-                      <p style={{ fontSize: '15px', fontWeight: '600', color: '#374151', margin: '0 0 4px 0' }}>Subir frente</p>
-                      <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>JPG o PNG (máx. 5MB)</p>
+                      <Upload style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '12px' }} />
+                      <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 4px 0' }}>Subir frente</p>
+                      <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>JPG o PNG (máx. 5MB)</p>
                     </>
                   )}
                 </label>
@@ -553,8 +553,8 @@ export default function Verification() {
               {requiresBack && (
                 <div>
                   <label style={{ ...labelStyle, marginBottom: '6px' }}>
-                    Reverso del documento <span style={{ color: '#dc2626' }}>*</span>
-                    <span style={{ fontSize: '12px', fontWeight: 400, color: '#6b7280', marginLeft: '6px' }}>(obligatorio)</span>
+                    Reverso del documento <span style={{ color: 'var(--en-oscuro-error, #dc2626)' }}>*</span>
+                    <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--en-oscuro-texto-2, #6b7280)', marginLeft: '6px' }}>(obligatorio)</span>
                   </label>
                   <input type="file" accept="image/*" onChange={handleFileChange('id_document_image_back')} style={{ display: 'none' }} id="id-upload-back" />
                   <label htmlFor="id-upload-back" style={uploadAreaStyle(formData.id_document_image_back)} data-testid="upload-id-back">
@@ -567,9 +567,9 @@ export default function Verification() {
                       </>
                     ) : (
                       <>
-                        <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
-                        <p style={{ fontSize: '15px', fontWeight: '600', color: '#374151', margin: '0 0 4px 0' }}>Subir reverso</p>
-                        <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>JPG o PNG (máx. 5MB)</p>
+                        <Upload style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '12px' }} />
+                        <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 4px 0' }}>Subir reverso</p>
+                        <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>JPG o PNG (máx. 5MB)</p>
                       </>
                     )}
                   </label>
@@ -598,14 +598,14 @@ export default function Verification() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
               <div style={{ 
                 width: '56px', height: '56px', borderRadius: '16px', 
-                background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)', 
+                background: 'var(--en-oscuro-acento-suave, linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%))', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center' 
               }}>
-                <FileText style={{ width: '28px', height: '28px', color: '#6366f1' }} />
+                <FileText style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Documento CPF</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Foto del documento CPF</p>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Documento CPF</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Foto del documento CPF</p>
               </div>
             </div>
 
@@ -621,9 +621,9 @@ export default function Verification() {
                   </>
                 ) : (
                   <>
-                    <Upload style={{ width: '40px', height: '40px', color: '#9ca3af', marginBottom: '12px' }} />
-                    <p style={{ fontSize: '15px', fontWeight: '600', color: '#374151', margin: '0 0 4px 0' }}>Subir CPF</p>
-                    <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>JPG, PNG o PDF (máx. 5MB)</p>
+                    <Upload style={{ width: '40px', height: '40px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '12px' }} />
+                    <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', margin: '0 0 4px 0' }}>Subir CPF</p>
+                    <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-3, #9ca3af)', margin: 0 }}>JPG, PNG o PDF (máx. 5MB)</p>
                   </>
                 )}
               </label>
@@ -650,14 +650,14 @@ export default function Verification() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
               <div style={{ 
                 width: '56px', height: '56px', borderRadius: '16px', 
-                background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)', 
+                background: 'var(--en-oscuro-acento-suave, linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%))', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center' 
               }}>
-                <Camera style={{ width: '28px', height: '28px', color: '#6366f1' }} />
+                <Camera style={{ width: '28px', height: '28px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>Selfie de verificación</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>Toma una foto de tu rostro</p>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Selfie de verificación</h2>
+                <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '4px 0 0 0' }}>Toma una foto de tu rostro</p>
               </div>
             </div>
 
@@ -689,17 +689,17 @@ export default function Verification() {
                       style={{
                         position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
                         width: '64px', height: '64px', borderRadius: '50%',
-                        backgroundColor: 'white', border: '4px solid #6366f1',
+                        backgroundColor: 'var(--en-oscuro-superficie, white)', border: '4px solid var(--en-oscuro-acento, #6366f1)',
                         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                       }}
                     >
-                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#6366f1' }} />
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--en-oscuro-acento, #6366f1)' }} />
                     </button>
                   </>
                 ) : (
                   <div style={{ 
                     width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', color: '#9ca3af'
+                    alignItems: 'center', justifyContent: 'center', color: 'var(--en-oscuro-texto-3, #9ca3af)'
                   }}>
                     <Camera style={{ width: '48px', height: '48px', marginBottom: '12px' }} />
                     <p style={{ fontSize: '15px', fontWeight: '500', margin: 0 }}>{cameraLoading ? 'Iniciando cámara…' : 'Cámara no activa'}</p>
@@ -715,7 +715,7 @@ export default function Verification() {
               )}
 
               {stream && !formData.selfie_image && (
-                <button onClick={stopCamera} style={{ ...buttonSecondaryStyle, color: '#dc2626', backgroundColor: '#fef2f2' }}>
+                <button onClick={stopCamera} style={{ ...buttonSecondaryStyle, color: 'var(--en-oscuro-error, #dc2626)', backgroundColor: 'var(--en-oscuro-error-suave, #fef2f2)' }}>
                   <X style={{ width: '20px', height: '20px' }} />
                   Cancelar
                 </button>
@@ -747,11 +747,11 @@ export default function Verification() {
 
             {/* Success Tips */}
             <div style={{ 
-              marginTop: '20px', padding: '16px', backgroundColor: '#f0fdf4', 
+              marginTop: '20px', padding: '16px', backgroundColor: 'var(--en-oscuro-exito-suave, #f0fdf4)', 
               borderRadius: '14px', borderLeft: '4px solid #22c55e' 
             }}>
-              <p style={{ fontSize: '14px', fontWeight: '600', color: '#166534', margin: '0 0 8px 0' }}>Tips para una buena foto:</p>
-              <ul style={{ fontSize: '13px', color: '#15803d', margin: 0, paddingLeft: '16px' }}>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-exito, #166534)', margin: '0 0 8px 0' }}>Tips para una buena foto:</p>
+              <ul style={{ fontSize: '13px', color: 'var(--en-oscuro-exito, #15803d)', margin: 0, paddingLeft: '16px' }}>
                 <li>Buena iluminación en tu rostro</li>
                 <li>Mira directamente a la cámara</li>
                 <li>Sin lentes ni accesorios que cubran tu cara</li>
@@ -766,32 +766,32 @@ export default function Verification() {
             <div style={{ textAlign: 'center' }}>
               <div style={{ 
                 width: '100px', height: '100px', borderRadius: '50%', 
-                background: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)', 
+                background: 'var(--en-oscuro-exito-suave, linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%))', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center', 
                 margin: '0 auto 24px' 
               }}>
-                <CheckCircle style={{ width: '56px', height: '56px', color: '#16a34a' }} />
+                <CheckCircle style={{ width: '56px', height: '56px', color: 'var(--en-oscuro-exito, #16a34a)' }} />
               </div>
               
-              <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', margin: '0 0 8px 0' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 8px 0' }}>
                 ¡Documentos Enviados!
               </h2>
-              <p style={{ fontSize: '15px', color: '#6b7280', margin: '0 0 24px 0' }}>
+              <p style={{ fontSize: '15px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 24px 0' }}>
                 Tu verificación está siendo procesada
               </p>
 
               <div style={{ 
-                padding: '20px', backgroundColor: '#fef3c7', 
+                padding: '20px', backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', 
                 borderRadius: '16px', marginBottom: '24px',
                 border: '1px solid #fcd34d'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
-                  <Loader style={{ width: '24px', height: '24px', color: '#d97706', animation: 'spin 1s linear infinite' }} />
-                  <p style={{ fontSize: '15px', fontWeight: '600', color: '#92400e', margin: 0 }}>
+                  <Loader style={{ width: '24px', height: '24px', color: 'var(--en-oscuro-alerta, #d97706)', animation: 'spin 1s linear infinite' }} />
+                  <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-alerta, #92400e)', margin: 0 }}>
                     En revisión
                   </p>
                 </div>
-                <p style={{ fontSize: '13px', color: '#b45309', margin: '12px 0 0 0' }}>
+                <p style={{ fontSize: '13px', color: 'var(--en-oscuro-alerta, #b45309)', margin: '12px 0 0 0' }}>
                   El proceso puede tomar de 5 a 30 minutos en horario laboral.
                   Te notificaremos cuando esté listo.
                 </p>

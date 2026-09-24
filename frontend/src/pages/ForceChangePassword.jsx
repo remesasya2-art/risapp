@@ -65,7 +65,7 @@ export default function ForceChangePassword() {
     width: '100%',
     padding: '16px 48px 16px 16px',
     borderRadius: '14px',
-    border: '1px solid #d1d5db',
+    border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)',
     fontSize: '16px',
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s'
@@ -74,14 +74,14 @@ export default function ForceChangePassword() {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#f5f5f5',
+      backgroundColor: 'var(--en-oscuro-fondo, #f5f5f5)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '20px'
     }}>
       <div style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
         borderRadius: '24px',
         padding: '40px 32px',
         width: '100%',
@@ -93,20 +93,20 @@ export default function ForceChangePassword() {
           width: '72px',
           height: '72px',
           borderRadius: '20px',
-          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          background: 'var(--en-oscuro-alerta-suave, linear-gradient(135deg, #fef3c7 0%, #fde68a 100%))',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           margin: '0 auto 24px'
         }}>
-          <Shield style={{ width: '36px', height: '36px', color: '#d97706' }} />
+          <Shield style={{ width: '36px', height: '36px', color: 'var(--en-oscuro-alerta, #d97706)' }} />
         </div>
 
         {/* Title */}
         <h1 style={{
           fontSize: '24px',
           fontWeight: '700',
-          color: '#111827',
+          color: 'var(--en-oscuro-texto, #111827)',
           textAlign: 'center',
           margin: '0 0 8px 0'
         }}>
@@ -115,7 +115,7 @@ export default function ForceChangePassword() {
         
         <p style={{
           fontSize: '15px',
-          color: '#6b7280',
+          color: 'var(--en-oscuro-texto-2, #6b7280)',
           textAlign: 'center',
           margin: '0 0 32px 0',
           lineHeight: '1.5'
@@ -126,7 +126,7 @@ export default function ForceChangePassword() {
         <form onSubmit={handleSubmit}>
           {/* New Password */}
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>
               Nueva contraseña
             </label>
             <div style={{ position: 'relative' }}>
@@ -149,7 +149,7 @@ export default function ForceChangePassword() {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#6b7280'
+                  color: 'var(--en-oscuro-texto-2, #6b7280)'
                 }}
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -159,7 +159,7 @@ export default function ForceChangePassword() {
 
           {/* Confirm Password */}
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' }}>
               Confirmar contraseña
             </label>
             <div style={{ position: 'relative' }}>
@@ -182,17 +182,17 @@ export default function ForceChangePassword() {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#6b7280'
+                  color: 'var(--en-oscuro-texto-2, #6b7280)'
                 }}
               >
                 {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
             {confirmPassword && newPassword !== confirmPassword && (
-              <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-error, #ef4444)', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
             )}
             {confirmPassword && newPassword === confirmPassword && !validarPassword(newPassword) && (
-              <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>✓ Las contraseñas coinciden</p>
+              <p style={{ fontSize: '13px', color: 'var(--en-oscuro-exito, #16a34a)', margin: '6px 0 0 0' }}>✓ Las contraseñas coinciden</p>
             )}
           </div>
 
@@ -205,7 +205,7 @@ export default function ForceChangePassword() {
               padding: '16px',
               borderRadius: '14px',
               border: 'none',
-              backgroundColor: '#6366f1',
+              backgroundColor: 'var(--en-oscuro-acento, #6366f1)',
               color: '#ffffff',
               fontSize: '16px',
               fontWeight: '700',
@@ -223,7 +223,7 @@ export default function ForceChangePassword() {
                 <div style={{
                   width: '20px',
                   height: '20px',
-                  border: '2px solid #ffffff',
+                  border: '2px solid var(--en-oscuro-linea, #ffffff)',
                   borderTopColor: 'transparent',
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite'
@@ -247,9 +247,9 @@ export default function ForceChangePassword() {
             padding: '14px',
             marginTop: '16px',
             borderRadius: '14px',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
             backgroundColor: 'transparent',
-            color: '#6b7280',
+            color: 'var(--en-oscuro-texto-2, #6b7280)',
             fontSize: '14px',
             fontWeight: '500',
             cursor: 'pointer'

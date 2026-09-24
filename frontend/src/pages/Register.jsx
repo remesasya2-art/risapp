@@ -197,11 +197,10 @@ export default function Register() {
   };
 
   // Mismo criterio que en el login: el segundo factor y el alta con Google
-  // todavía no pasaron al estilo nuevo, así que su tarjeta sigue blanca y fija
-  // en claro, sobre la pared de colores.
+  // siguen al modo con sus colores «en oscuro / el de siempre».
   const intermedia = (contenido) => (
     <Pantalla>
-      <div style={{ position: 'relative', zIndex: 1, colorScheme: 'light', width: '100%', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', justifyContent: 'center' }}>
         {contenido}
       </div>
     </Pantalla>
@@ -216,7 +215,7 @@ export default function Register() {
 
   if (googlePendiente) {
     return intermedia(
-      <div style={{ width: '100%', maxWidth: '420px', background: '#fff', color: '#111827', borderRadius: '28px', boxShadow: 'var(--t-sombra)', padding: '40px 32px' }}>
+      <div style={{ width: '100%', maxWidth: '420px', background: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-texto, #111827)', borderRadius: '28px', boxShadow: 'var(--t-sombra)', padding: '40px 32px' }}>
         <CompletarRegistroGoogle pendiente={googlePendiente} referralInicial={referralCode} onVolver={() => setGooglePendiente(null)} />
       </div>,
     );

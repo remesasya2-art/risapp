@@ -235,6 +235,7 @@ RUTAS_CON_TEMA = [
     '"/btc-lightning"', '"/seguimiento/:token"',
     '"/history"', '"/notifications"',
     '"/recharge"', '"/recharge-ves"', '"/credits/deposit"', '"/send-crypto"',
+    '"/login"', '"/register"', '"/legal"', '"/verification"', '"/force-change-password"',
 ]
 
 

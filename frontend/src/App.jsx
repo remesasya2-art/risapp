@@ -119,9 +119,9 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-      <Route path="/legal" element={<LegalPage />} />
+      <Route path="/login" element={<PublicRoute><ConTema><Login /></ConTema></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><ConTema><Register /></ConTema></PublicRoute>} />
+      <Route path="/legal" element={<ConTema><LegalPage /></ConTema>} />
       {/* Primer acceso del personal: llega por invitación, sin sesión previa. */}
       <Route path="/personal/activar" element={<ActivarPersonal />} />
       {/* Publica a proposito: es el link que el usuario le manda a quien espera
@@ -146,7 +146,7 @@ function AppRoutes() {
           una encomienda que no existe. */}
       <Route path="/envios/:transactionId/pagar" element={<ProtectedRoute><ConTema><RetomarPago /></ConTema></ProtectedRoute>} />
       <Route path="/envios/:envioId" element={<ProtectedRoute><ConTema><EnvioDetalle /></ConTema></ProtectedRoute>} />
-      <Route path="/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
+      <Route path="/verification" element={<ProtectedRoute><ConTema><Verification /></ConTema></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><ConTema><Notifications /></ConTema></ProtectedRoute>} />
       <Route path="/support" element={<ProtectedRoute><ConTema><Support /></ConTema></ProtectedRoute>} />
       
@@ -154,7 +154,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
       
       {/* Force Change Password Route */}
-      <Route path="/force-change-password" element={<ProtectedRoute><ForceChangePassword /></ProtectedRoute>} />
+      <Route path="/force-change-password" element={<ProtectedRoute><ConTema><ForceChangePassword /></ConTema></ProtectedRoute>} />
 
       {/* BTC Lightning Route */}
               <Route path="/btc-lightning" element={<ProtectedRoute><PuertaCripto tipo="deposito"><ConTema><BTCLightning /></ConTema></PuertaCripto></ProtectedRoute>} />
