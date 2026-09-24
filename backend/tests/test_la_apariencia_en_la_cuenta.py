@@ -200,3 +200,22 @@ def test_EL_TEMA_SE_PONE_ANTES_DE_DIBUJAR():
     blanco cada vez que abre la app."""
     fuente = (_FRONT / "main.jsx").read_text(encoding="utf-8")
     assert fuente.index("aplicar(leerDelAparato())") < fuente.index("createRoot(")
+
+
+def test_EL_PERFIL_OFRECE_ELEGIR_LA_APARIENCIA():
+    """Es el lugar donde se elige estando adentro. Sin esto, la preferencia
+    sólo se podría cambiar desde la portada, antes de entrar."""
+    perfil = (_FRONT / "pages" / "Profile.jsx").read_text(encoding="utf-8")
+    assert "<ControlDeApariencia />" in perfil
+    # La marca habilita el modo oscuro en el perfil.
+    assert 'className="env con-tema"' in perfil
+    control = (_FRONT / "components" / "tema" / "ControlDeApariencia.jsx").read_text(encoding="utf-8")
+    assert "onClick={() => elegir(o.valor)}" in control
+    assert [v for v in ("'auto'", "'claro'", "'oscuro'") if f"valor: {v}" in control] == ["'auto'", "'claro'", "'oscuro'"]
+
+
+def test_EL_INICIO_DEL_CLIENTE_TIENE_MODO_OSCURO_Y_EL_BOTON():
+    inicio = (_FRONT / "pages" / "Dashboard.jsx").read_text(encoding="utf-8")
+    assert 'className="con-tema"' in inicio
+    # En computadora y en celular: la barra de arriba es distinta en cada uno.
+    assert inicio.count("<SelectorDeApariencia />") == 2

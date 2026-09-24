@@ -50,7 +50,7 @@ function Encabezado() {
         background: C.marcaSuave, display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center',
       }}>
-        <Fingerprint size={18} color={C.marca} />
+        <Fingerprint size={18} style={{ color: C.marca }} />
       </span>
       <span>
         <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
@@ -190,7 +190,7 @@ export default function WebAuthnSettings() {
                     padding: '11px 13px', borderRadius: '11px',
                     background: C.fondo, border: `1px solid ${C.linea}`,
                   }}>
-                    <Fingerprint size={16} color={C.marca} style={{ flexShrink: 0 }} />
+                    <Fingerprint size={16} style={{ flexShrink: 0, color: C.marca }} />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         display: 'block', fontSize: '13.5px', fontWeight: 600, color: C.texto,

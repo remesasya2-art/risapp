@@ -34,27 +34,27 @@ export default function KycQuotaModal() {
       }}
       data-testid="kyc-quota-modal"
     >
-      <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '24px', maxWidth: '420px', width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+      <div style={{ backgroundColor: 'var(--en-oscuro-superficie, white)', borderRadius: '16px', padding: '24px', maxWidth: '420px', width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-          <div style={{ backgroundColor: '#fef3c7', borderRadius: '12px', padding: '10px', flexShrink: 0 }}>
-            <ShieldAlert style={{ width: '22px', height: '22px', color: '#d97706' }} />
+          <div style={{ backgroundColor: 'var(--en-oscuro-alerta-suave, #fef3c7)', borderRadius: '12px', padding: '10px', flexShrink: 0 }}>
+            <ShieldAlert style={{ width: '22px', height: '22px', color: 'var(--en-oscuro-alerta, #d97706)' }} />
           </div>
           <div style={{ flex: 1 }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: 0 }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
               Verificá tu cuenta para seguir operando
             </h3>
-            <p style={{ fontSize: '14px', color: '#4b5563', margin: '8px 0 0 0', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '14px', color: 'var(--en-oscuro-texto-2, #4b5563)', margin: '8px 0 0 0', lineHeight: 1.5 }}>
               Alcanzaste el límite de {cupo.max_ops} operaciones o {cupo.max_ris} RIS que permite
               una cuenta sin verificar. Completá la verificación para levantar el límite y seguir
               usando RIS App.
             </p>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: '10px 0 0 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '10px 0 0 0' }}>
               Usaste {cupo.ops_usadas} de {cupo.max_ops} operaciones y {cupo.ris_usados} de {cupo.max_ris} RIS.
             </p>
           </div>
           <button
             onClick={() => setCerrado(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '2px' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--en-oscuro-texto-3, #9ca3af)', padding: '2px' }}
             aria-label="Cerrar"
           >
             <X style={{ width: '18px', height: '18px' }} />
@@ -64,7 +64,7 @@ export default function KycQuotaModal() {
           onClick={() => navigate('/verification')}
           style={{
             width: '100%', marginTop: '20px', padding: '12px', borderRadius: '10px', border: 'none',
-            backgroundColor: '#4f46e5', color: 'white', fontWeight: '600', fontSize: '15px', cursor: 'pointer',
+            backgroundColor: 'var(--en-oscuro-acento, #4f46e5)', color: 'white', fontWeight: '600', fontSize: '15px', cursor: 'pointer',
           }}
           data-testid="kyc-quota-verificar"
         >

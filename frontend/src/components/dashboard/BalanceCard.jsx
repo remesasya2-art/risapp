@@ -49,15 +49,15 @@ export default function BalanceCard({
       data-testid="balance-card"
       style={{
         position: 'relative',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
         borderRadius: '22px',
-        border: '1px solid #eef0f4',
+        border: '1px solid var(--en-oscuro-linea, #eef0f4)',
         boxShadow: '0 8px 24px rgba(91,79,233,0.10), 0 1px 3px rgba(0,0,0,0.03)',
         overflow: 'hidden',
       }}
     >
       {/* Barra de acento superior en degradado */}
-      <div style={{ height: '4px', background: 'linear-gradient(90deg, #5B4FE9 0%, #8B7FFF 50%, #3B3A9E 100%)' }} />
+      <div style={{ height: '4px', background: 'linear-gradient(90deg, var(--en-oscuro-acento, #5B4FE9) 0%, #8B7FFF 50%, #3B3A9E 100%)' }} />
 
       {/* Watermark decorativo, muy sutil */}
       <Wallet
@@ -76,14 +76,14 @@ export default function BalanceCard({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(91,79,233,0.10)',
+              width: 40, height: 40, borderRadius: 12, backgroundColor: 'var(--en-oscuro-acento-suave, rgba(91,79,233,0.10))',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
-              <Wallet size={20} color={accent} strokeWidth={1.8} />
+              <Wallet size={20} strokeWidth={1.8} style={{ color: accent }} />
             </div>
             <div>
-              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#111827' }}>Saldo RIS</p>
-              <p style={{ margin: 0, fontSize: '11px', color: '#9ca3af' }}>Tu billetera principal</p>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)' }}>Saldo RIS</p>
+              <p style={{ margin: 0, fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)' }}>Tu billetera principal</p>
             </div>
           </div>
           <button
@@ -92,12 +92,12 @@ export default function BalanceCard({
             aria-label={hidden ? 'Mostrar saldo' : 'Ocultar saldo'}
             style={{
               width: '32px', height: '32px', borderRadius: '10px',
-              background: '#f3f4f6', border: 'none',
+              background: 'var(--en-oscuro-superficie-2, #f3f4f6)', border: 'none',
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              color: '#6b7280', transition: 'background 0.2s',
+              color: 'var(--en-oscuro-texto-2, #6b7280)', transition: 'background 0.2s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--en-oscuro-superficie-3, #e5e7eb)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--en-oscuro-superficie-2, #f3f4f6)'; }}
           >
             {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
@@ -112,7 +112,7 @@ export default function BalanceCard({
             margin: '0 0 18px 0',
             fontVariantNumeric: 'tabular-nums',
             lineHeight: 1.05,
-            color: '#111827',
+            color: 'var(--en-oscuro-texto, #111827)',
           }}
         >
           {hidden ? (
@@ -149,7 +149,7 @@ export default function BalanceCard({
 
         {/* Updated time */}
         {updatedAt && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#9ca3af', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginBottom: '20px' }}>
             <Clock size={13} />
             <span>Actualizado: {fmtRelative(updatedAt)}</span>
           </div>
@@ -174,7 +174,7 @@ export default function BalanceCard({
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               padding: '14px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '15px',
-              background: 'linear-gradient(135deg, #5B4FE9 0%, #3B3A9E 100%)', color: '#ffffff', textDecoration: 'none',
+              background: 'linear-gradient(135deg, var(--en-oscuro-acento, #5B4FE9) 0%, #3B3A9E 100%)', color: '#ffffff', textDecoration: 'none',
               transition: 'transform 0.2s, box-shadow 0.2s',
               boxShadow: '0 6px 16px rgba(91,79,233,0.30)',
             }}
@@ -192,7 +192,7 @@ export default function BalanceCard({
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               padding: '14px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '15px',
               background: 'transparent', color: accent, textDecoration: 'none',
-              border: '1.5px solid rgba(91,79,233,0.25)',
+              border: '1.5px solid var(--en-oscuro-acento-borde, rgba(91,79,233,0.25))',
               transition: 'transform 0.2s, background 0.2s',
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(91,79,233,0.06)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
@@ -214,21 +214,21 @@ function RatePill({ icon, value, label }) {
         display: 'flex', alignItems: 'center', gap: '10px',
         padding: '10px 14px',
         borderRadius: '12px',
-        background: 'linear-gradient(135deg, rgba(91,79,233,0.05) 0%, rgba(59,58,158,0.03) 100%)',
-        border: '1px solid #eef0f4',
+        background: 'linear-gradient(135deg, var(--en-oscuro-acento-suave, rgba(91,79,233,0.05)) 0%, rgba(59,58,158,0.03) 100%)',
+        border: '1px solid var(--en-oscuro-linea, #eef0f4)',
       }}
     >
       {icon && (
         <span style={{
-          width: 26, height: 26, borderRadius: 8, backgroundColor: 'rgba(91,79,233,0.10)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5B4FE9', flexShrink: 0,
+          width: 26, height: 26, borderRadius: 8, backgroundColor: 'var(--en-oscuro-acento-suave, rgba(91,79,233,0.10))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--en-oscuro-acento, #5B4FE9)', flexShrink: 0,
         }}>
           {icon}
         </span>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>{value}</span>
-        <span style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>{label}</span>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', whiteSpace: 'nowrap' }}>{value}</span>
+        <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', marginTop: '2px' }}>{label}</span>
       </div>
     </div>
   );

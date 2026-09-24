@@ -41,15 +41,49 @@
 
 /* ─── Sistema visual ───────────────────────────────────────────────────── */
 
+/* CADA COLOR ES «EN OSCURO, TAL; SI NO, EL DE SIEMPRE».
+ *
+ *   `var(--en-oscuro-texto, #101828)` vale #101828 en todas partes, igual
+ *   que antes, salvo dentro de una pantalla marcada `.con-tema` con el modo
+ *   oscuro puesto: ahí index.css define `--en-oscuro-texto` y gana ese. Así
+ *   una pantalla pasa al modo oscuro poniéndole la marca, y ninguna otra se
+ *   entera: en claro, cada pantalla que usa esta paleta queda idéntica píxel
+ *   a píxel (se comprobó con capturas).
+ *
+ *   DOS COSAS QUE ESTO EXIGE, Y QUE ROMPERIAN EN SILENCIO:
+ *
+ *   - No se le pega texto a un color (`C.marca + '22'` para agregarle
+ *     transparencia): con una variable adentro queda un valor inválido y el
+ *     navegador lo descarta.
+ *   - Un ícono no recibe el color como atributo (`<Check color={C.exito} />`)
+ *     sino por `style`: la variable dentro de un atributo de SVG la resuelve
+ *     Chrome, pero no hay garantía de que la resuelva el Safari del iPhone,
+ *     y el ícono quedaría invisible. Lo vigila
+ *     tests/test_la_paleta_de_los_flujos.py. */
+const oscuro = (nombre, deSiempre) => `var(--en-oscuro-${nombre}, ${deSiempre})`;
+
 const C = {
-  tinta: '#101828', texto: '#344054', suave: '#667085', tenue: '#98A2B3',
-  linea: '#E4E7EC', lineaFuerte: '#D0D5DD',
-  lienzo: '#FFFFFF', fondo: '#F7F8FA',
-  marca: '#4F46E5', marcaSuave: '#EEF0FF', marcaBorde: '#C7CDFF',
-  exito: '#067647', exitoSuave: '#ECFDF3', exitoBorde: '#A9EFC5',
-  alerta: '#B54708', alertaSuave: '#FFFAEB', alertaBorde: '#FEDF89',
-  error: '#B42318', errorSuave: '#FEF3F2', errorBorde: '#FECDCA',
+  tinta: oscuro('texto', '#101828'), texto: oscuro('texto', '#344054'),
+  suave: oscuro('texto-2', '#667085'), tenue: oscuro('texto-3', '#98A2B3'),
+  linea: oscuro('linea', '#E4E7EC'), lineaFuerte: oscuro('linea-fuerte', '#D0D5DD'),
+  lienzo: oscuro('superficie', '#FFFFFF'), fondo: oscuro('fondo', '#F7F8FA'),
+  marca: oscuro('acento', '#4F46E5'), marcaSuave: oscuro('acento-suave', '#EEF0FF'),
+  marcaBorde: oscuro('acento-borde', '#C7CDFF'),
+  exito: oscuro('exito', '#067647'), exitoSuave: oscuro('exito-suave', '#ECFDF3'),
+  exitoBorde: oscuro('exito-borde', '#A9EFC5'),
+  alerta: oscuro('alerta', '#B54708'), alertaSuave: oscuro('alerta-suave', '#FFFAEB'),
+  alertaBorde: oscuro('alerta-borde', '#FEDF89'),
+  error: oscuro('error', '#B42318'), errorSuave: oscuro('error-suave', '#FEF3F2'),
+  errorBorde: oscuro('error-borde', '#FECDCA'),
 };
+
+/* LOS QUE NO CAMBIAN CON EL MODO.
+ *
+ *   Una superficie que tiene que ser oscura siempre —la tarjeta del rol en el
+ *   perfil, con letra blanca— no puede usar `C.tinta`: ése es el color del
+ *   TEXTO, y en modo oscuro el texto es claro. Con él, la tarjeta se volvía
+ *   clara y la letra blanca desaparecía. */
+const FIJO = { oscuro: '#101828' };
 
 const HOJA = `
 .env { color: ${C.texto}; font-variant-numeric: tabular-nums lining-nums; }
@@ -109,4 +143,4 @@ export function iniciales(nombre) {
   return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
 }
 
-export { C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda };
+export { C, FIJO, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda };

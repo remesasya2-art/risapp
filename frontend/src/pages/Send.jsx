@@ -192,7 +192,7 @@ function ResumenDelMonto({ ris, ves, onCambiar }) {
             {fmt(ris)} <span style={{ fontSize: '12px', color: C.tenue }}>RIS</span>
           </p>
         </div>
-        <ArrowRight size={16} color={C.tenue} />
+        <ArrowRight size={16} style={{ color: C.tenue }} />
         <div>
           <p style={microEtiqueta}>Recibe</p>
           <p style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 700, color: C.exito }}>
@@ -556,7 +556,7 @@ export default function Send() {
               border: `1px solid ${C.linea}`, background: C.lienzo, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            <ArrowLeft size={19} color={C.texto} />
+            <ArrowLeft size={19} style={{ color: C.texto }} />
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: '21px', fontWeight: 700, color: C.tinta, margin: 0,
@@ -761,7 +761,7 @@ export default function Send() {
                   background: C.fondo, display: 'flex', alignItems: 'center',
                   justifyContent: 'center', border: `1px solid ${C.linea}`,
                 }}>
-                  <User size={26} color={C.tenue} />
+                  <User size={26} style={{ color: C.tenue }} />
                 </div>
                 <p style={{ color: C.tinta, margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600 }}>
                   Todavía no tenés beneficiarios de {esPagoMovil ? 'Pago Móvil' : 'transferencia'}
@@ -807,7 +807,7 @@ export default function Send() {
                           {detalleDe(b)}
                         </span>
                       </span>
-                      {elegido ? <CheckCircle2 size={21} color={C.marca} /> : null}
+                      {elegido ? <CheckCircle2 size={21} style={{ color: C.marca }} /> : null}
                     </button>
                   );
                 })}
@@ -1175,7 +1175,7 @@ export default function Send() {
                     background: C.lienzo, border: `1px solid ${C.linea}`, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                  <X size={18} color={C.suave} />
+                  <X size={18} style={{ color: C.suave }} />
                 </button>
               </div>
 
@@ -1222,7 +1222,7 @@ export default function Send() {
                       padding: '10px 12px', borderRadius: '10px',
                       background: C.marcaSuave, border: `1px solid ${C.marcaBorde}`,
                     }}>
-                      <Building2 size={16} color={C.marca} />
+                      <Building2 size={16} style={{ color: C.marca }} />
                       <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: C.tinta }}>
                         {bancoElegido.name}
                       </span>
@@ -1232,9 +1232,8 @@ export default function Send() {
                   ) : null}
 
                   <div style={{ position: 'relative' }}>
-                    <Search size={17} color={C.tenue} style={{
-                      position: 'absolute', left: '14px', top: '50%',
-                      transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 1 }} />
+                    <Search size={17} style={{ position: 'absolute', left: '14px', top: '50%',
+                      transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 1, color: C.tenue }} />
                     <input
                       className="env-campo" id="banco-buscar" type="text" value={bankSearch}
                       onChange={(e) => { setBankSearch(e.target.value); setShowBankDropdown(true); }}

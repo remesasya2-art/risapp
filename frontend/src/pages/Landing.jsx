@@ -318,7 +318,7 @@ export default function Landing() {
   const seccion = { position: 'relative', zIndex: 1, maxWidth: ANCHO, margin: '0 auto', padding: '72px 20px' };
 
   return (
-    <div className="con-tema" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+    <div className="con-tema t-base" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
       <style>{ESTILOS}</style>
 
       <div className="t-pared" aria-hidden="true">

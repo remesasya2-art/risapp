@@ -39,7 +39,7 @@ export default function NotificationBell() {
         height: '44px',
         borderRadius: '12px',
         border: 'none',
-        backgroundColor: '#f3f4f6',
+        backgroundColor: 'var(--en-oscuro-superficie-2, #f3f4f6)',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -49,7 +49,7 @@ export default function NotificationBell() {
       data-testid="notification-bell"
       title="Notificaciones"
     >
-      <Bell style={{ width: '22px', height: '22px', color: '#374151' }} />
+      <Bell style={{ width: '22px', height: '22px', color: 'var(--en-oscuro-texto, #374151)' }} />
       {unreadCount > 0 && (
         <span
           style={{
@@ -67,7 +67,7 @@ export default function NotificationBell() {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '0 4px',
-            border: '2px solid #ffffff'
+            border: '2px solid var(--en-oscuro-superficie, #ffffff)'
           }}
           data-testid="notification-count"
         >

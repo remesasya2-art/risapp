@@ -8,10 +8,13 @@ import { formatearCpf, normalizarCpf, queLeFaltaAlCpf } from '../utils/cpf';
 import EntrarConGoogle from '../components/auth/EntrarConGoogle';
 import CompletarRegistroGoogle from '../components/auth/CompletarRegistroGoogle';
 import TwoFactorFlow from '../components/auth/TwoFactorFlow';
+import SelectorDeApariencia from '../components/tema/SelectorDeApariencia';
+import { useTema } from '../contexts/TemaContext';
 
 export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { tema } = useTema();
   
   // Form fields
   const [name, setName] = useState('');
@@ -159,144 +162,113 @@ export default function Register() {
     }
   };
 
-  const pageStyle = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '16px',
-    fontFamily: 'Inter, Helvetica, -apple-system, sans-serif',
-    background: 'radial-gradient(ellipse at top left, #e8e0ff 0%, #f8f9fc 40%, #d4f0ff 100%)'
-  };
-
-  const cardStyle = {
-    width: '100%',
-    maxWidth: '420px',
-    backgroundColor: '#ffffff',
-    borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 12px 24px -8px rgba(0, 0, 0, 0.04)',
-    padding: '48px 40px'
-  };
-
+  // LOS CAMPOS SE MARCAN CON CSS, NO CON `onFocus`/`onBlur`.
+  //
+  //   Antes cada campo pintaba su borde a mano al entrar y al salir, con los
+  //   colores escritos (`#6366f1`, `#d1d5db`). En modo oscuro ese gris claro
+  //   volvía a aparecer cada vez que se salía de un campo. La regla de
+  //   `ESTILOS` hace lo mismo y respeta el modo.
   const inputStyle = {
     width: '100%',
-    padding: '16px',
+    padding: '15px 16px',
     borderRadius: '14px',
-    border: '1px solid #d1d5db',
+    border: '1px solid transparent',
     fontSize: '16px',
-    color: '#111827',
-    backgroundColor: '#ffffff',
+    color: 'var(--t-texto)',
+    backgroundColor: 'var(--t-campo)',
     outline: 'none',
-    transition: 'border-color 0.2s, box-shadow 0.2s'
-  };
-
-  const buttonStyle = {
-    width: '100%',
-    padding: '16px',
-    borderRadius: '14px',
-    border: 'none',
-    backgroundColor: '#6366f1',
-    color: '#ffffff',
-    fontSize: '16px',
-    fontWeight: '700',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s'
+    font: 'inherit',
   };
 
   const labelStyle = {
     display: 'block',
     fontSize: '14px',
     fontWeight: '600',
-    color: '#374151',
+    color: 'var(--t-texto)',
     marginBottom: '8px'
   };
 
-  if (twoFactorState) {
-    return (
-      <div style={pageStyle}>
-        <TwoFactorFlow mode={twoFactorState.mode} pendingToken={twoFactorState.pendingToken} email={twoFactorState.email}
-          onSuccess={() => { toast.success('¡Bienvenido!'); navigate('/'); }} />
+  const ayudaStyle = { fontSize: '12.5px', color: 'var(--t-texto-2)', margin: '6px 0 0 0' };
+
+  const ojoStyle = {
+    position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+    width: '36px', height: '36px', display: 'grid', placeItems: 'center',
+    background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--t-texto-3)',
+  };
+
+  // Mismo criterio que en el login: el segundo factor y el alta con Google
+  // todavía no pasaron al estilo nuevo, así que su tarjeta sigue blanca y fija
+  // en claro, sobre la pared de colores.
+  const intermedia = (contenido) => (
+    <Pantalla>
+      <div style={{ position: 'relative', zIndex: 1, colorScheme: 'light', width: '100%', display: 'flex', justifyContent: 'center' }}>
+        {contenido}
       </div>
+    </Pantalla>
+  );
+
+  if (twoFactorState) {
+    return intermedia(
+      <TwoFactorFlow mode={twoFactorState.mode} pendingToken={twoFactorState.pendingToken} email={twoFactorState.email}
+        onSuccess={() => { toast.success('¡Bienvenido!'); navigate('/'); }} />,
     );
   }
 
   if (googlePendiente) {
-    return (
-      <div style={pageStyle}>
-        <div style={cardStyle}>
-          <CompletarRegistroGoogle pendiente={googlePendiente} referralInicial={referralCode} onVolver={() => setGooglePendiente(null)} />
-        </div>
-      </div>
+    return intermedia(
+      <div style={{ width: '100%', maxWidth: '420px', background: '#fff', color: '#111827', borderRadius: '28px', boxShadow: 'var(--t-sombra)', padding: '40px 32px' }}>
+        <CompletarRegistroGoogle pendiente={googlePendiente} referralInicial={referralCode} onVolver={() => setGooglePendiente(null)} />
+      </div>,
     );
   }
 
   // Verification Code Step (Step 2)
   if (step === 2) {
     return (
-      <div style={pageStyle}>
-        <div style={cardStyle}>
+      <Pantalla>
+        <Tarjeta>
           {/* Back Button */}
           <button
             type="button"
             onClick={() => setStep(1)}
+            className="t-enlace"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'none',
-              border: 'none',
-              color: '#6366f1',
-              fontSize: '14px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              padding: 0,
-              marginBottom: '24px'
+              display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none',
+              font: 'inherit', fontSize: '15px', fontWeight: 500, cursor: 'pointer', padding: 0, marginBottom: '20px',
             }}
           >
             <ArrowLeft size={18} />
             Volver
           </button>
 
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '32px' }}>
-            <img 
-              src="/logo-ris.jpeg" 
-              alt="RIS" 
-              style={{ height: '48px', borderRadius: '12px' }}
-            />
-          </div>
-
-          {/* Title */}
-          <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#111827', textAlign: 'center', margin: '0 0 8px 0' }}>
-            Verifica tu cuenta
-          </h1>
-          <p style={{ fontSize: '16px', color: '#9ca3af', textAlign: 'center', margin: '0 0 32px 0' }}>
+          <Encabezado titulo="Verifica tu cuenta">
             Ingresa el código de 6 dígitos enviado a <br/>
-            <span style={{ color: '#6366f1', fontWeight: '500' }}>{email}</span>
-          </p>
+            <span style={{ color: 'var(--t-acento)', fontWeight: 600 }}>{email}</span>
+          </Encabezado>
 
           <form onSubmit={handleVerifyCode} data-testid="verification-form">
             {/* Verification Code Input */}
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="registro-codigo" style={labelStyle}>
                 Código de verificación
               </label>
               <input
+                id="registro-codigo"
                 type="text"
                 inputMode="numeric"
+                autoComplete="one-time-code"
                 maxLength={6}
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 data-testid="verification-code-input"
+                className="r-campo"
                 style={{
                   ...inputStyle,
                   textAlign: 'center',
-                  fontSize: '24px',
-                  letterSpacing: '8px',
+                  fontSize: '26px',
+                  letterSpacing: '10px',
                   fontWeight: '600'
                 }}
-                onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
               />
             </div>
 
@@ -305,236 +277,193 @@ export default function Register() {
               type="submit"
               disabled={loading || verificationCode.length !== 6}
               data-testid="verify-submit-btn"
-              style={{
-                ...buttonStyle,
-                opacity: loading || verificationCode.length !== 6 ? 0.6 : 1,
-                cursor: loading || verificationCode.length !== 6 ? 'not-allowed' : 'pointer'
-              }}
+              className="t-boton t-primario"
+              style={{ width: '100%', minHeight: '54px', fontSize: '17px' }}
             >
               {loading ? 'Verificando...' : 'Verificar Código'}
             </button>
           </form>
 
           {/* Resend Code */}
-          <div style={{ textAlign: 'center', marginTop: '24px' }}>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 8px 0' }}>
+          <div style={{ textAlign: 'center', marginTop: '22px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--t-texto-2)', margin: '0 0 6px 0' }}>
               ¿No recibiste el código?
             </p>
             <button
               type="button"
               onClick={handleResendCode}
               disabled={resending}
+              className="t-enlace"
               style={{
-                background: 'none',
-                border: 'none',
-                color: '#6366f1',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: resending ? 'not-allowed' : 'pointer',
-                opacity: resending ? 0.6 : 1
+                background: 'none', border: 'none', font: 'inherit', fontSize: '15px',
+                cursor: resending ? 'not-allowed' : 'pointer', opacity: resending ? 0.6 : 1
               }}
             >
               {resending ? 'Reenviando...' : 'Reenviar código'}
             </button>
           </div>
 
-          {/* Login Link */}
-          <p style={{ textAlign: 'center', fontSize: '15px', color: '#6b7280', marginTop: '24px' }}>
-            ¿Ya tienes cuenta?{' '}
-            <Link to="/login" style={{ color: '#6366f1', fontWeight: '500', textDecoration: 'none' }}>
-              Inicia sesión
-            </Link>
-          </p>
-        </div>
-      </div>
+          <PieDeLaTarjeta />
+        </Tarjeta>
+      </Pantalla>
     );
   }
 
   // Registration Form (Step 1)
   return (
-    <div style={pageStyle}>
-      <div style={cardStyle}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '32px' }}>
-          <img 
-            src="/logo-ris.jpeg" 
-            alt="RIS" 
-            style={{ height: '48px', borderRadius: '12px' }}
-          />
-        </div>
-
-        {/* Title */}
-        <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#111827', textAlign: 'center', margin: '0 0 8px 0' }}>
-          Crear Cuenta
-        </h1>
-        <p style={{ fontSize: '16px', color: '#9ca3af', textAlign: 'center', margin: '0 0 32px 0' }}>
-          Comienza con tu billetera digital
-        </p>
+    <Pantalla>
+      <Tarjeta>
+        <Encabezado titulo="Crear Cuenta">Comienza con tu billetera digital</Encabezado>
 
         {/* Con Google: sólo aparece si el servidor tiene id de cliente. */}
-        <EntrarConGoogle texto="signup_with" onSesion={entrarConSesion} onDosPasos={pedirDosPasos} onRegistroIncompleto={setGooglePendiente} />
+        <EntrarConGoogle texto="signup_with" oscuro={tema === 'oscuro'} onSesion={entrarConSesion} onDosPasos={pedirDosPasos} onRegistroIncompleto={setGooglePendiente} />
 
         {/* Divider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
-          <span style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>O continúa con email</span>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '4px 0 20px', color: 'var(--t-texto-3)', fontSize: '13px' }}>
+          <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--t-linea)' }}></div>
+          O continúa con email
+          <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--t-linea)' }}></div>
         </div>
 
         <form onSubmit={handleSubmit} data-testid="register-form">
           {/* Name */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="registro-nombre" style={labelStyle}>
               Nombre completo
             </label>
             <input
+              id="registro-nombre"
               type="text"
+              autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               data-testid="name-input"
+              className="r-campo"
               style={inputStyle}
-              onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
-              onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
           {/* CPF — se pide acá porque es lo que ata la cuenta a una persona:
               un CPF, una cuenta. Y porque la recarga lo necesita igual, así
               que pedirlo una sola vez evita que lo tipee dos veces. */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="registro-cpf" style={labelStyle}>
               CPF
             </label>
             <input
+              id="registro-cpf"
               type="text"
               inputMode="numeric"
               value={cpf}
               onChange={(e) => setCpf(formatearCpf(e.target.value))}
               placeholder="000.000.000-00"
               data-testid="cpf-input"
+              className="r-campo"
               style={inputStyle}
-              onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
-              onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
             />
-            <p style={{ fontSize: '12px', color: '#6b7280', margin: '6px 0 0 0' }}>
+            <p style={ayudaStyle}>
               Es con el que vas a recargar. No vas a tener que cargarlo de nuevo
               al verificar tu cuenta.
             </p>
           </div>
 
           {/* Email */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="registro-correo" style={labelStyle}>
               Correo electrónico
             </label>
             <input
+              id="registro-correo"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               data-testid="email-input"
+              className="r-campo"
               style={inputStyle}
-              onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
-              onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
           {/* Password */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="registro-clave" style={labelStyle}>
               Contraseña
             </label>
             <div style={{ position: 'relative' }}>
               <input
+                id="registro-clave"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 data-testid="password-input"
-                style={{ ...inputStyle, paddingRight: '48px' }}
-                onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+                className="r-campo"
+                style={{ ...inputStyle, paddingRight: '52px' }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  color: '#9ca3af'
-                }}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                style={ojoStyle}
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '6px 0 0 0' }}>{PASSWORD_HELP_TEXT}</p>
+            <p style={ayudaStyle}>{PASSWORD_HELP_TEXT}</p>
           </div>
 
           {/* Confirm Password */}
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <label htmlFor="registro-clave-2" style={labelStyle}>
               Confirmar contraseña
             </label>
             <div style={{ position: 'relative' }}>
               <input
+                id="registro-clave-2"
                 type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 data-testid="confirm-password-input"
+                className="r-campo"
                 style={{ 
                   ...inputStyle, 
-                  paddingRight: '48px',
-                  borderColor: confirmPassword && password !== confirmPassword ? '#ef4444' : '#d1d5db'
-                }}
-                onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
-                onBlur={(e) => { 
-                  e.target.style.borderColor = confirmPassword && password !== confirmPassword ? '#ef4444' : '#d1d5db'; 
-                  e.target.style.boxShadow = 'none'; 
+                  paddingRight: '52px',
+                  borderColor: confirmPassword && password !== confirmPassword ? 'var(--t-rojo)' : 'transparent'
                 }}
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  color: '#9ca3af'
-                }}
+                aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                style={ojoStyle}
               >
                 {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
             {confirmPassword && password !== confirmPassword && (
-              <p style={{ fontSize: '13px', color: '#ef4444', margin: '6px 0 0 0' }}>Las contraseñas no coinciden</p>
+              <p style={{ ...ayudaStyle, color: 'var(--t-rojo)' }}>Las contraseñas no coinciden</p>
             )}
             {confirmPassword && password === confirmPassword && !validarPassword(password) && (
-              <p style={{ fontSize: '13px', color: '#16a34a', margin: '6px 0 0 0' }}>Las contraseñas coinciden</p>
+              <p style={{ ...ayudaStyle, color: 'var(--t-verde)' }}>Las contraseñas coinciden</p>
             )}
           </div>
 
           {/* Referral Code Field */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={labelStyle}>Código de referido (opcional)</label>
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="registro-referido" style={labelStyle}>Código de referido (opcional)</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--t-texto-3)', display: 'grid' }}>
                 <Gift size={20} />
               </div>
               <input
+                id="registro-referido"
                 type="text"
                 value={referralCode}
                 onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
                 placeholder="Ej: REF3A9F2B01"
                 data-testid="register-referral-input"
+                className="r-campo"
                 style={{
                   ...inputStyle,
                   paddingLeft: '48px',
@@ -554,26 +483,26 @@ export default function Register() {
                     de cartel que después hay que explicarle a un cliente.
                 Ahora dice lo único que es cierto mientras se escribe. */}
             {referralCode && (
-              <p style={{ fontSize: '13px', color: '#6366f1', margin: '6px 0 0 0' }}>
+              <p style={{ ...ayudaStyle, color: 'var(--t-acento)' }}>
                 Te vas a registrar con esta invitación.
               </p>
             )}
           </div>
 
           {/* Aceptar términos */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', margin: '0 0 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', margin: '0 0 18px 0' }}>
             <input
               type="checkbox"
               id="acceptTerms"
               checked={acceptedTerms}
               onChange={(e) => setAcceptedTerms(e.target.checked)}
-              style={{ marginTop: '3px', cursor: 'pointer' }}
+              style={{ marginTop: '3px', cursor: 'pointer', width: '18px', height: '18px', accentColor: 'var(--t-acento)' }}
             />
-            <label htmlFor="acceptTerms" style={{ fontSize: '13px', color: '#6b7280', lineHeight: 1.5, cursor: 'pointer' }}>
+            <label htmlFor="acceptTerms" style={{ fontSize: '13.5px', color: 'var(--t-texto-2)', lineHeight: 1.5, cursor: 'pointer' }}>
               He leído y acepto los{' '}
-              <a href="/legal#terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline' }}>Términos y Condiciones</a>
+              <a href="/legal#terminos" target="_blank" rel="noopener noreferrer" className="t-enlace" style={{ textDecoration: 'underline' }}>Términos y Condiciones</a>
               {' '}y la{' '}
-              <a href="/legal#privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline' }}>Política de Privacidad</a>.
+              <a href="/legal#privacidad" target="_blank" rel="noopener noreferrer" className="t-enlace" style={{ textDecoration: 'underline' }}>Política de Privacidad</a>.
             </label>
           </div>
           {/* Submit Button */}
@@ -581,24 +510,77 @@ export default function Register() {
             type="submit"
             disabled={loading || !acceptedTerms}
             data-testid="register-submit-btn"
-            style={{
-              ...buttonStyle,
-              opacity: loading ? 0.6 : 1,
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
+            className="t-boton t-primario"
+            style={{ width: '100%', minHeight: '54px', fontSize: '17px' }}
           >
             {loading ? 'Enviando código...' : 'Continuar'}
           </button>
         </form>
 
-        {/* Login Link */}
-        <p style={{ textAlign: 'center', fontSize: '15px', color: '#6b7280', marginTop: '24px' }}>
-          ¿Ya tienes cuenta?{' '}
-          <Link to="/login" style={{ color: '#6366f1', fontWeight: '500', textDecoration: 'none' }}>
-            Inicia sesión
-          </Link>
-        </p>
+        <PieDeLaTarjeta />
+      </Tarjeta>
+    </Pantalla>
+  );
+}
+
+const ESTILOS = `
+  .r-campo { transition: border-color .15s ease, box-shadow .15s ease; }
+  .r-campo:focus { border-color: var(--t-acento) !important; box-shadow: 0 0 0 3px rgba(91,79,233,.18); }
+  .r-campo::placeholder { color: var(--t-texto-3); }
+`;
+
+// Las piezas van a nivel de módulo y no adentro de `Register`: un componente
+// definido durante el render es un tipo nuevo en cada dibujo, React lo
+// desmonta y lo vuelve a montar, y el campo que se estaba escribiendo pierde
+// el foco a la primera tecla.
+function Pantalla({ children }) {
+  return (
+    <div className="con-tema t-base" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+      <style>{ESTILOS}</style>
+      <div className="t-pared" aria-hidden="true">
+        <i style={{ width: 520, height: 520, left: -180, top: -140, background: 'var(--t-mancha-1)' }} />
+        <i style={{ width: 440, height: 440, right: -160, top: '30%', background: 'var(--t-mancha-2)' }} />
+        <i style={{ width: 480, height: 480, left: '10%', bottom: -160, background: 'var(--t-mancha-3)' }} />
       </div>
+      <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 5 }}>
+        <SelectorDeApariencia />
+      </div>
+      <main style={{ position: 'relative', zIndex: 1, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '72px 16px 40px' }}>
+        {children}
+      </main>
     </div>
+  );
+}
+
+function Tarjeta({ children }) {
+  return (
+    <div className="t-vidrio" style={{ width: '100%', maxWidth: '440px', borderRadius: '32px', padding: '32px 24px' }}>
+      {children}
+    </div>
+  );
+}
+
+function Encabezado({ titulo, children }) {
+  return (
+    <div style={{ textAlign: 'center', marginBottom: '26px' }}>
+      <img src="/logo-ris.png" alt="RISApp" width={64} height={64} className="t-logo" style={{ borderRadius: '17px' }} />
+      <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-.035em', margin: '18px 0 6px' }}>
+        {titulo}
+      </h1>
+      <p style={{ fontSize: '16px', color: 'var(--t-texto-2)', margin: 0, lineHeight: 1.45 }}>
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function PieDeLaTarjeta() {
+  return (
+    <p style={{ textAlign: 'center', fontSize: '15px', color: 'var(--t-texto-2)', margin: '24px 0 0' }}>
+      ¿Ya tienes cuenta?{' '}
+      <Link to="/login" className="t-enlace">
+        Inicia sesión
+      </Link>
+    </p>
   );
 }

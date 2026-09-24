@@ -23,24 +23,24 @@ export default function MarketRatesStrip({ isMobile = false }) {
 
   return (
     <div style={{
-      backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #eef0f4',
+      backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', border: '1px solid var(--en-oscuro-linea, #eef0f4)',
       boxShadow: '0 1px 3px rgba(0,0,0,0.03)', padding: '14px 16px',
       display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
     }}>
-      <span style={{ fontSize: '11px', fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--en-oscuro-texto-3, #9ca3af)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         Indicadores
       </span>
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', flex: 1 }}>
         {items.map((i) => (
           <div key={i.label} style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600 }}>{i.label}</span>
-            <span style={{ fontSize: '15px', fontWeight: 700, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: '11px', color: 'var(--en-oscuro-texto-3, #9ca3af)', fontWeight: 600 }}>{i.label}</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', fontVariantNumeric: 'tabular-nums' }}>
               {fmt(i.value)}
             </span>
           </div>
         ))}
       </div>
-      <span style={{ fontSize: '10.5px', color: vencida ? '#b45309' : '#9ca3af' }}>
+      <span style={{ fontSize: '10.5px', color: vencida ? 'var(--en-oscuro-alerta, #b45309)' : 'var(--en-oscuro-texto-3, #9ca3af)' }}>
         {vencida ? `Referencial · BCV ${fmtAntiguedadHoras(rates?.bcv_edad_horas)}` : 'Referencial · BCV'}
       </span>
     </div>

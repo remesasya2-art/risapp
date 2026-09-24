@@ -193,8 +193,11 @@ body {
   --t-mancha-4: rgba(200, 60, 160, .20);
 }
 
-.con-tema {
-  color-scheme: light;
+/* `.con-tema` es SOLO la marca: habilita el modo oscuro y no cambia nada
+   más, para poder ponérsela a una pantalla de antes sin moverle un píxel en
+   claro. El aspecto de las pantallas nuevas va aparte, en `.t-base`. */
+.con-tema { color-scheme: light; }
+.t-base {
   background-color: var(--t-fondo);
   color: var(--t-texto);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", Arial, sans-serif;
@@ -262,3 +265,36 @@ body {
    perdía entero y quedaba sólo la R flotando. El filo claro lo recorta; en
    modo claro es blanco sobre blanco y no se nota. */
 .t-logo { box-shadow: 0 0 0 1px var(--t-borde-vidrio), 0 8px 22px rgba(0, 0, 0, .18); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EN OSCURO — los valores que toman las pantallas de antes en modo oscuro
+   ══════════════════════════════════════════════════════════════════════════
+
+   Las pantallas que ya existían no se rediseñan para tener modo oscuro:
+   sus colores pasan a escribirse `var(--en-oscuro-texto, #101828)`. Estas
+   variables se definen SOLO acá, dentro de `.con-tema` en modo oscuro; en
+   cualquier otro lado no existen y gana el color de siempre, que va escrito
+   al lado. Ver components/flujo/estilos.js. */
+:root[data-tema="oscuro"] .con-tema {
+  --en-oscuro-fondo: #000000;
+  --en-oscuro-superficie: #1c1c1e;
+  --en-oscuro-superficie-2: #2c2c2e;
+  --en-oscuro-superficie-3: #3a3a3c;
+  --en-oscuro-texto: #f5f5f7;
+  --en-oscuro-texto-2: #a1a1a6;
+  --en-oscuro-texto-3: #8e8e93;
+  --en-oscuro-linea: rgba(255, 255, 255, .12);
+  --en-oscuro-linea-fuerte: rgba(255, 255, 255, .22);
+  --en-oscuro-acento: #8c83ff;
+  --en-oscuro-acento-suave: rgba(125, 115, 255, .18);
+  --en-oscuro-acento-borde: rgba(125, 115, 255, .45);
+  --en-oscuro-exito: #30d158;
+  --en-oscuro-exito-suave: rgba(48, 209, 88, .16);
+  --en-oscuro-exito-borde: rgba(48, 209, 88, .40);
+  --en-oscuro-alerta: #ffb340;
+  --en-oscuro-alerta-suave: rgba(255, 159, 10, .16);
+  --en-oscuro-alerta-borde: rgba(255, 159, 10, .40);
+  --en-oscuro-error: #ff6961;
+  --en-oscuro-error-suave: rgba(255, 69, 58, .16);
+  --en-oscuro-error-borde: rgba(255, 69, 58, .40);
+}

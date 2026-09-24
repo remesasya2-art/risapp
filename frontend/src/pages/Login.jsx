@@ -117,7 +117,7 @@ export default function Login() {
   //   los dos modos. Si se pintara oscura, esas letras oscuras quedarían
   //   sobre negro. Cuando pasen, se quita el `background: '#fff'`.
   const intermedia = (contenido) => (
-    <div className="con-tema" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div className="con-tema t-base" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <Pared />
       {/* `colorScheme: light` por lo mismo: sin él, en modo oscuro el
           navegador pintaría oscuros los campos de esa tarjeta blanca. */}
@@ -166,7 +166,7 @@ export default function Login() {
   };
 
   return (
-    <div className="con-tema" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+    <div className="con-tema t-base" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
       <style>{ESTILOS}</style>
       <Pared />
 

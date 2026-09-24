@@ -75,9 +75,10 @@ import PinSettings from '../components/PinSettings';
 import WebAuthnSettings from '../components/WebAuthnSettings';
 import DosPasosSettings from '../components/DosPasosSettings';
 import MiCodigoDeReferido from '../components/MiCodigoDeReferido';
+import ControlDeApariencia from '../components/tema/ControlDeApariencia';
 import { Boton, Aviso } from '../components/flujo';
 import {
-  C, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
+  C, FIJO, HOJA, tarjeta, etiqueta, microEtiqueta, campo, ayuda, iniciales,
 } from '../components/flujo/estilos';
 import { confirmarCierreDeSesion } from '../components/flujo/confirmar.js';
 import {
@@ -127,7 +128,7 @@ function Dato(props) {
       display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 14px',
       background: C.fondo, borderRadius: '12px', minWidth: 0,
     }}>
-      <Icono size={18} color={C.tenue} style={{ flexShrink: 0 }} />
+      <Icono size={18} style={{ flexShrink: 0, color: C.tenue }} />
       <span style={{ minWidth: 0 }}>
         <span style={{ ...microEtiqueta, display: 'block' }}>{titulo}</span>
         <span style={{
@@ -153,7 +154,7 @@ function Fila(props) {
           width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
           background: fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Icono size={18} color={color} />
+          <Icono size={18} style={{ color: color }} />
         </span>
         <span style={{ minWidth: 0, textAlign: 'left' }}>
           <span style={{
@@ -169,7 +170,7 @@ function Fila(props) {
           ) : null}
         </span>
       </span>
-      {flecha ? <ChevronRight size={18} color={C.tenue} style={{ flexShrink: 0 }} /> : null}
+      {flecha ? <ChevronRight size={18} style={{ flexShrink: 0, color: C.tenue }} /> : null}
     </>
   );
 
@@ -435,7 +436,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="env" data-testid="profile-page" style={{
+    <div className="env con-tema" data-testid="profile-page" style={{
       minHeight: '100vh', background: C.fondo,
       fontFamily: 'Inter, -apple-system, Segoe UI, Roboto, sans-serif',
     }}>
@@ -452,7 +453,7 @@ export default function Profile() {
               border: `1px solid ${C.linea}`, background: C.lienzo, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            <ArrowLeft size={19} color={C.texto} />
+            <ArrowLeft size={19} style={{ color: C.texto }} />
           </button>
           <h1 style={{
             fontSize: '21px', fontWeight: 700, color: C.tinta, margin: 0,
@@ -535,7 +536,7 @@ export default function Profile() {
               background: pushActivo ? C.exitoSuave : C.fondo,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              {pushActivo ? <Bell size={18} color={C.exito} /> : <BellOff size={18} color={C.suave} />}
+              {pushActivo ? <Bell size={18} style={{ color: C.exito }} /> : <BellOff size={18} style={{ color: C.suave }} />}
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
@@ -560,6 +561,8 @@ export default function Profile() {
           ) : null}
         </section>
 
+        <ControlDeApariencia />
+
         {/* El PIN no aplica a super_admin y la huella depende del navegador:
             cada componente decide si se dibuja. */}
         <PinSettings user={user} />
@@ -576,7 +579,7 @@ export default function Profile() {
                 width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
                 background: C.fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Shield size={18} color={C.suave} />
+                <Shield size={18} style={{ color: C.suave }} />
               </span>
               <span style={{ flex: 1, minWidth: '160px' }}>
                 <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
@@ -599,7 +602,8 @@ export default function Profile() {
           <Link to={panel.destino} data-testid="role-panel-btn" style={{
             ...tarjeta, display: 'flex', alignItems: 'center', gap: '13px',
             padding: '18px 20px', marginBottom: '16px', textDecoration: 'none',
-            background: C.tinta, border: `1px solid ${C.tinta}`,
+            // Oscura en los dos modos: ver `FIJO` en flujo/estilos.js.
+            background: FIJO.oscuro, border: `1px solid ${FIJO.oscuro}`,
           }}>
             <span style={{
               width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0,

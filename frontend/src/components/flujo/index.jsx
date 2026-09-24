@@ -92,7 +92,7 @@ function Aviso({ tono = 'info', titulo, children, testid }) {
       background: fondo, border: `1px solid ${borde}`,
       borderRadius: '12px', padding: '13px 15px',
     }}>
-      <Icono size={18} color={color} style={{ flexShrink: 0, marginTop: '1px' }} />
+      <Icono size={18} style={{ flexShrink: 0, marginTop: '1px', color: color }} />
       <div style={{ fontSize: '13.5px', lineHeight: 1.55, color: C.texto }}>
         {titulo ? (
           <strong style={{ display: 'block', color, marginBottom: '2px' }}>{titulo}</strong>
@@ -170,7 +170,7 @@ function Opcion(props) {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         background: elegida ? C.marca : C.fondo,
       }}>
-        <Icono size={21} color={elegida ? '#fff' : C.suave} />
+        <Icono size={21} style={{ color: elegida ? '#fff' : C.suave }} />
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: '15.5px', fontWeight: 700, color: C.tinta }}>

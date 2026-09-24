@@ -119,14 +119,14 @@ export default function PrimerosPasos({ user, isMobile = false }) {
     <div
       data-testid="primeros-pasos"
       style={{
-        backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #eef0f4',
+        backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px', border: '1px solid var(--en-oscuro-linea, #eef0f4)',
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)', padding: isMobile ? '16px' : '18px 20px', marginBottom: '24px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div>
-          <h2 style={{ fontSize: isMobile ? '16px' : '17px', fontWeight: 700, color: '#111827', margin: 0 }}>Primeros pasos</h2>
-          <p style={{ fontSize: '13px', color: '#6b7280', margin: '2px 0 0 0' }} data-testid="primeros-pasos-progreso">
+          <h2 style={{ fontSize: isMobile ? '16px' : '17px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>Primeros pasos</h2>
+          <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }} data-testid="primeros-pasos-progreso">
             {hechos} de {queCuentan.length} listos
           </p>
         </div>
@@ -136,7 +136,7 @@ export default function PrimerosPasos({ user, isMobile = false }) {
           title="Ocultar"
           aria-label="Ocultar primeros pasos"
           data-testid="primeros-pasos-ocultar"
-          style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: '#f3f4f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'var(--en-oscuro-superficie-2, #f3f4f6)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <X size={16} color="#6b7280" />
         </button>
@@ -150,23 +150,23 @@ export default function PrimerosPasos({ user, isMobile = false }) {
             data-estado={p.estado}
             style={{
               display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12,
-              background: p.estado === 'hecho' ? '#f0fdf4' : '#f9fafb',
-              border: '1px solid ' + (p.estado === 'hecho' ? '#dcfce7' : '#f3f4f6'),
+              background: p.estado === 'hecho' ? 'var(--en-oscuro-exito-suave, #f0fdf4)' : 'var(--en-oscuro-superficie-2, #f9fafb)',
+              border: '1px solid ' + (p.estado === 'hecho' ? 'var(--en-oscuro-exito-borde, #dcfce7)' : 'var(--en-oscuro-linea, #f3f4f6)'),
             }}
           >
             <Marca estado={p.estado} />
             <span style={{
               width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: '#eef2ff',
+              backgroundColor: 'var(--en-oscuro-acento-suave, #eef2ff)',
             }}>
               <p.Icono size={17} color="#4f46e5" />
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: p.estado === 'hecho' ? '#166534' : '#111827',
+              <div style={{ fontSize: '14px', fontWeight: 600, color: p.estado === 'hecho' ? 'var(--en-oscuro-exito, #166534)' : 'var(--en-oscuro-texto, #111827)',
                             textDecoration: p.estado === 'hecho' ? 'line-through' : 'none' }}>
                 {p.titulo}
               </div>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: 2 }}>{p.texto}</div>
+              <div style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', marginTop: 2 }}>{p.texto}</div>
               {/* En el teléfono el botón va DEBAJO del texto: al costado, un
                   «Volver a enviar» le dejaba tres palabras por línea. */}
               {p.boton && isMobile ? <Boton paso={p} /> : null}

@@ -146,7 +146,7 @@ export function NoSePudoLeer({ que, detalle, onReintentar, reintentando }) {
     <div style={{ padding: '36px 24px', borderRadius: '16px',
       backgroundColor: COLOR.alertaSuave, border: '1px solid #fde68a',
       textAlign: 'center' }}>
-      <AlertTriangle size={26} color={COLOR.alerta} />
+      <AlertTriangle size={26} style={{ color: COLOR.alerta }} />
       <p style={{ margin: '10px 0 0 0', fontSize: '16px', fontWeight: 700,
         color: '#92400e' }}>
         No se pudo leer {que}

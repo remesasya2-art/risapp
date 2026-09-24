@@ -39,7 +39,7 @@ function Encabezado({ activo }) {
         width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
         background: C.fondo, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <ShieldCheck size={18} color={activo ? '#16a34a' : C.suave} />
+        <ShieldCheck size={18} style={{ color: activo ? '#16a34a' : C.suave }} />
       </span>
       <span style={{ flex: 1, minWidth: '160px' }}>
         <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 600, color: C.tinta }}>
@@ -179,7 +179,7 @@ export default function DosPasosSettings() {
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
               <code data-testid="dos-pasos-clave" style={{
-                fontSize: '13px', wordBreak: 'break-all', background: '#fff',
+                fontSize: '13px', wordBreak: 'break-all', background: C.lienzo,
                 border: `1px solid ${C.linea}`, borderRadius: '8px', padding: '6px 8px',
               }}>{alta.secret}</code>
               <Boton tono="suave" onClick={() => {

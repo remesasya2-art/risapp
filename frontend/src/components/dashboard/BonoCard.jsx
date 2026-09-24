@@ -35,15 +35,15 @@ export default function BonoCard({ bono, isMobile = false }) {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   });
 
-  const acento = bloqueado ? '#B54708' : '#067647';
-  const fondo = bloqueado ? '#FFFAEB' : '#ECFDF3';
-  const borde = bloqueado ? '#FEDF89' : '#A9EFC5';
+  const acento = bloqueado ? 'var(--en-oscuro-alerta, #B54708)' : 'var(--en-oscuro-exito, #067647)';
+  const fondo = bloqueado ? 'var(--en-oscuro-alerta-suave, #FFFAEB)' : 'var(--en-oscuro-exito-suave, #ECFDF3)';
+  const borde = bloqueado ? 'var(--en-oscuro-alerta-borde, #FEDF89)' : 'var(--en-oscuro-exito-borde, #A9EFC5)';
 
   return (
     <div data-testid="bono-card" style={{
-      backgroundColor: '#ffffff', borderRadius: '16px',
+      backgroundColor: 'var(--en-oscuro-superficie, #ffffff)', borderRadius: '16px',
       padding: isMobile ? '16px' : '18px 20px',
-      border: '1px solid #eef0f4', boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      border: '1px solid var(--en-oscuro-linea, #eef0f4)', boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
       display: 'flex', alignItems: 'flex-start', gap: '14px',
     }}>
       <span style={{
@@ -51,8 +51,8 @@ export default function BonoCard({ bono, isMobile = false }) {
         backgroundColor: fondo, border: `1px solid ${borde}`,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {bloqueado ? <Lock size={18} color={acento} />
-                   : <Gift size={18} color={acento} />}
+        {bloqueado ? <Lock size={18} style={{ color: acento }} />
+                   : <Gift size={18} style={{ color: acento }} />}
       </span>
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -60,7 +60,7 @@ export default function BonoCard({ bono, isMobile = false }) {
           display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap',
         }}>
           <span style={{
-            fontSize: '13px', fontWeight: 600, color: '#6b7280',
+            fontSize: '13px', fontWeight: 600, color: 'var(--en-oscuro-texto-2, #6b7280)',
           }}>
             Bono de bienvenida
           </span>
@@ -84,14 +84,14 @@ export default function BonoCard({ bono, isMobile = false }) {
         </div>
 
         <div style={{
-          fontSize: '24px', fontWeight: 700, color: '#111827',
+          fontSize: '24px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)',
           fontVariantNumeric: 'tabular-nums', marginTop: '2px',
         }}>
           R$ {monto}
         </div>
 
         <p style={{
-          margin: '4px 0 0', fontSize: '12.5px', color: '#6b7280',
+          margin: '4px 0 0', fontSize: '12.5px', color: 'var(--en-oscuro-texto-2, #6b7280)',
           lineHeight: 1.5,
         }}>
           {bono.leyenda}

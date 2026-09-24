@@ -44,7 +44,7 @@ export default function PagoRecibido({
         background: C.exitoSuave, border: `1px solid ${C.exitoBorde}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <CheckCircle2 size={40} color={C.exito} strokeWidth={2.2} />
+        <CheckCircle2 size={40} strokeWidth={2.2} style={{ color: C.exito }} />
       </div>
 
       <h2 style={{ fontSize: '22px', fontWeight: 800, color: C.exito, margin: '0 0 6px 0',

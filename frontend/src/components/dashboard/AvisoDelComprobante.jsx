@@ -9,11 +9,11 @@ export default function AvisoDelComprobante({ estado }) {
     <div
       data-testid={`comprobante-${estado}`}
       style={{
-        padding: '40px', backgroundColor: '#f9fafb', borderRadius: '12px',
-        textAlign: 'center', border: '1px dashed #d1d5db',
+        padding: '40px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', borderRadius: '12px',
+        textAlign: 'center', border: '1px dashed var(--en-oscuro-linea-fuerte, #d1d5db)',
       }}
     >
-      <p style={{ color: estado === 'error' ? '#dc2626' : '#6b7280', margin: 0, fontSize: '14px' }}>{texto}</p>
+      <p style={{ color: estado === 'error' ? 'var(--en-oscuro-error, #dc2626)' : 'var(--en-oscuro-texto-2, #6b7280)', margin: 0, fontSize: '14px' }}>{texto}</p>
     </div>
   );
 }
