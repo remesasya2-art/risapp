@@ -126,3 +126,139 @@ body {
 .btn-gold:hover {
   background-color: var(--color-gold-500);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   APARIENCIA — los colores con nombre, en claro y en oscuro
+   ══════════════════════════════════════════════════════════════════════════
+
+   Las pantallas que pasaron al estilo nuevo no escriben colores: usan estos
+   nombres (`var(--t-texto)`), y el nombre cambia de valor según el atributo
+   `data-tema` del <html>, que pone src/tema/apariencia.js.
+
+   Las que todavía no pasaron siguen con sus colores escritos a mano y no se
+   enteran de nada: por eso el cambio se puede hacer pantalla por pantalla
+   sin que ninguna quede a medias. La marca de «ya pasó» es la clase
+   `.con-tema` en la raíz de la pantalla; ver el porqué de `color-scheme`
+   en apariencia.js. */
+
+:root {
+  --t-fondo: #f5f5f7;
+  --t-texto: #1d1d1f;
+  --t-texto-2: #6e6e73;
+  --t-texto-3: #8e8e93;
+  --t-vidrio: rgba(255, 255, 255, .62);
+  --t-vidrio-fuerte: rgba(255, 255, 255, .82);
+  --t-borde-vidrio: rgba(255, 255, 255, .75);
+  --t-linea: rgba(60, 60, 67, .13);
+  --t-campo: rgba(118, 118, 128, .10);
+  --t-acento: #5b4fe9;
+  --t-acento-2: #8b5cf6;
+  --t-naranja: #f28c28;
+  --t-verde: #34c759;
+  --t-rojo: #ff3b30;
+  --t-sombra: 0 20px 60px rgba(40, 30, 120, .12), 0 2px 8px rgba(0, 0, 0, .04);
+  --t-primario-arriba: #6d62ff;
+  --t-primario-abajo: #5144e0;
+  --t-mancha-1: rgba(124, 108, 255, .50);
+  --t-mancha-2: rgba(255, 160, 90, .40);
+  --t-mancha-3: rgba(90, 190, 255, .40);
+  --t-mancha-4: rgba(255, 120, 190, .26);
+}
+
+/* LO OSCURO VALE SOLO DENTRO DE `.con-tema`, NO EN TODO EL DOCUMENTO.
+   Un componente con colores con nombre puede aparecer dentro de una pantalla
+   que todavía no pasó —el pie de página está en varias—. Si lo oscuro colgara
+   del <html>, ese pie saldría negro al fondo de una pantalla blanca. Así,
+   fuera de una pantalla preparada, todo sigue claro. */
+:root[data-tema="oscuro"] .con-tema {
+  --t-fondo: #000000;
+  --t-texto: #f5f5f7;
+  --t-texto-2: #a1a1a6;
+  --t-texto-3: #8e8e93;
+  --t-vidrio: rgba(40, 40, 52, .55);
+  --t-vidrio-fuerte: rgba(44, 44, 56, .82);
+  --t-borde-vidrio: rgba(255, 255, 255, .12);
+  --t-linea: rgba(255, 255, 255, .10);
+  --t-campo: rgba(118, 118, 128, .24);
+  --t-acento: #7d73ff;
+  --t-acento-2: #a78bfa;
+  --t-verde: #30d158;
+  --t-rojo: #ff453a;
+  --t-sombra: 0 20px 60px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .06);
+  --t-primario-arriba: #8a81ff;
+  --t-primario-abajo: #6a5ff5;
+  --t-mancha-1: rgba(98, 80, 255, .42);
+  --t-mancha-2: rgba(242, 140, 40, .26);
+  --t-mancha-3: rgba(40, 120, 255, .30);
+  --t-mancha-4: rgba(200, 60, 160, .20);
+}
+
+.con-tema {
+  color-scheme: light;
+  background-color: var(--t-fondo);
+  color: var(--t-texto);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -.01em;
+}
+:root[data-tema="oscuro"] .con-tema { color-scheme: dark; }
+
+/* El vidrio. `-webkit-` va aparte porque Safari todavía lo pide así, y
+   Safari es justamente el navegador de quien tiene iPhone. */
+.t-vidrio {
+  background: var(--t-vidrio);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--t-borde-vidrio);
+  box-shadow: var(--t-sombra);
+}
+.t-vidrio-plano { box-shadow: none; }
+
+/* La pared de colores que se ve a través del vidrio. Sin ella el vidrio es
+   un rectángulo gris: el efecto necesita algo detrás. */
+.t-pared { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.t-pared > i { position: absolute; border-radius: 50%; filter: blur(70px); }
+
+.t-boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 24px; border-radius: 999px; border: 0;
+  font: inherit; font-size: 16px; font-weight: 600; letter-spacing: -.01em;
+  text-decoration: none; cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
+}
+.t-boton:hover { transform: translateY(-1px); }
+.t-boton:active { transform: scale(.98); }
+.t-boton:disabled { opacity: .5; cursor: default; transform: none; }
+.t-primario {
+  color: #fff;
+  background: linear-gradient(180deg, var(--t-primario-arriba), var(--t-primario-abajo));
+  box-shadow: 0 8px 24px rgba(91, 79, 233, .32), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.t-secundario { color: var(--t-texto); }
+
+/* Foco visible en todo lo que se toca: sin esto la página no se puede
+   recorrer con el teclado. */
+.con-tema a:focus-visible, .con-tema button:focus-visible, .con-tema input:focus-visible {
+  outline: 2px solid var(--t-acento); outline-offset: 3px;
+}
+
+.t-degradado {
+  background: linear-gradient(90deg, var(--t-acento), var(--t-acento-2) 55%, var(--t-naranja));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.t-chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px;
+  border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--t-texto-2);
+}
+.t-eyebrow { font-size: 13px; font-weight: 600; color: var(--t-acento); letter-spacing: .02em; margin: 0; }
+.t-grupo { border-radius: 18px; overflow: hidden; background: var(--t-vidrio-fuerte); border: 1px solid var(--t-borde-vidrio); }
+.t-fila { display: flex; align-items: center; gap: 14px; padding: 14px 16px; position: relative; }
+.t-fila + .t-fila::before {
+  content: ""; position: absolute; top: 0; left: 62px; right: 0; height: 1px; background: var(--t-linea);
+}
+.t-enlace { color: var(--t-acento); text-decoration: none; font-weight: 600; }
+.t-enlace:hover { text-decoration: underline; }
+
+/* El logo es un cuadrado NEGRO: sobre el fondo negro del modo oscuro se
+   perdía entero y quedaba sólo la R flotando. El filo claro lo recorta; en
+   modo claro es blanco sobre blanco y no se nota. */
+.t-logo { box-shadow: 0 0 0 1px var(--t-borde-vidrio), 0 8px 22px rgba(0, 0, 0, .18); }

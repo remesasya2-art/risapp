@@ -2,6 +2,14 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { aplicar, leerDelAparato } from './tema/apariencia'
+
+// ANTES DE DIBUJAR NADA. El tema se escribe en el <html> acá, y no cuando
+// monta React, para que la primera pantalla ya salga con los colores
+// elegidos: quien eligió oscuro no ve un destello blanco al abrir. No puede
+// ir en un <script> dentro de index.html: la política de contenido permite
+// un solo script, éste (ver tests/test_politica_de_contenido.py).
+aplicar(leerDelAparato())
 
 // ACA SE ARRANCABA EL SDK DE PAGOS CON `VITE_MP_PUBLIC_KEY`, Y SE SACO.
 //

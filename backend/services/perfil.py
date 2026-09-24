@@ -113,6 +113,12 @@ LO_QUE_VE_SU_DUENO = {
 
     # De dónde despacha, y desde cuándo está.
     "cep_origen": 1, "created_at": 1, "last_login": 1,
+
+    # Claro, oscuro o automático. Sale por las cinco puertas y no sólo por
+    # `/auth/me`: al entrar, la pantalla se pinta con lo que trae la puerta,
+    # y si la preferencia llegara recién con el `/auth/me` siguiente, quien
+    # eligió oscuro vería un destello blanco cada vez que inicia sesión.
+    "apariencia": 1,
 }
 
 # Los nombres permitidos, sin el `_id: 0` que es de la proyección de Mongo.

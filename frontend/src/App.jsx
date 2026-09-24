@@ -6,6 +6,7 @@ import PuertaRecarga from './components/PuertaRecarga';
 import PuertaEncomiendas from './components/PuertaEncomiendas';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
+import { TemaProvider } from './contexts/TemaContext';
 
 // Pages
 import Login from './pages/Login';
@@ -169,6 +170,7 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
+        <TemaProvider>
         <RateProvider>
           <AppRoutes />
           <Toaster 
@@ -188,6 +190,7 @@ export default function App() {
               confirmar.jsx. */}
           <ConfirmacionHost />
         </RateProvider>
+        </TemaProvider>
       </AuthProvider>
     </Router>
   );
