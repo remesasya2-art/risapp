@@ -39,6 +39,7 @@ from services.credits import normalize_currency, CREDIT_LABELS, credit_user
 from services.min_amount import effective_min_amount
 from services.notifications import create_notification
 from services import registro
+from models.acciones_de_dinero import MiDepositoCripto
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ async def get_min_amount(
     }
 
 
-@router.post("/deposit", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/deposit", response_model=MiDepositoCripto, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def create_deposit(
     data: DepositRequest,
     request: Request,

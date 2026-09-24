@@ -106,8 +106,8 @@ jobs:
       #   Y no bloquea, a propósito y por ahora: hay advertencias conocidas y
       #   anotadas en la sección 11 del dossier de seguridad (`cryptography`,
       #   que no se puede saltar tres versiones mayores sin un entorno de
-      #   ensayo; `litellm`, que no se importa en el código propio). Ponerlo
-      #   en bloqueante hoy sería congelar las fusiones por lo que ya se sabe.
+      #   ensayo). Ponerlo en bloqueante hoy sería congelar las fusiones por lo
+      #   que ya se sabe.
       #   El día que la lista quede limpia, se saca el `continue-on-error` y
       #   una dependencia nueva con agujero frena el pull request.
       #

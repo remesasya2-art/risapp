@@ -57,6 +57,16 @@ from models.cuenta import MiBeneficiario, MiBeneficiarioEnBrasil
 from models.movimientos import LO_QUE_VE_EL_CLIENTE, LO_QUE_VE_EN_LA_LISTA, MisMovimientos, MovimientoQueVeElCliente
 from services.las_fotos import cuales_tienen_comprobante
 from models.dinero_en_transito import EstadoDeMiEnvioCripto, MiRetiroPendiente
+from models.acciones_de_dinero import (
+    MiComprobanteRecibido,
+    MiCotizacionReais,
+    MiCotizacionVes,
+    MiEnvioCripto,
+    MiEnvioDeReais,
+    MiOrdenCriptoCancelada,
+    MiRecargaVes,
+    MiRetiroPedido,
+)
 router = APIRouter(tags=["transactions"])
 
 # ============== ENVIO CRIPTO: PAGOS INCOMPLETOS (3 NIVELES) ==============
@@ -336,7 +346,7 @@ async def get_br_beneficiaries(current_user: User = Depends(get_current_user)):
         for b in rows
     ]
 
-@router.post("/reais/send", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/reais/send", response_model=MiEnvioDeReais, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def create_reais_send(request: ReaisSendRequest, current_user: User = Depends(get_current_user)):
     """Crea una orden de envío RIS → Reais (1 RIS = 1 R$, sin comisión: ya viene
     incluida en la recarga). Queda pendiente para que el super_admin la pague
@@ -477,8 +487,8 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
 #   conserva por si algún cliente viejo lo llama, ahora con el mismo candado.
 #   Hay un test que recorre la aplicación armada y falla si una ruta de envío
 #   queda sin él.
-@router.post("/withdraw", dependencies=[Depends(sin_transacciones_personales)])
-@router.post("/withdrawal/create", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/withdraw", response_model=MiRetiroPedido, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/withdrawal/create", response_model=MiRetiroPedido, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
     """Create a withdrawal request"""
     if request.amount <= 0:
@@ -727,7 +737,7 @@ class CryptoSendRequest(BaseModel):
     use_balance: bool = False   # True: descuenta de balance_usdt/usdc (saldo de reembolsos). False (default): pago directo nuevo via NOWPayments.
     idempotency_key: Optional[str] = None
 
-@router.post("/withdraw-crypto", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/withdraw-crypto", response_model=MiEnvioCripto, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def create_crypto_withdrawal(request: CryptoSendRequest, current_user: User = Depends(get_current_user)):
     """Crea un envio de USDT/USDC a un beneficiario en VES.
 
@@ -1044,7 +1054,7 @@ async def get_crypto_withdrawal_status(transaction_id: str, current_user: User =
     return resp
 
 
-@router.post("/withdraw-crypto/{transaction_id}/cancelar")
+@router.post("/withdraw-crypto/{transaction_id}/cancelar", response_model=MiOrdenCriptoCancelada, response_model_exclude_unset=True)
 async def cancelar_orden_cripto(transaction_id: str, current_user: User = Depends(get_current_user)):
     """Cancela una orden de envio cripto que todavia no recibio ningun pago.
 
@@ -1488,7 +1498,7 @@ async def bancos_ves_disponibles() -> list[str]:
         return []
 
 
-@router.post("/recharge/ves", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/recharge/ves", response_model=MiRecargaVes, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
     """Create a VES recharge request"""
     # LA CARGA DE SALDO, ANTES DE CUALQUIER OTRA COSA.
@@ -1962,7 +1972,7 @@ class CotizarEnvioVesRequest(BaseModel):
     metodo: Optional[str] = None
 
 
-@router.post("/withdraw-ves/cotizar",
+@router.post("/withdraw-ves/cotizar", response_model=MiCotizacionVes, response_model_exclude_unset=True,
              dependencies=[Depends(sin_transacciones_personales)])
 async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
                             current_user: User = Depends(get_current_user)):
@@ -2328,7 +2338,7 @@ class ComprobanteDelEnvioRequest(BaseModel):
     proof_image: str                   # el comprobante
 
 
-@router.post("/enviar-reais/cotizar",
+@router.post("/enviar-reais/cotizar", response_model=MiCotizacionReais, response_model_exclude_unset=True,
              dependencies=[Depends(sin_transacciones_personales)])
 async def cotizar_envio_reais(request: CotizarEnvioReaisRequest,
                               current_user: User = Depends(get_current_user)):
@@ -2442,7 +2452,7 @@ async def cotizar_envio_reais(request: CotizarEnvioReaisRequest,
     return _resp
 
 
-@router.post("/enviar-reais/comprobante",
+@router.post("/enviar-reais/comprobante", response_model=MiComprobanteRecibido, response_model_exclude_unset=True,
              dependencies=[Depends(sin_transacciones_personales)])
 async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
                                       current_user: User = Depends(get_current_user)):

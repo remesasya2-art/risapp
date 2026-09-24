@@ -36,6 +36,7 @@ from services.notifications import create_notification
 from services import bancos, configuracion, pagos_una_sola_vez, saldos
 from services.limits import validate_card_amount
 from services.money import para_mostrar, to_float
+from models.acciones_de_dinero import MiCotizacionDeTarjeta, MiPagoConTarjeta
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/card", tags=["payments-card"])
@@ -178,7 +179,7 @@ async def get_card_config(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.post("/quote", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/quote", response_model=MiCotizacionDeTarjeta, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def quote_card_payment(
     amount_ris: float,
     payment_type_id: str = "credit_card",
@@ -205,7 +206,7 @@ async def quote_card_payment(
     }
 
 
-@router.post("/process", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/process", response_model=MiPagoConTarjeta, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def process_card_payment(
     body: CardPaymentInput,
     current_user: User = Depends(get_current_user),
