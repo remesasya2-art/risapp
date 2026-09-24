@@ -169,8 +169,8 @@ export default function Transportistas() {
             </span>
             <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px',
               borderRadius: '999px',
-              backgroundColor: t.activo ? COLOR.okSuave : '#f3f4f6',
-              color: t.activo ? '#065f46' : COLOR.suave }}>
+              backgroundColor: t.activo ? COLOR.okSuave : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+              color: t.activo ? 'var(--en-oscuro-exito, #065f46)' : COLOR.suave }}>
               {t.activo ? 'activo' : 'inactivo'}
             </span>
           </button>
@@ -490,7 +490,7 @@ function Cuenta({ transportista, onListo }) {
         </Boton>
       ) : (
         <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: COLOR.errorSuave,
-          border: '1px solid #fecaca' }}>
+          border: '1px solid var(--en-oscuro-error-borde, #fecaca)' }}>
           <div style={grilla('200px')}>
             <Campo etiqueta="Banco">
               <Texto value={cuenta.banco}
@@ -694,7 +694,7 @@ function Agencias({ transportista }) {
       ) : null}
 
       {nueva ? (
-        <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: '#f9fafb',
+        <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)',
           border: `1px solid ${COLOR.borde}`, marginBottom: '14px' }}>
           <div style={grilla('180px')}>
             {[['codigo', 'Código'], ['nombre', 'Nombre'], ['estado', 'Estado'],
@@ -794,7 +794,7 @@ function FilaDeAgencia({ agencia, guardando, onGuardar, onCancelar }) {
   if (!agencia) return null;
   return (
     <div style={{ marginTop: '14px', padding: '16px', borderRadius: '12px',
-      backgroundColor: '#f9fafb', border: `1px solid ${COLOR.borde}` }}>
+      backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)', border: `1px solid ${COLOR.borde}` }}>
       <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: COLOR.suave }}>
         Editando <strong style={{ fontFamily: 'monospace', color: COLOR.texto }}>
           {agencia.codigo}</strong> — el código no se cambia: es cómo la identifica el CSV.

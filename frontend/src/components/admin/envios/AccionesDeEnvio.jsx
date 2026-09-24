@@ -663,7 +663,7 @@ function Desviar({ envio, estado, onListo }) {
               <label key={d.hacia} style={{ display: 'flex', gap: '10px', cursor: 'pointer',
                 padding: '10px 12px', borderRadius: '10px',
                 border: `1px solid ${hacia === d.hacia ? COLOR.error : COLOR.borde}`,
-                backgroundColor: hacia === d.hacia ? COLOR.errorSuave : '#fff' }}>
+                backgroundColor: hacia === d.hacia ? COLOR.errorSuave : 'var(--en-oscuro-superficie, #fff)' }}>
                 <input type="radio" name={`desvio-${envio.envio_id}`} checked={hacia === d.hacia}
                   onChange={() => { setHacia(d.hacia); setConfirmado(false); }}
                   style={{ marginTop: '2px', accentColor: COLOR.error }} />

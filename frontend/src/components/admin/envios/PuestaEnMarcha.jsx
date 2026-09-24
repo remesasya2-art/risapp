@@ -21,9 +21,9 @@ import { Aviso, Boton, Cargando } from '../../envios/ui';
 import { COLOR, mensajeDeError, tarjeta } from '../../envios/estilos';
 
 const ICONO = {
-  listo: { Icono: Check, color: COLOR.ok, fondo: COLOR.okSuave, borde: '#a7f3d0' },
-  falta: { Icono: CircleDashed, color: COLOR.suave, fondo: '#f9fafb', borde: COLOR.borde },
-  ilegible: { Icono: AlertTriangle, color: COLOR.alerta, fondo: COLOR.alertaSuave, borde: '#fde68a' },
+  listo: { Icono: Check, color: COLOR.ok, fondo: COLOR.okSuave, borde: 'var(--en-oscuro-exito-borde, #a7f3d0)' },
+  falta: { Icono: CircleDashed, color: COLOR.suave, fondo: 'var(--en-oscuro-superficie-2, #f9fafb)', borde: COLOR.borde },
+  ilegible: { Icono: AlertTriangle, color: COLOR.alerta, fondo: COLOR.alertaSuave, borde: 'var(--en-oscuro-alerta-borde, #fde68a)' },
 };
 
 /** Convierte el `**negrita**` que usan los mensajes del backend. */
@@ -90,25 +90,25 @@ export default function PuestaEnMarcha({ onIr }) {
       <div style={{
         ...tarjeta,
         background: puedeOperar
-          ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
-          : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-        borderColor: puedeOperar ? '#a7f3d0' : '#c7d2fe',
+          ? 'var(--en-oscuro-exito-suave, linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%))'
+          : 'var(--en-oscuro-acento-suave, linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%))',
+        borderColor: puedeOperar ? 'var(--en-oscuro-exito-borde, #a7f3d0)' : 'var(--en-oscuro-acento-borde, #c7d2fe)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <p style={{ fontSize: '12px', margin: 0, fontWeight: 700, letterSpacing: '0.04em',
-              textTransform: 'uppercase', color: puedeOperar ? '#065f46' : '#3730a3' }}>
+              textTransform: 'uppercase', color: puedeOperar ? 'var(--en-oscuro-exito, #065f46)' : 'var(--en-oscuro-acento, #3730a3)' }}>
               Puesta en marcha
             </p>
             <p style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0 0 0',
-              color: puedeOperar ? '#065f46' : '#312e81' }}>
+              color: puedeOperar ? 'var(--en-oscuro-exito, #065f46)' : 'var(--en-oscuro-acento, #312e81)' }}>
               {puedeOperar
                 ? 'El módulo puede operar'
                 : `${listos} de ${pasos.length} pasos listos`}
             </p>
             <p style={{ fontSize: '13px', margin: '4px 0 0 0', lineHeight: 1.5,
-              color: puedeOperar ? '#047857' : '#4338ca' }}>
+              color: puedeOperar ? 'var(--en-oscuro-exito, #047857)' : 'var(--en-oscuro-acento, #4338ca)' }}>
               {puedeOperar
                 ? 'Los usuarios pueden cotizar. Cambiar cualquiera de estos bloques sigue siendo seguro: la tarifa se versiona y lo que va impreso en una caja queda congelado en el envío.'
                 : 'Hasta que estén los siete, /envios/limites contesta que el servicio no está disponible y nadie puede cotizar. Cargalos en este orden: cada uno depende de los de arriba.'}
@@ -154,7 +154,7 @@ export default function PuestaEnMarcha({ onIr }) {
               borderWidth: esSiguiente ? '2px' : '1px',
             }}>
               <div style={{ width: '30px', height: '30px', borderRadius: '9px', flexShrink: 0,
-                backgroundColor: '#fff', border: `1px solid ${t.borde}`,
+                backgroundColor: 'var(--en-oscuro-superficie, #fff)', border: `1px solid ${t.borde}`,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icono size={16} style={{ color: t.color }} />
               </div>
@@ -164,7 +164,7 @@ export default function PuestaEnMarcha({ onIr }) {
                   {paso.titulo}
                   {esSiguiente ? (
                     <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 700,
-                      color: COLOR.primarioOscuro, backgroundColor: '#fff', padding: '2px 8px',
+                      color: COLOR.primarioOscuro, backgroundColor: 'var(--en-oscuro-superficie, #fff)', padding: '2px 8px',
                       borderRadius: '999px', border: `1px solid ${COLOR.primario}` }}>
                       empezá por acá
                     </span>
