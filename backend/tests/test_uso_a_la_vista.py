@@ -499,7 +499,10 @@ def test_los_numeros_de_la_base_operaciones_por_tipo(base):
 
 def test_todo_junta_las_dos_fuentes(base):
     async def cuerpo():
-        cliente()
+        # El pedido se cuenta HOY, no en `HOY`: `todo` mira los últimos siete
+        # días del reloj de verdad, y con el pedido fijo en el 18 de septiembre
+        # de 2026 este test se rompía solo desde el 25.
+        cliente(ahora=datetime.now(timezone.utc))
         await uso.volcar(base)
         t = await uso.todo(base, dias=7)
         assert set(t) == {"dias", "desde", "hasta", "funciones", "sin_uso",

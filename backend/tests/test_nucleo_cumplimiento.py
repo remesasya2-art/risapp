@@ -138,7 +138,12 @@ def test_UN_RECLAMO_TIENE_PROTOCOLO_Y_DIEZ_DIAS_HABILES():
     assert r["protocolo"] == "OUV-2026-000001" and r["responder_hasta"] == "2026-10-01" and r["caso_soporte"] == "S-000123"
     r2 = ya(ouvidoria.abrir(canal="telefono", asunto="Otro", descripcion="Detalle", actor="ouv", ahora=jueves))
     assert r2["protocolo"] == "OUV-2026-000002"
-    assert ya(ouvidoria.detalle(r["id"]))["vencido"] is False
+    # «No vencido» se pregunta con fecha fija, como el «vencido» de abajo.
+    # `detalle` usa el día de hoy, y el plazo vence el 1 de octubre de 2026:
+    # desde el 2 de octubre este test se rompía solo, sin que nadie tocara
+    # el código.
+    (recien,) = [x for x in ya(ouvidoria.listar(hoy=date(2026, 9, 18))) if x["id"] == r["id"]]
+    assert recien["vencido"] is False
     assert [x["vencido"] for x in ya(ouvidoria.listar(hoy=date(2026, 10, 2)))] == [True, True]
     assert ya(ouvidoria.resumen(hoy=date(2026, 10, 2)))["vencidos"] == 2
 
