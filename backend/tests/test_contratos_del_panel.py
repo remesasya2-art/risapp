@@ -372,3 +372,105 @@ def test_EL_BENEFICIARIO_DE_LA_COLA_SALE_CON_LO_QUE_SE_PAGA_Y_NADA_MAS(cola):
         for interno in ("nota_interna", "creado_por_ip", "10.0.0.7", "copia-entera"):
             assert interno not in r.text, f"{camino} dejó salir «{interno}»"
         assert {f["transaction_id"]: f["amount_output"] for f in filas} == {"tx_p1": 5500.0, "tx_p2": 2200.0}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5. Las verificaciones de identidad
+# ══════════════════════════════════════════════════════════════════════════
+
+# Lo que leen KycPanel.jsx y KycDetailModal.jsx. La ventana del detalle
+# arranca con la fila de la lista y le encima el detalle: el riesgo y la lista
+# negra vienen sólo de la lista.
+# Largas a propósito: el KYC descarta como marcador vacío una imagen de menos
+# de 30 caracteres (`_normalize_image`).
+FOTO_SELFIE = "data:image/jpeg;base64," + "SELFIE" * 8
+FOTO_DOC = "data:image/jpeg;base64," + "DOCUMENTO" * 5
+
+LO_QUE_LEE_EL_KYC = {
+    "lista": {"verification_id", "user_id", "status", "has_selfie", "full_name", "blacklist_match", "email",
+              "cpf_number", "document_number", "phone_number", "submitted_at", "rejection_reason",
+              "risk_level", "risk_suggested", "admin_note"},
+    "detalle": {"verification_id", "status", "admin_note", "document_type", "document_type_label",
+                "id_document_image", "id_document_image_back", "cpf_image", "selfie_image", "full_name", "email",
+                "phone_number", "document_number", "cpf_number", "submitted_at", "rejection_reason",
+                "processed_by_name", "processed_at"},
+    "historia": {"audit_id", "created_at", "action", "admin_name"},
+    "detalles": {"final_reason", "previous_value", "new_value"},
+}
+
+
+@pytest.fixture
+def kyc():
+    import asyncio
+    from datetime import datetime, timezone
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from conftest import usar_base, ensenarle_decimal128_a_mongomock
+    from models.user import User
+    from routes import dependencies as deps
+    from routes import kyc_admin
+    from services.money import to_decimal128
+
+    ensenarle_decimal128_a_mongomock()
+    base = mongomock_motor.AsyncMongoMockClient()["contratos_del_kyc"]
+    usar_base(base)
+    t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
+
+    async def sembrar():
+        await base.users.insert_one({"user_id": "u_ana", "email": "ana@ejemplo.com", "full_name": "Ana Cliente",
+                                     "balance_ris": to_decimal128("150.25"), "role": "user", **SECRETOS})
+        await base.verifications.insert_one({
+            "verification_id": "v1", "user_id": "u_ana", "status": "pending", "full_name": "Ana Cliente",
+            "document_type": "rg", "document_number": "RG123", "cpf_number": "12345678909",
+            "phone_number": "+5511999999999", "submitted_at": t0, "admin_note": "mirar la foto",
+            "risk_level": "alto", "selfie_image": FOTO_SELFIE,
+            "id_document_image": FOTO_DOC, "campo_interno": "no sale"})
+        await base.kyc_audit_log.insert_one({
+            "audit_id": "aud_1", "verification_id": "v1", "user_id": "u_ana", "action": "note_updated",
+            "admin_id": "u_revisora", "admin_email": "revisora@ejemplo.com", "admin_name": "Revisora",
+            "details": {"previous_value": "", "new_value": "mirar la foto", "previous_length": 0,
+                        "new_length": 13}, "created_at": t0})
+    asyncio.run(sembrar())
+    app = FastAPI()
+    app.include_router(kyc_admin.router, prefix="/api")
+    jefe = User(user_id="u_jefe", name="Jefe", email="jefe@ejemplo.com", role="super_admin")
+    for dep in (deps.get_current_user, deps.get_crm_user, deps.get_super_admin):
+        app.dependency_overrides[dep] = lambda: jefe
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_EL_CONTRATO_DEL_KYC_TIENE_TODO_LO_QUE_LA_PANTALLA_LEE():
+    from models.panel_kyc import DetalleDeLaAuditoria, LineaDeLaHistoria, VerificacionQueVeElPanel
+    campos = set(VerificacionQueVeElPanel.model_fields)
+    assert not LO_QUE_LEE_EL_KYC["lista"] - campos
+    assert not LO_QUE_LEE_EL_KYC["detalle"] - campos
+    assert not LO_QUE_LEE_EL_KYC["historia"] - set(LineaDeLaHistoria.model_fields)
+    assert not LO_QUE_LEE_EL_KYC["detalles"] - set(DetalleDeLaAuditoria.model_fields)
+
+
+def test_LA_LISTA_DEL_KYC_TRAE_SI_HAY_FOTOS_PERO_NO_LAS_FOTOS(kyc):
+    r = kyc.get("/api/admin/kyc/list")
+    assert r.status_code == 200, r.text
+    (v,) = r.json()["items"]
+    assert v["has_selfie"] is True and v["risk_level"] == "alto" and v["blacklist_match"] is False
+    assert "selfie_image" not in v and "base64" not in r.text, "la lista no trae las fotos: pesan"
+    assert r.json()["counts"] == {"pending": 1, "approved": 0, "rejected": 0, "total": 1}
+    assert "campo_interno" not in r.text
+
+
+def test_EL_DETALLE_DEL_KYC_TRAE_LAS_FOTOS_Y_EL_SALDO_EN_NUMERO(kyc):
+    r = kyc.get("/api/admin/kyc/v1")
+    assert r.status_code == 200, r.text
+    assert r.json()["verification"]["selfie_image"] == FOTO_SELFIE
+    assert r.json()["user"]["balance_ris"] == 150.25
+    _sin_secretos(r.text)
+    assert "campo_interno" not in r.text
+
+
+def test_LA_HISTORIA_DEL_KYC_DICE_QUIEN_POR_SU_NOMBRE_Y_NO_POR_SU_CORREO(kyc):
+    r = kyc.get("/api/admin/kyc/v1/history")
+    assert r.status_code == 200, r.text
+    nota = next(h for h in r.json()["history"] if h["audit_id"] == "aud_1")
+    assert nota["admin_name"] == "Revisora" and nota["details"]["new_value"] == "mirar la foto"
+    for interno in ("revisora@ejemplo.com", "admin_email", "u_revisora"):
+        assert interno not in r.text, f"la historia dejó salir «{interno}»"

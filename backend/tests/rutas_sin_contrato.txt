@@ -71,9 +71,6 @@ GET /api/admin/errores
 GET /api/admin/errores/resumen
 GET /api/admin/hidden-transactions
 GET /api/admin/kyc/export.csv
-GET /api/admin/kyc/list
-GET /api/admin/kyc/{verification_id}
-GET /api/admin/kyc/{verification_id}/history
 GET /api/admin/lector/desempeno
 GET /api/admin/ledger/balance
 GET /api/admin/ledger/cobros-sin-acreditar
