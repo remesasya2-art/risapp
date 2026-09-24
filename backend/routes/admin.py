@@ -27,6 +27,10 @@ from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveRein
                                        RecargaProcesada, RolCambiado)
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.panel_retiros import ColaDeRetiros, RetirosPendientes
+from models.panel_ordenes import (ArchivoDelLote, BancosParaPagar, ComprobanteDelLote, ComprobanteDescartado,
+                                   ComprobantesCargados, ComprobantesDelLote, ImagenDelComprobante,
+                                   ListaDeLotes, LoteArmado, LoteCancelado, LoteCerrado, OrdenDevuelta,
+                                   OrdenesEnRevisionDePago, OrdenesPorProcesar)
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
@@ -1177,7 +1181,7 @@ async def liberar_orden(data: OrdenClaimRequest, admin: User = Depends(get_super
     return {"success": True}
 
 
-@router.get("/ordenes/pendientes")
+@router.get("/ordenes/pendientes", response_model=OrdenesPorProcesar, response_model_exclude_unset=True)
 async def get_ordenes_pendientes(admin: User = Depends(get_super_admin)):
     """Área unificada de 'Órdenes por procesar'.
 
@@ -1361,7 +1365,7 @@ class ArmarLoteRequest(BaseModel):
     banco_pagador: str
 
 
-@router.post("/lotes")
+@router.post("/lotes", response_model=LoteArmado, response_model_exclude_unset=True)
 async def armar_lote(
     cuerpo: ArmarLoteRequest,
     request: Request,
@@ -1402,7 +1406,7 @@ async def armar_lote(
     return lote
 
 
-@router.get("/lotes")
+@router.get("/lotes", response_model=ListaDeLotes, response_model_exclude_unset=True)
 async def listar_lotes_abiertos(admin: User = Depends(get_super_admin)):
     """Los lotes que todavía están en la calle, con sus órdenes reservadas."""
     return {"lotes": await lotes_de_pago.abiertos(db)}
@@ -1421,7 +1425,7 @@ async def desempeno_del_lector_de_comprobantes(
     return await desempeno_del_lector.medir(db)
 
 
-@router.get("/lotes/{lote_id}/archivo")
+@router.get("/lotes/{lote_id}/archivo", response_model=ArchivoDelLote, response_model_exclude_unset=True)
 async def archivo_del_lote(lote_id: str, admin: User = Depends(get_super_admin)):
     """El archivo GUARDADO de un lote, para volver a bajarlo idéntico.
 
@@ -1440,13 +1444,13 @@ class DevolverOrdenRequest(BaseModel):
     motivo: str
 
 
-@router.get("/lotes/cerrados")
+@router.get("/lotes/cerrados", response_model=ListaDeLotes, response_model_exclude_unset=True)
 async def listar_lotes_cerrados(admin: User = Depends(get_super_admin)):
     """Los últimos lotes cerrados. Adentro viven el archivo y las fotos."""
     return {"lotes": await lotes_de_pago.cerrados(db)}
 
 
-@router.post("/lotes/{lote_id}/cerrar")
+@router.post("/lotes/{lote_id}/cerrar", response_model=LoteCerrado, response_model_exclude_unset=True)
 async def cerrar_lote(lote_id: str, request: Request,
                       admin: User = Depends(get_super_admin)):
     """Asienta de una vez el pago de todas las órdenes del lote y lo cierra."""
@@ -1456,7 +1460,7 @@ async def cerrar_lote(lote_id: str, request: Request,
         raise HTTPException(409, str(e))
 
 
-@router.post("/lotes/{lote_id}/ordenes/{orden_id}/devolver")
+@router.post("/lotes/{lote_id}/ordenes/{orden_id}/devolver", response_model=OrdenDevuelta, response_model_exclude_unset=True)
 async def devolver_orden_del_lote(lote_id: str, orden_id: str,
                                   cuerpo: DevolverOrdenRequest,
                                   request: Request,
@@ -1469,7 +1473,7 @@ async def devolver_orden_del_lote(lote_id: str, orden_id: str,
         raise HTTPException(409, str(e))
 
 
-@router.post("/lotes/{lote_id}/cancelar")
+@router.post("/lotes/{lote_id}/cancelar", response_model=LoteCancelado, response_model_exclude_unset=True)
 async def cancelar_lote(lote_id: str, request: Request,
                         admin: User = Depends(get_super_admin)):
     """Deshace un lote: sus órdenes vuelven a la cola de pendientes."""
@@ -1511,7 +1515,7 @@ class DescartarComprobanteRequest(BaseModel):
     motivo: str
 
 
-@router.post("/lotes/{lote_id}/comprobantes")
+@router.post("/lotes/{lote_id}/comprobantes", response_model=ComprobantesCargados, response_model_exclude_unset=True)
 async def cargar_comprobantes_del_lote(
     lote_id: str,
     cuerpo: ComprobantesRequest,
@@ -1528,7 +1532,7 @@ async def cargar_comprobantes_del_lote(
         raise HTTPException(409, str(e))
 
 
-@router.get("/lotes/{lote_id}/comprobantes")
+@router.get("/lotes/{lote_id}/comprobantes", response_model=ComprobantesDelLote, response_model_exclude_unset=True)
 async def ver_comprobantes_del_lote(lote_id: str,
                                     admin: User = Depends(get_super_admin)):
     """La tabla de fotos del lote y las órdenes a las que se pueden asignar."""
@@ -1538,7 +1542,7 @@ async def ver_comprobantes_del_lote(lote_id: str,
         raise HTTPException(404, str(e))
 
 
-@router.get("/lotes/{lote_id}/comprobantes/{comprobante_id}/imagen")
+@router.get("/lotes/{lote_id}/comprobantes/{comprobante_id}/imagen", response_model=ImagenDelComprobante, response_model_exclude_unset=True)
 async def ver_una_foto_del_lote(lote_id: str, comprobante_id: str,
                                 admin: User = Depends(get_super_admin)):
     """Una foto concreta. Se pide de a una: once en base64 son decenas de megas."""
@@ -1549,7 +1553,7 @@ async def ver_una_foto_del_lote(lote_id: str, comprobante_id: str,
         raise HTTPException(404, str(e))
 
 
-@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/asignar")
+@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/asignar", response_model=ComprobanteDelLote, response_model_exclude_unset=True)
 async def asignar_comprobante_del_lote(
     lote_id: str, comprobante_id: str,
     cuerpo: AsignarComprobanteRequest,
@@ -1565,7 +1569,7 @@ async def asignar_comprobante_del_lote(
         raise HTTPException(409, str(e))
 
 
-@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/descartar")
+@router.post("/lotes/{lote_id}/comprobantes/{comprobante_id}/descartar", response_model=ComprobanteDescartado, response_model_exclude_unset=True)
 async def descartar_comprobante_del_lote(
     lote_id: str, comprobante_id: str,
     cuerpo: DescartarComprobanteRequest,
@@ -1581,7 +1585,7 @@ async def descartar_comprobante_del_lote(
         raise HTTPException(409, str(e))
 
 
-@router.get("/ordenes/bancos-para-pagar")
+@router.get("/ordenes/bancos-para-pagar", response_model=BancosParaPagar, response_model_exclude_unset=True)
 async def bancos_para_pagar(admin: User = Depends(get_super_admin)):
     """La lista de bancos, para elegir desde cuál se paga el lote."""
     from services import bancos_venezuela
@@ -1615,7 +1619,7 @@ async def _barrer_topups_vencidos() -> int:
     return vencidas
 
 
-@router.get("/ordenes/revision-pago")
+@router.get("/ordenes/revision-pago", response_model=OrdenesEnRevisionDePago, response_model_exclude_unset=True)
 async def get_ordenes_revision_pago(admin: User = Depends(get_super_admin)):
     """Bandeja de 'Diferencias de pago': envios cripto que quedaron incompletos."""
     vencidas = await _barrer_topups_vencidos()

@@ -483,3 +483,125 @@ def test_LA_HISTORIA_DEL_KYC_DICE_QUIEN_POR_SU_NOMBRE_Y_NO_POR_SU_CORREO(kyc):
     assert nota["admin_name"] == "Revisora" and nota["details"]["new_value"] == "mirar la foto"
     for interno in ("revisora@ejemplo.com", "admin_email", "u_revisora"):
         assert interno not in r.text, f"la historia dejó salir «{interno}»"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. Las órdenes por pagar y los lotes
+# ══════════════════════════════════════════════════════════════════════════
+
+def _igual_a_llamarla_directo(respuesta, directo, sin=()):
+    """La ruta, por HTTP con su contrato, contesta lo mismo que su función
+    llamada a mano: el contrato no se comió nada. `sin` son las claves que el
+    contrato deja afuera A PROPOSITO."""
+    from fastapi.encoders import jsonable_encoder
+    from services import json_de_mongo
+    # Lo directo trae la plata cruda de la base: se traduce con la red, como
+    # la traduce el servidor de verdad cuando una ruta no tiene contrato.
+    json_de_mongo.ensenarle_decimal128_a_fastapi()
+    esperado = {k: v for k, v in jsonable_encoder(directo).items() if k not in sin}
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json() == esperado
+
+
+@pytest.fixture
+def ordenes(panel):
+    """Un retiro a Venezuela y una recarga en bolívares, esperando."""
+    import asyncio
+    from datetime import datetime, timezone
+    from routes import admin as rutas_admin
+    from services.money import to_decimal128
+    base = rutas_admin.db
+    t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    asyncio.run(base.transactions.insert_many([
+        {"transaction_id": "tx_o1", "display_id": "000201", "user_id": "u_ana", "type": "withdrawal",
+         "status": "pending", "currency_input": "RIS", "currency_output": "VES",
+         "amount_input": to_decimal128("50.00"), "amount_output": to_decimal128("5500.00"),
+         "beneficiary_data": {"full_name": "José Pérez", "id_document": "V12345678", "bank": "Banesco",
+                              "bank_code": "0134", "account_number": "01340000000000000001",
+                              "payment_type": "transferencia", "nota_interna": "no sale"},
+         "created_at": t0},
+        {"transaction_id": "tx_o2", "display_id": "000202", "user_id": "u_ana", "type": "recharge_ves",
+         "status": "pending", "amount_ves": to_decimal128("1100.00"), "amount_ris": to_decimal128("10.00"),
+         "proof_image": "data:image/jpeg;base64," + "PAGO" * 10, "created_at": t0},
+    ]))
+    return panel
+
+
+def _jefe():
+    from models.user import User
+    return User(user_id="u_jefe", name="Jefe", email="jefe@ejemplo.com", role="super_admin")
+
+
+def test_LAS_ORDENES_POR_PROCESAR_SALEN_IGUAL_QUE_LAS_ARMA_LA_RUTA(ordenes):
+    import asyncio
+    from routes import admin as rutas_admin
+    r = ordenes.get("/api/admin/ordenes/pendientes")
+    _igual_a_llamarla_directo(r, asyncio.run(rutas_admin.get_ordenes_pendientes(admin=_jefe())))
+    assert {o["orden_id"] for o in r.json()["ordenes"]} == {"tx_o1", "tx_o2"}
+    assert "nota_interna" not in r.text
+
+
+def test_LA_REVISION_DE_PAGO_Y_LOS_BANCOS_SALEN_IGUAL_QUE_LOS_ARMA_LA_RUTA(ordenes):
+    import asyncio
+    from routes import admin as rutas_admin
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/ordenes/revision-pago"),
+                              asyncio.run(rutas_admin.get_ordenes_revision_pago(admin=_jefe())))
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/ordenes/bancos-para-pagar"),
+                              asyncio.run(rutas_admin.bancos_para_pagar(admin=_jefe())))
+
+
+def test_UN_LOTE_SE_ARMA_SE_LISTA_SE_BAJA_Y_SE_CANCELA_SIN_PERDER_NADA(ordenes):
+    """El ciclo del lote por HTTP. Cada lectura, igual a su servicio; armarlo
+    no devuelve las órdenes con sus beneficiarios (ya están en el archivo)."""
+    import asyncio
+    from routes import admin as rutas_admin
+    from services import comprobantes_del_lote, lotes_de_pago
+    base = rutas_admin.db
+    r = ordenes.post("/api/admin/lotes", json={"orden_ids": ["tx_o1"], "banco_pagador": "0102"})
+    assert r.status_code == 200, r.text
+    lote = r.json()
+    assert lote["total"] == 1 and lote["texto"] and lote["banco_pagador"]["codigo"] == "0102"
+    assert "ordenes" not in lote and "creado_por" not in lote
+    lote_id = lote["lote_id"]
+
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/lotes"), {"lotes": asyncio.run(lotes_de_pago.abiertos(base))})
+    _igual_a_llamarla_directo(ordenes.get(f"/api/admin/lotes/{lote_id}/archivo"),
+                              asyncio.run(lotes_de_pago.archivo(base, lote_id)))
+    _igual_a_llamarla_directo(ordenes.get(f"/api/admin/lotes/{lote_id}/comprobantes"),
+                              asyncio.run(comprobantes_del_lote.listar(base, lote_id)))
+
+    r = ordenes.post(f"/api/admin/lotes/{lote_id}/cancelar")
+    assert r.status_code == 200, r.text
+    assert r.json()["devueltas"] == 1
+    _igual_a_llamarla_directo(ordenes.get("/api/admin/lotes/cerrados"),
+                              {"lotes": asyncio.run(lotes_de_pago.cerrados(base))})
+
+
+LO_QUE_LEEN_ORDENES_Y_LOTES = {
+    "OrdenPorProcesar": {"orden_id", "flujo", "flujo_label", "accion", "display_id", "created_at", "user_name",
+                         "origen", "destino", "comprobante_usuario", "assigned_to", "assigned_to_name",
+                         "beneficiario"},
+    "BeneficiarioDeLaOrden": {"nombre", "documento", "banco", "telefono", "cuenta", "tipo_pago", "pix_key"},
+    "OrdenEnRevisionDePago": {"orden_id", "display_id", "topup_expired", "user_name", "user_email", "created_at",
+                              "paid_ratio", "pay_amount", "moneda", "actually_paid", "topup_actually_paid",
+                              "faltante", "recibido_total", "red", "amount_output", "currency_output",
+                              "beneficiario"},
+    "LoteEnLaLista": {"lote_id", "numero", "total", "banco_pagador", "creado_por_nombre", "creado_en",
+                      "sin_datos", "cerrado_por_nombre", "cerrado_en"},
+    "LoteArmado": {"texto", "numero", "banco_pagador", "total", "por_seccion", "sin_datos",
+                   "no_se_pudieron_tomar", "ya_no_estan"},
+    "ComprobanteDelLote": {"orden_id", "comprobante_id", "estado", "motivo", "leido"},
+    "OrdenDelLote": {"orden_id", "display_id", "beneficiario", "monto", "tiene_comprobante", "listo_para_registrar"},
+    "ComprobantesDelLote": {"estado", "hay_lector", "por_que_no_hay_lector", "descartadas", "comprobantes",
+                            "ordenes"},
+    "LoLeido": {"cuentas", "telefonos", "montos"},
+}
+
+
+@pytest.mark.parametrize("modelo", sorted(LO_QUE_LEEN_ORDENES_Y_LOTES))
+def test_LOS_CONTRATOS_DE_ORDENES_Y_LOTES_TIENEN_TODO_LO_QUE_LAS_PANTALLAS_LEEN(modelo):
+    """OrdenesPorProcesar.jsx, DiferenciasPago.jsx, LotesDePago y
+    ComprobantesDelLote.jsx."""
+    from models import panel_ordenes
+    faltan = LO_QUE_LEEN_ORDENES_Y_LOTES[modelo] - set(getattr(panel_ordenes, modelo).model_fields)
+    assert not faltan, f"la pantalla lee {modelo}.{sorted(faltan)} y el contrato no lo deja pasar"
