@@ -43,7 +43,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { montoDeLaUrl } from '../utils/montoDeLaUrl';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  ArrowLeft, ArrowRight, Plus, X, User, Check, Wallet, ShieldCheck,
+  ArrowLeft, ArrowRight, Plus, X, User, Check, Wallet, ShieldCheck, Copy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -154,6 +154,47 @@ function Marco({ navigate, children }) {
 
 /* ─── La pantalla ──────────────────────────────────────────────────────── */
 
+// A QUE CUENTA TRANSFERIR
+//
+//   Esta pantalla preguntaba «¿A qué banco transferiste?» sin haberle dicho
+//   nunca al cliente a qué cuenta transferir. Ahora muestra los datos del
+//   banco elegido, los mismos que ve la recarga (`/bancos-para-transferir`),
+//   cargados en Contabilidad → Bancos.
+function DatosDelBanco({ banco }) {
+  const copiar = async (texto) => {
+    try { await navigator.clipboard.writeText(texto); toast.success('Copiado'); }
+    catch { toast.error('No se pudo copiar'); }
+  };
+  const filas = [];
+  if (banco.transferencia) {
+    filas.push(['Titular', banco.transferencia.titular],
+      ['Cédula o RIF', banco.transferencia.documento],
+      [`Cuenta ${banco.transferencia.tipo_cuenta ? banco.transferencia.tipo_cuenta.toLowerCase() : ''}`.trim(), banco.transferencia.numero_cuenta]);
+  }
+  if (banco.pago_movil) {
+    filas.push(['Pago Móvil: teléfono', banco.pago_movil.telefono],
+      ['Pago Móvil: banco', `${banco.codigo} - ${banco.name}`]);
+    if (!banco.transferencia) filas.push(['Pago Móvil: cédula o RIF', banco.pago_movil.documento]);
+  }
+  return (
+    <dl data-testid="br-datos-banco" style={{ margin: '0 0 16px 0', display: 'grid', gap: '8px', padding: '12px 14px',
+      borderRadius: '12px', border: `1px solid ${C.linea}`, background: C.fondo }}>
+      {filas.map(([k, v]) => (
+        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <div style={{ minWidth: 0 }}>
+            <dt style={{ fontSize: '12px', color: C.suave }}>{k}</dt>
+            <dd style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: C.tinta, wordBreak: 'break-all' }}>{v}</dd>
+          </div>
+          <button type="button" onClick={() => copiar(v)} aria-label={`Copiar ${k}`} style={{
+            flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 9px', borderRadius: '8px',
+            border: `1px solid ${C.linea}`, background: C.lienzo, color: C.tinta, fontSize: '12px', cursor: 'pointer',
+          }}><Copy size={13} /> Copiar</button>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export default function SendReais() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
@@ -183,6 +224,8 @@ export default function SendReais() {
   const [pagoAlFinal, setPagoAlFinal] = useState(false);
   const [cotizacion, setCotizacion] = useState(null);   // lo que devolvió cotizar
   const [bancoElegido, setBancoElegido] = useState('');
+  // null = todavía no llegó; [] = no hay ninguno publicado.
+  const [bancosParaTransferir, setBancosParaTransferir] = useState(null);
   const [comprobante, setComprobante] = useState('');
 
   const saldo = user?.balance_ris || 0;
@@ -306,6 +349,9 @@ export default function SendReais() {
       idemRef.current = null;
       setCotizacion(r.data);
       setPaso(5);
+      api.get('/bancos-para-transferir')
+        .then((b) => setBancosParaTransferir(Array.isArray(b.data) ? b.data : []))
+        .catch(() => setBancosParaTransferir([]));
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo cotizar');
     } finally {
@@ -803,18 +849,30 @@ export default function SendReais() {
 
           <label htmlFor="br-banco" style={{ display: 'block', fontSize: '13px',
             fontWeight: 600, color: C.tinta, marginBottom: '6px' }}>
-            ¿A qué banco transferiste?
+            ¿A qué banco vas a transferir?
           </label>
           <select id="br-banco" data-testid="br-banco" value={bancoElegido}
             onChange={(e) => setBancoElegido(e.target.value)}
+            disabled={!bancosParaTransferir || bancosParaTransferir.length === 0}
             style={{ width: '100%', padding: '11px 12px', fontSize: '14px',
               borderRadius: '10px', border: `1px solid ${C.linea}`,
               background: 'var(--en-oscuro-superficie, #fff)', color: C.tinta, marginBottom: '14px' }}>
-            <option value="">Elegí el banco</option>
-            {(cotizacion.bancos || []).map((b) => (
-              <option key={b} value={b}>{b}</option>
+            <option value="">{bancosParaTransferir === null ? 'Cargando bancos…' : 'Elegí el banco'}</option>
+            {(bancosParaTransferir || []).map((b) => (
+              <option key={b.bank_id} value={b.bank_id}>{b.name}</option>
             ))}
           </select>
+          {bancosParaTransferir && bancosParaTransferir.length === 0 && (
+            <div style={{ marginBottom: '14px' }}>
+              <Aviso tono="alerta" testid="br-sin-bancos">
+                Por ahora no hay cuentas para transferir en bolívares. Escribinos por soporte y te ayudamos.
+              </Aviso>
+            </div>
+          )}
+          {(() => {
+            const b = (bancosParaTransferir || []).find((x) => x.bank_id === bancoElegido);
+            return b ? <DatosDelBanco banco={b} /> : null;
+          })()}
 
           {/* EL SELECTOR NATIVO VA ESCONDIDO DETRAS DE UNA ETIQUETA.
               Visible dice «Choose File / No file chosen», en inglés y sin

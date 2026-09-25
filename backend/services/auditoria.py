@@ -140,6 +140,9 @@ ACCIONES = {
     # bolívares, así que quién cargó o borró uno tiene que quedar escrito.
     "contabilidad.banco_creado": (Cat.CONFIG, "Banco de contabilidad creado"),
     "contabilidad.banco_borrado": (Cat.CONFIG, "Banco de contabilidad borrado"),
+    # A qué cuenta le dicen a los clientes que transfieran. Cambiarla manda la
+    # plata de la gente a otro lado: tiene que quedar quién y cuándo.
+    "contabilidad.banco_cobro": (Cat.CONFIG, "Datos de cobro de un banco"),
     # Los números que se cambian desde la pantalla de configuración del panel
     # (services/configuracion.py). Uno de ellos decide cuánta plata se le
     # regala a cada cuenta que se registra, así que «quién lo puso en

@@ -21,7 +21,7 @@ from services import nowpayments
 from services.min_amount import effective_min_amount
 from services.limits import validate_pix_amount, validate_ves_amount
 from services import kyc_quota
-from services.bancos import clave_del_nombre
+from services.bancos import clave_del_nombre, para_el_cliente
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
@@ -58,6 +58,7 @@ from models.movimientos import LO_QUE_VE_EL_CLIENTE, LO_QUE_VE_EN_LA_LISTA, MisM
 from services.las_fotos import cuales_tienen_comprobante
 from models.dinero_en_transito import EstadoDeMiEnvioCripto, MiRetiroPendiente
 from models.acciones_de_dinero import (
+    BancosParaTransferir,
     MiComprobanteRecibido,
     MiCotizacionReais,
     MiCotizacionVes,
@@ -1474,6 +1475,26 @@ async def bancos_ves_disponibles() -> list[str]:
         return []
 
 
+@router.get("/bancos-para-transferir", response_model=BancosParaTransferir, response_model_exclude_unset=True)
+async def bancos_para_transferir(current_user: User = Depends(get_current_user)):
+    """A qué cuentas puede transferir el cliente en bolívares.
+
+    Las usan la recarga y el envío a Brasil pagado en bolívares. Antes la
+    recarga las tenía escritas en su código —titular, cédula, teléfono y
+    cuentas, servidos a cualquier visitante— y el envío a Brasil no las
+    mostraba en ningún lado. Se cargan y se publican desde Contabilidad →
+    Bancos. Ver `services/bancos.para_el_cliente`.
+    """
+    salida = []
+    async for banco in db.bank_accounts.find(
+            {"currency": "VES", "cobro.publicado": True},
+            {"_id": 0, "bank_id": 1, "name": 1, "currency": 1, "is_gateway": 1, "cobro": 1}).sort("name", 1):
+        visto = para_el_cliente(banco)
+        if visto:
+            salida.append(visto)
+    return salida
+
+
 @router.post("/recharge/ves", response_model=MiRecargaVes, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
 async def recharge_ves(request: dict, current_user: User = Depends(get_current_user)):
     """Create a VES recharge request"""
@@ -2440,7 +2461,7 @@ async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
     # El banco tiene que resolver contra contabilidad, y se rechaza ACA.
     # Aceptar uno que no resuelve deja una orden que nadie va a poder procesar,
     # y el cliente se entera días después.
-    banco_id, _ = await resolve_ves_bank((request.destination_bank or "").strip())
+    banco_id, banco_doc = await resolve_ves_bank((request.destination_bank or "").strip())
     if not banco_id:
         disponibles = await bancos_ves_disponibles()
         raise HTTPException(
@@ -2451,7 +2472,10 @@ async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
     orden = await pago_al_final.recibir_comprobante(
         db, request.transaction_id, current_user.user_id,
         comprobante=comprobante, banco_id=banco_id,
-        banco_nombre=(request.destination_bank or "").strip())
+        # El nombre del banco que se encontró, no lo que mandó la pantalla: la
+        # pantalla manda el `bank_id`, y el panel mostraría ese código en vez
+        # del nombre.
+        banco_nombre=(banco_doc or {}).get("name") or (request.destination_bank or "").strip())
 
     await create_notification(
         user_id=current_user.user_id,

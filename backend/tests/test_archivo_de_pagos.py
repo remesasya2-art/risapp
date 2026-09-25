@@ -73,10 +73,10 @@ def test_LA_LINEA_DE_MISMO_BANCO_SALE_EXACTA():
 def test_EL_BLOQUE_DE_PAGO_MOVIL_SALE_EXACTO():
     """Cuatro líneas y sin número: el bloque se copia entero en el formulario
     del banco, y un número al principio sería un dato que hay que saltear."""
-    r = ap.armar([_orden(documento="24560778", telefono="04249311288",
+    r = ap.armar([_orden(documento="12345678", telefono="04141234567",
                          banco="0102", tipo="pago_movil", monto="93478.50")],
                  banco_pagador=BANESCO)
-    assert "24560778\n04249311288\n0102\nBS 93478,50" in r["texto"], r["texto"]
+    assert "12345678\n04141234567\n0102\nBS 93478,50" in r["texto"], r["texto"]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -126,7 +126,7 @@ def test_UNA_ORDEN_QUE_NO_SE_PUEDE_PAGAR_NO_SE_SALTEA(roto, por_que):
 
 @pytest.mark.parametrize("falta", ["telefono", "documento", "banco"])
 def test_UN_PAGO_MOVIL_INCOMPLETO_TAMPOCO_SE_SALTEA(falta):
-    datos = {"documento": "24560778", "telefono": "04249311288", "banco": "0102",
+    datos = {"documento": "12345678", "telefono": "04141234567", "banco": "0102",
              "tipo": "pago_movil", "monto": "300.00"}
     datos[falta] = None
     r = ap.armar([_orden(**datos)], banco_pagador=BANESCO)

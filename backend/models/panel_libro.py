@@ -235,8 +235,13 @@ class LineasDeUnUsuario(BaseModel):
 # Sin `created_by`: el identificador de quien cargó el banco. Retiros y
 # Recargas en bolívares leen el código, el nombre y la moneda; la pantalla de
 # bancos, además, si es la cuenta de una pasarela, que no se puede borrar.
+# Los datos para que el cliente transfiera (`services/bancos.normalizar_cobro`),
+# y si están publicados. El panel los muestra para editarlos.
+CobroDelBanco = _simple("CobroDelBanco", (
+    "codigo", "titular", "documento", "numero_cuenta", "tipo_cuenta", "telefono", "publicado"))
 BancoDeLaContabilidad = _simple("BancoDeLaContabilidad", (
-    "bank_id", "name", "currency", "balance", "created_at", "is_gateway"))
+    "bank_id", "name", "currency", "balance", "created_at", "is_gateway"),
+    cobro=(Optional[CobroDelBanco], None))
 BancosDeLaContabilidad = List[BancoDeLaContabilidad]
 
 ContabilidadBorrada = _simple("ContabilidadBorrada", ("success", "message", "total_deleted", "hidden_transactions"),

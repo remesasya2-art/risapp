@@ -57,6 +57,7 @@ POR QUE IMPORTA PARA LA CUENTA OMNIBUS
 """
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -308,3 +309,106 @@ def clave_del_nombre(texto) -> str:
                 # tienen que colapsar al mismo valor.
                 if p not in ("de", "del", "la", "el", "banco")]
     return " ".join(palabras)
+
+
+# ── Los datos para que el cliente transfiera ────────────────────────────
+#
+# A QUE CUENTA TRANSFIERE EL CLIENTE, Y POR QUE ESTO VIVE EN LA BASE
+#
+#   La pantalla de recarga en bolívares tenía escritos en el código el
+#   titular, su cédula, su teléfono y los números de cuenta. Ese código se le
+#   sirve a cualquier visitante, tenga sesión o no; y cambiar de cuenta exigía
+#   editar el código. Ahora cada banco de contabilidad guarda sus datos de
+#   cobro en `cobro`, se cargan desde el panel, y el cliente los ve sólo con
+#   sesión y sólo de los bancos publicados.
+#
+# LO QUE SE REVISA, Y POR QUE
+#
+#   Un dígito mal cargado manda la plata de un cliente a otra cuenta. Por eso
+#   no se guarda texto libre: el número de cuenta son 20 dígitos y empieza por
+#   el código del banco (así funcionan las cuentas en Venezuela, y es la forma
+#   de atrapar que se pegó la cuenta de otro banco); el teléfono de Pago Móvil
+#   es un celular venezolano de 11 dígitos; la cédula o el RIF lleva su letra.
+
+
+TIPOS_DE_CUENTA = ("Corriente", "Ahorro")
+
+
+class DatosDeCobroInvalidos(ValueError):
+    """Lo que no se puede guardar, dicho para quien lo escribió."""
+
+
+def _solo_digitos(texto) -> str:
+    return "".join(c for c in str(texto or "") if c.isdigit())
+
+
+def normalizar_cobro(datos: dict) -> dict:
+    """Los datos de cobro limpios, o `DatosDeCobroInvalidos` con el motivo.
+
+    Acepta lo que se escribe a mano —espacios, guiones, «+58»— y guarda una
+    sola forma, que es la que el cliente copia."""
+    codigo = _solo_digitos(datos.get("codigo"))
+    if len(codigo) != 4:
+        raise DatosDeCobroInvalidos("El código del banco son 4 dígitos: 0102, 0134…")
+
+    titular = " ".join(str(datos.get("titular") or "").split())
+    if not 3 <= len(titular) <= 80:
+        raise DatosDeCobroInvalidos("Escribí el titular de la cuenta, como figura en el banco.")
+
+    documento = str(datos.get("documento") or "").strip().upper().replace(" ", "").replace(".", "")
+    m = re.fullmatch(r"([VEJGP])-?(\d{5,10})(?:-?(\d))?", documento)
+    if not m:
+        raise DatosDeCobroInvalidos("La cédula o el RIF lleva su letra y los números: V-12345678 o J-123456789.")
+    documento = f"{m.group(1)}-{m.group(2)}" + (f"-{m.group(3)}" if m.group(3) else "")
+
+    cuenta = _solo_digitos(datos.get("numero_cuenta"))
+    tipo = str(datos.get("tipo_cuenta") or "").strip().capitalize()
+    if cuenta:
+        if len(cuenta) != 20:
+            raise DatosDeCobroInvalidos(f"El número de cuenta son 20 dígitos; tiene {len(cuenta)}.")
+        if not cuenta.startswith(codigo):
+            raise DatosDeCobroInvalidos(
+                f"El número de cuenta empieza por el código del banco ({codigo}) y éste empieza por "
+                f"{cuenta[:4]}. ¿Es la cuenta de otro banco?")
+        if tipo not in TIPOS_DE_CUENTA:
+            raise DatosDeCobroInvalidos("Elegí si la cuenta es corriente o de ahorro.")
+    else:
+        tipo = ""
+
+    telefono = _solo_digitos(datos.get("telefono"))
+    if telefono.startswith("58") and len(telefono) == 12:
+        telefono = "0" + telefono[2:]
+    if telefono and not (len(telefono) == 11 and telefono.startswith("04")):
+        raise DatosDeCobroInvalidos("El teléfono de Pago Móvil es un celular de 11 dígitos: 04141234567.")
+
+    if not cuenta and not telefono:
+        raise DatosDeCobroInvalidos("Cargá al menos una forma de pago: el número de cuenta o el teléfono de Pago Móvil.")
+
+    return {"codigo": codigo, "titular": titular, "documento": documento, "numero_cuenta": cuenta,
+            "tipo_cuenta": tipo, "telefono": telefono}
+
+
+def para_el_cliente(banco: dict):
+    """Lo que ve el cliente de un banco publicado, o None si no se muestra.
+
+    Lista de lo permitido, armada acá: ni el saldo, ni quién lo cargó, ni
+    nada que se le agregue mañana al banco llega a la pantalla del cliente."""
+    cobro = banco.get("cobro") or {}
+    if banco.get("currency") != "VES" or banco.get("is_gateway") or not cobro.get("publicado"):
+        return None
+    try:
+        # Se vuelve a revisar al servir: un documento tocado a mano en la base
+        # no llega al cliente si no pasa las mismas reglas que el panel.
+        limpio = normalizar_cobro(cobro)
+    except DatosDeCobroInvalidos:
+        return None
+    return {
+        "bank_id": banco.get("bank_id"),
+        "name": banco.get("name"),
+        "codigo": limpio["codigo"],
+        "transferencia": ({"titular": limpio["titular"], "documento": limpio["documento"],
+                           "numero_cuenta": limpio["numero_cuenta"], "tipo_cuenta": limpio["tipo_cuenta"]}
+                          if limpio["numero_cuenta"] else None),
+        "pago_movil": ({"telefono": limpio["telefono"], "documento": limpio["documento"]}
+                       if limpio["telefono"] else None),
+    }
