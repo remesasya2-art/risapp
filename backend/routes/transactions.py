@@ -21,6 +21,7 @@ from services import nowpayments
 from services.min_amount import effective_min_amount
 from services.limits import validate_pix_amount, validate_ves_amount
 from services import kyc_quota
+from services.bancos import clave_del_nombre
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
@@ -1402,25 +1403,6 @@ async def webhook_crypto_send(request: Request):
 # tiene `destination_bank`, y nadie lo escribia — el defecto de mas arriba
 # mantenia desarmada la bomba de mas abajo.
 
-_ACENTOS = str.maketrans("áéíóúÁÉÍÓÚàâãêôõçÀÂÃÊÔÕÇ", "aeiouAEIOUaaaeoocAAAEOOC")
-
-
-def _clave_de_banco(texto) -> str:
-    """Un nombre de banco reducido a lo comparable: sin acentos, sin puntuacion.
-
-    'Banco de Venezuela', 'banco_venezuela' y 'BANCO DE VENEZUELA' tienen que
-    ser la misma cosa. Sin esto, la traduccion depende de como lo tipeo quien
-    cargo el banco en contabilidad, que es una fuente distinta de quien escribio
-    la lista del frontend.
-    """
-    limpio = str(texto or "").translate(_ACENTOS).lower()
-    palabras = [p for p in "".join(c if c.isalnum() else " " for c in limpio).split()
-                # 'de' y 'del' sobran: "Banco de Venezuela" y "banco_venezuela"
-                # tienen que colapsar al mismo valor.
-                if p not in ("de", "del", "la", "el", "banco")]
-    return " ".join(palabras)
-
-
 async def resolve_ves_bank(valor):
     """(bank_id, documento) del banco de contabilidad que corresponde, o (None, None).
 
@@ -1465,10 +1447,10 @@ async def resolve_ves_bank(valor):
         logger.warning(f"resolve_ves_bank: no se pudo leer bank_accounts: {e}")
         return None, None
 
-    buscada = _clave_de_banco(texto)
+    buscada = clave_del_nombre(texto)
     if not buscada:
         return None, None
-    candidatos = [b for b in bancos if _clave_de_banco(b.get("name")) == buscada]
+    candidatos = [b for b in bancos if clave_del_nombre(b.get("name")) == buscada]
     if len(candidatos) != 1:
         if len(candidatos) > 1:
             logger.warning(

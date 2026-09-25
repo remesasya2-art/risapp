@@ -282,3 +282,29 @@ async def total_por_moneda(db) -> dict:
         caja["total"] = quantize_money(caja["total"] + saldo_de(cuenta))
         caja["cuentas"] += 1
     return totales
+
+
+# ── El nombre de un banco, reducido a lo comparable ─────────────────────
+#
+# Vive acá y no en la recarga porque lo usan dos lados que tienen que
+# coincidir: la recarga en bolívares, que busca el banco por su nombre, y la
+# pantalla de bancos, que no deja cargar dos que se confundirían en esa
+# búsqueda. Si cada uno tuviera su copia, se podrían separar.
+
+_ACENTOS = str.maketrans("áéíóúÁÉÍÓÚàâãêôõçÀÂÃÊÔÕÇ", "aeiouAEIOUaaaeoocAAAEOOC")
+
+
+def clave_del_nombre(texto) -> str:
+    """Un nombre de banco reducido a lo comparable: sin acentos, sin puntuacion.
+
+    'Banco de Venezuela', 'banco_venezuela' y 'BANCO DE VENEZUELA' tienen que
+    ser la misma cosa. Sin esto, la traduccion depende de como lo tipeo quien
+    cargo el banco en contabilidad, que es una fuente distinta de quien escribio
+    la lista del frontend.
+    """
+    limpio = str(texto or "").translate(_ACENTOS).lower()
+    palabras = [p for p in "".join(c if c.isalnum() else " " for c in limpio).split()
+                # 'de' y 'del' sobran: "Banco de Venezuela" y "banco_venezuela"
+                # tienen que colapsar al mismo valor.
+                if p not in ("de", "del", "la", "el", "banco")]
+    return " ".join(palabras)
