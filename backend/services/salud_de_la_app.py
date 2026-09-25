@@ -113,16 +113,17 @@ async def _transacciones(db):
     from services.transacciones import hay_transacciones
     # El texto dice qué protegen las transacciones HOY, no qué protegerían.
     # Decía «los cobros se escriben en una sola operación» con réplicas, y no
-    # era cierto: sólo el motor contable abre transacciones; el saldo del
-    # cliente y su línea del libro siguen siendo dos escrituras con o sin
-    # réplicas. Con ese texto, el día que Mongo tuviera réplicas la salud se
-    # ponía en verde prometiendo algo que no pasaba.
+    # era cierto: sólo el motor contable abría transacciones. Con ese texto, el
+    # día que Mongo tuviera réplicas la salud se ponía en verde prometiendo
+    # algo que no pasaba. Por eso nombra lo que va junto y lo que todavía no:
+    # los saldos en cripto se mueven fuera de `saldos.py` y no se tocaron.
     if await hay_transacciones():
         return (True, "Mongo es un conjunto de réplicas: el motor contable (lotes de USDT, ventas P2P, "
-                      "conciliación) escribe en una sola operación, y el saldo del cliente va junto con "
-                      "su línea del libro en PIX, tarjeta, bonos y ajustes. En retiros, recargas en "
-                      "bolívares, devoluciones y encomiendas el saldo y su línea todavía son dos escrituras "
-                      "separadas", False)
+                      "conciliación) escribe en una sola operación, y el saldo en RIS del cliente va junto "
+                      "con su línea del libro en PIX, tarjeta, bonos, ajustes, envíos, retiros, recargas en "
+                      "bolívares, devoluciones y encomiendas. Los saldos en cripto (acreditaciones de USDT "
+                      "y USDC, envíos pagados con cripto, devoluciones de pagos incompletos y la billetera "
+                      "de BTC) todavía son dos escrituras separadas", False)
     return (False, "Mongo es de UN solo nodo: la aplicación corre sin transacciones. El motor contable "
                    "escribe en operaciones separadas, y el saldo del cliente y su línea del libro son dos "
                    "escrituras separadas. Hace falta un conjunto de réplicas (replica set)", False)
