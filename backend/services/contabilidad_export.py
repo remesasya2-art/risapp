@@ -81,17 +81,25 @@ def _grupos(resumen: dict) -> list:
     for grupo, saldo in (resumen.get("por_grupo") or {}).items():
         lineas.append([grupo.capitalize(), saldo])
     lineas.append([])
+    # El activo de cada país aparte, como en la pantalla: el total de arriba
+    # suma bancos de Brasil y de Venezuela, que no son la misma caja. Ver
+    # `services/contabilidad.PAISES`. Todo en RIS.
+    if resumen.get("activo_por_pais"):
+        lineas += [["ACTIVO POR PAÍS (en RIS)"], ["País", "Saldo"]]
+        for pais, saldo in resumen["activo_por_pais"].items():
+            lineas.append([pais, saldo])
+        lineas.append([])
     return lineas
 
 
 def _cuentas(resumen: dict) -> list:
     lineas = [["BALANCE DE COMPROBACIÓN"],
-              ["Código", "Cuenta", "Tipo", "Naturaleza", "Suma debe",
+              ["Código", "Cuenta", "País", "Tipo", "Naturaleza", "Suma debe",
                "Suma haber", "Saldo"]]
     for c in resumen.get("cuentas") or []:
-        lineas.append([c["codigo"], c["nombre"], c["tipo"], c["naturaleza"],
+        lineas.append([c["codigo"], c["nombre"], c.get("pais") or "", c["tipo"], c["naturaleza"],
                        c["suma_debe"], c["suma_haber"], c["saldo"]])
-    lineas.append(["", "TOTALES", "", "", resumen.get("total_debe"),
+    lineas.append(["", "TOTALES", "", "", "", resumen.get("total_debe"),
                    resumen.get("total_haber"), ""])
     lineas.append([])
     return lineas

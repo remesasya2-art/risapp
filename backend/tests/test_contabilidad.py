@@ -240,6 +240,41 @@ def test_el_balance_de_comprobacion_cuadra():
     assert b["total_debe"] == b["total_haber"]
 
 
+def test_el_activo_de_brasil_y_el_de_venezuela_van_por_separado():
+    """Una sola tarjeta de «activo» sumaba los bancos de los dos países: dos
+    cajas que no se pueden usar una por la otra. La pasarela es de Brasil (la
+    tarjeta cobra en reales); la cripto y el efectivo sin identificar no son de
+    ningún país. Los tres juntos siguen dando el activo total."""
+    linea(n=1, movement_type="recarga_pix", direction="credit", amount=100.0)      # 1.1.01
+    linea(n=2, movement_type="pago_tarjeta", direction="credit", amount=5.0)       # 1.1.04
+    linea(n=3, movement_type="recarga_ves", direction="credit", amount=40.0)       # 1.1.02
+    linea(n=4, movement_type="envio_ves", direction="debit", amount=15.5)          # 1.1.02
+    linea(n=5, movement_type="refund_envio", direction="credit", amount=3.0)       # 1.1.99, sin moneda
+    b = balance()
+    assert b["activo_por_pais"] == {"Brasil": "105.00", "Venezuela": "24.50", "Sin país": "3.00"}
+    assert b["por_grupo"]["activo"] == "132.50", "los tres suman el activo total"
+    paises = {c["codigo"]: c["pais"] for c in b["cuentas"]}
+    assert paises["1.1.01"] == "Brasil" and paises["1.1.04"] == "Brasil"
+    assert paises["1.1.02"] == "Venezuela" and paises["1.1.99"] is None and paises["2.1.01"] is None
+
+
+def test_el_excel_para_el_contador_tambien_separa_los_paises():
+    linea(n=1, movement_type="recarga_pix", direction="credit", amount=100.0)
+    linea(n=2, movement_type="recarga_ves", direction="credit", amount=40.0)
+    texto = exp.balance_a_csv(balance(), mayor(), "super@example.com")
+    assert "ACTIVO POR PAÍS (en RIS)" in texto
+    assert "Brasil" in texto and "100.00" in texto and "Venezuela" in texto and "40.00" in texto
+    assert "Código,Cuenta,País," in texto.replace(";", ","), "cada cuenta dice su país"
+
+
+def test_la_pantalla_del_balance_muestra_cada_pais_aparte():
+    import pathlib as _p
+    src = (_p.Path(__file__).resolve().parents[2] / "frontend/src/components/admin/LibroMayor.jsx").read_text("utf-8")
+    assert "datos.activo_por_pais" in src and "`Activo en ${pais}`" in src
+    assert "filter(([grupo]) => grupo !== 'activo')" in src, "el activo mezclado no se muestra"
+    assert "Todos los montos están en <strong>RIS</strong>" in src
+
+
 def test_el_saldo_de_cada_cuenta_respeta_su_NATURALEZA():
     """Una cuenta de activo con saldo deudor se muestra positiva; una de pasivo
     con saldo acreedor, también. Presentarlas todas con el mismo signo obliga a
