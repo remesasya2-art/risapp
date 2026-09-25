@@ -147,14 +147,14 @@ def contabilidad(monkeypatch):
     from _lote_c_comun import SUPER, app_con
     from routes import accounting, accounting_v2
     from routes import dependencies as deps
-    from services import accounting_engine as ae
+    from services import transacciones
     from conftest import ensenarle_decimal128_a_mongomock
     # Los saldos de los bancos se mueven con `$inc` sobre Decimal128: la base
     # doble no sabe sumarlos si no se le enseña (ver tests/conftest.py).
     ensenarle_decimal128_a_mongomock()
     c, base = app_con(accounting.router, deps.get_super_admin, SUPER, "contratos_de_contabilidad")
     c.app.include_router(accounting_v2.router)
-    monkeypatch.setattr(ae, "_SUPPORTS_TRANSACTIONS", None, raising=False)
+    monkeypatch.setattr(transacciones, "_SUPPORTS_TRANSACTIONS", None)
 
     async def sembrar():
         await base.processed_webhooks.create_index("webhook_event_id", unique=True)

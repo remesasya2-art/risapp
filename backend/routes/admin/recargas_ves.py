@@ -12,7 +12,7 @@ from typing import Optional
 
 from database import db
 from services import las_fotos
-from services import quien_es
+from services import quien_es, transacciones
 from services.money import from_db, para_mostrar, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.acciones_del_panel import (EstadoCambiado, OrdenLiberada, OrdenTomada,
@@ -476,84 +476,104 @@ async def process_ves_recharge(
         if not bank:
             raise HTTPException(status_code=404, detail="Banco destino no encontrado en contabilidad")
         
-        # Register in bank ledger (VES received from user)
+        # TODO LO QUE ESCRIBE LA APROBACION, EN UNA TRANSACCION
         #
-        # Esta línea hacía `bank["balance"] + amount_ves`. Cuando la cuenta ya
-        # había pasado por el ajuste manual de contabilidad, su saldo es
-        # `Decimal128`, y sumarle un float levanta TypeError: un 500 crudo, sin
-        # `try` que lo atrape, en TODA aprobación sobre esa cuenta. Además el
-        # saldo posterior salía de una lectura anterior al `$inc`, así que con
-        # dos aprobaciones simultáneas las dos anotaban el mismo número.
-        from services import bancos
-        _mov = await bancos.ajustar(db, bank_id, amount_ves)
-        new_balance = to_float(_mov["saldo_nuevo"])
+        #   El banco, su libro, el estado de la recarga, el saldo del cliente y
+        #   su línea: con un Mongo de un solo nodo son cinco escrituras
+        #   separadas, y un corte a la mitad deja, por ejemplo, el banco
+        #   acreditado y el cliente no. Con réplicas van juntas. El aviso del
+        #   cupo va DESPUES: una transacción que choca se reintenta, y un aviso
+        #   no se puede reintentar sin mandarlo dos veces.
+        async def trabajo(session):
+            # Register in bank ledger (VES received from user)
+            #
+            # Esta línea hacía `bank["balance"] + amount_ves`. Cuando la cuenta ya
+            # había pasado por el ajuste manual de contabilidad, su saldo es
+            # `Decimal128`, y sumarle un float levanta TypeError: un 500 crudo, sin
+            # `try` que lo atrape, en TODA aprobación sobre esa cuenta. Además el
+            # saldo posterior salía de una lectura anterior al `$inc`, así que con
+            # dos aprobaciones simultáneas las dos anotaban el mismo número.
+            from services import bancos
+            _mov = await bancos.ajustar(db, bank_id, amount_ves, session=session)
+            new_balance = to_float(_mov["saldo_nuevo"])
         
-        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "full_name": 1, "name": 1, "email": 1})
-        user_name = user_doc.get("full_name", user_doc.get("name", user_doc.get("email", ""))) if user_doc else ""
+            user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "full_name": 1, "name": 1, "email": 1})
+            user_name = user_doc.get("full_name", user_doc.get("name", user_doc.get("email", ""))) if user_doc else ""
         
-        await db.bank_ledger.insert_one({
-            "bank_id": bank_id, "bank_name": bank["name"],
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "type": "entrada",
-            "concept": f"Recarga VES de {user_name} (TX {transaction_id[:8]})",
-            "amount": amount_ves, "balance_after": new_balance,
-            "reference": transaction_id, "notes": "Recarga VES aprobada",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
+            await db.bank_ledger.insert_one({
+                "bank_id": bank_id, "bank_name": bank["name"],
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "type": "entrada",
+                "concept": f"Recarga VES de {user_name} (TX {transaction_id[:8]})",
+                "amount": amount_ves, "balance_after": new_balance,
+                "reference": transaction_id, "notes": "Recarga VES aprobada",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }, session=session)
         
-        # Update recharge status
-        await db.transactions.update_one(
-            {"transaction_id": transaction_id},
-            {"$set": {
-                "status": "approved",
-                "processed_at": datetime.now(timezone.utc),
-                "processed_by": admin.user_id,
-                "received_in_bank": bank_id,
-                "destination_bank_id": bank_id,
-                "destination_bank_name": bank["name"],
-                "reference_digits": reference_digits,
-                **({"banco_elegido_a_mano": True,
-                    "banco_elegido_por": admin.user_id,
-                    "banco_elegido_at": datetime.now(timezone.utc)}
-                   if banco_elegido_a_mano else {}),
-            }}
-        )
+            # Update recharge status
+            await db.transactions.update_one(
+                {"transaction_id": transaction_id},
+                {"$set": {
+                    "status": "approved",
+                    "processed_at": datetime.now(timezone.utc),
+                    "processed_by": admin.user_id,
+                    "received_in_bank": bank_id,
+                    "destination_bank_id": bank_id,
+                    "destination_bank_name": bank["name"],
+                    "reference_digits": reference_digits,
+                    **({"banco_elegido_a_mano": True,
+                        "banco_elegido_por": admin.user_id,
+                        "banco_elegido_at": datetime.now(timezone.utc)}
+                       if banco_elegido_a_mano else {}),
+                }},
+                session=session,
+            )
         
-        # Add balance to user
-        _rch_user = await db.users.find_one_and_update(
-            {"user_id": user_id},
-            {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris)), **kyc_quota.consume_inc(amount_ris)}},
-            return_document=True
-        )
+            # Add balance to user
+            _rch_user = await db.users.find_one_and_update(
+                {"user_id": user_id},
+                {"$inc": {"balance_ris": to_decimal128(to_decimal(amount_ris)), **kyc_quota.consume_inc(amount_ris)}},
+                return_document=True,
+                session=session,
+            )
+            # Libro mayor RIS (no interrumpe la aprobación)
+            try:
+                from services.ledger import record_ris_entry
+                _rch_after = (_rch_user or {}).get("balance_ris")
+                _rch_after = to_float(from_db(_rch_after)) if _rch_after is not None else None
+                await record_ris_entry(
+                    user_id=user_id,
+                    movement_type="recarga_ves",
+                    amount=amount_ris,
+                    direction="credit",
+                    account="balance_ris",
+                    balance_before=(_rch_after - amount_ris) if _rch_after is not None else None,
+                    balance_after=_rch_after,
+                    reference_kind="transaction",
+                    reference_id=transaction_id,
+                    transaction_id=transaction_id,
+                    actor_type="admin",
+                    actor_id=admin.user_id,
+                    rate=(amount_ves / amount_ris) if amount_ris else None,
+                    rate_kind="ves_to_ris",
+                    amount_output=amount_ves,
+                    currency_output="VES",
+                    metadata={"destination_bank_id": bank_id},
+                    notes="Recarga VES → RIS aprobada",
+                    session=session,
+                )
+            except Exception as e:
+                # Sin transacción, el libro no interrumpe la aprobación. Con
+                # transacción, sí: tragarse el error confirmaría el crédito sin su
+                # línea.
+                if session is not None:
+                    raise
+                logger.warning(f"Ledger recarga_ves no registrado: {e}")
+            return _rch_user
+
+        _rch_user = await transacciones.en_una_transaccion(trabajo)
         # Si esta recarga le agoto el cupo sin KYC, avisarle. Nunca interrumpe.
         await kyc_quota.notify_if_exhausted(_rch_user)
-        # Libro mayor RIS (no interrumpe la aprobación)
-        try:
-            from services.ledger import record_ris_entry
-            _rch_after = (_rch_user or {}).get("balance_ris")
-            _rch_after = to_float(from_db(_rch_after)) if _rch_after is not None else None
-            await record_ris_entry(
-                user_id=user_id,
-                movement_type="recarga_ves",
-                amount=amount_ris,
-                direction="credit",
-                account="balance_ris",
-                balance_before=(_rch_after - amount_ris) if _rch_after is not None else None,
-                balance_after=_rch_after,
-                reference_kind="transaction",
-                reference_id=transaction_id,
-                transaction_id=transaction_id,
-                actor_type="admin",
-                actor_id=admin.user_id,
-                rate=(amount_ves / amount_ris) if amount_ris else None,
-                rate_kind="ves_to_ris",
-                amount_output=amount_ves,
-                currency_output="VES",
-                metadata={"destination_bank_id": bank_id},
-                notes="Recarga VES → RIS aprobada",
-            )
-        except Exception as e:
-            logger.warning(f"Ledger recarga_ves no registrado: {e}")
         
         # Notify user
         await create_notification(

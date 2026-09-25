@@ -60,10 +60,15 @@ async def record_crypto_entry(
     user_snapshot: dict = None,
     metadata: dict = None,
     notes: str = None,
+    session=None,
 ):
-    """Escribe una linea inmutable en el libro de creditos cripto. Nunca lanza
-    excepcion (best-effort): si falla, se loguea pero NO revierte la acreditacion
-    real que ya se hizo sobre balance_usdt/balance_usdc.
+    """Escribe una linea inmutable en el libro de creditos cripto. Sin
+    `session` nunca lanza excepcion (best-effort): si falla, se loguea pero NO
+    revierte la acreditacion real que ya se hizo sobre balance_usdt/balance_usdc.
+
+    Con `session` —la transacción del movimiento de saldo— un error SÍ sale,
+    por el mismo motivo que en `ledger.record_ris_entry`: tragarlo confirmaría
+    el saldo movido sin su línea.
 
     Devuelve el entry_id si se registro, o None si hubo algun problema.
     """
@@ -111,9 +116,18 @@ async def record_crypto_entry(
             "notes": notes,
         }
 
-        await db[LEDGER_COLLECTION].insert_one(entry)
+        # Sin transacción, la misma llamada de siempre.
+        if session is None:
+            await db[LEDGER_COLLECTION].insert_one(entry)
+        else:
+            await db[LEDGER_COLLECTION].insert_one(entry, session=session)
         return entry["entry_id"]
     except Exception as e:
+        if session is not None:
+            logger.error(
+                "El asiento cripto falló adentro de la transacción: el movimiento se "
+                f"deshace — user_id={user_id} movimiento={movement_type} monto={amount} error={e!r}")
+            raise
         # Igual que en el libro RIS: no se relanza, pero no se calla. Ver
         # services/gritos.py.
         from services import gritos

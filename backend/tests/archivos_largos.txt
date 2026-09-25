@@ -22,7 +22,7 @@
 #     El número se puede bajar a mano cuando un archivo se achica: así lo que
 #     se sacó no se puede volver a poner. Subirlo, nunca.
  2525 frontend/src/pages/AdminPanel.jsx
- 2492 backend/routes/transactions.py
+ 2298 backend/routes/transactions.py
  1689 backend/routes/envios_admin.py
  1544 backend/tests/test_envios_e2e.py
  1544 frontend/src/components/admin/Nucleo.jsx
@@ -40,7 +40,7 @@
  1005 backend/tests/test_envios_almacen.py
   996 backend/tests/test_envios_cobros.py
   993 frontend/src/components/admin/RecargasVES.jsx
-  991 backend/services/accounting_engine.py
+  953 backend/services/accounting_engine.py
   987 backend/tests/test_cofre.py
   981 frontend/src/pages/BTCLightning.jsx
   969 backend/services/contabilidad.py
@@ -58,9 +58,8 @@
   870 frontend/src/components/admin/OrdenesPorProcesar.jsx
   832 frontend/src/components/admin/envios/Transportistas.jsx
   819 frontend/src/pages/Verification.jsx
-  814 backend/services/envios_cobros.py
   814 backend/services/envios_operacion.py
   812 frontend/src/pages/Profile.jsx
-  810 backend/tests/test_motor_contable.py
+  809 backend/tests/test_motor_contable.py
   808 backend/services/configuracion.py
   805 backend/tests/test_envios_estados.py

@@ -96,6 +96,38 @@ jobs:
         # solos en vez de salir a la red. Ver tests/conftest.py.
         run: python -m pytest tests/ -q --no-header
 
+      # LOS TESTS QUE TOCAN TRANSACCIONES, CONTRA UN MONGO DE VERDAD
+      #
+      #   La suite corre sobre mongomock, que no tiene transacciones: todo lo
+      #   que la aplicación hace adentro de una pasa por el camino de un Mongo
+      #   de un solo nodo. La primera vez que el motor contable corrió contra
+      #   un Mongo con réplicas, dos tests se pusieron en rojo —con mongomock
+      #   pasaban—. Este paso los corre ahí, CON transacciones.
+      #
+      #   Un solo nodo alcanza: lo que se prueba es que las transacciones
+      #   existan, no la copia. Va en este trabajo y no en uno aparte por la
+      #   misma razón que el escaneo de abajo: cada trabajo nuevo suma
+      #   peticiones a GitHub. `tests/test_el_ci_prueba_con_mongo_de_verdad.py`
+      #   vigila que el paso siga y que corra cada archivo que lo necesita.
+      - name: "[BLOQUEANTE] Tests con transacciones, contra un Mongo con réplicas"
+        working-directory: backend
+        env:
+          RIS_MONGO_DE_VERDAD: "mongodb://127.0.0.1:27017/?replicaSet=rs0"
+        run: |
+          docker run -d --name mongo-rs -p 27017:27017 mongo:7.0 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do
+            docker exec mongo-rs mongosh --quiet --eval "db.adminCommand('ping').ok" && break
+            sleep 2
+          done
+          docker exec mongo-rs mongosh --quiet --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: '127.0.0.1:27017'}]})"
+          for i in $(seq 1 30); do
+            docker exec mongo-rs mongosh --quiet --eval "db.hello().isWritablePrimary" | grep -q true && break
+            sleep 2
+          done
+          python -m pytest tests/test_motor_contable.py tests/test_saldo_y_libro_juntos.py tests/test_salidas_de_saldo.py \
+            tests/test_el_panel_acredita_en_una_transaccion.py tests/test_las_encomiendas_cobran_en_una_transaccion.py \
+            -q --no-header -rs
+
       # EL ESCANEO DE DEPENDENCIAS VA EN ESTE MISMO TRABAJO, Y AVISA SIN FRENAR
       #
       #   Va acá y no en un trabajo aparte porque cada trabajo de CI habla con

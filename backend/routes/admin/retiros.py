@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from database import db
 from services import las_fotos
-from services import quien_es
+from services import quien_es, transacciones
 from services.money import from_db, to_float, to_decimal, to_decimal128
 from models.user import User
 from models.acciones_del_panel import AccionDelPanel
@@ -151,92 +151,114 @@ async def process_withdrawal(
         message = "Retiro aprobado"
         
     elif action == "reject":
-        # Refund balance — a la moneda de ORIGEN del envío (RIS, o USDT/USDC si
-        # el saldo debitado fue cripto). Nunca asumir RIS a ciegas.
-        _cur_in = str(transaction.get("currency_input") or "RIS").upper()
-        _refund_amount = transaction.get("amount_input", 0)
+        # LA DEVOLUCION, SU LINEA Y EL ESTADO, EN UNA TRANSACCION
+        #
+        #   Con un Mongo de un solo nodo son escrituras separadas: un corte
+        #   después de devolver deja la plata devuelta y el retiro pendiente, y
+        #   un segundo rechazo la devolvería otra vez. Con réplicas van juntas.
+        #   El aviso al cliente va después: una transacción que choca se
+        #   reintenta, y un aviso no.
+        async def trabajo(session):
+            # Refund balance — a la moneda de ORIGEN del envío (RIS, o USDT/USDC si
+            # el saldo debitado fue cripto). Nunca asumir RIS a ciegas.
+            _cur_in = str(transaction.get("currency_input") or "RIS").upper()
+            _refund_amount = transaction.get("amount_input", 0)
 
-        if _cur_in in ("USDT", "USDC"):
-            from services.credits import to_credit_decimal
-            from bson.decimal128 import Decimal128
-            _refund_field = "balance_usdt" if _cur_in == "USDT" else "balance_usdc"
-            _refund_dec = to_credit_decimal(_refund_amount)
-            _refunded_user = await db.users.find_one_and_update(
-                {"user_id": transaction["user_id"]},
-                {"$inc": {_refund_field: Decimal128(_refund_dec)}},
-                return_document=True
-            )
-            try:
-                from services.ledger_crypto import record_crypto_entry
-                _bal_after = (_refunded_user or {}).get(_refund_field)
-                _bal_after = float(to_credit_decimal(_bal_after)) if _bal_after is not None else None
-                await record_crypto_entry(
-                    user_id=transaction["user_id"],
-                    currency=_cur_in.lower(),
-                    movement_type="refund_envio",
-                    amount=float(_refund_dec),
-                    direction="credit",
-                    balance_before=(_bal_after - float(_refund_dec)) if _bal_after is not None else None,
-                    balance_after=_bal_after,
-                    reference_kind="transaction",
-                    reference_id=transaction_id,
-                    actor_type="admin",
-                    actor_id=admin.user_id,
-                    metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
-                    notes="Devolución por envío rechazado",
+            if _cur_in in ("USDT", "USDC"):
+                from services.credits import to_credit_decimal
+                from bson.decimal128 import Decimal128
+                _refund_field = "balance_usdt" if _cur_in == "USDT" else "balance_usdc"
+                _refund_dec = to_credit_decimal(_refund_amount)
+                _refunded_user = await db.users.find_one_and_update(
+                    {"user_id": transaction["user_id"]},
+                    {"$inc": {_refund_field: Decimal128(_refund_dec)}},
+                    return_document=True,
+                    session=session,
                 )
-            except Exception as e:
-                logger.warning(f"Ledger cripto refund_envio no registrado: {e}")
-        else:
-            _refunded_user = await db.users.find_one_and_update(
-                {"user_id": transaction["user_id"]},
-                {"$inc": {"balance_ris": to_decimal128(to_decimal(_refund_amount))}},
-                return_document=True
-            )
-            # Libro mayor RIS: crédito de devolución (no interrumpe el rechazo)
-            try:
-                from services.ledger import record_ris_entry
-                _bal_after = (_refunded_user or {}).get("balance_ris")
-                _bal_after = to_float(from_db(_bal_after)) if _bal_after is not None else None
-                await record_ris_entry(
-                    user_id=transaction["user_id"],
-                    movement_type="refund_envio",
-                    amount=_refund_amount,
-                    direction="credit",
-                    account="balance_ris",
-                    balance_before=(_bal_after - _refund_amount) if _bal_after is not None else None,
-                    balance_after=_bal_after,
-                    reference_kind="transaction",
-                    reference_id=transaction_id,
-                    transaction_id=transaction_id,
-                    display_id=transaction.get("display_id"),
-                    actor_type="admin",
-                    actor_id=admin.user_id,
-                    counterparty=transaction.get("beneficiary_data"),
-                    metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
-                    notes="Devolución por retiro rechazado",
+                try:
+                    from services.ledger_crypto import record_crypto_entry
+                    _bal_after = (_refunded_user or {}).get(_refund_field)
+                    _bal_after = float(to_credit_decimal(_bal_after)) if _bal_after is not None else None
+                    await record_crypto_entry(
+                        user_id=transaction["user_id"],
+                        currency=_cur_in.lower(),
+                        movement_type="refund_envio",
+                        amount=float(_refund_dec),
+                        direction="credit",
+                        balance_before=(_bal_after - float(_refund_dec)) if _bal_after is not None else None,
+                        balance_after=_bal_after,
+                        reference_kind="transaction",
+                        reference_id=transaction_id,
+                        actor_type="admin",
+                        actor_id=admin.user_id,
+                        metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
+                        notes="Devolución por envío rechazado",
+                        session=session,
+                    )
+                except Exception as e:
+                    if session is not None:
+                        raise
+                    logger.warning(f"Ledger cripto refund_envio no registrado: {e}")
+            else:
+                _refunded_user = await db.users.find_one_and_update(
+                    {"user_id": transaction["user_id"]},
+                    {"$inc": {"balance_ris": to_decimal128(to_decimal(_refund_amount))}},
+                    return_document=True,
+                    session=session,
                 )
-            except Exception as e:
-                logger.warning(f"Ledger refund_envio no registrado: {e}")
+                # Libro mayor RIS: crédito de devolución (no interrumpe el rechazo)
+                try:
+                    from services.ledger import record_ris_entry
+                    _bal_after = (_refunded_user or {}).get("balance_ris")
+                    _bal_after = to_float(from_db(_bal_after)) if _bal_after is not None else None
+                    await record_ris_entry(
+                        user_id=transaction["user_id"],
+                        movement_type="refund_envio",
+                        amount=_refund_amount,
+                        direction="credit",
+                        account="balance_ris",
+                        balance_before=(_bal_after - _refund_amount) if _bal_after is not None else None,
+                        balance_after=_bal_after,
+                        reference_kind="transaction",
+                        reference_id=transaction_id,
+                        transaction_id=transaction_id,
+                        display_id=transaction.get("display_id"),
+                        actor_type="admin",
+                        actor_id=admin.user_id,
+                        counterparty=transaction.get("beneficiary_data"),
+                        metadata={"currency_output": transaction.get("currency_output"), "amount_output": transaction.get("amount_output")},
+                        notes="Devolución por retiro rechazado",
+                        session=session,
+                    )
+                except Exception as e:
+                    # Sin transacción, el libro no interrumpe el rechazo. Con
+                    # transacción, sí: tragarse el error confirmaría la devolución
+                    # sin su línea.
+                    if session is not None:
+                        raise
+                    logger.warning(f"Ledger refund_envio no registrado: {e}")
 
-        # Marca del reembolso con la MISMA forma que el flujo de pago incompleto
-        # (rechazar-y-reembolsar-saldo), para que el historial no tenga que saber
-        # cual de los dos caminos lo genero.
-        _refunded_amount = float(_refund_amount or 0)
-        _reject_update = {
-            "status": "rejected",
-            "completed_at": datetime.now(timezone.utc),
-            "processed_by": admin.user_id,
-            "refunded_to_balance": _refunded_amount > 0,
-            "refunded_to_balance_field": (
-                _refund_field if _cur_in in ("USDT", "USDC") else "balance_ris"
-            ),
-            "refund_amount": _refunded_amount,
-        }
-        await db.transactions.update_one(
-            {"transaction_id": transaction_id},
-            {"$set": _reject_update}
-        )
+            # Marca del reembolso con la MISMA forma que el flujo de pago incompleto
+            # (rechazar-y-reembolsar-saldo), para que el historial no tenga que saber
+            # cual de los dos caminos lo genero.
+            _refunded_amount = float(_refund_amount or 0)
+            _reject_update = {
+                "status": "rejected",
+                "completed_at": datetime.now(timezone.utc),
+                "processed_by": admin.user_id,
+                "refunded_to_balance": _refunded_amount > 0,
+                "refunded_to_balance_field": (
+                    _refund_field if _cur_in in ("USDT", "USDC") else "balance_ris"
+                ),
+                "refund_amount": _refunded_amount,
+            }
+            await db.transactions.update_one(
+                {"transaction_id": transaction_id},
+                {"$set": _reject_update},
+                session=session,
+            )
+
+        await transacciones.en_una_transaccion(trabajo)
         
         await create_notification(
             user_id=transaction["user_id"],

@@ -44,8 +44,25 @@ def corre(coro):
     return asyncio.run(coro)
 
 
+def _lejos_del_cambio_de_minuto(margen=10):
+    """Si faltan menos de `margen` segundos para que cambie el minuto, espera
+    a que empiece el siguiente.
+
+    El piso cuenta por minuto de reloj: el contador y el aviso «una línea por
+    IP y minuto» cambian de ventana cuando cambia el minuto. Un test que manda
+    ocho pedidos a las hh:mm:59.9 los reparte en dos minutos, y lo que ve —dos
+    líneas, un contador que vuelve a cero— es lo correcto para el producto y
+    un rojo para el test. Pasó en CI: el aviso quedó a las 06:55:59.996.
+    """
+    import time
+    resto = 60 - time.time() % 60
+    if resto < margen:
+        time.sleep(resto + 0.05)
+
+
 @pytest.fixture
 def base():
+    _lejos_del_cambio_de_minuto()
     b = mongomock_motor.AsyncMongoMockClient()["ris_piso"]
     usar_base(b)
     security_2fa.reiniciar_la_cuenta()
