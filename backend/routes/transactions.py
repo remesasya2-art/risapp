@@ -2461,7 +2461,7 @@ async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
     # El banco tiene que resolver contra contabilidad, y se rechaza ACA.
     # Aceptar uno que no resuelve deja una orden que nadie va a poder procesar,
     # y el cliente se entera días después.
-    banco_id, _ = await resolve_ves_bank((request.destination_bank or "").strip())
+    banco_id, banco_doc = await resolve_ves_bank((request.destination_bank or "").strip())
     if not banco_id:
         disponibles = await bancos_ves_disponibles()
         raise HTTPException(
@@ -2472,7 +2472,10 @@ async def comprobante_del_envio_reais(request: ComprobanteDelEnvioRequest,
     orden = await pago_al_final.recibir_comprobante(
         db, request.transaction_id, current_user.user_id,
         comprobante=comprobante, banco_id=banco_id,
-        banco_nombre=(request.destination_bank or "").strip())
+        # El nombre del banco que se encontró, no lo que mandó la pantalla: la
+        # pantalla manda el `bank_id`, y el panel mostraría ese código en vez
+        # del nombre.
+        banco_nombre=(banco_doc or {}).get("name") or (request.destination_bank or "").strip())
 
     await create_notification(
         user_id=current_user.user_id,

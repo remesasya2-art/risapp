@@ -189,3 +189,26 @@ def test_NINGUNA_CUENTA_BANCARIA_DE_VERDAD_ESCRITA_EN_EL_FRONTEND():
             if "0123456789" not in numero:
                 halladas.append(f"{archivo.relative_to(src)}: {numero}")
     assert not halladas, "cuentas bancarias escritas en el frontend:\n" + "\n".join(halladas)
+
+
+def test_EL_ENVIO_A_BRASIL_MUESTRA_A_QUE_CUENTA_TRANSFERIR():
+    """Preguntaba «¿A qué banco transferiste?» sin haber dicho nunca a cuál."""
+    from _lote_c_comun import fuente, sin_comentarios
+    envio = sin_comentarios(fuente("pages/SendReais.jsx"))
+    assert "api.get('/bancos-para-transferir')" in envio
+    assert "<DatosDelBanco banco={b} />" in envio
+    assert "banco.transferencia.numero_cuenta" in envio and "banco.pago_movil.telefono" in envio
+    assert "value={b.bank_id}" in envio, "se manda el bank_id del banco elegido"
+
+
+def test_EL_COMPROBANTE_DEL_ENVIO_GUARDA_EL_NOMBRE_DEL_BANCO_Y_NO_SU_CODIGO():
+    """La pantalla manda el `bank_id`. Guardarlo como nombre haría que el panel
+    muestre «b_ves» donde tiene que decir «Banesco»."""
+    import ast
+    import pathlib
+    arbol = ast.parse((pathlib.Path(__file__).resolve().parent.parent / "routes/transactions.py").read_text("utf-8"))
+    llamadas = [n for n in ast.walk(arbol) if isinstance(n, ast.Call)
+                and getattr(n.func, "attr", "") == "recibir_comprobante"]
+    assert len(llamadas) == 1
+    (nombre,) = [k.value for k in llamadas[0].keywords if k.arg == "banco_nombre"]
+    assert "banco_doc" in ast.unparse(nombre), ast.unparse(nombre)
