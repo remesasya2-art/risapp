@@ -327,11 +327,8 @@ def clave_del_nombre(texto) -> str:
 #   Un dígito mal cargado manda la plata de un cliente a otra cuenta. Por eso
 #   no se guarda texto libre: el número de cuenta son 20 dígitos y empieza por
 #   el código del banco (así funcionan las cuentas en Venezuela, y es la forma
-#   de atrapar que se pegó la cuenta de otro banco); el teléfono de Pago Móvil
-#   es un celular venezolano de 11 dígitos; la cédula o el RIF lleva su letra.
-
-
-TIPOS_DE_CUENTA = ("Corriente", "Ahorro")
+#   de atrapar que se pegó la cuenta de otro banco); la cédula o el RIF lleva
+#   su letra.
 
 
 class DatosDeCobroInvalidos(ValueError):
@@ -345,8 +342,8 @@ def _solo_digitos(texto) -> str:
 def normalizar_cobro(datos: dict) -> dict:
     """Los datos de cobro limpios, o `DatosDeCobroInvalidos` con el motivo.
 
-    Acepta lo que se escribe a mano —espacios, guiones, «+58»— y guarda una
-    sola forma, que es la que el cliente copia."""
+    Acepta lo que se escribe a mano —espacios, guiones, puntos— y guarda
+    una sola forma, que es la que el cliente copia."""
     codigo = _solo_digitos(datos.get("codigo"))
     if len(codigo) != 4:
         raise DatosDeCobroInvalidos("El código del banco son 4 dígitos: 0102, 0134…")
@@ -361,31 +358,20 @@ def normalizar_cobro(datos: dict) -> dict:
         raise DatosDeCobroInvalidos("La cédula o el RIF lleva su letra y los números: V-12345678 o J-123456789.")
     documento = f"{m.group(1)}-{m.group(2)}" + (f"-{m.group(3)}" if m.group(3) else "")
 
+    # SOLO TRANSFERENCIA. Pago Móvil y el tipo de cuenta se sacaron por
+    # decisión del dueño del proyecto: el cliente ve tres datos —nombre,
+    # cédula y cuenta— y los copia de una. Si llegan, se ignoran.
     cuenta = _solo_digitos(datos.get("numero_cuenta"))
-    tipo = str(datos.get("tipo_cuenta") or "").strip().capitalize()
-    if cuenta:
-        if len(cuenta) != 20:
-            raise DatosDeCobroInvalidos(f"El número de cuenta son 20 dígitos; tiene {len(cuenta)}.")
-        if not cuenta.startswith(codigo):
-            raise DatosDeCobroInvalidos(
-                f"El número de cuenta empieza por el código del banco ({codigo}) y éste empieza por "
-                f"{cuenta[:4]}. ¿Es la cuenta de otro banco?")
-        if tipo not in TIPOS_DE_CUENTA:
-            raise DatosDeCobroInvalidos("Elegí si la cuenta es corriente o de ahorro.")
-    else:
-        tipo = ""
+    if not cuenta:
+        raise DatosDeCobroInvalidos("Escribí el número de cuenta: es a donde transfiere el cliente.")
+    if len(cuenta) != 20:
+        raise DatosDeCobroInvalidos(f"El número de cuenta son 20 dígitos; tiene {len(cuenta)}.")
+    if not cuenta.startswith(codigo):
+        raise DatosDeCobroInvalidos(
+            f"El número de cuenta empieza por el código del banco ({codigo}) y éste empieza por "
+            f"{cuenta[:4]}. ¿Es la cuenta de otro banco?")
 
-    telefono = _solo_digitos(datos.get("telefono"))
-    if telefono.startswith("58") and len(telefono) == 12:
-        telefono = "0" + telefono[2:]
-    if telefono and not (len(telefono) == 11 and telefono.startswith("04")):
-        raise DatosDeCobroInvalidos("El teléfono de Pago Móvil es un celular de 11 dígitos: 04141234567.")
-
-    if not cuenta and not telefono:
-        raise DatosDeCobroInvalidos("Cargá al menos una forma de pago: el número de cuenta o el teléfono de Pago Móvil.")
-
-    return {"codigo": codigo, "titular": titular, "documento": documento, "numero_cuenta": cuenta,
-            "tipo_cuenta": tipo, "telefono": telefono}
+    return {"codigo": codigo, "titular": titular, "documento": documento, "numero_cuenta": cuenta}
 
 
 def para_el_cliente(banco: dict):
@@ -405,10 +391,7 @@ def para_el_cliente(banco: dict):
     return {
         "bank_id": banco.get("bank_id"),
         "name": banco.get("name"),
-        "codigo": limpio["codigo"],
-        "transferencia": ({"titular": limpio["titular"], "documento": limpio["documento"],
-                           "numero_cuenta": limpio["numero_cuenta"], "tipo_cuenta": limpio["tipo_cuenta"]}
-                          if limpio["numero_cuenta"] else None),
-        "pago_movil": ({"telefono": limpio["telefono"], "documento": limpio["documento"]}
-                       if limpio["telefono"] else None),
+        "titular": limpio["titular"],
+        "documento": limpio["documento"],
+        "numero_cuenta": limpio["numero_cuenta"],
     }

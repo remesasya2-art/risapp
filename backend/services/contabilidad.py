@@ -112,11 +112,23 @@ ACTIVO, PASIVO, PATRIMONIO, INGRESO, EGRESO = (
 # saldo de cada cuenta en el balance.
 NATURALEZA_DEUDORA = frozenset({ACTIVO, EGRESO})
 
+# EL PAIS DE CADA CUENTA DE ACTIVO
+#
+#   Todas las cuentas se llevan en RIS: cada línea del libro es un movimiento
+#   del saldo RIS de un usuario, y la cuenta de enfrente se deduce del tipo de
+#   movimiento. Así que «Bancos en Venezuela» no suma bolívares: suma los RIS
+#   que entraron por bolívares. Pero sumar en un solo «activo» lo que está en
+#   un banco de Brasil y lo que está en uno de Venezuela mezcla dos cajas que
+#   no se pueden usar una por la otra: por eso cada cuenta dice de qué país es,
+#   y el balance muestra el activo de cada país por separado. Las pasarelas son
+#   de Brasil: la tarjeta cobra por Mercado Pago, en reales.
+PAISES = ("Brasil", "Venezuela")
+
 PLAN_DE_CUENTAS = OrderedDict([
-    ("1.1.01", {"nombre": "Bancos en Brasil (BRL)", "tipo": ACTIVO}),
-    ("1.1.02", {"nombre": "Bancos en Venezuela (VES)", "tipo": ACTIVO}),
+    ("1.1.01", {"nombre": "Bancos en Brasil (BRL)", "tipo": ACTIVO, "pais": "Brasil"}),
+    ("1.1.02", {"nombre": "Bancos en Venezuela (VES)", "tipo": ACTIVO, "pais": "Venezuela"}),
     ("1.1.03", {"nombre": "Billeteras cripto (USDT / USDC)", "tipo": ACTIVO}),
-    ("1.1.04", {"nombre": "Pasarelas de pago en tránsito", "tipo": ACTIVO}),
+    ("1.1.04", {"nombre": "Pasarelas de pago en tránsito", "tipo": ACTIVO, "pais": "Brasil"}),
     ("1.1.99", {"nombre": "Efectivo sin identificar", "tipo": ACTIVO}),
 
     ("2.1.01", {"nombre": "Saldo RIS de usuarios", "tipo": PASIVO}),
@@ -499,6 +511,10 @@ async def balance_de_comprobacion(*, desde: str, hasta: str, libro: str = None,
     mayor = await libro_mayor(desde=desde, hasta=hasta, libro=libro,
                               tz_min=tz_min, db=db)
     filas, por_grupo = [], {}
+    # El activo de cada país, aparte: ver `PAISES`. Lo que no es de ningún
+    # país (cripto, efectivo sin identificar) va en «Sin país», y así los
+    # tres suman el activo de `por_grupo` y no se pierde nada.
+    activo_por_pais = OrderedDict((p, ZERO) for p in (*PAISES, "Sin país"))
     total_debe = total_haber = ZERO
     for c in mayor["cuentas"]:
         debe, haber = _monto(c["suma_debe"]), _monto(c["suma_haber"])
@@ -506,9 +522,14 @@ async def balance_de_comprobacion(*, desde: str, hasta: str, libro: str = None,
         total_haber += haber
         grupo = por_grupo.setdefault(c["tipo"], ZERO)
         por_grupo[c["tipo"]] = grupo + _monto(c["saldo"])
-        filas.append({k: c[k] for k in
-                      ("codigo", "nombre", "tipo", "naturaleza",
-                       "suma_debe", "suma_haber", "saldo")})
+        pais = (PLAN_DE_CUENTAS.get(c["codigo"]) or {}).get("pais")
+        if c["tipo"] == ACTIVO:
+            clave = pais or "Sin país"
+            activo_por_pais[clave] = activo_por_pais[clave] + _monto(c["saldo"])
+        fila = {k: c[k] for k in ("codigo", "nombre", "tipo", "naturaleza",
+                                  "suma_debe", "suma_haber", "saldo")}
+        fila["pais"] = pais
+        filas.append(fila)
 
     return {
         "desde": desde, "hasta": hasta, "tz_min": tz_min,
@@ -519,6 +540,8 @@ async def balance_de_comprobacion(*, desde: str, hasta: str, libro: str = None,
         "cuadra": quantize_money(total_debe) == quantize_money(total_haber),
         "por_grupo": {tipo: str(quantize_money(monto))
                       for tipo, monto in sorted(por_grupo.items())},
+        "activo_por_pais": {pais: str(quantize_money(monto))
+                            for pais, monto in activo_por_pais.items()},
     }
 
 

@@ -44,7 +44,7 @@ def _simple(nombre, campos, **extra):
 
 # ── El plan de cuentas ────────────────────────────────────────────────────
 
-CuentaContable = _simple("CuentaContable", ("codigo", "nombre", "tipo"))
+CuentaContable = _simple("CuentaContable", ("codigo", "nombre", "tipo", "pais"))
 AsientoDelPlan = _simple("AsientoDelPlan", ("movement_type", "contra", "glosa"))
 
 
@@ -83,7 +83,8 @@ _CUENTA_CON_SALDO = ("codigo", "nombre", "tipo", "naturaleza", "suma_debe", "sum
 
 CuentaDelMayor = _simple("CuentaDelMayor", (*_CUENTA_CON_SALDO, "hay_mas_movimientos"),
                          movimientos=(List[MovimientoDelMayor], []))
-CuentaDelBalance = _simple("CuentaDelBalance", _CUENTA_CON_SALDO)
+# `pais`: Brasil, Venezuela o nada. Ver `services/contabilidad.PAISES`.
+CuentaDelBalance = _simple("CuentaDelBalance", (*_CUENTA_CON_SALDO, "pais"))
 
 
 class LibroMayor(BaseModel):
@@ -104,6 +105,7 @@ class BalanceDeComprobacion(BaseModel):
     total_haber: Escalar = None
     cuadra: Escalar = None
     por_grupo: Dict[str, Escalar] = {}
+    activo_por_pais: Dict[str, Escalar] = {}
 
 
 # ── Control 1: la reconciliación ──────────────────────────────────────────
@@ -238,7 +240,7 @@ class LineasDeUnUsuario(BaseModel):
 # Los datos para que el cliente transfiera (`services/bancos.normalizar_cobro`),
 # y si están publicados. El panel los muestra para editarlos.
 CobroDelBanco = _simple("CobroDelBanco", (
-    "codigo", "titular", "documento", "numero_cuenta", "tipo_cuenta", "telefono", "publicado"))
+    "codigo", "titular", "documento", "numero_cuenta", "publicado"))
 BancoDeLaContabilidad = _simple("BancoDeLaContabilidad", (
     "bank_id", "name", "currency", "balance", "created_at", "is_gateway"),
     cobro=(Optional[CobroDelBanco], None))

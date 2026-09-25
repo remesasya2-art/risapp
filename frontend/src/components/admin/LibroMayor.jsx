@@ -270,7 +270,47 @@ const DESCRIPCIONES = {
 
 /* ─── Balance de comprobación ──────────────────────────────────────────── */
 
+// BRASIL Y VENEZUELA POR SEPARADO
+//
+//   El activo se mostraba en una sola tarjeta que sumaba los bancos de Brasil
+//   con los de Venezuela: dos cajas que no se pueden usar una por la otra.
+//   Ahora cada país tiene su tarjeta y su bloque en la tabla, con subtotal. El
+//   país de cada cuenta lo dice el plan de cuentas (`services/contabilidad.
+//   PAISES`), no esta pantalla.
+const SECCIONES = [
+  ['Brasil', 'Brasil — bancos en reales y pasarelas'],
+  ['Venezuela', 'Venezuela — bancos en bolívares'],
+  [null, 'Sin país — saldo de los usuarios, ingresos, gastos y lo que no es de un banco'],
+];
+
 function Balance({ datos }) {
+  const cuentas = datos.cuentas || [];
+  const porPais = datos.activo_por_pais || {};
+  const tarjetas = [
+    ...Object.entries(porPais)
+      .filter(([pais, saldo]) => pais !== 'Sin país' || Number(saldo) !== 0)
+      .map(([pais, saldo]) => [pais === 'Sin país' ? 'Activo sin país' : `Activo en ${pais}`, saldo]),
+    ...Object.entries(datos.por_grupo || {}).filter(([grupo]) => grupo !== 'activo'),
+  ];
+  const filas = [];
+  SECCIONES.forEach(([pais, titulo]) => {
+    const suyas = cuentas.filter((c) => (c.pais || null) === pais);
+    if (suyas.length === 0) return;
+    filas.push(['', <strong data-testid="balance-seccion">{titulo}</strong>, '', '', '', '']);
+    suyas.forEach((c) => filas.push([
+      <span style={{ fontFamily: 'monospace' }}>{c.codigo}</span>,
+      c.nombre,
+      <Etiqueta texto={c.tipo} />,
+      <Numero valor={c.suma_debe} />,
+      <Numero valor={c.suma_haber} />,
+      <Numero valor={c.saldo} fuerte />,
+    ]));
+    if (pais) {
+      filas.push(['', <span style={{ color: COLOR.suave }}>Activo en {pais}</span>, '', '', '',
+        <Numero valor={porPais[pais]} fuerte />]);
+    }
+  });
+
   return (
     <>
       {/* El aviso va ARRIBA del número, no al pie: quien mira «✓ cuadra» sin
@@ -280,16 +320,18 @@ function Balance({ datos }) {
         el debe <strong>siempre</strong> va a igualar al haber. Que cuadre no prueba
         que los datos estén bien: lo que sí prueba algo son las pestañas de{' '}
         <strong>Reconciliación</strong> e <strong>Integridad</strong>.
+        {' '}Todos los montos están en <strong>RIS</strong>: lo que entró en reales o
+        en bolívares, convertido a la tasa de cada operación.
       </Aviso>
 
       <div style={{ ...tarjeta, display: 'grid', gap: '12px',
         gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-        {Object.entries(datos.por_grupo || {}).map(([grupo, saldo]) => (
-          <div key={grupo} style={{ border: `1px solid ${COLOR.borde}`,
+        {tarjetas.map(([titulo, saldo]) => (
+          <div key={titulo} data-testid="balance-tarjeta" style={{ border: `1px solid ${COLOR.borde}`,
             borderRadius: '12px', padding: '12px 14px' }}>
             <p style={{ margin: 0, fontSize: '12px', fontWeight: 700,
               color: COLOR.suave, textTransform: 'uppercase',
-              letterSpacing: '.4px' }}>{grupo}</p>
+              letterSpacing: '.4px' }}>{titulo}</p>
             <p style={{ margin: '6px 0 0 0', fontSize: '20px', fontWeight: 800 }}>
               {saldo}
             </p>
@@ -299,14 +341,7 @@ function Balance({ datos }) {
 
       <Tabla
         cabeceras={['Código', 'Cuenta', 'Tipo', 'Suma debe', 'Suma haber', 'Saldo']}
-        filas={(datos.cuentas || []).map((c) => [
-          <span style={{ fontFamily: 'monospace' }}>{c.codigo}</span>,
-          c.nombre,
-          <Etiqueta texto={c.tipo} />,
-          <Numero valor={c.suma_debe} />,
-          <Numero valor={c.suma_haber} />,
-          <Numero valor={c.saldo} fuerte />,
-        ])}
+        filas={filas}
         pie={['', 'TOTALES', '', <Numero valor={datos.total_debe} fuerte />,
           <Numero valor={datos.total_haber} fuerte />, '']}
       />

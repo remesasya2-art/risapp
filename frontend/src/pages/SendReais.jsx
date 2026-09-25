@@ -159,39 +159,40 @@ function Marco({ navigate, children }) {
 //   Esta pantalla preguntaba «¿A qué banco transferiste?» sin haberle dicho
 //   nunca al cliente a qué cuenta transferir. Ahora muestra los datos del
 //   banco elegido, los mismos que ve la recarga (`/bancos-para-transferir`),
-//   cargados en Contabilidad → Bancos.
+//   cargados en Contabilidad → Bancos. Sólo transferencia, por decisión del
+//   dueño del proyecto: nombre completo, cédula y cuenta, y un botón que copia
+//   los tres de una.
 function DatosDelBanco({ banco }) {
-  const copiar = async (texto) => {
-    try { await navigator.clipboard.writeText(texto); toast.success('Copiado'); }
+  const copiar = async (texto, aviso = 'Copiado') => {
+    try { await navigator.clipboard.writeText(texto); toast.success(aviso); }
     catch { toast.error('No se pudo copiar'); }
   };
-  const filas = [];
-  if (banco.transferencia) {
-    filas.push(['Titular', banco.transferencia.titular],
-      ['Cédula o RIF', banco.transferencia.documento],
-      [`Cuenta ${banco.transferencia.tipo_cuenta ? banco.transferencia.tipo_cuenta.toLowerCase() : ''}`.trim(), banco.transferencia.numero_cuenta]);
-  }
-  if (banco.pago_movil) {
-    filas.push(['Pago Móvil: teléfono', banco.pago_movil.telefono],
-      ['Pago Móvil: banco', `${banco.codigo} - ${banco.name}`]);
-    if (!banco.transferencia) filas.push(['Pago Móvil: cédula o RIF', banco.pago_movil.documento]);
-  }
+  const filas = [
+    ['Nombre completo', banco.titular],
+    ['Cédula', banco.documento],
+    ['Número de cuenta', banco.numero_cuenta],
+  ];
+  const todo = filas.map(([, v]) => v).join('\n');
   return (
-    <dl data-testid="br-datos-banco" style={{ margin: '0 0 16px 0', display: 'grid', gap: '8px', padding: '12px 14px',
-      borderRadius: '12px', border: `1px solid ${C.linea}`, background: C.fondo }}>
-      {filas.map(([k, v]) => (
-        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-          <div style={{ minWidth: 0 }}>
-            <dt style={{ fontSize: '12px', color: C.suave }}>{k}</dt>
-            <dd style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: C.tinta, wordBreak: 'break-all' }}>{v}</dd>
+    <div style={{ marginBottom: '16px' }}>
+      <dl data-testid="br-datos-banco" style={{ margin: '0 0 10px 0', display: 'grid', gap: '8px', padding: '12px 14px',
+        borderRadius: '12px', border: `1px solid ${C.linea}`, background: C.fondo }}>
+        {filas.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+            <div style={{ minWidth: 0 }}>
+              <dt style={{ fontSize: '12px', color: C.suave }}>{k}</dt>
+              <dd style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: C.tinta, wordBreak: 'break-all' }}>{v}</dd>
+            </div>
+            <button type="button" onClick={() => copiar(v)} aria-label={`Copiar ${k}`} style={{
+              flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 9px', borderRadius: '8px',
+              border: `1px solid ${C.linea}`, background: C.lienzo, color: C.tinta, fontSize: '12px', cursor: 'pointer',
+            }}><Copy size={13} /> Copiar</button>
           </div>
-          <button type="button" onClick={() => copiar(v)} aria-label={`Copiar ${k}`} style={{
-            flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 9px', borderRadius: '8px',
-            border: `1px solid ${C.linea}`, background: C.lienzo, color: C.tinta, fontSize: '12px', cursor: 'pointer',
-          }}><Copy size={13} /> Copiar</button>
-        </div>
-      ))}
-    </dl>
+        ))}
+      </dl>
+      <Boton tipo="secundario" ancho onClick={() => copiar(todo, '¡Datos copiados!')} Icono={Copy}
+        testid="br-copiar-todo">Copiar todos los datos</Boton>
+    </div>
   );
 }
 

@@ -127,16 +127,8 @@ MiRemesaCancelada = _simple("MiRemesaCancelada", ("ok", "msg"))
 # Lo arma `services/bancos.para_el_cliente` con lista de lo permitido. Ni el
 # saldo del banco ni quién lo cargó: sólo lo que hace falta para transferir.
 
-DatosParaTransferir = _simple("DatosParaTransferir", ("titular", "documento", "numero_cuenta", "tipo_cuenta"))
-DatosParaPagoMovil = _simple("DatosParaPagoMovil", ("telefono", "documento"))
-
-
-class BancoParaTransferir(BaseModel):
-    bank_id: Escalar = None
-    name: Escalar = None
-    codigo: Escalar = None
-    transferencia: Optional[DatosParaTransferir] = None
-    pago_movil: Optional[DatosParaPagoMovil] = None
+# Sólo transferencia: nombre completo, cédula y cuenta.
+BancoParaTransferir = _simple("BancoParaTransferir", ("bank_id", "name", "titular", "documento", "numero_cuenta"))
 
 
 BancosParaTransferir = List[BancoParaTransferir]
