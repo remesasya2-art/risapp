@@ -1120,9 +1120,10 @@ enlace y marca la fila.
 
 **Lo que falta para que esto sea de verdad continuidad:** la regla de
 retención configurada en R2 (sin ella los respaldos se acumulan: 70 MB por
-día), la restauración de prueba hecha y anotada, y un Mongo con conjunto de
-réplicas, que además de las transacciones da una segunda copia viva. Los
-tres están en la sección 11.
+día), la restauración de prueba hecha y anotada, y una segunda copia viva de
+Mongo. El conjunto de réplicas ya está activo desde el 25 de septiembre de
+2026, pero es de un solo miembro: da las transacciones, no la segunda copia;
+para eso hay que sumarle otro miembro. Los tres están en la sección 11.
 
 ---
 
@@ -1216,7 +1217,7 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | **Restauración de prueba del respaldo** | Procedimiento escrito (9.1), no ejecutado todavía | Media jornada del operador con un Mongo aparte. Confirma el RTO estimado de una a dos horas y prueba que la llave del cofre abre los documentos restaurados. Hasta que se haga, el respaldo es una esperanza comprobada línea a línea, no una restauración probada. |
 | **Regla de retención de los respaldos en R2** | No configurada | En Cloudflare, el bucket de la aplicación → reglas de ciclo de vida: borrar los objetos con prefijo `respaldos/` a los 30 días. La aplicación no puede borrar (el token de R2 no tiene ese permiso, a propósito); sin la regla, los respaldos automáticos se acumulan a 70 MB por día. |
 | **Segundo destino para el respaldo** | No implementado | El respaldo automático va al mismo proveedor que las fotos. El día que ese almacén y la base caigan juntos, la copia de afuera es la que el operador bajó a mano. Un segundo destino en otro proveedor cierra eso. |
-| **Mongo con conjunto de réplicas** | Sin confirmar; la salud de la aplicación lo dice en `transacciones` | Es un ajuste del proveedor de Mongo, no de código: los pasos están en `docs/mongo-con-replicas.md`. Con un nodo suelto el motor contable corre sin transacciones y un cobro que mueve el saldo y escribe el libro son dos escrituras separadas. |
+| **Mongo con conjunto de réplicas** | **Hecho** el 25 de septiembre de 2026; la salud de la aplicación lo dice en `transacciones` | Es un ajuste del proveedor de Mongo, no de código: los pasos, y cómo volver atrás, están en `docs/mongo-con-replicas.md`. Es un conjunto de **un solo miembro**: da las transacciones, no una segunda copia viva. Desde el mismo día, cada movimiento de saldo del cliente —en RIS y en cripto— va junto con su línea del libro; la salud nombra los caminos. |
 | **Escaneo de dependencias en modo aviso** | Corre en CI en cada pull request, no frena | Que la lista de advertencias conocidas quede limpia (las de `cryptography`, `ecdsa`, `black`, `anyio` y `soupsieve`); entonces se saca el `continue-on-error` del flujo y una dependencia nueva con agujero frena la fusión. |
 | **Encargado de datos / LGPD** | No designado formalmente | Decisión del operador. |
 | **Sesión corta para el rol `agent`** | Hoy dura 7 días | Decisión del operador. El agente entra al panel y se le exige segundo factor, pero su sesión dura como la de un cliente. Acortarla es un cambio de una línea; el costo es que el agente vuelva a autenticarse durante la jornada. Está fijado en `test_duracion_de_la_sesion.py` para que sea una decisión y no un olvido. |

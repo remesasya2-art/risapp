@@ -711,19 +711,40 @@ async def cancelar_remesa(remesa_id: str, current_user: User = Depends(get_curre
 
 @router.get("/wallet", response_model=MiBilleteraBtc, response_model_exclude_unset=True)
 async def get_btc_wallet(current_user: User = Depends(get_current_user)):
-    """Retorna el saldo de la billetera BTC-VES del usuario autenticado."""
-    wallet = await db.btc_ves_wallets.find_one(
-        {"user_id": current_user.user_id},
-        {"_id": 0}
-    )
-    if not wallet:
-        return {"saldo": 0.0, "moneda": "BTC-VES", "user_id": current_user.user_id}
-    return {
-        "saldo": float(wallet.get("saldo", 0)),
-        "moneda": wallet.get("moneda", "BTC-VES"),
-        "user_id": current_user.user_id,
-        "actualizado_en": wallet.get("actualizado_en", None)
-    }
+    """Los bolívares en camino: las órdenes pagadas con Bitcoin que todavía no
+    se le enviaron al beneficiario.
+
+    SE CALCULA CADA VEZ, NO SE GUARDA
+
+        Antes se leía `btc_ves_wallets.saldo`, un contador que el aviso de
+        Blink suma al cobrar. Pero marcar la orden como enviada desde el panel
+        (`completar_remesa_btc`) no lo descontaba: sólo lo hacía una ruta vieja
+        del operador que ninguna pantalla usa. El número que veía el cliente
+        sólo crecía, y mostraba como «disponibles» bolívares ya entregados.
+
+        Sumar las órdenes en «pagado» da siempre lo correcto, arregla lo que
+        el contador ya acumuló sin tocar datos, y no necesita libro: cada orden
+        es su propio registro. El contador se sigue escribiendo como antes
+        para no tocar la ruta del operador, pero ya no se muestra.
+    """
+    from services.money import to_decimal, to_float, ZERO
+    ordenes = await db.btc_remesas.find(
+        {"user_id": current_user.user_id, "estado": "pagado"},
+        {"_id": 0, "ves_recibe": 1, "pagado_en": 1},
+    ).to_list(_TOPE_DE_ORDENES_EN_CAMINO)
+    # En Decimal: sumar `float` de a uno arrastra centavos que ningún
+    # bolívar tuvo.
+    total = sum((to_decimal(o.get("ves_recibe") or 0) for o in ordenes), ZERO)
+    respuesta = {"saldo": to_float(total), "moneda": "BTC-VES", "user_id": current_user.user_id}
+    pagos = [o["pagado_en"] for o in ordenes if o.get("pagado_en")]
+    if pagos:
+        respuesta["actualizado_en"] = max(pagos)
+    return respuesta
+
+
+# Una persona con más de cien órdenes pagadas esperando envío es un problema
+# de operación, no de pantalla: el tope evita que la lectura crezca sin límite.
+_TOPE_DE_ORDENES_EN_CAMINO = 100
 
 
 @router.get("/historial", response_model=MiHistorialBtc, response_model_exclude_unset=True)

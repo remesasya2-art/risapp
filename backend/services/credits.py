@@ -16,8 +16,10 @@ AUDITORIA
     Cada acreditacion (via webhook o manual desde el panel de superadmin) queda
     registrada como una linea inmutable en el libro mayor de creditos cripto
     (services/ledger_crypto.py), con saldo antes/despues, quien la hizo y a que
-    operacion pertenece. Si el registro del ledger falla, NUNCA revierte ni
-    bloquea la acreditacion real — es solo el rastro auditable.
+    operacion pertenece. Sin transacciones, si el registro del ledger falla NO
+    revierte ni bloquea la acreditacion. Con la transaccion de quien llama
+    (`session`), el saldo y su linea van juntos: si la linea falla, el error
+    sale y la transaccion deshace el credito.
 """
 
 import logging
@@ -86,6 +88,7 @@ async def credit_user(
     actor_id: str | None = None,
     actor_email: str | None = None,
     notes: str | None = None,
+    session=None,
 ) -> dict:
     """Acredita amount de creditos (USDT/USDC) al usuario, de forma atomica.
 
@@ -108,9 +111,13 @@ async def credit_user(
 
     # Saldo antes (best-effort, solo para el registro del ledger; el $inc de abajo
     # es la operacion atomica real que determina el saldo).
+    # La sesión se pasa sólo si hay una: los dobles de algunos tests no la
+    # aceptan, y sin transacción la llamada tiene que ser la de siempre.
+    con = {"session": session} if session is not None else {}
     user_before = await db.users.find_one(
         {"user_id": user_id},
         {"_id": 0, field: 1, "email": 1, "name": 1, "full_name": 1, "role": 1},
+        **con,
     )
     balance_before = float(to_credit_decimal(user_before.get(field, 0))) if user_before else None
 
@@ -118,6 +125,7 @@ async def credit_user(
     await db.users.update_one(
         {"user_id": user_id},
         {"$inc": {field: inc_value}},
+        **con,
     )
 
     balance_after = (balance_before + float(amount_dec)) if balance_before is not None else None
@@ -145,8 +153,12 @@ async def credit_user(
                 } if user_before else None
             ),
             notes=notes,
+            session=session,
         )
     except Exception as e:
+        # Con transacción, tragarse el error confirmaría el crédito sin su línea.
+        if session is not None:
+            raise
         logger.warning(f"No se pudo registrar en ledger_crypto (user={user_id}): {e}")
 
     return {"ok": True, "field": field, "amount": str(amount_dec)}

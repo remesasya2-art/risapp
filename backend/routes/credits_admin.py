@@ -258,35 +258,47 @@ async def manual_credit(data: ManualCreditRequest, admin: User = Depends(get_sup
 
     order_id = f"admin_{currency}_{user['user_id']}_{uuid.uuid4().hex[:12]}"
 
-    result = await credit_user(
-        db, user["user_id"], currency, data.amount,
-        movement_type="ajuste_admin_cripto",
-        reference_kind="manual",
-        reference_id=order_id,
-        actor_type="admin",
-        actor_id=admin.user_id,
-        actor_email=getattr(admin, "email", None),
-        notes=data.note or "Acreditacion manual desde panel de superadmin",
-    )
+    # El crédito, su línea y el registro del depósito van en una transacción
+    # cuando el Mongo la tiene. Sin ella, un corte después de acreditar dejaba
+    # el saldo sumado sin el depósito que lo explica, y el historial cripto
+    # del cliente —que sale de `crypto_deposits`— sin la entrada.
+    async def trabajo(session):
+        result = await credit_user(
+            db, user["user_id"], currency, data.amount,
+            movement_type="ajuste_admin_cripto",
+            reference_kind="manual",
+            reference_id=order_id,
+            actor_type="admin",
+            actor_id=admin.user_id,
+            actor_email=getattr(admin, "email", None),
+            notes=data.note or "Acreditacion manual desde panel de superadmin",
+            session=session,
+        )
+        if not result.get("ok"):
+            return result
+        await db.crypto_deposits.insert_one(
+            {
+                "order_id": order_id,
+                "user_id": user["user_id"],
+                "currency": currency,
+                "amount": float(data.amount),
+                "credit_amount": float(data.amount),
+                "status": "manual",
+                "credited": True,
+                "credited_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(timezone.utc),
+                "source": "admin_manual",
+                "admin_id": admin.user_id,
+                "admin_note": data.note or "",
+            },
+            **({"session": session} if session is not None else {}),
+        )
+        return result
+
+    from services import transacciones
+    result = await transacciones.en_una_transaccion(trabajo)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("reason", "No se pudo acreditar."))
-
-    await db.crypto_deposits.insert_one(
-        {
-            "order_id": order_id,
-            "user_id": user["user_id"],
-            "currency": currency,
-            "amount": float(data.amount),
-            "credit_amount": float(data.amount),
-            "status": "manual",
-            "credited": True,
-            "credited_at": datetime.now(timezone.utc),
-            "created_at": datetime.now(timezone.utc),
-            "source": "admin_manual",
-            "admin_id": admin.user_id,
-            "admin_note": data.note or "",
-        }
-    )
 
     logger.info(
         f"Admin {admin.user_id} acredito manualmente {data.amount} {currency} "

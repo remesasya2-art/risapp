@@ -167,78 +167,104 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
         logger.error(f"Orden {transaction_id} en revisión con moneda inesperada {cur_in}; no se cancela")
         raise HTTPException(status_code=400, detail="Esta orden no es un envío USDT/USDC; no hay saldo cripto que devolver.")
 
-    # Recien ahora se reclama el estado, y se sigue reclamando de forma atomica:
-    # si dos admins tocan el boton a la vez, solo uno pasa y el reembolso no se
-    # duplica. El chequeo de arriba no reemplaza al claim, solo evita cancelar
-    # ordenes que despues no vamos a poder reembolsar.
-    claimed = await db.transactions.find_one_and_update(
-        {"transaction_id": transaction_id, "status": "underpaid_review"},
-        {"$set": {
-            "status": "rejected",
-            "completed_at": ahora,
-            "processed_by": admin.user_id,
-            "rejected_reason": "pago_incompleto",
-        }},
-        return_document=True,
-    )
+    # EL RECHAZO, LA DEVOLUCION Y SU LINEA, EN UNA TRANSACCION
+    #
+    #   La orden se marca «rejected» ANTES de devolver el saldo: es el reclamo
+    #   que impide que dos administradores devuelvan dos veces. Con un Mongo de
+    #   un solo nodo son escrituras separadas, y un corte entre las dos dejaba
+    #   la orden rechazada y SIN devolución: el botón ya no dejaba reintentar,
+    #   porque la orden ya no estaba en revisión. Con réplicas van juntas: si
+    #   algo falla, la orden sigue en revisión y el botón se puede volver a usar.
+    async def trabajo(session):
+        # La sesión se pasa sólo si hay una: sin transacción, las llamadas son
+        # las de siempre.
+        con = {"session": session} if session is not None else {}
+        # Recien ahora se reclama el estado, y se sigue reclamando de forma atomica:
+        # si dos admins tocan el boton a la vez, solo uno pasa y el reembolso no se
+        # duplica. El chequeo de arriba no reemplaza al claim, solo evita cancelar
+        # ordenes que despues no vamos a poder reembolsar.
+        claimed = await db.transactions.find_one_and_update(
+            {"transaction_id": transaction_id, "status": "underpaid_review"},
+            {"$set": {
+                "status": "rejected",
+                "completed_at": ahora,
+                "processed_by": admin.user_id,
+                "rejected_reason": "pago_incompleto",
+            }},
+            return_document=True,
+            **con,
+        )
+        if not claimed:
+            return None, 0.0, None
+
+        monto = float(claimed.get("actually_paid") or 0) + float(claimed.get("topup_actually_paid") or 0)
+        monto_dec = to_credit_decimal(monto)
+        field = "balance_usdt" if cur_in == "USDT" else "balance_usdc"
+
+        acreditado = 0.0
+        if monto > 0:
+            user_doc = await db.users.find_one_and_update(
+                {"user_id": claimed["user_id"]},
+                {"$inc": {field: Decimal128(monto_dec)}},
+                return_document=True,
+                **con,
+            )
+            acreditado = float(monto_dec)
+            try:
+                from services.ledger_crypto import record_crypto_entry
+                bal_after = (user_doc or {}).get(field)
+                bal_after = float(to_credit_decimal(bal_after)) if bal_after is not None else None
+                await record_crypto_entry(
+                    user_id=claimed["user_id"],
+                    currency=cur_in.lower(),
+                    movement_type="reembolso_pago_incompleto",
+                    amount=acreditado,
+                    direction="credit",
+                    balance_before=(bal_after - acreditado) if bal_after is not None else None,
+                    balance_after=bal_after,
+                    reference_kind="transaction",
+                    reference_id=transaction_id,
+                    actor_type="admin",
+                    actor_id=admin.user_id,
+                    actor_email=getattr(admin, "email", None),
+                    metadata={
+                        "display_id": claimed.get("display_id"),
+                        "pay_amount": claimed.get("pay_amount"),
+                        "actually_paid": claimed.get("actually_paid"),
+                        "topup_actually_paid": claimed.get("topup_actually_paid"),
+                        "paid_ratio": claimed.get("paid_ratio"),
+                    },
+                    notes="Devolución como saldo por envío con pago incompleto",
+                    session=session,
+                )
+            except Exception as e:
+                # Con transacción, tragarse el error confirmaría la devolución
+                # sin su línea.
+                if session is not None:
+                    raise
+                logger.warning(f"Ledger cripto reembolso_pago_incompleto no registrado: {e}")
+
+        # `refunded_to_balance` es un booleano y el monto va en `refund_amount`. Antes
+        # el monto se guardaba en `refunded_to_balance`; el historial normaliza los
+        # documentos viejos, pero de aca en adelante los dos flujos escriben igual.
+        await db.transactions.update_one(
+            {"transaction_id": transaction_id},
+            {"$set": {
+                "refunded_to_balance": acreditado > 0,
+                "refunded_to_balance_field": field,
+                "refund_amount": acreditado,
+            }},
+            **con,
+        )
+        return claimed, acreditado, field
+
+    from services import transacciones
+    claimed, acreditado, field = await transacciones.en_una_transaccion(trabajo)
     if not claimed:
         existe = await db.transactions.find_one({"transaction_id": transaction_id}, {"status": 1})
         if not existe:
             raise HTTPException(status_code=404, detail="Orden no encontrada")
         raise HTTPException(status_code=409, detail=f"La orden ya no está en revisión (estado: {existe.get('status')})")
-
-    monto = float(claimed.get("actually_paid") or 0) + float(claimed.get("topup_actually_paid") or 0)
-    monto_dec = to_credit_decimal(monto)
-    field = "balance_usdt" if cur_in == "USDT" else "balance_usdc"
-
-    acreditado = 0.0
-    if monto > 0:
-        user_doc = await db.users.find_one_and_update(
-            {"user_id": claimed["user_id"]},
-            {"$inc": {field: Decimal128(monto_dec)}},
-            return_document=True,
-        )
-        acreditado = float(monto_dec)
-        try:
-            from services.ledger_crypto import record_crypto_entry
-            bal_after = (user_doc or {}).get(field)
-            bal_after = float(to_credit_decimal(bal_after)) if bal_after is not None else None
-            await record_crypto_entry(
-                user_id=claimed["user_id"],
-                currency=cur_in.lower(),
-                movement_type="reembolso_pago_incompleto",
-                amount=acreditado,
-                direction="credit",
-                balance_before=(bal_after - acreditado) if bal_after is not None else None,
-                balance_after=bal_after,
-                reference_kind="transaction",
-                reference_id=transaction_id,
-                actor_type="admin",
-                actor_id=admin.user_id,
-                actor_email=getattr(admin, "email", None),
-                metadata={
-                    "display_id": claimed.get("display_id"),
-                    "pay_amount": claimed.get("pay_amount"),
-                    "actually_paid": claimed.get("actually_paid"),
-                    "topup_actually_paid": claimed.get("topup_actually_paid"),
-                    "paid_ratio": claimed.get("paid_ratio"),
-                },
-                notes="Devolución como saldo por envío con pago incompleto",
-            )
-        except Exception as e:
-            logger.warning(f"Ledger cripto reembolso_pago_incompleto no registrado: {e}")
-
-    # `refunded_to_balance` es un booleano y el monto va en `refund_amount`. Antes
-    # el monto se guardaba en `refunded_to_balance`; el historial normaliza los
-    # documentos viejos, pero de aca en adelante los dos flujos escriben igual.
-    await db.transactions.update_one(
-        {"transaction_id": transaction_id},
-        {"$set": {
-            "refunded_to_balance": acreditado > 0,
-            "refunded_to_balance_field": field,
-            "refund_amount": acreditado,
-        }},
-    )
 
     try:
         await create_notification(

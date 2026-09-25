@@ -347,35 +347,57 @@ async def nowpayments_webhook(request: Request):
         return {"received": True, "processed": False, "status": payment_status}
     if payment_status != "finished":
         return {"received": True, "processed": False, "status": payment_status}
-    claimed = await db.crypto_deposits.find_one_and_update(
-        {"order_id": order_id, "credited": False},
-        {
-            "$set": {
-                "credited": True,
-                "status": "finished",
-                "credited_at": datetime.now(timezone.utc),
-            }
-        },
-    )
+    # EL RECLAMO, EL CREDITO Y SU LINEA, EN UNA TRANSACCION
+    #
+    #   El depósito se marca «acreditado» ANTES de sumar el saldo: es lo que
+    #   impide que un aviso repetido acredite dos veces. Con un Mongo de un
+    #   solo nodo son escrituras separadas, y un corte entre las dos dejaba el
+    #   depósito marcado y el saldo sin sumar: la plata del cliente se perdía,
+    #   y nada la reintentaba, porque el depósito ya figuraba acreditado. Con
+    #   réplicas van juntos: si algo falla, el depósito sigue sin acreditar y
+    #   el próximo aviso de NOWPayments lo vuelve a intentar.
+    actually_paid = payload.get("actually_paid")
+
+    async def trabajo(session):
+        con = {"session": session} if session is not None else {}
+        claimed = await db.crypto_deposits.find_one_and_update(
+            {"order_id": order_id, "credited": False},
+            {
+                "$set": {
+                    "credited": True,
+                    "status": "finished",
+                    "credited_at": datetime.now(timezone.utc),
+                }
+            },
+            **con,
+        )
+        if not claimed:
+            return None, None, None
+        credit_amount = actually_paid if actually_paid else claimed.get("amount")
+        result = await credit_user(
+            db, claimed["user_id"], claimed["currency"], credit_amount,
+            movement_type="deposito_cripto",
+            reference_kind="crypto_deposit",
+            reference_id=order_id,
+            actor_type="webhook",
+            notes="Acreditado via webhook NOWPayments",
+            session=session,
+        )
+        if not result.get("ok"):
+            await db.crypto_deposits.update_one(
+                {"order_id": order_id},
+                {"$set": {"credited": False, "credit_error": result.get("reason")}},
+                **con,
+            )
+        return claimed, credit_amount, result
+
+    from services import transacciones
+    claimed, credit_amount, result = await transacciones.en_una_transaccion(trabajo)
     if not claimed:
         logger.info(f"NOWPayments webhook: order_id {order_id} ya estaba acreditado, ignorando duplicado")
         return {"received": True, "already_processed": True}
-    actually_paid = payload.get("actually_paid")
-    credit_amount = actually_paid if actually_paid else claimed.get("amount")
-    result = await credit_user(
-        db, claimed["user_id"], claimed["currency"], credit_amount,
-        movement_type="deposito_cripto",
-        reference_kind="crypto_deposit",
-        reference_id=order_id,
-        actor_type="webhook",
-        notes="Acreditado via webhook NOWPayments",
-    )
     if not result.get("ok"):
         logger.error(f"NOWPayments webhook: fallo al acreditar order_id {order_id}: {result}")
-        await db.crypto_deposits.update_one(
-            {"order_id": order_id},
-            {"$set": {"credited": False, "credit_error": result.get("reason")}},
-        )
         return {"received": True, "error": "credit_failed"}
     logger.info(
         f"NOWPayments: acreditado {credit_amount} {claimed['currency']} "

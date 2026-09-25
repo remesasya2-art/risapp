@@ -115,15 +115,16 @@ async def _transacciones(db):
     # Decía «los cobros se escriben en una sola operación» con réplicas, y no
     # era cierto: sólo el motor contable abría transacciones. Con ese texto, el
     # día que Mongo tuviera réplicas la salud se ponía en verde prometiendo
-    # algo que no pasaba. Por eso nombra lo que va junto y lo que todavía no:
-    # los saldos en cripto se mueven fuera de `saldos.py` y no se tocaron.
+    # algo que no pasaba. Por eso nombra lo que va junto, camino por camino: si
+    # mañana aparece un movimiento de saldo nuevo fuera de transacción, este
+    # texto tiene que decirlo.
     if await hay_transacciones():
         return (True, "Mongo es un conjunto de réplicas: el motor contable (lotes de USDT, ventas P2P, "
-                      "conciliación) escribe en una sola operación, y el saldo en RIS del cliente va junto "
-                      "con su línea del libro en PIX, tarjeta, bonos, ajustes, envíos, retiros, recargas en "
-                      "bolívares, devoluciones y encomiendas. Los saldos en cripto (acreditaciones de USDT "
-                      "y USDC, envíos pagados con cripto, devoluciones de pagos incompletos y la billetera "
-                      "de BTC) todavía son dos escrituras separadas", False)
+                      "conciliación) escribe en una sola operación, y el saldo del cliente va junto con su "
+                      "línea del libro. En RIS: PIX, tarjeta, bonos, ajustes, envíos, retiros, recargas en "
+                      "bolívares, devoluciones y encomiendas. En cripto: depósitos de USDT y USDC, envíos "
+                      "pagados con saldo y devoluciones de retiros y de pagos incompletos. La billetera "
+                      "BTC-VES no es un saldo guardado: se calcula de las órdenes pagadas", False)
     return (False, "Mongo es de UN solo nodo: la aplicación corre sin transacciones. El motor contable "
                    "escribe en operaciones separadas, y el saldo del cliente y su línea del libro son dos "
                    "escrituras separadas. Hace falta un conjunto de réplicas (replica set)", False)

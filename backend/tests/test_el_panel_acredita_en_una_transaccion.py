@@ -191,3 +191,91 @@ def test_RECHAZAR_EN_USDT_UN_ERROR_DEL_LIBRO_CRIPTO_ANTES_DE_LA_BASE_TAMBIEN_DES
     with pytest.raises(ValueError):
         corre(_rechazar())
     assert _cuenta(base, "balance_usdt") == Decimal("10.00") and _estado_del_retiro(base) == "pending"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La devolución de un pago incompleto en cripto
+# ══════════════════════════════════════════════════════════════════════════
+
+def _orden_incompleta(base):
+    corre(base.users.insert_one({"user_id": "u_1", "email": "cliente@ejemplo.test", "name": "Cliente",
+                                 "role": "user", "balance_usdt": to_decimal128("1.00")}))
+    corre(base.transactions.insert_one({"transaction_id": "tx_inc", "display_id": "RIS-7", "type": "withdrawal",
+                                        "status": "underpaid_review", "user_id": "u_1",
+                                        "currency_input": "USDT", "actually_paid": 12.5,
+                                        "topup_actually_paid": 2.5}))
+
+
+def _devolver_incompleto():
+    from routes.admin import pagos_incompletos
+    return pagos_incompletos.rechazar_orden_y_reembolsar_saldo("tx_inc", admin=SUPER)
+
+
+def _orden_incompleta_estado(base):
+    return corre(base.transactions.find_one({"transaction_id": "tx_inc"}))
+
+
+def test_INCOMPLETO_RECHAZA_DEVUELVE_ASIENTA_Y_ANOTA(base):
+    _orden_incompleta(base)
+    r = corre(_devolver_incompleto())
+    assert r["refunded"] == 15.0
+    assert _cuenta(base, "balance_usdt") == Decimal("16.00")
+    orden = _orden_incompleta_estado(base)
+    assert orden["status"] == "rejected" and orden["refund_amount"] == 15.0
+    (linea,) = corre(base.ledger.find({"reference.id": "tx_inc"}).to_list(5))
+    assert linea["movement_type"] == "reembolso_pago_incompleto"
+
+
+def test_INCOMPLETO_DOS_VECES_DEVUELVE_UNA(base):
+    from fastapi import HTTPException
+    _orden_incompleta(base)
+    corre(_devolver_incompleto())
+    with pytest.raises(HTTPException) as e:
+        corre(_devolver_incompleto())
+    assert e.value.status_code == 409 and _cuenta(base, "balance_usdt") == Decimal("16.00")
+
+
+@solo_con_transacciones
+def test_INCOMPLETO_SI_LA_LINEA_FALLA_LA_ORDEN_SIGUE_EN_REVISION(base):
+    """Sin transacciones, la orden quedaba rechazada; y si lo que fallaba era
+    la devolución, rechazada y sin devolver, con el botón ya inútil."""
+    _orden_incompleta(base)
+    corre(base.create_collection("ledger", validator=LIBRO_QUE_RECHAZA_TODO))
+    with pytest.raises(Exception):
+        corre(_devolver_incompleto())
+    assert _cuenta(base, "balance_usdt") == Decimal("1.00")
+    assert _orden_incompleta_estado(base)["status"] == "underpaid_review", "el botón ya no se podría reintentar"
+
+
+@solo_con_transacciones
+def test_INCOMPLETO_UN_ERROR_DEL_LIBRO_ANTES_DE_LA_BASE_TAMBIEN_DESHACE_TODO(base, monkeypatch):
+    from services import ledger_crypto
+
+    def no_se_puede(*a, **k):
+        raise ValueError("la línea no se pudo armar")
+    monkeypatch.setattr(ledger_crypto, "quantize_money", no_se_puede)
+    _orden_incompleta(base)
+    with pytest.raises(ValueError):
+        corre(_devolver_incompleto())
+    assert _cuenta(base, "balance_usdt") == Decimal("1.00")
+    assert _orden_incompleta_estado(base)["status"] == "underpaid_review"
+
+
+@solo_con_transacciones
+def test_INCOMPLETO_SI_LA_CONFIRMACION_FALLA_NO_QUEDA_NADA(base, monkeypatch):
+    """Los campos de la devolución son lo último que se escribe: sólo se ve
+    que van adentro si algo falla después de ellos."""
+    from services import transacciones
+
+    async def todo_y_se_aborta(trabajo):
+        async with await transacciones.mongo_client.start_session() as sesion:
+            async with sesion.start_transaction():
+                await trabajo(sesion)
+                raise RuntimeError("la confirmación falló")
+    monkeypatch.setattr(transacciones, "en_una_transaccion", todo_y_se_aborta)
+    _orden_incompleta(base)
+    with pytest.raises(RuntimeError):
+        corre(_devolver_incompleto())
+    orden = _orden_incompleta_estado(base)
+    assert orden["status"] == "underpaid_review" and "refund_amount" not in orden
+    assert _cuenta(base, "balance_usdt") == Decimal("1.00") and corre(base.ledger.count_documents({})) == 0

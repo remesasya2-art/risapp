@@ -192,3 +192,100 @@ def test_EN_BOLIVARES_UN_ERROR_DEL_LIBRO_ANTES_DE_LLEGAR_A_LA_BASE_TAMBIEN_DESHA
     with pytest.raises(ValueError):
         corre(_retiro_ves(50.0))
     assert _saldo(base) == Decimal("100.00") and _cuantos(base, "transactions") == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El envío a Venezuela pagado con saldo en cripto
+# ══════════════════════════════════════════════════════════════════════════
+
+def _con_usdt(base, saldo="100.00000000"):
+    corre(base.users.insert_one({"user_id": "u_1", "email": CLIENTE.email, "name": "Cliente",
+                                 "role": "user", "balance_usdt": to_decimal128(saldo)}))
+
+
+def _envio_cripto(monto=30.0):
+    return salidas_de_saldo.cobrar_envio_con_saldo_cripto(
+        CLIENTE, SimpleNamespace(amount=monto, currency="usdt", beneficiary_id="b_ve"),
+        key="usdt", tx_id="tx_cri", display_id="RIS-9", crypto_to_ves=40.0, amount_ves=monto * 40,
+        beneficiary_data={"full_name": "Destinatario"})
+
+
+def _usdt(base):
+    return from_db(corre(base.users.find_one({"user_id": "u_1"}))["balance_usdt"])
+
+
+def _cripto_todo_y_se_aborta(monkeypatch):
+    """Confirma todo lo del trabajo y aborta al final, como si la confirmación
+    fallara. Lo último que se escribe sólo se ve que va adentro de la
+    transacción si algo falla DESPUÉS de escribirlo."""
+    from services import transacciones
+
+    async def todo_y_se_aborta(trabajo):
+        async with await transacciones.mongo_client.start_session() as sesion:
+            async with sesion.start_transaction():
+                await trabajo(sesion)
+                raise RuntimeError("la confirmación falló")
+    monkeypatch.setattr(transacciones, "en_una_transaccion", todo_y_se_aborta)
+
+
+def test_CON_SALDO_CRIPTO_DESCUENTA_CREA_LA_ORDEN_Y_ASIENTA(base):
+    _con_usdt(base)
+    corre(_envio_cripto(30.0))
+    assert _usdt(base) == Decimal("70.00")
+    orden = corre(base.transactions.find_one({"transaction_id": "tx_cri"}))
+    assert orden["funded_from"] == "balance" and orden["currency_input"] == "USDT"
+    (linea,) = corre(base.ledger.find({"reference.id": "tx_cri"}).to_list(5))
+    assert linea["movement_type"] == "envio_ves" and linea["direction"] == "debit"
+
+
+def test_CON_SALDO_CRIPTO_SIN_SALDO_NO_ESCRIBE_NADA(base):
+    _con_usdt(base, "10.00000000")
+    with pytest.raises(HTTPException) as e:
+        corre(_envio_cripto(30.0))
+    assert e.value.status_code == 400
+    assert _usdt(base) == Decimal("10.00") and _cuantos(base, "transactions") == 0
+
+
+@solo_con_transacciones
+def test_CON_SALDO_CRIPTO_SI_LA_LINEA_FALLA_NO_HAY_DEBITO_NI_ORDEN(base):
+    """Sin transacciones, el saldo se descontaba y la orden quedaba creada
+    aunque la línea del libro cripto no se escribiera."""
+    _con_usdt(base)
+    corre(base.create_collection("ledger", validator=LIBRO_QUE_RECHAZA_TODO))
+    with pytest.raises(Exception):
+        corre(_envio_cripto(30.0))
+    assert _usdt(base) == Decimal("100.00"), "se descontó sin su línea"
+    assert _cuantos(base, "transactions") == 0
+
+
+@solo_con_transacciones
+def test_CON_SALDO_CRIPTO_UN_ERROR_DEL_LIBRO_ANTES_DE_LA_BASE_TAMBIEN_DESHACE_TODO(base, monkeypatch):
+    from services import ledger_crypto
+
+    def no_se_puede(*a, **k):
+        raise ValueError("la línea no se pudo armar")
+    monkeypatch.setattr(ledger_crypto, "quantize_money", no_se_puede)
+    _con_usdt(base)
+    with pytest.raises(ValueError):
+        corre(_envio_cripto(30.0))
+    assert _usdt(base) == Decimal("100.00") and _cuantos(base, "transactions") == 0
+
+
+@solo_con_transacciones
+def test_CON_SALDO_CRIPTO_SI_LA_ORDEN_NO_SE_REGISTRA_EL_SALDO_VUELVE(base):
+    _con_usdt(base)
+    corre(base.create_collection("transactions", validator=LIBRO_QUE_RECHAZA_TODO))
+    with pytest.raises(HTTPException) as e:
+        corre(_envio_cripto(30.0))
+    assert e.value.status_code == 500
+    assert _usdt(base) == Decimal("100.00") and corre(base.ledger.count_documents({})) == 0
+
+
+@solo_con_transacciones
+def test_CON_SALDO_CRIPTO_SI_LA_CONFIRMACION_FALLA_NO_QUEDA_NADA(base, monkeypatch):
+    _cripto_todo_y_se_aborta(monkeypatch)
+    _con_usdt(base)
+    with pytest.raises(RuntimeError):
+        corre(_envio_cripto(30.0))
+    assert _usdt(base) == Decimal("100.00") and _cuantos(base, "transactions") == 0
+    assert corre(base.ledger.count_documents({})) == 0, "la línea quedó escrita fuera de la transacción"

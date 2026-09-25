@@ -1,11 +1,14 @@
 # Pasar el Mongo de Railway a un conjunto de réplicas
 
+> **Hecho en producción el 25 de septiembre de 2026.** La salud de la
+> aplicación pasó a `SALUD| bien`, con «transacciones» en verde. Esta guía queda
+> para volver atrás (sección 5) o para repetirlo en otro entorno.
+
 **Qué se gana:** que cada movimiento de plata del cliente se escriba entero o no
-se escriba. Hoy el Mongo de producción es de **un solo nodo**, y con un solo
-nodo Mongo no tiene *transacciones* —la forma de agrupar varias escrituras para
-que queden todas o ninguna—. La aplicación ya está preparada para usarlas: el
-día que el Mongo las tenga, las usa sola. Lo que falta es un ajuste del Mongo,
-no del código.
+se escriba. Un Mongo de **un solo nodo** no tiene *transacciones* —la forma de
+agrupar varias escrituras para que queden todas o ninguna—. La aplicación está
+preparada para usarlas: cuando el Mongo las tiene, las usa sola. Lo que hace
+falta es un ajuste del Mongo, no del código.
 
 Un *conjunto de réplicas* (en inglés, *replica set*) es la forma que tiene Mongo
 de trabajar con transacciones. Acá va a ser un conjunto **de un solo miembro**:
@@ -34,11 +37,23 @@ sección 5 y también se probó.
 ## 1. Pegar el comando de arranque
 
 En Railway: el proyecto → el servicio de **MongoDB** → **Settings** →
-sección **Deploy** → **Custom Start Command**. Pegá esto, **en una sola línea,
-tal cual**:
+sección **Deploy** → **Custom Start Command**.
+
+**Antes de borrar lo que haya ahí, copialo:** es lo que se restaura para volver
+atrás. En producción el campo ya traía, de la plantilla de Railway:
 
 ```
-bash -c 'K=/data/db/rs.key; if [ -z "$RAILWAY_PRIVATE_DOMAIN" ]; then echo "SIN RED PRIVADA: Mongo arranca sin replicas"; exec docker-entrypoint.sh mongod --ipv6 --bind_ip_all; fi; [ -f $K ] || head -c 512 /dev/urandom | base64 -w0 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; SH=$(command -v mongosh || command -v mongo); (until $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"$RAILWAY_PRIVATE_DOMAIN:27017\"}]}).ok }" 2>/dev/null | grep -q 1; do sleep 2; done; echo "REPLICAS LISTAS") & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip_all'
+docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false
+```
+
+Esas opciones —escuchar por IPv6, que es por donde anda la red privada de
+Railway, y no juntar datos de diagnóstico— se conservan en el comando nuevo.
+La primera versión de esta guía no las traía; se corrigieron antes de usarla.
+
+Reemplazalo por esto, **en una sola línea, tal cual**:
+
+```
+bash -c 'K=/data/db/rs.key; if [ -z "$RAILWAY_PRIVATE_DOMAIN" ]; then echo "SIN RED PRIVADA: Mongo arranca sin replicas"; exec docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false; fi; [ -f $K ] || head -c 512 /dev/urandom | base64 -w0 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; SH=$(command -v mongosh || command -v mongo); (until $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"$RAILWAY_PRIVATE_DOMAIN:27017\"}]}).ok }" 2>/dev/null | grep -q 1; do sleep 2; done; echo "REPLICAS LISTAS") & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
 ```
 
 Qué hace, en orden:
@@ -84,11 +99,19 @@ En el panel, «Salud de la aplicación», la línea **transacciones** tiene que
 estar con ✓ y decir:
 
 > Mongo es un conjunto de réplicas: el motor contable (lotes de USDT, ventas
-> P2P, conciliación) escribe en una sola operación, y el saldo en RIS del
-> cliente va junto con su línea del libro…
+> P2P, conciliación) escribe en una sola operación, y el saldo del cliente va
+> junto con su línea del libro…
 
 El mismo texto aparece cada cinco minutos en el registro del backend, en la
-línea que empieza con `SALUD|`.
+línea que empieza con `SALUD|`, que tiene que decir `SALUD| bien`.
+
+Justo después del reinicio es normal ver una o dos veces
+
+    SALUD| me salteé la vuelta: el turno lo tiene otro proceso
+
+Durante el reinicio conviven el contenedor viejo y el nuevo, y la revisión la
+hace uno solo; el turno se libera solo a los cuatro minutos. Para no esperar,
+abrí el panel: la tarjeta de salud revisa en el momento, sin turno.
 
 Hasta hoy esa línea decía «Mongo es de UN solo nodo» con ✗. Si sigue diciendo
 eso después del paso 3, el backend no se reinició o Mongo no quedó como
@@ -100,8 +123,15 @@ conjunto de réplicas: mirá otra vez el registro del paso 2.
 
 Si algo no se ve bien, en cualquier momento:
 
-1. Servicio de **MongoDB** → Settings → Deploy → **borrá** el Custom Start
-   Command, y desplegá.
+1. Servicio de **MongoDB** → Settings → Deploy → en **Custom Start Command**
+   poné de nuevo el comando que había antes (sección 1), y desplegá. En
+   producción es:
+
+   ```
+   docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false
+   ```
+
+   Si el campo estaba vacío antes, dejalo vacío.
 2. **Redeploy** del backend.
 
 Mongo vuelve a arrancar como un solo nodo, con todos sus datos, y la aplicación
@@ -141,7 +171,17 @@ Railway—, y con el comando de arriba copiado letra por letra:
 - que la vuelta atrás (sección 5) deja Mongo como un solo nodo, con los datos,
   leyendo y escribiendo.
 
-**No se puede probar desde acá**, porque es de Railway: cómo ejecuta el comando
-de arranque, que el disco de Mongo esté montado en `/data/db` y que la imagen
-traiga `mongosh`. Si alguna de esas tres cosas no fuera así, el paso 2 lo
-muestra: no aparece «REPLICAS LISTAS», y se vuelve atrás.
+El ensayo se repitió con las opciones de la plantilla de Railway (IPv6 y sin
+diagnóstico): mismo resultado, y el diagnóstico sigue apagado.
+
+**Lo que sólo se podía ver en Railway**: cómo ejecuta el comando de arranque,
+que el disco de Mongo esté montado en `/data/db` y que la imagen traiga
+`mongosh`. Se vio el 25 de septiembre de 2026, en producción:
+
+- en el registro de Mongo, el comando reintentó iniciar el conjunto cada dos
+  segundos —se ve como «Connection not authenticating» desde `127.0.0.1`, con
+  el controlador `nodejs`, que es `mongosh`— y dejó de intentar al lograrlo;
+- el backend, al reiniciarse, creó sus índices sin error: Mongo aceptaba
+  escrituras;
+- la salud dijo `SALUD| bien`, con «Mongo es un conjunto de réplicas», y la
+  base pasó a responder en 1 ms.
