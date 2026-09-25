@@ -49,6 +49,7 @@ from services.ip_cliente import ip_del_cliente
 from database import db
 from services import personal as _personal
 from services.email_notifications import notify_dos_pasos_activado
+from models.fuera_del_panel import RegistroDeAccesos
 from models.user import User
 from routes.dependencies import get_current_user, set_session_cookie
 from services.perfil import para_su_dueno
@@ -826,7 +827,7 @@ async def twofa_verify(request: Request, response: Response, data: TwoFAVerifyRe
 # ============================================================
 # Admin access log endpoint (consult)
 # ============================================================
-@router.get("/admin-access-log")
+@router.get("/admin-access-log", response_model=RegistroDeAccesos, response_model_exclude_unset=True)
 async def admin_access_log(
     limit: int = 50,
     current_user: User = Depends(get_current_user),

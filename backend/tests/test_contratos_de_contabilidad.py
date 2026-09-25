@@ -182,7 +182,11 @@ def test_LOS_BANCOS_Y_SU_LIBRO(contabilidad):
     alcanza = c.get("/admin/accounting/balance-check?currency=VES&amount=500")
     _igual_a_llamarla_directo(alcanza, ya(accounting.check_balance(currency="VES", amount=500, admin=SUPER)))
     assert alcanza.json()["sufficient"] is True
-    assert c.delete(f"/admin/accounting/banks/{bid}").json() == {"message": "Banco eliminado"}
+    # Con un movimiento anotado ya no se borra (ver tests/test_bancos_de_contabilidad.py);
+    # uno recién cargado, sí.
+    assert c.delete(f"/admin/accounting/banks/{bid}").status_code == 409
+    nuevo = c.post("/admin/accounting/banks", json={"name": "Provincial", "currency": "VES"}).json()["bank_id"]
+    assert c.delete(f"/admin/accounting/banks/{nuevo}").json() == {"message": "Banco eliminado"}
 
 
 def test_LAS_TASAS_LAS_OPERACIONES_Y_EL_LIBRO_DE_USDT(contabilidad):

@@ -198,7 +198,6 @@ LOS_DE_AFUERA = [
     ("/api/btc/webhook/blink", "Blink: custodia de Bitcoin"),
     ("/api/transactions/crypto-send/webhook", "pasarela de envíos en cripto"),
     ("/api/webhooks/twilio/whatsapp", "Twilio"),
-    ("/api/centro-gestion/log", "integración de contabilidad"),
 ]
 
 

@@ -136,6 +136,10 @@ ACCIONES = {
     # Configuración
     "config.tasa":              (Cat.CONFIG, "Cambio de tasa de cambio"),
     "config.limites":           (Cat.CONFIG, "Cambio de límites"),
+    # Los bancos de contabilidad: de ellos dependen Retiros y Recargas en
+    # bolívares, así que quién cargó o borró uno tiene que quedar escrito.
+    "contabilidad.banco_creado": (Cat.CONFIG, "Banco de contabilidad creado"),
+    "contabilidad.banco_borrado": (Cat.CONFIG, "Banco de contabilidad borrado"),
     # Los números que se cambian desde la pantalla de configuración del panel
     # (services/configuracion.py). Uno de ellos decide cuánta plata se le
     # regala a cada cuenta que se registra, así que «quién lo puso en

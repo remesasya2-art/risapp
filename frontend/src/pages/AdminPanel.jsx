@@ -27,6 +27,7 @@ import Respaldo from '../components/admin/Respaldo';
 import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
+import Bancos from '../components/admin/Bancos';
 import { fmt } from '../utils/format';
 import MesaDeAyuda from '../components/admin/MesaDeAyuda';
 import { WipeButton } from '../components/common/WipeButton';
@@ -94,6 +95,9 @@ const TABS = [
   // mover acá —es de sólo lectura y no muestra datos del pagador—.
   { key: 'hoja_mp', label: 'Pagos de Mercado Pago', icon: Receipt },
   { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
+  // Crear y borrar las cuentas de donde salen los retiros y a donde entran
+  // las recargas. Sólo del super administrador, como sus rutas.
+  { key: 'bancos', label: 'Bancos', icon: Landmark, superAdminOnly: true },
   { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
   { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
   { key: 'crm', label: 'CRM', icon: UserCog },
@@ -169,7 +173,7 @@ const GRUPOS = [
   { key: 'g_envios', label: 'Encomiendas', icon: Boxes,
     hijas: ['operacion', 'envios'] },
   { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
-    hijas: ['ledger', 'seguridad', 'cobros', 'reportes'] },
+    hijas: ['ledger', 'bancos', 'seguridad', 'cobros', 'reportes'] },
   { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
     hijas: ['configuracion', 'respaldo', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
 ];
@@ -460,9 +464,12 @@ const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => { loadData(); }, [activeTab]);
 
-  useEffect(() => {
+  // Retiros y Recargas eligen de esta lista; la pantalla de Bancos la vuelve
+  // a pedir cuando carga o borra uno.
+  const cargarBancos = useCallback(() => {
     api.get('/admin/accounting/banks').then(res => setAccountingBanks(res.data || [])).catch(() => {});
   }, []);
+  useEffect(() => { cargarBancos(); }, [cargarBancos]);
 
   useEffect(() => {
   }, []);
@@ -1063,6 +1070,12 @@ const [searchParams, setSearchParams] = useSearchParams();
 
         {activeTab === 'cobros' && user?.role === 'super_admin' && (
           <CobrosSinAcreditar />
+        )}
+
+        {activeTab === 'bancos' && user?.role === 'super_admin' && (
+          <ErrorBoundary clave="bancos" donde="Bancos">
+            <Bancos onCambio={cargarBancos} />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'hoja_mp' && (

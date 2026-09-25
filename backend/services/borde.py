@@ -80,7 +80,6 @@ EXENTAS = (
     "/api/btc/webhook/blink",
     "/api/transactions/crypto-send/webhook",
     "/api/webhooks/",
-    "/api/centro-gestion/",
 )
 
 

@@ -21,6 +21,7 @@ from services import nowpayments
 from services.min_amount import effective_min_amount
 from services.limits import validate_pix_amount, validate_ves_amount
 from services import kyc_quota
+from services.bancos import clave_del_nombre
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://www.risappbr.com")
 CRYPTO_NETWORK_TICKER = {"usdt": "usdttrc20", "usdc": "usdc"}
@@ -48,7 +49,6 @@ from models.requests import WithdrawalRequest, BeneficiaryCreate
 from routes.dependencies import get_current_user, get_verified_user, sin_transacciones_personales
 from services.idempotency import claim_idempotency, store_idempotency_result
 from services.notifications import create_notification
-from services.centro_gestion import registrar_evento
 from utils.helpers import get_next_withdrawal_id
 from services.imagen_recibida import ImagenInvalida, limpiar_imagen_opcional
 
@@ -706,28 +706,6 @@ async def create_withdrawal(request: WithdrawalRequest, current_user: User = Dep
         notification_type="withdrawal_pending",
         data={"transaction_id": tx_id},
     )
-
-    # Registrar en CentroGestion
-    try:
-        await registrar_evento(
-            tipo="retiro_ves",
-            transaction_id=tx_id,
-            user_id=current_user.user_id,
-            user_email=user.get("email"),
-            user_name=user.get("name") or user.get("full_name"),
-            amount_input=request.amount,
-            amount_output=amount_ves,
-            currency_input="RIS",
-            currency_output="VES",
-            status="pending",
-            metadata={
-                "display_id": display_id,
-                "rate": ris_to_ves,
-                "beneficiary": beneficiary_data
-            }
-        )
-    except Exception as e:
-        logger.warning(f"registrar_evento fallo: {e}")
 
     _resp_withdraw = {
         "message": "Retiro solicitado exitosamente",
@@ -1425,25 +1403,6 @@ async def webhook_crypto_send(request: Request):
 # tiene `destination_bank`, y nadie lo escribia — el defecto de mas arriba
 # mantenia desarmada la bomba de mas abajo.
 
-_ACENTOS = str.maketrans("áéíóúÁÉÍÓÚàâãêôõçÀÂÃÊÔÕÇ", "aeiouAEIOUaaaeoocAAAEOOC")
-
-
-def _clave_de_banco(texto) -> str:
-    """Un nombre de banco reducido a lo comparable: sin acentos, sin puntuacion.
-
-    'Banco de Venezuela', 'banco_venezuela' y 'BANCO DE VENEZUELA' tienen que
-    ser la misma cosa. Sin esto, la traduccion depende de como lo tipeo quien
-    cargo el banco en contabilidad, que es una fuente distinta de quien escribio
-    la lista del frontend.
-    """
-    limpio = str(texto or "").translate(_ACENTOS).lower()
-    palabras = [p for p in "".join(c if c.isalnum() else " " for c in limpio).split()
-                # 'de' y 'del' sobran: "Banco de Venezuela" y "banco_venezuela"
-                # tienen que colapsar al mismo valor.
-                if p not in ("de", "del", "la", "el", "banco")]
-    return " ".join(palabras)
-
-
 async def resolve_ves_bank(valor):
     """(bank_id, documento) del banco de contabilidad que corresponde, o (None, None).
 
@@ -1488,10 +1447,10 @@ async def resolve_ves_bank(valor):
         logger.warning(f"resolve_ves_bank: no se pudo leer bank_accounts: {e}")
         return None, None
 
-    buscada = _clave_de_banco(texto)
+    buscada = clave_del_nombre(texto)
     if not buscada:
         return None, None
-    candidatos = [b for b in bancos if _clave_de_banco(b.get("name")) == buscada]
+    candidatos = [b for b in bancos if clave_del_nombre(b.get("name")) == buscada]
     if len(candidatos) != 1:
         if len(candidatos) > 1:
             logger.warning(
@@ -1622,8 +1581,6 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     if _client_ris and abs(_client_ris - amount_ris) > 0.01:
         logger.warning(f"recharge_ves: RIS del cliente ({_client_ris}) != servidor ({amount_ris}) user={current_user.user_id}")
 
-    user = await db.users.find_one({"user_id": current_user.user_id})
-
     tx_id = f"rech_{uuid.uuid4().hex[:12]}"
     # EL NUMERO CORTO, TAMBIEN ACA
     #
@@ -1660,21 +1617,6 @@ async def recharge_ves(request: dict, current_user: User = Depends(get_current_u
     }
 
     await db.transactions.insert_one(transaction)
-
-    # Registrar en CentroGestion
-    await registrar_evento(
-        tipo="recarga_ves",
-        transaction_id=tx_id,
-        user_id=current_user.user_id,
-        user_email=user.get("email") if user else None,
-        user_name=user.get("name") or user.get("full_name") if user else None,
-        amount_input=amount_input,
-        amount_output=amount_ris,
-        currency_input="VES",
-        currency_output="RIS",
-        status="pending",
-        metadata={"payment_method": payment_method}
-    )
 
     _resp_rch = {
         "message": "Recarga VES registrada, pendiente de verificacion",

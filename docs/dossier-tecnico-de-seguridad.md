@@ -1266,7 +1266,7 @@ Esta sección existe porque un dossier sin ella no es creíble.
 | Un comprobante peligroso no se llega a guardar | `backend/services/imagen_recibida.py` | `test_imagen_recibida.py` |
 | El proxy de medios sólo va a donde tiene que ir | `backend/routes/media.py` | `test_media_twilio.py` |
 | Toda ruta pública tiene tope de intentos o motivo escrito | `backend/routes/` | `test_puertas_sin_llave.py` |
-| Toda ruta de los puentes exige la clave, y la exige primero | `backend/routes/adminbrl_bridge.py`, `backend/routes/centro_gestion.py` | `test_puente_con_llave.py` |
+| Ya no hay puentes que entren con clave compartida: se quitaron el de adminbrl y, en septiembre de 2026, el de centro-gestion | `backend/routes/__init__.py`, `backend/services/borde.py` | `test_centro_gestion_quitado.py` |
 | Los webhooks verifican firma y frescura | `backend/routes/gestor_pix.py`, `backend/routes/btc_lightning.py` | `test_webhooks_firmados.py` |
 | La documentación de la API no se publica, y el cuerpo tiene tope | `backend/server.py`, `backend/services/limite_de_cuerpo.py` | `test_superficie_de_la_api.py` |
 | Un documento cifrado vuelve idéntico, y el tamaño no crece | `backend/services/cofre.py` | `test_cofre.py` |

@@ -7,14 +7,16 @@ import io
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from decimal import Decimal, InvalidOperation
+from typing import Optional, Union
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte
+from services.money import ZERO, from_db, to_float, to_decimal, to_decimal128, quantize_money, is_gte, para_mostrar
 from services import las_fotos
 from services import bancos
 from services import quien_es
+from services import auditoria
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -56,7 +58,9 @@ class UsdtRatesInput(BaseModel):
 class BankInput(BaseModel):
     name: str
     currency: str  # "VES" or "BRL"
-    initial_balance: float = 0
+    # String en el borde, como todo el dinero: la pantalla lo manda así. Se
+    # sigue aceptando número porque el endpoint existía antes que la pantalla.
+    initial_balance: Union[str, int, float] = "0"
 
 
 class UsdtOperationInput(BaseModel):
@@ -85,28 +89,126 @@ async def get_banks(currency: str = None, admin: User = Depends(get_super_admin)
     return banks
 
 
+MONEDAS_DE_LOS_BANCOS = ("VES", "BRL")
+
+
+def _saldo_inicial(valor) -> Decimal:
+    """El saldo inicial escrito, o un 400 que dice qué está mal.
+
+    NO SE USA `to_decimal` A SECAS: ante algo que no es un número devuelve
+    cero sin avisar, y un «1.500,00» mal escrito crearía el banco con saldo
+    cero como si nada. Acá lo que no se entiende se rechaza."""
+    texto = str(valor if valor is not None else "0").strip() or "0"
+    try:
+        monto = Decimal(texto)
+    except InvalidOperation:
+        raise HTTPException(status_code=400, detail=(
+            f"«{texto}» no es un monto. Escribilo con punto para los decimales, sin "
+            "separador de miles: 1500.00"))
+    if not monto.is_finite() or monto < 0:
+        raise HTTPException(status_code=400, detail="El saldo inicial no puede ser negativo.")
+    return quantize_money(monto)
+
+
 @router.post("/banks", response_model=BancoCreado, response_model_exclude_unset=True)
-async def create_bank(data: BankInput, admin: User = Depends(get_super_admin)):
-    """Create a bank account"""
+async def create_bank(data: BankInput, pedido: Request, admin: User = Depends(get_super_admin)):
+    """Crea una cuenta bancaria.
+
+    Hasta que existió la pantalla de bancos esto sólo se podía hacer
+    llamando a la API a mano, y no revisaba nada: aceptaba un nombre vacío,
+    cualquier moneda y un saldo negativo.
+    """
+    nombre = " ".join((data.name or "").split())
+    if not 2 <= len(nombre) <= 60:
+        raise HTTPException(status_code=400, detail="El nombre del banco tiene que tener entre 2 y 60 letras.")
+    moneda = (data.currency or "").strip().upper()
+    if moneda not in MONEDAS_DE_LOS_BANCOS:
+        raise HTTPException(status_code=400, detail="La moneda tiene que ser VES o BRL.")
+    saldo = _saldo_inicial(data.initial_balance)
+
+    # DOS BANCOS EN BOLIVARES QUE SE CONFUNDEN POR EL NOMBRE, NO.
+    #
+    #   La recarga en bolívares encuentra su banco por el nombre que eligió
+    #   el cliente (`routes/transactions.resolve_ves_bank`). Si dos bancos en
+    #   VES reducen al mismo nombre —«Banesco» y «BANESCO»—, la recarga no
+    #   sabe a cuál ir y el cliente recibe «ese banco no está disponible».
+    #   Se frena acá, que es donde se puede elegir otro nombre. En reales no
+    #   hace falta: nadie los busca por el nombre.
+    if moneda == "VES":
+        clave = bancos.clave_del_nombre(nombre)
+        async for otro in db.bank_accounts.find({"currency": "VES"}, {"_id": 0, "name": 1}):
+            if bancos.clave_del_nombre(otro.get("name")) == clave:
+                raise HTTPException(status_code=409, detail=(
+                    f"Ya hay un banco en bolívares que se llama «{otro.get('name')}». Con dos "
+                    "nombres iguales, las recargas de los clientes no sabrían a cuál ir."))
+
     bank_id = f"bank_{uuid.uuid4().hex[:8]}"
     bank = {
         "bank_id": bank_id,
-        "name": data.name,
-        "currency": data.currency.upper(),
-        "balance": to_decimal128(data.initial_balance),
+        "name": nombre,
+        "currency": moneda,
+        "balance": to_decimal128(saldo),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": admin.user_id
     }
     await db.bank_accounts.insert_one(bank)
+    await auditoria.registrar(
+        db, "contabilidad.banco_creado", quien=admin, request=pedido,
+        objetivo_tipo="banco", objetivo_id=bank_id, objetivo_desc=f"{nombre} ({moneda})",
+        despues={"name": nombre, "currency": moneda, "balance": str(saldo)})
     return {"message": "Banco creado", "bank_id": bank_id}
 
 
+async def _por_que_no_se_puede_borrar(banco: dict) -> Optional[str]:
+    """El motivo, en palabras, o None si se puede borrar.
+
+    BORRAR ERA UN `delete_one` SIN PREGUNTAR NADA
+
+        Un banco no está suelto: sus movimientos quedan en `bank_ledger` con su
+        `bank_id`, y cada recarga en bolívares guarda el banco al que el cliente
+        transfirió. Borrar uno con historia deja esos movimientos sin banco y
+        las recargas pendientes sin a dónde acreditarse: la aprobación falla
+        con «cuenta inexistente» y el operador no sabe por qué.
+
+        Mientras borrar exigía llamar a la API a mano, eso no pasaba por
+        accidente. Con un botón, sí. Por eso sólo se borra lo que nunca se usó:
+        un banco cargado por error.
+    """
+    if banco.get("is_gateway"):
+        return ("Es la cuenta de una pasarela de pago: la crea la aplicación sola y la "
+                "vuelve a necesitar con el próximo cobro.")
+    movimientos = await db.bank_ledger.count_documents({"bank_id": banco["bank_id"]})
+    if movimientos:
+        return (f"Tiene {movimientos} movimiento{'s' if movimientos != 1 else ''} anotado"
+                f"{'s' if movimientos != 1 else ''}. Borrarlo los dejaría sin banco.")
+    saldo = bancos.saldo_de(banco)
+    if saldo != 0:
+        return f"Tiene saldo ({para_mostrar(saldo, banco.get('currency', ''))}). Sólo se borra un banco en cero."
+    esperando = await db.transactions.count_documents(
+        {"destination_bank_id": banco["bank_id"], "status": "pending"})
+    if esperando:
+        return (f"Hay {esperando} recarga{'s' if esperando != 1 else ''} esperando aprobación "
+                "hacia este banco.")
+    return None
+
+
 @router.delete("/banks/{bank_id}", response_model=MensajeDeContabilidad, response_model_exclude_unset=True)
-async def delete_bank(bank_id: str, admin: User = Depends(get_super_admin)):
-    """Delete a bank account"""
+async def delete_bank(bank_id: str, pedido: Request, admin: User = Depends(get_super_admin)):
+    """Borra una cuenta bancaria que nunca se usó. Ver `_por_que_no_se_puede_borrar`."""
+    banco = await db.bank_accounts.find_one({"bank_id": bank_id}, {"_id": 0})
+    if not banco:
+        raise HTTPException(status_code=404, detail="Banco no encontrado")
+    motivo = await _por_que_no_se_puede_borrar(banco)
+    if motivo:
+        raise HTTPException(status_code=409, detail=f"No se puede borrar «{banco.get('name')}». {motivo}")
     result = await db.bank_accounts.delete_one({"bank_id": bank_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Banco no encontrado")
+    await auditoria.registrar(
+        db, "contabilidad.banco_borrado", quien=admin, request=pedido,
+        objetivo_tipo="banco", objetivo_id=bank_id,
+        objetivo_desc=f"{banco.get('name')} ({banco.get('currency')})",
+        antes={"name": banco.get("name"), "currency": banco.get("currency")})
     return {"message": "Banco eliminado"}
 
 

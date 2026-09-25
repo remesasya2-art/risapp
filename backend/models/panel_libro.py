@@ -233,8 +233,10 @@ class LineasDeUnUsuario(BaseModel):
 # ── Contabilidad: la lista de bancos y el borrado ─────────────────────────
 
 # Sin `created_by`: el identificador de quien cargó el banco. Retiros y
-# Recargas en bolívares leen el código, el nombre y la moneda.
-BancoDeLaContabilidad = _simple("BancoDeLaContabilidad", ("bank_id", "name", "currency", "balance", "created_at"))
+# Recargas en bolívares leen el código, el nombre y la moneda; la pantalla de
+# bancos, además, si es la cuenta de una pasarela, que no se puede borrar.
+BancoDeLaContabilidad = _simple("BancoDeLaContabilidad", (
+    "bank_id", "name", "currency", "balance", "created_at", "is_gateway"))
 BancosDeLaContabilidad = List[BancoDeLaContabilidad]
 
 ContabilidadBorrada = _simple("ContabilidadBorrada", ("success", "message", "total_deleted", "hidden_transactions"),

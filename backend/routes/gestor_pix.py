@@ -20,6 +20,7 @@ from database import db
 from services.limits import validate_pix_amount
 from services import bancos, cpf_de_la_cuenta, kyc_quota, pagos_una_sola_vez, saldos
 from services import recarga_abierta
+from models.fuera_del_panel import PagoSimulado, PixCancelado, PixCreado
 from models.user import User
 from typing import List
 from models.dinero_en_transito import EstadoDeMiPix, MiPixActivo, MiPixPendiente, UnPixDeMiHistorial
@@ -78,7 +79,7 @@ async def require_authenticated_user(current_user: User = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Usuario no encontrado")
     return current_user
 
-@router.post("/create", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/create", dependencies=[Depends(sin_transacciones_personales)], response_model=PixCreado, response_model_exclude_unset=True)
 async def create_pix_payment(request: CreatePixRequest, current_user: User = Depends(require_authenticated_user)):
     """Create a PIX payment for third-party recharge via Mercado Pago"""
     # Limite de monto validado ANTES de crear el pago en Mercado Pago: si no,
@@ -277,7 +278,7 @@ async def get_pending_pix(current_user: User = Depends(require_authenticated_use
     }
 
 
-@router.post("/cancel/{payment_id}")
+@router.post("/cancel/{payment_id}", response_model=PixCancelado, response_model_exclude_unset=True)
 async def cancel_pix_payment(payment_id: str, current_user: User = Depends(require_authenticated_user)):
     """Cancel a pending PIX payment"""
     result = await db.gestor_pix_payments.update_one(
@@ -497,7 +498,7 @@ async def _credit_mercadopago_bank(payment: dict, amount_brl: float):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-@router.post("/simulate-payment/{payment_id}", dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/simulate-payment/{payment_id}", dependencies=[Depends(sin_transacciones_personales)], response_model=PagoSimulado, response_model_exclude_unset=True)
 async def simulate_pix_payment(payment_id: str, current_user: User = Depends(require_authenticated_user)):
     """Simulate PIX payment confirmation (for testing when MP not available)"""
     # --- SECURITY: this endpoint credits real balance with no real payment.
