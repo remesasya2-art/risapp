@@ -137,7 +137,14 @@ export default function TasasBtcSection() {
   const input = { width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--en-oscuro-linea-fuerte, #d1d5db)', fontSize: '16px', outline: 'none', boxSizing: 'border-box' };
   const help = { fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '6px 0 0 0' };
   const lbl = { display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-texto, #374151)', marginBottom: '8px' };
-  const ej = cfg?.example;
+  // SIN PRECIO DEL BTC NO HAY VISTA PREVIA
+  //
+  //   Cuando el backend no consigue el precio, manda `example: {}`. Un objeto
+  //   vacío cuenta como verdadero, así que con `cfg?.example` a secas la
+  //   tarjeta se dibujaba igual y mostraba «NaN Bs» y «$NaN»: un número roto
+  //   en la pantalla donde se fija la tasa. Arriba ya dice «— USDI» cuando no
+  //   hay precio; acá, mejor no mostrar nada que mostrar una cuenta falsa.
+  const ej = cfg?.example?.precio_con_margen ? cfg.example : null;
 
   return (
     <div style={{ borderTop: '1px solid var(--en-oscuro-linea, #e5e7eb)', paddingTop: '24px', marginTop: '24px' }}>

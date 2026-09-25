@@ -7,6 +7,7 @@ cuentas entran por semana.
 from fastapi import APIRouter, Depends
 
 from database import db
+from models.panel_tablero import UsoDeLaApp
 from models.user import User
 from routes.dependencies import get_super_admin
 from services import uso
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/admin/uso", tags=["Uso"])
 DIAS_PERMITIDOS = (7, 30, 90)
 
 
-@router.get("")
+@router.get("", response_model=UsoDeLaApp, response_model_exclude_unset=True)
 async def ver(dias: int = 30, admin: User = Depends(get_super_admin)):
     if dias not in DIAS_PERMITIDOS:
         dias = 30

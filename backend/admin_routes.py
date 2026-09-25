@@ -80,6 +80,7 @@ from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 #     función, no su nombre—, en `test_una_sola_puerta.py`.
 from models.user import User as Usuario   # noqa: E402
 from models.acciones_del_panel import EstadoCambiado, SaldoAjustado  # noqa: E402
+from models.panel_tablero import DetalleDeOperacion, OperacionesDelPanel  # noqa: E402
 from models.panel_personal import Administradores, CatalogoDePermisos  # noqa: E402
 from models.panel_recargas import (FotoDeLaRecarga, RecargasPendientes, RegistroDePago,  # noqa: E402
                                    RegistrosDePago)
@@ -529,7 +530,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
 # TRANSACTIONS
 # =======================
 
-@admin_router.get("/transactions")
+@admin_router.get("/transactions", response_model=OperacionesDelPanel, response_model_exclude_unset=True)
 async def get_all_transactions(
     admin_user: Usuario = Depends(get_admin_user),
     skip: int = 0,
@@ -631,7 +632,7 @@ async def export_transactions(admin_user: Usuario = Depends(get_admin_user)):
         headers={"Content-Disposition": "attachment; filename=transactions.xlsx"}
     )
 
-@admin_router.get("/transactions/{transaction_id}")
+@admin_router.get("/transactions/{transaction_id}", response_model=DetalleDeOperacion, response_model_exclude_unset=True)
 async def get_transaction_detail(transaction_id: str, admin_user: Usuario = Depends(get_admin_user)):
     """Get transaction detail including proof image"""
     if not has_permission(admin_user, "transactions.view"):

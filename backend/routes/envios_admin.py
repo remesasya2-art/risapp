@@ -52,6 +52,8 @@ from services.envios_catalogo import invalidar_cache
 from services.envios_tarifas import validar_tarifa
 
 logger = logging.getLogger(__name__)
+from models.panel_encomiendas import (AccionSobreUnEnvio, AgenciaCreada, AgenciaEditada, Agencias, AgenciasImportadas, BloqueDeConfiguracion, BloqueGuardado, BloquesDeConfiguracion, BorradorGuardado, ColaDeEnvios, ColaboradorGuardado, CuentaCambiada, EstadoDelAlmacen, EstadoDelModulo, FilaDeMatrizGuardada, HistorialDeEnvios, LoteRetirado, Matrices, MatricesImportadas, MigracionDelAlmacen, OrigenGuardado, Origenes, OrigenesImportados, PreciosObservados, PruebaDelAlmacen, RetiroEnElCorreo, SimulacionDeTarifa, TarifaPublicada, TarifasDelPanel, TicketDelEnvio, TransportistaCreada, TransportistaEditada, Transportistas, TurnoDesignado, Viaje)
+
 router = APIRouter(prefix="/admin/envios", tags=["envios-admin"])
 
 
@@ -81,7 +83,7 @@ def _error(errores: list[str]) -> HTTPException:
 
 # ─── La portada: qué falta para poder operar ──────────────────────────────
 
-@router.get("/estado")
+@router.get("/estado", response_model=EstadoDelModulo, response_model_exclude_unset=True)
 async def estado_del_modulo(admin: User = Depends(get_super_admin)):
     """El checklist de puesta en marcha, en el orden en que hay que cargarlo.
 
@@ -101,7 +103,7 @@ async def estado_del_modulo(admin: User = Depends(get_super_admin)):
 
 # ─── Bloques de configuración ─────────────────────────────────────────────
 
-@router.get("/config")
+@router.get("/config", response_model=BloquesDeConfiguracion, response_model_exclude_unset=True)
 async def listar_bloques(admin: User = Depends(get_super_admin)):
     """Qué bloques existen y cuáles ya tienen valor. Es la portada del panel."""
     salida = {}
@@ -110,14 +112,14 @@ async def listar_bloques(admin: User = Depends(get_super_admin)):
     return {"bloques": salida, "disponibles": sorted(ESQUEMAS)}
 
 
-@router.get("/config/{bloque}")
+@router.get("/config/{bloque}", response_model=BloqueDeConfiguracion, response_model_exclude_unset=True)
 async def leer_bloque(bloque: str, admin: User = Depends(get_super_admin)):
     if bloque not in ESQUEMAS:
         raise HTTPException(404, f"Bloque de configuración desconocido: {bloque}")
     return await envios_config.leer(bloque) or {}
 
 
-@router.put("/config/{bloque}")
+@router.put("/config/{bloque}", response_model=BloqueGuardado, response_model_exclude_unset=True)
 async def guardar_bloque(bloque: str, datos: dict,
                          admin: User = Depends(get_super_admin)):
     """Valida, guarda, audita e invalida el caché. En ese orden.
@@ -135,7 +137,7 @@ async def guardar_bloque(bloque: str, datos: dict,
 
 # ─── Transportistas ───────────────────────────────────────────────────────
 
-@router.get("/transportistas")
+@router.get("/transportistas", response_model=Transportistas, response_model_exclude_unset=True)
 async def listar_transportistas(admin: User = Depends(get_crm_user)):
     """El operador también lee: necesita saber a quién le está entregando."""
     filas = await db.transportistas.find({}, {"_id": 0}).sort("orden", 1).to_list(None)
@@ -153,7 +155,7 @@ def _sin_cuenta(t: dict) -> dict:
     return salida
 
 
-@router.post("/transportistas")
+@router.post("/transportistas", response_model=TransportistaCreada, response_model_exclude_unset=True)
 async def crear_transportista(datos: Transportista,
                               admin: User = Depends(get_super_admin)):
     if datos.rol != "venezuela" and datos.cuenta_bancaria is not None:
@@ -172,7 +174,7 @@ async def crear_transportista(datos: Transportista,
     return {"ok": True, "transportista_id": doc["transportista_id"]}
 
 
-@router.patch("/transportistas/{transportista_id}")
+@router.patch("/transportistas/{transportista_id}", response_model=TransportistaEditada, response_model_exclude_unset=True)
 async def editar_transportista(transportista_id: str, datos: dict,
                                admin: User = Depends(get_super_admin)):
     """Edita todo menos el código y la cuenta bancaria.
@@ -267,7 +269,7 @@ class CambioDeCuenta(BaseModel):
     motivo: str = ""
 
 
-@router.put("/transportistas/{transportista_id}/cuenta")
+@router.put("/transportistas/{transportista_id}/cuenta", response_model=CuentaCambiada, response_model_exclude_unset=True)
 async def cambiar_cuenta(transportista_id: str, cambio: CambioDeCuenta,
                          admin: User = Depends(get_super_admin)):
     """Cambia la cuenta que recibe los fletes. El campo más sensible del panel.
@@ -339,14 +341,14 @@ async def cambiar_cuenta(transportista_id: str, cambio: CambioDeCuenta,
 
 # ─── Agencias ─────────────────────────────────────────────────────────────
 
-@router.get("/transportistas/{transportista_id}/agencias")
+@router.get("/transportistas/{transportista_id}/agencias", response_model=Agencias, response_model_exclude_unset=True)
 async def listar_agencias(transportista_id: str, admin: User = Depends(get_crm_user)):
     filas = await db.agencias.find({"transportista_id": transportista_id},
                                    {"_id": 0}).sort("estado", 1).to_list(None)
     return {"agencias": filas}
 
 
-@router.post("/transportistas/{transportista_id}/agencias")
+@router.post("/transportistas/{transportista_id}/agencias", response_model=AgenciaCreada, response_model_exclude_unset=True)
 async def crear_agencia(transportista_id: str, datos: Agencia,
                         admin: User = Depends(get_super_admin)):
     if not await db.transportistas.find_one({"transportista_id": transportista_id}):
@@ -386,7 +388,7 @@ async def _liberar_punto_entrega(transportista_id: str) -> None:
         {"$set": {"es_punto_entrega": False}})
 
 
-@router.patch("/transportistas/{transportista_id}/agencias/{codigo}")
+@router.patch("/transportistas/{transportista_id}/agencias/{codigo}", response_model=AgenciaEditada, response_model_exclude_unset=True)
 async def editar_agencia(transportista_id: str, codigo: str, datos: dict,
                          admin: User = Depends(get_super_admin)):
     """Corrige una agencia. **No borra: se desactiva con `activa: false`.**
@@ -432,7 +434,7 @@ async def editar_agencia(transportista_id: str, codigo: str, datos: dict,
     return {"ok": True, "valor": {**validada, "transportista_id": transportista_id}}
 
 
-@router.post("/transportistas/{transportista_id}/agencias/csv")
+@router.post("/transportistas/{transportista_id}/agencias/csv", response_model=AgenciasImportadas, response_model_exclude_unset=True)
 async def importar_agencias(transportista_id: str, archivo: UploadFile = File(...),
                             admin: User = Depends(get_super_admin)):
     """Importa agencias desde un CSV. Una fila mala no aborta la importación.
@@ -570,7 +572,7 @@ async def _uf_con_matriz() -> tuple[set, bool]:
     return claves, ok
 
 
-@router.get("/origenes")
+@router.get("/origenes", response_model=Origenes, response_model_exclude_unset=True)
 async def listar_origenes(admin: User = Depends(get_super_admin)):
     """El catálogo, la cobertura de matriz y la cola de propuestos, en una sola
     lectura: es una sola pantalla y pedirla en tres llamadas es pintarla en tres
@@ -595,7 +597,7 @@ async def listar_origenes(admin: User = Depends(get_super_admin)):
     }
 
 
-@router.post("/origenes")
+@router.post("/origenes", response_model=OrigenGuardado, response_model_exclude_unset=True)
 async def crear_origen(datos: OrigenNuevo, admin: User = Depends(get_super_admin)):
     """Alta de UNA ciudad. Es el camino corto: agregar un CEP no puede exigir
     armar un CSV entero."""
@@ -613,7 +615,7 @@ async def crear_origen(datos: OrigenNuevo, admin: User = Depends(get_super_admin
             "ya_existia": bool(anterior)}
 
 
-@router.patch("/origenes/{cep}")
+@router.patch("/origenes/{cep}", response_model=OrigenGuardado, response_model_exclude_unset=True)
 async def editar_origen(cep: str, datos: OrigenEditado,
                         admin: User = Depends(get_super_admin)):
     """Corrige una ciudad. **No borra: se desactiva con `activo: false`.**"""
@@ -636,7 +638,7 @@ async def editar_origen(cep: str, datos: OrigenEditado,
                                   "cep_legible": envios_origenes.formatear_cep(guardado["cep"])}}
 
 
-@router.post("/origenes/csv")
+@router.post("/origenes/csv", response_model=OrigenesImportados, response_model_exclude_unset=True)
 async def importar_origenes(archivo: UploadFile = File(...),
                             confirmar: bool = Form(False),
                             admin: User = Depends(get_super_admin)):
@@ -709,7 +711,7 @@ async def importar_origenes(archivo: UploadFile = File(...),
     return {"ok": True, "confirmado": True, **plan}
 
 
-@router.post("/origenes/propuestos/{cep}")
+@router.post("/origenes/propuestos/{cep}", response_model=OrigenGuardado, response_model_exclude_unset=True)
 async def resolver_origen_propuesto(cep: str, datos: PropuestoResuelto,
                                     admin: User = Depends(get_super_admin)):
     """Aprueba una ciudad de la cola —y ahí entra al catálogo— o la descarta.
@@ -749,7 +751,7 @@ async def resolver_origen_propuesto(cep: str, datos: PropuestoResuelto,
 
 # ─── Tarifas: la consola de precios ───────────────────────────────────────
 
-@router.get("/tarifas")
+@router.get("/tarifas", response_model=TarifasDelPanel, response_model_exclude_unset=True)
 async def listar_tarifas(admin: User = Depends(get_super_admin)):
     """El historial con sus notas, y qué hay en el borrador."""
     borrador, origen = await envios_tarifa_editor.borrador_o_copia()
@@ -768,7 +770,7 @@ async def listar_tarifas(admin: User = Depends(get_super_admin)):
     })
 
 
-@router.put("/tarifas/borrador")
+@router.put("/tarifas/borrador", response_model=BorradorGuardado, response_model_exclude_unset=True)
 async def guardar_borrador_tarifa(datos: TarifaBorrador,
                                   admin: User = Depends(get_super_admin)):
     """Guarda el borrador. No publica nada y no valida la coherencia de la tabla.
@@ -797,7 +799,7 @@ class Simulacion(BaseModel):
     fecha: date | None = None              # para ver una temporada sin esperarla
 
 
-@router.post("/tarifas/simular")
+@router.post("/tarifas/simular", response_model=SimulacionDeTarifa, response_model_exclude_unset=True)
 async def simular_tarifa(datos: Simulacion, admin: User = Depends(get_super_admin)):
     """Cotiza las cajas contra el borrador y contra la vigente, lado a lado.
 
@@ -827,7 +829,7 @@ class Publicacion(BaseModel):
     tarifa: TarifaEnvio | None = None
 
 
-@router.post("/tarifas/publicar")
+@router.post("/tarifas/publicar", response_model=TarifaPublicada, response_model_exclude_unset=True)
 async def publicar_tarifa(datos: Publicacion, admin: User = Depends(get_super_admin)):
     """Crea la versión nueva y reordena las ventanas. **Nunca edita una existente.**
 
@@ -880,7 +882,7 @@ async def publicar_tarifa(datos: Publicacion, admin: User = Depends(get_super_ad
 # necesita ver a que nombre estan rotulados los paquetes para saber cuales puede
 # reclamar, pero no tiene por que poder cambiar ese nombre.
 
-@router.get("/retiro")
+@router.get("/retiro", response_model=RetiroEnElCorreo, response_model_exclude_unset=True)
 async def ver_retiro(admin: User = Depends(get_crm_user)):
     """La nómina, quién está de turno y la vista previa del bloque de despacho.
 
@@ -914,7 +916,7 @@ async def ver_retiro(admin: User = Depends(get_crm_user)):
     }
 
 
-@router.post("/retiro/colaboradores")
+@router.post("/retiro/colaboradores", response_model=ColaboradorGuardado, response_model_exclude_unset=True)
 async def crear_colaborador(datos: Colaborador, admin: User = Depends(get_super_admin)):
     """Da de alta a alguien autorizado a retirar en la agencia de Pacaraima."""
     validado = datos.model_dump()
@@ -941,7 +943,7 @@ async def crear_colaborador(datos: Colaborador, admin: User = Depends(get_super_
     return {"ok": True, "valor": validado}
 
 
-@router.put("/retiro/colaboradores/{colaborador_id}")
+@router.put("/retiro/colaboradores/{colaborador_id}", response_model=ColaboradorGuardado, response_model_exclude_unset=True)
 async def editar_colaborador(colaborador_id: str, datos: Colaborador,
                              admin: User = Depends(get_super_admin)):
     """Edita una ficha. **No borra: se desactiva con `activo: false`.**
@@ -980,7 +982,7 @@ class Designacion(BaseModel):
     colaborador_id: str = Field(min_length=1, max_length=40)
 
 
-@router.put("/retiro/turno")
+@router.put("/retiro/turno", response_model=TurnoDesignado, response_model_exclude_unset=True)
 async def designar_retirador(datos: Designacion, admin: User = Depends(get_super_admin)):
     """Marca quién sale rotulado en las cotizaciones **nuevas**.
 
@@ -1043,7 +1045,7 @@ class Verificacion(BaseModel):
     idempotency_key: str = Field(default=None, max_length=100)
 
 
-@router.post("/envios/{envio_id}/comprobante/verificar")
+@router.post("/envios/{envio_id}/comprobante/verificar", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def verificar_comprobante(envio_id: str, datos: Verificacion,
                                 admin: User = Depends(get_admin_user)):
     """Confirma el comprobante y **emite el cobro inicial**.
@@ -1091,7 +1093,7 @@ def _operacion(e: Exception):
     return HTTPException(503, "No se pudo completar. Reintentá en un momento.")
 
 
-@router.get("/envios/cola")
+@router.get("/envios/cola", response_model=ColaDeEnvios, response_model_exclude_unset=True)
 async def ver_cola(estado: str = "disponible_retiro",
                    admin: User = Depends(get_crm_user)):
     """La cola del operador, agrupada por el nombre rotulado en cada caja.
@@ -1108,7 +1110,7 @@ class Disponible(BaseModel):
     dias_guarda: int = Field(default=None, ge=1, le=180)
 
 
-@router.post("/envios/{envio_id}/disponible")
+@router.post("/envios/{envio_id}/disponible", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def marcar_disponible(envio_id: str, datos: Disponible = None,
                             admin: User = Depends(get_crm_user)):
     """El paquete está en el mostrador. **Arranca el reloj de guarda.**
@@ -1131,7 +1133,7 @@ class Lote(BaseModel):
     nota: str = Field(default="", max_length=300)
 
 
-@router.post("/envios/retiro-lote")
+@router.post("/envios/retiro-lote", response_model=LoteRetirado, response_model_exclude_unset=True)
 async def retirar_lote(datos: Lote, admin: User = Depends(get_crm_user)):
     """Retira varios paquetes del mostrador de una vez.
 
@@ -1154,7 +1156,7 @@ class Repesaje(BaseModel):
     idempotency_key: str = Field(default=None, max_length=100)
 
 
-@router.post("/envios/{envio_id}/repesar")
+@router.post("/envios/{envio_id}/repesar", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def repesar(envio_id: str, datos: Repesaje,
                   admin: User = Depends(get_admin_user)):
     """Pesa con balanza propia y cierra el precio. Las tres ramas del ajuste.
@@ -1175,7 +1177,7 @@ async def repesar(envio_id: str, datos: Repesaje,
         raise _operacion(e)
 
 
-@router.post("/envios/{envio_id}/despachar")
+@router.post("/envios/{envio_id}/despachar", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def despachar(envio_id: str, admin: User = Depends(get_crm_user)):
     """El paquete sale hacia Santa Elena. **Solo con todo pago.**
 
@@ -1187,7 +1189,7 @@ async def despachar(envio_id: str, admin: User = Depends(get_crm_user)):
         raise _operacion(e)
 
 
-@router.post("/envios/{envio_id}/entregar")
+@router.post("/envios/{envio_id}/entregar", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def entregar(envio_id: str, guia: str = Form(...),
                    foto: UploadFile = File(None),
                    admin: User = Depends(get_crm_user)):
@@ -1215,7 +1217,7 @@ def _rentabilidad(e: Exception):
     return HTTPException(503, "No se pudo calcular. Reintentá en un momento.")
 
 
-@router.get("/envios/{envio_id}/ticket")
+@router.get("/envios/{envio_id}/ticket", response_model=TicketDelEnvio, response_model_exclude_unset=True)
 async def ver_ticket(envio_id: str, admin: User = Depends(get_crm_user)):
     """Los datos del papel que se pega en la caja antes de que salga.
 
@@ -1233,7 +1235,7 @@ async def ver_ticket(envio_id: str, admin: User = Depends(get_crm_user)):
         raise _operacion(e)
 
 
-@router.get("/envios/historial")
+@router.get("/envios/historial", response_model=HistorialDeEnvios, response_model_exclude_unset=True)
 async def ver_historial(estado: str = None, buscar: str = None,
                         saltear: int = 0,
                         admin: User = Depends(get_crm_user)):
@@ -1262,7 +1264,7 @@ class RetiroFinal(BaseModel):
     fuente: str = Field(default="", max_length=60)
 
 
-@router.post("/envios/{envio_id}/retiro-final")
+@router.post("/envios/{envio_id}/retiro-final", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def registrar_retiro_final(envio_id: str, datos: RetiroFinal,
                                  admin: User = Depends(get_crm_user)):
     """Anota que el destinatario retiró la caja en la oficina, y le avisa.
@@ -1287,7 +1289,7 @@ async def registrar_retiro_final(envio_id: str, datos: RetiroFinal,
         raise _operacion(e)
 
 
-@router.get("/envios/viajes/{lote_id}")
+@router.get("/envios/viajes/{lote_id}", response_model=Viaje, response_model_exclude_unset=True)
 async def ver_viaje(lote_id: str, admin: User = Depends(get_crm_user)):
     """Qué dejó un viaje a Pacaraima: lo cobrado, lo pendiente y el resultado.
 
@@ -1305,7 +1307,7 @@ class CostoDelViaje(BaseModel):
     costo_ris: str = Field(min_length=1, max_length=20)
 
 
-@router.put("/envios/viajes/{lote_id}/costo")
+@router.put("/envios/viajes/{lote_id}/costo", response_model=Viaje, response_model_exclude_unset=True)
 async def cargar_costo_viaje(lote_id: str, datos: CostoDelViaje,
                              admin: User = Depends(get_crm_user)):
     """Carga lo que costó el viaje: combustible, peajes y horas.
@@ -1320,7 +1322,7 @@ async def cargar_costo_viaje(lote_id: str, datos: CostoDelViaje,
         raise _rentabilidad(e)
 
 
-@router.get("/envios/observado")
+@router.get("/envios/observado", response_model=PreciosObservados, response_model_exclude_unset=True)
 async def ver_observado(dias: int = 90, admin: User = Depends(get_super_admin)):
     """Lo que costó de verdad cada tramo, sacado de las operaciones.
 
@@ -1340,7 +1342,7 @@ class Aprobacion(BaseModel):
     moneda: str = Field(default=None, max_length=8)
 
 
-@router.post("/envios/observado/aprobar")
+@router.post("/envios/observado/aprobar", response_model=FilaDeMatrizGuardada, response_model_exclude_unset=True)
 async def aprobar_observado(datos: Aprobacion,
                             admin: User = Depends(get_super_admin)):
     """Lleva un valor observado a la matriz de referencia. **Nadie más escribe ahí.**
@@ -1416,7 +1418,7 @@ async def _claves_que_faltan() -> dict:
     return {"transportistas": salida, "legible": legible}
 
 
-@router.get("/matrices")
+@router.get("/matrices", response_model=Matrices, response_model_exclude_unset=True)
 async def listar_matrices(admin: User = Depends(get_super_admin)):
     """Las filas cargadas, con de dónde salió cada número y cuál está vieja.
 
@@ -1449,7 +1451,7 @@ async def listar_matrices(admin: User = Depends(get_super_admin)):
     }
 
 
-@router.post("/matrices")
+@router.post("/matrices", response_model=FilaDeMatrizGuardada, response_model_exclude_unset=True)
 async def cargar_fila_de_matriz(datos: FilaDeMatriz,
                                 admin: User = Depends(get_super_admin)):
     """Carga o corrige UNA fila. Agregar un precio no puede exigir un CSV.
@@ -1471,7 +1473,7 @@ async def cargar_fila_de_matriz(datos: FilaDeMatriz,
     return resultado
 
 
-@router.post("/matrices/csv")
+@router.post("/matrices/csv", response_model=MatricesImportadas, response_model_exclude_unset=True)
 async def importar_matrices(transportista_id: str = Form(...),
                             archivo: UploadFile = File(...),
                             confirmar: bool = Form(False),
@@ -1545,7 +1547,7 @@ class Desvio(BaseModel):
     motivo: str = Field(min_length=10, max_length=500)
 
 
-@router.post("/envios/{envio_id}/desviar/{hacia}")
+@router.post("/envios/{envio_id}/desviar/{hacia}", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def desviar_envio(envio_id: str, hacia: str, datos: Desvio,
                         admin: User = Depends(get_admin_user)):
     """Lleva un envío a `retenido`, `devuelto`, `siniestrado` o `cancelado`.
@@ -1565,7 +1567,7 @@ class Flete(BaseModel):
     monto_ris: str = Field(min_length=1, max_length=20)
 
 
-@router.put("/envios/{envio_id}/flete")
+@router.put("/envios/{envio_id}/flete", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def cargar_flete(envio_id: str, datos: Flete,
                        admin: User = Depends(get_crm_user)):
     """Registra lo que el transportista de destino pidió por el tramo final.
@@ -1585,7 +1587,7 @@ class AcreditacionFlete(BaseModel):
     referencia: str = Field(default="", max_length=80)
 
 
-@router.post("/envios/{envio_id}/flete/acreditar")
+@router.post("/envios/{envio_id}/flete/acreditar", response_model=AccionSobreUnEnvio, response_model_exclude_unset=True)
 async def acreditar_flete(envio_id: str, datos: AcreditacionFlete,
                           admin: User = Depends(get_admin_user)):
     """Marca que la remesa del usuario al transportista llegó.
@@ -1641,7 +1643,7 @@ class Migracion(BaseModel):
                         le=MIGRACION_LOTE_MAX)
 
 
-@router.get("/almacen")
+@router.get("/almacen", response_model=EstadoDelAlmacen, response_model_exclude_unset=True)
 async def estado_almacen(admin: User = Depends(get_super_admin)):
     """Dónde están los bytes hoy. Sin la clave ni el secreto, nunca."""
     from services import envios_almacen, envios_archivos
@@ -1653,7 +1655,7 @@ async def estado_almacen(admin: User = Depends(get_super_admin)):
             503, "No se pudo leer el estado del almacén. Probá de nuevo.")
 
 
-@router.post("/almacen/probar")
+@router.post("/almacen/probar", response_model=PruebaDelAlmacen, response_model_exclude_unset=True)
 async def probar_almacen(admin: User = Depends(get_super_admin)):
     """Escribe y lee un objeto minúsculo contra el bucket.
 
@@ -1668,7 +1670,7 @@ async def probar_almacen(admin: User = Depends(get_super_admin)):
         raise HTTPException(503, "No se pudo probar el almacén. Probá de nuevo.")
 
 
-@router.post("/almacen/migrar")
+@router.post("/almacen/migrar", response_model=MigracionDelAlmacen, response_model_exclude_unset=True)
 async def migrar_almacen(datos: Migracion = None,
                          admin: User = Depends(get_super_admin)):
     """Mueve un lote de fotos de Mongo al almacén de objetos.

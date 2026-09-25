@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from routes.dependencies import get_super_admin
 from models.user import User
+from models.panel_contabilidad import (Conciliacion, InformeEjecutivo, InventarioDeUsdt, LoteDeUsdt, LotesDeUsdt, MensajeDeContabilidad, RegistroDelMotor, VentaP2P, VentasP2P)
 from database import db
 from services.accounting_engine import (
     CoreAccountingEngine,
@@ -50,7 +51,7 @@ class WebhookConciliateInput(BaseModel):
 
 
 # ---------- Bootstrap ----------
-@router.post("/bootstrap-indexes")
+@router.post("/bootstrap-indexes", response_model=MensajeDeContabilidad, response_model_exclude_unset=True)
 async def bootstrap_indexes(admin: User = Depends(get_super_admin)):
     """Create or re-ensure all engine indexes. Safe to call multiple times."""
     await ensure_indexes()
@@ -58,7 +59,7 @@ async def bootstrap_indexes(admin: User = Depends(get_super_admin)):
 
 
 # ---------- USDT Lots (FIFO inventory) ----------
-@router.post("/usdt-lots")
+@router.post("/usdt-lots", response_model=LoteDeUsdt, response_model_exclude_unset=True)
 async def add_usdt_lot(data: UsdtLotInput, admin: User = Depends(get_super_admin)):
     try:
         lot = await CoreAccountingEngine.register_usdt_lot(
@@ -74,7 +75,7 @@ async def add_usdt_lot(data: UsdtLotInput, admin: User = Depends(get_super_admin
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/usdt-lots")
+@router.get("/usdt-lots", response_model=LotesDeUsdt, response_model_exclude_unset=True)
 async def list_usdt_lots(
     only_active: bool = False, admin: User = Depends(get_super_admin)
 ):
@@ -89,7 +90,7 @@ async def list_usdt_lots(
     return {"lots": lots, "count": len(lots)}
 
 
-@router.get("/usdt-inventory-summary")
+@router.get("/usdt-inventory-summary", response_model=InventarioDeUsdt, response_model_exclude_unset=True)
 async def usdt_inventory_summary(admin: User = Depends(get_super_admin)):
     """Aggregate active inventory: total USDT remaining + weighted avg cost."""
     pipeline = [
@@ -127,7 +128,7 @@ async def usdt_inventory_summary(admin: User = Depends(get_super_admin)):
 
 
 # ---------- P2P Sales ----------
-@router.post("/p2p-sales")
+@router.post("/p2p-sales", response_model=VentaP2P, response_model_exclude_unset=True)
 async def execute_p2p_sale(
     data: P2PSaleInput, admin: User = Depends(get_super_admin)
 ):
@@ -145,7 +146,7 @@ async def execute_p2p_sale(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/p2p-sales")
+@router.get("/p2p-sales", response_model=VentasP2P, response_model_exclude_unset=True)
 async def list_p2p_sales(
     limit: int = Query(50, ge=1, le=500),
     admin: User = Depends(get_super_admin),
@@ -168,7 +169,7 @@ def _default_range_caracas(days: int = 1):
     return start, end
 
 
-@router.get("/executive-report")
+@router.get("/executive-report", response_model=InformeEjecutivo, response_model_exclude_unset=True)
 async def executive_report(
     start: Optional[str] = None,
     end: Optional[str] = None,
@@ -192,7 +193,7 @@ async def executive_report(
 
 
 # ---------- Audit Log ----------
-@router.get("/audit-log")
+@router.get("/audit-log", response_model=RegistroDelMotor, response_model_exclude_unset=True)
 async def get_audit_log(
     severity: Optional[str] = Query(None, pattern="^(INFO|WARNING|CRITICAL)$"),
     action: Optional[str] = None,
@@ -217,7 +218,7 @@ async def get_audit_log(
 
 
 # ---------- Webhook (manual conciliation trigger) ----------
-@router.post("/webhook-conciliate")
+@router.post("/webhook-conciliate", response_model=Conciliacion, response_model_exclude_unset=True)
 async def webhook_conciliate(
     data: WebhookConciliateInput, admin: User = Depends(get_super_admin)
 ):

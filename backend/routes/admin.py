@@ -36,6 +36,10 @@ from models.panel_ordenes import (ArchivoDelLote, BancosParaPagar, ComprobanteDe
                                    ComprobantesCargados, ComprobantesDelLote, ImagenDelComprobante,
                                    ListaDeLotes, LoteArmado, LoteCancelado, LoteCerrado, OrdenDevuelta,
                                    OrdenesEnRevisionDePago, OrdenesPorProcesar)
+from models.panel_tablero import (AccionEnLaListaNegra, BcvActualizado, DesempenoDelLector,
+                                   FotosConvertidas, FuentesDeReporte, HistorialDeTasas, HistorialDelBcv,
+                                   LecturaDelBcv, ListaNegra, MermaDeNowpayments, PendientesDelPanel,
+                                   ReporteGenerado, TasaActualizada, TasasDelSistema)
 from models.requests import UpdateRateRequest, ChangeRoleRequest, ResetPasswordAdminRequest
 from pydantic import BaseModel, Field
 from routes.dependencies import (get_admin_user, get_current_user,
@@ -423,7 +427,7 @@ async def get_audit_log(
 
 # ============== MAINTENANCE ==============
 
-@router.post("/fix-media-urls")
+@router.post("/fix-media-urls", response_model=FotosConvertidas, response_model_exclude_unset=True)
 async def fix_media_urls(admin: User = Depends(get_super_admin)):
     """Baja las fotos que están en Twilio y las guarda como base64.
 
@@ -1423,7 +1427,7 @@ async def listar_lotes_abiertos(admin: User = Depends(get_super_admin)):
 #   `/lotes/algo` lo pondría a competir por el orden de registro con
 #   `/lotes/{lote_id}/...`, que es el choque que ya pasó dos veces en este
 #   repositorio y que vigila `tests/test_rutas_alcanzables.py`.
-@router.get("/lector/desempeno")
+@router.get("/lector/desempeno", response_model=DesempenoDelLector, response_model_exclude_unset=True)
 async def desempeno_del_lector_de_comprobantes(
         admin: User = Depends(get_super_admin)):
     """Cómo viene adjudicando el lector, sobre los últimos lotes cerrados."""
@@ -1843,7 +1847,7 @@ async def rechazar_orden_y_reembolsar_saldo(transaction_id: str, admin: User = D
     }
 
 
-@router.get("/reportes/merma-nowpayments")
+@router.get("/reportes/merma-nowpayments", response_model=MermaDeNowpayments, response_model_exclude_unset=True)
 async def reporte_merma_nowpayments(
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD, inclusivo"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD, inclusivo"),
@@ -1966,7 +1970,7 @@ async def reporte_merma_nowpayments(
     }
 
 
-@router.get("/reportes/fuentes")
+@router.get("/reportes/fuentes", response_model=FuentesDeReporte, response_model_exclude_unset=True)
 async def reportes_fuentes(admin: User = Depends(get_super_admin)):
     """Los flujos de dinero sobre los que se puede pedir un reporte.
 
@@ -1979,7 +1983,7 @@ async def reportes_fuentes(admin: User = Depends(get_super_admin)):
                         for k, v in reportes.FUENTES.items()]}
 
 
-@router.get("/reportes")
+@router.get("/reportes", response_model=ReporteGenerado, response_model_exclude_unset=True)
 async def generar_reporte(
     desde: str = Query(..., description="AAAA-MM-DD"),
     hasta: str = Query(..., description="AAAA-MM-DD"),
@@ -2512,13 +2516,13 @@ async def process_ves_recharge(
     return {"message": message}
 
 
-@router.get("/rates")
+@router.get("/rates", response_model=TasasDelSistema, response_model_exclude_unset=True)
 async def get_rates(admin: User = Depends(get_super_admin)):
     """Get exchange rates"""
     rate = await db.rates.find_one({}, {"_id": 0}, sort=[("updated_at", -1)])
     return rate or {"ris_to_ves": 92.0, "ves_to_ris": 0.0109}
 
-@router.post("/rates")
+@router.post("/rates", response_model=TasaActualizada, response_model_exclude_unset=True)
 async def update_rates(request: UpdateRateRequest, peticion: Request,
                        admin: User = Depends(get_super_admin)):
     """Update exchange rates - 3 independent rates"""
@@ -2575,7 +2579,7 @@ async def update_rates(request: UpdateRateRequest, peticion: Request,
     return {"message": "Tasa actualizada", **update_fields}
 
 
-@router.get("/rate-history")
+@router.get("/rate-history", response_model=HistorialDeTasas, response_model_exclude_unset=True)
 async def get_rate_history(
     limit: int = 200,
     route: str = None,
@@ -2598,7 +2602,7 @@ async def get_rate_history(
 
 # ============== BCV RATES ==============
 
-@router.get("/bcv-rates")
+@router.get("/bcv-rates", response_model=LecturaDelBcv, response_model_exclude_unset=True)
 async def get_bcv_rates(admin: User = Depends(get_admin_user)):
     """Get latest BCV snapshot (USD/EUR/CNY/TRY/RUB to VES)."""
     from services.bcv_scraper import get_latest
@@ -2606,7 +2610,7 @@ async def get_bcv_rates(admin: User = Depends(get_admin_user)):
     return latest or {"rates": {}, "value_date": None, "fetched_at": None}
 
 
-@router.get("/bcv-rates/history")
+@router.get("/bcv-rates/history", response_model=HistorialDelBcv, response_model_exclude_unset=True)
 async def get_bcv_rates_history(limit: int = 50, admin: User = Depends(get_admin_user)):
     """Get BCV rate history."""
     from services.bcv_scraper import get_history
@@ -2614,7 +2618,7 @@ async def get_bcv_rates_history(limit: int = 50, admin: User = Depends(get_admin
     return {"entries": entries, "count": len(entries)}
 
 
-@router.post("/bcv-rates/refresh")
+@router.post("/bcv-rates/refresh", response_model=BcvActualizado, response_model_exclude_unset=True)
 async def refresh_bcv_rates(admin: User = Depends(get_admin_user)):
     """Force fetch BCV rates right now.
 
@@ -3082,7 +3086,7 @@ class BlacklistAddRequest(BaseModel):
     value: str
     reason: str = ""
 
-@router.post("/blacklist")
+@router.post("/blacklist", response_model=AccionEnLaListaNegra, response_model_exclude_unset=True)
 async def add_to_blacklist(data: BlacklistAddRequest, admin: User = Depends(get_crm_user)):
     """Agrega un correo/CPF/documento a la lista negra."""
     bl_type = (data.type or "").lower().strip()
@@ -3107,13 +3111,13 @@ async def add_to_blacklist(data: BlacklistAddRequest, admin: User = Depends(get_
     logger.info(f"Blacklist add: {bl_type}={norm} by {admin.user_id}")
     return {"success": True, "message": "Agregado a la lista negra", "blacklist_id": entry["blacklist_id"]}
 
-@router.get("/blacklist")
+@router.get("/blacklist", response_model=ListaNegra, response_model_exclude_unset=True)
 async def list_blacklist(admin: User = Depends(get_crm_user)):
     """Lista todos los elementos de la lista negra."""
     items = await db.blacklist.find({}, {"_id": 0}).sort("banned_at", -1).to_list(1000)
     return {"items": items, "total": len(items)}
 
-@router.delete("/blacklist/{blacklist_id}")
+@router.delete("/blacklist/{blacklist_id}", response_model=AccionEnLaListaNegra, response_model_exclude_unset=True)
 async def remove_from_blacklist(blacklist_id: str, admin: User = Depends(get_crm_user)):
     """Quita un elemento de la lista negra (des-banear)."""
     result = await db.blacklist.delete_one({"blacklist_id": blacklist_id})
@@ -3206,7 +3210,7 @@ async def ban_from_verification(data: BanUserRequest, admin: User = Depends(get_
 #   Un cliente no recibe ninguno; un agente recibe los suyos y no se entera de
 #   cuántos retiros hay esperando.
 
-@router.get("/pendientes")
+@router.get("/pendientes", response_model=PendientesDelPanel, response_model_exclude_unset=True)
 async def get_pendientes(current_user: User = Depends(get_current_user)):
     """Cuánto trabajo espera en cada pestaña, para quien pregunta."""
     if current_user.role not in ROLES_DEL_PERSONAL:
