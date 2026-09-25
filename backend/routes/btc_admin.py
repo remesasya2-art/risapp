@@ -30,6 +30,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from database import db
+from models.panel_tablero import (ConfiguracionBtc, ConfiguracionBtcGuardada, EstadisticasBtc,
+                                  RemesaBtcEnviada, RemesasBtc)
 from models.user import User
 from routes.dependencies import get_super_admin
 from services.money import para_mostrar
@@ -208,7 +210,7 @@ async def _hydrate_users(remesas):
 # CONFIG ENDPOINTS
 # ============================================================================
 
-@router.get("/config")
+@router.get("/config", response_model=ConfiguracionBtc, response_model_exclude_unset=True)
 async def get_btc_config(admin: User = Depends(get_super_admin)):
     margen = await _read_config_value("btc_margen", DEFAULT_MARGEN)
     comision = await _read_config_value("btc_comision", DEFAULT_COMISION)
@@ -266,7 +268,7 @@ async def get_btc_config(admin: User = Depends(get_super_admin)):
     }
 
 
-@router.patch("/config")
+@router.patch("/config", response_model=ConfiguracionBtcGuardada, response_model_exclude_unset=True)
 async def update_btc_config(payload: BtcConfigUpdate, admin: User = Depends(get_super_admin)):
     changes = {}
     if payload.margen is not None:
@@ -300,7 +302,7 @@ async def update_btc_config(payload: BtcConfigUpdate, admin: User = Depends(get_
 # STATS / LIST / EXPORT
 # ============================================================================
 
-@router.get("/stats")
+@router.get("/stats", response_model=EstadisticasBtc, response_model_exclude_unset=True)
 async def get_btc_stats(admin: User = Depends(get_super_admin)):
     """Aggregated counts and totals by status."""
     pipeline = [
@@ -334,7 +336,7 @@ async def get_btc_stats(admin: User = Depends(get_super_admin)):
     }
 
 
-@router.get("/transacciones")
+@router.get("/transacciones", response_model=RemesasBtc, response_model_exclude_unset=True)
 async def list_btc_transacciones(
     status: str = Query("all", pattern="^(pendiente|pagado|enviado|cancelado|expirado|fallido|all)$"),
     search: Optional[str] = None,
@@ -503,7 +505,7 @@ async def completar_remesa_btc(remesa_id: str, comprobante: Optional[str] = None
     return {"success": True, "message": "Remesa marcada como enviada", "via": via}
 
 
-@router.post("/marcar-enviado")
+@router.post("/marcar-enviado", response_model=RemesaBtcEnviada, response_model_exclude_unset=True)
 async def marcar_btc_enviado(data: MarcarBtcEnviadoRequest, admin: User = Depends(get_super_admin)):
     """El super_admin marca una remesa BTC (ya pagada en BTC) como enviada,
     tras pagar manualmente en bolívares. Puede adjuntar el comprobante de pago.

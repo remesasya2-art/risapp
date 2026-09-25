@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models.escalar import Escalar
+from models.panel_tablero import TableroDelPanel
 from models.reglas_publicas import LosLimites, MisLimites
 from openpyxl import Workbook
 
@@ -305,7 +306,7 @@ async def export_transactions(current_user: User = Depends(get_super_admin)):
 
 # ============== ADMIN DASHBOARD ==============
 
-@router.get("/admin/dashboard")
+@router.get("/admin/dashboard", response_model=TableroDelPanel, response_model_exclude_unset=True)
 async def get_admin_dashboard(current_user: User = Depends(get_super_admin)):
     """Get admin dashboard stats"""
     # Count users

@@ -42,6 +42,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from database import db
+from models.panel_tablero import ConfiguracionDelPanel
 from models.user import User
 from routes.dependencies import get_super_admin
 from services import auditoria, configuracion
@@ -76,12 +77,12 @@ def _respuesta(valores: dict) -> dict:
     return {"ajustes": ajustes}
 
 
-@router.get("")
+@router.get("", response_model=ConfiguracionDelPanel, response_model_exclude_unset=True)
 async def ver_configuracion(_: User = Depends(get_super_admin)):
     return _respuesta(await configuracion.leer_todo(db))
 
 
-@router.put("")
+@router.put("", response_model=ConfiguracionDelPanel, response_model_exclude_unset=True)
 async def guardar_configuracion(cuerpo: GuardarAjustes, pedido: Request,
                                 quien: User = Depends(get_super_admin)):
     if not cuerpo.valores:

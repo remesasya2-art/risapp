@@ -18,35 +18,14 @@
 # COMO SE USA
 # Las rutas que NO declaran contrato de salida (`response_model`), congeladas.
 # POR QUE ESTA LISTA EXISTE
-DELETE /api/admin/blacklist/{blacklist_id}
 DELETE /{full_path:path}
 GET /api/admin/accounting/export
-GET /api/admin/bcv-rates
-GET /api/admin/bcv-rates/history
-GET /api/admin/blacklist
-GET /api/admin/btc/config
-GET /api/admin/btc/stats
-GET /api/admin/btc/transacciones
 GET /api/admin/btc/transacciones.csv
-GET /api/admin/configuracion
-GET /api/admin/dashboard
 GET /api/admin/envios/envios/{envio_id}/foto/{asset_id}
-GET /api/admin/errores
-GET /api/admin/errores/resumen
 GET /api/admin/kyc/export.csv
-GET /api/admin/lector/desempeno
-GET /api/admin/pendientes
-GET /api/admin/rate-history
-GET /api/admin/rates
-GET /api/admin/reportes
-GET /api/admin/reportes/fuentes
-GET /api/admin/reportes/merma-nowpayments
 GET /api/admin/reportes/procesados
-GET /api/admin/transactions
 GET /api/admin/transactions/export
-GET /api/admin/transactions/{transaction_id}
 GET /api/admin/users/{user_id}/ficha
-GET /api/admin/uso
 GET /api/auth/2fa/admin-access-log
 GET /api/centro-gestion/health
 GET /api/centro-gestion/log
@@ -57,13 +36,7 @@ GET /api/media/twilio/{path:path}
 GET /api/transactions/export
 GET /api/withdrawal/queue-stats
 GET /{full_path:path}
-PATCH /api/admin/btc/config
 PATCH /{full_path:path}
-POST /api/admin/bcv-rates/refresh
-POST /api/admin/blacklist
-POST /api/admin/btc/marcar-enviado
-POST /api/admin/fix-media-urls
-POST /api/admin/rates
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
 POST /api/credits/webhook
@@ -77,5 +50,4 @@ POST /api/webauthn/register/options
 POST /api/webhook/mercadopago
 POST /api/webhooks/twilio/whatsapp
 POST /{full_path:path}
-PUT /api/admin/configuracion
 PUT /{full_path:path}
