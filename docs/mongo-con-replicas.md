@@ -99,8 +99,8 @@ En el panel, «Salud de la aplicación», la línea **transacciones** tiene que
 estar con ✓ y decir:
 
 > Mongo es un conjunto de réplicas: el motor contable (lotes de USDT, ventas
-> P2P, conciliación) escribe en una sola operación, y el saldo en RIS del
-> cliente va junto con su línea del libro…
+> P2P, conciliación) escribe en una sola operación, y el saldo del cliente va
+> junto con su línea del libro…
 
 El mismo texto aparece cada cinco minutos en el registro del backend, en la
 línea que empieza con `SALUD|`, que tiene que decir `SALUD| bien`.

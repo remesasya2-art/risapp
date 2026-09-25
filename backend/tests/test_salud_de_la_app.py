@@ -107,10 +107,10 @@ def test_CON_REPLICAS_NO_PROMETE_LO_QUE_NO_PASA(todo_sano):
     c = comprobacion(ya(salud.revisar(todo_sano)), "transacciones")
     assert c["ok"] is True
     assert "los cobros se escriben en una sola operación" not in c["detalle"]
-    assert "todavía son dos escrituras separadas" in c["detalle"]
-    # Lo que ya va junto no se anuncia como separado, y lo separado se nombra.
-    pendiente = c["detalle"].split("Los saldos en cripto")[1]
-    assert "encomiendas" not in pendiente and "USDT" in pendiente
+    # Nombra cada camino que va junto, en RIS y en cripto, y ya no anuncia
+    # nada como separado: los que lo estaban se metieron en transacciones.
+    assert "encomiendas" in c["detalle"] and "depósitos de USDT y USDC" in c["detalle"]
+    assert "dos escrituras separadas" not in c["detalle"]
 
 
 def test_con_la_tasa_del_bcv_vencida_o_ausente_lo_dice(todo_sano):
