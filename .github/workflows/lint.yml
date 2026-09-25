@@ -126,6 +126,7 @@ jobs:
           done
           python -m pytest tests/test_motor_contable.py tests/test_saldo_y_libro_juntos.py tests/test_salidas_de_saldo.py \
             tests/test_el_panel_acredita_en_una_transaccion.py tests/test_las_encomiendas_cobran_en_una_transaccion.py \
+            tests/test_los_depositos_cripto_en_una_transaccion.py \
             -q --no-header -rs
 
       # EL ESCANEO DE DEPENDENCIAS VA EN ESTE MISMO TRABAJO, Y AVISA SIN FRENAR
