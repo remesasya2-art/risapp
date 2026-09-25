@@ -1,0 +1,66 @@
+# Los archivos de código que ya pasaban de 800 líneas el día que se escribió
+# la regla, con cuántas tenían. Ver `test_archivos_de_hasta_800_lineas.py`.
+#
+# POR QUE ESTA LISTA EXISTE
+#
+#     La regla es que ningún archivo pase de 800 líneas; si crece más, se
+#     divide. Cuando se escribió, 43 ya pasaban. Dividirlos todos de una es un
+#     cambio enorme que toca media aplicación a la vez, y cada fusión de este
+#     repositorio despliega a producción. Así que esta lista los congela.
+#
+# COMO SE USA
+#
+#     No se agregan líneas a mano nunca. Esta lista sólo se achica.
+#
+#     - Archivo nuevo de más de 800        -> el test se pone rojo. Dividilo.
+#     - Uno de acá crece de lo anotado     -> el test se pone rojo. Dividilo,
+#                                             o sacale lo que le agregaste.
+#     - Uno de acá baja a 800 o menos      -> el test se pone rojo. Borralo
+#                                             de acá: es uno menos.
+#     - Uno de acá se borra o se muda      -> el test se pone rojo. Borralo.
+#
+#     El número se puede bajar a mano cuando un archivo se achica: así lo que
+#     se sacó no se puede volver a poner. Subirlo, nunca.
+ 2525 frontend/src/pages/AdminPanel.jsx
+ 2492 backend/routes/transactions.py
+ 1689 backend/routes/envios_admin.py
+ 1544 backend/tests/test_envios_e2e.py
+ 1544 frontend/src/components/admin/Nucleo.jsx
+ 1533 backend/nucleo/rutas.py
+ 1361 backend/tests/test_bono_de_bienvenida.py
+ 1327 frontend/src/pages/Send.jsx
+ 1232 backend/tests/test_envios_operacion.py
+ 1188 frontend/src/components/admin/SeguridadFinanciera.jsx
+ 1154 backend/routes/soporte.py
+ 1096 backend/tests/test_envios_crear.py
+ 1079 backend/routes/auth.py
+ 1074 backend/routes/gestor_pix.py
+ 1025 frontend/src/pages/Recharge.jsx
+ 1009 frontend/src/components/admin/Retiros.jsx
+ 1005 backend/tests/test_envios_almacen.py
+  996 backend/tests/test_envios_cobros.py
+  993 frontend/src/components/admin/RecargasVES.jsx
+  991 backend/services/accounting_engine.py
+  987 backend/tests/test_cofre.py
+  981 frontend/src/pages/BTCLightning.jsx
+  969 backend/services/contabilidad.py
+  967 backend/tests/test_pago_al_final.py
+  958 frontend/src/components/admin/MesaDeAyuda.jsx
+  952 frontend/src/pages/GestorFlowMockup.jsx
+  930 backend/routes/accounting.py
+  924 backend/tests/test_envios_comprobante.py
+  919 frontend/src/pages/SendReais.jsx
+  918 backend/tests/test_cadena_tls.py
+  909 backend/tests/test_politica_de_contenido.py
+  893 backend/tests/test_envios_cotizador.py
+  888 backend/tests/test_comprobantes_del_lote.py
+  873 backend/routes/security_2fa.py
+  870 frontend/src/components/admin/OrdenesPorProcesar.jsx
+  832 frontend/src/components/admin/envios/Transportistas.jsx
+  819 frontend/src/pages/Verification.jsx
+  814 backend/services/envios_cobros.py
+  814 backend/services/envios_operacion.py
+  812 frontend/src/pages/Profile.jsx
+  810 backend/tests/test_motor_contable.py
+  808 backend/services/configuracion.py
+  805 backend/tests/test_envios_estados.py
