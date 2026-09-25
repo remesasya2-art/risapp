@@ -394,12 +394,12 @@ def test_el_documento_se_guarda_hasheado_y_nunca_en_claro(base):
 # Donde está permitido escribir `verification_status: "verified"` SIN liberar
 # un bono, y por qué. La lista es corta a propósito: cada línea es una puerta
 # que queda sin vigilar.
-ESCRITURAS_PERMITIDAS_SIN_BONO = {
-    # Crea una cuenta de ADMINISTRADOR nueva, con la verificación ya puesta.
-    # Una cuenta que nace administradora no viene de un código de referido y no
-    # tiene bono que liberar. No es una puerta del KYC.
-    ("admin_routes.py", "create_sub_admin"),
-}
+#
+# Hoy no queda ninguna. La única era `admin_routes.create_sub_admin`, que
+# creaba administradores con la verificación puesta a mano; se sacó porque se
+# saltaba las reglas del personal (ver el bloque que la reemplaza en
+# `admin_routes.py`). Si vuelve una, que sea con su porqué al lado.
+ESCRITURAS_PERMITIDAS_SIN_BONO = set()
 
 LLAMADA_AL_BONO = "al_aprobarse_el_kyc"
 MARCA_DE_VERIFICADO = '"verification_status": "verified"'
@@ -478,14 +478,13 @@ def _escrituras_del_estado_verificado():
     return encontradas
 
 
-# Las cuatro que tienen que aparecer. Escritas a mano para que el buscador no
+# Las tres que tienen que aparecer. Escritas a mano para que el buscador no
 # pueda quedarse callado: si encuentra menos, o si encuentra la LECTURA de
 # `misc.py`, el test de abajo se pone rojo.
 ESCRITURAS_ESPERADAS = {
     ("admin.py", "decide_verification"),
     ("admin.py", "process_verification"),
     ("kyc_admin.py", "approve_kyc"),
-    ("admin_routes.py", "create_sub_admin"),
 }
 
 

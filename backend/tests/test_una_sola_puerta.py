@@ -194,20 +194,24 @@ def test_toda_ruta_de_admin_entra_por_la_misma_puerta(app_armada):
     )
 
 
-def test_las_catorce_rutas_que_estaban_sueltas_siguen_existiendo(app_armada):
+def test_las_rutas_que_estaban_sueltas_siguen_existiendo(app_armada):
     """El test de arriba también pasaría si alguien borrara las rutas.
 
     Este fija que sigan ahí, atendidas por `admin_routes`, para que el de
     arriba esté diciendo algo sobre ellas y no sobre un archivo vacío.
+
+    Eran catorce. Son once desde que se sacaron el alta, el cambio y la baja
+    de `/admin/sub-admins`, que se saltaban las reglas del personal (ver
+    `admin_routes.py`): el alta de personal es de RRHH.
     """
     de_admin_routes = [
         getattr(r, "path", "") for r in app_armada.routes
         if getattr(getattr(r, "endpoint", None), "__module__", "") == "admin_routes"
         and getattr(r, "path", "").startswith("/api/admin")
     ]
-    assert len(de_admin_routes) == 14, (
+    assert len(de_admin_routes) == 11, (
         f"admin_routes.py atiende {len(de_admin_routes)} rutas, se esperaban "
-        f"14. Si el cambio fue a propósito, corregí el número acá:\n"
+        f"11. Si el cambio fue a propósito, corregí el número acá:\n"
         + "\n".join(f"    {c}" for c in sorted(de_admin_routes)))
 
 
