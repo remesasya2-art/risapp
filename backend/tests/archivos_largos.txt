@@ -40,7 +40,7 @@
  1005 backend/tests/test_envios_almacen.py
   996 backend/tests/test_envios_cobros.py
   993 frontend/src/components/admin/RecargasVES.jsx
-  991 backend/services/accounting_engine.py
+  953 backend/services/accounting_engine.py
   987 backend/tests/test_cofre.py
   981 frontend/src/pages/BTCLightning.jsx
   969 backend/services/contabilidad.py
@@ -61,6 +61,6 @@
   814 backend/services/envios_cobros.py
   814 backend/services/envios_operacion.py
   812 frontend/src/pages/Profile.jsx
-  810 backend/tests/test_motor_contable.py
+  809 backend/tests/test_motor_contable.py
   808 backend/services/configuracion.py
   805 backend/tests/test_envios_estados.py

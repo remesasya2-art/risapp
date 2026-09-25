@@ -57,9 +57,9 @@ def todo_sano(base, monkeypatch):
     """La aplicación como tiene que estar en producción: candado del CPF,
     Mongo con réplicas, BCV fresco, cofre cifrando con la llave buena y los
     contadores en la base."""
-    from services import accounting_engine, cofre
+    from services import cofre, transacciones
     ya(base.users.create_index("cpf_number", unique=True, sparse=True, name=NOMBRE_DEL_INDICE))
-    monkeypatch.setattr(accounting_engine, "_SUPPORTS_TRANSACTIONS", True)
+    monkeypatch.setattr(transacciones, "_SUPPORTS_TRANSACTIONS", True)
     bcv_de_hace(base, 2)
     monkeypatch.setenv(cofre.VARIABLE_MODO, "cifrando")
     monkeypatch.setenv(cofre.VARIABLE_LLAVE, cofre.llave_nueva()["llave"])
@@ -93,11 +93,21 @@ def test_sin_el_candado_del_cpf_no_es_sana_pero_no_es_grave(todo_sano):
 
 def test_CON_MONGO_DE_UN_SOLO_NODO_LO_DICE(todo_sano, monkeypatch):
     """Lo detecta el motor contable al arrancar y lo decía sólo en el log."""
-    from services import accounting_engine
-    monkeypatch.setattr(accounting_engine, "_SUPPORTS_TRANSACTIONS", False)
+    from services import transacciones
+    monkeypatch.setattr(transacciones, "_SUPPORTS_TRANSACTIONS", False)
     c = comprobacion(ya(salud.revisar(todo_sano)), "transacciones")
     assert c["ok"] is False and c["grave"] is False
     assert "replica set" in c["detalle"] and "dos escrituras" in c["detalle"]
+
+
+def test_CON_REPLICAS_NO_PROMETE_LO_QUE_NO_PASA(todo_sano):
+    """Decía «los cobros se escriben en una sola operación» y el saldo del
+    cliente nunca pasó por una transacción: con réplicas, la salud se ponía en
+    verde afirmando algo falso."""
+    c = comprobacion(ya(salud.revisar(todo_sano)), "transacciones")
+    assert c["ok"] is True
+    assert "los cobros se escriben en una sola operación" not in c["detalle"]
+    assert "todavía son dos escrituras separadas" in c["detalle"]
 
 
 def test_con_la_tasa_del_bcv_vencida_o_ausente_lo_dice(todo_sano):

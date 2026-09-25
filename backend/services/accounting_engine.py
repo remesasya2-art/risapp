@@ -27,14 +27,16 @@ Existing collections (touched only via $inc atomic ops):
 """
 import logging
 import uuid
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
-from database import db, client as mongo_client
+from database import db
+from services.transacciones import (CorteQueSeGuarda, hay_transacciones,  # noqa: F401
+                                    abandonar as _abandonar,
+                                    sesion_atomica as _atomic_session)
 from services.money import (ZERO, from_db, quantize_money, to_decimal,
                             to_float)
 from services import bancos
@@ -49,47 +51,6 @@ DEFAULT_GATEWAY_FEE_PERCENTAGE = 0.01  # 1% — TODO: move to GatewayConfig
 WEBHOOK_TTL_DAYS = 180
 # Cuánto puede diferir el monto que avisa la pasarela del que esperábamos.
 TOLERANCIA_DESCUADRE = Decimal("0.01")
-
-# Cached at startup: True if replica set, False if standalone
-_SUPPORTS_TRANSACTIONS: Optional[bool] = None
-
-
-async def _detect_transaction_support() -> bool:
-    """Check once whether the cluster supports multi-document transactions."""
-    global _SUPPORTS_TRANSACTIONS
-    if _SUPPORTS_TRANSACTIONS is not None:
-        return _SUPPORTS_TRANSACTIONS
-    try:
-        info = await mongo_client.admin.command("hello")
-        # Replica sets expose "setName" — standalones don't
-        _SUPPORTS_TRANSACTIONS = "setName" in info
-    except Exception:
-        _SUPPORTS_TRANSACTIONS = False
-    if not _SUPPORTS_TRANSACTIONS:
-        logger.warning(
-            "Accounting engine: standalone MongoDB detected — "
-            "running WITHOUT multi-document transactions (dev mode)"
-        )
-    return _SUPPORTS_TRANSACTIONS
-
-
-async def hay_transacciones() -> bool:
-    """Para la salud de la aplicación: si el Mongo de producción es un conjunto
-    de réplicas (y entonces un cobro mueve el saldo y escribe el libro en UNA
-    operación) o un nodo suelto, donde eso son dos escrituras separadas."""
-    return await _detect_transaction_support()
-
-
-@asynccontextmanager
-async def _atomic_session():
-    """Yield a Motor session inside a transaction, or None if standalone."""
-    if await _detect_transaction_support():
-        async with await mongo_client.start_session() as session:
-            async with session.start_transaction():
-                yield session
-    else:
-        yield None
-
 
 # ============================================================
 # Indexes (idempotent — safe to call multiple times)
@@ -367,6 +328,7 @@ class WebhookConciliationService:
                         session=session,
                     )
                 except DuplicateKeyError:
+                    await _abandonar(session)
                     return {
                         "status": "IGNORED_DUPLICATE",
                         "message": "Webhook ya procesado.",
@@ -405,7 +367,7 @@ class WebhookConciliationService:
                         {"$set": {"status": "suspended"}},
                         session=session,
                     )
-                    raise ValueError(
+                    raise CorteQueSeGuarda(
                         f"Descuadre: esperado {expected}, recibido {amount_received}"
                     )
 

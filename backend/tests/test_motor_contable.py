@@ -21,12 +21,10 @@ LO QUE MAS IMPORTA ACA
     4. Que el saldo del banco siga siendo Decimal128 después de que el motor lo
        toque. Un solo `$inc` con float y el pozo empieza a arrastrar centavos.
 
-    Este entorno corre mongomock, que no tiene transacciones multi-documento.
-    No es una limitación del test: es la misma situación de un mongod suelto,
-    que es lo que el propio motor detecta y anuncia con un warning. Lo que se
-    prueba acá vale para ese caso, que es el peor.
+    Con mongomock no hay transacciones: es el camino de un mongod suelto. Con
+    `RIS_MONGO_DE_VERDAD`, los mismos tests corren CON transacciones contra un
+    Mongo con réplicas (ver `tests/_mongo_de_verdad.py`); CI lo hace siempre.
 """
-import asyncio
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -43,15 +41,13 @@ mongomock_motor = pytest.importorskip(
     reason="mongomock-motor no está instalado: es de test y no va en producción",
 )
 
-from conftest import ensenarle_decimal128_a_mongomock, usar_base    # noqa: E402
+from conftest import ensenarle_decimal128_a_mongomock               # noqa: E402
 ensenarle_decimal128_a_mongomock()
 
 from services import accounting_engine as ae                        # noqa: E402
 from services import bancos                                         # noqa: E402
-
-
-def corre(coro):
-    return asyncio.run(coro)
+from services import transacciones                                  # noqa: E402
+from _mongo_de_verdad import MONGO_DE_VERDAD, base_para, corre     # noqa: E402
 
 
 def d(x):
@@ -65,12 +61,15 @@ def saldo(doc):
 
 @pytest.fixture
 def base(monkeypatch):
-    b = mongomock_motor.AsyncMongoMockClient()["ris_test"]
-    usar_base(b)
-    # El motor cachea si el cluster soporta transacciones. Sin resetearlo, el
-    # primer test decide por todos los demás y el orden pasa a importar.
-    monkeypatch.setattr(ae, "_SUPPORTS_TRANSACTIONS", None, raising=False)
-    return b
+    yield from base_para(monkeypatch, "ris_motor_contable")
+
+
+@pytest.mark.skipif(not MONGO_DE_VERDAD, reason="sin RIS_MONGO_DE_VERDAD: los tests corren sobre mongomock")
+def test_CON_UN_MONGO_DE_VERDAD_EL_MOTOR_USA_TRANSACCIONES(base):
+    """Si el Mongo de CI arrancara como nodo suelto, todos los demás pasarían
+    por el camino SIN transacciones y el trabajo daría verde sin haber probado
+    lo que vino a probar."""
+    assert corre(transacciones.hay_transacciones()) is True
 
 
 async def _indices(base):
