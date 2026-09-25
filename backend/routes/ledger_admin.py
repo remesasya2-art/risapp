@@ -14,6 +14,10 @@ from pydantic import BaseModel, Field
 
 from database import db
 from models.user import User
+from models.panel_libro import (AperturaDelLibro, BalanceDeComprobacion, CobrosSinAcreditar,
+                                 ConciliacionDelPozo, CotejoDeLaLlave, EstadoDelCofre, IntegridadDelLibro,
+                                 LibroDiario, LibroMayor, LineasDeUnUsuario, LlaveNuevaDelCofre,
+                                 PlanDeCuentas, Reconciliacion, ReconciliacionVieja)
 from routes.dependencies import get_super_admin
 from services import cobros_sin_acreditar
 from services.ledger import sum_ris_balance, create_opening_entries
@@ -30,7 +34,7 @@ router = APIRouter(prefix="/admin/ledger", tags=["ledger"])
 EPS = quantize_money("0.01")
 
 
-@router.post("/opening")
+@router.post("/opening", response_model=AperturaDelLibro, response_model_exclude_unset=True)
 async def run_opening(admin: User = Depends(get_super_admin)):
     """Crea las líneas de saldo de apertura (idempotente: se puede llamar varias
     veces sin duplicar). A partir de aquí el ledger cuadra contra los saldos."""
@@ -38,7 +42,7 @@ async def run_opening(admin: User = Depends(get_super_admin)):
     return result
 
 
-@router.get("/reconcile")
+@router.get("/reconcile", response_model=ReconciliacionVieja, response_model_exclude_unset=True)
 async def reconcile(admin: User = Depends(get_super_admin)):
     """Compara, por usuario, el balance_ris guardado contra la suma del ledger.
     Lista solo los que NO cuadran (diferencia mayor a la tolerancia)."""
@@ -92,7 +96,7 @@ def _para_el_json(valor):
     return valor
 
 
-@router.get("/entries")
+@router.get("/entries", response_model=LineasDeUnUsuario, response_model_exclude_unset=True)
 async def list_entries(
     user_id: str = Query(...),
     limit: int = Query(100),
@@ -139,7 +143,7 @@ def _error(e: Exception):
     return HTTPException(503, "No se pudo leer el libro. Reintentá en un momento.")
 
 
-@router.get("/plan-de-cuentas")
+@router.get("/plan-de-cuentas", response_model=PlanDeCuentas, response_model_exclude_unset=True)
 async def plan_de_cuentas(admin: User = Depends(get_super_admin)):
     """El plan de cuentas y el mapa de asientos.
 
@@ -157,7 +161,7 @@ async def plan_de_cuentas(admin: User = Depends(get_super_admin)):
     }
 
 
-@router.get("/diario")
+@router.get("/diario", response_model=LibroDiario, response_model_exclude_unset=True)
 async def ver_diario(
     desde: str = Query(..., description="AAAA-MM-DD"),
     hasta: str = Query(..., description="AAAA-MM-DD"),
@@ -179,7 +183,7 @@ async def ver_diario(
         raise _error(e)
 
 
-@router.get("/mayor")
+@router.get("/mayor", response_model=LibroMayor, response_model_exclude_unset=True)
 async def ver_mayor(
     desde: str = Query(..., description="AAAA-MM-DD"),
     hasta: str = Query(..., description="AAAA-MM-DD"),
@@ -195,7 +199,7 @@ async def ver_mayor(
         raise _error(e)
 
 
-@router.get("/balance")
+@router.get("/balance", response_model=BalanceDeComprobacion, response_model_exclude_unset=True)
 async def ver_balance(
     desde: str = Query(..., description="AAAA-MM-DD"),
     hasta: str = Query(..., description="AAAA-MM-DD"),
@@ -235,7 +239,7 @@ async def ver_balance(
         headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 
-@router.get("/reconciliacion")
+@router.get("/reconciliacion", response_model=Reconciliacion, response_model_exclude_unset=True)
 async def ver_reconciliacion(
     libro: str = Query("RIS"),
     limite: int = Query(200, ge=1, le=1000),
@@ -254,7 +258,7 @@ async def ver_reconciliacion(
         raise _error(e)
 
 
-@router.get("/pozo")
+@router.get("/pozo", response_model=ConciliacionDelPozo, response_model_exclude_unset=True)
 async def ver_conciliacion_del_pozo(admin: User = Depends(get_super_admin)):
     """¿Por cada RIS que un usuario tiene, hay un real nuestro?
 
@@ -273,7 +277,7 @@ async def ver_conciliacion_del_pozo(admin: User = Depends(get_super_admin)):
         raise _error(e)
 
 
-@router.get("/integridad")
+@router.get("/integridad", response_model=IntegridadDelLibro, response_model_exclude_unset=True)
 async def ver_integridad(
     libro: str = Query(None),
     admin: User = Depends(get_super_admin),
@@ -289,7 +293,7 @@ async def ver_integridad(
         raise _error(e)
 
 
-@router.get("/cofre")
+@router.get("/cofre", response_model=EstadoDelCofre, response_model_exclude_unset=True)
 async def estado_del_cofre(admin: User = Depends(get_super_admin)):
     """El estado del cofre de los documentos, para la pantalla de seguridad.
 
@@ -346,7 +350,7 @@ class LlaveParaCotejar(BaseModel):
     llave: str = Field(default="", max_length=2000)
 
 
-@router.post("/cofre/llave-nueva")
+@router.post("/cofre/llave-nueva", response_model=LlaveNuevaDelCofre, response_model_exclude_unset=True)
 async def llave_nueva_del_cofre(request: Request,
                                 admin: User = Depends(get_super_admin)):
     """Sortea una llave nueva y su huella. No la guarda en ningún lado.
@@ -367,7 +371,7 @@ async def llave_nueva_del_cofre(request: Request,
     return nueva
 
 
-@router.post("/cofre/cotejar")
+@router.post("/cofre/cotejar", response_model=CotejoDeLaLlave, response_model_exclude_unset=True)
 async def cotejar_la_llave_del_cofre(cuerpo: LlaveParaCotejar,
                                      admin: User = Depends(get_super_admin)):
     """¿La llave que anoté sirve, es la que corre, y abre los documentos?
@@ -397,7 +401,7 @@ async def cotejar_la_llave_del_cofre(cuerpo: LlaveParaCotejar,
 #     —`get_super_admin`—, así que el control nuevo entra donde se lo va a
 #     buscar en vez de abrir un vecindario propio.
 
-@router.get("/cobros-sin-acreditar")
+@router.get("/cobros-sin-acreditar", response_model=CobrosSinAcreditar, response_model_exclude_unset=True)
 async def ver_cobros_sin_acreditar(
     dias: int = Query(cobros_sin_acreditar.DIAS_POR_DEFECTO),
     tope: int = Query(cobros_sin_acreditar.TOPE_POR_DEFECTO),

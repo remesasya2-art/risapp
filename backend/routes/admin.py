@@ -28,6 +28,7 @@ from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveRein
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.panel_retiros import ColaDeRetiros, RetirosPendientes
 from models.panel_recargas import ColaDeRecargasVes, ControlDeReferencia, RecargasVesPendientes
+from models.panel_libro import ContabilidadBorrada
 from models.panel_soporte import (AccionDeSoporte, CalificacionesPorAsesor, PrioridadDeLaSolicitud,
                                    RespuestaPorCorreo, SolicitudesDeAyuda, SolicitudResuelta, SolicitudTomada)
 from models.panel_ordenes import (ArchivoDelLote, BancosParaPagar, ComprobanteDelLote, ComprobanteDescartado,
@@ -286,7 +287,7 @@ async def wipe_all_data(
     }
 
 
-@router.post("/accounting/wipe")
+@router.post("/accounting/wipe", response_model=ContabilidadBorrada, response_model_exclude_unset=True)
 async def wipe_accounting_data(
     request: WipeRequest,
     admin: User = Depends(get_super_admin)
