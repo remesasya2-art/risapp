@@ -28,6 +28,8 @@ from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveRein
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.panel_retiros import ColaDeRetiros, RetirosPendientes
 from models.panel_recargas import ColaDeRecargasVes, ControlDeReferencia, RecargasVesPendientes
+from models.panel_libro import (BorradoTotal, ContabilidadBorrada, OperacionesEscondidas,
+                                 OperacionesRestauradas, RegistroDeAccionesSensibles, VistaPreviaDelBorrado)
 from models.panel_soporte import (AccionDeSoporte, CalificacionesPorAsesor, PrioridadDeLaSolicitud,
                                    RespuestaPorCorreo, SolicitudesDeAyuda, SolicitudResuelta, SolicitudTomada)
 from models.panel_ordenes import (ArchivoDelLote, BancosParaPagar, ComprobanteDelLote, ComprobanteDescartado,
@@ -169,7 +171,7 @@ async def _record_audit(admin: User, action: str, deleted: dict, total: int, ext
         logger.error(f"Error recording audit log: {e}")
 
 
-@router.get("/wipe-all/preview")
+@router.get("/wipe-all/preview", response_model=VistaPreviaDelBorrado, response_model_exclude_unset=True)
 async def wipe_all_preview(admin: User = Depends(get_super_admin)):
     """Qué haría el borrado total, SIN hacer nada.
 
@@ -230,7 +232,7 @@ async def wipe_all_preview(admin: User = Depends(get_super_admin)):
     }
 
 
-@router.post("/wipe-all")
+@router.post("/wipe-all", response_model=BorradoTotal, response_model_exclude_unset=True)
 async def wipe_all_data(
     request: WipeRequest,
     admin: User = Depends(get_super_admin)
@@ -286,7 +288,7 @@ async def wipe_all_data(
     }
 
 
-@router.post("/accounting/wipe")
+@router.post("/accounting/wipe", response_model=ContabilidadBorrada, response_model_exclude_unset=True)
 async def wipe_accounting_data(
     request: WipeRequest,
     admin: User = Depends(get_super_admin)
@@ -320,7 +322,7 @@ async def wipe_accounting_data(
     }
 
 
-@router.get("/hidden-transactions")
+@router.get("/hidden-transactions", response_model=OperacionesEscondidas, response_model_exclude_unset=True)
 async def get_hidden_transactions(
     limit: int = 500,
     admin: User = Depends(get_super_admin)
@@ -363,7 +365,7 @@ class RestoreRequest(BaseModel):
     restore_all: bool = False
 
 
-@router.post("/restore-transactions")
+@router.post("/restore-transactions", response_model=OperacionesRestauradas, response_model_exclude_unset=True)
 async def restore_transactions(
     request: RestoreRequest,
     admin: User = Depends(get_super_admin)
@@ -400,7 +402,7 @@ async def restore_transactions(
     }
 
 
-@router.get("/audit-log")
+@router.get("/audit-log", response_model=RegistroDeAccionesSensibles, response_model_exclude_unset=True)
 async def get_audit_log(
     limit: int = 100,
     admin: User = Depends(get_super_admin)

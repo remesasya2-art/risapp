@@ -22,7 +22,6 @@ DELETE /api/admin/accounting/banks/{bank_id}
 DELETE /api/admin/blacklist/{blacklist_id}
 DELETE /{full_path:path}
 GET /api/admin/accounting/balance-check
-GET /api/admin/accounting/banks
 GET /api/admin/accounting/banks/{bank_id}/ledger
 GET /api/admin/accounting/export
 GET /api/admin/accounting/operations
@@ -35,7 +34,6 @@ GET /api/admin/accounting/v2/executive-report
 GET /api/admin/accounting/v2/p2p-sales
 GET /api/admin/accounting/v2/usdt-inventory-summary
 GET /api/admin/accounting/v2/usdt-lots
-GET /api/admin/audit-log
 GET /api/admin/bcv-rates
 GET /api/admin/bcv-rates/history
 GET /api/admin/blacklist
@@ -63,20 +61,8 @@ GET /api/admin/envios/transportistas
 GET /api/admin/envios/transportistas/{transportista_id}/agencias
 GET /api/admin/errores
 GET /api/admin/errores/resumen
-GET /api/admin/hidden-transactions
 GET /api/admin/kyc/export.csv
 GET /api/admin/lector/desempeno
-GET /api/admin/ledger/balance
-GET /api/admin/ledger/cobros-sin-acreditar
-GET /api/admin/ledger/cofre
-GET /api/admin/ledger/diario
-GET /api/admin/ledger/entries
-GET /api/admin/ledger/integridad
-GET /api/admin/ledger/mayor
-GET /api/admin/ledger/plan-de-cuentas
-GET /api/admin/ledger/pozo
-GET /api/admin/ledger/reconcile
-GET /api/admin/ledger/reconciliacion
 GET /api/admin/pendientes
 GET /api/admin/rate-history
 GET /api/admin/rates
@@ -89,7 +75,6 @@ GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
 GET /api/admin/users/{user_id}/ficha
 GET /api/admin/uso
-GET /api/admin/wipe-all/preview
 GET /api/auth/2fa/admin-access-log
 GET /api/centro-gestion/health
 GET /api/centro-gestion/log
@@ -113,7 +98,6 @@ POST /api/admin/accounting/v2/bootstrap-indexes
 POST /api/admin/accounting/v2/p2p-sales
 POST /api/admin/accounting/v2/usdt-lots
 POST /api/admin/accounting/v2/webhook-conciliate
-POST /api/admin/accounting/wipe
 POST /api/admin/bcv-rates/refresh
 POST /api/admin/blacklist
 POST /api/admin/btc/marcar-enviado
@@ -141,12 +125,7 @@ POST /api/admin/envios/transportistas
 POST /api/admin/envios/transportistas/{transportista_id}/agencias
 POST /api/admin/envios/transportistas/{transportista_id}/agencias/csv
 POST /api/admin/fix-media-urls
-POST /api/admin/ledger/cofre/cotejar
-POST /api/admin/ledger/cofre/llave-nueva
-POST /api/admin/ledger/opening
 POST /api/admin/rates
-POST /api/admin/restore-transactions
-POST /api/admin/wipe-all
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
 POST /api/credits/webhook

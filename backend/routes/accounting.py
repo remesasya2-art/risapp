@@ -21,6 +21,7 @@ from openpyxl.utils import get_column_letter
 
 from routes.dependencies import get_super_admin
 from models.user import User
+from models.panel_libro import BancosDeLaContabilidad
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class UsdtOperationInput(BaseModel):
 
 # === Bank Management ===
 
-@router.get("/banks")
+@router.get("/banks", response_model=BancosDeLaContabilidad, response_model_exclude_unset=True)
 async def get_banks(currency: str = None, admin: User = Depends(get_super_admin)):
     """Get all bank accounts"""
     query = {}
