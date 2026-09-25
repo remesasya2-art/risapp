@@ -39,6 +39,9 @@ EL ORDEN, Y POR QUE ES ASI
     5. Asiento en el ledger. Nunca interrumpe: el libro es un registro, no la
        fuente de verdad del saldo.
     6. Guardar el resultado idempotente.
+
+    Con un Mongo con réplicas, el débito, el libro y el marcado van en una sola
+    transacción y no hace falta compensar nada: `services/envios_cobros_juntos.py`.
 """
 
 import logging
@@ -245,6 +248,13 @@ async def _intentar_pagar(base, envio: dict, partida: str, importe: Decimal,
         (_partida_existente(reservada, partida) or {}).get("monto_ris")))
     if persistido.is_finite() and persistido > ZERO:
         importe = persistido
+
+    # Con réplicas, débito, línea y marcado van en una transacción, y lo que
+    # sigue —la compensación incluida— es el camino de un Mongo de un solo nodo.
+    from services import envios_cobros_juntos, transacciones
+    if await transacciones.hay_transacciones():
+        return await envios_cobros_juntos.pagar_reservada(
+            base, envio, partida, importe, intento_id, ahora, actor_type, actor_id)
 
     # 3b. El débito. Condicional al saldo, en una sola operación: leer el saldo y
     #     después restar es una carrera con la plata de alguien.
@@ -485,7 +495,7 @@ async def _devolver(base, user_id: str, importe: Decimal, entry_id,
 
 
 async def _asentar(user_id, importe, envio, partida, saldo_despues,
-                   intento_id, actor_type, actor_id) -> str | None:
+                   intento_id, actor_type, actor_id, session=None) -> str | None:
     try:
         from services.ledger import record_ris_entry
         return await record_ris_entry(
@@ -511,8 +521,13 @@ async def _asentar(user_id, importe, envio, partida, saldo_despues,
                       "tarifa_version": (envio.get("cotizacion") or {}).get(
                           "tarifa_version")},
             notes=f"Servicio de traslado transfronterizo, partida {partida}",
+            session=session,
         )
     except Exception as e:                                    # pragma: no cover
+        # Con transacción el error sale: tragarlo confirmaría el débito sin
+        # su línea, que es la evidencia de que ocurrió.
+        if session is not None:
+            raise
         logger.error(f"envios: no se pudo asentar el cobro en el libro: {e}")
         return None
 
@@ -725,90 +740,8 @@ async def _tarifa_congelada(base, envio: dict) -> dict:
 
 # ─── Devolver ─────────────────────────────────────────────────────────────
 
-async def devolver(envio: dict, monto, *, db=None, ahora=None, motivo: str = "ajuste",
-                   actor_type: str = "system", actor_id: str = None) -> dict:
-    """Le acredita saldo al usuario. La otra mitad del ajuste.
-
-    Existe porque el ajuste por repesaje tiene tres ramas y una es DEVOLVER: si
-    la balanza propia da menos que el comprobante, el usuario pagó de más. Sin
-    esta función el cobro inicial sería un anticipo que solo sube, que es
-    exactamente lo que el diseño del ajuste dice que no puede pasar.
-
-    Acreditar es más simple que cobrar y por una razón: no puede fallar por falta
-    de fondos, así que no hay reserva, no hay carrera con el saldo y no hay
-    compensación. Lo único que hay que garantizar es que no se acredite dos
-    veces, y eso lo hace el registro en el envío.
-    """
-    ahora = ahora or datetime.now(timezone.utc)
-    base = await _db(db)
-    envio_id, user_id = _identidad(envio)
-
-    importe = quantize_money(to_decimal(monto)).copy_abs()
-    if not importe.is_finite() or importe <= ZERO:
-        raise CobroImposible(
-            "Una devolución de cero no se emite: si no hay nada que devolver, no hay "
-            "devolución.", http=500)
-
-    # La marca va primero y es la guardia: si ya está, no se acredita de nuevo.
-    try:
-        escrito = await base.envios.find_one_and_update(
-            {"envio_id": envio_id, "cobros.devolucion": None},
-            {"$set": {"cobros.devolucion": {
-                "monto_ris": str(importe), "motivo": motivo,
-                "emitido_at": ahora, "estado": "acreditando"}}},
-            return_document=True)
-    except Exception as e:
-        logger.error(f"envios: no se pudo emitir la devolución de {envio_id}: {e}")
-        raise CobroImposible(
-            "No se pudo emitir la devolución. Reintentá en un momento.", http=503) from e
-
-    if escrito is None:
-        ya = ((await _releer(base, envio_id)).get("cobros") or {}).get("devolucion") or {}
-        return {"estado": ya.get("estado") or "acreditado",
-                "monto_ris": str(to_decimal(ya.get("monto_ris"))),
-                "saldo_restante": None, "entry_id": None}
-
-    try:
-        usuario = await base.users.find_one_and_update(
-            {"user_id": user_id}, {"$inc": {"balance_ris": to_decimal128(importe)}},
-            return_document=True)
-    except Exception as e:
-        logger.error(f"envios: no se pudo acreditar {importe} a {user_id}: {e}")
-        try:
-            await base.envios.update_one({"envio_id": envio_id},
-                                         {"$set": {"cobros.devolucion": None}})
-        except Exception:                                     # pragma: no cover
-            logger.critical(f"envios: devolución trabada en {envio_id}")
-        raise CobroImposible(
-            "No se pudo procesar la devolución. Reintentá en un momento.",
-            http=503) from e
-
-    saldo = to_decimal((usuario or {}).get("balance_ris"))
-    entry_id = None
-    try:
-        from services.ledger import record_ris_entry
-        entry_id = await record_ris_entry(
-            user_id=user_id, movement_type=MOVIMIENTO_REEMBOLSO,
-            amount=float(importe), direction="credit", balance_after=float(saldo),
-            reference_kind="envio", reference_id=envio_id,
-            display_id=envio.get("display_id"),
-            actor_type=actor_type, actor_id=actor_id,
-            metadata={"partida": "devolucion", "motivo": motivo},
-            notes="Devolución del servicio de traslado transfronterizo")
-    except Exception as e:                                    # pragma: no cover
-        logger.error(f"envios: no se pudo asentar la devolución: {e}")
-
-    try:
-        await base.envios.update_one(
-            {"envio_id": envio_id},
-            {"$set": {"cobros.devolucion.estado": "acreditado",
-                      "cobros.devolucion.acreditado_at": ahora,
-                      "cobros.reembolsado_ris": str(importe)}})
-    except Exception as e:                                    # pragma: no cover
-        # La plata ya está en la cuenta del usuario. NO se revierte: quitarle un
-        # saldo que ya vio, por un fallo nuestro de registro, es peor que un
-        # campo desactualizado que se puede recalcular del libro.
-        logger.error(f"envios: no se pudo cerrar la devolución de {envio_id}: {e}")
-
-    return {"estado": "acreditado", "monto_ris": str(importe),
-            "saldo_restante": str(quantize_money(saldo)), "entry_id": entry_id}
+async def devolver(envio: dict, monto, **opciones) -> dict:
+    """Le acredita saldo al usuario. Vive en `services/envios_cobros_juntos.py`,
+    que cuenta por qué se mudó; éste queda para que nadie tenga que cambiar."""
+    from services.envios_cobros_juntos import devolver as acreditar
+    return await acreditar(envio, monto, **opciones)
