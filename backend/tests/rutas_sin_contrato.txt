@@ -34,7 +34,6 @@ GET /api/admin/accounting/v2/executive-report
 GET /api/admin/accounting/v2/p2p-sales
 GET /api/admin/accounting/v2/usdt-inventory-summary
 GET /api/admin/accounting/v2/usdt-lots
-GET /api/admin/audit-log
 GET /api/admin/bcv-rates
 GET /api/admin/bcv-rates/history
 GET /api/admin/blacklist
@@ -62,7 +61,6 @@ GET /api/admin/envios/transportistas
 GET /api/admin/envios/transportistas/{transportista_id}/agencias
 GET /api/admin/errores
 GET /api/admin/errores/resumen
-GET /api/admin/hidden-transactions
 GET /api/admin/kyc/export.csv
 GET /api/admin/lector/desempeno
 GET /api/admin/pendientes
@@ -77,7 +75,6 @@ GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
 GET /api/admin/users/{user_id}/ficha
 GET /api/admin/uso
-GET /api/admin/wipe-all/preview
 GET /api/auth/2fa/admin-access-log
 GET /api/centro-gestion/health
 GET /api/centro-gestion/log
@@ -129,8 +126,6 @@ POST /api/admin/envios/transportistas/{transportista_id}/agencias
 POST /api/admin/envios/transportistas/{transportista_id}/agencias/csv
 POST /api/admin/fix-media-urls
 POST /api/admin/rates
-POST /api/admin/restore-transactions
-POST /api/admin/wipe-all
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
 POST /api/credits/webhook

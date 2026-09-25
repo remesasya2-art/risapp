@@ -344,3 +344,110 @@ def test_NINGUNA_RUTA_DEL_LIBRO_DEJA_SALIR_UN_SECRETO_DEL_USUARIO(libro):
               f"/admin/ledger/diario?desde={DESDE}&hasta={HASTA}", "/admin/ledger/pozo"):
         r = c.get(u)
         assert r.status_code == 200 and "$2b$12$clave" not in r.text and "JBSW" not in r.text, u
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El borrado total, lo escondido y el registro de lo que se hizo
+# ══════════════════════════════════════════════════════════════════════════
+
+A = "routes/admin.py"
+DEL_BORRADO = [
+    ("GET", "/wipe-all/preview", "VistaPreviaDelBorrado"),
+    ("POST", "/wipe-all", "BorradoTotal"),
+    ("GET", "/hidden-transactions", "OperacionesEscondidas"),
+    ("POST", "/restore-transactions", "OperacionesRestauradas"),
+    ("GET", "/audit-log", "RegistroDeAccionesSensibles"),
+]
+
+
+@pytest.mark.parametrize("metodo,camino,modelo", DEL_BORRADO, ids=[f"{m} {c}" for m, c, _ in DEL_BORRADO])
+def test_EL_BORRADO_Y_LO_ESCONDIDO_TIENEN_CONTRATO(metodo, camino, modelo):
+    ruta = _ruta(A, "router", metodo, camino)
+    assert ruta.response_model is not None and ruta.response_model.__name__ == modelo
+    assert ruta.response_model_exclude_unset is True
+    claves = _claves(A, metodo, camino, None)
+    assert claves, f"no encontré qué devuelve {camino}"
+    faltan = claves - set(ruta.response_model.model_fields)
+    assert not faltan, f"{camino} devuelve {sorted(faltan)} y su contrato no los tiene"
+
+
+def test_LO_QUE_ESCRIBE_EL_REGISTRO_ESTA_EN_SU_CONTRATO():
+    """El registro devuelve cada línea como se guardó: sus campos son los que
+    escribe `_record_audit`, el único que escribe ahí."""
+    import ast
+    import pathlib
+    from models.panel_libro import AccionSensible
+    arbol = ast.parse((pathlib.Path(__file__).resolve().parent.parent / A).read_text("utf-8"))
+    (f,) = [n for n in ast.walk(arbol) if isinstance(n, ast.AsyncFunctionDef) and n.name == "_record_audit"]
+    (d,) = [n for n in ast.walk(f) if isinstance(n, ast.Dict)][:1]
+    claves = {k.value for k in d.keys if isinstance(k, ast.Constant)}
+    assert len(claves) >= 5 and claves <= set(AccionSensible.model_fields), sorted(claves)
+
+
+def test_LO_QUE_LEEN_LOS_BOTONES_DE_BORRAR_Y_RESTAURAR():
+    from _lote_c_comun import fuente
+    from models.panel_libro import BorradoTotal, ContabilidadBorrada, OperacionEscondida, OperacionesRestauradas
+    lee_el_boton = {"transaction_id", "display_id", "type", "amount_input", "amount_output", "currency",
+                    "created_at", "user_name"}
+    assert lee_el_boton <= set(OperacionEscondida.model_fields)
+    assert "restored" in OperacionesRestauradas.model_fields
+    assert "total_deleted" in BorradoTotal.model_fields and "total_deleted" in ContabilidadBorrada.model_fields
+    texto = fuente("components/common/RestoreButton.jsx") + fuente("components/common/WipeButton.jsx")
+    assert not [c for c in lee_el_boton | {"restored", "total_deleted"} if c not in texto]
+
+
+@pytest.fixture
+def borrado():
+    from conftest import ensenarle_decimal128_a_mongomock
+    from _lote_c_comun import SUPER, app_con
+    from routes import admin as rutas_admin
+    from routes import dependencies as deps
+    from services import ledger
+    from services.money import to_decimal128
+    ensenarle_decimal128_a_mongomock()
+    c, base = app_con(rutas_admin.router, deps.get_super_admin, SUPER, "contratos_del_borrado")
+    ledger._indexes_ready = False
+
+    async def sembrar():
+        await base.users.insert_one({"user_id": "u1", "email": "uno@example.com", "name": "Uno", "role": "user",
+                                     "balance_ris": to_decimal128("70.00"), "password_hash": "$2b$12$clave"})
+        await base.transactions.insert_many([
+            {"transaction_id": "tx_e1", "display_id": "000901", "user_id": "u1", "type": "withdrawal",
+             "status": "completed", "amount_input": to_decimal128("60.00"), "amount_output": to_decimal128("6600.00"),
+             "currency": "RIS", "created_at": HOY, "hidden_from_admin": True,
+             "proof_image": "data:image/jpeg;base64," + "FOTO" * 20, "nota_interna": "revisar"},
+            {"transaction_id": "tx_e2", "display_id": "000902", "user_id": "u1", "type": "recharge",
+             "status": "completed", "amount_input": to_decimal128("40.00"), "created_at": HOY}])
+    ya(sembrar())
+    return c, base
+
+
+def test_ESCONDER_Y_RESTAURAR_POR_HTTP(borrado):
+    from _lote_c_comun import SUPER
+    from routes import admin as rutas_admin
+    c, _ = borrado
+    r = c.get("/admin/hidden-transactions")
+    _igual_a_llamarla_directo(r, ya(rutas_admin.get_hidden_transactions(limit=500, admin=SUPER)))
+    (fila,) = r.json()["transactions"]
+    assert fila["amount_input"] == 60.0 and fila["user_name"] == "Uno"
+    assert "FOTO" not in r.text and "revisar" not in r.text and "$2b$12$clave" not in r.text
+    r = c.post("/admin/restore-transactions", json={"transaction_ids": ["tx_e1"]})
+    assert r.json() == {"success": True, "message": "1 transacciones restauradas", "restored": 1}
+
+
+def test_LA_VISTA_PREVIA_EL_BORRADO_Y_EL_REGISTRO_POR_HTTP(borrado):
+    from _lote_c_comun import SUPER
+    from routes import admin as rutas_admin
+    c, _ = borrado
+    previa = c.get("/admin/wipe-all/preview")
+    _igual_a_llamarla_directo(previa, ya(rutas_admin.wipe_all_preview(admin=SUPER)))
+    assert previa.json()["se_borrarian"] and previa.json()["saldos_que_se_ponen_en_cero"]["balance_ris"] == "70.00"
+    r = c.post("/admin/wipe-all", json={"confirmation": "CONFIRMAR"})
+    assert r.status_code == 200, r.text
+    hecho = r.json()
+    assert hecho["success"] is True and hecho["total_deleted"] >= 2 and hecho["deleted"]["transactions"] == 2
+    assert hecho["libro_conservado"] is True and "revisados" in hecho["cierre_del_libro"]
+    registro = c.get("/admin/audit-log")
+    (linea,) = registro.json()["entries"]
+    assert linea["action"] == "wipe_all" and linea["admin_user_id"] == SUPER.user_id
+    assert linea["extra"]["saldos_reseteados"] and linea["deleted"]["transactions"] == 2

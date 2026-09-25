@@ -239,3 +239,57 @@ BancosDeLaContabilidad = List[BancoDeLaContabilidad]
 
 ContabilidadBorrada = _simple("ContabilidadBorrada", ("success", "message", "total_deleted", "hidden_transactions"),
                               deleted=(Dict[str, Escalar], {}))
+
+
+# ── El borrado total, lo que se esconde y lo que queda anotado ────────────
+#
+# Van al lado del borrado de la contabilidad porque son la misma familia: el
+# botón que borra (`WipeButton.jsx`), el que devuelve lo escondido
+# (`RestoreButton.jsx`), y el registro donde queda asentado quién apretó cada
+# uno. Todas se arman campo por campo en `routes/admin.py`; los contratos fijan
+# esos campos.
+
+CierreDelLibro = _simple("CierreDelLibro", ("revisados", "cierres_creados", "error"),
+                         por_cuenta=(Dict[str, Escalar], {}))
+
+BorradoTotal = _simple("BorradoTotal", (
+    "success", "message", "total_deleted", "users_balance_reset", "libro_conservado"),
+    deleted=(Dict[str, Escalar], {}),
+    cierre_del_libro=(Optional[CierreDelLibro], None))
+
+ColeccionABorrar = _simple("ColeccionABorrar", ("coleccion", "documentos"))
+ElLibroEnElBorrado = _simple("ElLibroEnElBorrado", ("lineas", "se_borra", "que_pasa"))
+
+
+class VistaPreviaDelBorrado(BaseModel):
+    es_una_simulacion: Escalar = None
+    se_borrarian: List[ColeccionABorrar] = []
+    documentos_a_borrar: Escalar = None
+    saldos_que_se_ponen_en_cero: Dict[str, Escalar] = {}
+    usuarios_con_saldo: Escalar = None
+    libro: Optional[ElLibroEnElBorrado] = None
+    no_se_toca: List[Escalar] = []
+
+
+OperacionEscondida = _simple("OperacionEscondida", (
+    "transaction_id", "display_id", "type", "status", "amount_input", "amount_output", "currency", "route",
+    "user_id", "user_name", "user_email", "created_at"))
+
+
+class OperacionesEscondidas(BaseModel):
+    transactions: List[OperacionEscondida] = []
+    count: Escalar = None
+
+
+OperacionesRestauradas = _simple("OperacionesRestauradas", ("success", "message", "restored"))
+
+# Lo que escribe `routes/admin._record_audit`, el único que escribe en
+# `audit_log`. `extra` queda libre: cada acción anota lo suyo.
+AccionSensible = _simple("AccionSensible", ("admin_email", "admin_user_id", "action", "total_deleted", "timestamp"),
+                         deleted=(Dict[str, Escalar], {}),
+                         extra=(Optional[Any], None))
+
+
+class RegistroDeAccionesSensibles(BaseModel):
+    entries: List[AccionSensible] = []
+    count: Escalar = None
