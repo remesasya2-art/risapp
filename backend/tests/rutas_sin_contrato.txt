@@ -27,10 +27,6 @@ GET /api/admin/reportes/procesados
 GET /api/admin/transactions/export
 GET /api/admin/users/{user_id}/ficha
 GET /api/auth/2fa/admin-access-log
-GET /api/centro-gestion/health
-GET /api/centro-gestion/log
-GET /api/centro-gestion/log/{transaction_id}
-GET /api/centro-gestion/stats
 GET /api/envios/{envio_id}/foto/{asset_id}
 GET /api/media/twilio/{path:path}
 GET /api/transactions/export

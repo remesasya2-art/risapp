@@ -90,15 +90,6 @@ SIN_TOPE_A_PROPOSITO = {
     ("POST", "/api/credits/webhook"): "webhook: lo protege la firma",
     ("POST", "/api/crypto-send/webhook"): "webhook: lo protege la firma",
 
-    # ── El centro de gestión. No usa sesión: entra
-    #    con una clave compartida en una cabecera, y esa clave es lo que los
-    #    protege. Que la clave se exija SIEMPRE lo prueba
-    #    `test_puente_con_llave.py`; un tope por IP acá cortaría a la aplicación
-    #    externa, que llama desde una sola dirección.
-    ("GET", "/api/centro-gestion/health"): "entra con clave, no con sesión",
-    ("GET", "/api/centro-gestion/log"): "entra con clave, no con sesión",
-    ("GET", "/api/centro-gestion/log/{transaction_id}"): "entra con clave, no con sesión",
-    ("GET", "/api/centro-gestion/stats"): "entra con clave, no con sesión",
 
     # ── Enrolamiento del segundo factor. El `pending_token` se CONSUME al
     #    entrar (`_consume_pending_token` marca `consumed` en el mismo
