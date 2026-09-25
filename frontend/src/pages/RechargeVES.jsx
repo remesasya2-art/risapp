@@ -11,41 +11,13 @@ import api from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
 import { fmt } from '../utils/format';
 
-// Datos de los bancos
-const BANK_DATA = {
-  'banco_venezuela': {
-    name: 'Banco de Venezuela',
-    code: '0102',
-    color: 'var(--en-oscuro-acento, #003876)',
-    pago_movil: {
-      ci: 'V-24560778',
-      telefono: '04249311288',
-      banco: '0102 - Banco de Venezuela'
-    },
-    transferencia: {
-      titular: 'JULIO FRANCISCO HERNANDEZ',
-      cuenta: '01020504280000184324',
-      ci: 'V-24560778',
-      tipo: 'Corriente'
-    }
-  },
-  'banesco': {
-    name: 'Banesco',
-    code: '0134',
-    color: 'var(--en-oscuro-acento, #00529B)',
-    pago_movil: {
-      ci: 'V-24560778',
-      telefono: '04249311288',
-      banco: '0134 - Banesco'
-    },
-    transferencia: {
-      titular: 'JULIO FRANCISCO HERNANDEZ',
-      cuenta: '01340869688691034659',
-      ci: 'V-24560778',
-      tipo: 'Corriente'
-    }
-  }
-};
+// A QUE CUENTA TRANSFIERE EL CLIENTE
+//
+//   Acá estaban escritos el titular, su cédula, su teléfono y los números de
+//   cuenta. Este archivo se le sirve a cualquier visitante, tenga sesión o no,
+//   y cambiar de cuenta exigía editar código. Ahora los carga el super
+//   administrador en Contabilidad → Bancos y esta pantalla los pide al
+//   servidor (`/bancos-para-transferir`), que devuelve sólo los publicados.
 
 export default function RechargeVES() {
   const navigate = useNavigate();
@@ -68,6 +40,15 @@ export default function RechargeVES() {
   useEffect(() => {
     fetchMyRecharges();
   }, []);
+
+  // null = todavía no llegó; [] = no hay ninguno publicado.
+  const [bancos, setBancos] = useState(null);
+  useEffect(() => {
+    api.get('/bancos-para-transferir')
+      .then((r) => setBancos(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setBancos([]));
+  }, []);
+  const banco = (bancos || []).find((b) => b.bank_id === selectedBank) || null;
 
   const fetchMyRecharges = async () => {
     setLoadingRecharges(true);
@@ -130,19 +111,18 @@ export default function RechargeVES() {
 
   // Copiar todos los datos de pago (solo datos relevantes)
   const copyAllPaymentData = async () => {
-    if (!selectedBank || !paymentType) return;
-    
-    const bankData = BANK_DATA[selectedBank];
+    if (!banco || !paymentType) return;
+
     let allData = '';
-    
+
     if (paymentType === 'pago_movil') {
-      allData = `${bankData.pago_movil.telefono}
-${bankData.pago_movil.ci}
-${bankData.code}`;
+      allData = `${banco.pago_movil.telefono}
+${banco.pago_movil.documento}
+${banco.codigo}`;
     } else {
-      allData = `${bankData.transferencia.titular}
-${bankData.transferencia.cuenta}
-${bankData.transferencia.ci}`;
+      allData = `${banco.transferencia.titular}
+${banco.transferencia.numero_cuenta}
+${banco.transferencia.documento}`;
     }
     
     try {
@@ -193,6 +173,9 @@ ${bankData.transferencia.ci}`;
         // mandaba `bank` y `voucher_image`, la otra `proof_image`, el panel leia
         // `destination_bank` y gestor.py `voucher_url`: cuatro nombres para dos
         // cosas, y una ruta que no guardaba ninguno.
+        // El `bank_id` del banco elegido, no su nombre: el servidor lo busca
+        // así primero (`resolve_ves_bank`) y no hay parecido de nombres que
+        // lo confunda.
         destination_bank: selectedBank,
         proof_image: proofImage,
         idempotency_key: idemRef.current
@@ -522,14 +505,21 @@ ${bankData.transferencia.ci}`;
               </label>
               <select
                 value={selectedBank}
-                onChange={(e) => setSelectedBank(e.target.value)}
+                onChange={(e) => { setSelectedBank(e.target.value); setPaymentType(''); }}
                 style={selectStyle}
                 data-testid="bank-select"
+                disabled={!bancos || bancos.length === 0}
               >
-                <option value="">Seleccionar banco...</option>
-                <option value="banco_venezuela">🏦 Banco de Venezuela</option>
-                <option value="banesco">🏦 Banesco</option>
+                <option value="">{bancos === null ? 'Cargando bancos…' : 'Seleccionar banco...'}</option>
+                {(bancos || []).map((b) => (
+                  <option key={b.bank_id} value={b.bank_id}>🏦 {b.name}</option>
+                ))}
               </select>
+              {bancos && bancos.length === 0 && (
+                <p data-testid="sin-bancos" style={{ fontSize: '13px', color: 'var(--en-oscuro-alerta, #92400e)', margin: '8px 0 0 0' }}>
+                  Por ahora no hay cuentas para transferir en bolívares. Escribinos por soporte y te ayudamos.
+                </p>
+              )}
             </div>
 
             {/* Payment Type Selection */}
@@ -544,8 +534,10 @@ ${bankData.transferencia.ci}`;
                 data-testid="payment-type-select"
               >
                 <option value="">Seleccionar tipo de pago...</option>
-                <option value="pago_movil">📱 Pago Móvil</option>
-                <option value="transferencia">💳 Transferencia Bancaria</option>
+                {/* Sólo lo que ese banco tiene cargado: uno puede tener
+                    cuenta y no Pago Móvil, o al revés. */}
+                {banco?.pago_movil && <option value="pago_movil">📱 Pago Móvil</option>}
+                {banco?.transferencia && <option value="transferencia">💳 Transferencia Bancaria</option>}
               </select>
             </div>
 
@@ -565,7 +557,7 @@ ${bankData.transferencia.ci}`;
         )}
 
         {/* Step 2: Payment Details */}
-        {step === 2 && selectedBank && paymentType && (
+        {step === 2 && banco && paymentType && (
           <div>
             {/* Back button */}
             <button 
@@ -600,14 +592,14 @@ ${bankData.transferencia.ci}`;
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
                 <div style={{ 
                   width: '44px', height: '44px', borderRadius: '12px', 
-                  backgroundColor: BANK_DATA[selectedBank].color,
+                  backgroundColor: 'var(--en-oscuro-acento, #2563eb)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                   <Building2 style={{ width: '24px', height: '24px', color: '#ffffff' }} />
                 </div>
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
-                    {BANK_DATA[selectedBank].name}
+                    {banco.name}
                   </h3>
                   <p style={{ fontSize: '13px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '2px 0 0 0' }}>
                     {paymentType === 'pago_movil' ? '📱 Pago Móvil' : '💳 Transferencia'}
@@ -623,11 +615,11 @@ ${bankData.transferencia.ci}`;
                       <div>
                         <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Teléfono</p>
                         <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
-                          {BANK_DATA[selectedBank].pago_movil.telefono}
+                          {banco.pago_movil.telefono}
                         </p>
                       </div>
                       <button 
-                        onClick={() => copyToClipboard(BANK_DATA[selectedBank].pago_movil.telefono, 'telefono')}
+                        onClick={() => copyToClipboard(banco.pago_movil.telefono, 'telefono')}
                         style={{ ...copyBtnStyle, backgroundColor: copiedField === 'telefono' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
                         {copiedField === 'telefono' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
@@ -639,13 +631,13 @@ ${bankData.transferencia.ci}`;
                   <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Cédula</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Cédula o RIF</p>
                         <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
-                          {BANK_DATA[selectedBank].pago_movil.ci}
+                          {banco.pago_movil.documento}
                         </p>
                       </div>
                       <button 
-                        onClick={() => copyToClipboard(BANK_DATA[selectedBank].pago_movil.ci, 'ci')}
+                        onClick={() => copyToClipboard(banco.pago_movil.documento, 'ci')}
                         style={{ ...copyBtnStyle, backgroundColor: copiedField === 'ci' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
                         {copiedField === 'ci' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
@@ -659,11 +651,11 @@ ${bankData.transferencia.ci}`;
                       <div>
                         <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Banco</p>
                         <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
-                          {BANK_DATA[selectedBank].pago_movil.banco}
+                          {`${banco.codigo} - ${banco.name}`}
                         </p>
                       </div>
                       <button 
-                        onClick={() => copyToClipboard(BANK_DATA[selectedBank].code, 'banco')}
+                        onClick={() => copyToClipboard(banco.codigo, 'banco')}
                         style={{ ...copyBtnStyle, backgroundColor: copiedField === 'banco' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
                         {copiedField === 'banco' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
@@ -679,11 +671,11 @@ ${bankData.transferencia.ci}`;
                       <div>
                         <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Titular</p>
                         <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
-                          {BANK_DATA[selectedBank].transferencia.titular}
+                          {banco.transferencia.titular}
                         </p>
                       </div>
                       <button 
-                        onClick={() => copyToClipboard(BANK_DATA[selectedBank].transferencia.titular, 'titular')}
+                        onClick={() => copyToClipboard(banco.transferencia.titular, 'titular')}
                         style={{ ...copyBtnStyle, backgroundColor: copiedField === 'titular' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
                         {copiedField === 'titular' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
@@ -697,11 +689,11 @@ ${bankData.transferencia.ci}`;
                       <div>
                         <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Número de Cuenta</p>
                         <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0, fontFamily: 'monospace' }}>
-                          {BANK_DATA[selectedBank].transferencia.cuenta}
+                          {banco.transferencia.numero_cuenta}
                         </p>
                       </div>
                       <button 
-                        onClick={() => copyToClipboard(BANK_DATA[selectedBank].transferencia.cuenta, 'cuenta')}
+                        onClick={() => copyToClipboard(banco.transferencia.numero_cuenta, 'cuenta')}
                         style={{ ...copyBtnStyle, backgroundColor: copiedField === 'cuenta' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
                         {copiedField === 'cuenta' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}
@@ -713,13 +705,13 @@ ${bankData.transferencia.ci}`;
                   <div style={{ padding: '14px', backgroundColor: 'var(--en-oscuro-superficie-2, #f8f9fa)', borderRadius: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Cédula</p>
+                        <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 4px 0' }}>Cédula o RIF</p>
                         <p style={{ fontSize: '16px', fontWeight: '600', color: 'var(--en-oscuro-texto, #111827)', margin: 0 }}>
-                          {BANK_DATA[selectedBank].transferencia.ci}
+                          {banco.transferencia.documento}
                         </p>
                       </div>
                       <button 
-                        onClick={() => copyToClipboard(BANK_DATA[selectedBank].transferencia.ci, 'ci_trans')}
+                        onClick={() => copyToClipboard(banco.transferencia.documento, 'ci_trans')}
                         style={{ ...copyBtnStyle, backgroundColor: copiedField === 'ci_trans' ? 'var(--en-oscuro-exito-suave, #dcfce7)' : 'var(--en-oscuro-superficie-2, #f3f4f6)' }}
                       >
                         {copiedField === 'ci_trans' ? <CheckCircle style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-exito, #16a34a)' }} /> : <Copy style={{ width: '14px', height: '14px' }} />}

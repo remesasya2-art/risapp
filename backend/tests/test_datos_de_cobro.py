@@ -161,3 +161,31 @@ def test_LA_PANTALLA_DE_BANCOS_CARGA_LOS_DATOS_Y_AVISA_SI_NINGUNO_ESTA_PUBLICADO
     assert "api.put(`/admin/accounting/banks/${banco.bank_id}/cobro`, datos)" in pantalla
     assert 'data-testid="bancos-sin-publicar"' in pantalla
     assert "b.currency === 'VES' && b.cobro?.publicado" in pantalla
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Las pantallas del cliente ya no los tienen escritos
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_LA_RECARGA_PIDE_LOS_BANCOS_AL_SERVIDOR_Y_NO_LOS_TIENE_ESCRITOS():
+    from _lote_c_comun import fuente, sin_comentarios
+    recarga = sin_comentarios(fuente("pages/RechargeVES.jsx"))
+    assert "api.get('/bancos-para-transferir')" in recarga
+    assert "BANK_DATA" not in recarga and "titular:" not in recarga
+    assert "destination_bank: selectedBank" in recarga and "b.bank_id" in recarga, \
+        "se manda el bank_id del banco elegido"
+
+
+def test_NINGUNA_CUENTA_BANCARIA_DE_VERDAD_ESCRITA_EN_EL_FRONTEND():
+    """El frontend se le sirve a cualquier visitante. Una cuenta venezolana
+    son 20 dígitos que empiezan por 01; las de ejemplo de los campos llevan
+    «0123456789» a la vista y se dejan pasar."""
+    import pathlib
+    import re
+    src = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src"
+    halladas = []
+    for archivo in list(src.rglob("*.jsx")) + list(src.rglob("*.js")):
+        for numero in re.findall(r"(?<!\d)01\d{18}(?!\d)", archivo.read_text("utf-8", errors="ignore")):
+            if "0123456789" not in numero:
+                halladas.append(f"{archivo.relative_to(src)}: {numero}")
+    assert not halladas, "cuentas bancarias escritas en el frontend:\n" + "\n".join(halladas)
