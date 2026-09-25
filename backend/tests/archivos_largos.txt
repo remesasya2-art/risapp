@@ -22,7 +22,7 @@
 #     El número se puede bajar a mano cuando un archivo se achica: así lo que
 #     se sacó no se puede volver a poner. Subirlo, nunca.
  2525 frontend/src/pages/AdminPanel.jsx
- 2298 backend/routes/transactions.py
+ 2243 backend/routes/transactions.py
  1689 backend/routes/envios_admin.py
  1544 backend/tests/test_envios_e2e.py
  1544 frontend/src/components/admin/Nucleo.jsx

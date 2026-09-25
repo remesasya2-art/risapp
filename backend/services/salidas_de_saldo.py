@@ -275,3 +275,92 @@ async def cobrar_retiro_en_bolivares(current_user, request, *, transaction, tx_i
         return user
 
     return await transacciones.en_una_transaccion(trabajo)
+
+
+async def cobrar_envio_con_saldo_cripto(current_user, request, *, key, tx_id, display_id,
+                                        crypto_to_ves, amount_ves, beneficiary_data):
+    """Descuenta el saldo en USDT o USDC, crea la orden y asienta su línea en el
+    libro cripto. Es el envío a Venezuela que el cliente paga con su saldo.
+
+    Devuelve el documento del usuario después del débito. Levanta las mismas
+    `HTTPException` que la ruta levantaba: saldo insuficiente y orden que no
+    se pudo registrar.
+    """
+    from bson.decimal128 import Decimal128
+    from services.credits import credit_field_for, to_credit_decimal
+
+    field = credit_field_for(request.currency)
+    amount_dec = to_credit_decimal(request.amount)
+
+    async def trabajo(session):
+        # La sesión se pasa sólo si hay una: sin transacción, las llamadas son
+        # las de siempre.
+        con = {"session": session} if session is not None else {}
+        user = await db.users.find_one_and_update(
+            {"user_id": current_user.user_id, field: {"$gte": Decimal128(amount_dec)}},
+            {"$inc": {field: Decimal128(-amount_dec)}},
+            return_document=True,
+            **con,
+        )
+        if user is None:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente")
+
+        transaction = {
+            "transaction_id": tx_id,
+            "display_id": display_id,
+            "user_id": current_user.user_id,
+            "type": "withdrawal",
+            "amount_input": request.amount,
+            "amount_output": amount_ves,
+            "currency_input": key.upper(),
+            "currency_output": "VES",
+            "rate": crypto_to_ves,
+            "status": "pending",
+            "beneficiary_id": request.beneficiary_id,
+            "beneficiary_data": beneficiary_data,
+            "funded_from": "balance",
+            "created_at": datetime.now(timezone.utc),
+        }
+        try:
+            await db.transactions.insert_one(transaction, **con)
+        except Exception as e:
+            # Con transacción, el error la deshace entera: devolver a mano sería
+            # escribir sobre una transacción que el servidor ya abortó.
+            if session is None:
+                await db.users.update_one(
+                    {"user_id": current_user.user_id},
+                    {"$inc": {field: Decimal128(amount_dec)}}
+                )
+            logger.error(f"Fallo al registrar envío cripto (saldo) {tx_id}, saldo devuelto: {e}")
+            raise HTTPException(status_code=500, detail="No se pudo registrar el envío. Tu saldo no fue afectado.")
+
+        try:
+            from services.ledger_crypto import record_crypto_entry
+            balance_after = user.get(field)
+            balance_after_f = float(to_credit_decimal(balance_after)) if balance_after is not None else None
+            await record_crypto_entry(
+                user_id=current_user.user_id,
+                currency=key,
+                movement_type="envio_ves",
+                amount=float(amount_dec),
+                direction="debit",
+                balance_before=(balance_after_f + float(amount_dec)) if balance_after_f is not None else None,
+                balance_after=balance_after_f,
+                reference_kind="transaction",
+                reference_id=tx_id,
+                actor_type="user",
+                actor_id=current_user.user_id,
+                actor_email=user.get("email"),
+                metadata={"display_id": display_id, "beneficiary": beneficiary_data, "funded_from": "balance"},
+                notes=f"Envío {key.upper()} → VES (desde saldo)",
+                session=session,
+            )
+        except Exception as e:
+            # Sin transacción, el libro nunca interrumpe el envío. Con
+            # transacción, sí: tragarse el error confirmaría el débito sin su línea.
+            if session is not None:
+                raise
+            logger.warning(f"Ledger cripto envio_ves (saldo) no registrado: {e}")
+        return user
+
+    return await transacciones.en_una_transaccion(trabajo)
