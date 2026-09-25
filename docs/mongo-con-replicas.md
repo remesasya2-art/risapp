@@ -185,3 +185,156 @@ que el disco de Mongo esté montado en `/data/db` y que la imagen traiga
   escrituras;
 - la salud dijo `SALUD| bien`, con «Mongo es un conjunto de réplicas», y la
   base pasó a responder en 1 ms.
+
+
+---
+
+# Segunda parte: tres miembros
+
+**Qué se gana:** una copia viva de la base. Con un solo miembro, si ese Mongo
+se cae o se daña su disco, la aplicación se queda sin base hasta restaurar el
+respaldo. Con tres, si se cae **uno**, otro toma su lugar en unos diez
+segundos, sin perder datos, y la aplicación sigue.
+
+**Lo que no cambia:** tres miembros aguantan que se caiga **uno**. Si se caen
+dos, el que queda no acepta escrituras: es así a propósito, para que dos copias
+nunca escriban cosas distintas. Para ese caso está la sección 12.
+
+**Lo que cuesta:** Mongo pasa de un contenedor y un disco a tres. Los tres
+quedan en la misma región de Railway: protegen de que se caiga un contenedor o
+se dañe un disco, no de que se caiga la región entera.
+
+**Cómo se sabe que anda:** la salud de la aplicación tiene una línea
+**réplicas**. Hoy dice «un solo miembro»; al terminar tiene que decir
+«3 miembros: 1 primario y 2 al día». Si un día una copia se cae o se atrasa,
+esa línea se pone en rojo y la campana del equipo avisa.
+
+Todo lo de esta parte se ensayó con MongoDB 8, con los comandos copiados letra
+por letra: desde un Mongo como el de producción hasta tres miembros, con uno
+tirado abajo de golpe, con dos caídos y con la vuelta a uno solo (sección 13).
+
+## 8. La llave del conjunto, calculada de la contraseña
+
+Hoy la llave del conjunto (`/data/db/rs.key`) se genera al azar y sólo la tiene
+el Mongo de hoy. Los miembros nuevos necesitan **la misma**, y nadie tiene que
+verla ni copiarla. Por eso, desde esta parte, cada miembro la calcula a partir
+de la contraseña de Mongo que Railway ya guarda: todos llegan a la misma llave
+sin que viaje a ningún lado.
+
+En el servicio **MongoDB** → Settings → Deploy → **Custom Start Command**,
+reemplazá el comando de la sección 1 por éste, en una sola línea:
+
+```
+bash -c 'K=/data/db/rs.key; if [ -z "$RAILWAY_PRIVATE_DOMAIN" ]; then echo "SIN RED PRIVADA: Mongo arranca sin replicas"; exec docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false; fi; printf "%s" "rs0:$MONGO_INITDB_ROOT_PASSWORD" | sha256sum | cut -c1-64 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; SH=$(command -v mongosh || command -v mongo); YO="$RAILWAY_PRIVATE_DOMAIN:27017"; (until $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"$YO\"}]}).ok }" 2>/dev/null | grep -q 1; do sleep 2; done; echo "REPLICAS LISTAS"; if [ "$SOLO_ESTE_MIEMBRO" = "si" ]; then $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "const c = rs.conf(); c.members = c.members.filter(m => m.host === \"$YO\"); rs.reconfig(c, {force: true}); print(\"QUEDA UN SOLO MIEMBRO\")"; fi) & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
+```
+
+Es el mismo de antes con dos cambios: la llave se calcula en vez de sortearse,
+y aparece la variable `SOLO_ESTE_MIEMBRO` de la sección 12, que no está puesta
+y no hace nada hasta que se la ponga.
+
+Desplegá. En el registro de MongoDB tiene que aparecer **REPLICAS LISTAS**, como
+siempre, y la salud tiene que seguir en `bien`. Es un reinicio de medio minuto.
+
+## 9. Dos servicios de Mongo nuevos, vacíos
+
+Hacé esto dos veces, una para **MongoDB2** y otra para **MongoDB3** (así, sin
+guión: esos nombres se usan en la sección 11).
+
+1. En el proyecto: **+ New** → **Database** → **MongoDB**. Crea el servicio con
+   su disco. Cambiale el nombre a `MongoDB2` (o `MongoDB3`).
+2. **La misma versión de Mongo que el de hoy.** En el servicio **MongoDB** →
+   Settings → **Source**, mirá la imagen (por ejemplo `mongo:8.0.x`) y poné la
+   misma en el nuevo. Mezclar versiones en un conjunto trae problemas.
+3. En **Variables** del servicio nuevo, agregá estas tres, tal cual. Son
+   *referencias*: Railway pone el valor, nadie lo ve ni lo copia.
+
+   | Variable | Valor |
+   |---|---|
+   | `PRIMARIO` | `${{MongoDB.RAILWAY_PRIVATE_DOMAIN}}` |
+   | `USUARIO_RAIZ` | `${{MongoDB.MONGO_INITDB_ROOT_USERNAME}}` |
+   | `CLAVE_RAIZ` | `${{MongoDB.MONGO_INITDB_ROOT_PASSWORD}}` |
+
+4. En Settings → Deploy → **Custom Start Command**, pegá esto, en una sola línea:
+
+   ```
+   bash -c 'K=/data/db/rs.key; printf "%s" "rs0:$CLAVE_RAIZ" | sha256sum | cut -c1-64 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; unset MONGO_INITDB_ROOT_USERNAME MONGO_INITDB_ROOT_PASSWORD; SH=$(command -v mongosh || command -v mongo); (until $SH --host "rs0/$PRIMARIO:27017" --quiet -u "$USUARIO_RAIZ" -p "$CLAVE_RAIZ" --authenticationDatabase admin --eval "const yo = \"$RAILWAY_PRIVATE_DOMAIN:27017\"; if (!rs.conf().members.some(m => m.host === yo)) rs.add({host: yo, priority: 0.5}); print(\"SUMADO\")" 2>/dev/null | grep -q SUMADO; do sleep 5; done; echo "MIEMBRO SUMADO") & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
+   ```
+
+5. Desplegá. En el registro del servicio nuevo tiene que aparecer, en uno o dos
+   minutos, **MIEMBRO SUMADO**. Después copia todos los datos del primero, y
+   mientras tanto la salud dice que está «copiando los datos por primera vez».
+
+Qué hace el comando: calcula la llave igual que el primero; arranca Mongo
+**vacío**, como miembro del conjunto `rs0`; y en paralelo le pide al primero
+que lo sume, con prioridad más baja, así el de hoy sigue siendo el principal
+mientras esté bien. Si se reinicia, ve que ya está sumado y no hace nada más.
+Borra las variables de usuario de la plantilla antes de arrancar: un miembro
+nuevo tiene que empezar vacío y recibir los usuarios del primero, no crear los
+suyos.
+
+## 10. Comprobar
+
+En la salud de la aplicación (tarjeta del panel, o la línea `SALUD|` del
+registro del backend), **réplicas** tiene que decir:
+
+> 3 miembros: 1 primario y 2 al día
+
+Si dice «copiando los datos por primera vez», esperá: depende de cuántos datos
+haya. Si dice «sin responder» por más de unos minutos, mirá el registro de ese
+servicio.
+
+## 11. Que el backend conozca los tres
+
+Mientras el backend esté andando, se entera solo de los tres miembros. Pero si
+**arranca** —un despliegue, un reinicio— justo cuando el Mongo de hoy está
+caído, sólo conoce su dirección y no puede conectarse. Se arregla diciéndole
+las tres.
+
+En el servicio del **backend** → **Variables** → `MONGO_URL`:
+
+1. Copiá el valor que tiene hoy a un lugar seguro, para poder volver. **No lo
+   pegues en ningún chat.**
+2. Reemplazalo por esto, tal cual:
+
+   ```
+   mongodb://${{MongoDB.MONGO_INITDB_ROOT_USERNAME}}:${{MongoDB.MONGO_INITDB_ROOT_PASSWORD}}@${{MongoDB.RAILWAY_PRIVATE_DOMAIN}}:27017,${{MongoDB2.RAILWAY_PRIVATE_DOMAIN}}:27017,${{MongoDB3.RAILWAY_PRIVATE_DOMAIN}}:27017/?replicaSet=rs0&authSource=admin
+   ```
+
+3. Desplegá el backend.
+
+Igual que las variables de la sección 9, son referencias: la contraseña no se
+ve ni se copia. Se ensayó: con el Mongo de hoy muerto de golpe, un backend que
+arranca con esta dirección se conecta y escribe en unos diez segundos.
+
+## 12. Si se caen dos: dejar uno solo
+
+Con dos miembros caídos, el que queda no acepta escrituras y la aplicación no
+puede operar. Si hace falta volver a escribir **ya**, sin esperar a que los
+otros vuelvan:
+
+1. En el servicio **MongoDB** → **Variables**, agregá `SOLO_ESTE_MIEMBRO` con el
+   valor `si`, y desplegá.
+2. En su registro tiene que aparecer **QUEDA UN SOLO MIEMBRO**. Desde ese
+   momento es un conjunto de un miembro, como el de la primera parte, y
+   escribe.
+3. **Borrá la variable `SOLO_ESTE_MIEMBRO`** y desplegá otra vez. Si queda
+   puesta, cada reinicio vuelve a sacar a los demás.
+
+Cuando los otros dos vuelvan a andar, con reiniciarlos se suman solos.
+
+## 13. Volver atrás, a un solo miembro
+
+1. La sección 12 completa: `SOLO_ESTE_MIEMBRO=si`, esperar «QUEDA UN SOLO
+   MIEMBRO», borrar la variable.
+2. Borrá los servicios **MongoDB2** y **MongoDB3**, con sus discos.
+3. En el backend, `MONGO_URL` vuelve al valor que copiaste en la sección 11.
+
+**No** borres MongoDB2 y MongoDB3 antes del paso 1: el de hoy quedaría solo en
+un conjunto de tres, sin mayoría, y dejaría de escribir.
+
+El comando de arranque del MongoDB de hoy puede quedar como el de la sección 8.
+Para volver al de antes de todo (el de la plantilla de Railway):
+
+```
+docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false
+```
