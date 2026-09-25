@@ -57,15 +57,17 @@ QUE HACE ESTE MODULO
     lecturas previas dan el mismo número y las dos líneas del libro mienten;
     `return_document=True` devuelve el único valor que de verdad quedó.
 
-    El libro nunca rompe el flujo del dinero: si el asiento falla, la plata ya
-    se movió y deshacerla sería peor. Pero **no falla en silencio**: se loguea a
-    nivel ERROR con todo lo necesario para reponer la línea a mano.
+    Con un Mongo de un solo nodo, el libro nunca rompe el flujo del dinero: si
+    el asiento falla, la plata ya se movió y deshacerla sería peor. Pero **no
+    falla en silencio**: se loguea a nivel ERROR con todo lo necesario para
+    reponer la línea a mano. Con transacciones, el saldo y su línea van juntos
+    y ese caso deja de existir: ver `mover`.
 """
 
 import logging
 from decimal import Decimal
 
-from services import kyc_quota
+from services import kyc_quota, transacciones
 from services.ledger import record_ris_entry
 from services.money import from_db, quantize_money, to_decimal, to_decimal128, to_float
 
@@ -163,9 +165,33 @@ async def mover(db, user_id: str, monto, *, movimiento: str,
     viaja tal cual a `record_ris_entry`.
 
     Devuelve `{"saldo_anterior", "saldo_nuevo", "usuario", "entry_id"}`, con los
-    saldos en `Decimal` y `entry_id` en `None` si el asiento no se pudo escribir
-    (que se loguea a nivel ERROR, pero no interrumpe: la plata ya se movió).
+    saldos en `Decimal`.
+
+    EL SALDO Y SU LINEA VAN JUNTOS CUANDO EL MONGO PUEDE
+
+    Con transacciones (Mongo con réplicas) el `$inc` y la línea del libro se
+    escriben en UNA transacción: o quedan los dos, o ninguno. Si la línea
+    falla, la plata NO se mueve y sale el error. Sin transacciones (un nodo
+    suelto) son dos escrituras como siempre: si la línea falla, la plata ya
+    se movió, `entry_id` vuelve en `None` y queda el grito en Errores.
+
+    Quien ya trae su propia `session` es dueño de su transacción: se usa ésa.
     """
+    if session is not None:
+        return await _mover(db, user_id, monto, movimiento=movimiento, cuenta=cuenta,
+                            exigir_saldo=exigir_saldo, consumir_cupo=consumir_cupo,
+                            session=session, **libro)
+    return await transacciones.en_una_transaccion(
+        lambda sesion: _mover(db, user_id, monto, movimiento=movimiento, cuenta=cuenta,
+                              exigir_saldo=exigir_saldo, consumir_cupo=consumir_cupo,
+                              session=sesion, **libro))
+
+
+async def _mover(db, user_id: str, monto, *, movimiento: str,
+                cuenta: str = "balance_ris", exigir_saldo: bool = False,
+                consumir_cupo: bool = False, session=None, **libro) -> dict:
+    """El movimiento en sí; ver `mover`. Puede correr más de una vez si la
+    transacción choca con otra: todo lo que escribe va con `session`."""
     if cuenta not in CUENTAS:
         raise CuentaDesconocida(cuenta)
 
@@ -236,6 +262,7 @@ async def mover(db, user_id: str, monto, *, movimiento: str,
         account=cuenta,
         balance_before=to_float(saldo_anterior),
         balance_after=to_float(saldo_nuevo),
+        session=session,
         **libro,
     )
 
@@ -271,7 +298,21 @@ async def transferir(db, user_id: str, monto, *, de: str, a: str,
     Deja DOS líneas en el libro —el débito de una cuenta y el crédito de la
     otra— porque eso es un traspaso: las dos patas se anulan contra la cuenta de
     traspasos internos y el balance no se mueve.
+
+    Con transacciones, el traspaso y sus dos líneas van juntos, como en `mover`.
     """
+    if session is not None:
+        return await _transferir(db, user_id, monto, de=de, a=a, movimiento=movimiento,
+                                 session=session, **libro)
+    return await transacciones.en_una_transaccion(
+        lambda sesion: _transferir(db, user_id, monto, de=de, a=a, movimiento=movimiento,
+                                   session=sesion, **libro))
+
+
+async def _transferir(db, user_id: str, monto, *, de: str, a: str,
+                     movimiento: str = "traspaso_interno", session=None,
+                     **libro) -> dict:
+    """El traspaso en sí; ver `transferir`."""
     for cuenta in (de, a):
         if cuenta not in CUENTAS:
             raise CuentaDesconocida(cuenta)
@@ -311,6 +352,7 @@ async def transferir(db, user_id: str, monto, *, de: str, a: str,
             account=cuenta,
             balance_before=to_float(antes),
             balance_after=to_float(despues),
+            session=session,
             **libro,
         ))
 

@@ -74,11 +74,18 @@ async def record_ris_entry(
     user_snapshot: dict = None,    # email/name/role del usuario (si ya se tiene a mano)
     metadata: dict = None,         # contexto libre adicional
     notes: str = None,
+    session=None,                  # la transacción del movimiento de saldo, si hay una
 ):
-    """Escribe una línea inmutable en el libro de RIS. Nunca lanza excepción.
+    """Escribe una línea inmutable en el libro de RIS.
 
     Devuelve el entry_id si se registró, o None si hubo algún problema (sin
     afectar el flujo que la invocó).
+
+    CON `session`, en cambio, un error SÍ sale. La línea va adentro de la
+    misma transacción que movió el saldo, y tragarse el error dejaría
+    confirmar un saldo movido sin su línea: justo lo que la transacción vino
+    a impedir. Saliendo, la transacción se deshace entera y la plata no se
+    mueve.
     """
     try:
         await _ensure_indexes()
@@ -147,9 +154,20 @@ async def record_ris_entry(
             "notes": notes,
         }
 
-        await db[LEDGER_COLLECTION].insert_one(entry)
+        # Sin transacción, la misma llamada de siempre, sin `session`: el camino
+        # de un Mongo de un solo nodo no cambia en nada.
+        if session is None:
+            await db[LEDGER_COLLECTION].insert_one(entry)
+        else:
+            await db[LEDGER_COLLECTION].insert_one(entry, session=session)
         return entry["entry_id"]
     except Exception as e:
+        if session is not None:
+            logger.error(
+                "El asiento del libro falló adentro de la transacción: el movimiento de "
+                f"saldo se deshace — user_id={user_id} movimiento={movement_type} "
+                f"monto={amount} cuenta={account} error={e!r}")
+            raise
         # No se relanza: el saldo YA se movió y tumbar el flujo no lo repone.
         # Pero tampoco se calla: fila en Errores y campana a los super
         # administradores, con lo necesario para reponer la línea a mano.

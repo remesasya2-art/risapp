@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from database import client as mongo_client
+from pymongo.errors import PyMongoError
 
 # El aviso de «Mongo de un solo nodo» salía con este nombre cuando la
 # detección vivía en el motor contable; se conserva para que quien lo busque
@@ -106,3 +107,42 @@ async def abandonar(session) -> None:
     """
     if session is not None and session.in_transaction:
         await session.abort_transaction()
+
+
+# Cuántas veces se intenta una transacción que choca al confirmar.
+INTENTOS = 5
+
+
+async def en_una_transaccion(trabajo):
+    """Corre `trabajo(session)` adentro de una transacción, o `trabajo(None)`
+    si el Mongo no tiene.
+
+    `with_transaction` del driver, y no `sesion_atomica`, porque este es el
+    camino de los movimientos de saldo del cliente: dos pagos al mismo
+    usuario al mismo tiempo chocan (el segundo recibe un «WriteConflict») y
+    el driver reintenta solo el trabajo entero. Con `sesion_atomica` ese
+    choque sería un error para el cliente.
+
+    `trabajo` puede correr MÁS DE UNA VEZ: todo lo que escriba tiene que ir
+    con la sesión que recibe, para que el intento que se descarta no deje
+    nada escrito.
+    """
+    if not await _detectar():
+        return await trabajo(None)
+    for intento in range(INTENTOS):
+        try:
+            async with await mongo_client.start_session() as session:
+                return await session.with_transaction(trabajo)
+        except PyMongoError as error:
+            # POR QUE ESTE REINTENTO, SI `with_transaction` YA REINTENTA
+            #
+            #   Reintenta lo que falla ADENTRO del trabajo, pero no lo que falla
+            #   al CONFIRMAR: en motor 3.3 la confirmación ocurre al salir de su
+            #   propio bloque y el reintento que viene después no llega a
+            #   correr. Se vio contra un Mongo de verdad: el primer asiento en
+            #   un libro que todavía no existía chocó al confirmar con la
+            #   creación de sus índices —«WriteConflict», marcado como
+            #   pasajero— y el movimiento terminaba en error.
+            #   Sólo se reintenta lo que el propio Mongo marca como pasajero.
+            if not error.has_error_label("TransientTransactionError") or intento == INTENTOS - 1:
+                raise
