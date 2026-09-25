@@ -1499,3 +1499,46 @@ def test_41_una_tarifa_con_dos_escalones_que_comparten_borde_se_puede_publicar()
     _ok(CLIENTE.post("/api/admin/envios/tarifas/simular", json={}))
     _ok(CLIENTE.post("/api/admin/envios/tarifas/publicar",
                      json={"nota": "Escalones contiguos, como los escribe el editor."}))
+
+
+def test_42_las_lecturas_del_panel_salen_enteras_por_su_contrato():
+    """Con los datos de verdad de todo el recorrido, cada lectura del panel de
+    encomiendas contesta por HTTP —con su contrato— lo mismo que su función
+    llamada a mano. Es la guarda que ve lo que la lectura del código no ve:
+    lo que se arma con `{**otro}`. Ver tests/test_contratos_de_encomiendas.py."""
+    from fastapi.encoders import jsonable_encoder
+    from routes import envios_admin as ea
+    from services import json_de_mongo
+    json_de_mongo.ensenarle_decimal128_a_fastapi()
+    admin = como("super_admin")
+    envio = corre(DB.envios.find_one({"envio_id": ESTADO["envio_id"]}))
+    lote = next((e["origen"]["lote_retiro_id"] for e in corre(DB.envios.find({}).to_list(100))
+                 if (e.get("origen") or {}).get("lote_retiro_id")), None)
+    lecturas = [
+        ("/estado", ea.estado_del_modulo(admin=admin)),
+        ("/config", ea.listar_bloques(admin=admin)),
+        ("/config/operacion", ea.leer_bloque(bloque="operacion", admin=admin)),
+        ("/transportistas", ea.listar_transportistas(admin=admin)),
+        (f"/transportistas/{ESTADO['trp_ve']}/agencias", ea.listar_agencias(transportista_id=ESTADO["trp_ve"], admin=admin)),
+        ("/origenes", ea.listar_origenes(admin=admin)),
+        ("/tarifas", ea.listar_tarifas(admin=admin)),
+        ("/retiro", ea.ver_retiro(admin=admin)),
+        ("/envios/cola?estado=todos", ea.ver_cola(estado="todos", admin=admin)),
+        (f"/envios/{envio['envio_id']}/ticket", ea.ver_ticket(envio_id=envio["envio_id"], admin=admin)),
+        ("/envios/historial", ea.ver_historial(estado=None, buscar=None, saltear=0, admin=admin)),
+        ("/envios/observado", ea.ver_observado(dias=90, admin=admin)),
+        ("/matrices", ea.listar_matrices(admin=admin)),
+        ("/almacen", ea.estado_almacen(admin=admin)),
+    ]
+    if lote:
+        lecturas.append((f"/envios/viajes/{lote}", ea.ver_viaje(lote_id=lote, admin=admin)))
+    assert lote, "el recorrido tendría que haber dejado un viaje: sin él, esta lectura no se prueba"
+    for camino, llamada in lecturas:
+        r = CLIENTE.get(f"/api/admin/envios{camino}")
+        assert r.status_code == 200, (camino, r.text)
+        por_http, directo = r.json(), jsonable_encoder(corre(llamada))
+        # La vista previa del retiro dice cuándo se armó: cambia entre una
+        # llamada y la otra, y no es un campo que el contrato se coma.
+        for respuesta in (por_http, directo):
+            (respuesta.get("vista_previa") or {}).pop("congelado_at", None)
+        assert por_http == directo, f"{camino}: el contrato se comió algo"
