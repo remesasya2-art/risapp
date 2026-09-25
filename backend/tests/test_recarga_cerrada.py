@@ -218,6 +218,8 @@ NO_SE_CIERRAN = (
     # Gastar el saldo que ya está. Cerrarlo sería atrapar la plata de alguien.
     ("routes/transactions.py", "create_withdrawal"),
     ("routes/transactions.py", "create_reais_send"),
+    # Lo que la ruta escribe en la base, adentro de una transacción.
+    ("services/salidas_de_saldo.py", "cobrar_envio_a_brasil"),
     # Pagar un envío en bolívares NO es cargar saldo, aunque las dos reciban
     # una transferencia con comprobante.
     ("routes/transactions.py", "comprobante_del_envio_reais"),

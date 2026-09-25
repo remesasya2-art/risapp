@@ -35,8 +35,14 @@ _HISTORIAL = (_BACKEND.parent / "frontend" / "src" / "components" /
 # 1. El servidor le pone número a todas
 # ══════════════════════════════════════════════════════════════════════════
 
+# Las órdenes que se pagan con saldo se arman en `services/salidas_de_saldo.py`
+# desde que su escritura va adentro de una transacción: leer sólo la ruta
+# dejaba de ver esas órdenes.
+_ARCHIVOS = (_BACKEND / "routes" / "transactions.py", _BACKEND / "services" / "salidas_de_saldo.py")
+
+
 def _rutas() -> str:
-    return (_BACKEND / "routes" / "transactions.py").read_text(encoding="utf-8")
+    return "\n".join(a.read_text(encoding="utf-8") for a in _ARCHIVOS)
 
 
 def _cuerpo(nombre: str) -> str:

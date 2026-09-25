@@ -124,7 +124,7 @@ jobs:
             docker exec mongo-rs mongosh --quiet --eval "db.hello().isWritablePrimary" | grep -q true && break
             sleep 2
           done
-          python -m pytest tests/test_motor_contable.py tests/test_saldo_y_libro_juntos.py -q --no-header -rs
+          python -m pytest tests/test_motor_contable.py tests/test_saldo_y_libro_juntos.py tests/test_salidas_de_saldo.py -q --no-header -rs
 
       # EL ESCANEO DE DEPENDENCIAS VA EN ESTE MISMO TRABAJO, Y AVISA SIN FRENAR
       #
