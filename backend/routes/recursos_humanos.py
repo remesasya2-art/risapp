@@ -45,6 +45,9 @@ from pydantic import BaseModel, EmailStr, Field
 
 from database import db
 from models.user import User
+from models.panel_personal import (AccionesAuditables, AltaDelPersonal, InvitacionReenviada,
+                                   LegajoCambiado, LegajoCompleto, LibroDeAuditoria, ListaDelPersonal,
+                                   PermisosCambiados, PermisosQueSePuedenDar, SesionesCerradas)
 from routes.dependencies import get_super_admin
 from services import auditoria, invitaciones, personal
 from services.email import send_staff_invitation_email
@@ -198,7 +201,7 @@ def _puede_entrar_ya(doc: dict) -> bool:
 
 # ─── Catálogo ─────────────────────────────────────────────────────────────
 
-@router.get("/permisos")
+@router.get("/permisos", response_model=PermisosQueSePuedenDar, response_model_exclude_unset=True)
 async def catalogo_de_permisos(admin: User = Depends(get_super_admin)):
     """Los permisos que se pueden otorgar, con su nombre legible."""
     from services.permisos import CATALOGO
@@ -207,7 +210,7 @@ async def catalogo_de_permisos(admin: User = Depends(get_super_admin)):
 
 # ─── Legajos ──────────────────────────────────────────────────────────────
 
-@router.get("")
+@router.get("", response_model=ListaDelPersonal, response_model_exclude_unset=True)
 async def listar_personal(incluir_bajas: bool = False,
                           admin: User = Depends(get_super_admin)):
     filtro = {personal.CAMPO: True}
@@ -222,7 +225,7 @@ async def listar_personal(incluir_bajas: bool = False,
     return {"personal": fichas, "total": len(fichas)}
 
 
-@router.get("/{user_id}")
+@router.get("/{user_id}", response_model=LegajoCompleto, response_model_exclude_unset=True)
 async def ver_legajo(user_id: str, admin: User = Depends(get_super_admin)):
     doc = await db.users.find_one({"user_id": user_id, personal.CAMPO: True})
     if not doc:
@@ -233,7 +236,7 @@ async def ver_legajo(user_id: str, admin: User = Depends(get_super_admin)):
             "historial": historial["lineas"]}
 
 
-@router.post("")
+@router.post("", response_model=AltaDelPersonal, response_model_exclude_unset=True)
 async def dar_de_alta(datos: AltaDePersonal, request: Request,
                       admin: User = Depends(get_super_admin)):
     """Da de alta a una persona como personal de la empresa.
@@ -357,7 +360,7 @@ async def dar_de_alta(datos: AltaDePersonal, request: Request,
             "acceso": acceso}
 
 
-@router.post("/{user_id}/reenviar-invitacion")
+@router.post("/{user_id}/reenviar-invitacion", response_model=InvitacionReenviada, response_model_exclude_unset=True)
 async def reenviar_invitacion(user_id: str, request: Request,
                               admin: User = Depends(get_super_admin)):
     """Vuelve a mandar el correo de primer acceso.
@@ -384,7 +387,7 @@ async def reenviar_invitacion(user_id: str, request: Request,
     return {"mensaje": f"Invitación reenviada a {doc['email']}", "acceso": acceso}
 
 
-@router.put("/{user_id}/permisos")
+@router.put("/{user_id}/permisos", response_model=PermisosCambiados, response_model_exclude_unset=True)
 async def cambiar_permisos(user_id: str, datos: CambioDePermisos,
                            request: Request,
                            admin: User = Depends(get_super_admin)):
@@ -411,7 +414,7 @@ async def cambiar_permisos(user_id: str, datos: CambioDePermisos,
     return {"mensaje": "Permisos actualizados", "permisos": permisos}
 
 
-@router.put("/{user_id}/legajo")
+@router.put("/{user_id}/legajo", response_model=LegajoCambiado, response_model_exclude_unset=True)
 async def cambiar_legajo(user_id: str, datos: CambioDeLegajo, request: Request,
                          admin: User = Depends(get_super_admin)):
     doc = await db.users.find_one({"user_id": user_id, personal.CAMPO: True})
@@ -446,7 +449,7 @@ _LO_DEL_SEGUNDO_FACTOR = ("two_factor_enabled", "two_factor_secret",
                           "two_factor_enabled_at")
 
 
-@router.post("/{user_id}/reiniciar-dos-pasos")
+@router.post("/{user_id}/reiniciar-dos-pasos", response_model=SesionesCerradas, response_model_exclude_unset=True)
 async def reiniciar_dos_pasos(user_id: str, datos: ReinicioDeDosPasos,
                               request: Request,
                               admin: User = Depends(get_super_admin)):
@@ -539,7 +542,7 @@ async def reiniciar_dos_pasos(user_id: str, datos: ReinicioDeDosPasos,
             "sesiones_cerradas": cerradas.deleted_count}
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", response_model=SesionesCerradas, response_model_exclude_unset=True)
 async def dar_de_baja(user_id: str, datos: Baja, request: Request,
                       admin: User = Depends(get_super_admin)):
     """Baja: se le quitan los permisos, se desactiva y se cierran sus sesiones.
@@ -585,7 +588,7 @@ async def dar_de_baja(user_id: str, datos: Baja, request: Request,
 
 # ─── El libro ─────────────────────────────────────────────────────────────
 
-@router.get("/auditoria/libro")
+@router.get("/auditoria/libro", response_model=LibroDeAuditoria, response_model_exclude_unset=True)
 async def libro_de_auditoria(
     categoria: Optional[str] = None,
     accion: Optional[str] = None,
@@ -601,7 +604,7 @@ async def libro_de_auditoria(
         objetivo_id=objetivo_id, limite=limite, saltar=saltar)
 
 
-@router.get("/auditoria/acciones")
+@router.get("/auditoria/acciones", response_model=AccionesAuditables, response_model_exclude_unset=True)
 async def acciones_auditables(admin: User = Depends(get_super_admin)):
     """El catálogo de acciones, para armar los filtros del panel."""
     return {"acciones": [

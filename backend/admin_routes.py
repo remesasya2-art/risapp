@@ -80,6 +80,7 @@ from services.permisos import CATALOGO as ADMIN_PERMISSIONS
 #     función, no su nombre—, en `test_una_sola_puerta.py`.
 from models.user import User as Usuario   # noqa: E402
 from models.acciones_del_panel import EstadoCambiado, SaldoAjustado  # noqa: E402
+from models.panel_personal import Administradores, CatalogoDePermisos  # noqa: E402
 from models.panel_recargas import (FotoDeLaRecarga, RecargasPendientes, RegistroDePago,  # noqa: E402
                                    RegistrosDePago)
 from routes.dependencies import (        # noqa: E402
@@ -199,7 +200,7 @@ class AdjustBalanceRequest(BaseModel):
 # PERMISSIONS
 # =======================
 
-@admin_router.get("/permissions-list")
+@admin_router.get("/permissions-list", response_model=CatalogoDePermisos, response_model_exclude_unset=True)
 async def get_permissions_list(admin_user: Usuario = Depends(get_admin_user)):
     """Get list of all available permissions"""
     return ADMIN_PERMISSIONS
@@ -208,7 +209,7 @@ async def get_permissions_list(admin_user: Usuario = Depends(get_admin_user)):
 # SUB-ADMIN MANAGEMENT
 # =======================
 
-@admin_router.get("/sub-admins")
+@admin_router.get("/sub-admins", response_model=Administradores, response_model_exclude_unset=True)
 async def get_sub_admins(admin_user: Usuario = Depends(get_super_admin)):
     """Get all sub-administrators (super_admin only)"""
     # Lista de lo permitido. Acá había una de lo PROHIBIDO con tres nombres

@@ -20,7 +20,6 @@
 # POR QUE ESTA LISTA EXISTE
 DELETE /api/admin/accounting/banks/{bank_id}
 DELETE /api/admin/blacklist/{blacklist_id}
-DELETE /api/admin/rrhh/{user_id}
 DELETE /{full_path:path}
 GET /api/admin/accounting/balance-check
 GET /api/admin/accounting/banks
@@ -79,19 +78,12 @@ GET /api/admin/ledger/pozo
 GET /api/admin/ledger/reconcile
 GET /api/admin/ledger/reconciliacion
 GET /api/admin/pendientes
-GET /api/admin/permissions-list
 GET /api/admin/rate-history
 GET /api/admin/rates
 GET /api/admin/reportes
 GET /api/admin/reportes/fuentes
 GET /api/admin/reportes/merma-nowpayments
 GET /api/admin/reportes/procesados
-GET /api/admin/rrhh
-GET /api/admin/rrhh/auditoria/acciones
-GET /api/admin/rrhh/auditoria/libro
-GET /api/admin/rrhh/permisos
-GET /api/admin/rrhh/{user_id}
-GET /api/admin/sub-admins
 GET /api/admin/transactions
 GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
@@ -154,9 +146,6 @@ POST /api/admin/ledger/cofre/llave-nueva
 POST /api/admin/ledger/opening
 POST /api/admin/rates
 POST /api/admin/restore-transactions
-POST /api/admin/rrhh
-POST /api/admin/rrhh/{user_id}/reenviar-invitacion
-POST /api/admin/rrhh/{user_id}/reiniciar-dos-pasos
 POST /api/admin/wipe-all
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
@@ -179,6 +168,4 @@ PUT /api/admin/envios/retiro/colaboradores/{colaborador_id}
 PUT /api/admin/envios/retiro/turno
 PUT /api/admin/envios/tarifas/borrador
 PUT /api/admin/envios/transportistas/{transportista_id}/cuenta
-PUT /api/admin/rrhh/{user_id}/legajo
-PUT /api/admin/rrhh/{user_id}/permisos
 PUT /{full_path:path}
