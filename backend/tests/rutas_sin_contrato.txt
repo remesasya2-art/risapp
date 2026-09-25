@@ -37,7 +37,6 @@ GET /api/admin/accounting/v2/executive-report
 GET /api/admin/accounting/v2/p2p-sales
 GET /api/admin/accounting/v2/usdt-inventory-summary
 GET /api/admin/accounting/v2/usdt-lots
-GET /api/admin/agent-ratings
 GET /api/admin/audit-log
 GET /api/admin/bcv-rates
 GET /api/admin/bcv-rates/history
@@ -94,7 +93,6 @@ GET /api/admin/rrhh/auditoria/libro
 GET /api/admin/rrhh/permisos
 GET /api/admin/rrhh/{user_id}
 GET /api/admin/sub-admins
-GET /api/admin/support-requests
 GET /api/admin/transactions
 GET /api/admin/transactions/export
 GET /api/admin/transactions/{transaction_id}
@@ -161,11 +159,6 @@ POST /api/admin/rrhh
 POST /api/admin/rrhh/{user_id}/reenviar-invitacion
 POST /api/admin/rrhh/{user_id}/reiniciar-dos-pasos
 POST /api/admin/sub-admins
-POST /api/admin/support-requests/{request_id}/claim
-POST /api/admin/support-requests/{request_id}/priority
-POST /api/admin/support-requests/{request_id}/release
-POST /api/admin/support-requests/{request_id}/reply
-POST /api/admin/support-requests/{request_id}/resolve
 POST /api/admin/wipe-all
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink

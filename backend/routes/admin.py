@@ -28,6 +28,8 @@ from models.acciones_del_panel import (AccionDelPanel, AgenteAsignado, ClaveRein
 from models.panel_usuarios import DetalleDeUsuario, FichaCompletaDelUsuario, ListaDeUsuariosDelPanel
 from models.panel_retiros import ColaDeRetiros, RetirosPendientes
 from models.panel_recargas import ColaDeRecargasVes, ControlDeReferencia, RecargasVesPendientes
+from models.panel_soporte import (AccionDeSoporte, CalificacionesPorAsesor, PrioridadDeLaSolicitud,
+                                   RespuestaPorCorreo, SolicitudesDeAyuda, SolicitudResuelta, SolicitudTomada)
 from models.panel_ordenes import (ArchivoDelLote, BancosParaPagar, ComprobanteDelLote, ComprobanteDescartado,
                                    ComprobantesCargados, ComprobantesDelLote, ImagenDelComprobante,
                                    ListaDeLotes, LoteArmado, LoteCancelado, LoteCerrado, OrdenDevuelta,
@@ -2812,13 +2814,13 @@ async def process_verification(user_id: str, action: str, reason: str = None, ad
 
 # ============== SUPPORT REQUESTS ==============
 
-@router.get("/support-requests")
+@router.get("/support-requests", response_model=SolicitudesDeAyuda, response_model_exclude_unset=True)
 async def get_support_requests(admin: User = Depends(get_crm_user)):
     """Get all support requests"""
     requests = await db.support_requests.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return {"requests": requests}
 
-@router.post("/support-requests/{request_id}/resolve")
+@router.post("/support-requests/{request_id}/resolve", response_model=SolicitudResuelta, response_model_exclude_unset=True)
 async def resolve_support_request(request_id: str, admin: User = Depends(get_crm_user)):
     """Mark a support request as resolved"""
     result = await db.support_requests.update_one(
@@ -2839,7 +2841,7 @@ async def resolve_support_request(request_id: str, admin: User = Depends(get_crm
 class SupportReplyRequest(BaseModel):
     message: str
 
-@router.post("/support-requests/{request_id}/reply")
+@router.post("/support-requests/{request_id}/reply", response_model=RespuestaPorCorreo, response_model_exclude_unset=True)
 async def reply_support_request(request_id: str, data: SupportReplyRequest, admin: User = Depends(get_crm_user)):
     """Responde una solicitud de soporte por correo (vía Resend) y guarda la respuesta."""
     text = (data.message or "").strip()
@@ -2896,7 +2898,7 @@ async def reply_support_request(request_id: str, data: SupportReplyRequest, admi
         return {"success": False, "email_sent": False, "message": "Respuesta guardada, pero el correo no se pudo enviar (revisa la configuracion de Resend)."}
     return {"success": True, "email_sent": True, "message": "Respuesta enviada por correo"}
 
-@router.post("/support-requests/{request_id}/claim")
+@router.post("/support-requests/{request_id}/claim", response_model=SolicitudTomada, response_model_exclude_unset=True)
 async def claim_support_request(request_id: str, admin: User = Depends(get_crm_user)):
     """Toma (claim) una solicitud de soporte de forma ATÓMICA: solo uno puede tomarla."""
     result = await db.support_requests.update_one(
@@ -2914,7 +2916,7 @@ async def claim_support_request(request_id: str, admin: User = Depends(get_crm_u
         return {"success": True, "already_mine": True, "assigned_to": admin.user_id, "assigned_to_name": admin.name or "Operador"}
     return {"success": False, "assigned_to": (existing or {}).get("assigned_to"), "assigned_to_name": (existing or {}).get("assigned_to_name")}
 
-@router.post("/support-requests/{request_id}/release")
+@router.post("/support-requests/{request_id}/release", response_model=AccionDeSoporte, response_model_exclude_unset=True)
 async def release_support_request(request_id: str, admin: User = Depends(get_crm_user)):
     """Suelta una solicitud. Solo el dueño del caso o un super admin."""
     req = await db.support_requests.find_one({"support_id": request_id}, {"_id": 0, "assigned_to": 1})
@@ -2932,7 +2934,7 @@ async def release_support_request(request_id: str, admin: User = Depends(get_crm
 class SetPriorityRequest(BaseModel):
     priority: str
 
-@router.post("/support-requests/{request_id}/priority")
+@router.post("/support-requests/{request_id}/priority", response_model=PrioridadDeLaSolicitud, response_model_exclude_unset=True)
 async def set_support_priority(request_id: str, data: SetPriorityRequest, admin: User = Depends(get_crm_user)):
     """Cambia la prioridad de una solicitud de soporte."""
     valid = ["baja", "normal", "alta", "urgente"]
@@ -2946,7 +2948,7 @@ async def set_support_priority(request_id: str, data: SetPriorityRequest, admin:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     return {"success": True, "priority": data.priority}
 
-@router.get("/agent-ratings")
+@router.get("/agent-ratings", response_model=CalificacionesPorAsesor, response_model_exclude_unset=True)
 async def get_agent_ratings(admin: User = Depends(get_super_admin)):
     """Resumen interno de calificaciones por agente (solo super admin)."""
     ratings = await db.ratings.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)

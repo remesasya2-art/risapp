@@ -251,3 +251,104 @@ def test_LAS_ACCIONES_DEL_ASESOR_POR_HTTP(mesa):
     assert c.post(f"{u}/soltar").json() == {"success": True}
     assert c.post(f"{u}/transferir", json={"area": "finanzas", "nota": "Lo ve Finanzas"}).json() == {
         "success": True, "area": "finanzas", "asignado_a": None}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La bandeja vieja (pedidos de ayuda sin cuenta) y las calificaciones
+# ══════════════════════════════════════════════════════════════════════════
+
+A = "routes/admin.py"
+VIEJAS = [
+    ("GET", "/support-requests", "SolicitudesDeAyuda"),
+    ("POST", "/support-requests/{request_id}/resolve", "SolicitudResuelta"),
+    ("POST", "/support-requests/{request_id}/reply", "RespuestaPorCorreo"),
+    ("POST", "/support-requests/{request_id}/claim", "SolicitudTomada"),
+    ("POST", "/support-requests/{request_id}/release", "AccionDeSoporte"),
+    ("POST", "/support-requests/{request_id}/priority", "PrioridadDeLaSolicitud"),
+    ("GET", "/agent-ratings", "CalificacionesPorAsesor"),
+]
+
+
+@pytest.mark.parametrize("metodo,camino,modelo", VIEJAS, ids=[f"{m} {c}" for m, c, _ in VIEJAS])
+def test_LA_BANDEJA_VIEJA_Y_LAS_CALIFICACIONES_TIENEN_CONTRATO(metodo, camino, modelo):
+    ruta = _ruta(A, "router", metodo, camino)
+    assert ruta.response_model is not None and ruta.response_model.__name__ == modelo
+    assert ruta.response_model_exclude_unset is True
+    faltan = _claves(A, metodo, camino, None) - set(ruta.response_model.model_fields)
+    assert not faltan, f"{camino} devuelve {sorted(faltan)} y su contrato no los tiene"
+
+
+# Buscado en frontend/src/pages/AdminPanel.jsx (pestañas «Soporte» y
+# «Calificaciones»).
+LO_QUE_LEE_LA_PESTANA_SOPORTE = {"support_id", "status", "email", "message", "subject", "assigned_to",
+                                 "assigned_to_name", "case_code", "created_at", "phone_number",
+                                 "responded_at", "priority"}
+LO_QUE_LEEN_LAS_CALIFICACIONES = {"agent_id", "agent_name", "average", "count", "ratings"}
+LO_QUE_LEE_DE_CADA_CALIFICACION = {"case_code", "channel", "comment", "created_at", "stars"}
+
+
+def test_LO_QUE_LEEN_LAS_PESTANAS_VIEJAS_ESTA_EN_SU_CONTRATO():
+    from _lote_c_comun import fuente
+    from models import panel_soporte as m
+    assert LO_QUE_LEE_LA_PESTANA_SOPORTE <= set(m.SolicitudDeAyuda.model_fields)
+    assert LO_QUE_LEEN_LAS_CALIFICACIONES <= set(m.CalificacionesDeUnAsesor.model_fields)
+    assert LO_QUE_LEE_DE_CADA_CALIFICACION <= set(m.CalificacionRecibida.model_fields)
+    texto = fuente("pages/AdminPanel.jsx")
+    todos = LO_QUE_LEE_LA_PESTANA_SOPORTE | LO_QUE_LEEN_LAS_CALIFICACIONES | LO_QUE_LEE_DE_CADA_CALIFICACION
+    assert not sorted(c for c in todos if c not in texto)
+
+
+@pytest.fixture
+def bandeja_vieja():
+    from _lote_c_comun import SUPER, app_con
+    from routes import admin as rutas_admin
+    from routes import dependencies as deps
+    c, base = app_con(rutas_admin.router, deps.get_crm_user, SUPER, "bandeja_vieja")
+    c.app.dependency_overrides[deps.get_super_admin] = lambda: SUPER
+    ya(base.support_requests.insert_one({
+        "support_id": "sup_1", "case_number": 12, "case_code": "TKT-000012", "email": "luis@example.com",
+        "subject": "No puedo entrar", "phone_number": "+58 412 0000000", "message": "Perdí el teléfono",
+        "status": "pending", "created_at": T, "resolved_by": "u_resolvio_secreto",
+        "responded_by": "u_respondio_secreto", "responded_at": T,
+        "replies": [{"message": "texto de la respuesta vieja", "admin_id": "u_admin_secreto"}]}))
+    ya(base.ratings.insert_many([
+        {"rating_id": "r1", "channel": "caso", "case_ref": "c1", "case_code": "S-000007",
+         "agent_id": "u_carla", "agent_name": "Carla", "stars": 5, "comment": "Rápida", "created_at": T},
+        {"rating_id": "r2", "channel": "caso", "case_ref": "c2", "case_code": "S-000008",
+         "agent_id": "u_carla", "agent_name": "Carla", "stars": 3, "comment": "", "created_at": T}]))
+    return c
+
+
+def test_LA_BANDEJA_VIEJA_SIN_LAS_RESPUESTAS_NI_LOS_IDENTIFICADORES(bandeja_vieja):
+    from _lote_c_comun import SUPER
+    from routes import admin as rutas_admin
+    c = bandeja_vieja
+    r = c.get("/admin/support-requests")
+    directo = ya(rutas_admin.get_support_requests(admin=SUPER))
+    for pedido in directo["requests"]:
+        for k in ("resolved_by", "responded_by", "replies"):
+            pedido.pop(k, None)
+    _igual_a_llamarla_directo(r, directo)
+    for secreto in ("u_resolvio_secreto", "u_respondio_secreto", "u_admin_secreto", "respuesta vieja"):
+        assert secreto not in r.text, secreto
+
+
+def test_LAS_ACCIONES_DE_LA_BANDEJA_VIEJA_POR_HTTP(bandeja_vieja):
+    from _lote_c_comun import SUPER
+    c = bandeja_vieja
+    u = "/admin/support-requests/sup_1"
+    assert c.post(f"{u}/claim").json() == {"success": True, "assigned_to": SUPER.user_id,
+                                          "assigned_to_name": SUPER.name}
+    assert c.post(f"{u}/claim").json()["already_mine"] is True
+    assert c.post(f"{u}/priority", json={"priority": "alta"}).json() == {"success": True, "priority": "alta"}
+    assert c.post(f"{u}/release").json() == {"success": True}
+    assert c.post(f"{u}/resolve").json() == {"message": "Solicitud marcada como resuelta"}
+
+
+def test_LAS_CALIFICACIONES_SON_LAS_DE_SIEMPRE(bandeja_vieja):
+    from _lote_c_comun import SUPER
+    from routes import admin as rutas_admin
+    r = bandeja_vieja.get("/admin/agent-ratings")
+    _igual_a_llamarla_directo(r, ya(rutas_admin.get_agent_ratings(admin=SUPER)))
+    (carla,) = r.json()["agents"]
+    assert carla["average"] == 4.0 and carla["count"] == 2 and len(carla["ratings"]) == 2

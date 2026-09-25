@@ -124,3 +124,42 @@ MensajeDelAsesor = _simple("MensajeDelAsesor", ("success", "interno"))
 EstadoDelCaso = _simple("EstadoDelCaso", ("success", "estado"))
 CasoTransferido = _simple("CasoTransferido", ("success", "area", "asignado_a"))
 PedidoHecho = _simple("PedidoHecho", ("success",), pedido=(Optional[PedidoAUnArea], None))
+
+
+# ── La bandeja vieja: los pedidos de ayuda sin cuenta ─────────────────────
+#
+# Los escribe el formulario de «no puedo entrar» (`routes/recovery.py`), y se
+# contestan por correo desde la pestaña «Soporte» del panel. Cada pedido salía
+# entero, con la lista de respuestas que se le mandaron —cada una con el
+# identificador de quien la escribió— y quién lo resolvió y lo respondió por
+# su identificador. La pantalla muestra el pedido, quién lo atiende por su
+# nombre y si ya se respondió (`responded_at`); el texto de las respuestas no
+# lo muestra, y queda en la base.
+
+SolicitudDeAyuda = _simple("SolicitudDeAyuda", (
+    "support_id", "case_number", "case_code", "email", "subject", "phone_number", "message",
+    "status", "priority", "created_at", "assigned_to", "assigned_to_name", "assigned_at",
+    "resolved_at", "responded_at"))
+
+
+class SolicitudesDeAyuda(BaseModel):
+    requests: List[SolicitudDeAyuda] = []
+
+
+SolicitudTomada = _simple("SolicitudTomada", ("success", "already_mine", "assigned_to", "assigned_to_name"))
+RespuestaPorCorreo = _simple("RespuestaPorCorreo", ("success", "email_sent", "message"))
+PrioridadDeLaSolicitud = _simple("PrioridadDeLaSolicitud", ("success", "priority"))
+SolicitudResuelta = _simple("SolicitudResuelta", ("message",))
+
+# ── Las calificaciones por asesor (sólo el super administrador) ───────────
+#
+# Ya se armaban campo por campo; el contrato fija esos campos.
+
+CalificacionRecibida = _simple("CalificacionRecibida", ("stars", "comment", "channel", "case_code", "created_at"))
+CalificacionesDeUnAsesor = _simple("CalificacionesDeUnAsesor", ("agent_id", "agent_name", "count", "average"),
+                                   ratings=(List[CalificacionRecibida], []))
+
+
+class CalificacionesPorAsesor(BaseModel):
+    agents: List[CalificacionesDeUnAsesor] = []
+    total: Escalar = None
