@@ -217,8 +217,6 @@ class DatosDeCobro(BaseModel):
     titular: str = ""
     documento: str = ""
     numero_cuenta: str = ""
-    tipo_cuenta: str = ""
-    telefono: str = ""
     publicado: bool = False
 
 

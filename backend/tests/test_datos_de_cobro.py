@@ -19,7 +19,7 @@ os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "ris_test")
 
 BIEN = {"codigo": "0134", "titular": "Empresa de Ejemplo C.A.", "documento": "j-12345678-9",
-        "numero_cuenta": "0134 0000 11 2222333344", "tipo_cuenta": "corriente", "telefono": "+58 414 555 0000"}
+        "numero_cuenta": "0134 0000 11 2222333344"}
 
 
 def ya(c):
@@ -34,7 +34,7 @@ def test_LO_QUE_SE_ESCRIBE_A_MANO_QUEDA_EN_UNA_SOLA_FORMA():
     from services.bancos import normalizar_cobro
     assert normalizar_cobro(BIEN) == {
         "codigo": "0134", "titular": "Empresa de Ejemplo C.A.", "documento": "J-12345678-9",
-        "numero_cuenta": "01340000112222333344", "tipo_cuenta": "Corriente", "telefono": "04145550000"}
+        "numero_cuenta": "01340000112222333344"}
 
 
 @pytest.mark.parametrize("cambio,dice", [
@@ -43,23 +43,28 @@ def test_LO_QUE_SE_ESCRIBE_A_MANO_QUEDA_EN_UNA_SOLA_FORMA():
     ({"documento": "12345678"}, "letra"),
     ({"numero_cuenta": "0134000011222233334"}, "tiene 19"),
     ({"numero_cuenta": "01020000112222333344"}, "¿Es la cuenta de otro banco?"),
-    ({"tipo_cuenta": "plazo fijo"}, "corriente o de ahorro"),
-    ({"telefono": "02125550000"}, "celular"),
-    ({"numero_cuenta": "", "telefono": ""}, "al menos una forma de pago"),
-], ids=["codigo", "titular", "documento-sin-letra", "cuenta-corta", "cuenta-de-otro-banco", "tipo",
-        "telefono-fijo", "sin-forma-de-pago"])
+    ({"numero_cuenta": ""}, "Escribí el número de cuenta"),
+], ids=["codigo", "titular", "documento-sin-letra", "cuenta-corta", "cuenta-de-otro-banco", "sin-cuenta"])
 def test_UN_DATO_QUE_MANDARIA_LA_PLATA_A_OTRO_LADO_SE_RECHAZA(cambio, dice):
     from services.bancos import DatosDeCobroInvalidos, normalizar_cobro
     with pytest.raises(DatosDeCobroInvalidos, match=dice):
         normalizar_cobro({**BIEN, **cambio})
 
 
-def test_ALCANZA_CON_UNA_DE_LAS_DOS_FORMAS_DE_PAGO():
+def test_LO_QUE_ARMA_PARA_EL_CLIENTE_SON_LOS_TRES_DATOS_Y_NADA_MAS():
+    """El contrato de la ruta también recorta, y por eso este test mira la
+    función sola: con dos guardas, una puede tapar que la otra dejó de andar."""
+    from services.bancos import normalizar_cobro, para_el_cliente
+    visto = para_el_cliente({"bank_id": "b", "name": "Banesco", "currency": "VES",
+                             "cobro": {**normalizar_cobro(BIEN), "publicado": True}})
+    assert set(visto) == {"bank_id", "name", "titular", "documento", "numero_cuenta"}
+
+
+def test_SOLO_TRANSFERENCIA_LO_DE_PAGO_MOVIL_SE_IGNORA():
+    """Pago Móvil y el tipo de cuenta se sacaron: si llegan, no se guardan."""
     from services.bancos import normalizar_cobro
-    solo_movil = normalizar_cobro({**BIEN, "numero_cuenta": ""})
-    assert solo_movil["numero_cuenta"] == "" and solo_movil["tipo_cuenta"] == "" and solo_movil["telefono"]
-    solo_cuenta = normalizar_cobro({**BIEN, "telefono": ""})
-    assert solo_cuenta["telefono"] == "" and solo_cuenta["numero_cuenta"]
+    limpio = normalizar_cobro({**BIEN, "telefono": "04145550000", "tipo_cuenta": "Corriente"})
+    assert set(limpio) == {"codigo", "titular", "documento", "numero_cuenta"}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -95,7 +100,7 @@ def test_GUARDAR_DEJA_LOS_DATOS_LIMPIOS_Y_QUEDA_EN_LA_AUDITORIA(app):
     assert r.status_code == 200, r.text
     assert r.json()["cobro"]["numero_cuenta"] == "01340000112222333344" and r.json()["cobro"]["publicado"] is True
     guardado = ya(base.bank_accounts.find_one({"bank_id": "b_ves"}))["cobro"]
-    assert guardado["documento"] == "J-12345678-9" and guardado["telefono"] == "04145550000"
+    assert guardado["documento"] == "J-12345678-9" and "telefono" not in guardado
     (linea,) = ya(base.auditoria.find({"accion": "contabilidad.banco_cobro"}).to_list(5))
     assert linea["objetivo"]["id"] == "b_ves" and linea["despues"]["numero_cuenta"] == "01340000112222333344"
     lista = c.get("/admin/accounting/banks").json()
@@ -127,20 +132,20 @@ def test_EL_CLIENTE_VE_SOLO_LO_PUBLICADO_Y_SOLO_LO_NECESARIO(app):
     r = c.get("/bancos-para-transferir")
     assert r.status_code == 200, r.text
     assert r.json() == [{
-        "bank_id": "b_ves", "name": "Banesco", "codigo": "0134",
-        "transferencia": {"titular": "Empresa de Ejemplo C.A.", "documento": "J-12345678-9",
-                          "numero_cuenta": "01340000112222333344", "tipo_cuenta": "Corriente"},
-        "pago_movil": {"telefono": "04145550000", "documento": "J-12345678-9"},
-    }]
+        "bank_id": "b_ves", "name": "Banesco", "titular": "Empresa de Ejemplo C.A.",
+        "documento": "J-12345678-9", "numero_cuenta": "01340000112222333344",
+    }], "sólo transferencia: nombre completo, cédula y cuenta"
     for nada in ("9000", "balance", "u_ID_INTERNO", "Mercantil"):
         assert nada not in r.text, f"{nada} le llegó al cliente"
 
 
-def test_SIN_TELEFONO_NO_SE_OFRECE_PAGO_MOVIL(app):
-    c, _ = app
-    c.put("/admin/accounting/banks/b_ves/cobro", json={**BIEN, "telefono": "", "publicado": True})
-    (banco,) = c.get("/bancos-para-transferir").json()
-    assert banco["pago_movil"] is None and banco["transferencia"]["numero_cuenta"]
+def test_UN_COBRO_VIEJO_CON_PAGO_MOVIL_Y_SIN_CUENTA_NO_SE_MUESTRA(app):
+    """Antes se podía guardar sólo el teléfono. Sin cuenta no hay a dónde
+    transferir: ese banco no le llega al cliente hasta que se cargue."""
+    c, base = app
+    ya(base.bank_accounts.update_one({"bank_id": "b_ves"}, {"$set": {"cobro": {
+        **BIEN, "numero_cuenta": "", "telefono": "04145550000", "publicado": True}}}))
+    assert c.get("/bancos-para-transferir").json() == []
 
 
 def test_LO_TOCADO_A_MANO_EN_LA_BASE_NO_LE_LLEGA_AL_CLIENTE(app):
@@ -174,6 +179,8 @@ def test_LA_RECARGA_PIDE_LOS_BANCOS_AL_SERVIDOR_Y_NO_LOS_TIENE_ESCRITOS():
     assert "BANK_DATA" not in recarga and "titular:" not in recarga
     assert "destination_bank: selectedBank" in recarga and "b.bank_id" in recarga, \
         "se manda el bank_id del banco elegido"
+    assert "pago_movil" not in recarga and "payment-type-select" not in recarga, "sólo transferencia"
+    assert "${banco.titular}" in recarga and "${banco.numero_cuenta}" in recarga, "copiar todo lleva los tres datos"
 
 
 def test_NINGUNA_CUENTA_BANCARIA_DE_VERDAD_ESCRITA_EN_EL_FRONTEND():
@@ -197,7 +204,9 @@ def test_EL_ENVIO_A_BRASIL_MUESTRA_A_QUE_CUENTA_TRANSFERIR():
     envio = sin_comentarios(fuente("pages/SendReais.jsx"))
     assert "api.get('/bancos-para-transferir')" in envio
     assert "<DatosDelBanco banco={b} />" in envio
-    assert "banco.transferencia.numero_cuenta" in envio and "banco.pago_movil.telefono" in envio
+    assert "banco.numero_cuenta" in envio and "banco.documento" in envio and "banco.titular" in envio
+    assert "pago_movil" not in envio, "sólo transferencia"
+    assert 'testid="br-copiar-todo"' in envio, "un botón copia los tres datos de una"
     assert "value={b.bank_id}" in envio, "se manda el bank_id del banco elegido"
 
 

@@ -36,16 +36,16 @@ function fmtFecha(d) {
 //
 //   Estos datos los ve el cliente en la recarga en bolívares y en el envío a
 //   Brasil pagado en bolívares. Antes estaban escritos en el código de la
-//   pantalla de recarga, que se le sirve a cualquier visitante. Las reglas
-//   —20 dígitos que empiezan por el código del banco, un celular de 11— las
-//   hace cumplir el servidor (`services/bancos.normalizar_cobro`): acá sólo
-//   se escribe y se muestra lo que contesta.
+//   pantalla de recarga, que se le sirve a cualquier visitante. Sólo
+//   transferencia: el cliente ve nombre completo, cédula y cuenta. Las reglas
+//   —20 dígitos que empiezan por el código del banco— las hace cumplir el
+//   servidor (`services/bancos.normalizar_cobro`): acá sólo se escribe y se
+//   muestra lo que contesta.
 function EditorDeCobro({ banco, onGuardado, estilos }) {
   const previo = banco.cobro || {};
   const [datos, setDatos] = useState({
     codigo: previo.codigo || '', titular: previo.titular || '', documento: previo.documento || '',
-    numero_cuenta: previo.numero_cuenta || '', tipo_cuenta: previo.tipo_cuenta || 'Corriente',
-    telefono: previo.telefono || '', publicado: !!previo.publicado,
+    numero_cuenta: previo.numero_cuenta || '', publicado: !!previo.publicado,
   });
   const [guardando, setGuardando] = useState(false);
   const campo = (k) => (e) => setDatos({ ...datos, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
@@ -82,19 +82,11 @@ function EditorDeCobro({ banco, onGuardado, estilos }) {
       </p>
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
         {caja('Código del banco', 'codigo', { flex: '0 1 130px', placeholder: '0134', inputMode: 'numeric', maxLength: 4 })}
-        {caja('Titular', 'titular', { flex: '2 1 240px', placeholder: 'Como figura en el banco' })}
-        {caja('Cédula o RIF', 'documento', { placeholder: 'V-12345678' })}
+        {caja('Nombre completo del titular', 'titular', { flex: '2 1 240px', placeholder: 'Como figura en el banco' })}
+        {caja('Cédula', 'documento', { placeholder: 'V-12345678' })}
       </div>
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '12px' }}>
-        {caja('Número de cuenta (transferencia)', 'numero_cuenta', { flex: '2 1 260px', placeholder: '20 dígitos', inputMode: 'numeric' })}
-        <div>
-          <label style={lbl}>Tipo de cuenta</label>
-          <select value={datos.tipo_cuenta} onChange={campo('tipo_cuenta')} style={{ ...input, cursor: 'pointer' }} data-testid="cobro-tipo_cuenta">
-            <option value="Corriente">Corriente</option>
-            <option value="Ahorro">Ahorro</option>
-          </select>
-        </div>
-        {caja('Teléfono de Pago Móvil', 'telefono', { placeholder: '04141234567', inputMode: 'tel' })}
+        {caja('Número de cuenta', 'numero_cuenta', { flex: '2 1 260px', placeholder: '20 dígitos', inputMode: 'numeric' })}
       </div>
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', cursor: 'pointer' }}>
