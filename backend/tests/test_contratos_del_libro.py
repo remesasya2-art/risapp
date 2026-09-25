@@ -52,9 +52,9 @@ def test_CADA_RUTA_DEL_LIBRO_TIENE_SU_CONTRATO(metodo, camino, modelo):
 def test_LAS_DOS_DE_CONTABILIDAD_QUE_USA_EL_PANEL_TIENEN_CONTRATO():
     bancos = _ruta("routes/accounting.py", "router", "GET", "/banks")
     assert bancos.response_model.__args__[0].__name__ == "BancoDeLaContabilidad"
-    borrar = _ruta("routes/admin.py", "router", "POST", "/accounting/wipe")
+    borrar = _ruta("routes/admin/mantenimiento.py", "router", "POST", "/accounting/wipe")
     assert borrar.response_model.__name__ == "ContabilidadBorrada" and borrar.response_model_exclude_unset
-    assert _claves("routes/admin.py", "POST", "/accounting/wipe", None) <= set(borrar.response_model.model_fields)
+    assert _claves("routes/admin/mantenimiento.py", "POST", "/accounting/wipe", None) <= set(borrar.response_model.model_fields)
 
 
 # Lo que arma cada servicio, leído del código: TODOS sus `return {...}`,
@@ -350,7 +350,7 @@ def test_NINGUNA_RUTA_DEL_LIBRO_DEJA_SALIR_UN_SECRETO_DEL_USUARIO(libro):
 # El borrado total, lo escondido y el registro de lo que se hizo
 # ══════════════════════════════════════════════════════════════════════════
 
-A = "routes/admin.py"
+A = "routes/admin/mantenimiento.py"
 DEL_BORRADO = [
     ("GET", "/wipe-all/preview", "VistaPreviaDelBorrado"),
     ("POST", "/wipe-all", "BorradoTotal"),
@@ -400,7 +400,7 @@ def test_LO_QUE_LEEN_LOS_BOTONES_DE_BORRAR_Y_RESTAURAR():
 def borrado():
     from conftest import ensenarle_decimal128_a_mongomock
     from _lote_c_comun import SUPER, app_con
-    from routes import admin as rutas_admin
+    from routes.admin import mantenimiento as rutas_admin
     from routes import dependencies as deps
     from services import ledger
     from services.money import to_decimal128
@@ -424,7 +424,7 @@ def borrado():
 
 def test_ESCONDER_Y_RESTAURAR_POR_HTTP(borrado):
     from _lote_c_comun import SUPER
-    from routes import admin as rutas_admin
+    from routes.admin import mantenimiento as rutas_admin
     c, _ = borrado
     r = c.get("/admin/hidden-transactions")
     _igual_a_llamarla_directo(r, ya(rutas_admin.get_hidden_transactions(limit=500, admin=SUPER)))
@@ -437,7 +437,7 @@ def test_ESCONDER_Y_RESTAURAR_POR_HTTP(borrado):
 
 def test_LA_VISTA_PREVIA_EL_BORRADO_Y_EL_REGISTRO_POR_HTTP(borrado):
     from _lote_c_comun import SUPER
-    from routes import admin as rutas_admin
+    from routes.admin import mantenimiento as rutas_admin
     c, _ = borrado
     previa = c.get("/admin/wipe-all/preview")
     _igual_a_llamarla_directo(previa, ya(rutas_admin.wipe_all_preview(admin=SUPER)))

@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # estado del envio: el libro se lee dentro de dos anos, cuando los estados de
 # este modulo pueden llamarse de otra forma.
 # `_paquete` en los dos: `pago_envio` y `refund_envio` ya significan otra cosa en
-# esta aplicacion —el envio de una REMESA a VES o BRL, ver routes/admin.py— y una
+# esta aplicacion —el envio de una REMESA a VES o BRL, ver routes/admin/— y una
 # consulta del libro por movement_type mezclaria dos negocios distintos.
 MOVIMIENTO_COBRO = "pago_envio_paquete"
 MOVIMIENTO_REEMBOLSO = "refund_envio_paquete"

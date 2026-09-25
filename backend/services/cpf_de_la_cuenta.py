@@ -82,7 +82,7 @@ async def esta_vetado(db, valor) -> bool:
     """¿Este CPF está en la lista negra?
 
     La lista guarda el CPF en dígitos pelados (`_normalize_blacklist_value` en
-    routes/admin.py), que es lo mismo que devuelve `cpf.normalizar`. Si esas
+    routes/admin/usuarios.py), que es lo mismo que devuelve `cpf.normalizar`. Si esas
     dos normalizaciones se separan, el veto deja de encontrarse y nadie se
     entera: por eso las dos sacan todo lo que no es un dígito, y nada más.
     """

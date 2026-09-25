@@ -40,7 +40,7 @@ mongomock_motor = pytest.importorskip(
     reason="mongomock-motor no está instalado: es de test y no va en producción",
 )
 
-from conftest import usar_base                       # noqa: E402
+from conftest import los_py_de, usar_base                       # noqa: E402
 from services import notifications as n              # noqa: E402
 
 # La de verdad, agarrada ANTES de que el fixture de abajo la reemplace. Sin
@@ -322,7 +322,7 @@ def test_los_avisos_salen_a_la_vez(base, monkeypatch):
 def _archivos_del_backend():
     for carpeta in ("routes", "services"):
         raiz = os.path.join(_BACKEND, carpeta)
-        for nombre in sorted(os.listdir(raiz)):
+        for nombre in los_py_de(raiz):
             if nombre.endswith(".py"):
                 yield f"{carpeta}/{nombre}", os.path.join(raiz, nombre)
 

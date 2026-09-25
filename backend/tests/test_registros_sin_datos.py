@@ -44,6 +44,8 @@ import pytest
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _BACKEND)
 
+from conftest import los_py_de                                       # noqa: E402
+
 from services import registro                                       # noqa: E402
 
 
@@ -246,7 +248,7 @@ def _archivos():
         raiz = os.path.join(_BACKEND, carpeta)
         if not os.path.isdir(raiz):
             continue
-        for archivo in sorted(os.listdir(raiz)):
+        for archivo in los_py_de(raiz):
             if archivo.endswith(".py"):
                 yield f"{carpeta}/{archivo}", os.path.join(raiz, archivo)
 

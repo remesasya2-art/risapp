@@ -411,7 +411,7 @@ def _escrituras_del_estado_verificado():
     Se usa el árbol del código y no una búsqueda de texto por dos motivos.
 
     El primero: hace falta saber en qué FUNCION cae cada escritura, porque
-    `routes/admin.py` tiene dos en dos funciones distintas y una búsqueda plana
+    `routes/admin/kyc.py` tiene dos en dos funciones distintas y una búsqueda plana
     no las separa.
 
     El segundo lo descubrió este test de la peor forma: la primera versión
@@ -482,8 +482,8 @@ def _escrituras_del_estado_verificado():
 # pueda quedarse callado: si encuentra menos, o si encuentra la LECTURA de
 # `misc.py`, el test de abajo se pone rojo.
 ESCRITURAS_ESPERADAS = {
-    ("admin.py", "decide_verification"),
-    ("admin.py", "process_verification"),
+    ("kyc.py", "decide_verification"),
+    ("kyc.py", "process_verification"),
     ("kyc_admin.py", "approve_kyc"),
 }
 
@@ -536,7 +536,8 @@ def test_las_tres_puertas_del_kyc_liberan_el_bono(base, monkeypatch):
     —adentro de la rama del rechazo, por ejemplo— pasa la primera y falla ésta.
     """
     from models.user import User
-    from routes import admin as rutas_admin, kyc_admin as rutas_kyc
+    from routes import kyc_admin as rutas_kyc
+    from routes.admin import kyc as rutas_admin
 
     jefa = User(user_id="u_jefa", name="Jefa", email="jefa@example.com",
                 role="super_admin")

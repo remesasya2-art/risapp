@@ -170,7 +170,7 @@ def test_ningun_handler_vuelve_a_decorar_por_pedido():
 
     raiz = pathlib.Path(_BACKEND)
     culpables = []
-    for archivo in list(raiz.glob("routes/*.py")) + list(raiz.glob("*.py")):
+    for archivo in list(raiz.glob("routes/**/*.py")) + list(raiz.glob("*.py")):
         for n, linea in enumerate(archivo.read_text().splitlines(), 1):
             if re.match(r"\s+@\w*limiter\.limit\(", linea):
                 culpables.append(f"{archivo.relative_to(raiz)}:{n}")
@@ -264,7 +264,7 @@ def test_NO_QUEDA_NINGUN_DECORADOR_DE_LIMITE():
 
     raiz = pathlib.Path(_BACKEND)
     culpables = []
-    for archivo in list(raiz.glob("routes/*.py")) + list(raiz.glob("*.py")):
+    for archivo in list(raiz.glob("routes/**/*.py")) + list(raiz.glob("*.py")):
         for n, linea in enumerate(archivo.read_text().splitlines(), 1):
             if re.match(r"\s*@\w*limiter\.limit\(", linea):
                 culpables.append(f"{archivo.relative_to(raiz)}:{n}")

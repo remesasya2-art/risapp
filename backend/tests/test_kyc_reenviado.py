@@ -94,7 +94,7 @@ def test_el_admin_revisa_los_documentos_NUEVOS(base):
     """Revisar la foto vieja significa rechazar de nuevo, para siempre."""
     async def caso():
         await _dos_envios(base)
-        import routes.admin as adm
+        import routes.admin.kyc as adm
         usuarios = await adm.db.users.find(
             {"verification_status": "pending"}, {"_id": 0}).to_list(100)
         assert len(usuarios) == 1
@@ -121,7 +121,7 @@ def test_con_un_solo_envio_ordenar_no_cambia_nada(base):
 
 # ── La guarda: que no vuelva a aparecer un find_one sin ordenar ───────────
 
-_FUENTES = sorted(p for p in __import__("pathlib").Path(_BACKEND).glob("routes/*.py")
+_FUENTES = sorted(p for p in __import__("pathlib").Path(_BACKEND).glob("routes/**/*.py")
                   if p.is_file())
 
 

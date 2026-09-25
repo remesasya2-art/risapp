@@ -181,7 +181,7 @@ def test_descargar_la_ficha_deja_una_linea_en_la_auditoria(base):
             "full_name": "Ana Ribeiro", "cpf_number": "12345678901",
             "role": "user", "verification_status": "verified",
         })
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         quien = User(user_id="sa_1", email="jefa@ejemplo.com", name="Jefa",
                      role="super_admin")
         r = await ra.descargar_ficha_del_cliente("u1", pedido(), admin=quien)
@@ -202,7 +202,7 @@ def test_descargar_la_ficha_deja_una_linea_en_la_auditoria(base):
 def test_la_linea_se_escribe_ANTES_de_mandar_el_archivo():
     """Al revés, una descarga que se corta a la mitad se lleva los datos igual
     y no queda anotada."""
-    fuente = pathlib.Path(_BACKEND, "routes", "admin.py").read_text()
+    fuente = pathlib.Path(_BACKEND, "routes", "admin", "usuarios.py").read_text()
     arbol = ast.parse(fuente)
     fn = next(n for n in ast.walk(arbol)
               if isinstance(n, ast.AsyncFunctionDef)
@@ -214,7 +214,7 @@ def test_la_linea_se_escribe_ANTES_de_mandar_el_archivo():
 
 def test_de_un_cliente_que_no_existe_no_se_baja_nada(base):
     async def cuerpo():
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         quien = User(user_id="sa_1", email="jefa@ejemplo.com", name="Jefa",
                      role="super_admin")
         with pytest.raises(Exception) as e:
@@ -270,7 +270,7 @@ def test_la_ficha_no_lleva_las_fotos_del_kyc(base):
             "verification_id": "v1", "user_id": "u1",
             "id_document_image": FOTO, "cpf_image": FOTO, "selfie_image": FOTO,
         })
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         quien = User(user_id="sa_1", email="jefa@ejemplo.com", name="Jefa",
                      role="super_admin")
         r = await ra.descargar_ficha_del_cliente("u1", pedido(), admin=quien)

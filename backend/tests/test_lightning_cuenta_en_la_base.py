@@ -97,7 +97,7 @@ def test_NO_QUEDA_NINGUN_CONTADOR_EN_LA_MEMORIA_DE_LAS_RUTAS():
         return isinstance(valor, ast.Call) and getattr(valor.func, "id", "") in ("dict", "list", "defaultdict")
 
     culpables = []
-    for archivo in sorted(raiz.glob("*.py")):
+    for archivo in sorted(raiz.rglob("*.py")):
         arbol = ast.parse(archivo.read_text(encoding="utf-8"))
         for nodo in arbol.body:
             if not isinstance(nodo, ast.Assign) or not es_un_recipiente(nodo.value):

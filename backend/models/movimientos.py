@@ -39,7 +39,7 @@ from services.las_fotos import LAS_FOTOS
 #   `hidden_from_admin`.
 #
 #   El peor de todos es `assigned_to_name`. Se llena con
-#   `full_name or name or email` —en `routes/admin.py` y en
+#   `full_name or name or email` —en `routes/admin/recargas_ves.py` y en
 #   `services/lotes_de_pago.py`, las dos con la misma última alternativa—, así
 #   que un agente que no tenga el nombre cargado le deja SU DIRECCION DE
 #   CORREO escrita en la orden del cliente. Cerrar el lote no la borra: queda

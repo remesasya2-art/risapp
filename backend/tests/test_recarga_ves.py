@@ -56,7 +56,7 @@ def _preparar():
         sys.modules["routes.dependencies"] = deps
 
     import routes.transactions as tx
-    import routes.admin as adm
+    import routes.admin.recargas_ves as adm
     return tx, adm
 
 

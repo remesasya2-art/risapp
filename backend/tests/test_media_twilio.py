@@ -42,7 +42,7 @@ sys.path.insert(0, _BACKEND)
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "ris_test")
 
-from conftest import usar_base                                      # noqa: E402,F401
+from conftest import los_py_de, usar_base                                      # noqa: E402,F401
 
 AC = "AC" + "a" * 32
 MM = "MM" + "b" * 32
@@ -256,7 +256,7 @@ def _arboles():
     """Cada archivo de `routes/`, ya parseado."""
     import ast
     rutas = os.path.join(_BACKEND, "routes")
-    for archivo in sorted(os.listdir(rutas)):
+    for archivo in los_py_de(rutas):
         if not archivo.endswith(".py"):
             continue
         texto = open(os.path.join(rutas, archivo), encoding="utf-8").read()
@@ -264,9 +264,9 @@ def _arboles():
 
 
 def test_LA_MIGRACION_USA_EL_MISMO_CRITERIO_QUE_LA_RUTA():
-    """El agujero de `admin.py` no fue un descuido puntual: fue tener el mismo
+    """El agujero de `admin.py` (hoy `admin/mantenimiento.py`) no fue un descuido puntual: fue tener el mismo
     pedido escrito dos veces, y arreglar sólo uno."""
-    fuente = open(os.path.join(_BACKEND, "routes", "admin.py"), encoding="utf-8").read()
+    fuente = open(os.path.join(_BACKEND, "routes", "admin", "mantenimiento.py"), encoding="utf-8").read()
     assert "url_de_medio" in fuente and "bajar_medio" in fuente
 
 

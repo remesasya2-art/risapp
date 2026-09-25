@@ -223,7 +223,7 @@ def test_la_ficha_de_un_usuario_contesta(base, cliente):
 def test_LA_RUTA_QUE_DEVOLVIA_DOCUMENTOS_ENTEROS_YA_NO_ESTA(base, cliente):
     """`/verifications/pending` devolvía cada usuario pendiente entero, con la
     semilla del segundo factor y el hash del PIN. Ninguna pantalla la usaba y
-    se sacó (ver el comentario en routes/admin.py). Si vuelve, que sea con un
+    se sacó (ver el comentario en routes/admin/kyc.py). Si vuelve, que sea con un
     contrato: este test se pone rojo para que alguien lo mire."""
     import asyncio
 

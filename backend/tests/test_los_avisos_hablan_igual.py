@@ -67,7 +67,7 @@ def avisos_al_usuario():
     de un comentario contaría como si estuviera en un título.
     """
     raiz = pathlib.Path(_BACKEND)
-    for archivo in sorted(raiz.glob("routes/*.py")) + sorted(raiz.glob("services/*.py")):
+    for archivo in sorted(raiz.glob("routes/**/*.py")) + sorted(raiz.glob("services/*.py")):
         arbol = ast.parse(archivo.read_text(), filename=str(archivo))
         for nodo in ast.walk(arbol):
             if not isinstance(nodo, ast.Call):

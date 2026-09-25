@@ -17,7 +17,7 @@ QUE PASABA
         processed_by, paid_from_bank, hidden_from_admin
 
     El peor es `assigned_to_name`. Se llena con `full_name or name or email`
-    —en `routes/admin.py` y en `services/lotes_de_pago.py`, las dos con la
+    —en `routes/admin/recargas_ves.py` y en `services/lotes_de_pago.py`, las dos con la
     misma última alternativa—, así que un agente que no tenga el nombre
     cargado le deja SU DIRECCION DE CORREO escrita en la orden del cliente.
     Cerrar el lote no la borra. De ahí viajaba al navegador del cliente, que es
@@ -110,7 +110,7 @@ def _app(nombre):
 
 # ─── Lo que le escribe el panel a la orden mientras la procesa ────────────
 #
-# Los nombres y los valores son los que escriben de verdad `routes/admin.py`
+# Los nombres y los valores son los que escriben de verdad `routes/admin/recargas_ves.py`
 # (al tomar una orden) y `services/lotes_de_pago.py` (al armar el lote).
 DEL_PANEL = {
     "assigned_to": "adm_9",

@@ -51,7 +51,7 @@ mongomock_motor = pytest.importorskip(
 
 from conftest import usar_base, ensenarle_decimal128_a_mongomock  # noqa: E402
 from models.user import User                                   # noqa: E402
-from routes import admin as rutas_admin                        # noqa: E402
+from routes.admin import usuarios as rutas_admin               # noqa: E402
 from services import perfil                                    # noqa: E402
 from services.money import to_decimal128                       # noqa: E402
 

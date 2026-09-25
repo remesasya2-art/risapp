@@ -255,7 +255,7 @@ ContabilidadBorrada = _simple("ContabilidadBorrada", ("success", "message", "tot
 # Van al lado del borrado de la contabilidad porque son la misma familia: el
 # botón que borra (`WipeButton.jsx`), el que devuelve lo escondido
 # (`RestoreButton.jsx`), y el registro donde queda asentado quién apretó cada
-# uno. Todas se arman campo por campo en `routes/admin.py`; los contratos fijan
+# uno. Todas se arman campo por campo en `routes/admin/mantenimiento.py`; los contratos fijan
 # esos campos.
 
 CierreDelLibro = _simple("CierreDelLibro", ("revisados", "cierres_creados", "error"),

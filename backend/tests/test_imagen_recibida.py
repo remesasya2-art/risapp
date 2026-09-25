@@ -28,6 +28,8 @@ import pytest
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _BACKEND)
 
+from conftest import los_py_de                                       # noqa: E402
+
 from services.imagen_recibida import (                              # noqa: E402
     TOPE_BYTES, ImagenInvalida, es_imagen_aceptable, limpiar_imagen,
     limpiar_imagen_opcional, limpiar_lista)
@@ -181,7 +183,7 @@ def test_algo_que_no_es_una_lista_no_pasa_por_error():
 PUNTOS_DE_ENTRADA = [
     ("routes/misc.py", "limpiar_imagen"),           # los documentos del KYC
     ("routes/transactions.py", "limpiar_imagen_opcional"),   # recarga en VES
-    ("routes/admin.py", "limpiar_lista"),           # comprobantes de un retiro
+    ("routes/admin/retiros.py", "limpiar_lista"),   # comprobantes de un retiro
 ]
 
 
@@ -210,7 +212,7 @@ def test_NINGUNA_RUTA_GUARDA_UNA_IMAGEN_SIN_VALIDARLA():
 
     sospechosos = []
     rutas = os.path.join(_BACKEND, "routes")
-    for archivo in sorted(os.listdir(rutas)):
+    for archivo in los_py_de(rutas):
         if not archivo.endswith(".py"):
             continue
         texto = open(os.path.join(rutas, archivo), encoding="utf-8").read()

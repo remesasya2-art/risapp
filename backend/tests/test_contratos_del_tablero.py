@@ -32,25 +32,25 @@ from test_contratos_de_encomiendas import _campos                        # noqa:
 
 _BACKEND = pathlib.Path(__file__).resolve().parent.parent
 
-A, BTC, CONF = "routes/admin.py", "routes/btc_admin.py", "routes/configuracion.py"
+BTC, CONF = "routes/btc_admin.py", "routes/configuracion.py"
 # (archivo, router, método, camino, contrato)
 RUTAS = [
     ("routes/misc.py", "router", "GET", "/admin/dashboard", "TableroDelPanel"),
-    (A, "router", "GET", "/pendientes", "PendientesDelPanel"),
-    (A, "router", "POST", "/fix-media-urls", "FotosConvertidas"),
-    (A, "router", "GET", "/lector/desempeno", "DesempenoDelLector"),
-    (A, "router", "GET", "/reportes/merma-nowpayments", "MermaDeNowpayments"),
-    (A, "router", "GET", "/reportes/fuentes", "FuentesDeReporte"),
-    (A, "router", "GET", "/reportes", "ReporteGenerado"),
-    (A, "router", "GET", "/rates", "TasasDelSistema"),
-    (A, "router", "POST", "/rates", "TasaActualizada"),
-    (A, "router", "GET", "/rate-history", "HistorialDeTasas"),
-    (A, "router", "GET", "/bcv-rates", "LecturaDelBcv"),
-    (A, "router", "GET", "/bcv-rates/history", "HistorialDelBcv"),
-    (A, "router", "POST", "/bcv-rates/refresh", "BcvActualizado"),
-    (A, "router", "POST", "/blacklist", "AccionEnLaListaNegra"),
-    (A, "router", "GET", "/blacklist", "ListaNegra"),
-    (A, "router", "DELETE", "/blacklist/{blacklist_id}", "AccionEnLaListaNegra"),
+    ("routes/admin/pendientes.py", "router", "GET", "/pendientes", "PendientesDelPanel"),
+    ("routes/admin/mantenimiento.py", "router", "POST", "/fix-media-urls", "FotosConvertidas"),
+    ("routes/admin/lotes.py", "router", "GET", "/lector/desempeno", "DesempenoDelLector"),
+    ("routes/admin/reportes.py", "router", "GET", "/reportes/merma-nowpayments", "MermaDeNowpayments"),
+    ("routes/admin/reportes.py", "router", "GET", "/reportes/fuentes", "FuentesDeReporte"),
+    ("routes/admin/reportes.py", "router", "GET", "/reportes", "ReporteGenerado"),
+    ("routes/admin/tasas.py", "router", "GET", "/rates", "TasasDelSistema"),
+    ("routes/admin/tasas.py", "router", "POST", "/rates", "TasaActualizada"),
+    ("routes/admin/tasas.py", "router", "GET", "/rate-history", "HistorialDeTasas"),
+    ("routes/admin/tasas.py", "router", "GET", "/bcv-rates", "LecturaDelBcv"),
+    ("routes/admin/tasas.py", "router", "GET", "/bcv-rates/history", "HistorialDelBcv"),
+    ("routes/admin/tasas.py", "router", "POST", "/bcv-rates/refresh", "BcvActualizado"),
+    ("routes/admin/usuarios.py", "router", "POST", "/blacklist", "AccionEnLaListaNegra"),
+    ("routes/admin/usuarios.py", "router", "GET", "/blacklist", "ListaNegra"),
+    ("routes/admin/usuarios.py", "router", "DELETE", "/blacklist/{blacklist_id}", "AccionEnLaListaNegra"),
     (CONF, "router", "GET", "", "ConfiguracionDelPanel"),
     (CONF, "router", "PUT", "", "ConfiguracionDelPanel"),
     (BTC, "router", "GET", "/config", "ConfiguracionBtc"),
@@ -78,10 +78,10 @@ def test_CADA_RUTA_QUE_QUEDABA_DEL_PANEL_TIENE_SU_CONTRATO(archivo, nombre, meto
 # algo agregado: no hay un diccionario a la vista en la ruta. Se leen más
 # abajo, en su servicio o en lo que se guarda.
 NO_ARMAN_AHI = {
-    ("routes/admin.py", "GET", "/lector/desempeno"), ("routes/admin.py", "GET", "/reportes"),
-    ("routes/admin.py", "GET", "/bcv-rates/history"), ("routes/configuracion.py", "GET", ""),
+    ("routes/admin/lotes.py", "GET", "/lector/desempeno"), ("routes/admin/reportes.py", "GET", "/reportes"),
+    ("routes/admin/tasas.py", "GET", "/bcv-rates/history"), ("routes/configuracion.py", "GET", ""),
     # Estas dos devuelven `lo_de_la_base or {...por omisión}`.
-    ("routes/admin.py", "GET", "/rates"), ("routes/admin.py", "GET", "/bcv-rates"),
+    ("routes/admin/tasas.py", "GET", "/rates"), ("routes/admin/tasas.py", "GET", "/bcv-rates"),
     ("routes/errores_admin.py", "GET", ""), ("routes/errores_admin.py", "GET", "/resumen"),
     ("routes/uso_admin.py", "GET", ""), ("routes/btc_admin.py", "POST", "/marcar-enviado"),
     ("admin_routes.py", "GET", "/transactions/{transaction_id}"),
@@ -150,7 +150,7 @@ def test_LO_QUE_ARMAN_LOS_SERVICIOS_ESTA_EN_SU_CONTRATO():
     _en(m.UsoDeLaApp, _claves_de_las_funciones("services/uso.py", ["todo"]))
     _en(m.RemesaBtc, _claves_de_las_funciones(BTC, ["_serialize_remesa"]))
     _en(m.RemesaBtcEnviada, _claves_de_las_funciones(BTC, ["completar_remesa_btc"]))
-    _en(m.OrdenConMerma, _claves_de_los_diccionarios_pasados_a(A, "reporte_merma_nowpayments", "append"))
+    _en(m.OrdenConMerma, _claves_de_los_diccionarios_pasados_a("routes/admin/reportes.py", "reporte_merma_nowpayments", "append"))
 
 
 def test_LO_QUE_SE_GUARDA_Y_SE_LEE_TAL_CUAL_ESTA_EN_SU_CONTRATO():
@@ -160,11 +160,11 @@ def test_LO_QUE_SE_GUARDA_Y_SE_LEE_TAL_CUAL_ESTA_EN_SU_CONTRATO():
     afuera a propósito."""
     from models import panel_tablero as m
     _en(m.ErrorRegistrado, _claves_de_la_variable("services/errores.py", "anotar", "linea"))
-    _en(m.EntradaDeLaListaNegra, _claves_de_la_variable(A, "add_to_blacklist", "entry"), afuera={"banned_by"})
+    _en(m.EntradaDeLaListaNegra, _claves_de_la_variable("routes/admin/usuarios.py", "add_to_blacklist", "entry"), afuera={"banned_by"})
     _en(m.CambioDeTasa, _claves_de_la_variable("services/rate_history.py", "log_if_changed", "entry"))
     _en(m.LecturaDelBcv, _claves_de_las_funciones("services/bcv_scraper.py", ["fetch_bcv_rates"])
         | _claves_de_la_variable("services/bcv_scraper.py", "get_latest", "doc"))
-    tasa = _claves_de_la_variable(A, "update_rates", "update_fields") \
+    tasa = _claves_de_la_variable("routes/admin/tasas.py", "update_rates", "update_fields") \
         | _claves_de_los_diccionarios_pasados_a("database.py", "init_db", "insert_one")
     _en(m.TasasDelSistema, tasa, afuera={"updated_by"})
     assert "updated_by" in tasa, "la lectura dejó de ver quién cambió la tasa: este test no mira lo que dice"
@@ -255,7 +255,8 @@ def panel(monkeypatch):
 
 def test_EL_TABLERO_Y_LOS_PENDIENTES(panel):
     from _lote_c_comun import SUPER
-    from routes import admin, misc
+    from routes import misc
+    from routes.admin import pendientes as admin
     c, _ = panel
     tablero = c.get("/admin/dashboard")
     _igual_a_llamarla_directo(tablero, ya(misc.get_admin_dashboard(current_user=SUPER)))
@@ -265,7 +266,7 @@ def test_EL_TABLERO_Y_LOS_PENDIENTES(panel):
 
 def test_LAS_TASAS_NO_DICEN_QUIEN_LAS_CAMBIO(panel):
     from _lote_c_comun import SUPER
-    from routes import admin
+    from routes.admin import tasas as admin
     c, _ = panel
     tasas = c.get("/admin/rates")
     _igual_a_llamarla_directo(tasas, _sin(ya(admin.get_rates(admin=SUPER)), "updated_by"))
@@ -281,7 +282,7 @@ def test_LAS_TASAS_NO_DICEN_QUIEN_LAS_CAMBIO(panel):
 
 def test_LAS_TASAS_DEL_BCV(panel, monkeypatch):
     from _lote_c_comun import SUPER
-    from routes import admin
+    from routes.admin import tasas as admin
     from services import bcv_scraper
     c, _ = panel
     ultima = c.get("/admin/bcv-rates")
@@ -301,7 +302,7 @@ def test_LAS_TASAS_DEL_BCV(panel, monkeypatch):
 
 def test_LA_LISTA_NEGRA(panel):
     from _lote_c_comun import SUPER
-    from routes import admin
+    from routes.admin import usuarios as admin
     c, _ = panel
     alta = c.post("/admin/blacklist", json={"type": "email", "value": "Malo@Ejemplo.test", "reason": "fraude"})
     assert alta.status_code == 200, alta.text
@@ -371,7 +372,7 @@ def test_LOS_ERRORES_Y_EL_USO(panel):
 
 def test_LOS_REPORTES_Y_EL_LECTOR(panel):
     from _lote_c_comun import SUPER
-    from routes import admin
+    from routes.admin import lotes, reportes as admin
     from services import reportes
     c, base = panel
     _igual_a_llamarla_directo(c.get("/admin/reportes/fuentes"), ya(admin.reportes_fuentes(admin=SUPER)))
@@ -389,7 +390,7 @@ def test_LOS_REPORTES_Y_EL_LECTOR(panel):
     assert _sin(r.json(), "generado_at") == _sin(jsonable_encoder(directo), "generado_at")
     assert r.json()["operaciones"] >= 1 and r.json()["filas"]
     _igual_a_llamarla_directo(c.get("/admin/lector/desempeno"),
-                              ya(admin.desempeno_del_lector_de_comprobantes(admin=SUPER)))
+                              ya(lotes.desempeno_del_lector_de_comprobantes(admin=SUPER)))
     fotos = c.post("/admin/fix-media-urls").json()
     assert fotos["transactions_fixed"] == 0 and fotos["errors"] == [] and fotos["message"]
 

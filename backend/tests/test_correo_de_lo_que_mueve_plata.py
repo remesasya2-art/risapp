@@ -35,7 +35,7 @@ mongomock_motor = pytest.importorskip(
     reason="mongomock-motor no está instalado: es de test y no va en producción",
 )
 
-from conftest import usar_base                       # noqa: E402
+from conftest import los_py_de, usar_base                       # noqa: E402
 from services import avisos_por_correo, correo       # noqa: E402
 from services import notifications as n              # noqa: E402
 
@@ -226,7 +226,7 @@ def test_la_tabla_no_declara_clases_de_aviso_que_no_existen():
     usados = set()
     for carpeta in ("routes", "services"):
         raiz = os.path.join(_BACKEND, carpeta)
-        for nombre in sorted(os.listdir(raiz)):
+        for nombre in los_py_de(raiz):
             if not nombre.endswith(".py"):
                 continue
             with open(os.path.join(raiz, nombre), encoding="utf-8") as f:

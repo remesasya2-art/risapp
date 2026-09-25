@@ -424,7 +424,7 @@ from pathlib import Path                                            # noqa: E402
 
 _RAIZ = Path(_BACKEND)
 _FUENTES = sorted(
-    p for p in (list(_RAIZ.glob("routes/*.py"))
+    p for p in (list(_RAIZ.glob("routes/**/*.py"))
                 + list(_RAIZ.glob("services/*.py"))
                 + [_RAIZ / "admin_routes.py"])
     if p.is_file())

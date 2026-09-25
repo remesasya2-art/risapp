@@ -454,7 +454,7 @@ def avisos_del_repositorio():
     pasa en `data`. Se lee el ARBOL y no el texto: un `data=` en un comentario
     o en una cadena no cuenta, y con una expresión regular sí contaría."""
     carpeta = pathlib.Path(_BACKEND)
-    for archivo in sorted(carpeta.glob("routes/*.py")) + sorted(carpeta.glob("services/*.py")):
+    for archivo in sorted(carpeta.glob("routes/**/*.py")) + sorted(carpeta.glob("services/*.py")):
         arbol = ast.parse(archivo.read_text(), filename=str(archivo))
         for nodo in ast.walk(arbol):
             if not isinstance(nodo, ast.Call):

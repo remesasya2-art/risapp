@@ -281,3 +281,22 @@ def ensenarle_decimal128_a_mongomock():
     # convierte a `Decimal` antes de tocar nada—. Si alguien escribe esa query,
     # que la escriba con este comentario a la vista: acá el E2E daría verde
     # sobre un comportamiento que producción no tiene.
+
+
+def los_py_de(carpeta):
+    """Los `.py` de una carpeta Y de sus subcarpetas, como caminos relativos a
+    ella (`"basic.py"`, `"admin/kyc.py"`), ordenados.
+
+    Los barridos que recorren `routes/` usaban `os.listdir`, que no baja a las
+    subcarpetas. Cuando `routes/admin.py` se dividió en `routes/admin/`, esos
+    barridos dejaron de mirar el panel entero SIN FALLAR: un barrido que busca
+    culpables y no encuentra el archivo da verde igual. Uno solo se dio cuenta,
+    porque además cuenta cuántos avisos encontró.
+    """
+    salida = []
+    for base, carpetas, archivos in os.walk(carpeta):
+        carpetas[:] = sorted(c for c in carpetas if c != "__pycache__")
+        for nombre in archivos:
+            if nombre.endswith(".py"):
+                salida.append(os.path.relpath(os.path.join(base, nombre), carpeta).replace(os.sep, "/"))
+    return sorted(salida)

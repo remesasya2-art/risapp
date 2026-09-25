@@ -326,9 +326,9 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
 # ─── Retiros: las rutas vivían acá y estaban MUERTAS ──────────────────────
 #
 # `admin_routes.py` registraba `GET /api/admin/withdrawals/pending` y
-# `POST /api/admin/withdrawals/process`, que `routes/admin.py` ya registra con
+# `POST /api/admin/withdrawals/process`, que `routes/admin/retiros.py` ya registra con
 # los mismos caminos. `server.py` monta primero el router modular, así que
-# FastAPI resolvía siempre contra `routes/admin.py` y estas dos nunca corrían.
+# FastAPI resolvía siempre contra `routes/admin/retiros.py` y estas dos nunca corrían.
 #
 # No era código inofensivo. La versión muerta de `process`:
 #
@@ -342,7 +342,7 @@ async def update_user_balance(user_id: str, request: AdjustBalanceRequest,
 #
 # Bastaba con que alguien cambiara el orden de los `include_router` en
 # `server.py` para que esa versión pasara a atender los retiros, en silencio.
-# Se eliminaron: la buena vive en `routes/admin.py`.
+# Se eliminaron: la buena vive en `routes/admin/retiros.py`.
 
 # =======================
 # RECHARGES MANAGEMENT
@@ -715,7 +715,7 @@ async def get_admin_payment_record_detail(record_id: str, admin_user: Usuario = 
 # colección, al recargar veía su número nuevo y quedaba convencido. Una
 # pantalla que confirma un cambio que no ocurrió es peor que una que falla.
 #
-# La ruta que SI funciona es `POST /admin/rates` (routes/admin.py): escribe
+# La ruta que SI funciona es `POST /admin/rates` (routes/admin/tasas.py): escribe
 # `db.rates`, deja historial en `rate_history` y asienta en el libro de
 # auditoría con el antes y el después. Es la que usa el panel —se comprobó
 # que el frontend no llamaba a ésta ni una vez— y es sólo del super

@@ -39,7 +39,7 @@ from services import nowpayments as nowpayments_module  # noqa: E402
 nowpayments_module.IPN_KEY = IPN_KEY
 
 import routes.transactions as tx_routes  # noqa: E402
-import routes.admin as admin_routes  # noqa: E402
+import routes.admin.reportes as admin_routes  # noqa: E402
 
 
 # --------------------------------------------------------------------------
