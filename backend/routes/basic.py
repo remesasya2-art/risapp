@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from database import db
+from models.fuera_del_panel import ColaDePagos
 from models.user import User
 from routes.dependencies import get_current_user, get_super_admin
 
@@ -127,7 +128,7 @@ async def get_current_rate():
 # existiera. El día que alguien deje un zip en esa ruta, se lo lleva medio
 # mundo. No la usaba el frontend ni ningún proceso.
 
-@router.get("/withdrawal/queue-stats")
+@router.get("/withdrawal/queue-stats", response_model=ColaDePagos, response_model_exclude_unset=True)
 async def get_withdrawal_queue_stats(admin=Depends(get_super_admin)):
     """Resumen de la cola de pagos, para la cabecera del panel.
 

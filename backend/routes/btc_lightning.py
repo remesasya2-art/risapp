@@ -12,6 +12,7 @@ import httpx
 from database import db
 from services import cripto_abierta
 from fastapi import APIRouter, Depends, HTTPException, Request
+from models.fuera_del_panel import EnvioMarcadoPorElOperador
 from models.user import User
 from pydantic import BaseModel
 from services.aviso_de_tasa import avisar_si_hace_falta
@@ -599,7 +600,7 @@ async def webhook_blink(request: Request):
 #   administrador, igual que todo el panel de Bitcoin y que los retiros. Es la
 #   que usa el panel; ésta no la llama ninguna pantalla. Quedaba abierta sólo
 #   para quien la escribiera a mano.
-@router.post("/operador/marcar-enviado")
+@router.post("/operador/marcar-enviado", response_model=EnvioMarcadoPorElOperador, response_model_exclude_unset=True)
 async def marcar_enviado(body: MarcarEnviadoRequest, current_user: User = Depends(get_super_admin)):
     remesa = await db.btc_remesas.find_one({"remesa_id": body.remesa_id})
     if not remesa:
