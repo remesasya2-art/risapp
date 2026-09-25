@@ -891,7 +891,7 @@ export default function BTCLightning() {
             <p style={{ margin: 0, fontSize: '36px', fontWeight: 700, color: C.tinta, letterSpacing: '-.02em' }}>
               {loadingWallet ? '—' : fmt(btcWallet?.saldo || 0)}
             </p>
-            <p style={{ ...ayuda, marginTop: '4px' }}>bolívares disponibles</p>
+            <p style={{ ...ayuda, marginTop: '4px' }}>bolívares en camino a tu beneficiario</p>
             <div style={{ marginTop: '16px' }}>
               <Boton onClick={fetchBtcWallet} Icono={RefreshCw} disabled={loadingWallet}>
                 {loadingWallet ? 'Actualizando…' : 'Actualizar'}
@@ -902,8 +902,8 @@ export default function BTCLightning() {
             <p style={{ ...microEtiqueta, marginBottom: '9px' }}>Qué es este saldo</p>
             <p style={{ margin: 0, fontSize: '14px', color: C.texto, lineHeight: 1.65 }}>
               Cuando pagás con Bitcoin, registramos el pago al confirmarse en la
-              red. Ese monto es el equivalente en bolívares que se le envía a tu
-              beneficiario al completar la transferencia.
+              red. Este monto suma los bolívares que ya pagaste y todavía no le
+              llegaron a tu beneficiario: baja cuando se completa la transferencia.
             </p>
           </section>
         </>

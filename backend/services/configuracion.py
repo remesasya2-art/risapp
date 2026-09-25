@@ -333,7 +333,7 @@ AJUSTES = {
     #   alguien adentro. En 1 no nace custodia nueva —que es lo que apura— y
     #   quien tenga saldo lo puede sacar. Pasar a 0 es un clic del panel
     #   DESPUES de comprobar que las cuentas 2.1.03 y 2.1.04 del libro mayor, y
-    #   la colección `btc_ves_wallets`, están en cero.
+    #   las órdenes de Bitcoin en «pagado» (no `btc_ves_wallets`), están en cero.
     #
     # LO QUE ESTE AJUSTE NO APAGA NUNCA, Y ES A PROPOSITO
     #
