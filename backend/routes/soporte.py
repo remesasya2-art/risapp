@@ -54,6 +54,10 @@ from services.imagen_recibida import ImagenInvalida, limpiar_foto_del_chat
 from services.money import to_float
 from services.notifications import create_notification
 from models.acciones_del_cliente import MiCasoAbierto, MiCasoActualizado, MiRespuestaEnviada
+from models.panel_soporte import (AccionDeSoporte, Asesores, AreasDeSoporte, BandejaDelAsesor,
+                                   CasoCompleto, CasoTomado, CasoTransferido, EstadoDelCaso,
+                                   MensajeDelAsesor, PedidoHecho, PedidosDeMiArea,
+                                   RespuestaRapidaCreada, RespuestasRapidas)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["soporte"])
@@ -550,13 +554,13 @@ class RespuestaAlPedido(BaseModel):
     respuesta: str = Field(..., min_length=1, max_length=2000)
 
 
-@router.get("/admin/soporte/areas")
+@router.get("/admin/soporte/areas", response_model=AreasDeSoporte, response_model_exclude_unset=True)
 async def areas(current_user: User = Depends(get_crm_user)):
     """Las áreas a las que se puede transferir o pedir algo."""
     return {"areas": [{"clave": k, "nombre": v[0]} for k, v in soporte.AREAS.items()]}
 
 
-@router.get("/admin/soporte/asesores")
+@router.get("/admin/soporte/asesores", response_model=Asesores, response_model_exclude_unset=True)
 async def asesores(area: Optional[str] = None,
                    current_user: User = Depends(get_crm_user)):
     """Quién puede recibir una transferencia de esa área."""
@@ -570,7 +574,7 @@ async def asesores(area: Optional[str] = None,
     } for p in gente]}
 
 
-@router.get("/admin/soporte/casos")
+@router.get("/admin/soporte/casos", response_model=BandejaDelAsesor, response_model_exclude_unset=True)
 async def bandeja(estado: Optional[str] = None, area: Optional[str] = None,
                   mios: bool = False, buscar: Optional[str] = None,
                   current_user: User = Depends(get_crm_user)):
@@ -613,7 +617,7 @@ async def bandeja(estado: Optional[str] = None, area: Optional[str] = None,
     return {"casos": casos}
 
 
-@router.get("/admin/soporte/casos/{caso_id}")
+@router.get("/admin/soporte/casos/{caso_id}", response_model=CasoCompleto, response_model_exclude_unset=True)
 async def ver_caso(caso_id: str, current_user: User = Depends(get_crm_user)):
     """El caso completo: conversación, notas internas, pedidos y ficha del cliente.
 
@@ -685,7 +689,7 @@ async def ver_caso(caso_id: str, current_user: User = Depends(get_crm_user)):
     }
 
 
-@router.post("/admin/soporte/casos/{caso_id}/tomar")
+@router.post("/admin/soporte/casos/{caso_id}/tomar", response_model=CasoTomado, response_model_exclude_unset=True)
 async def tomar(caso_id: str, current_user: User = Depends(get_crm_user)):
     """Toma el caso, de forma atómica: sólo uno puede."""
     resultado = await db.soporte_casos.update_one(
@@ -713,7 +717,7 @@ async def tomar(caso_id: str, current_user: User = Depends(get_crm_user)):
             "asignado_a_nombre": caso.get("asignado_a_nombre")}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/soltar")
+@router.post("/admin/soporte/casos/{caso_id}/soltar", response_model=AccionDeSoporte, response_model_exclude_unset=True)
 async def soltar(caso_id: str, current_user: User = Depends(get_crm_user)):
     """Suelta el caso. Sólo quien lo atiende, o un super administrador."""
     caso = await _caso(caso_id)
@@ -732,7 +736,7 @@ async def soltar(caso_id: str, current_user: User = Depends(get_crm_user)):
     return {"success": True}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/mensajes")
+@router.post("/admin/soporte/casos/{caso_id}/mensajes", response_model=MensajeDelAsesor, response_model_exclude_unset=True)
 async def responder_asesor(caso_id: str, datos: RespuestaDelAsesor,
                            current_user: User = Depends(get_crm_user)):
     """Responde al cliente, o deja una nota interna que el cliente no ve."""
@@ -792,7 +796,7 @@ async def responder_asesor(caso_id: str, datos: RespuestaDelAsesor,
     return {"success": True}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/estado")
+@router.post("/admin/soporte/casos/{caso_id}/estado", response_model=EstadoDelCaso, response_model_exclude_unset=True)
 async def cambiar_estado(caso_id: str, datos: CambioDeEstado,
                          current_user: User = Depends(get_crm_user)):
     """Mueve el caso de estado, si la transición es válida."""
@@ -840,7 +844,7 @@ async def cambiar_estado(caso_id: str, datos: CambioDeEstado,
     return {"success": True, "estado": datos.estado}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/prioridad")
+@router.post("/admin/soporte/casos/{caso_id}/prioridad", response_model=AccionDeSoporte, response_model_exclude_unset=True)
 async def cambiar_prioridad(caso_id: str, datos: CambioDePrioridad,
                             current_user: User = Depends(get_crm_user)):
     if datos.prioridad not in soporte.PRIORIDADES:
@@ -856,7 +860,7 @@ async def cambiar_prioridad(caso_id: str, datos: CambioDePrioridad,
     return {"success": True}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/transferir")
+@router.post("/admin/soporte/casos/{caso_id}/transferir", response_model=CasoTransferido, response_model_exclude_unset=True)
 async def transferir(caso_id: str, datos: Transferencia,
                      current_user: User = Depends(get_crm_user)):
     """Pasa el caso a otra área, y opcionalmente a un asesor concreto.
@@ -921,7 +925,7 @@ async def transferir(caso_id: str, datos: Transferencia,
     return {"success": True, "area": datos.area, "asignado_a": datos.asesor_id}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/escalar")
+@router.post("/admin/soporte/casos/{caso_id}/escalar", response_model=AccionDeSoporte, response_model_exclude_unset=True)
 async def escalar(caso_id: str, datos: Escalamiento,
                   current_user: User = Depends(get_crm_user)):
     """Marca el caso como escalado, con motivo, y lo pone primero en la lista."""
@@ -972,7 +976,7 @@ async def escalar(caso_id: str, datos: Escalamiento,
     return {"success": True}
 
 
-@router.post("/admin/soporte/casos/{caso_id}/pedidos")
+@router.post("/admin/soporte/casos/{caso_id}/pedidos", response_model=PedidoHecho, response_model_exclude_unset=True)
 async def pedir_a_area(caso_id: str, datos: PedidoAArea,
                        current_user: User = Depends(get_crm_user)):
     """Le pide algo a otra área SIN soltar el caso.
@@ -1015,7 +1019,7 @@ async def pedir_a_area(caso_id: str, datos: PedidoAArea,
     return {"success": True, "pedido": pedido}
 
 
-@router.get("/admin/soporte/pedidos")
+@router.get("/admin/soporte/pedidos", response_model=PedidosDeMiArea, response_model_exclude_unset=True)
 async def pedidos_de_mi_area(pendientes: bool = True,
                              current_user: User = Depends(get_crm_user)):
     """Los pedidos que le tocan a quien pregunta, según lo que puede resolver."""
@@ -1031,7 +1035,7 @@ async def pedidos_de_mi_area(pendientes: bool = True,
     return {"pedidos": lista, "areas": mias}
 
 
-@router.post("/admin/soporte/pedidos/{pedido_id}/responder")
+@router.post("/admin/soporte/pedidos/{pedido_id}/responder", response_model=AccionDeSoporte, response_model_exclude_unset=True)
 async def responder_pedido(pedido_id: str, datos: RespuestaAlPedido,
                            current_user: User = Depends(get_crm_user)):
     """Contesta un pedido. La respuesta vuelve al caso como nota interna.
@@ -1107,7 +1111,7 @@ _RAPIDAS_POR_DEFECTO = [
 ]
 
 
-@router.get("/admin/quick-replies")
+@router.get("/admin/quick-replies", response_model=RespuestasRapidas, response_model_exclude_unset=True)
 async def respuestas_rapidas(current_user: User = Depends(get_crm_user)):
     """Las respuestas rápidas compartidas. Siembra las de fábrica la primera vez."""
     cuantas = await db.quick_replies.count_documents({})
@@ -1124,7 +1128,7 @@ async def respuestas_rapidas(current_user: User = Depends(get_crm_user)):
         "created_at", 1).to_list(200)
 
 
-@router.post("/admin/quick-replies")
+@router.post("/admin/quick-replies", response_model=RespuestaRapidaCreada, response_model_exclude_unset=True)
 async def crear_respuesta_rapida(datos: RespuestaRapida,
                                  current_user: User = Depends(get_crm_user)):
     """Crea una respuesta rápida compartida."""
@@ -1142,7 +1146,7 @@ async def crear_respuesta_rapida(datos: RespuestaRapida,
     return {"success": True, "qr_id": doc["qr_id"], "text": texto}
 
 
-@router.delete("/admin/quick-replies/{qr_id}")
+@router.delete("/admin/quick-replies/{qr_id}", response_model=AccionDeSoporte, response_model_exclude_unset=True)
 async def borrar_respuesta_rapida(qr_id: str,
                                   current_user: User = Depends(get_crm_user)):
     """Elimina una respuesta rápida compartida."""

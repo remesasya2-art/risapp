@@ -20,7 +20,6 @@
 # POR QUE ESTA LISTA EXISTE
 DELETE /api/admin/accounting/banks/{bank_id}
 DELETE /api/admin/blacklist/{blacklist_id}
-DELETE /api/admin/quick-replies/{qr_id}
 DELETE /api/admin/rrhh/{user_id}
 DELETE /api/admin/sub-admins/{user_id}
 DELETE /{full_path:path}
@@ -83,7 +82,6 @@ GET /api/admin/ledger/reconcile
 GET /api/admin/ledger/reconciliacion
 GET /api/admin/pendientes
 GET /api/admin/permissions-list
-GET /api/admin/quick-replies
 GET /api/admin/rate-history
 GET /api/admin/rates
 GET /api/admin/reportes
@@ -95,11 +93,6 @@ GET /api/admin/rrhh/auditoria/acciones
 GET /api/admin/rrhh/auditoria/libro
 GET /api/admin/rrhh/permisos
 GET /api/admin/rrhh/{user_id}
-GET /api/admin/soporte/areas
-GET /api/admin/soporte/asesores
-GET /api/admin/soporte/casos
-GET /api/admin/soporte/casos/{caso_id}
-GET /api/admin/soporte/pedidos
 GET /api/admin/sub-admins
 GET /api/admin/support-requests
 GET /api/admin/transactions
@@ -162,21 +155,11 @@ POST /api/admin/fix-media-urls
 POST /api/admin/ledger/cofre/cotejar
 POST /api/admin/ledger/cofre/llave-nueva
 POST /api/admin/ledger/opening
-POST /api/admin/quick-replies
 POST /api/admin/rates
 POST /api/admin/restore-transactions
 POST /api/admin/rrhh
 POST /api/admin/rrhh/{user_id}/reenviar-invitacion
 POST /api/admin/rrhh/{user_id}/reiniciar-dos-pasos
-POST /api/admin/soporte/casos/{caso_id}/escalar
-POST /api/admin/soporte/casos/{caso_id}/estado
-POST /api/admin/soporte/casos/{caso_id}/mensajes
-POST /api/admin/soporte/casos/{caso_id}/pedidos
-POST /api/admin/soporte/casos/{caso_id}/prioridad
-POST /api/admin/soporte/casos/{caso_id}/soltar
-POST /api/admin/soporte/casos/{caso_id}/tomar
-POST /api/admin/soporte/casos/{caso_id}/transferir
-POST /api/admin/soporte/pedidos/{pedido_id}/responder
 POST /api/admin/sub-admins
 POST /api/admin/support-requests/{request_id}/claim
 POST /api/admin/support-requests/{request_id}/priority
