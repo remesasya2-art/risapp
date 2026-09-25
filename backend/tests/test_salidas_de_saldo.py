@@ -121,3 +121,74 @@ def test_A_BRASIL_UN_ERROR_DEL_LIBRO_ANTES_DE_LLEGAR_A_LA_BASE_TAMBIEN_DESHACE_T
     with pytest.raises(ValueError):
         corre(_a_brasil(30.0))
     assert _saldo(base) == Decimal("100.00") and _cuantos(base, "transactions") == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El retiro en bolívares, que puede salir de dos cuentas
+# ══════════════════════════════════════════════════════════════════════════
+
+def _con_bono(base, bono="20.00"):
+    from services import bonos
+    corre(base.users.update_one({"user_id": "u_1"}, {"$set": {
+        "bono": {"estado": bonos.LIBERADO}, bonos.CUENTA_DEL_BONO: to_decimal128(bono)}}))
+
+
+def _retiro_ves(monto=50.0):
+    orden = {"transaction_id": "tx_ves", "display_id": "RIS-1", "user_id": "u_1", "type": "withdrawal",
+             "amount_input": monto, "currency_input": "RIS", "currency_output": "VES", "status": "pending"}
+    return salidas_de_saldo.cobrar_retiro_en_bolivares(
+        CLIENTE, SimpleNamespace(amount=monto), transaction=orden, tx_id="tx_ves", display_id="RIS-1",
+        ris_to_ves=100.0, amount_ves=monto * 100, beneficiary_data={"full_name": "Destinatario"})
+
+
+def _bono(base):
+    from services import bonos
+    return from_db(corre(base.users.find_one({"user_id": "u_1"})).get(bonos.CUENTA_DEL_BONO))
+
+
+def test_EN_BOLIVARES_DESCUENTA_CREA_LA_ORDEN_Y_ASIENTA(base):
+    _preparar(base)
+    corre(_retiro_ves(50.0))
+    assert _saldo(base) == Decimal("50.00") and _cuantos(base, "transactions") == 1
+    (linea,) = corre(base.ledger.find({"transaction_id": "tx_ves"}).to_list(5))
+    assert linea["movement_type"] == "envio_ves" and linea["account"] == "balance_ris"
+
+
+def test_EN_BOLIVARES_EL_BONO_SE_GASTA_PRIMERO_Y_CADA_CUENTA_TIENE_SU_LINEA(base):
+    _preparar(base)
+    _con_bono(base, "20.00")
+    corre(_retiro_ves(50.0))
+    assert _bono(base) == Decimal("0.00") and _saldo(base) == Decimal("70.00")
+    cuentas = sorted(linea["account"] for linea in corre(base.ledger.find({"transaction_id": "tx_ves"}).to_list(5)))
+    assert cuentas == ["balance_ris", "balance_ris_bono"]
+
+
+def test_EN_BOLIVARES_SIN_SALDO_NO_ESCRIBE_NADA(base):
+    _preparar(base, saldo="10.00")
+    with pytest.raises(HTTPException) as e:
+        corre(_retiro_ves(50.0))
+    assert e.value.status_code == 400 and _saldo(base) == Decimal("10.00") and _cuantos(base, "transactions") == 0
+
+
+@solo_con_transacciones
+def test_EN_BOLIVARES_SI_UNA_LINEA_FALLA_NI_EL_SALDO_NI_EL_BONO_SE_MUEVEN(base):
+    _preparar(base)
+    _con_bono(base, "20.00")
+    corre(base.create_collection("ledger", validator=LIBRO_QUE_RECHAZA_TODO))
+    with pytest.raises(Exception):
+        corre(_retiro_ves(50.0))
+    assert _saldo(base) == Decimal("100.00") and _bono(base) == Decimal("20.00")
+    assert _cuantos(base, "transactions") == 0
+
+
+@solo_con_transacciones
+def test_EN_BOLIVARES_UN_ERROR_DEL_LIBRO_ANTES_DE_LLEGAR_A_LA_BASE_TAMBIEN_DESHACE_TODO(base, monkeypatch):
+    from services import ledger
+
+    def no_se_puede(*a, **k):
+        raise ValueError("la línea no se pudo armar")
+    monkeypatch.setattr(ledger, "quantize_money", no_se_puede)
+    _preparar(base)
+    with pytest.raises(ValueError):
+        corre(_retiro_ves(50.0))
+    assert _saldo(base) == Decimal("100.00") and _cuantos(base, "transactions") == 0
