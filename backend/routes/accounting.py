@@ -22,6 +22,7 @@ from openpyxl.utils import get_column_letter
 from routes.dependencies import get_super_admin
 from models.user import User
 from models.panel_libro import BancosDeLaContabilidad
+from models.panel_contabilidad import (AlcanzaElSaldo, BancoCreado, LibroDeUnBanco, LibroDeUsdt, MensajeDeContabilidad, MovimientoManual, OperacionRegistrada, OperacionesConUsdt, ReporteDeContabilidad, TasaDeUsdt, TasasDeUsdt)
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ async def get_banks(currency: str = None, admin: User = Depends(get_super_admin)
     return banks
 
 
-@router.post("/banks")
+@router.post("/banks", response_model=BancoCreado, response_model_exclude_unset=True)
 async def create_bank(data: BankInput, admin: User = Depends(get_super_admin)):
     """Create a bank account"""
     bank_id = f"bank_{uuid.uuid4().hex[:8]}"
@@ -100,7 +101,7 @@ async def create_bank(data: BankInput, admin: User = Depends(get_super_admin)):
     return {"message": "Banco creado", "bank_id": bank_id}
 
 
-@router.delete("/banks/{bank_id}")
+@router.delete("/banks/{bank_id}", response_model=MensajeDeContabilidad, response_model_exclude_unset=True)
 async def delete_bank(bank_id: str, admin: User = Depends(get_super_admin)):
     """Delete a bank account"""
     result = await db.bank_accounts.delete_one({"bank_id": bank_id})
@@ -109,7 +110,7 @@ async def delete_bank(bank_id: str, admin: User = Depends(get_super_admin)):
     return {"message": "Banco eliminado"}
 
 
-@router.get("/banks/{bank_id}/ledger")
+@router.get("/banks/{bank_id}/ledger", response_model=LibroDeUnBanco, response_model_exclude_unset=True)
 async def get_bank_ledger(bank_id: str, page: int = 1, limit: int = 50, admin: User = Depends(get_super_admin)):
     """Get bank ledger (libro diario) - all entries/exits"""
     bank = await db.bank_accounts.find_one({"bank_id": bank_id}, {"_id": 0})
@@ -148,7 +149,7 @@ class ManualLedgerEntry(BaseModel):
     notes: str = ""
 
 
-@router.post("/banks/ledger/manual")
+@router.post("/banks/ledger/manual", response_model=MovimientoManual, response_model_exclude_unset=True)
 async def add_manual_ledger_entry(data: ManualLedgerEntry, admin: User = Depends(get_super_admin)):
     """Add a manual entry to bank ledger (payment to beneficiary, deposit, etc.)"""
     bank = await db.bank_accounts.find_one({"bank_id": data.bank_id})
@@ -190,7 +191,7 @@ async def add_manual_ledger_entry(data: ManualLedgerEntry, admin: User = Depends
 
 # === USDT Rates ===
 
-@router.post("/rates")
+@router.post("/rates", response_model=MensajeDeContabilidad, response_model_exclude_unset=True)
 async def set_usdt_rates(data: UsdtRatesInput, admin: User = Depends(get_super_admin)):
     """Set daily USDT buy/sell rates"""
     await db.accounting_rates.update_one(
@@ -208,7 +209,7 @@ async def set_usdt_rates(data: UsdtRatesInput, admin: User = Depends(get_super_a
     return {"message": "Tasas actualizadas"}
 
 
-@router.get("/rates")
+@router.get("/rates", response_model=TasasDeUsdt, response_model_exclude_unset=True)
 async def get_usdt_rates(route: str = "brl_ves", date: str = None, admin: User = Depends(get_super_admin)):
     """Get USDT rates"""
     query = {"route": route}
@@ -218,7 +219,7 @@ async def get_usdt_rates(route: str = "brl_ves", date: str = None, admin: User =
     return rates
 
 
-@router.get("/rates/latest")
+@router.get("/rates/latest", response_model=TasaDeUsdt, response_model_exclude_unset=True)
 async def get_latest_rates(route: str = "brl_ves", admin: User = Depends(get_super_admin)):
     """Get the most recent rates for a route"""
     rate = await db.accounting_rates.find_one(
@@ -231,7 +232,7 @@ async def get_latest_rates(route: str = "brl_ves", admin: User = Depends(get_sup
 
 # === USDT Operations (Buy/Sell) ===
 
-@router.post("/operations")
+@router.post("/operations", response_model=OperacionRegistrada, response_model_exclude_unset=True)
 async def register_usdt_operation(data: UsdtOperationInput, admin: User = Depends(get_super_admin)):
     """Register a USDT buy or sell operation"""
     # Verify bank exists
@@ -335,7 +336,7 @@ async def register_usdt_operation(data: UsdtOperationInput, admin: User = Depend
     return {"message": "Operación registrada", "operation_id": op_id, "total_fiat": total_fiat}
 
 
-@router.get("/operations")
+@router.get("/operations", response_model=OperacionesConUsdt, response_model_exclude_unset=True)
 async def get_operations(route: str = "brl_ves", limit: int = 50, admin: User = Depends(get_super_admin)):
     """Get USDT operations"""
     operations = await db.usdt_operations.find(
@@ -346,7 +347,7 @@ async def get_operations(route: str = "brl_ves", limit: int = 50, admin: User = 
 
 # === USDT Ledger ===
 
-@router.get("/usdt-ledger")
+@router.get("/usdt-ledger", response_model=LibroDeUsdt, response_model_exclude_unset=True)
 async def get_usdt_ledger(route: str = "brl_ves", page: int = 1, limit: int = 30, admin: User = Depends(get_super_admin)):
     """Get USDT ledger (libro de USDT) - all buy/sell entries"""
     balance_doc = await db.usdt_balance.find_one({"route": route})
@@ -410,7 +411,7 @@ def get_date_range(period: str, date_str: str = None):
     return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
 
 
-@router.get("/report")
+@router.get("/report", response_model=ReporteDeContabilidad, response_model_exclude_unset=True)
 async def get_accounting_report(
     route: str = "brl_ves",
     period: str = "month",
@@ -757,7 +758,7 @@ async def export_accounting_excel(
 
 # === Balance Check ===
 
-@router.get("/balance-check")
+@router.get("/balance-check", response_model=AlcanzaElSaldo, response_model_exclude_unset=True)
 async def check_balance(
     currency: str = "VES",
     amount: float = 0,

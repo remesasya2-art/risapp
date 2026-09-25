@@ -18,22 +18,9 @@
 # COMO SE USA
 # Las rutas que NO declaran contrato de salida (`response_model`), congeladas.
 # POR QUE ESTA LISTA EXISTE
-DELETE /api/admin/accounting/banks/{bank_id}
 DELETE /api/admin/blacklist/{blacklist_id}
 DELETE /{full_path:path}
-GET /api/admin/accounting/balance-check
-GET /api/admin/accounting/banks/{bank_id}/ledger
 GET /api/admin/accounting/export
-GET /api/admin/accounting/operations
-GET /api/admin/accounting/rates
-GET /api/admin/accounting/rates/latest
-GET /api/admin/accounting/report
-GET /api/admin/accounting/usdt-ledger
-GET /api/admin/accounting/v2/audit-log
-GET /api/admin/accounting/v2/executive-report
-GET /api/admin/accounting/v2/p2p-sales
-GET /api/admin/accounting/v2/usdt-inventory-summary
-GET /api/admin/accounting/v2/usdt-lots
 GET /api/admin/bcv-rates
 GET /api/admin/bcv-rates/history
 GET /api/admin/blacklist
@@ -90,14 +77,6 @@ PATCH /api/admin/envios/origenes/{cep}
 PATCH /api/admin/envios/transportistas/{transportista_id}
 PATCH /api/admin/envios/transportistas/{transportista_id}/agencias/{codigo}
 PATCH /{full_path:path}
-POST /api/admin/accounting/banks
-POST /api/admin/accounting/banks/ledger/manual
-POST /api/admin/accounting/operations
-POST /api/admin/accounting/rates
-POST /api/admin/accounting/v2/bootstrap-indexes
-POST /api/admin/accounting/v2/p2p-sales
-POST /api/admin/accounting/v2/usdt-lots
-POST /api/admin/accounting/v2/webhook-conciliate
 POST /api/admin/bcv-rates/refresh
 POST /api/admin/blacklist
 POST /api/admin/btc/marcar-enviado
