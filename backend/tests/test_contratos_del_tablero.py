@@ -412,3 +412,22 @@ def test_LAS_DOS_RUTAS_VIEJAS_DE_OPERACIONES_YA_NO_DEVUELVEN_EL_DOCUMENTO_ENTERO
         for adentro in ('"_id"', "notas_internas", "no mostrar", "ipn_crudo", "beneficiary_id", "b_1"):
             assert adentro not in respuesta.text, f"{adentro} salió en {respuesta.url}"
     assert "FOTO" not in lista.text, "la lista sigue sin las fotos"
+
+
+def test_SIN_PRECIO_DEL_BTC_LA_PANTALLA_NO_DIBUJA_UNA_VISTA_PREVIA_CON_NAN(panel, monkeypatch):
+    """Sin precio del BTC el backend manda `example: {}`, y la pantalla de
+    tasas lo tomaba como un ejemplo de verdad: «NaN Bs» y «$NaN». Se ve en la
+    vista previa del 25 de septiembre de 2026, con el precio bloqueado."""
+    import re
+    from _lote_c_comun import fuente, sin_comentarios
+    from routes import btc_admin
+    c, _ = panel
+
+    async def sin_precio():
+        return None
+    monkeypatch.setattr(btc_admin, "_fetch_current_btc_price", sin_precio)
+    assert c.get("/admin/btc/config").json()["example"] == {}, "el caso que este test cubre dejó de existir"
+    codigo = sin_comentarios(fuente("components/admin/TasasBtcSection.jsx"))
+    (ej,) = re.findall(r"const ej = (.+);", codigo)
+    assert "precio_con_margen" in ej and "null" in ej, \
+        f"la vista previa se dibuja con cualquier `example`, también el vacío: `{ej}`"
