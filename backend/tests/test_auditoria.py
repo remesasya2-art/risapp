@@ -393,11 +393,11 @@ import pathlib                                                      # noqa: E402
 
 # (archivo, función, acción que tiene que asentar)
 ENGANCHES = [
-    ("routes/admin.py", "decide_verification", "kyc.aprobado"),
-    ("routes/admin.py", "decide_verification", "kyc.rechazado"),
-    ("routes/admin.py", "suspend_user", "usuario.suspendido"),
-    ("routes/admin.py", "suspend_user", "usuario.reactivado"),
-    ("routes/admin.py", "update_rates", "config.tasa"),
+    ("routes/admin/kyc.py", "decide_verification", "kyc.aprobado"),
+    ("routes/admin/kyc.py", "decide_verification", "kyc.rechazado"),
+    ("routes/admin/usuarios.py", "suspend_user", "usuario.suspendido"),
+    ("routes/admin/usuarios.py", "suspend_user", "usuario.reactivado"),
+    ("routes/admin/tasas.py", "update_rates", "config.tasa"),
     ("admin_routes.py", "approve_recharge", "dinero.recarga_aprobada"),
     ("admin_routes.py", "approve_recharge", "dinero.recarga_rechazada"),
     ("admin_routes.py", "update_user_balance", "dinero.ajuste_manual"),
@@ -484,7 +484,7 @@ def test_EL_CAMBIO_DE_TASA_GUARDA_EL_VALOR_ANTERIOR():
     Y para tenerlo hay que LEER antes de escribir: después del update, el
     valor viejo ya no está.
     """
-    cuerpo = _cuerpo("routes/admin.py", "update_rates")
+    cuerpo = _cuerpo("routes/admin/tasas.py", "update_rates")
     assert "antes_de_la_tasa" in cuerpo
     posicion_lectura = cuerpo.index("antes_de_la_tasa")
     posicion_escritura = cuerpo.index("rates.update_one")

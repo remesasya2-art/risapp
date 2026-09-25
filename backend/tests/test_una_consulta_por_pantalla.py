@@ -267,8 +267,10 @@ def test_las_dos_colas_de_trabajo_tienen_tope():
     No las acota el historial sino el trabajo sin procesar: chicas mientras el
     equipo esté al día, sin techo el día que no lo esté.
     """
-    from routes import admin as rutas_admin
-    fuente = pathlib.Path(_BACKEND, "routes", "admin.py").read_text()
+    from routes.admin import _comun as rutas_admin
+    # Todo el panel y no sólo los dos archivos donde hoy viven: si una de las
+    # dos funciones se muda de archivo, el test la sigue encontrando.
+    fuente = "\n".join(p.read_text() for p in sorted(pathlib.Path(_BACKEND, "routes", "admin").glob("*.py")))
 
     assert rutas_admin.TOPE_DE_UNA_COLA > 0
     arbol = ast.parse(fuente)
@@ -280,7 +282,7 @@ def test_las_dos_colas_de_trabajo_tienen_tope():
         # pasar este test el día que alguien le cambie el nombre a la función,
         # que es justo cuando hay que mirarlo.
         assert nombre in por_nombre, (
-            f"«{nombre}» ya no existe en routes/admin.py. Si se renombró, "
+            f"«{nombre}» ya no existe en routes/admin/. Si se renombró, "
             f"corregí el nombre acá; si se borró, sacá esta línea a mano.")
         cuerpo = ast.unparse(por_nombre[nombre])
         assert "TOPE_DE_UNA_COLA" in cuerpo, (

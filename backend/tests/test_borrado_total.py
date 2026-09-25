@@ -237,7 +237,7 @@ def test_las_dos_patas_apertura_y_cierre_se_anulan_en_el_patrimonio(base):
 
 def test_las_siete_colecciones_de_plata_estan_en_la_lista():
     """Se llamaba «borrado total» y dejaba siete colecciones de plata vivas."""
-    ruta = os.path.join(_BACKEND, "routes", "admin.py")
+    ruta = os.path.join(_BACKEND, "routes", "admin", "mantenimiento.py")
     fuente = open(ruta, encoding="utf-8").read()
     import ast
     arbol = ast.parse(fuente)
@@ -268,7 +268,7 @@ def test_el_soft_delete_muerto_ya_no_esta():
     """`_hide_from_admin` sobre una colección recién vaciada marcaba cero
     documentos, y hacía creer que el usuario conservaba su historial."""
     import ast
-    ruta = os.path.join(_BACKEND, "routes", "admin.py")
+    ruta = os.path.join(_BACKEND, "routes", "admin", "mantenimiento.py")
     arbol = ast.parse(open(ruta, encoding="utf-8").read())
     for nodo in ast.walk(arbol):
         if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef)) \
@@ -290,7 +290,7 @@ def test_el_borrado_de_contabilidad_SI_conserva_su_soft_delete():
     """Ahí sí sirve: ese borrado no toca `transactions`, así que esconderlas
     del informe es exactamente lo que hay que hacer."""
     import ast
-    ruta = os.path.join(_BACKEND, "routes", "admin.py")
+    ruta = os.path.join(_BACKEND, "routes", "admin", "mantenimiento.py")
     arbol = ast.parse(open(ruta, encoding="utf-8").read())
     for nodo in ast.walk(arbol):
         if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef)) \

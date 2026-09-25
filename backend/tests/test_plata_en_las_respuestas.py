@@ -180,7 +180,7 @@ def test_ninguna_ruta_devuelve_balance_ris_sin_convertirlo():
     }
 
     culpables = []
-    for archivo in sorted(rutas.glob("*.py")):
+    for archivo in sorted(rutas.rglob("*.py")):
         if archivo.name in sabidos:
             continue
         texto = archivo.read_text(encoding="utf-8")

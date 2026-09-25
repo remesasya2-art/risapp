@@ -21,28 +21,28 @@ from test_contratos_de_acceso import _claves                    # noqa: E402
 
 # (archivo, cómo se llama el router ahí, método, camino, contrato)
 ACCIONES = [
-    ("routes/admin.py", "router", "POST", "/change-role", "RolCambiado"),
-    ("routes/admin.py", "router", "POST", "/users/{user_id}/set-agent", "AgenteAsignado"),
-    ("routes/admin.py", "router", "POST", "/reset-password", "ClaveReiniciada"),
-    ("routes/admin.py", "router", "POST", "/withdrawals/process", "AccionDelPanel"),
-    ("routes/admin.py", "router", "POST", "/verifications/decide", "AccionDelPanel"),
-    ("routes/admin.py", "router", "POST", "/verifications/process", "AccionDelPanel"),
-    ("routes/admin.py", "router", "POST", "/users/{user_id}/suspend", "AccionDelPanel"),
-    ("routes/admin.py", "router", "DELETE", "/users/{user_id}", "AccionDelPanel"),
-    ("routes/admin.py", "router", "POST", "/ban", "CuentaVetada"),
+    ("routes/admin/usuarios.py", "router", "POST", "/change-role", "RolCambiado"),
+    ("routes/admin/usuarios.py", "router", "POST", "/users/{user_id}/set-agent", "AgenteAsignado"),
+    ("routes/admin/usuarios.py", "router", "POST", "/reset-password", "ClaveReiniciada"),
+    ("routes/admin/retiros.py", "router", "POST", "/withdrawals/process", "AccionDelPanel"),
+    ("routes/admin/kyc.py", "router", "POST", "/verifications/decide", "AccionDelPanel"),
+    ("routes/admin/kyc.py", "router", "POST", "/verifications/process", "AccionDelPanel"),
+    ("routes/admin/usuarios.py", "router", "POST", "/users/{user_id}/suspend", "AccionDelPanel"),
+    ("routes/admin/usuarios.py", "router", "DELETE", "/users/{user_id}", "AccionDelPanel"),
+    ("routes/admin/usuarios.py", "router", "POST", "/ban", "CuentaVetada"),
     ("routes/kyc_admin.py", "router", "POST", "/{verification_id}/approve", "AccionDelPanel"),
     ("routes/kyc_admin.py", "router", "POST", "/{verification_id}/risk", "RiesgoMarcado"),
     ("routes/kyc_admin.py", "router", "POST", "/{verification_id}/re-review", "AccionDelPanel"),
     ("routes/kyc_admin.py", "router", "POST", "/{verification_id}/reject", "VerificacionRechazada"),
     ("routes/kyc_admin.py", "router", "PATCH", "/{verification_id}/note", "NotaGuardada"),
     ("admin_routes.py", "admin_router", "PUT", "/users/{user_id}/balance", "SaldoAjustado"),
-    ("routes/admin.py", "router", "POST", "/ordenes/tomar", "OrdenTomada"),
-    ("routes/admin.py", "router", "POST", "/ordenes/liberar", "OrdenLiberada"),
-    ("routes/admin.py", "router", "POST", "/ordenes/{transaction_id}/aprobar-con-diferencia", "EstadoCambiado"),
-    ("routes/admin.py", "router", "POST", "/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo",
+    ("routes/admin/recargas_ves.py", "router", "POST", "/ordenes/tomar", "OrdenTomada"),
+    ("routes/admin/recargas_ves.py", "router", "POST", "/ordenes/liberar", "OrdenLiberada"),
+    ("routes/admin/pagos_incompletos.py", "router", "POST", "/ordenes/{transaction_id}/aprobar-con-diferencia", "EstadoCambiado"),
+    ("routes/admin/pagos_incompletos.py", "router", "POST", "/ordenes/{transaction_id}/rechazar-y-reembolsar-saldo",
      "OrdenRechazadaYReembolsada"),
-    ("routes/admin.py", "router", "POST", "/recharges/ves/process/{transaction_id}", "RecargaProcesada"),
-    ("routes/admin.py", "router", "POST", "/envios-reais/{transaction_id}/verificar", "EstadoCambiado"),
+    ("routes/admin/recargas_ves.py", "router", "POST", "/recharges/ves/process/{transaction_id}", "RecargaProcesada"),
+    ("routes/admin/recargas_ves.py", "router", "POST", "/envios-reais/{transaction_id}/verificar", "EstadoCambiado"),
     ("admin_routes.py", "admin_router", "POST", "/recharges/approve", "EstadoCambiado"),
     ("routes/credits_admin.py", "router", "POST", "/manual-credit", "CreditoManual"),
 ]
@@ -153,7 +153,7 @@ def _campos(anotacion):
 
 @pytest.mark.parametrize("camino", sorted(LO_QUE_LEE_EL_PANEL))
 def test_EL_CONTRATO_TIENE_TODO_LO_QUE_EL_PANEL_LEE(camino):
-    contrato = _ruta("routes/admin.py", "router", "GET", camino).response_model
+    contrato = _ruta("routes/admin/usuarios.py", "router", "GET", camino).response_model
     for parte, lee in LO_QUE_LEE_EL_PANEL[camino].items():
         faltan = lee - _campos(contrato.model_fields[parte].annotation)
         assert not faltan, f"{camino}: el panel lee {parte}.{sorted(faltan)} y el contrato no los deja pasar"
@@ -299,7 +299,7 @@ def test_LOS_TOTALES_DE_LA_FICHA_SE_SUMAN_CON_DECIMAL128_DE_VERDAD():
                  "amount_ris": Decimal128("40.00"), "amount_ves": Decimal128("4400.00")},
             ])
 
-        from routes import admin
+        from routes.admin import usuarios as admin
         admin.db = Base()
         r = asyncio.run(admin.get_user_complete_history("u", admin=None))
         print(r["stats"]["total_recharged_ris"], r["stats"]["total_withdrawn_ris"], r["stats"]["total_ves_sent"])
@@ -327,7 +327,7 @@ def cola(panel):
     import asyncio
     from datetime import datetime, timezone
     from services.money import to_decimal128
-    from routes import admin as rutas_admin
+    from routes.admin import retiros as rutas_admin
     base = rutas_admin.db    # la misma base que sembró `panel`
     t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
 
@@ -353,7 +353,7 @@ def test_LA_COLA_DE_PAGOS_SALE_IGUAL_QUE_LA_ARMA_EL_SERVICIO(cola):
     ruta es la del servicio, salvo lo que sobra del beneficiario."""
     import asyncio
     from fastapi.encoders import jsonable_encoder
-    from routes import admin as rutas_admin
+    from routes.admin import retiros as rutas_admin
     from services import retiros
     r = cola.get("/api/admin/withdrawals/all")
     assert r.status_code == 200, r.text
@@ -508,7 +508,7 @@ def ordenes(panel):
     """Un retiro a Venezuela y una recarga en bolívares, esperando."""
     import asyncio
     from datetime import datetime, timezone
-    from routes import admin as rutas_admin
+    from routes.admin import recargas_ves as rutas_admin
     from services.money import to_decimal128
     base = rutas_admin.db
     t0 = datetime(2026, 9, 20, tzinfo=timezone.utc)
@@ -534,7 +534,7 @@ def _jefe():
 
 def test_LAS_ORDENES_POR_PROCESAR_SALEN_IGUAL_QUE_LAS_ARMA_LA_RUTA(ordenes):
     import asyncio
-    from routes import admin as rutas_admin
+    from routes.admin import recargas_ves as rutas_admin
     r = ordenes.get("/api/admin/ordenes/pendientes")
     _igual_a_llamarla_directo(r, asyncio.run(rutas_admin.get_ordenes_pendientes(admin=_jefe())))
     assert {o["orden_id"] for o in r.json()["ordenes"]} == {"tx_o1", "tx_o2"}
@@ -543,18 +543,18 @@ def test_LAS_ORDENES_POR_PROCESAR_SALEN_IGUAL_QUE_LAS_ARMA_LA_RUTA(ordenes):
 
 def test_LA_REVISION_DE_PAGO_Y_LOS_BANCOS_SALEN_IGUAL_QUE_LOS_ARMA_LA_RUTA(ordenes):
     import asyncio
-    from routes import admin as rutas_admin
+    from routes.admin import lotes, pagos_incompletos
     _igual_a_llamarla_directo(ordenes.get("/api/admin/ordenes/revision-pago"),
-                              asyncio.run(rutas_admin.get_ordenes_revision_pago(admin=_jefe())))
+                              asyncio.run(pagos_incompletos.get_ordenes_revision_pago(admin=_jefe())))
     _igual_a_llamarla_directo(ordenes.get("/api/admin/ordenes/bancos-para-pagar"),
-                              asyncio.run(rutas_admin.bancos_para_pagar(admin=_jefe())))
+                              asyncio.run(lotes.bancos_para_pagar(admin=_jefe())))
 
 
 def test_UN_LOTE_SE_ARMA_SE_LISTA_SE_BAJA_Y_SE_CANCELA_SIN_PERDER_NADA(ordenes):
     """El ciclo del lote por HTTP. Cada lectura, igual a su servicio; armarlo
     no devuelve las órdenes con sus beneficiarios (ya están en el archivo)."""
     import asyncio
-    from routes import admin as rutas_admin
+    from routes.admin import lotes as rutas_admin
     from services import comprobantes_del_lote, lotes_de_pago
     base = rutas_admin.db
     r = ordenes.post("/api/admin/lotes", json={"orden_ids": ["tx_o1"], "banco_pagador": "0102"})
@@ -624,7 +624,7 @@ def _sin_reloj(pagina):
 def test_LA_COLA_DE_RECARGAS_EN_BOLIVARES_SALE_IGUAL_QUE_LA_ARMA_LA_RUTA(ordenes):
     import asyncio
     from fastapi.encoders import jsonable_encoder
-    from routes import admin as rutas_admin
+    from routes.admin import recargas_ves as rutas_admin
     from services import json_de_mongo
     json_de_mongo.ensenarle_decimal128_a_fastapi()
     r = ordenes.get("/api/admin/recharges/ves")
@@ -639,7 +639,7 @@ def test_LA_COLA_DE_RECARGAS_EN_BOLIVARES_SALE_IGUAL_QUE_LA_ARMA_LA_RUTA(ordenes
 
 def test_EL_CONTROL_DE_REFERENCIA_CONTESTA_IGUAL_CON_Y_SIN_COINCIDENCIAS(ordenes):
     import asyncio
-    from routes import admin as rutas_admin
+    from routes.admin import recargas_ves as rutas_admin
     for digitos in ("12", "345"):
         _igual_a_llamarla_directo(
             ordenes.get("/api/admin/recharges/ves/check-reference", params={"digits": digitos}),

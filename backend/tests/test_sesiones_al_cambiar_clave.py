@@ -48,7 +48,7 @@ mongomock_motor = pytest.importorskip(
     reason="mongomock-motor no está instalado: es de test y no va en producción",
 )
 
-from conftest import usar_base                                      # noqa: E402
+from conftest import los_py_de, usar_base                                      # noqa: E402
 from services import sesiones                                       # noqa: E402
 
 
@@ -235,7 +235,7 @@ def test_un_authorization_que_no_es_bearer_no_se_toma_como_token():
 CAMINOS = [
     ("routes/auth.py", "change_password", True),
     ("routes/recovery.py", "reset_password", False),
-    ("routes/admin.py", "admin_reset_password", False),
+    ("routes/admin/usuarios.py", "admin_reset_password", False),
 ]
 
 
@@ -295,7 +295,7 @@ def test_NINGUNA_RUTA_NUEVA_CAMBIA_UNA_CONTRASENA_SIN_CERRAR_SESIONES():
     huerfanas = []
     for carpeta in ("routes", "services"):
         raiz = os.path.join(_BACKEND, carpeta)
-        for archivo in sorted(os.listdir(raiz)):
+        for archivo in los_py_de(raiz):
             if not archivo.endswith(".py"):
                 continue
             rel = f"{carpeta}/{archivo}"
@@ -334,7 +334,7 @@ def test_el_barrido_encuentra_algo():
     encontradas = 0
     for carpeta in ("routes", "services"):
         raiz = os.path.join(_BACKEND, carpeta)
-        for archivo in sorted(os.listdir(raiz)):
+        for archivo in los_py_de(raiz):
             if not archivo.endswith(".py"):
                 continue
             texto = open(os.path.join(raiz, archivo), encoding="utf-8").read()

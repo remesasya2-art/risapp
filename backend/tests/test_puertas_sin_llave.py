@@ -35,7 +35,7 @@ sys.path.insert(0, _BACKEND)
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "ris_test")
 
-from conftest import usar_base                                      # noqa: E402,F401
+from conftest import los_py_de, usar_base                                      # noqa: E402,F401
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -252,7 +252,7 @@ def test_CADA_TOPE_CUENTA_APARTE():
     import re
     alcances = {}
     rutas = os.path.join(_BACKEND, "routes")
-    for archivo in sorted(os.listdir(rutas)):
+    for archivo in los_py_de(rutas):
         if not archivo.endswith(".py"):
             continue
         texto = open(os.path.join(rutas, archivo), encoding="utf-8").read()
@@ -270,7 +270,7 @@ def test_ninguna_regla_es_tan_alta_que_no_frene_nada():
     flojas = []
     por_hora = {"second": 3600, "minute": 60, "minutes": 60, "hour": 1, "hours": 1,
                 "day": 1 / 24, "15minutes": 4}
-    for archivo in sorted(os.listdir(rutas)):
+    for archivo in los_py_de(rutas):
         if not archivo.endswith(".py"):
             continue
         texto = open(os.path.join(rutas, archivo), encoding="utf-8").read()

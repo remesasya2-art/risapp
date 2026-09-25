@@ -109,7 +109,11 @@ def test_LAS_LINEAS_DE_LOS_BANCOS_QUE_ESCRIBE_LA_APP_ESTAN_EN_EL_CONTRATO():
     from models.panel_contabilidad import LineaDelBanco
     raiz = pathlib.Path(__file__).resolve().parent.parent
     claves = set()
-    for archivo in ("routes/accounting.py", "routes/gestor_pix.py", "routes/admin.py", "routes/payments_card.py"):
+    # El panel son varios archivos desde que `routes/admin.py` se dividió: se
+    # leen todos, no el que hoy escribe en el libro, para que el que lo haga
+    # mañana tampoco quede afuera.
+    panel = [f"routes/admin/{p.name}" for p in sorted((raiz / "routes" / "admin").glob("*.py"))]
+    for archivo in ("routes/accounting.py", "routes/gestor_pix.py", *panel, "routes/payments_card.py"):
         for n in ast.walk(ast.parse((raiz / archivo).read_text("utf-8"))):
             if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "insert_one" \
                     and getattr(getattr(n.func, "value", None), "attr", "") == "bank_ledger" \

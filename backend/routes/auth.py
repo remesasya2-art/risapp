@@ -443,7 +443,7 @@ async def login_with_password(request: Request, response: Response, body: LoginW
         #
         #     Acá se miraba SOLO `status == "suspended"`, y el botón de banear
         #     del panel no escribe ese campo: escribe `is_banned`
-        #     (`/admin/ban`, en routes/admin.py). O sea que banear no cerraba
+        #     (`/admin/ban`, en routes/admin/usuarios.py). O sea que banear no cerraba
         #     esta puerta.
         #
         #     Comprobado corriéndolo antes de tocar nada: una cuenta con

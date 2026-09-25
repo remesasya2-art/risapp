@@ -953,7 +953,10 @@ def test_los_tipos_de_movimiento_no_chocan_con_los_de_remesas():
     negocios."""
     assert cobros.MOVIMIENTO_COBRO not in ("pago_envio", "envio_ves", "envio_reais")
     assert cobros.MOVIMIENTO_REEMBOLSO not in ("refund_envio", "refund_envio_ves")
-    for archivo in ("routes/admin.py", "routes/transactions.py"):
+    # Todo el panel, no el archivo donde hoy se mueve la plata: un nombre
+    # prohibido tiene que saltar esté donde esté.
+    panel = sorted(f"routes/admin/{n}" for n in os.listdir(os.path.join(_BACKEND, "routes", "admin")) if n.endswith(".py"))
+    for archivo in (*panel, "routes/transactions.py"):
         fuente = open(os.path.join(_BACKEND, archivo), encoding="utf-8").read()
         assert cobros.MOVIMIENTO_COBRO not in fuente
         assert cobros.MOVIMIENTO_REEMBOLSO not in fuente

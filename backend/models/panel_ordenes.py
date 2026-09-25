@@ -5,7 +5,7 @@ lotes de pago y de sus comprobantes.
 Segunda tanda de los contratos del panel (la primera, sobre los clientes, en
 `models/panel_usuarios.py`).
 
-Casi todo se arma campo por campo en `routes/admin.py` y en los servicios de
+Casi todo se arma campo por campo en `routes/admin/` y en los servicios de
 lotes y comprobantes. Los contratos fijan esos campos: el día que alguien
 agregue «un dato más» a una orden, no sale solo.
 

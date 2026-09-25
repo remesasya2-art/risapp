@@ -138,7 +138,7 @@ def test_los_grupos_suman_el_total(base):
 def test_la_ruta_devuelve_a_todos_incluidos_los_vetados(base):
     async def cuerpo():
         await _once_cuentas(base)
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         r = await ra.get_all_users(admin=None)
         assert len(r["users"]) == 11
         por_id = {u["user_id"]: u for u in r["users"]}
@@ -153,7 +153,7 @@ def test_el_resumen_viaja_con_la_lista(base):
     Es exactamente lo que pasaba entre la tarjeta y la tabla."""
     async def cuerpo():
         await _once_cuentas(base)
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         r = await ra.get_all_users(admin=None)
         assert r["resumen"]["total"] == len(r["users"])
     corre(cuerpo())
@@ -164,7 +164,7 @@ def test_la_tarjeta_del_resumen_cuenta_lo_mismo_que_la_tabla(base):
     la tabla. Antes la tarjeta decía 10 y la tabla mostraba 9."""
     async def cuerpo():
         await _once_cuentas(base)
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         from services import pendientes
         r = await ra.get_all_users(admin=None)
         assert await pendientes.total_de_usuarios() == r["resumen"][estado.ACTIVA]
@@ -186,7 +186,7 @@ def test_ninguna_llave_se_coló_con_los_dos_campos_nuevos(base):
             "password_hash": "$2b$12$secreto", "two_factor_secret": "JBSWY3DPEHPK3PXP",
             "pin_hash": "$2b$12$pin", "webauthn_credentials": [{"public_key": "AAA"}],
         })
-        from routes import admin as ra
+        from routes.admin import usuarios as ra
         r = await ra.get_all_users(admin=None)
         crudo = repr(r)
         for prohibido in ("secreto", "JBSWY3DPEHPK3PXP", "$2b$12$pin", "public_key"):

@@ -46,7 +46,7 @@ mongomock_motor = pytest.importorskip(
     reason="mongomock-motor no está instalado: es de test y no va en producción")
 pytest.importorskip("cryptography", reason="`cryptography` no está instalado")
 
-from conftest import usar_base                                      # noqa: E402
+from conftest import los_py_de, usar_base                                      # noqa: E402
 from services import cofre                                          # noqa: E402
 
 
@@ -405,7 +405,7 @@ def test_abrir_varios_deja_el_resto_del_documento_intacto(cerrado):
 PUNTOS = [
     ("routes/misc.py", "guardar"),          # el envío del KYC
     ("routes/kyc_admin.py", "abrir"),       # el panel de revisión
-    ("routes/admin.py", "abrir_varios"),    # la ficha del usuario
+    ("routes/admin/usuarios.py", "abrir_varios"),    # la ficha del usuario
     # La ficha del cliente. Estaba en `routes/google_drive.py`, que subía el
     # PDF a Google Drive; ese camino se quitó y ahora la ficha se descarga
     # desde el servidor. El cofre sigue en el medio: si las imágenes
@@ -477,7 +477,7 @@ def test_NINGUNA_RUTA_LEE_UN_DOCUMENTO_SIN_ABRIR_EL_COFRE():
     huerfanos = []
     for carpeta in ("routes", "services"):
         raiz = os.path.join(_BACKEND, carpeta)
-        for archivo in sorted(os.listdir(raiz)):
+        for archivo in los_py_de(raiz):
             if not archivo.endswith(".py"):
                 continue
             rel = f"{carpeta}/{archivo}"

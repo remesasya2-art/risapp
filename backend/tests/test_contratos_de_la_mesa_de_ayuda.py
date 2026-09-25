@@ -257,7 +257,7 @@ def test_LAS_ACCIONES_DEL_ASESOR_POR_HTTP(mesa):
 # La bandeja vieja (pedidos de ayuda sin cuenta) y las calificaciones
 # ══════════════════════════════════════════════════════════════════════════
 
-A = "routes/admin.py"
+A = "routes/admin/soporte.py"
 VIEJAS = [
     ("GET", "/support-requests", "SolicitudesDeAyuda"),
     ("POST", "/support-requests/{request_id}/resolve", "SolicitudResuelta"),
@@ -301,7 +301,7 @@ def test_LO_QUE_LEEN_LAS_PESTANAS_VIEJAS_ESTA_EN_SU_CONTRATO():
 @pytest.fixture
 def bandeja_vieja():
     from _lote_c_comun import SUPER, app_con
-    from routes import admin as rutas_admin
+    from routes.admin import soporte as rutas_admin
     from routes import dependencies as deps
     c, base = app_con(rutas_admin.router, deps.get_crm_user, SUPER, "bandeja_vieja")
     c.app.dependency_overrides[deps.get_super_admin] = lambda: SUPER
@@ -321,7 +321,7 @@ def bandeja_vieja():
 
 def test_LA_BANDEJA_VIEJA_SIN_LAS_RESPUESTAS_NI_LOS_IDENTIFICADORES(bandeja_vieja):
     from _lote_c_comun import SUPER
-    from routes import admin as rutas_admin
+    from routes.admin import soporte as rutas_admin
     c = bandeja_vieja
     r = c.get("/admin/support-requests")
     directo = ya(rutas_admin.get_support_requests(admin=SUPER))
@@ -347,7 +347,7 @@ def test_LAS_ACCIONES_DE_LA_BANDEJA_VIEJA_POR_HTTP(bandeja_vieja):
 
 def test_LAS_CALIFICACIONES_SON_LAS_DE_SIEMPRE(bandeja_vieja):
     from _lote_c_comun import SUPER
-    from routes import admin as rutas_admin
+    from routes.admin import soporte as rutas_admin
     r = bandeja_vieja.get("/admin/agent-ratings")
     _igual_a_llamarla_directo(r, ya(rutas_admin.get_agent_ratings(admin=SUPER)))
     (carla,) = r.json()["agents"]

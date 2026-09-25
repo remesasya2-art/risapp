@@ -61,7 +61,7 @@ CONVERSORES = frozenset({
 })
 
 _FUENTES = sorted(
-    p for p in (list(_BACKEND.glob("routes/*.py"))
+    p for p in (list(_BACKEND.glob("routes/**/*.py"))
                 + list(_BACKEND.glob("services/*.py"))
                 + [_BACKEND / "admin_routes.py", _BACKEND / "server.py"])
     if p.is_file())

@@ -893,7 +893,7 @@ def test_la_cotizacion_inversa_no_toca_ningun_saldo():
 def test_rechazar_un_comprobante_EXIGE_un_motivo_escrito():
     """Sin motivo, el cliente recibe un «no» sin saber qué corregir y termina
     en soporte."""
-    cuerpo = _cuerpo("verificar_pago_en_bolivares", "routes/admin.py")
+    cuerpo = _cuerpo("verificar_pago_en_bolivares", "routes/admin/recargas_ves.py")
     assert "if not motivo:" in cuerpo
 
 

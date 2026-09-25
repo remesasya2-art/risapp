@@ -257,7 +257,7 @@ def test_NO_SALE_NADA_QUE_NO_ESTE_DECLARADO(base):
 
 
 def test_el_contrato_de_la_ruta_es_por_lista_de_lo_permitido():
-    fuente = (_BACKEND / "routes" / "admin.py").read_text(encoding="utf-8")
+    fuente = (_BACKEND / "routes" / "admin" / "reportes.py").read_text(encoding="utf-8")
     assert "response_model=LaHojaDeMercadoPago" in fuente
 
 
@@ -342,7 +342,7 @@ def test_LA_VE_UN_ADMINISTRADOR_Y_NO_SOLO_EL_SUPER():
     ficha = panel[i:panel.index("\n", i)]
     assert "superAdminOnly" not in ficha
 
-    ruta = (_BACKEND / "routes" / "admin.py").read_text(encoding="utf-8")
+    ruta = (_BACKEND / "routes" / "admin" / "reportes.py").read_text(encoding="utf-8")
     j = ruta.index('@router.get("/hoja-mercadopago"')
     cuerpo = ruta[j:ruta.index('"""', ruta.index('"""', j) + 3)]
     assert "Depends(get_admin_user)" in cuerpo

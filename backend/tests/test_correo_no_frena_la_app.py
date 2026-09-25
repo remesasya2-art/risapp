@@ -37,6 +37,8 @@ import pytest
 _BACKEND = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _BACKEND)
 
+from conftest import los_py_de                                       # noqa: E402
+
 from services import correo               # noqa: E402
 
 
@@ -287,7 +289,7 @@ def test_nadie_llama_a_resend_por_su_cuenta():
     culpables = []
     for carpeta in ("routes", "services"):
         raiz = os.path.join(_BACKEND, carpeta)
-        for nombre in sorted(os.listdir(raiz)):
+        for nombre in los_py_de(raiz):
             if not nombre.endswith(".py") or nombre == "correo.py":
                 continue
             with open(os.path.join(raiz, nombre), encoding="utf-8") as f:

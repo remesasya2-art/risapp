@@ -162,6 +162,13 @@ Están explicadas en el código, con el motivo al lado. En resumen:
 - **Nunca «cruce de frontera»**: se dice «traslado transfronterizo». Es una
   convención escrita, sin test que la vigile.
 - **Configurar nunca puede requerir editar código en GitHub.**
+- **Ningún archivo de más de 800 líneas; si crece más, se divide.** Por tema,
+  moviendo el código tal cual, como se hizo con `routes/admin.py` (hoy
+  `routes/admin/`). Lo vigila `tests/test_archivos_de_hasta_800_lineas.py`,
+  sobre `backend/` y `frontend/src/`. Los 43 archivos que ya pasaban el día que
+  se escribió la regla están congelados en `tests/archivos_largos.txt`: no
+  pueden crecer, y esa lista sólo se achica — nunca se le agrega un archivo
+  para que el test pase.
 
 ## Los comentarios del código
 

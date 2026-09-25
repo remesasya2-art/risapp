@@ -265,7 +265,7 @@ def test_un_cliente_no_puede_pedir_los_pendientes(con_trabajo):
     """La ruta no pasa por los guardas con permiso —no tiene UN permiso: es un
     resumen de nueve secciones—, así que la puerta está adentro y se prueba."""
     from fastapi import HTTPException
-    from routes import admin
+    from routes.admin import pendientes as admin
 
     with pytest.raises(HTTPException) as e:
         corre(admin.get_pendientes(quien("user")))
@@ -273,7 +273,7 @@ def test_un_cliente_no_puede_pedir_los_pendientes(con_trabajo):
 
 
 def test_la_ruta_devuelve_los_contadores_y_los_usuarios(con_trabajo):
-    from routes import admin
+    from routes.admin import pendientes as admin
     corre(con_trabajo.users.insert_many(
         [{"user_id": f"u{i}", "role": "user"} for i in range(3)]))
 
@@ -284,7 +284,7 @@ def test_la_ruta_devuelve_los_contadores_y_los_usuarios(con_trabajo):
 
 
 def test_la_ruta_le_da_a_cada_uno_lo_suyo(con_trabajo):
-    from routes import admin
+    from routes.admin import pendientes as admin
     r = corre(admin.get_pendientes(quien("agent", "support.view")))
     assert set(r["pendientes"]) == {"support"}
 

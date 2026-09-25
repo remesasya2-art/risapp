@@ -138,7 +138,7 @@ def test_el_panel_del_super_admin_muestra_el_numero_de_caso():
     caso = _caso_calificado(cliente, actual)
 
     async def revisar():
-        from routes.admin import get_agent_ratings
+        from routes.admin.soporte import get_agent_ratings
         salida = await get_agent_ratings(admin=ASESOR)
         fila = salida["agents"][0]["ratings"][0]
         assert fila["case_code"] == caso["numero"], (
@@ -165,7 +165,7 @@ def test_las_calificaciones_ya_guardadas_no_se_quedan_sin_referencia():
             "agent_id": "s_beto", "agent_name": "Beto Asesor",
             "stars": 4, "comment": "", "created_at": datetime.now(timezone.utc),
         })
-        from routes.admin import get_agent_ratings
+        from routes.admin.soporte import get_agent_ratings
         salida = await get_agent_ratings(admin=ASESOR)
         fila = salida["agents"][0]["ratings"][0]
         assert fila["case_code"] == "caso_de_antes"

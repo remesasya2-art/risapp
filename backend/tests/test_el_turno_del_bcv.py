@@ -175,7 +175,7 @@ def test_EL_RELOJ_PIDE_EL_TURNO_ANTES_DE_RASPAR():
 def test_EL_BOTON_DEL_PANEL_PIDE_EL_MISMO_TURNO():
     """Si pidiera otro, el botón y el reloj podrían raspar a la vez — que es la
     carrera que ya existe hoy, con un solo proceso."""
-    fuente = open(os.path.join(_BACKEND, "routes", "admin.py"),
+    fuente = open(os.path.join(_BACKEND, "routes", "admin", "tasas.py"),
                   encoding="utf-8").read()
     cuerpo = fuente.split("async def refresh_bcv_rates", 1)[1].split("@router")[0]
     assert "turnos.me_toca(db, TURNO" in cuerpo, (
