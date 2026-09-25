@@ -19,7 +19,9 @@ QUE PASA SIN REPLICAS
     El camino CON transacciones no se ve con `mongomock`, que no las tiene.
     Lo prueba el trabajo «Motor contra un Mongo de verdad» de CI.
 """
+import asyncio
 import logging
+import random
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -109,40 +111,52 @@ async def abandonar(session) -> None:
         await session.abort_transaction()
 
 
-# Cuántas veces se intenta una transacción que choca al confirmar.
-INTENTOS = 5
+# Cuántas veces se intenta una transacción que choca con otra.
+INTENTOS = 20
 
 
 async def en_una_transaccion(trabajo):
     """Corre `trabajo(session)` adentro de una transacción, o `trabajo(None)`
     si el Mongo no tiene.
 
-    `with_transaction` del driver, y no `sesion_atomica`, porque este es el
-    camino de los movimientos de saldo del cliente: dos pagos al mismo
-    usuario al mismo tiempo chocan (el segundo recibe un «WriteConflict») y
-    el driver reintenta solo el trabajo entero. Con `sesion_atomica` ese
-    choque sería un error para el cliente.
+    Es el camino de los movimientos de saldo del cliente. Dos pagos al mismo
+    usuario al mismo tiempo chocan: el segundo recibe un «WriteConflict»,
+    marcado por el propio Mongo como pasajero, y acá se reintenta el trabajo
+    entero. Sin el reintento, ese choque sería un error para el cliente.
 
     `trabajo` puede correr MÁS DE UNA VEZ: todo lo que escriba tiene que ir
     con la sesión que recibe, para que el intento que se descarta no deje
     nada escrito.
+
+    POR QUE UN REINTENTO PROPIO Y NO `with_transaction` DEL DRIVER
+
+        Se usaba el del driver, y se vieron dos problemas contra un Mongo de
+        verdad. Uno: en motor 3.3 no reintenta lo que choca al CONFIRMAR —la
+        confirmación ocurre al salir de su propio bloque y su reintento no
+        llega a correr—; el primer asiento en un libro que todavía no existía
+        chocaba así con la creación de sus índices y el movimiento terminaba
+        en error. Dos: reintenta durante 120 SEGUNDOS, y un choque que se
+        repite dejaba un pedido HTTP colgado dos minutos; con otro reintento
+        encima, diez. Acá se cuentan intentos, no segundos.
+
+        Sólo se reintenta lo que el Mongo marca como pasajero. Nunca una
+        confirmación de resultado incierto («UnknownTransactionCommitResult»):
+        pudo haberse aplicado, y repetir el trabajo entero la aplicaría dos
+        veces.
     """
     if not await _detectar():
         return await trabajo(None)
     for intento in range(INTENTOS):
-        try:
-            async with await mongo_client.start_session() as session:
-                return await session.with_transaction(trabajo)
-        except PyMongoError as error:
-            # POR QUE ESTE REINTENTO, SI `with_transaction` YA REINTENTA
-            #
-            #   Reintenta lo que falla ADENTRO del trabajo, pero no lo que falla
-            #   al CONFIRMAR: en motor 3.3 la confirmación ocurre al salir de su
-            #   propio bloque y el reintento que viene después no llega a
-            #   correr. Se vio contra un Mongo de verdad: el primer asiento en
-            #   un libro que todavía no existía chocó al confirmar con la
-            #   creación de sus índices —«WriteConflict», marcado como
-            #   pasajero— y el movimiento terminaba en error.
-            #   Sólo se reintenta lo que el propio Mongo marca como pasajero.
-            if not error.has_error_label("TransientTransactionError") or intento == INTENTOS - 1:
-                raise
+        async with await mongo_client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    resultado = await trabajo(session)
+                return resultado
+            except PyMongoError as error:
+                pasajero = (error.has_error_label("TransientTransactionError")
+                            and not error.has_error_label("UnknownTransactionCommitResult"))
+                if not pasajero or intento == INTENTOS - 1:
+                    raise
+        # Una espera corta y al azar, para que dos que chocaron no vuelvan a
+        # chocar en el mismo instante.
+        await asyncio.sleep(random.uniform(0, 0.005 * (intento + 1)))
