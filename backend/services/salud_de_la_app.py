@@ -92,8 +92,8 @@ async def revisar(db) -> dict:
     except Exception as e:
         comprobaciones.append({"nombre": "base", "ok": False, "detalle": f"Mongo no responde: {type(e).__name__}: {e}", "grave": True})
         return {"ok": False, "revisado_en": ahora.isoformat(), "comprobaciones": comprobaciones}
-    for nombre, mirar in (("cpf_unico", _cpf_unico), ("transacciones", _transacciones), ("bcv", _bcv),
-                          ("cofre", _cofre), ("contadores", _contadores), ("respaldo", _respaldo)):
+    for nombre, mirar in (("cpf_unico", _cpf_unico), ("transacciones", _transacciones), ("replicas", _replicas),
+                          ("bcv", _bcv), ("cofre", _cofre), ("contadores", _contadores), ("respaldo", _respaldo)):
         try:
             ok, detalle, grave = await mirar(db)
         except Exception as e:
@@ -128,6 +128,61 @@ async def _transacciones(db):
     return (False, "Mongo es de UN solo nodo: la aplicación corre sin transacciones. El motor contable "
                    "escribe en operaciones separadas, y el saldo del cliente y su línea del libro son dos "
                    "escrituras separadas. Hace falta un conjunto de réplicas (replica set)", False)
+
+
+# Cuánto puede ir atrás una copia antes de avisar. Al día, una copia va a
+# menos de un segundo; un minuto quiere decir que no da abasto o que se cortó,
+# y si en ese momento se cae el primario, lo que no alcanzó a copiar se pierde.
+ATRASO_MAXIMO_S = 60
+
+# Los estados de un miembro, dichos para quien lee la tarjeta del panel.
+_ESTADOS = {"STARTUP": "arrancando", "STARTUP2": "copiando los datos por primera vez",
+            "RECOVERING": "recuperándose", "ROLLBACK": "deshaciendo escrituras",
+            "DOWN": "caído", "UNKNOWN": "sin contacto", "REMOVED": "quitado del conjunto"}
+
+
+async def _replicas(db):
+    """Cuántos miembros tiene el conjunto de réplicas, y si están al día.
+
+    POR QUE AVISA
+
+        Tres miembros aguantan que se caiga UNO: los otros dos siguen siendo
+        mayoría y la base sigue escribiendo. Pero una copia caída no se nota
+        —la aplicación funciona igual— y el día que se cae otra, la base deja
+        de escribir sin aviso previo. Esta comprobación es el aviso previo.
+
+    Pregunta con el mismo cliente que decide si hay transacciones: es el que
+    conoce el conjunto entero, no una base en particular.
+    """
+    from services import transacciones
+    if not await transacciones.hay_transacciones():
+        return True, "no aplica: Mongo es de un solo nodo (ver «transacciones»)", False
+    estado = await transacciones.mongo_client.admin.command("replSetGetStatus")
+    miembros = estado.get("members") or []
+    if len(miembros) <= 1:
+        return (True, "un solo miembro: hay transacciones, pero no una copia viva de la base "
+                      "(ver docs/mongo-con-replicas.md)", False)
+    primario = next((m for m in miembros if m.get("stateStr") == "PRIMARY"), None)
+    problemas = []
+    for m in miembros:
+        if m.get("stateStr") == "ARBITER" and m.get("health") == 1:
+            continue                                  # vota y no guarda datos: no hay qué copiar
+        if m.get("health") != 1 or m.get("stateStr") not in ("PRIMARY", "SECONDARY"):
+            problemas.append(f"{m.get('name')} está {_ESTADOS.get(m.get('stateStr'), 'sin responder')}")
+        elif primario is not None and m is not primario:
+            atraso = (primario["optimeDate"] - m["optimeDate"]).total_seconds()
+            if atraso > ATRASO_MAXIMO_S:
+                problemas.append(f"{m.get('name')} va {int(atraso)} s atrás")
+    if not problemas and primario is not None:
+        return True, f"{len(miembros)} miembros: 1 primario y {len(miembros) - 1} al día", False
+    arriba = sum(1 for m in miembros if m.get("health") == 1)
+    margen = arriba - (len(miembros) // 2 + 1)
+    if primario is None:
+        problemas.insert(0, "no hay primario")
+    consecuencia = ("Sin mayoría: la base no puede escribir" if margen < 0 else
+                    "Si se cae uno más, la base deja de escribir" if margen == 0 else
+                    "La base sigue escribiendo")
+    return False, f"{len(miembros)} miembros: {'; '.join(problemas)}. {consecuencia}", False
 
 
 async def _bcv(db):

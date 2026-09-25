@@ -44,7 +44,33 @@ def comprobacion(r, nombre):
     return next(c for c in r["comprobaciones"] if c["nombre"] == nombre)
 
 
-TODAS = {"base", "cpf_unico", "transacciones", "bcv", "cofre", "contadores", "respaldo"}
+TODAS = {"base", "cpf_unico", "transacciones", "replicas", "bcv", "cofre", "contadores", "respaldo"}
+
+AHORA_RS = datetime(2026, 9, 25, 12, 0, 0)
+
+
+def miembro(nombre, estado="SECONDARY", salud=1, atraso_s=0):
+    return {"name": nombre, "stateStr": estado, "health": salud,
+            "optimeDate": AHORA_RS - timedelta(seconds=atraso_s)}
+
+
+class _ClienteConReplicas:
+    """El cliente de Mongo, sólo para `replSetGetStatus`: los miembros que se le
+    den, con su estado. Un conjunto de verdad de tres miembros no se arma en un
+    test, y lo que se prueba es cómo se lee lo que contesta."""
+
+    def __init__(self, *miembros):
+        cliente = self
+
+        class _Admin:
+            async def command(self, nombre, *a, **k):
+                assert nombre == "replSetGetStatus"
+                return {"set": "rs0", "members": list(cliente.miembros)}
+        self.miembros = miembros
+        self.admin = _Admin()
+
+
+TRES_SANOS = (miembro("m1:27017", "PRIMARY"), miembro("m2:27017"), miembro("m3:27017"))
 
 
 def bcv_de_hace(base, horas):
@@ -60,6 +86,7 @@ def todo_sano(base, monkeypatch):
     from services import cofre, transacciones
     ya(base.users.create_index("cpf_number", unique=True, sparse=True, name=NOMBRE_DEL_INDICE))
     monkeypatch.setattr(transacciones, "_SUPPORTS_TRANSACTIONS", True)
+    monkeypatch.setattr(transacciones, "mongo_client", _ClienteConReplicas(*TRES_SANOS))
     bcv_de_hace(base, 2)
     monkeypatch.setenv(cofre.VARIABLE_MODO, "cifrando")
     monkeypatch.setenv(cofre.VARIABLE_LLAVE, cofre.llave_nueva()["llave"])
@@ -256,3 +283,85 @@ def test_sin_respaldo_automatico_reciente_no_es_sana(todo_sano):
     ya(todo_sano.respaldos.delete_many({}))
     c = comprobacion(ya(salud.revisar(todo_sano)), "respaldo")
     assert c["ok"] is False and c["grave"] is False and "todavía" in c["detalle"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Las réplicas: una copia caída no se nota, y la próxima deja la base sin escribir
+# ══════════════════════════════════════════════════════════════════════════
+
+def _replicas(base, monkeypatch, *miembros):
+    from services import transacciones
+    monkeypatch.setattr(transacciones, "mongo_client", _ClienteConReplicas(*miembros))
+    return comprobacion(ya(salud.revisar(base)), "replicas")
+
+
+def test_REPLICAS_TRES_AL_DIA_ES_SANA(todo_sano):
+    c = comprobacion(ya(salud.revisar(todo_sano)), "replicas")
+    assert c["ok"] is True and c["detalle"] == "3 miembros: 1 primario y 2 al día"
+
+
+def test_REPLICAS_UNA_CAIDA_AVISA_QUE_OTRA_MAS_DEJA_LA_BASE_SIN_ESCRIBIR(todo_sano, monkeypatch):
+    """La aplicación sigue funcionando y por eso no se nota: el aviso es lo
+    único que deja reponerla antes de que se caiga la segunda."""
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "PRIMARY"), miembro("m2:27017"),
+                  miembro("m3:27017", "(not reachable/healthy)", salud=0))
+    assert c["ok"] is False and c["grave"] is False
+    assert "m3:27017 está sin responder" in c["detalle"]
+    assert "Si se cae uno más, la base deja de escribir" in c["detalle"]
+    assert ya(salud.revisar(todo_sano))["ok"] is False
+
+
+def test_REPLICAS_DOS_CAIDAS_DICE_QUE_NO_HAY_MAYORIA(todo_sano, monkeypatch):
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "SECONDARY"),
+                  miembro("m2:27017", "DOWN", salud=0), miembro("m3:27017", "DOWN", salud=0))
+    assert c["ok"] is False and "no hay primario" in c["detalle"]
+    assert "Sin mayoría: la base no puede escribir" in c["detalle"]
+
+
+def test_REPLICAS_UNA_COPIA_ATRASADA_AVISA(todo_sano, monkeypatch):
+    """Una copia que se quedó atrás es una copia que, si se cae el primario,
+    pierde lo que no alcanzó a copiar."""
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "PRIMARY"), miembro("m2:27017"),
+                  miembro("m3:27017", atraso_s=salud.ATRASO_MAXIMO_S + 60))
+    assert c["ok"] is False and f"m3:27017 va {salud.ATRASO_MAXIMO_S + 60} s atrás" in c["detalle"]
+    assert "La base sigue escribiendo" in c["detalle"]
+
+
+def test_REPLICAS_UN_ATRASO_DENTRO_DEL_MARGEN_NO_AVISA(todo_sano, monkeypatch):
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "PRIMARY"), miembro("m2:27017"),
+                  miembro("m3:27017", atraso_s=salud.ATRASO_MAXIMO_S))
+    assert c["ok"] is True
+
+
+def test_REPLICAS_LA_COPIA_INICIAL_SE_DICE_EN_CRISTIANO(todo_sano, monkeypatch):
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "PRIMARY"), miembro("m2:27017"),
+                  miembro("m3:27017", "STARTUP2"))
+    assert c["ok"] is False and "m3:27017 está copiando los datos por primera vez" in c["detalle"]
+
+
+def test_REPLICAS_UN_ARBITRO_NO_ES_UNA_COPIA_ATRASADA(todo_sano, monkeypatch):
+    """Un árbitro vota y no guarda datos: no tiene fecha de copia que comparar."""
+    arbitro = {"name": "m3:27017", "stateStr": "ARBITER", "health": 1}
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "PRIMARY"), miembro("m2:27017"), arbitro)
+    assert c["ok"] is True
+
+
+def test_REPLICAS_CON_UN_SOLO_MIEMBRO_ES_SANA_Y_LO_DICE(todo_sano, monkeypatch):
+    """Es como está producción hoy: un estado elegido, no una falla. Marcarlo
+    MAL todo el día sería un aviso que alguien termina silenciando."""
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017", "PRIMARY"))
+    assert c["ok"] is True and "un solo miembro" in c["detalle"] and "copia viva" in c["detalle"]
+
+
+def test_REPLICAS_SIN_CONJUNTO_NO_APLICA(todo_sano, monkeypatch):
+    from services import transacciones
+    monkeypatch.setattr(transacciones, "_SUPPORTS_TRANSACTIONS", False)
+    c = comprobacion(ya(salud.revisar(todo_sano)), "replicas")
+    assert c["ok"] is True and "no aplica" in c["detalle"]
+
+
+def test_REPLICAS_TRES_SANOS_SIN_PRIMARIO_NO_ES_SANA(todo_sano, monkeypatch):
+    """En medio de una elección, o si ninguno puede ganarla, los tres
+    contestan y ninguno es primario: nadie acepta escrituras."""
+    c = _replicas(todo_sano, monkeypatch, miembro("m1:27017"), miembro("m2:27017"), miembro("m3:27017"))
+    assert c["ok"] is False and "no hay primario" in c["detalle"]
