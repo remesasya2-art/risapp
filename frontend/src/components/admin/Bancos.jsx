@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { confirmar } from '../flujo/confirmar.js';
-import { Landmark, Trash2, Plus, RefreshCw } from 'lucide-react';
+import { Landmark, Trash2, Plus, RefreshCw, Eye, EyeOff, CreditCard } from 'lucide-react';
 
 // LA PANTALLA DE BANCOS
 //
@@ -32,6 +32,84 @@ function fmtFecha(d) {
   return dt.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// A QUE CUENTA LE DECIMOS AL CLIENTE QUE TRANSFIERA
+//
+//   Estos datos los ve el cliente en la recarga en bolívares y en el envío a
+//   Brasil pagado en bolívares. Antes estaban escritos en el código de la
+//   pantalla de recarga, que se le sirve a cualquier visitante. Las reglas
+//   —20 dígitos que empiezan por el código del banco, un celular de 11— las
+//   hace cumplir el servidor (`services/bancos.normalizar_cobro`): acá sólo
+//   se escribe y se muestra lo que contesta.
+function EditorDeCobro({ banco, onGuardado, estilos }) {
+  const previo = banco.cobro || {};
+  const [datos, setDatos] = useState({
+    codigo: previo.codigo || '', titular: previo.titular || '', documento: previo.documento || '',
+    numero_cuenta: previo.numero_cuenta || '', tipo_cuenta: previo.tipo_cuenta || 'Corriente',
+    telefono: previo.telefono || '', publicado: !!previo.publicado,
+  });
+  const [guardando, setGuardando] = useState(false);
+  const campo = (k) => (e) => setDatos({ ...datos, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      const res = await api.put(`/admin/accounting/banks/${banco.bank_id}/cobro`, datos);
+      toast.success(res.data?.message || 'Datos guardados');
+      onGuardado();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudieron guardar los datos', { duration: 7000 });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const { input, lbl } = estilos;
+  const caja = (etiqueta, k, extra = {}) => (
+    <div style={{ flex: extra.flex || '1 1 180px' }}>
+      <label style={lbl}>{etiqueta}</label>
+      <input value={datos[k]} onChange={campo(k)} placeholder={extra.placeholder || ''} inputMode={extra.inputMode}
+        maxLength={extra.maxLength} style={{ ...input, width: '100%' }} data-testid={`cobro-${k}`} />
+    </div>
+  );
+
+  return (
+    <div style={{ padding: '14px 12px 16px', backgroundColor: 'var(--en-oscuro-superficie-2, #f9fafb)' }} data-testid="cobro-editor">
+      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--en-oscuro-texto, #111827)', margin: '0 0 4px 0' }}>
+        Datos para que el cliente transfiera a «{banco.name}»
+      </p>
+      <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '0 0 12px 0' }}>
+        Revisalos dos veces: un dígito mal cargado manda la plata de un cliente a otra cuenta.
+      </p>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        {caja('Código del banco', 'codigo', { flex: '0 1 130px', placeholder: '0134', inputMode: 'numeric', maxLength: 4 })}
+        {caja('Titular', 'titular', { flex: '2 1 240px', placeholder: 'Como figura en el banco' })}
+        {caja('Cédula o RIF', 'documento', { placeholder: 'V-12345678' })}
+      </div>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '12px' }}>
+        {caja('Número de cuenta (transferencia)', 'numero_cuenta', { flex: '2 1 260px', placeholder: '20 dígitos', inputMode: 'numeric' })}
+        <div>
+          <label style={lbl}>Tipo de cuenta</label>
+          <select value={datos.tipo_cuenta} onChange={campo('tipo_cuenta')} style={{ ...input, cursor: 'pointer' }} data-testid="cobro-tipo_cuenta">
+            <option value="Corriente">Corriente</option>
+            <option value="Ahorro">Ahorro</option>
+          </select>
+        </div>
+        {caja('Teléfono de Pago Móvil', 'telefono', { placeholder: '04141234567', inputMode: 'tel' })}
+      </div>
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--en-oscuro-texto, #111827)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={datos.publicado} onChange={campo('publicado')} data-testid="cobro-publicado" />
+          Mostrárselo a los clientes para que transfieran acá
+        </label>
+        <button onClick={guardar} disabled={guardando} data-testid="cobro-guardar" style={{
+          padding: '10px 16px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--en-oscuro-acento, #2563eb)',
+          color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', opacity: guardando ? 0.6 : 1,
+        }}>{guardando ? 'Guardando…' : 'Guardar datos'}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Bancos({ onCambio }) {
   const [bancos, setBancos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -39,6 +117,7 @@ export default function Bancos({ onCambio }) {
   const [moneda, setMoneda] = useState('VES');
   const [saldo, setSaldo] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [abierto, setAbierto] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -154,10 +233,16 @@ export default function Bancos({ onCambio }) {
         </div>
         {moneda === 'VES' && (
           <p style={{ fontSize: '12px', color: 'var(--en-oscuro-texto-2, #6b7280)', margin: '10px 0 0 0' }}>
-            Los clientes eligen a qué banco transfirieron de una lista fija de la pantalla de recarga. Este banco recibe esas recargas si su nombre coincide con uno de esa lista.
+            Para que los clientes le transfieran, después de cargarlo tocá «Datos para el cliente» y publicalo.
           </p>
         )}
       </div>
+
+      {!cargando && !bancos.some((b) => b.currency === 'VES' && b.cobro?.publicado) && (
+        <div data-testid="bancos-sin-publicar" style={{ ...card, marginBottom: '16px', borderColor: 'var(--en-oscuro-alerta, #f59e0b)', backgroundColor: 'var(--en-oscuro-alerta-suave, #fffbeb)', color: 'var(--en-oscuro-texto, #92400e)', fontSize: '14px' }}>
+          <strong>Ningún banco se les muestra a los clientes.</strong> Hasta que publiques uno, no pueden recargar en bolívares ni pagar en bolívares un envío a Brasil: no tienen a dónde transferir.
+        </div>
+      )}
 
       {cargando && bancos.length === 0 ? (
         <p style={{ color: 'var(--en-oscuro-texto-2, #6b7280)' }}>Cargando…</p>
@@ -179,7 +264,8 @@ export default function Bancos({ onCambio }) {
             </thead>
             <tbody>
               {bancos.map((b) => (
-                <tr key={b.bank_id} data-testid="banco-fila">
+                <Fragment key={b.bank_id}>
+                <tr data-testid="banco-fila">
                   <td style={td}>
                     <span style={{ fontWeight: 600 }}>{b.name}</span>
                     {b.is_gateway && (
@@ -187,11 +273,26 @@ export default function Bancos({ onCambio }) {
                         Pasarela
                       </span>
                     )}
+                    {b.currency === 'VES' && !b.is_gateway && (
+                      <span data-testid="banco-visible" style={{ marginLeft: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                        backgroundColor: b.cobro?.publicado ? 'var(--en-oscuro-exito-suave, #ecfdf5)' : 'var(--en-oscuro-superficie-2, #f3f4f6)',
+                        color: b.cobro?.publicado ? 'var(--en-oscuro-exito, #047857)' : 'var(--en-oscuro-texto-2, #6b7280)' }}>
+                        {b.cobro?.publicado ? <><Eye size={12} /> Lo ven los clientes</> : <><EyeOff size={12} /> No lo ven los clientes</>}
+                      </span>
+                    )}
                   </td>
                   <td style={td}>{MONEDAS[b.currency]?.etiqueta || b.currency}</td>
                   <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtSaldo(b)}</td>
                   <td style={{ ...td, color: 'var(--en-oscuro-texto-2, #6b7280)' }}>{fmtFecha(b.created_at)}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>
+                  <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {b.currency === 'VES' && !b.is_gateway && (
+                      <button onClick={() => setAbierto(abierto === b.bank_id ? null : b.bank_id)} data-testid="banco-cobro" style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '8px', marginRight: '8px',
+                        border: '1px solid var(--en-oscuro-linea, #e5e7eb)', backgroundColor: 'var(--en-oscuro-superficie, #fff)', color: 'var(--en-oscuro-texto, #374151)', fontWeight: 600, fontSize: '13px', cursor: 'pointer',
+                      }}>
+                        <CreditCard size={14} /> Datos para el cliente
+                      </button>
+                    )}
                     {/* La cuenta de una pasarela la crea la aplicación y la
                         vuelve a necesitar con el próximo cobro: no se ofrece
                         borrarla. El backend lo frena igual. */}
@@ -205,6 +306,14 @@ export default function Bancos({ onCambio }) {
                     )}
                   </td>
                 </tr>
+                {abierto === b.bank_id && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: 0, borderBottom: '1px solid var(--en-oscuro-linea, #f3f4f6)' }}>
+                      <EditorDeCobro banco={b} estilos={{ input, lbl }} onGuardado={() => { setAbierto(null); cambio(); }} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

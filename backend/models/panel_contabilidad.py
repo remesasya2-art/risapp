@@ -41,6 +41,8 @@ def _simple(nombre, campos, **extra):
 
 MensajeDeContabilidad = _simple("MensajeDeContabilidad", ("message",))
 BancoCreado = _simple("BancoCreado", ("message", "bank_id"))
+# Los datos de cobro recién guardados: los mismos campos que lista el panel.
+CobroGuardado = _simple("CobroGuardado", ("message",), cobro=(Optional[Any], None))
 MovimientoManual = _simple("MovimientoManual", ("message", "new_balance"))
 
 BancoDelLibro = _simple("BancoDelLibro", ("bank_id", "name", "currency", "balance", "created_at"))

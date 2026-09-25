@@ -24,7 +24,7 @@ from openpyxl.utils import get_column_letter
 from routes.dependencies import get_super_admin
 from models.user import User
 from models.panel_libro import BancosDeLaContabilidad
-from models.panel_contabilidad import (AlcanzaElSaldo, BancoCreado, LibroDeUnBanco, LibroDeUsdt, MensajeDeContabilidad, MovimientoManual, OperacionRegistrada, OperacionesConUsdt, ReporteDeContabilidad, TasaDeUsdt, TasasDeUsdt)
+from models.panel_contabilidad import (AlcanzaElSaldo, BancoCreado, CobroGuardado, LibroDeUnBanco, LibroDeUsdt, MensajeDeContabilidad, MovimientoManual, OperacionRegistrada, OperacionesConUsdt, ReporteDeContabilidad, TasaDeUsdt, TasasDeUsdt)
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -210,6 +210,48 @@ async def delete_bank(bank_id: str, pedido: Request, admin: User = Depends(get_s
         objetivo_desc=f"{banco.get('name')} ({banco.get('currency')})",
         antes={"name": banco.get("name"), "currency": banco.get("currency")})
     return {"message": "Banco eliminado"}
+
+
+class DatosDeCobro(BaseModel):
+    codigo: str = ""
+    titular: str = ""
+    documento: str = ""
+    numero_cuenta: str = ""
+    tipo_cuenta: str = ""
+    telefono: str = ""
+    publicado: bool = False
+
+
+@router.put("/banks/{bank_id}/cobro", response_model=CobroGuardado, response_model_exclude_unset=True)
+async def guardar_datos_de_cobro(bank_id: str, datos: DatosDeCobro, pedido: Request,
+                                 admin: User = Depends(get_super_admin)):
+    """Los datos para que el cliente transfiera a este banco, y si se le
+    muestran. Ver `services/bancos.normalizar_cobro`."""
+    banco = await db.bank_accounts.find_one({"bank_id": bank_id}, {"_id": 0})
+    if not banco:
+        raise HTTPException(status_code=404, detail="Banco no encontrado")
+    # Sólo bolívares: son los únicos a los que el cliente transfiere a mano.
+    # Una cuenta de pasarela cobra sola; mostrarla sería invitar a pagarle
+    # por fuera del cobro, donde nadie lo registra.
+    if banco.get("currency") != "VES":
+        raise HTTPException(status_code=400, detail="Sólo los bancos en bolívares reciben transferencias de clientes.")
+    if banco.get("is_gateway"):
+        raise HTTPException(status_code=400, detail="La cuenta de una pasarela no se le muestra al cliente.")
+    try:
+        limpio = bancos.normalizar_cobro(datos.model_dump())
+    except bancos.DatosDeCobroInvalidos as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    cobro = {**limpio, "publicado": bool(datos.publicado)}
+    antes = banco.get("cobro")
+    await db.bank_accounts.update_one({"bank_id": bank_id}, {"$set": {"cobro": cobro}})
+    await auditoria.registrar(
+        db, "contabilidad.banco_cobro", quien=admin, request=pedido,
+        objetivo_tipo="banco", objetivo_id=bank_id,
+        objetivo_desc=f"{banco.get('name')} ({banco.get('currency')})",
+        antes=antes, despues=cobro)
+    return {"message": ("Datos guardados. Los clientes ya ven este banco." if cobro["publicado"]
+                        else "Datos guardados. Este banco no se les muestra a los clientes."),
+            "cobro": cobro}
 
 
 @router.get("/banks/{bank_id}/ledger", response_model=LibroDeUnBanco, response_model_exclude_unset=True)
