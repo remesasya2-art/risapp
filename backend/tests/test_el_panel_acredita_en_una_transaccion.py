@@ -105,3 +105,89 @@ def test_APROBAR_UN_ERROR_DEL_LIBRO_ANTES_DE_LLEGAR_A_LA_BASE_TAMBIEN_DESHACE_TO
     with pytest.raises(ValueError):
         corre(_aprobar())
     assert _saldo(base) == Decimal("10.00") and _banco(base) == Decimal("1000.00") and _estado(base) == "pending"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# La devolución de un retiro rechazado
+# ══════════════════════════════════════════════════════════════════════════
+
+def _retiro_pendiente(base, moneda="RIS"):
+    campo = {"RIS": "balance_ris", "USDT": "balance_usdt"}[moneda]
+    corre(base.users.insert_one({"user_id": "u_1", "email": "cliente@ejemplo.test", "name": "Cliente",
+                                 "role": "user", campo: to_decimal128("10.00")}))
+    corre(base.transactions.insert_one({"transaction_id": "tx_ret", "type": "withdrawal", "status": "pending",
+                                        "user_id": "u_1", "amount_input": 40.0, "currency_input": moneda,
+                                        "currency_output": "VES", "amount_output": 4000.0}))
+
+
+def _rechazar():
+    from routes.admin import retiros
+    return retiros.process_withdrawal({"transaction_id": "tx_ret", "action": "reject"}, None, admin=SUPER)
+
+
+def _cuenta(base, campo="balance_ris"):
+    return from_db(corre(base.users.find_one({"user_id": "u_1"})).get(campo))
+
+
+def _estado_del_retiro(base):
+    return corre(base.transactions.find_one({"transaction_id": "tx_ret"}))["status"]
+
+
+def test_RECHAZAR_DEVUELVE_EL_SALDO_DEJA_LA_LINEA_Y_MARCA_EL_RETIRO(base):
+    _retiro_pendiente(base)
+    corre(_rechazar())
+    assert _cuenta(base) == Decimal("50.00") and _estado_del_retiro(base) == "rejected"
+    (linea,) = corre(base.ledger.find({"transaction_id": "tx_ret"}).to_list(5))
+    assert linea["movement_type"] == "refund_envio"
+
+
+def test_RECHAZAR_UN_RETIRO_EN_USDT_DEVUELVE_USDT(base):
+    _retiro_pendiente(base, "USDT")
+    corre(_rechazar())
+    assert _cuenta(base, "balance_usdt") == Decimal("50.00") and _estado_del_retiro(base) == "rejected"
+
+
+@solo_con_transacciones
+def test_RECHAZAR_SI_LA_LINEA_FALLA_NI_DEVOLUCION_NI_ESTADO(base):
+    """Sin transacciones, la plata quedaba devuelta sin su línea."""
+    _retiro_pendiente(base)
+    corre(base.create_collection("ledger", validator=LIBRO_QUE_RECHAZA_TODO))
+    with pytest.raises(Exception):
+        corre(_rechazar())
+    assert _cuenta(base) == Decimal("10.00") and _estado_del_retiro(base) == "pending"
+
+
+@solo_con_transacciones
+def test_RECHAZAR_EN_USDT_SI_LA_LINEA_CRIPTO_FALLA_NI_DEVOLUCION_NI_ESTADO(base):
+    from services import ledger_crypto
+    _retiro_pendiente(base, "USDT")
+    corre(base.create_collection(ledger_crypto.LEDGER_COLLECTION, validator=LIBRO_QUE_RECHAZA_TODO))
+    with pytest.raises(Exception):
+        corre(_rechazar())
+    assert _cuenta(base, "balance_usdt") == Decimal("10.00") and _estado_del_retiro(base) == "pending"
+
+
+@solo_con_transacciones
+def test_RECHAZAR_UN_ERROR_DEL_LIBRO_ANTES_DE_LLEGAR_A_LA_BASE_TAMBIEN_DESHACE_TODO(base, monkeypatch):
+    from services import ledger
+
+    def no_se_puede(*a, **k):
+        raise ValueError("la línea no se pudo armar")
+    monkeypatch.setattr(ledger, "quantize_money", no_se_puede)
+    _retiro_pendiente(base)
+    with pytest.raises(ValueError):
+        corre(_rechazar())
+    assert _cuenta(base) == Decimal("10.00") and _estado_del_retiro(base) == "pending"
+
+
+@solo_con_transacciones
+def test_RECHAZAR_EN_USDT_UN_ERROR_DEL_LIBRO_CRIPTO_ANTES_DE_LA_BASE_TAMBIEN_DESHACE_TODO(base, monkeypatch):
+    from services import ledger_crypto
+
+    def no_se_puede(*a, **k):
+        raise ValueError("la línea no se pudo armar")
+    monkeypatch.setattr(ledger_crypto, "quantize_money", no_se_puede)
+    _retiro_pendiente(base, "USDT")
+    with pytest.raises(ValueError):
+        corre(_rechazar())
+    assert _cuenta(base, "balance_usdt") == Decimal("10.00") and _estado_del_retiro(base) == "pending"
