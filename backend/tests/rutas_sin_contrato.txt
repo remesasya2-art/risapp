@@ -21,7 +21,6 @@
 DELETE /api/admin/accounting/banks/{bank_id}
 DELETE /api/admin/blacklist/{blacklist_id}
 DELETE /api/admin/rrhh/{user_id}
-DELETE /api/admin/sub-admins/{user_id}
 DELETE /{full_path:path}
 GET /api/admin/accounting/balance-check
 GET /api/admin/accounting/banks
@@ -158,7 +157,6 @@ POST /api/admin/restore-transactions
 POST /api/admin/rrhh
 POST /api/admin/rrhh/{user_id}/reenviar-invitacion
 POST /api/admin/rrhh/{user_id}/reiniciar-dos-pasos
-POST /api/admin/sub-admins
 POST /api/admin/wipe-all
 POST /api/btc/operador/marcar-enviado
 POST /api/btc/webhook/blink
@@ -183,5 +181,4 @@ PUT /api/admin/envios/tarifas/borrador
 PUT /api/admin/envios/transportistas/{transportista_id}/cuenta
 PUT /api/admin/rrhh/{user_id}/legajo
 PUT /api/admin/rrhh/{user_id}/permisos
-PUT /api/admin/sub-admins/{user_id}
 PUT /{full_path:path}

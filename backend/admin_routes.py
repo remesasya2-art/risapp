@@ -4,19 +4,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime, timezone
 from bson import ObjectId
 from openpyxl import Workbook
 from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
-from services.money import to_decimal128
 from services import perfil
 from services import las_fotos
 from services import quien_es
 from services import auditoria
 import logging
-import uuid
 import os
 from services import saldos
 from dotenv import load_dotenv
@@ -129,16 +127,6 @@ async def create_notification(user_id: str, title: str, message: str, notificati
 # REQUEST/RESPONSE MODELS
 # =======================
 
-class CreateSubAdminRequest(BaseModel):
-    email: str
-    name: str
-    permissions: List[str]
-
-class UpdateSubAdminRequest(BaseModel):
-    permissions: Optional[List[str]] = None
-    is_active: Optional[bool] = None
-    name: Optional[str] = None
-
 class ProcessWithdrawalAdminRequest(BaseModel):
     transaction_id: str
     action: str  # "approve" or "reject"
@@ -240,82 +228,29 @@ async def get_sub_admins(admin_user: Usuario = Depends(get_super_admin)):
     # devolvería 500, que es lo que le pasaba a la lista de usuarios.
     return [perfil.terminar_de_armar(a) for a in admins]
 
-@admin_router.post("/sub-admins")
-async def create_sub_admin(request: CreateSubAdminRequest, admin_user: Usuario = Depends(get_super_admin)):
-    """Create a new sub-administrator (super_admin only)"""
-    
-    # Check if user already exists
-    existing = await db.users.find_one({"email": request.email})
-    
-    if existing:
-        # Update existing user to admin
-        await db.users.update_one(
-            {"email": request.email},
-            {"$set": {
-                "role": "admin",
-                "permissions": request.permissions,
-                "created_by_admin": admin_user.user_id,
-                "updated_at": datetime.now(timezone.utc)
-            }}
-        )
-        return {"message": f"Usuario {request.email} promovido a admin", "user_id": existing.get('user_id')}
-    else:
-        # Create new admin user
-        new_admin = {
-            "user_id": f"admin_{uuid.uuid4().hex[:12]}",
-            "email": request.email,
-            "name": request.name,
-            "role": "admin",
-            "permissions": request.permissions,
-            "is_active": True,
-            # En Decimal128, como el resto de la app. Naciendo en int, el
-            # tipo del saldo dependía de quién creó al usuario.
-            "balance_ris": to_decimal128(0),
-            "verification_status": "verified",
-            "created_by_admin": admin_user.user_id,
-            "created_at": datetime.now(timezone.utc)
-        }
-        await db.users.insert_one(new_admin)
-        return {"message": f"Admin {request.email} creado", "user_id": new_admin['user_id']}
-
-@admin_router.put("/sub-admins/{user_id}")
-async def update_sub_admin(user_id: str, request: UpdateSubAdminRequest, admin_user: Usuario = Depends(get_super_admin)):
-    """Update a sub-administrator (super_admin only)"""
-    
-    target = await db.users.find_one({"user_id": user_id})
-    if not target:
-        raise HTTPException(status_code=404, detail="Admin no encontrado")
-    
-    if target.get('role') == 'super_admin' and admin_user.user_id != user_id:
-        raise HTTPException(status_code=403, detail="No puedes modificar a otro super_admin")
-    
-    update_data = {"updated_at": datetime.now(timezone.utc)}
-    if request.permissions is not None:
-        update_data["permissions"] = request.permissions
-    if request.is_active is not None:
-        update_data["is_active"] = request.is_active
-    if request.name is not None:
-        update_data["name"] = request.name
-    
-    await db.users.update_one({"user_id": user_id}, {"$set": update_data})
-    return {"message": "Admin actualizado"}
-
-@admin_router.delete("/sub-admins/{user_id}")
-async def delete_sub_admin(user_id: str, admin_user: Usuario = Depends(get_super_admin)):
-    """Remove admin role from user (super_admin only)"""
-    
-    target = await db.users.find_one({"user_id": user_id})
-    if not target:
-        raise HTTPException(status_code=404, detail="Admin no encontrado")
-    
-    if target.get('role') == 'super_admin':
-        raise HTTPException(status_code=403, detail="No puedes eliminar a un super_admin")
-    
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {"role": "user", "permissions": []}}
-    )
-    return {"message": "Rol de admin removido"}
+# ─── ALTA, CAMBIO Y BAJA DE ADMINISTRADORES: SE FUERON A RRHH ────────────
+#
+# Acá vivían `POST`, `PUT` y `DELETE /admin/sub-admins`. Eran el camino viejo
+# que `routes/recursos_humanos.py` dice haber reemplazado, pero seguían
+# vivos, y se saltaban las tres reglas del personal (`services/personal.py`).
+# Comprobado corriéndolos:
+#
+#   - El alta con un correo que ya existía PROMOVIA esa cuenta a `admin`: un
+#     cliente con 250 de saldo pasaba a ser administrador con su plata
+#     adentro. Y con uno que no existía, creaba la cuenta con
+#     `verification_status: "verified"` puesto a mano, sin KYC.
+#   - Ninguna de las dos marcaba la cuenta como personal (`es_personal`), así
+#     que el candado que le impide al personal mover plata —`saldos.mover`—
+#     no la frenaba, y la persona no aparecía en la lista de RRHH: un
+#     administrador que la pantalla del personal no ve.
+#   - Ninguna dejaba una línea en el libro de auditoría. Tampoco el cambio de
+#     permisos, ni la baja, que además no cerraba las sesiones abiertas.
+#
+# Ninguna pantalla las usaba: el panel da de alta, cambia permisos y da de
+# baja por RRHH, que hace todo eso bien. Se sacan; la lista de administradores
+# (`GET /admin/sub-admins`) se queda, que sólo lee. Un test comprueba que no
+# vuelvan (`tests/test_contratos_del_personal.py`).
+# ─────────────────────────────────────────────────────────────────────────
 
 # =======================
 # USER MANAGEMENT

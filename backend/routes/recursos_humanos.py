@@ -18,6 +18,11 @@ QUE CAMBIA RESPECTO DE LO QUE HABIA
     Acá el alta es explícita, deja legajo, deja línea de auditoría, y no
     inventa una verificación que nadie hizo.
 
+    Durante un tiempo las dos convivieron: esta sección reemplazó a la vieja
+    en la pantalla, pero `POST`, `PUT` y `DELETE /admin/sub-admins` seguían
+    vivas, y cualquiera que las llamara directo se saltaba todo lo de acá.
+    Ya no existen (ver `admin_routes.py`).
+
 LAS REGLAS
 
     1. Sólo el super administrador entra a esta sección. Ni un `admin` con
