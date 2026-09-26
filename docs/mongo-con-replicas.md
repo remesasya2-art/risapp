@@ -72,7 +72,7 @@ Qué hace, en orden:
    la segunda parte llegan a la misma sin que viaje a ningún lado.
 3. **Espera a que su nombre sea suyo.** Antes de arrancar Mongo, comprueba que
    su nombre en la red privada ya apunte a este contenedor, y recién ahí sigue:
-   escribe **NOMBRE CONFIRMADO** en el registro. Si a los dos minutos todavía
+   escribe **NOMBRE CONFIRMADO** en el registro. Si a los tres minutos todavía
    no apunta, arranca igual y escribe **NOMBRE SIN CONFIRMAR**. El porqué, más
    abajo.
 4. **Arranca Mongo** como conjunto de réplicas llamado `rs0`, con los mismos
@@ -111,7 +111,7 @@ contenedor, y sigue cuando coinciden.
 ## 2. Desplegar y mirar el registro de Mongo
 
 Guardá y desplegá el servicio de MongoDB. En **Deployments → View logs** del
-servicio de MongoDB, esperá hasta **dos minutos** a que aparezcan, en este
+servicio de MongoDB, esperá hasta **tres minutos** a que aparezcan, en este
 orden:
 
     NOMBRE CONFIRMADO (N esperas)
@@ -124,7 +124,7 @@ apuntar al contenedor nuevo. Cualquier número está bien.
   paso 3.
 - **Apareció «SIN RED PRIVADA»:** Mongo quedó como estaba, no se rompió nada.
   No sigas: la red privada del proyecto está apagada y hay que verlo antes.
-- **Pasaron dos minutos y no apareció ninguno de los dos:** **volvé atrás ya**
+- **Pasaron tres minutos y no apareció ninguno de los dos:** **volvé atrás ya**
   (sección 5). Mientras un conjunto de réplicas no está iniciado, Mongo no
   acepta escrituras, y la aplicación no puede operar.
 - **Apareció «NOMBRE SIN CONFIRMAR»:** si igual aparece REPLICAS LISTAS, anda;
@@ -145,7 +145,7 @@ El 25 de septiembre el primer arranque anduvo y el que falló fue el reinicio.
 Así que, con REPLICAS LISTAS a la vista, se reinicia a propósito una vez:
 servicio de **MongoDB** → **Deployments** → los tres puntos del último →
 **Restart**. Tiene que volver a aparecer NOMBRE CONFIRMADO y REPLICAS LISTAS
-en dos minutos. Si no, volvé atrás (sección 5).
+en tres minutos. Si no, volvé atrás (sección 5).
 
 Hacelo a una hora tranquila: son dos cortes de medio minuto.
 
@@ -263,7 +263,7 @@ otro lado durante unos segundos, como en Railway:
   una transacción;
 - un miembro nuevo (sección 9) se sumó, y al reiniciarlo con su nombre tarde
   volvió como secundario;
-- con un nombre que nunca apunta al contenedor, esperó el tope, escribió
+- con un nombre que nunca apunta al contenedor, esperó el tope —tres minutos—, escribió
   NOMBRE SIN CONFIRMAR, arrancó igual y se sumó.
 
 
