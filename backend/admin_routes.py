@@ -482,7 +482,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
             data={"transaction_id": request.transaction_id, "amount_ris": amount_ris}
         )
         
-        logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.email}")
+        logger.info(f"Recharge {request.transaction_id} approved by admin {admin_user.user_id}")
         await auditoria.registrar(
             db, "dinero.recarga_aprobada", quien=admin_user, request=peticion,
             objetivo_tipo="transaccion", objetivo_id=request.transaction_id,
@@ -514,7 +514,7 @@ async def approve_recharge(request: ApproveRechargeRequest, peticion: Request,
             data={"transaction_id": request.transaction_id}
         )
         
-        logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.email}")
+        logger.info(f"Recharge {request.transaction_id} rejected by admin {admin_user.user_id}")
         await auditoria.registrar(
             db, "dinero.recarga_rechazada", quien=admin_user, request=peticion,
             objetivo_tipo="transaccion", objetivo_id=request.transaction_id,
