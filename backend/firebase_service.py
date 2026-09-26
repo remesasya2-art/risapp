@@ -2,6 +2,7 @@ import os
 import logging
 import firebase_admin
 from firebase_admin import credentials, messaging
+from services import registro
 from pathlib import Path
 from typing import Optional
 
@@ -111,7 +112,7 @@ class PushNotificationService:
             return True
             
         except messaging.UnregisteredError:
-            logger.warning(f"FCM token is no longer valid: {fcm_token[:20]}...")
+            logger.warning(f"FCM token is no longer valid: {registro.final(fcm_token)}")
             return False
         except Exception as e:
             logger.error(f"Error sending push notification: {e}")

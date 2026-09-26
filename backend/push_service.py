@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Optional
+from services import registro
 from exponent_server_sdk import (
     DeviceNotRegisteredError,
     PushClient,
@@ -31,7 +32,7 @@ class PushNotificationService:
             
             # Check if it's an Expo push token
             if not push_token.startswith('ExponentPushToken') and not push_token.startswith('e-'):
-                logger.warning(f"Invalid Expo push token format: {push_token[:20]}...")
+                logger.warning(f"Invalid Expo push token format: {registro.final(push_token)}")
                 return False
             
             message = PushMessage(
@@ -47,14 +48,14 @@ class PushNotificationService:
             
             # Check for errors
             if response.status == "ok":
-                logger.info(f"Push notification sent successfully to {push_token[:30]}...")
+                logger.info(f"Push notification sent successfully to {registro.final(push_token)}")
                 return True
             else:
                 logger.error(f"Push notification failed: {response.message}")
                 return False
                 
         except DeviceNotRegisteredError:
-            logger.warning(f"Device not registered: {push_token[:30]}...")
+            logger.warning(f"Device not registered: {registro.final(push_token)}")
             return False
         except PushServerError as e:
             logger.error(f"Push server error: {e}")
