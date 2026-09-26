@@ -47,7 +47,12 @@ async def _detectar() -> bool:
         # Replica sets expose "setName" — standalones don't
         _SUPPORTS_TRANSACTIONS = "setName" in info
     except Exception:
-        _SUPPORTS_TRANSACTIONS = False
+        # Sin respuesta NO se recuerda. Antes se guardaba «no hay» y quedaba
+        # así hasta el próximo despliegue: un backend que arrancaba con Mongo
+        # caído seguía sin transacciones cuando el conjunto de réplicas volvía.
+        # Desde que el servidor atiende aunque la base no conteste (ver
+        # services/preparar_la_base.py), arrancar así dejó de ser raro.
+        return False
     if not _SUPPORTS_TRANSACTIONS:
         logger.warning(
             "Accounting engine: standalone MongoDB detected — "

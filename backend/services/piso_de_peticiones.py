@@ -56,6 +56,12 @@ from services.ip_cliente import ip_del_cliente
 logger = logging.getLogger(__name__)
 
 PREFIJO_DE_LA_API = "/api/"
+# El ping de vida de Railway no pasa por el piso. Contarlo exige ir a la base
+# —los ajustes, y en producción el contador mismo—, y con Mongo caído cada ping
+# esperaba 30 segundos: Railway daba por muerto un servidor que estaba arriba.
+# Es lo que terminó de tumbar la página el 25 de septiembre de 2026. El ping no
+# toca la base (routes/basic.py), así que no hay nada que proteger contándolo.
+SIN_PISO = frozenset({"/api/health"})
 PREFIJO_DEL_PANEL = "/api/admin"
 
 ALCANCE_CLIENTES = "piso.clientes"
@@ -153,12 +159,12 @@ class Piso:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not scope.get("path", "").startswith(PREFIJO_DE_LA_API):
+        camino = scope.get("path", "")
+        if scope["type"] != "http" or not camino.startswith(PREFIJO_DE_LA_API) or camino in SIN_PISO:
             await self.app(scope, receive, send)
             return
         from database import db
 
-        camino = scope["path"]
         metodo = scope.get("method", "")
         ip = ip_del_cliente(Request(scope))
         a = await ajustes(db)

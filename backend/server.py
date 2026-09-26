@@ -71,10 +71,10 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
 # omisión para el remitente (había uno en config.py y otro en
 # email_notifications.py), y los tres eran distintos.
 
-# Lifespan context manager (replaces @app.on_event startup/shutdown)
-@asynccontextmanager
-async def lifespan(app):
-    # Startup
+async def _preparar_la_base():
+    """Índices, migraciones y revisiones que necesitan la base. Corren en
+    segundo plano, cuando la base contesta: services/preparar_la_base.py
+    cuenta qué pasó el 25 de septiembre de 2026, cuando corrían antes de atender."""
     try:
         await db.users.create_index("email", unique=True, sparse=True)
         # ÚNICO: un CPF, una cuenta. El motivo y la trampa de reemplazar un
@@ -209,29 +209,6 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Indices de invitaciones del personal: {e}")
     try:
-        # Lo que el alta de personal necesita para funcionar de punta a punta.
-        # Sin esto, el alta "funciona" —la cuenta queda creada— pero el correo
-        # con la llave no sale, y quien la dio de alta se entera cuando el
-        # colaborador avisa que nunca le llegó nada. Mejor gritarlo acá.
-        from config import FRONTEND_URL
-        from services import correo
-        if not correo.revisar():
-            logger.error(
-                "ALTA DE PERSONAL A MEDIAS: con el correo así, las cuentas se "
-                "van a crear pero el enlace de activación NO va a salir, y el "
-                "colaborador no va a poder entrar. El motivo está en la línea "
-                "de arriba.")
-        if not (FRONTEND_URL or "").startswith("https://"):
-            logger.error(
-                "FRONTEND_URL = %r. Con esto se arma el enlace de activación "
-                "del personal; si no es la URL pública real, el correo sale "
-                "con un link roto.", FRONTEND_URL)
-        else:
-            logger.info("Alta de personal: los enlaces se arman sobre %s",
-                        FRONTEND_URL)
-    except Exception as e:
-        logger.error(f"No se pudo revisar la configuracion de correo: {e}")
-    try:
         # Estructura del módulo de envíos. Crea índices, nunca datos: los
         # transportistas, agencias y tarifas se cargan desde el panel.
         from services.envios_indices import ensure_envios_indexes
@@ -257,6 +234,52 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Cofre: no se pudo revisar al arrancar: {e}")
 
+    # El núcleo de cuentas. Se anuncia porque su estado de fábrica es
+    # «apagado» y conviene que el registro lo diga: si un día aparece
+    # «laboratorio» sin que nadie lo haya prendido, hay que mirar.
+    try:
+        from nucleo import base as nucleo_base, modo as nucleo_modo
+        modo_nucleo = await nucleo_modo.leer(db)
+        logger.info("Núcleo de cuentas: modo «%s», base %s",
+                    nucleo_modo.NOMBRES[modo_nucleo],
+                    "configurada" if nucleo_base.url_configurada() else "sin configurar")
+    except Exception as e:
+        logger.warning(f"Núcleo: no se pudo revisar al arrancar: {e}")
+
+
+# Lifespan context manager (replaces @app.on_event startup/shutdown)
+@asynccontextmanager
+async def lifespan(app):
+    # Startup
+    # Lo que necesita la base va en segundo plano: el servidor tiene que
+    # contestar /api/health aunque Mongo tarde, o Railway da el despliegue por
+    # fallido y la página queda en «Not Found». Ver services/preparar_la_base.py.
+    from services import preparar_la_base
+    preparar_la_base.arrancar(db, _preparar_la_base)
+    try:
+        # Lo que el alta de personal necesita para funcionar de punta a punta.
+        # Sin esto, el alta "funciona" —la cuenta queda creada— pero el correo
+        # con la llave no sale, y quien la dio de alta se entera cuando el
+        # colaborador avisa que nunca le llegó nada. Mejor gritarlo acá.
+        from config import FRONTEND_URL
+        from services import correo
+        if not correo.revisar():
+            logger.error(
+                "ALTA DE PERSONAL A MEDIAS: con el correo así, las cuentas se "
+                "van a crear pero el enlace de activación NO va a salir, y el "
+                "colaborador no va a poder entrar. El motivo está en la línea "
+                "de arriba.")
+        if not (FRONTEND_URL or "").startswith("https://"):
+            logger.error(
+                "FRONTEND_URL = %r. Con esto se arma el enlace de activación "
+                "del personal; si no es la URL pública real, el correo sale "
+                "con un link roto.", FRONTEND_URL)
+        else:
+            logger.info("Alta de personal: los enlaces se arman sobre %s",
+                        FRONTEND_URL)
+    except Exception as e:
+        logger.error(f"No se pudo revisar la configuracion de correo: {e}")
+
     # La puerta del borde. Se dice en el arranque porque su estado por omisión
     # —apagada— es justamente el que deja el agujero abierto, y un agujero que
     # no se anuncia es un agujero que nadie cierra.
@@ -270,17 +293,6 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"Borde: no se pudo revisar al arrancar: {e}")
 
-    # El núcleo de cuentas. Se anuncia porque su estado de fábrica es
-    # «apagado» y conviene que el registro lo diga: si un día aparece
-    # «laboratorio» sin que nadie lo haya prendido, hay que mirar.
-    try:
-        from nucleo import base as nucleo_base, modo as nucleo_modo
-        modo_nucleo = await nucleo_modo.leer(db)
-        logger.info("Núcleo de cuentas: modo «%s», base %s",
-                    nucleo_modo.NOMBRES[modo_nucleo],
-                    "configurada" if nucleo_base.url_configurada() else "sin configurar")
-    except Exception as e:
-        logger.warning(f"Núcleo: no se pudo revisar al arrancar: {e}")
     try:
         from services.bcv_scraper import start_scheduler
         start_scheduler(db, interval_hours=1)
@@ -323,6 +335,8 @@ async def lifespan(app):
         logger.warning(f"Núcleo: no se pudo arrancar el trabajador: {e}")
     yield
     # Shutdown
+    # La preparación de la base, si todavía está esperando a que Mongo vuelva.
+    await preparar_la_base.parar()
     # Lo que el contador tiene en memoria, a la base antes de cerrarla. No
     # levanta: ver services/uso.py.
     await uso.parar(db)
