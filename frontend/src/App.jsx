@@ -4,6 +4,7 @@ import ConfirmacionHost from './components/flujo/ConfirmacionHost';
 import PuertaCripto from './components/PuertaCripto';
 import PuertaRecarga from './components/PuertaRecarga';
 import PuertaEncomiendas from './components/PuertaEncomiendas';
+import PuertaRemesas from './components/PuertaRemesas';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RateProvider } from './contexts/RateContext';
 import { TemaProvider } from './contexts/TemaContext';
@@ -130,8 +131,8 @@ function AppRoutes() {
       
       {/* Protected Routes */}
       <Route path="/" element={<HomeGate />} />
-      <Route path="/send" element={<ProtectedRoute><ConTema><Send /></ConTema></ProtectedRoute>} />
-      <Route path="/send-reais" element={<ProtectedRoute><ConTema><SendReais /></ConTema></ProtectedRoute>} />
+      <Route path="/send" element={<ProtectedRoute><PuertaRemesas><ConTema><Send /></ConTema></PuertaRemesas></ProtectedRoute>} />
+      <Route path="/send-reais" element={<ProtectedRoute><PuertaRemesas><ConTema><SendReais /></ConTema></PuertaRemesas></ProtectedRoute>} />
       {/* La marca del tema va POR FUERA de la puerta cripto, no adentro: un
           test lee esta línea buscando la puerta pegada a su pantalla, y la
           puerta no dibuja nada propio (nada, o una redirección), así que

@@ -30,6 +30,7 @@
  */
 import { useState, useEffect } from 'react';
 import useRecarga from '../../hooks/useRecarga';
+import useRemesas from '../../hooks/useRemesas';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Circle, Clock, AlertCircle, ShieldCheck, Wallet, Send, Fingerprint, X } from 'lucide-react';
 import api from '../../utils/api';
@@ -54,6 +55,7 @@ const VERIFICACION = {
 
 export default function PrimerosPasos({ user, isMobile = false }) {
   const recarga = useRecarga();
+  const remesas = useRemesas();
   const navigate = useNavigate();
   const [estado, setEstado] = useState(null);
   const [oculto, setOculto] = useState(leerOculto);
@@ -80,7 +82,8 @@ export default function PrimerosPasos({ user, isMobile = false }) {
       estado: estado.recarga ? 'hecho' : 'pendiente',
       texto: estado.recarga ? 'Ya tenés saldo cargado.' : 'Por PIX, con tarjeta o con cripto.',
       boton: estado.recarga ? null : 'Recargar' },
-    { clave: 'envio', Icono: Send, titulo: 'Hacé tu primer envío', ruta: '/send', cuenta: true,
+    // El de enviar, por lo mismo, desaparece con remesas en pausa.
+    remesas.abiertas && { clave: 'envio', Icono: Send, titulo: 'Hacé tu primer envío', ruta: '/send', cuenta: true,
       estado: estado.envio ? 'hecho' : 'pendiente',
       texto: estado.envio ? 'Ya hiciste tu primer envío.' : 'A Venezuela en bolívares, o a Brasil en reales.',
       boton: estado.envio ? null : 'Enviar' },

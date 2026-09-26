@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Wallet, Eye, EyeOff, Plus, ArrowUpRight, Clock, Building2, TrendingUp } from 'lucide-react';
 import useRecarga from '../../hooks/useRecarga';
+import useRemesas from '../../hooks/useRemesas';
 import { fmt, fmtRelative } from '../../utils/format';
 import useCountUp from '../../hooks/useCountUp';
 
@@ -27,6 +28,7 @@ export default function BalanceCard({
   isMobile = false,
 }) {
   const recarga = useRecarga();
+  const remesas = useRemesas();
   const [hidden, setHidden] = useState(false);
   const animated = useCountUp(balance, 900);
   const accent = '#5B4FE9';
@@ -155,7 +157,9 @@ export default function BalanceCard({
           </div>
         )}
 
-        {/* Buttons */}
+        {/* Buttons. Con remesas en pausa no queda ninguno —la recarga cierra
+            con ella—, y la tarjeta muestra sólo el saldo. */}
+        {remesas.abiertas && (
         <div
           style={{
             display: 'grid',
@@ -202,6 +206,7 @@ export default function BalanceCard({
             {isMobile ? 'Gastar' : 'Gastar Saldo'}
           </Link>
         </div>
+        )}
       </div>
     </div>
   );
