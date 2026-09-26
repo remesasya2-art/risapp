@@ -1,8 +1,12 @@
 # Pasar el Mongo de Railway a un conjunto de réplicas
 
-> **Hecho en producción el 25 de septiembre de 2026.** La salud de la
-> aplicación pasó a `SALUD| bien`, con «transacciones» en verde. Esta guía queda
-> para volver atrás (sección 5) o para repetirlo en otro entorno.
+> **Estado al 26 de septiembre de 2026: Mongo volvió a ser de un solo nodo.**
+> El 25 se pasó a réplicas con esta guía y anduvo. Esa tarde, en un reinicio,
+> Mongo no se reconoció en su propio conjunto y quedó sin primario: la
+> aplicación no pudo escribir hasta volver atrás con la sección 5. La causa y
+> el arreglo están en «Por qué espera a su nombre», en la sección 1. El comando
+> de la sección 1 ya trae el arreglo: para volver a réplicas se sigue esta guía
+> desde el principio, incluida la prueba de reinicio de la sección 2.
 
 **Qué se gana:** que cada movimiento de plata del cliente se escriba entero o no
 se escriba. Un Mongo de **un solo nodo** no tiene *transacciones* —la forma de
@@ -53,7 +57,7 @@ La primera versión de esta guía no las traía; se corrigieron antes de usarla.
 Reemplazalo por esto, **en una sola línea, tal cual**:
 
 ```
-bash -c 'K=/data/db/rs.key; if [ -z "$RAILWAY_PRIVATE_DOMAIN" ]; then echo "SIN RED PRIVADA: Mongo arranca sin replicas"; exec docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false; fi; [ -f $K ] || head -c 512 /dev/urandom | base64 -w0 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; SH=$(command -v mongosh || command -v mongo); (until $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"$RAILWAY_PRIVATE_DOMAIN:27017\"}]}).ok }" 2>/dev/null | grep -q 1; do sleep 2; done; echo "REPLICAS LISTAS") & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
+bash -c 'K=/data/db/rs.key; if [ -z "$RAILWAY_PRIVATE_DOMAIN" ]; then echo "SIN RED PRIVADA: Mongo arranca sin replicas"; exec docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false; fi; printf "%s" "rs0:$MONGO_INITDB_ROOT_PASSWORD" | sha256sum | cut -c1-64 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; SH=$(command -v mongosh || command -v mongo); YO="$RAILWAY_PRIVATE_DOMAIN:27017"; N=0; until $SH --nodb --quiet --eval "const o = require(\"os\"), d = require(\"dns\"); const mias = Object.values(o.networkInterfaces()).flat().map(i => i.address); d.promises.lookup(\"$RAILWAY_PRIVATE_DOMAIN\", {all: true}).then(a => a.some(x => mias.includes(x.address)) ? \"ES ESTE\" : \"TODAVIA NO\", () => \"TODAVIA NO\")" 2>/dev/null | grep -q "ES ESTE"; do N=$((N+1)); if [ $N -ge 60 ]; then echo "NOMBRE SIN CONFIRMAR: $RAILWAY_PRIVATE_DOMAIN no apunta a este contenedor; Mongo arranca igual"; break; fi; sleep 2; done; [ $N -lt 60 ] && echo "NOMBRE CONFIRMADO ($N esperas)"; (until $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"$YO\"}]}).ok }" 2>/dev/null | grep -q 1; do sleep 2; done; echo "REPLICAS LISTAS"; if [ "$SOLO_ESTE_MIEMBRO" = "si" ]; then $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "const c = rs.conf(); c.members = c.members.filter(m => m.host === \"$YO\"); rs.reconfig(c, {force: true}); print(\"QUEDA UN SOLO MIEMBRO\")"; fi) & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
 ```
 
 Qué hace, en orden:
@@ -62,30 +66,88 @@ Qué hace, en orden:
    el registro «SIN RED PRIVADA». Es un resguardo: sin red privada, el conjunto
    de réplicas no tendría un nombre con el que encontrarse a sí mismo.
 2. **La llave del conjunto.** Un conjunto de réplicas con usuario y contraseña
-   exige un archivo de llave. Se genera al azar la primera vez, se guarda en el
-   disco de Mongo (`/data/db/rs.key`) y en los arranques siguientes se reusa.
-   Nadie la ve ni la copia: es interna de Mongo.
-3. **Arranca Mongo** como conjunto de réplicas llamado `rs0`, con los mismos
+   exige un archivo de llave. Se calcula de la contraseña de Mongo que Railway
+   ya guarda, y se escribe en el disco de Mongo (`/data/db/rs.key`). Nadie la
+   ve ni la copia; y como sale de la contraseña, los miembros que se sumen en
+   la segunda parte llegan a la misma sin que viaje a ningún lado.
+3. **Espera a que su nombre sea suyo.** Antes de arrancar Mongo, comprueba que
+   su nombre en la red privada ya apunte a este contenedor, y recién ahí sigue:
+   escribe **NOMBRE CONFIRMADO** en el registro. Si a los dos minutos todavía
+   no apunta, arranca igual y escribe **NOMBRE SIN CONFIRMAR**. El porqué, más
+   abajo.
+4. **Arranca Mongo** como conjunto de réplicas llamado `rs0`, con los mismos
    datos, el mismo usuario y la misma contraseña de siempre.
-4. **En paralelo, lo inicia.** La primera vez, un conjunto de réplicas tiene
+5. **En paralelo, lo inicia.** La primera vez, un conjunto de réplicas tiene
    que *iniciarse* una sola vez, diciéndole cuál es su dirección. Eso lo hace
    solo, con el usuario que Railway ya tiene configurado, y cuando termina
    escribe **REPLICAS LISTAS** en el registro. En los arranques siguientes ve
    que ya está iniciado y sólo escribe el mensaje.
 
+La variable `SOLO_ESTE_MIEMBRO` que aparece al final es la de la sección 12:
+no está puesta y no hace nada hasta que se la ponga.
+
+### Por qué espera a su nombre
+
+Un conjunto de réplicas se acuerda de sus miembros por nombre: acá, el nombre
+del servicio en la red privada de Railway (`mongodb.railway.internal`). Cada
+vez que Mongo arranca, busca ese nombre en su lista para saber cuál de todos
+es él.
+
+En Railway, cada despliegue o reinicio levanta un contenedor **nuevo**, con
+otra dirección, y el nombre tarda unos segundos en pasar a apuntarle. Si Mongo
+arranca en esos segundos, el nombre todavía lleva al contenedor viejo: Mongo
+no se encuentra en su propia lista, queda afuera del conjunto y **sin
+primario** —no acepta escrituras—. Con un solo miembro, nadie lo saca de ahí:
+se ensayó, y a los dos minutos, con el nombre ya bien, seguía igual.
+
+Es lo que pasó el 25 de septiembre de 2026. El comando que había entonces no
+esperaba; la primera vez anduvo porque el conjunto se inició con Mongo ya
+arriba, y el problema apareció en el primer reinicio.
+
+El comando de arriba lo pregunta antes de arrancar, con el mismo `mongosh` que
+trae la imagen: resuelve el nombre, lo compara con las direcciones de este
+contenedor, y sigue cuando coinciden.
+
 ## 2. Desplegar y mirar el registro de Mongo
 
 Guardá y desplegá el servicio de MongoDB. En **Deployments → View logs** del
-servicio de MongoDB, esperá hasta **un minuto** a que aparezca:
+servicio de MongoDB, esperá hasta **dos minutos** a que aparezcan, en este
+orden:
 
+    NOMBRE CONFIRMADO (N esperas)
     REPLICAS LISTAS
 
-- **Apareció:** seguí con el paso 3.
+El número de esperas dice cuántas veces de dos segundos tardó el nombre en
+apuntar al contenedor nuevo. Cualquier número está bien.
+
+- **Aparecieron:** hacé la prueba de reinicio de abajo, y después seguí con el
+  paso 3.
 - **Apareció «SIN RED PRIVADA»:** Mongo quedó como estaba, no se rompió nada.
   No sigas: la red privada del proyecto está apagada y hay que verlo antes.
 - **Pasaron dos minutos y no apareció ninguno de los dos:** **volvé atrás ya**
   (sección 5). Mientras un conjunto de réplicas no está iniciado, Mongo no
   acepta escrituras, y la aplicación no puede operar.
+- **Apareció «NOMBRE SIN CONFIRMAR»:** si igual aparece REPLICAS LISTAS, anda;
+  avisá igual, porque el nombre no está apuntando adonde tiene que apuntar. Si
+  no aparece, volvé atrás.
+
+**Cómo se sabe que Mongo no quedó sin primario:** REPLICAS LISTAS no alcanza
+—se escribe aunque no haya primario—. Lo que lo confirma es que el backend
+escriba: en su registro, después de `ARRANQUE| base preparada`, la siguiente
+línea `SALUD|` sin «base» en rojo. Si el registro de Mongo repite
+«Connection not authenticating» o «Successfully authenticated» desde
+`127.0.0.1` durante más de dos minutos, es el comando reintentando sin
+lograrlo: **volvé atrás**.
+
+### La prueba de reinicio
+
+El 25 de septiembre el primer arranque anduvo y el que falló fue el reinicio.
+Así que, con REPLICAS LISTAS a la vista, se reinicia a propósito una vez:
+servicio de **MongoDB** → **Deployments** → los tres puntos del último →
+**Restart**. Tiene que volver a aparecer NOMBRE CONFIRMADO y REPLICAS LISTAS
+en dos minutos. Si no, volvé atrás (sección 5).
+
+Hacelo a una hora tranquila: son dos cortes de medio minuto.
 
 ## 3. Reiniciar el backend
 
@@ -186,6 +248,24 @@ que el disco de Mongo esté montado en `/data/db` y que la imagen traiga
 - la salud dijo `SALUD| bien`, con «Mongo es un conjunto de réplicas», y la
   base pasó a responder en 1 ms.
 
+**Lo que ese ensayo no vio** fue el nombre: la máquina de ensayo usaba
+direcciones en vez de nombres, y una dirección no tarda en apuntar a ningún
+lado. El 26 de septiembre se repitió con nombres que, al arrancar, apuntan a
+otro lado durante unos segundos, como en Railway:
+
+- con el comando viejo, Mongo quedó sin primario, igual que en producción, y
+  a los 90 segundos seguía así;
+- con el de la sección 1, sobre esos mismos datos atascados, llegó a
+  primario; y también en tres reinicios más con el nombre tarde, y en uno con
+  el nombre bien desde el principio;
+- desde un Mongo suelto como el de hoy, con datos escritos mientras estaba
+  suelto, llegó a primario con el nombre tarde, conservó los datos y confirmó
+  una transacción;
+- un miembro nuevo (sección 9) se sumó, y al reiniciarlo con su nombre tarde
+  volvió como secundario;
+- con un nombre que nunca apunta al contenedor, esperó el tope, escribió
+  NOMBRE SIN CONFIRMAR, arrancó igual y se sumó.
+
 
 ---
 
@@ -215,25 +295,18 @@ tirado abajo de golpe, con dos caídos y con la vuelta a uno solo (sección 13).
 
 ## 8. La llave del conjunto, calculada de la contraseña
 
-Hoy la llave del conjunto (`/data/db/rs.key`) se genera al azar y sólo la tiene
-el Mongo de hoy. Los miembros nuevos necesitan **la misma**, y nadie tiene que
+Los miembros nuevos necesitan **la misma** llave del conjunto que el primero, y nadie tiene que
 verla ni copiarla. Por eso, desde esta parte, cada miembro la calcula a partir
 de la contraseña de Mongo que Railway ya guarda: todos llegan a la misma llave
 sin que viaje a ningún lado.
 
-En el servicio **MongoDB** → Settings → Deploy → **Custom Start Command**,
-reemplazá el comando de la sección 1 por éste, en una sola línea:
+El comando de la sección 1 ya lo hace desde el 26 de septiembre de 2026. Si el
+servicio **MongoDB** tiene ese comando, este paso está hecho: seguí con la
+sección 9.
 
-```
-bash -c 'K=/data/db/rs.key; if [ -z "$RAILWAY_PRIVATE_DOMAIN" ]; then echo "SIN RED PRIVADA: Mongo arranca sin replicas"; exec docker-entrypoint.sh mongod --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false; fi; printf "%s" "rs0:$MONGO_INITDB_ROOT_PASSWORD" | sha256sum | cut -c1-64 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; SH=$(command -v mongosh || command -v mongo); YO="$RAILWAY_PRIVATE_DOMAIN:27017"; (until $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"$YO\"}]}).ok }" 2>/dev/null | grep -q 1; do sleep 2; done; echo "REPLICAS LISTAS"; if [ "$SOLO_ESTE_MIEMBRO" = "si" ]; then $SH --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "const c = rs.conf(); c.members = c.members.filter(m => m.host === \"$YO\"); rs.reconfig(c, {force: true}); print(\"QUEDA UN SOLO MIEMBRO\")"; fi) & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
-```
-
-Es el mismo de antes con dos cambios: la llave se calcula en vez de sortearse,
-y aparece la variable `SOLO_ESTE_MIEMBRO` de la sección 12, que no está puesta
-y no hace nada hasta que se la ponga.
-
-Desplegá. En el registro de MongoDB tiene que aparecer **REPLICAS LISTAS**, como
-siempre, y la salud tiene que seguir en `bien`. Es un reinicio de medio minuto.
+Si tiene otro —el de la primera versión de esta guía, que sorteaba la llave y
+no esperaba a su nombre—, reemplazalo por el de la sección 1 y seguí las
+secciones 2 a 4, prueba de reinicio incluida.
 
 ## 9. Dos servicios de Mongo nuevos, vacíos
 
@@ -257,14 +330,15 @@ guión: esos nombres se usan en la sección 11).
 4. En Settings → Deploy → **Custom Start Command**, pegá esto, en una sola línea:
 
    ```
-   bash -c 'K=/data/db/rs.key; printf "%s" "rs0:$CLAVE_RAIZ" | sha256sum | cut -c1-64 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; unset MONGO_INITDB_ROOT_USERNAME MONGO_INITDB_ROOT_PASSWORD; SH=$(command -v mongosh || command -v mongo); (until $SH --host "rs0/$PRIMARIO:27017" --quiet -u "$USUARIO_RAIZ" -p "$CLAVE_RAIZ" --authenticationDatabase admin --eval "const yo = \"$RAILWAY_PRIVATE_DOMAIN:27017\"; if (!rs.conf().members.some(m => m.host === yo)) rs.add({host: yo, priority: 0.5}); print(\"SUMADO\")" 2>/dev/null | grep -q SUMADO; do sleep 5; done; echo "MIEMBRO SUMADO") & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
+   bash -c 'K=/data/db/rs.key; printf "%s" "rs0:$CLAVE_RAIZ" | sha256sum | cut -c1-64 > $K; chmod 400 $K; chown mongodb:mongodb $K 2>/dev/null; unset MONGO_INITDB_ROOT_USERNAME MONGO_INITDB_ROOT_PASSWORD; SH=$(command -v mongosh || command -v mongo); N=0; until $SH --nodb --quiet --eval "const o = require(\"os\"), d = require(\"dns\"); const mias = Object.values(o.networkInterfaces()).flat().map(i => i.address); d.promises.lookup(\"$RAILWAY_PRIVATE_DOMAIN\", {all: true}).then(a => a.some(x => mias.includes(x.address)) ? \"ES ESTE\" : \"TODAVIA NO\", () => \"TODAVIA NO\")" 2>/dev/null | grep -q "ES ESTE"; do N=$((N+1)); if [ $N -ge 60 ]; then echo "NOMBRE SIN CONFIRMAR: $RAILWAY_PRIVATE_DOMAIN no apunta a este contenedor; Mongo arranca igual"; break; fi; sleep 2; done; [ $N -lt 60 ] && echo "NOMBRE CONFIRMADO ($N esperas)"; (until $SH --host "rs0/$PRIMARIO:27017" --quiet -u "$USUARIO_RAIZ" -p "$CLAVE_RAIZ" --authenticationDatabase admin --eval "const yo = \"$RAILWAY_PRIVATE_DOMAIN:27017\"; if (!rs.conf().members.some(m => m.host === yo)) rs.add({host: yo, priority: 0.5}); print(\"SUMADO\")" 2>/dev/null | grep -q SUMADO; do sleep 5; done; echo "MIEMBRO SUMADO") & exec docker-entrypoint.sh mongod --replSet rs0 --keyFile $K --ipv6 --bind_ip ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false'
    ```
 
 5. Desplegá. En el registro del servicio nuevo tiene que aparecer, en uno o dos
-   minutos, **MIEMBRO SUMADO**. Después copia todos los datos del primero, y
+   minutos, **NOMBRE CONFIRMADO** y después **MIEMBRO SUMADO**. Después copia todos los datos del primero, y
    mientras tanto la salud dice que está «copiando los datos por primera vez».
 
-Qué hace el comando: calcula la llave igual que el primero; arranca Mongo
+Qué hace el comando: calcula la llave igual que el primero; espera a que su
+nombre apunte a su contenedor, por lo mismo que el primero; arranca Mongo
 **vacío**, como miembro del conjunto `rs0`; y en paralelo le pide al primero
 que lo sume, con prioridad más baja, así el de hoy sigue siendo el principal
 mientras esté bien. Si se reinicia, ve que ya está sumado y no hace nada más.
@@ -332,7 +406,7 @@ Cuando los otros dos vuelvan a andar, con reiniciarlos se suman solos.
 **No** borres MongoDB2 y MongoDB3 antes del paso 1: el de hoy quedaría solo en
 un conjunto de tres, sin mayoría, y dejaría de escribir.
 
-El comando de arranque del MongoDB de hoy puede quedar como el de la sección 8.
+El comando de arranque del MongoDB de hoy puede quedar como el de la sección 1.
 Para volver al de antes de todo (el de la plantilla de Railway):
 
 ```
