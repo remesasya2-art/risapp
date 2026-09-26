@@ -36,6 +36,11 @@ import pytest
 _RAIZ = pathlib.Path(os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")))
 PANEL = _RAIZ / "frontend" / "src" / "pages" / "AdminPanel.jsx"
+# El catálogo de secciones y el menú del costado se mudaron fuera del panel
+# cuando éste llegó a su tope de líneas. Se leen los tres juntos: las reglas
+# de acá valen para el menú, viva en el archivo que viva.
+_ADMIN = _RAIZ / "frontend" / "src" / "components" / "admin"
+ARCHIVOS_DEL_MENU = (PANEL, _ADMIN / "seccionesDelPanel.js", _ADMIN / "MenuDelPanel.jsx")
 
 # `crm` era el contenedor de las subpestañas de clientes y ese trabajo ahora lo
 # hace el grupo. Sigue aceptándose en la dirección (`?tab=crm`) por los enlaces
@@ -61,7 +66,7 @@ def _bloque(texto: str, nombre: str) -> str:
 
 @pytest.fixture(scope="module")
 def panel():
-    return PANEL.read_text(encoding="utf-8")
+    return "\n".join(p.read_text(encoding="utf-8") for p in ARCHIVOS_DEL_MENU)
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +105,7 @@ def test_ninguna_seccion_queda_sin_grupo(secciones, por_grupo):
     assert not huerfanas, (
         "estas secciones existen en el panel y NINGUN grupo del menú las "
         f"nombra, así que no hay forma de llegar a ellas: {', '.join(huerfanas)}.\n"
-        "Se agregan a `GRUPOS` en frontend/src/pages/AdminPanel.jsx.")
+        "Se agregan a `GRUPOS` en frontend/src/components/admin/seccionesDelPanel.js.")
 
 
 def test_ningun_grupo_nombra_una_seccion_que_no_existe(secciones, por_grupo):

@@ -312,7 +312,20 @@ def test_la_hoja_se_escribe_DESPUES_de_comprobar_la_firma():
 #   la sección exista, que el componente esté importado y que haya algo que lo
 #   dibuje.
 
-_PANEL = _BACKEND.parent / "frontend" / "src" / "pages" / "AdminPanel.jsx"
+_SRC = _BACKEND.parent / "frontend" / "src"
+
+
+class _PanelYSusSecciones:
+    """El panel más el catálogo de sus secciones, que vive aparte desde que
+    AdminPanel.jsx llegó a su tope de líneas."""
+
+    def read_text(self, encoding="utf-8"):
+        return "\n".join(p.read_text(encoding=encoding) for p in (
+            _SRC / "pages" / "AdminPanel.jsx",
+            _SRC / "components" / "admin" / "seccionesDelPanel.js"))
+
+
+_PANEL = _PanelYSusSecciones()
 
 
 def test_LA_HOJA_SE_PUEDE_ABRIR_DESDE_EL_PANEL():

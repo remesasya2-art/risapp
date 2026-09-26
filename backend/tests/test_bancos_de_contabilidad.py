@@ -171,7 +171,10 @@ def test_UN_BANCO_QUE_NO_EXISTE_ES_404(bancos):
 
 def test_LA_PANTALLA_ESTA_EN_CONTABILIDAD_Y_PREGUNTA_SIN_CUADROS_DEL_NAVEGADOR():
     from _lote_c_comun import fuente, sin_comentarios
-    panel = sin_comentarios(fuente("pages/AdminPanel.jsx"))
+    # Las secciones y sus grupos viven en seccionesDelPanel.js desde que el
+    # panel llegó a su tope de líneas; el dibujo sigue en AdminPanel.jsx.
+    panel = sin_comentarios(fuente("pages/AdminPanel.jsx") + "\n"
+                            + fuente("components/admin/seccionesDelPanel.js"))
     assert "{ key: 'bancos'" in panel and "superAdminOnly: true" in panel.split("{ key: 'bancos'")[1].split("\n")[0]
     assert "'ledger', 'bancos'" in panel, "la pestaña tiene que estar en el grupo Contabilidad"
     assert "<Bancos onCambio={cargarBancos} />" in panel, \

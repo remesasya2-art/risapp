@@ -14,7 +14,8 @@ _SRC = pathlib.Path(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."
 
 
 def test_la_pestana_del_panel_es_solo_del_super_administrador():
-    panel = (_SRC / "pages" / "AdminPanel.jsx").read_text(encoding="utf-8")
+    # El catálogo de secciones vive aparte desde que AdminPanel.jsx llegó a su tope.
+    panel = (_SRC / "components" / "admin" / "seccionesDelPanel.js").read_text(encoding="utf-8")
     m = re.search(r"\{\s*key:\s*'nucleo'[^}]*\}", panel)
     assert m, "no está la pestaña «nucleo» en TABS"
     assert "superAdminOnly: true" in m.group(0)

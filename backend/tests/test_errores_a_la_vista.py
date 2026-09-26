@@ -274,7 +274,10 @@ def test_buscar_devuelve_de_mas_nuevo_a_mas_viejo_y_el_resumen_cuenta(base):
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_la_pestana_existe_y_es_solo_del_super_administrador():
-    panel = _PANEL.read_text(encoding="utf-8")
+    # Las secciones y sus grupos viven en seccionesDelPanel.js desde que el
+    # panel llegó a su tope de líneas; el dibujo sigue en AdminPanel.jsx.
+    panel = _PANEL.read_text(encoding="utf-8") + "\n" + (
+        _PANEL.parent.parent / "components" / "admin" / "seccionesDelPanel.js").read_text(encoding="utf-8")
     assert "key: 'errores'" in panel, "se fue la pestaña Errores"
     linea = next(l for l in panel.splitlines() if "key: 'errores'" in l)
     assert "superAdminOnly: true" in linea

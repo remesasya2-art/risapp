@@ -539,7 +539,10 @@ def test_la_ruta_acota_los_dias(base, monkeypatch):
 
 
 def test_la_pestana_existe_y_es_solo_del_super_administrador():
-    panel = _PANEL.read_text(encoding="utf-8")
+    # Las secciones y sus grupos viven en seccionesDelPanel.js desde que el
+    # panel llegó a su tope de líneas; el dibujo sigue en AdminPanel.jsx.
+    panel = _PANEL.read_text(encoding="utf-8") + "\n" + (
+        _PANEL.parent.parent / "components" / "admin" / "seccionesDelPanel.js").read_text(encoding="utf-8")
     assert "key: 'uso'" in panel, "se fue la pestaña Uso"
     linea = next(l for l in panel.splitlines() if "key: 'uso'" in l)
     assert "superAdminOnly: true" in linea
