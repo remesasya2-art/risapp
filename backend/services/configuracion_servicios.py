@@ -22,6 +22,26 @@ from decimal import Decimal
 from services.configuracion_ajuste import DINERO, ENTERO, Ajuste
 
 AJUSTES_DE_LOS_SERVICIOS = {
+    # ── Remesas: la llave madre ───────────────────────────────────────────
+    #
+    # Gastar en Venezuela y en Brasil. Cerrada, cierra además la carga de
+    # saldo y la entrada de cripto, aunque sus llaves de abajo digan otra
+    # cosa. Viene en 1 de fábrica por la regla de siempre: el despliegue no
+    # apaga nada, lo apaga una persona desde el panel. Qué corta y qué deja
+    # andando: services/remesas_abiertas.py.
+    "remesas_abiertas": Ajuste(
+        tipo=ENTERO, defecto=1, minimo=0, maximo=1,
+        unidad="0 = en pausa, 1 = abierto",
+        etiqueta="Remesas (gastar en Venezuela y en Brasil)",
+        ayuda="En 1 (fábrica) todo sigue igual. En 0 no se pueden hacer envíos "
+              "nuevos a Venezuela ni a Brasil, y quedan cerradas también la "
+              "carga de saldo y la entrada de cripto, aunque sus ajustes digan "
+              "otra cosa (la salida de cripto sigue abierta, para que nadie "
+              "quede con su plata adentro). Lo que ya está en curso termina: el "
+              "cliente lo ve, sube su comprobante, y el panel sigue entero. "
+              "Ojo: quien tenga saldo cargado no lo va a poder gastar mientras "
+              "esté en 0."),
+
     # ── Cargar saldo ──────────────────────────────────────────────────────
     #
     # La empresa no custodia dinero de terceros ni ofrece recarga. El estado al

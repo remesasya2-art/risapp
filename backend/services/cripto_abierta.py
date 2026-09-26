@@ -99,12 +99,23 @@ async def _estado(db) -> int:
     El `except` devuelve `SOLO_SALIDA` y no `ABIERTA`: si no se sabe, lo que no
     hace daño es no aceptar plata nueva. Ver el encabezado.
     """
-    from services import configuracion
+    from services import configuracion, remesas_abiertas
     try:
-        return int(await configuracion.leer(db, CLAVE))
+        estado = int(await configuracion.leer(db, CLAVE))
     except Exception as e:                                    # pragma: no cover
         logger.error("No se pudo leer %s, se asume sólo salida: %s", CLAVE, e)
         return SOLO_SALIDA
+    return con_la_llave_madre(estado, await remesas_abiertas.esta_abierta(db))
+
+
+def con_la_llave_madre(estado: int, remesas_abiertas: bool) -> int:
+    """El estado que rige, con remesas cerrada o abierta.
+
+    Remesas cerrada baja la cripto a SOLO_SALIDA como mucho: no entra plata
+    nueva, pero la que está puede salir. Cerrarla del todo le atraparía el
+    saldo a quien lo tenga. Si ya estaba en 0, queda en 0.
+    """
+    return estado if remesas_abiertas else min(estado, SOLO_SALIDA)
 
 
 async def acepta_depositos(db) -> bool:

@@ -163,6 +163,13 @@ async def _al_registrarse(db, user_id: str, codigo: str) -> dict:
         logger.warning("bonos: %s intentó usar su propio código", user_id)
         return {"acreditado": False, "motivo": "codigo_propio"}
 
+    from services import remesas_abiertas
+    if not await remesas_abiertas.esta_abierta(db):
+        # El bono sólo se puede gastar en envíos a Venezuela. Con remesas en
+        # pausa sería plata que la cuenta no puede usar y que la empresa
+        # igual debe. Se registra sin bono, como con el bono en cero.
+        return {"acreditado": False, "motivo": "remesas_en_pausa"}
+
     monto = await configuracion.leer(db, "bono_al_referido")
     if monto <= 0:
         # El bono apagado desde el panel. No es un error: es la forma de

@@ -174,10 +174,15 @@ async def limits_payload(db) -> dict:
     que redondear mal.
     """
     from services import configuracion, cripto_abierta, pago_al_final
-    from services import encomiendas_abiertas, recarga_abierta
+    from services import encomiendas_abiertas, recarga_abierta, remesas_abiertas
     from services.money import to_float
 
     ajustes = await configuracion.leer_todo(db)
+    # La llave madre. Recarga y cripto se publican YA recortadas por ella,
+    # igual que las recortan sus guardas en el servidor: si se publicara la
+    # llave suelta, la pantalla ofrecería recargar con remesas cerrada y el
+    # servidor le contestaría 503.
+    remesas = bool(int(ajustes[remesas_abiertas.CLAVE]))
     return {
         "pix": {"min_brl": to_float(ajustes["pix_minimo"]),
                 "max_brl": to_float(ajustes["pix_maximo"])},
@@ -204,7 +209,8 @@ async def limits_payload(db) -> dict:
         #   Se publican las respuestas resueltas y no sólo el número: ver
         #   `cripto_abierta.para_el_frontend`.
         "cripto": cripto_abierta.para_el_frontend(
-            int(ajustes[cripto_abierta.CLAVE])),
+            cripto_abierta.con_la_llave_madre(
+                int(ajustes[cripto_abierta.CLAVE]), remesas)),
         # El flujo de pago, por el mismo motivo que la línea de arriba: la
         # pantalla del envío tiene que ofrecer exactamente lo que el servidor
         # acepta. Con esto apagado, `/withdraw-ves/cotizar` contesta 503, así
@@ -213,9 +219,13 @@ async def limits_payload(db) -> dict:
         # Si se puede cargar saldo. Con esto en false las cuatro rutas de
         # recarga contestan 503, así que la pantalla tiene que esconder sus
         # ocho puertas: un botón que lleva a un error no es una opción.
-        "recarga": bool(int(ajustes[recarga_abierta.CLAVE])),
+        "recarga": bool(int(ajustes[recarga_abierta.CLAVE])) and remesas,
         # Si se pueden mandar encomiendas nuevas. Con esto en false, cotizar y
         # confirmar contestan 503, así que el menú tiene que dejar de ofrecer
         # «Enviar un paquete». Lo que ya está en camino no depende de esto.
         "encomiendas": bool(int(ajustes[encomiendas_abiertas.CLAVE])),
+        # Si se puede gastar en Venezuela y en Brasil. Con esto en false las
+        # cinco rutas que crean un envío contestan 503, así que el menú deja
+        # de ofrecerlas. Lo que ya está en curso no depende de esto.
+        "remesas": remesas,
     }

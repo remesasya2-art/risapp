@@ -90,14 +90,20 @@ SIN_RECARGA = ("Cargar saldo no está disponible por ahora. Podés enviar "
 
 
 async def esta_abierta(db) -> bool:
-    """¿Se puede cargar saldo?"""
-    from services import configuracion
+    """¿Se puede cargar saldo?
+
+    Con remesas cerrada, no, diga lo que diga esta llave: el saldo sólo se
+    gasta en envíos, y cargar plata que no se puede gastar es custodiarla.
+    Ver services/remesas_abiertas.py, «ES LA LLAVE MADRE».
+    """
+    from services import configuracion, remesas_abiertas
     try:
-        return int(await configuracion.leer(db, CLAVE)) == ABIERTA
+        propia = int(await configuracion.leer(db, CLAVE)) == ABIERTA
     except Exception as e:                                    # pragma: no cover
         # Falla ABIERTO. Ver el encabezado: acá el daño está en frenar.
         logger.error("No se pudo leer %s, se asume abierta: %s", CLAVE, e)
-        return True
+        propia = True
+    return propia and await remesas_abiertas.esta_abierta(db)
 
 
 async def exigir_abierta(db) -> None:
