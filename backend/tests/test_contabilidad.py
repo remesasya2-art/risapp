@@ -59,6 +59,7 @@ def _cargar(nombre):
 
 con = _cargar("contabilidad")
 exp = _cargar("contabilidad_export")
+to_decimal128 = _cargar("money").to_decimal128
 
 
 def corre(coro):
@@ -84,8 +85,11 @@ def linea(**extra):
         "created_at": DIA, "book": "RIS", "user_id": "usr_ana",
         "user_email": "ana@example.com", "user_name": "Ana Pérez",
         "movement_type": "recarga_pix", "direction": "credit",
-        # float, como lo guarda de verdad `abs(float(amount or 0))`
-        "amount": 100.0, "signed_amount": 100.0,
+        # Decimal128, como lo guarda `record_ris_entry` desde que el libro dejó
+        # de escribir `abs(float(amount or 0))`. Con un float acá, una
+        # conversión que sólo funciona con float pasaba todos estos tests: se
+        # vio el 26 de septiembre de 2026 (tests/test_exportar_con_decimal128.py).
+        "amount": to_decimal128("100.00"), "signed_amount": to_decimal128("100.00"),
         "currency": "RIS", "account": "balance_ris",
         "actor": {"type": "webhook", "id": None, "email": None},
     }
