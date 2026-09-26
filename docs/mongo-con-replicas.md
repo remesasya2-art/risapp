@@ -1,12 +1,18 @@
 # Pasar el Mongo de Railway a un conjunto de réplicas
 
-> **Estado al 26 de septiembre de 2026: Mongo volvió a ser de un solo nodo.**
-> El 25 se pasó a réplicas con esta guía y anduvo. Esa tarde, en un reinicio,
-> Mongo no se reconoció en su propio conjunto y quedó sin primario: la
-> aplicación no pudo escribir hasta volver atrás con la sección 5. La causa y
-> el arreglo están en «Por qué espera a su nombre», en la sección 1. El comando
-> de la sección 1 ya trae el arreglo: para volver a réplicas se sigue esta guía
-> desde el principio, incluida la prueba de reinicio de la sección 2.
+> **Hecho en producción el 26 de septiembre de 2026**, con el comando de la
+> sección 1 y la prueba de reinicio de la sección 2. La salud dice
+> `SALUD| bien`, con «transacciones» en verde y «réplicas: un solo miembro».
+> Lo que se vio está al final de la sección 7.
+>
+> Fue el segundo intento. El 25 se pasó a réplicas con la primera versión de
+> esta guía y anduvo; esa tarde, en un reinicio, Mongo no se reconoció en su
+> propio conjunto y quedó sin primario: la aplicación no pudo escribir hasta
+> volver atrás con la sección 5. La causa y el arreglo están en «Por qué
+> espera a su nombre», en la sección 1.
+>
+> La segunda parte (tres miembros) está sin hacer. Su sección 8 ya quedó
+> hecha con el comando de la sección 1: se empieza por la 9.
 
 **Qué se gana:** que cada movimiento de plata del cliente se escriba entero o no
 se escriba. Un Mongo de **un solo nodo** no tiene *transacciones* —la forma de
@@ -265,6 +271,22 @@ otro lado durante unos segundos, como en Railway:
   volvió como secundario;
 - con un nombre que nunca apunta al contenedor, esperó el tope —tres minutos—, escribió
   NOMBRE SIN CONFIRMAR, arrancó igual y se sumó.
+
+**Lo que se vio en producción el 26 de septiembre de 2026**, con el comando de
+la sección 1:
+
+- al desplegarlo —contenedor nuevo—, `NOMBRE CONFIRMADO (1 esperas)`: la
+  primera vez que miró, el nombre todavía no apuntaba al contenedor. Es el
+  mismo retraso que el 25 dejó a Mongo sin primario; esta vez esperó dos
+  segundos y siguió. Mongo pasó a primario («stepping up all services») y
+  escribió REPLICAS LISTAS dos segundos después;
+- en la prueba de reinicio —**Restart**, que reusa el contenedor—,
+  `NOMBRE CONFIRMADO (0 esperas)`, primario dos segundos después de apagarse,
+  y REPLICAS LISTAS;
+- el backend, redesplegado, atendió antes de terminar sus índices
+  (`ARRANQUE| base preparada` salió después de «Application startup
+  complete») y la salud dijo `SALUD| bien`, con «Mongo es un conjunto de
+  réplicas» y «réplicas: un solo miembro».
 
 
 ---
