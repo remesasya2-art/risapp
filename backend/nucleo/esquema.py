@@ -95,7 +95,7 @@ plan_de_cuentas = Table(
 cuentas = Table(
     "cuentas", metadata,
     Column("id", String(40), primary_key=True),               # «cta_…»
-    Column("titular_ref", String(80), nullable=False),        # referencia al titular en la app (user_id)
+    Column("titular_ref", String(80), nullable=False),        # el id del legajo del titular («tit_…»), nunca un user_id de la app
     Column("cuenta_contable", String(20), ForeignKey("plan_de_cuentas.codigo"), nullable=False),
     Column("moneda", String(3), nullable=False, default="BRL"),
     Column("estado", String(12), nullable=False, default="activa"),  # activa, bloqueada, cerrada
