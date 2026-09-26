@@ -153,5 +153,6 @@ def test_LA_PESTANA_DE_BITCOIN_ES_SOLO_DEL_SUPER_ADMIN_EN_EL_PANEL():
     """Si el panel se la mostrara a un `admin`, vería la pestaña y un 403."""
     import re
     from pathlib import Path
-    panel = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "AdminPanel.jsx").read_text(encoding="utf-8")
+    # El catálogo de secciones vive aparte desde que AdminPanel.jsx llegó a su tope.
+    panel = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "components" / "admin" / "seccionesDelPanel.js").read_text(encoding="utf-8")
     assert re.search(r"\{\s*key:\s*'btc'[^}]*superAdminOnly:\s*true", panel), "la pestaña 'btc' tiene que ser superAdminOnly"

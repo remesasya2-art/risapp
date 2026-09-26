@@ -80,9 +80,18 @@ async def para_poner_plata(db) -> str:
         lo manda a una pantalla que rebota, que es el error que este archivo
         existe para no repetir.
     """
-    from services import pago_al_final, recarga_abierta
+    from services import pago_al_final, recarga_abierta, remesas_abiertas
 
     try:
+        # CON REMESAS EN PAUSA NO HAY VIA QUE NOMBRAR, Y ESO SE DICE.
+        #
+        #   La llave madre cierra la carga de saldo y los envíos pagando al
+        #   final: las dos respuestas de abajo mandarían al cliente a una
+        #   puerta cerrada. Y sin esto, la tercera dejaba un ERROR diciendo
+        #   que el seguro de la configuración falló, cuando lo que pasó es que
+        #   alguien pausó el servicio a propósito.
+        if not await remesas_abiertas.esta_abierta(db):
+            return remesas_abiertas.EN_PAUSA
         se_puede_cargar = await recarga_abierta.esta_abierta(db)
         hay_pago_al_final = await pago_al_final.esta_activo(db)
     except Exception as e:                                    # pragma: no cover

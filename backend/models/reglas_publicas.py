@@ -48,6 +48,7 @@ class LosLimites(BaseModel):
     pago_al_final: Escalar = None
     recarga: Escalar = None
     encomiendas: Escalar = None
+    remesas: Escalar = None
 
 
 MiCupoSinVerificar = _simple("MiCupoSinVerificar", (

@@ -33,10 +33,11 @@ EL ORDEN DE LA LISTA IMPORTA
 from fastapi import APIRouter
 
 from routes.admin import (kyc, lotes, mantenimiento, pagos_incompletos,
-                          pendientes, recargas_ves, reportes, retiros, soporte,
-                          tasas, usuarios)
+                          pendientes, recargas_ves, reportes, retiros,
+                          servicios, soporte, tasas, usuarios)
 
 router = APIRouter()
 for _parte in (mantenimiento, usuarios, retiros, recargas_ves, lotes,
-               pagos_incompletos, reportes, tasas, kyc, soporte, pendientes):
+               pagos_incompletos, reportes, tasas, kyc, soporte, pendientes,
+               servicios):
     router.include_router(_parte.router)

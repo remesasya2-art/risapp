@@ -105,6 +105,39 @@ CATALOGO = {
 }
 
 
+# ─── De qué servicio es cada permiso ──────────────────────────────────────
+#
+# RIS son tres servicios que se prenden por separado —remesas, encomiendas y
+# el banco— sobre una plataforma común (ver services/servicios.py). El
+# personal es UN solo equipo, y lo que decide en qué servicio trabaja cada
+# persona son sus permisos: la pantalla de RRHH los muestra agrupados así, y
+# el panel le enseña a cada quien sólo los servicios donde tiene algo que
+# hacer.
+#
+# Sirve para ORDENAR, no para dar ni quitar nada: el permiso sigue valiendo
+# lo mismo. Y el banco todavía no tiene permisos propios: hoy su gerencia es
+# sólo del super administrador (nucleo/rutas.py), y los suyos llegan con la
+# gerencia bancaria. Un test exige que cada permiso del catálogo tenga
+# servicio: uno nuevo sin servicio no aparecería en ningún grupo de RRHH.
+PLATAFORMA, REMESAS, ENCOMIENDAS, BANCO = "plataforma", "remesas", "encomiendas", "banco"
+
+SERVICIO_DEL_PERMISO = {
+    "users.view": PLATAFORMA, "users.blacklist": PLATAFORMA,
+    "kyc.view": PLATAFORMA, "kyc.approve": PLATAFORMA, "kyc.ficha": PLATAFORMA,
+    "support.view": PLATAFORMA, "support.respond": PLATAFORMA,
+    "support.close": PLATAFORMA, "support.pedidos": PLATAFORMA,
+    "settings.view": PLATAFORMA, "settings.edit": PLATAFORMA,
+    "admins.view": PLATAFORMA,
+    # El saldo de la cuenta es de remesas: se carga para gastar en Venezuela
+    # y en Brasil. Ajustarlo a mano es una decisión sobre esa plata.
+    "saldos.ajustar": REMESAS,
+    "recharges.view": REMESAS, "recharges.approve": REMESAS,
+    "transactions.view": REMESAS, "transactions.export": REMESAS,
+    "envios.view": ENCOMIENDAS, "envios.operar": ENCOMIENDAS,
+    "envios.dinero": ENCOMIENDAS,
+}
+
+
 # ─── La tabla ─────────────────────────────────────────────────────────────
 #
 # (método, camino) -> permiso. El camino es la PLANTILLA que declara la ruta,

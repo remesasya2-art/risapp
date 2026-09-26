@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import useRecarga from '../hooks/useRecarga';
+import useRemesas from '../hooks/useRemesas';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -18,6 +19,7 @@ import { abrirArchivo, bajarArchivo, rutaDeArchivo } from '../utils/urlDeArchivo
 
 export default function History() {
   const recarga = useRecarga();
+  const remesas = useRemesas();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { rates } = useRate();
@@ -226,9 +228,9 @@ export default function History() {
                   <Plus style={{ width: '18px', height: '18px' }} /> Recargar saldo
                 </Link>
               ) : null}
-              <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: 'var(--en-oscuro-acento, #5B4FE9)', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
+              {remesas.abiertas && <Link to="/send" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: 'var(--en-oscuro-acento, #5B4FE9)', color: '#ffffff', borderRadius: '12px', textDecoration: 'none', fontWeight: 600, fontSize: '14px' }}>
                 <ArrowUpRight style={{ width: '18px', height: '18px' }} /> Nuevo envío
-              </Link>
+              </Link>}
             </div>
           </div>
         ) : (

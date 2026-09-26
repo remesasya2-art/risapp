@@ -205,6 +205,17 @@ class _ColeccionFalsa:
         return type("R", (), {"modified_count": 1})()
 
 
+class _ConfigFalsa(_ColeccionFalsa):
+    """La colección de ajustes busca POR CLAVE. La genérica devuelve siempre
+    el primer documento, y con más de una llave leída en el camino (la de
+    cripto y la de remesas, que es su llave madre) la de remesas leía el 2 de
+    la cripto: quedaba «en pausa» y la guarda cerraba la entrada."""
+
+    async def find_one(self, query=None, projection=None, sort=None):
+        clave = (query or {}).get("clave")
+        return next((d for d in self.docs if d.get("clave") == clave), None)
+
+
 class _DBFalsa:
     def __init__(self, beneficiario, tasa):
         self.beneficiaries = _ColeccionFalsa([beneficiario])
@@ -220,7 +231,7 @@ class _DBFalsa:
         #   Se escribe el estado en la base falsa en vez de sustituir la
         #   guarda: así estos tests siguen corriendo por el código de verdad,
         #   y si alguien cambia cómo se lee el ajuste, se enteran acá también.
-        self.config = _ColeccionFalsa([{"clave": "cripto_abierta", "valor": 2}])
+        self.config = _ConfigFalsa([{"clave": "cripto_abierta", "valor": 2}])
 
     def __getitem__(self, nombre):
         """`services/configuracion.py` entra por `db["config"]`, no por

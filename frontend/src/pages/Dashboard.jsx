@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import useRecarga from '../hooks/useRecarga';
 import useEncomiendas from '../hooks/useEncomiendas';
+import useRemesas from '../hooks/useRemesas';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const cripto = useCripto();
   const recarga = useRecarga();
   const encomiendas = useEncomiendas();
+  const remesas = useRemesas();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -160,8 +162,11 @@ export default function Dashboard() {
   // Base menu items
   const baseMenuItems = [
     { icon: LayoutDashboard, label: 'Inicio', path: '/' },
-    { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
-    { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
+    // Con remesas en pausa las dos desaparecen: ver hooks/useRemesas.js.
+    ...(remesas.abiertas ? [
+      { icon: ArrowLeftRight, label: 'Gastar en Venezuela', path: '/send' },
+      { icon: ArrowUpRight, label: 'Gastar en Brasil', path: '/send-reais' },
+    ] : []),
     { icon: History, label: 'Historial', path: '/history' },
     { icon: User, label: 'Perfil', path: '/profile' },
     { icon: HelpCircle, label: 'Soporte', path: '/support' },
@@ -181,7 +186,7 @@ export default function Dashboard() {
   // desaparece del menú; quien ya tiene un paquete en camino lo sigue viendo
   // desde el historial y desde «Mis envíos», que no dependen de esto.
   if (encomiendas.abiertas) {
-    const despuesDeBrasil = menuItems.findIndex((m) => m.path === '/send-reais') + 1;
+    const despuesDeBrasil = menuItems.findIndex((m) => m.path === '/send-reais') + 1 || 1;
     menuItems.splice(despuesDeBrasil, 0, { icon: Package, label: 'Enviar un paquete', path: '/envios' });
   }
 
@@ -552,7 +557,7 @@ export default function Dashboard() {
             updatedAt={rates?.updated_at || rates?.last_updated || new Date()}
             isMobile={isMobile}
           />
-          <Calculadora isMobile={isMobile} />
+          {remesas.abiertas && <Calculadora isMobile={isMobile} />}
         </div>
 
         {/* El bono de bienvenida. Saldo aparte, con reglas propias: bloqueado
@@ -609,11 +614,11 @@ export default function Dashboard() {
                 <Link to="/recharge" style={{ color: 'var(--en-oscuro-acento, #5B4FE9)', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
                   Recarga saldo para comenzar
                 </Link>
-              ) : (
+              ) : remesas.abiertas ? (
                 <Link to="/send" style={{ color: 'var(--en-oscuro-acento, #5B4FE9)', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
                   Hacé tu primer envío
                 </Link>
-              )}
+              ) : null}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

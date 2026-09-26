@@ -136,7 +136,7 @@ def test_el_pago_publicado_no_tiene_agujeros(base):
     """
     p = corre(limits.limits_payload(base))
     assert set(p) == {"pix", "tarjeta", "ves", "sin_verificar", "cripto",
-                      "pago_al_final", "recarga", "encomiendas"}, p
+                      "pago_al_final", "recarga", "encomiendas", "remesas"}, p
     assert set(p["pix"]) == {"min_brl", "max_brl"}
     assert set(p["tarjeta"]) == {"min_brl", "max_brl"}
     assert set(p["ves"]) == {"min_ves", "max_ves"}

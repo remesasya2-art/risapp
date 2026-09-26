@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRate } from '../contexts/RateContext';
-import { 
-  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, TrendingUp, Search, Package, Boxes, 
-  RefreshCw, Shield, Activity, Eye, X, ChevronRight, UserCog, Gift, Briefcase, KeyRound, Trash2, MessageSquare, CheckCircle, Clock, Phone, Mail, Send, Download, Image, Upload, AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck, SlidersHorizontal, Menu
-, AlertTriangle, BarChart3, Receipt, Landmark, Archive } from 'lucide-react';
+import {
+  ArrowLeft, Users, ArrowUpRight, ArrowDownLeft, Search, RefreshCw, Shield,
+  Eye, X, UserCog, KeyRound, MessageSquare, CheckCircle, Clock, Phone, Mail,
+  Send, Download, Image, Menu,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { confirmar } from '../components/flujo/confirmar.js';
@@ -28,6 +29,9 @@ import RecargasVES from '../components/admin/RecargasVES';
 import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
 import Bancos from '../components/admin/Bancos';
+import MenuDelPanel from '../components/admin/MenuDelPanel';
+import Servicios from '../components/admin/Servicios';
+import { TABS, CRM_SUBTABS } from '../components/admin/seccionesDelPanel';
 import { fmt } from '../utils/format';
 import MesaDeAyuda from '../components/admin/MesaDeAyuda';
 import { WipeButton } from '../components/common/WipeButton';
@@ -59,151 +63,7 @@ const maskCPF = (cpf) => {
   return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
 };
 
-const CRM_KEYS = ['users', 'kyc', 'blacklist', 'chat', 'support'];
-
-const CRM_SUBTABS = [
-  { key: 'users', label: 'Usuarios', icon: Users },
-  { key: 'kyc', label: 'KYC', icon: Shield },
-  { key: 'blacklist', label: 'Lista negra', icon: Shield },
-  { key: 'chat', label: 'Chat', icon: MessageSquare },
-  { key: 'support', label: 'Soporte', icon: MessageSquare },
-  { key: 'ratings', label: 'Calificaciones', icon: Star },
-];
-
-const TABS = [
-  { key: 'overview', label: 'Resumen', icon: Activity },
-  // Qué usa la gente. `superAdminOnly`: es el cuadro de mando del negocio
-  // —altas, embudo, funciones más usadas—, no una tarea que se delegue.
-  { key: 'uso', label: 'Uso', icon: BarChart3, superAdminOnly: true },
-  { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
-  { key: 'diferencias', label: 'Diferencias de pago', icon: AlertCircle, superAdminOnly: true },
-  { key: 'reportes', label: 'Reportes', icon: Download },
-  // Antes del Libro mayor a propósito: acá están las cuatro respuestas, allá
-  // el detalle contable de cada una. Sólo del super administrador, igual que
-  // las rutas que consulta (`get_super_admin` en el backend).
-  { key: 'seguridad', label: 'Seguridad financiera', icon: ShieldCheck, superAdminOnly: true },
-  // Al lado de Seguridad financiera porque es la misma clase de pregunta —una
-  // sobre el dinero que hay que ir a buscar, no sobre la operación del día— y
-  // porque consulta la misma puerta del backend (`get_super_admin`). Va después
-  // y no antes: aquélla se carga sola y contesta de una, ésta hay que pulsarla
-  // y le pregunta a Mercado Pago pago por pago.
-  { key: 'cobros', label: 'Cobros sin acreditar', icon: Search, superAdminOnly: true },
-  // La hoja que alimenta Mercado Pago sola: una fila por aviso que llega, se
-  // haya podido acreditar o no. SIN `superAdminOnly`, igual que la ruta que
-  // consulta (`get_admin_user`): quien atiende a un cliente que dice «pagué y
-  // no me aparece» tiene que poder mirarlo en el momento, y no hay dinero que
-  // mover acá —es de sólo lectura y no muestra datos del pagador—.
-  { key: 'hoja_mp', label: 'Pagos de Mercado Pago', icon: Receipt },
-  { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
-  // Crear y borrar las cuentas de donde salen los retiros y a donde entran
-  // las recargas. Sólo del super administrador, como sus rutas.
-  { key: 'bancos', label: 'Bancos', icon: Landmark, superAdminOnly: true },
-  { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
-  { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
-  { key: 'crm', label: 'CRM', icon: UserCog },
-  { key: 'rates', label: 'Tasas', icon: TrendingUp },
-  // Sólo del super administrador, igual que las dos rutas que consulta: la
-  // lista de órdenes (`/btc/operador/pendientes`) y marcarlas como enviadas
-  // (`/admin/btc/marcar-enviado`). Visible para un `admin`, mostraba la lista
-  // pero el botón de pagar le contestaba 403.
-  { key: 'btc', label: 'BTC Lightning', icon: Zap, superAdminOnly: true },
-  { key: 'credits', label: 'Créditos Cripto', icon: Wallet, superAdminOnly: true },
-  // La cola de Pacaraima. SIN `superAdminOnly`: la usa el operador todos los
-  // dias y el super administrador tambien puede hacer cualquier tarea de
-  // operador —pasa por `get_crm_user` y por `get_admin_user`, asi que ninguna
-  // ruta lo rechaza—. La separacion de roles va en el otro sentido: el que viaja
-  // y pesa cajas no puede cambiar los precios ni la cuenta que recibe los
-  // fletes.
-  { key: 'operacion', label: 'Cola de envíos', icon: Boxes },
-  // La configuracion, en cambio, si es solo del super administrador: cambia
-  // precios, la cuenta que recibe los fletes y a nombre de quien se rotulan las
-  // cajas.
-  { key: 'envios', label: 'Config. de envíos', icon: Package, superAdminOnly: true },
-  // Recursos Humanos y el libro de auditoría son SÓLO del super administrador,
-  // igual que en el backend (`get_super_admin`). Dar de alta a alguien con
-  // permisos, y leer quién hizo qué, no son cosas que se deleguen: si se
-  // pudieran delegar, quien las tuviera podría darse a sí mismo el resto.
-  { key: 'rrhh', label: 'Recursos Humanos', icon: UserCog, superAdminOnly: true },
-  { key: 'auditoria', label: 'Auditoría', icon: ScrollText, superAdminOnly: true },
-  // Los errores del servidor. Sólo super administrador, como la auditoría: una
-  // línea trae la ruta, el usuario que lo sufrió y el texto de una excepción.
-  { key: 'errores', label: 'Errores', icon: AlertTriangle, superAdminOnly: true },
-  // Los números configurables del panel. `superAdminOnly` por el mismo motivo
-  // que Recursos Humanos: uno de esos números decide cuánta plata se le regala
-  // a cada cuenta que se registra, y quien pudiera cambiarlo podría subirlo,
-  // cobrar y bajarlo otra vez. El backend lo exige igual (`get_super_admin`).
-  { key: 'configuracion', label: 'Configuración', icon: SlidersHorizontal, superAdminOnly: true },
-  // El respaldo de la base: se baja un archivo con los datos de todos los
-  // clientes. Sólo super administrador; el backend lo exige igual.
-  { key: 'respaldo', label: 'Respaldo de la base', icon: Archive, superAdminOnly: true },
-  // El laboratorio del núcleo de cuentas: la arquitectura de fintech que se
-  // construye mientras se resuelve lo legal. SOLO super administrador, y
-  // además el servidor contesta 404 a todo mientras «Núcleo de cuentas» esté
-  // en 0 en Configuración. Los clientes no tienen ninguna puerta a esto. Ver
-  // components/admin/Nucleo.jsx.
-  { key: 'nucleo', label: 'Núcleo (laboratorio)', icon: Landmark, superAdminOnly: true },
-];
-
-// LOS SEIS GRUPOS DEL PANEL
-//
-//   Antes esto era una tira plana de dieciocho pestañas que envolvía en tres
-//   filas, ordenadas por el momento en que se fueron agregando. El propio
-//   archivo lo estaba peleando a mano: había comentarios pidiendo que una
-//   pestaña quedara «antes del Libro mayor a propósito» y otra «al lado de
-//   Seguridad financiera», que es agrupar sin tener con qué.
-//
-//   El criterio no es el tema, es QUE VINISTE A HACER:
-//
-//     Operación      trabajo que espera a que alguien lo haga
-//     Clientes       la gente y lo que manda
-//     Encomiendas    las cajas y lo que cuesta mandarlas
-//     Contabilidad   dinero que ya se movió, para cuadrarlo o explicarlo
-//     Administración lo que cambia cómo se comporta el sistema
-//
-//   `hijas` son claves de `TABS` y `CRM_SUBTABS`, no secciones nuevas: los
-//   nombres internos no cambian, así que los enlaces con `?tab=` y el salto de
-//   la campana del equipo siguen andando igual.
-const GRUPOS = [
-  { key: 'g_resumen', label: 'Resumen', icon: Activity, hijas: ['overview', 'uso'] },
-  { key: 'g_operacion', label: 'Operación', icon: CheckCircle,
-    hijas: ['ordenes', 'withdrawals', 'recharges', 'diferencias', 'hoja_mp',
-            'btc', 'credits', 'rates'] },
-  { key: 'g_clientes', label: 'Clientes', icon: UserCog,
-    hijas: ['users', 'kyc', 'blacklist', 'chat', 'support', 'ratings'] },
-  { key: 'g_envios', label: 'Encomiendas', icon: Boxes,
-    hijas: ['operacion', 'envios'] },
-  { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
-    hijas: ['ledger', 'bancos', 'seguridad', 'cobros', 'reportes'] },
-  { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
-    hijas: ['configuracion', 'respaldo', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
-];
-
-// La ficha de cada sección, venga de donde venga. `crm` no entra: era el
-// contenedor de las subpestañas y ahora ese trabajo lo hace el grupo.
-const POR_CLAVE = Object.fromEntries(
-  [...TABS.filter((t) => t.key !== 'crm'), ...CRM_SUBTABS].map((s) => [s.key, s]));
-
-// El número que dice cuánto espera en una pestaña.
-//
-// Se pinta SOLO si hay algo. Un «0» permanente en nueve pestañas es ruido que
-// se aprende a no mirar, y entonces el 3 de al lado tampoco se mira.
-function Pendiente({ cuantos, activa }) {
-  if (!cuantos) return null;
-  return (
-    <span
-      style={{
-        minWidth: '20px', height: '20px', padding: '0 6px', borderRadius: '9999px',
-        fontSize: '11px', fontWeight: 700, display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center',
-        backgroundColor: activa ? 'rgba(255,255,255,0.28)' : 'var(--en-oscuro-error-suave, #fee2e2)',
-        color: activa ? '#ffffff' : 'var(--en-oscuro-error, #b91c1c)',
-      }}
-      data-testid="pendiente"
-    >
-      {cuantos > 99 ? '99+' : cuantos}
-    </span>
-  );
-}
+// Las secciones y el menú: components/admin/seccionesDelPanel.js y MenuDelPanel.jsx.
 
 // Cómo se llama cada rol en pantalla.
 //
@@ -341,35 +201,6 @@ const [searchParams, setSearchParams] = useSearchParams();
 
   // Elegir una sección cierra el menú del teléfono. Sin esto queda tapando lo
   // que la persona acaba de pedir.
-  // QUE GRUPOS ESTAN DESPLEGADOS
-  //
-  //   Arrancan TODOS CERRADOS. Es una decisión del dueño del proyecto y va
-  //   anotada porque la primera versión hacía lo contrario: los abría todos,
-  //   con el argumento de que el menú existe para ver las veinte secciones sin
-  //   tocar nada.
-  //
-  //   Lo que ese argumento no miraba: veinte renglones abiertos no se leen de
-  //   un vistazo, se recorren. Con los grupos cerrados, el menú entero son
-  //   SEIS renglones que entran juntos en cualquier pantalla —teléfono
-  //   incluido—, y se despliega el que se necesita. Eso es lo que hace que
-  //   agrupar sirva de algo en vez de ser sólo un título encima de una lista
-  //   igual de larga.
-  //
-  //   Cada grupo se abre y se cierra por su cuenta: se pueden tener dos
-  //   abiertos a la vez. Cerrar los otros al abrir uno es la otra forma
-  //   posible, y se descartó porque obliga a reabrir el de al lado cada vez
-  //   que se va y se vuelve.
-  //
-  //   El grupo de la sección abierta se despliega solo y no se puede cerrar:
-  //   esconder justo lo que estás mirando deja el menú sin poder indicar dónde
-  //   estás parada.
-  const [desplegados, setDesplegados] = useState(() => new Set());
-
-  const desplegar = (clave) => setDesplegados((antes) => {
-    const ahora = new Set(antes);
-    if (ahora.has(clave)) ahora.delete(clave); else ahora.add(clave);
-    return ahora;
-  });
 
   const irA = (clave) => {
     setActiveTab(clave);
@@ -471,9 +302,6 @@ const [searchParams, setSearchParams] = useSearchParams();
   }, []);
   useEffect(() => { cargarBancos(); }, [cargarBancos]);
 
-  useEffect(() => {
-  }, []);
-
   // Un solo pedido para las nueve secciones. El servidor devuelve únicamente
   // los contadores de las que ESTE usuario puede abrir: un contador es
   // información, y «hay 14 retiros pendientes» le dice a quien no puede verlos
@@ -504,41 +332,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     return () => clearInterval(reloj);
   }, [cargarPendientes, activeTab]);
 
-  // CRM no tiene trabajo propio: es la puerta a KYC, Soporte y las demás. Su
-  // número es la suma de lo que hay adentro, o la pestaña se ve vacía mientras
-  // hay ocho KYC esperando a un clic de distancia.
-  // Las mismas reglas de siempre, en un solo lugar en vez de repartidas entre
-  // la tira de arriba y la de las subpestañas.
-  const puedeVerSeccion = (clave) => {
-    if (isAgent) {
-      return ['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion']
-        .includes(clave);
-    }
-    if (clave === 'ratings') return user?.role === 'super_admin';
-    return !POR_CLAVE[clave]?.superAdminOnly || user?.role === 'super_admin';
-  };
-
-  const gruposVisibles = GRUPOS
-    .map((g) => ({ ...g, hijas: g.hijas.filter(puedeVerSeccion) }))
-    .filter((g) => g.hijas.length > 0);
-
-  const grupoActivo = gruposVisibles.find((g) => g.hijas.includes(activeTab))
-    || gruposVisibles[0];
-
-  // EL CONTADOR SUBE AL GRUPO, Y NO ES UN ADORNO
-  //
-  //   El número que dice cuánto espera vivía en la pestaña de cada sección, y
-  //   eso se hizo a propósito: quien entra al panel tiene que ver DESDE AFUERA
-  //   dónde hay cola. Al agrupar, ese número queda un nivel más adentro.
-  //
-  //   Así que el grupo muestra la suma y cada sección conserva el suyo:
-  //   «Operación 7» se ve de entrada, y al abrirlo se ve que son 4 de Órdenes
-  //   y 3 de Retiros. Sin esto, agrupar escondería justo la señal que dice por
-  //   dónde empezar.
-  const pendientesDe = (clave) => pendientes[clave] || 0;
-
-  const pendientesDelGrupo = (grupo) =>
-    grupo.hijas.reduce((suma, clave) => suma + pendientesDe(clave), 0);
 
   const loadData = async () => {
     setLoading(true);
@@ -971,85 +764,9 @@ const [searchParams, setSearchParams] = useSearchParams();
       {/* El menú de las secciones: fijo al costado en pantalla ancha, y
           plegado detrás del botón del encabezado en el teléfono. */}
       <div style={{ display: 'flex', alignItems: 'flex-start', maxWidth: '1440px', margin: '0 auto' }}>
-        {/* La sombra que tapa el contenido mientras el menú está abierto. Se
-            toca y se cierra: en un teléfono es más fácil que buscar la X. */}
-        {!esAncho && menuAbierto && (
-          <div onClick={() => setMenuAbierto(false)}
-            style={{ position: 'fixed', inset: '64px 0 0 0', zIndex: 45,
-                     backgroundColor: 'rgba(17,24,39,0.45)' }} />
-        )}
-        <aside style={{
-          width: '236px', flexShrink: 0, backgroundColor: 'var(--en-oscuro-superficie, #ffffff)',
-          borderRight: '1px solid var(--en-oscuro-linea, #e5e7eb)', padding: '18px 12px',
-          overflowY: 'auto',
-          ...(esAncho ? {
-            minHeight: 'calc(100vh - 64px)', position: 'sticky', top: '64px',
-            maxHeight: 'calc(100vh - 64px)',
-          } : {
-            position: 'fixed', top: '64px', bottom: 0, left: 0, zIndex: 50,
-            boxShadow: '2px 0 16px rgba(0,0,0,0.12)',
-            transform: menuAbierto ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.2s ease',
-          }),
-        }}>
-          {gruposVisibles.map((grupo) => {
-            // El grupo de la sección abierta no se pliega, aunque se haya
-            // pedido: el menú tiene que poder mostrar dónde estás parada.
-            const tieneLoAbierto = grupo.hijas.includes(activeTab);
-            const abierto = tieneLoAbierto || desplegados.has(grupo.key);
-            return (
-            <div key={grupo.key} style={{
-              marginBottom: '10px', paddingBottom: '10px',
-              // La línea entre grupos. Antes la separación era sólo aire, y el
-              // aire no se lee como una división: los títulos en gris chiquito
-              // se veían como espacio sobrante y el menú parecía una lista
-              // larga y plana de veinte cosas sueltas.
-              borderBottom: '1px solid var(--en-oscuro-linea, #f1f2f6)',
-            }}>
-              <button onClick={() => desplegar(grupo.key)}
-                data-testid={`grupo-${grupo.key}`}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
-                  padding: '7px 10px', marginBottom: '3px', borderRadius: '8px',
-                  border: 'none', backgroundColor: 'transparent', cursor: 'pointer',
-                  fontSize: '11.5px', fontWeight: 800, color: 'var(--en-oscuro-texto, #111827)',
-                  textTransform: 'uppercase', letterSpacing: '0.06em',
-                }}>
-                <grupo.icon style={{ width: '14px', height: '14px', color: 'var(--en-oscuro-acento, #6366f1)' }} />
-                <span style={{ flex: 1, textAlign: 'left' }}>{grupo.label}</span>
-                <Pendiente cuantos={pendientesDelGrupo(grupo)} activa={false} />
-                <ChevronRight style={{
-                  width: '14px', height: '14px', color: 'var(--en-oscuro-texto-3, #c2c6d0)',
-                  transform: abierto ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 0.15s',
-                }} />
-              </button>
-              {abierto && grupo.hijas.map((clave) => {
-                const s = POR_CLAVE[clave];
-                if (!s) return null;
-                const activa = activeTab === clave;
-                return (
-                  <button key={clave} onClick={() => irA(clave)}
-                    data-testid={`tab-${clave}`}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '9px', width: '100%',
-                      padding: '8px 10px', marginBottom: '2px', borderRadius: '9px',
-                      border: 'none', cursor: 'pointer', textAlign: 'left',
-                      fontSize: '13.5px', fontWeight: activa ? 600 : 500,
-                      backgroundColor: activa ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'transparent',
-                      color: activa ? 'var(--en-oscuro-acento, #4338ca)' : 'var(--en-oscuro-texto-2, #4b5563)',
-                    }}
-                  >
-                    <s.icon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden',
-                                   textOverflow: 'ellipsis' }}>{s.label}</span>
-                    <Pendiente cuantos={pendientesDe(clave)} activa={false} />
-                  </button>
-                );
-              })}
-            </div>
-          );})}
-        </aside>
+        <MenuDelPanel user={user} activeTab={activeTab} irA={irA} abrirSeccion={setActiveTab}
+          pendientes={pendientes} esAncho={esAncho}
+          menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
 
       <main key={recarga} style={{ flex: 1, minWidth: 0, padding: esAncho ? '24px' : '16px' }}>
         {/* Overview Tab */}
@@ -1102,6 +819,7 @@ const [searchParams, setSearchParams] = useSearchParams();
             <Errores />
           </ErrorBoundary>
         )}
+        {activeTab === 'servicios' && <ErrorBoundary clave="servicios" donde="Servicios"><Servicios /></ErrorBoundary>}
         {activeTab === 'nucleo' && (
           <ErrorBoundary clave="nucleo" donde="Núcleo de cuentas">
             <Nucleo />

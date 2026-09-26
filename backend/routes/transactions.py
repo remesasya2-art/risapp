@@ -46,7 +46,7 @@ def _normalize_tx_money(tx):
     return tx
 from models.user import User
 from models.requests import WithdrawalRequest, BeneficiaryCreate
-from routes.dependencies import get_current_user, get_verified_user, sin_transacciones_personales
+from routes.dependencies import get_current_user, get_verified_user, sin_transacciones_personales, con_remesas_abiertas
 from services.idempotency import claim_idempotency, store_idempotency_result
 from services.notifications import create_notification
 from utils.helpers import get_next_withdrawal_id
@@ -364,7 +364,7 @@ def _como_se_lista_en_brasil(b: dict) -> dict:
         "created_at": b.get("created_at"),
     }
 
-@router.post("/reais/send", response_model=MiEnvioDeReais, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/reais/send", response_model=MiEnvioDeReais, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales), Depends(con_remesas_abiertas)])
 async def create_reais_send(request: ReaisSendRequest, current_user: User = Depends(get_current_user)):
     """Crea una orden de envío RIS → Reais (1 RIS = 1 R$, sin comisión: ya viene
     incluida en la recarga). Queda pendiente para que el super_admin la pague
@@ -416,8 +416,8 @@ async def create_reais_send(request: ReaisSendRequest, current_user: User = Depe
 #   conserva por si algún cliente viejo lo llama, ahora con el mismo candado.
 #   Hay un test que recorre la aplicación armada y falla si una ruta de envío
 #   queda sin él.
-@router.post("/withdraw", response_model=MiRetiroPedido, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
-@router.post("/withdrawal/create", response_model=MiRetiroPedido, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales)])
+@router.post("/withdraw", response_model=MiRetiroPedido, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales), Depends(con_remesas_abiertas)])
+@router.post("/withdrawal/create", response_model=MiRetiroPedido, response_model_exclude_unset=True, dependencies=[Depends(sin_transacciones_personales), Depends(con_remesas_abiertas)])
 async def create_withdrawal(request: WithdrawalRequest, current_user: User = Depends(get_current_user)):
     """Create a withdrawal request"""
     if request.amount <= 0:
@@ -1704,7 +1704,7 @@ class CotizarEnvioVesRequest(BaseModel):
 
 
 @router.post("/withdraw-ves/cotizar", response_model=MiCotizacionVes, response_model_exclude_unset=True,
-             dependencies=[Depends(sin_transacciones_personales)])
+             dependencies=[Depends(sin_transacciones_personales), Depends(con_remesas_abiertas)])
 async def cotizar_envio_ves(request: CotizarEnvioVesRequest,
                             current_user: User = Depends(get_current_user)):
     """Deja una orden esperando el pago, y devuelve el QR para pagarla.
@@ -2070,7 +2070,7 @@ class ComprobanteDelEnvioRequest(BaseModel):
 
 
 @router.post("/enviar-reais/cotizar", response_model=MiCotizacionReais, response_model_exclude_unset=True,
-             dependencies=[Depends(sin_transacciones_personales)])
+             dependencies=[Depends(sin_transacciones_personales), Depends(con_remesas_abiertas)])
 async def cotizar_envio_reais(request: CotizarEnvioReaisRequest,
                               current_user: User = Depends(get_current_user)):
     """Deja una orden esperando que el cliente pague en bolívares.

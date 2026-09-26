@@ -227,6 +227,20 @@ async def sin_transacciones_personales(
     return current_user
 
 
+async def con_remesas_abiertas() -> None:
+    """La llave del servicio de remesas, en las rutas donde nace un envío.
+
+    Es una dependencia aparte y no una línea más adentro de
+    `sin_transacciones_personales`, aunque las dos cuelguen de las mismas
+    rutas: aquélla también protege rutas que TERMINAN una operación en curso
+    —subir el comprobante, pagar con tarjeta un envío ya creado—, y ésas
+    tienen que seguir andando con remesas cerrada. Ver
+    services/remesas_abiertas.py.
+    """
+    from services import remesas_abiertas
+    await remesas_abiertas.exigir_abierta()
+
+
 def has_permission(user: User, permission: str) -> bool:
     """Check if user has a specific permission"""
     if user.role == "super_admin":
