@@ -176,7 +176,10 @@ def test_LA_PANTALLA_ESTA_EN_CONTABILIDAD_Y_PREGUNTA_SIN_CUADROS_DEL_NAVEGADOR()
     panel = sin_comentarios(fuente("pages/AdminPanel.jsx") + "\n"
                             + fuente("components/admin/seccionesDelPanel.js"))
     assert "{ key: 'bancos'" in panel and "superAdminOnly: true" in panel.split("{ key: 'bancos'")[1].split("\n")[0]
-    assert "'ledger', 'bancos'" in panel, "la pestaña tiene que estar en el grupo Contabilidad"
+    # Desde que el panel se separó por servicio, Bancos vive en la Tesorería
+    # de Remesas: son las cuentas de donde salen sus retiros y a donde entran
+    # sus recargas. Ver GRUPOS en seccionesDelPanel.js.
+    assert "hijas: ['bancos', 'cobros']" in panel, "la pestaña tiene que estar en la Tesorería de Remesas"
     assert "<Bancos onCambio={cargarBancos} />" in panel, \
         "sin avisarle al panel, Retiros y Recargas no ven el banco nuevo hasta recargar"
     pantalla = sin_comentarios(fuente("components/admin/Bancos.jsx"))

@@ -4,9 +4,10 @@
 // por la regla de las 800: se movió tal cual para poder separar el panel por
 // servicio. Las secciones y los grupos que dibuja están en
 // seccionesDelPanel.js.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { GRUPOS, POR_CLAVE } from './seccionesDelPanel';
+import api from '../../utils/api';
+import { GRUPOS, POR_CLAVE, SERVICIOS_DEL_PANEL, SERVICIO_DE } from './seccionesDelPanel';
 
 // El número que dice cuánto espera en una pestaña.
 //
@@ -31,7 +32,7 @@ function Pendiente({ cuantos, activa }) {
 }
 
 export default function MenuDelPanel({
-  user, activeTab, irA, pendientes, esAncho, menuAbierto, setMenuAbierto,
+  user, activeTab, irA, abrirSeccion, pendientes, esAncho, menuAbierto, setMenuAbierto,
 }) {
   const isAgent = user?.role === 'agent';
 
@@ -67,6 +68,49 @@ export default function MenuDelPanel({
 
   const pendientesDelGrupo = (grupo) =>
     grupo.hijas.reduce((suma, clave) => suma + pendientesDe(clave), 0);
+
+  // LOS CUATRO SERVICIOS
+  //
+  //   El menú muestra los grupos de UN servicio por vez: el de la sección
+  //   abierta. Así, al llegar a una sección desde la campana o desde un
+  //   enlace con `?tab=`, el botón de su servicio se enciende solo, y no
+  //   hace falta un estado aparte que pueda quedar desparejo.
+  //
+  //   Se muestran sólo los servicios en los que esta persona ve alguna
+  //   sección, y los botones sólo si son más de uno: a un agente, que ve
+  //   clientes y la cola de envíos, no se le ofrece el banco.
+  const serviciosVisibles = SERVICIOS_DEL_PANEL.filter(
+    (s) => gruposVisibles.some((g) => g.servicio === s.key));
+  const servicioActual = SERVICIO_DE[activeTab] || serviciosVisibles[0]?.key;
+  const gruposDelServicio = gruposVisibles.filter((g) => g.servicio === servicioActual);
+
+  // Elegir un servicio abre su primera sección, sin cerrar el menú del
+  // teléfono: se eligió un menú, todavía no qué hacer en él.
+  const elegirServicio = (clave) => {
+    const primero = gruposVisibles.find((g) => g.servicio === clave);
+    if (primero && clave !== servicioActual) abrirSeccion(primero.hijas[0]);
+  };
+
+  // Si cada servicio está prendido. Lo mira todo el personal: quien atiende
+  // tiene que saber que remesas está en pausa antes de que un cliente se lo
+  // cuente. Se vuelve a pedir al cambiar de sección, como los pendientes,
+  // así que después de apagar uno en «Servicios» el menú se entera enseguida.
+  const [encendidos, setEncendidos] = useState({});
+  useEffect(() => {
+    let vigente = true;
+    api.get('/admin/servicios')
+      .then((r) => {
+        if (!vigente) return;
+        setEncendidos(Object.fromEntries(
+          (r.data?.servicios || []).map((s) => [s.servicio, s])));
+      })
+      .catch(() => { /* sin el dato, los botones van sin la marca */ });
+    return () => { vigente = false; };
+  }, [activeTab]);
+
+  const pendientesDelServicio = (clave) => gruposVisibles
+    .filter((g) => g.servicio === clave)
+    .reduce((suma, g) => suma + pendientesDelGrupo(g), 0);
 
   // QUE GRUPOS ESTAN DESPLEGADOS
   //
@@ -121,7 +165,47 @@ export default function MenuDelPanel({
           transition: 'transform 0.2s ease',
         }),
       }}>
-        {gruposVisibles.map((grupo) => {
+        {serviciosVisibles.length > 1 && (
+          <div data-testid="servicios-del-panel" style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px',
+            marginBottom: '14px', paddingBottom: '14px',
+            borderBottom: '1px solid var(--en-oscuro-linea, #e5e7eb)',
+          }}>
+            {serviciosVisibles.map((s) => {
+              const activo = s.key === servicioActual;
+              const estado = encendidos[s.key];
+              const apagado = estado && !estado.encendido;
+              return (
+                <button key={s.key} onClick={() => elegirServicio(s.key)}
+                  data-testid={`servicio-${s.key}`}
+                  title={estado ? `${s.label}: ${estado.estado}` : s.label}
+                  style={{
+                    position: 'relative', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', gap: '3px', padding: '8px 4px', borderRadius: '10px',
+                    cursor: 'pointer', fontSize: '12px', fontWeight: activo ? 700 : 600,
+                    border: activo ? '1.5px solid var(--en-oscuro-acento, #4f46e5)' : '1px solid var(--en-oscuro-linea, #e5e7eb)',
+                    backgroundColor: activo ? 'var(--en-oscuro-acento-suave, #eef2ff)' : 'transparent',
+                    color: activo ? 'var(--en-oscuro-acento, #4338ca)' : 'var(--en-oscuro-texto-2, #4b5563)',
+                  }}>
+                  <s.icon style={{ width: '16px', height: '16px' }} />
+                  <span>{s.label}</span>
+                  {apagado && (
+                    <span data-testid={`servicio-${s.key}-apagado`} style={{
+                      fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+                      letterSpacing: '0.04em', color: 'var(--en-oscuro-texto-3, #9ca3af)',
+                    }}>{estado.estado}</span>
+                  )}
+                  {!activo && pendientesDelServicio(s.key) > 0 && (
+                    <span style={{ position: 'absolute', top: '4px', right: '4px' }}>
+                      <Pendiente cuantos={pendientesDelServicio(s.key)} activa={false} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {gruposDelServicio.map((grupo) => {
           // El grupo de la sección abierta no se pliega, aunque se haya
           // pedido: el menú tiene que poder mostrar dónde estás parada.
           const tieneLoAbierto = grupo.hijas.includes(activeTab);

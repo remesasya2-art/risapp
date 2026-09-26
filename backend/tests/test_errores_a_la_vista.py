@@ -281,7 +281,7 @@ def test_la_pestana_existe_y_es_solo_del_super_administrador():
     assert "key: 'errores'" in panel, "se fue la pestaña Errores"
     linea = next(l for l in panel.splitlines() if "key: 'errores'" in l)
     assert "superAdminOnly: true" in linea
-    assert "'errores'" in next(l for l in panel.splitlines() if "hijas: ['configuracion'" in l)
+    assert "'errores'" in next(l for l in panel.splitlines() if "hijas: ['servicios', 'configuracion'" in l)
     assert "<Errores />" in panel
 
 

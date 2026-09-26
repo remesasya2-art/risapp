@@ -342,7 +342,7 @@ def test_la_hoja_esta_en_OPERACION():
     abre cuando un cobro de hoy no apareció."""
     panel = _PANEL.read_text(encoding="utf-8")
     i = panel.index("key: 'g_operacion'")
-    grupo = panel[i:panel.index("key: 'g_clientes'")]
+    grupo = panel[i:panel.index("]", panel.index("hijas: [", i))]
     assert "'hoja_mp'" in grupo
 
 

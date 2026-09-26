@@ -15,6 +15,7 @@ import {
   Shield, Activity, UserCog, MessageSquare, CheckCircle, Download,
   AlertCircle, Zap, BookOpen, Star, Wallet, ScrollText, ShieldCheck,
   SlidersHorizontal, AlertTriangle, BarChart3, Receipt, Landmark, Archive,
+  Power, LayoutGrid, Send,
 } from 'lucide-react';
 
 export const CRM_SUBTABS = [
@@ -98,9 +99,12 @@ export const TABS = [
   // en 0 en Configuración. Los clientes no tienen ninguna puerta a esto. Ver
   // components/admin/Nucleo.jsx.
   { key: 'nucleo', label: 'Núcleo (laboratorio)', icon: Landmark, superAdminOnly: true },
+  // Prender y apagar cada servicio. Del super administrador, como la
+  // Configuración de la que lee: pausar remesas es una decisión del dueño.
+  { key: 'servicios', label: 'Servicios', icon: Power, superAdminOnly: true },
 ];
 
-// LOS SEIS GRUPOS DEL PANEL
+// LOS GRUPOS DEL PANEL
 //
 //   Antes esto era una tira plana de dieciocho pestañas que envolvía en tres
 //   filas, ordenadas por el momento en que se fueron agregando. El propio
@@ -119,20 +123,50 @@ export const TABS = [
 //   `hijas` son claves de `TABS` y `CRM_SUBTABS`, no secciones nuevas: los
 //   nombres internos no cambian, así que los enlaces con `?tab=` y el salto de
 //   la campana del equipo siguen andando igual.
+//
+//   Y ENCIMA DE LOS GRUPOS, EL SERVICIO.
+//
+//   Cada grupo es de un servicio —`servicio`—, y el menú muestra los de uno
+//   por vez, elegido con los cuatro botones de arriba: cada servicio tiene su
+//   propia gerencia, y el día que remesas se pause su menú entero queda
+//   aparte, sin mezclarse con el del banco. Lo que es de todos (clientes,
+//   contabilidad, personal) es la «plataforma».
+//
+//   Lo que cruza servicios se queda en la plataforma aunque mire plata de
+//   remesas: el resumen, el uso, el libro mayor, la seguridad financiera y
+//   los reportes suman lo de todos, y partirlos sería perder la foto entera.
+//   Bancos y cobros sin acreditar sí se fueron a Remesas: son las cuentas de
+//   donde salen sus retiros y los pagos de sus recargas.
+export const SERVICIOS_DEL_PANEL = [
+  { key: 'plataforma', label: 'Plataforma', icon: LayoutGrid },
+  { key: 'remesas', label: 'Remesas', icon: Send },
+  { key: 'encomiendas', label: 'Encomiendas', icon: Boxes },
+  { key: 'banco', label: 'Banco', icon: Landmark },
+];
+
 export const GRUPOS = [
-  { key: 'g_resumen', label: 'Resumen', icon: Activity, hijas: ['overview', 'uso'] },
-  { key: 'g_operacion', label: 'Operación', icon: CheckCircle,
+  { key: 'g_resumen', servicio: 'plataforma', label: 'Resumen', icon: Activity, hijas: ['overview', 'uso'] },
+  { key: 'g_clientes', servicio: 'plataforma', label: 'Clientes', icon: UserCog,
+    hijas: ['users', 'kyc', 'blacklist', 'chat', 'support', 'ratings'] },
+  { key: 'g_cuentas', servicio: 'plataforma', label: 'Contabilidad', icon: BookOpen,
+    hijas: ['ledger', 'seguridad', 'reportes'] },
+  { key: 'g_admin', servicio: 'plataforma', label: 'Administración', icon: SlidersHorizontal,
+    hijas: ['servicios', 'configuracion', 'respaldo', 'rrhh', 'auditoria', 'errores'] },
+  { key: 'g_operacion', servicio: 'remesas', label: 'Operación', icon: CheckCircle,
     hijas: ['ordenes', 'withdrawals', 'recharges', 'diferencias', 'hoja_mp',
             'btc', 'credits', 'rates'] },
-  { key: 'g_clientes', label: 'Clientes', icon: UserCog,
-    hijas: ['users', 'kyc', 'blacklist', 'chat', 'support', 'ratings'] },
-  { key: 'g_envios', label: 'Encomiendas', icon: Boxes,
+  { key: 'g_tesoreria', servicio: 'remesas', label: 'Tesorería', icon: Landmark,
+    hijas: ['bancos', 'cobros'] },
+  { key: 'g_envios', servicio: 'encomiendas', label: 'Encomiendas', icon: Boxes,
     hijas: ['operacion', 'envios'] },
-  { key: 'g_cuentas', label: 'Contabilidad', icon: BookOpen,
-    hijas: ['ledger', 'bancos', 'seguridad', 'cobros', 'reportes'] },
-  { key: 'g_admin', label: 'Administración', icon: SlidersHorizontal,
-    hijas: ['configuracion', 'respaldo', 'rrhh', 'auditoria', 'errores', 'nucleo'] },
+  { key: 'g_banco', servicio: 'banco', label: 'Gerencia bancaria', icon: Landmark,
+    hijas: ['nucleo'] },
 ];
+
+// De qué servicio es cada sección. Lo usa el menú para saber qué botón
+// encender cuando se llega a una sección desde afuera (la campana, `?tab=`).
+export const SERVICIO_DE = Object.fromEntries(
+  GRUPOS.flatMap((g) => g.hijas.map((h) => [h, g.servicio])));
 
 // La ficha de cada sección, venga de donde venga. `crm` no entra: era el
 // contenedor de las subpestañas y ahora ese trabajo lo hace el grupo.

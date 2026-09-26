@@ -30,6 +30,7 @@ import Retiros from '../components/admin/Retiros';
 import ListaNegra from '../components/admin/ListaNegra';
 import Bancos from '../components/admin/Bancos';
 import MenuDelPanel from '../components/admin/MenuDelPanel';
+import Servicios from '../components/admin/Servicios';
 import { TABS, CRM_SUBTABS } from '../components/admin/seccionesDelPanel';
 import { fmt } from '../utils/format';
 import MesaDeAyuda from '../components/admin/MesaDeAyuda';
@@ -62,8 +63,7 @@ const maskCPF = (cpf) => {
   return `***.***.**${lastThree.charAt(0)}-${lastThree.slice(1)}`;
 };
 
-// El catálogo de secciones, sus grupos y el menú del costado viven en
-// components/admin/seccionesDelPanel.js y MenuDelPanel.jsx. Ver ahí por qué.
+// Las secciones y el menú: components/admin/seccionesDelPanel.js y MenuDelPanel.jsx.
 
 // Cómo se llama cada rol en pantalla.
 //
@@ -301,9 +301,6 @@ const [searchParams, setSearchParams] = useSearchParams();
     api.get('/admin/accounting/banks').then(res => setAccountingBanks(res.data || [])).catch(() => {});
   }, []);
   useEffect(() => { cargarBancos(); }, [cargarBancos]);
-
-  useEffect(() => {
-  }, []);
 
   // Un solo pedido para las nueve secciones. El servidor devuelve únicamente
   // los contadores de las que ESTE usuario puede abrir: un contador es
@@ -767,7 +764,7 @@ const [searchParams, setSearchParams] = useSearchParams();
       {/* El menú de las secciones: fijo al costado en pantalla ancha, y
           plegado detrás del botón del encabezado en el teléfono. */}
       <div style={{ display: 'flex', alignItems: 'flex-start', maxWidth: '1440px', margin: '0 auto' }}>
-        <MenuDelPanel user={user} activeTab={activeTab} irA={irA}
+        <MenuDelPanel user={user} activeTab={activeTab} irA={irA} abrirSeccion={setActiveTab}
           pendientes={pendientes} esAncho={esAncho}
           menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
 
@@ -822,6 +819,7 @@ const [searchParams, setSearchParams] = useSearchParams();
             <Errores />
           </ErrorBoundary>
         )}
+        {activeTab === 'servicios' && <ErrorBoundary clave="servicios" donde="Servicios"><Servicios /></ErrorBoundary>}
         {activeTab === 'nucleo' && (
           <ErrorBoundary clave="nucleo" donde="Núcleo de cuentas">
             <Nucleo />
