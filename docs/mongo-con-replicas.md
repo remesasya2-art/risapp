@@ -1,18 +1,18 @@
 # Pasar el Mongo de Railway a un conjunto de réplicas
 
-> **Hecho en producción el 26 de septiembre de 2026**, con el comando de la
-> sección 1 y la prueba de reinicio de la sección 2. La salud dice
-> `SALUD| bien`, con «transacciones» en verde y «réplicas: un solo miembro».
-> Lo que se vio está al final de la sección 7.
+> **Hecho en producción el 26 de septiembre de 2026, las dos partes.** Primero
+> un miembro, con el comando de la sección 1 y la prueba de reinicio de la
+> sección 2; lo que se vio está al final de la sección 7. Después, tres
+> miembros, con las secciones 9 a 11; lo que se vio está al final de la
+> sección 11. La salud dice `SALUD| bien`, con «transacciones» en verde y
+> «réplicas: 3 miembros: 1 primario y 2 al día».
 >
 > Fue el segundo intento. El 25 se pasó a réplicas con la primera versión de
 > esta guía y anduvo; esa tarde, en un reinicio, Mongo no se reconoció en su
 > propio conjunto y quedó sin primario: la aplicación no pudo escribir hasta
 > volver atrás con la sección 5. La causa y el arreglo están en «Por qué
 > espera a su nombre», en la sección 1.
->
-> La segunda parte (tres miembros) está sin hacer. Su sección 8 ya quedó
-> hecha con el comando de la sección 1: se empieza por la 9.
+
 
 **Qué se gana:** que cada movimiento de plata del cliente se escriba entero o no
 se escriba. Un Mongo de **un solo nodo** no tiene *transacciones* —la forma de
@@ -307,8 +307,8 @@ quedan en la misma región de Railway: protegen de que se caiga un contenedor o
 se dañe un disco, no de que se caiga la región entera.
 
 **Cómo se sabe que anda:** la salud de la aplicación tiene una línea
-**réplicas**. Hoy dice «un solo miembro»; al terminar tiene que decir
-«3 miembros: 1 primario y 2 al día». Si un día una copia se cae o se atrasa,
+**réplicas**. Con un solo miembro dice «un solo miembro»; con los tres, desde
+el 26 de septiembre de 2026, «3 miembros: 1 primario y 2 al día». Si un día una copia se cae o se atrasa,
 esa línea se pone en rojo y la campana del equipo avisa.
 
 Todo lo de esta parte se ensayó con MongoDB 8, con los comandos copiados letra
@@ -334,6 +334,18 @@ secciones 2 a 4, prueba de reinicio incluida.
 
 Hacé esto dos veces, una para **MongoDB2** y otra para **MongoDB3** (así, sin
 guión: esos nombres se usan en la sección 11).
+
+**MongoDB3 enseguida después de MongoDB2, no otro día.** Con dos miembros,
+para escribir hacen falta los dos: si MongoDB2 se cae mientras todavía no hay
+un tercero, el principal deja de aceptar escrituras. Ese rato tiene que ser
+corto. Si igual pasa, la salida es la sección 12.
+
+**El servicio nuevo no arranca vacío, y no importa.** Railway lo despliega con
+su plantilla apenas se crea, antes de que tenga el comando de abajo: su disco
+ya trae un usuario y una contraseña propios. Se ensayó así: al sumarse, el
+miembro nuevo ve que no tiene la historia del conjunto, borra lo que traía y
+copia todo del principal, usuarios incluidos. Queda con los del principal, no
+con los de la plantilla.
 
 1. En el proyecto: **+ New** → **Database** → **MongoDB**. Crea el servicio con
    su disco. Cambiale el nombre a `MongoDB2` (o `MongoDB3`).
@@ -401,6 +413,15 @@ En el servicio del **backend** → **Variables** → `MONGO_URL`:
 Igual que las variables de la sección 9, son referencias: la contraseña no se
 ve ni se copia. Se ensayó: con el Mongo de hoy muerto de golpe, un backend que
 arranca con esta dirección se conecta y escribe en unos diez segundos.
+
+**Lo que se vio en producción el 26 de septiembre de 2026:**
+
+- MongoDB2 escribió MIEMBRO SUMADO a las 04:33:35 (GMT-4) y MongoDB3
+  se sumó enseguida después, con el mismo comando;
+- la tarjeta de salud del panel dijo «réplicas: 3 miembros: 1 primario y 2 al
+  día», en sana;
+- con `MONGO_URL` apuntando a los tres, el backend arrancó y escribió
+  `ARRANQUE| base preparada`.
 
 ## 12. Si se caen dos: dejar uno solo
 
