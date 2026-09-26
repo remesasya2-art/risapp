@@ -1,6 +1,7 @@
 import os
 import logging
 import mercadopago
+from services import registro
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -70,7 +71,7 @@ class MercadoPagoService:
                 "date_of_expiration": expiration.strftime("%Y-%m-%dT%H:%M:%S.000-03:00")
             }
             
-            logger.info(f"Creating PIX payment: {amount} BRL for {payer_email}")
+            logger.info(f"Creating PIX payment: {amount} BRL for {registro.correo(payer_email)}")
             
             payment_response = self.sdk.payment().create(payment_data)
             response = payment_response.get("response", {})
