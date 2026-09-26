@@ -79,6 +79,21 @@ def ultimos(valor, cuantos: int = 4) -> str:
     return f"...{digitos[-cuantos:]}" if len(digitos) > cuantos else "..."
 
 
+def final(valor, cuantos: int = 4) -> str:
+    """Los últimos caracteres de una llave que no es sólo dígitos: la de las
+    notificaciones de un teléfono, por ejemplo.
+
+    `ultimos` se queda con los dígitos, y de `ExponentPushToken[aB3x...]` no
+    dejaría casi nada que sirva para distinguir un teléfono de otro. Esto deja
+    los últimos cuatro, tal cual: alcanza para ver si dos avisos van al mismo
+    teléfono, y no alcanza para mandarle nada.
+    """
+    texto = str(valor or "").strip()
+    if not texto:
+        return "(vacío)"
+    return f"...{texto[-cuantos:]}" if len(texto) > cuantos * 2 else "..."
+
+
 # Las claves que nunca se copian a un registro, mire quien mire. Se comparan
 # por «contiene», para que `id_document_image_back` caiga igual que
 # `id_document_image`.
