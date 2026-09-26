@@ -17,6 +17,7 @@ from services import auditoria
 import logging
 import os
 from services import saldos
+from services.money import from_db, to_float
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -604,6 +605,12 @@ async def export_transactions(admin_user: Usuario = Depends(get_admin_user)):
     ws.append(headers)
     
     # Data
+    #
+    # Los montos pasan por `to_float(from_db(...))`, como en la exportación
+    # gemela de routes/misc.py: el dinero se guarda en Decimal128 y el Excel no
+    # sabe escribirlo. Una sola orden así hacía contestar «Cannot convert
+    # Decimal128 to Excel» y la exportación entera daba 500. A la gemela se le
+    # arregló en el #182; a ésta nadie la tocó.
     for t in transactions:
         beneficiary_name = ""
         if t.get("beneficiary_data"):
@@ -614,8 +621,8 @@ async def export_transactions(admin_user: Usuario = Depends(get_admin_user)):
             t.get("user_id", ""),
             t.get("type", ""),
             t.get("status", ""),
-            t.get("amount_input", 0),
-            t.get("amount_output", 0),
+            to_float(from_db(t.get("amount_input") or 0)),
+            to_float(from_db(t.get("amount_output") or 0)),
             str(t.get("created_at", "")),
             str(t.get("completed_at", "")),
             beneficiary_name
