@@ -269,3 +269,29 @@ def test_el_panel_no_comparte_contador_con_los_clientes_ni_con_el_mismo_techo(ba
     assert c.get("/api/cosas").status_code == 429
     for _ in range(3):
         assert c.get("/api/admin/pendientes").status_code == 200, "el panel tiene su propio contador"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# El ping de vida de Railway no pasa por el piso
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_el_ping_de_vida_no_va_a_la_base(base, app, monkeypatch):
+    """Contarlo exige leer los ajustes y, en producción, el contador: las dos
+    cosas en Mongo. Con Mongo caído cada ping esperaba 30 segundos y Railway
+    dio por muerto al servidor el 25 de septiembre de 2026."""
+    @app.get("/api/health")
+    async def ping():
+        return {"status": "healthy"}
+    fueron = []
+
+    async def a_la_base(*a, **k):
+        fueron.append(a)
+        raise RuntimeError("No primary exists currently")
+    monkeypatch.setattr(piso, "ajustes", a_la_base)
+    c = cliente(app)
+    assert c.get("/api/health").status_code == 200
+    assert fueron == []
+    # El resto de la API sigue pasando por el piso: el hueco es sólo el ping.
+    with pytest.raises(RuntimeError):
+        c.get("/api/cosas")
+    assert len(fueron) == 1
