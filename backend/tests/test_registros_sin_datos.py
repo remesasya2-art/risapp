@@ -202,7 +202,10 @@ CRUDOS = re.compile(
     # no cae acá —es un campo elegido a mano— pero `payload.email` sí, por la
     # regla del correo de abajo.
     r"payload(?!\.)|body(?!\.)|"
-    r"\w*\.email|\w*\[.email.\]|\bemail\b|"
+    # `email` DENTRO de otro nombre también: `payer_email` se escribió entero
+    # en cada PIX hasta el 26 de septiembre de 2026, porque `\bemail\b` no ve
+    # la palabra pegada a un guion bajo.
+    r"\w*\.email|\w*\[.email.\]|\w*email\w*|"
     r"\w*\.phone\w*|\bphone_number\b|\btelefono\b|\bcelular\b|"
     r"\bcpf\w*|\bdocument_number\b|\bcedula\b|\w*id_document\w*|"
     r"\bselfie\w*|\bproof_image\b|\bvoucher_image\b|"
@@ -243,14 +246,25 @@ def _interpolado(nodo, texto):
     return " ".join(partes)
 
 
+# Lo que NO se barre: los tests escriben datos de ejemplo a propósito, y los
+# scripts corren a mano, en una terminal, no en el registro de Railway.
+_SIN_BARRER = {"tests", "scripts", "__pycache__"}
+
+
 def _archivos():
-    for carpeta in ("routes", "services", "utils"):
-        raiz = os.path.join(_BACKEND, carpeta)
-        if not os.path.isdir(raiz):
-            continue
-        for archivo in los_py_de(raiz):
+    """TODO el backend, no una lista de carpetas.
+
+    Antes se barrían `routes/`, `services/` y `utils/`. El correo del cliente
+    se escribía entero en `mercadopago_service.py`, que vive en la raíz, y el
+    barrido no lo vio nunca: una lista de carpetas deja afuera cada archivo
+    que alguien pone en otro lado.
+    """
+    for raiz, carpetas, archivos in os.walk(_BACKEND):
+        carpetas[:] = sorted(c for c in carpetas if c not in _SIN_BARRER and not c.startswith("."))
+        for archivo in sorted(archivos):
             if archivo.endswith(".py"):
-                yield f"{carpeta}/{archivo}", os.path.join(raiz, archivo)
+                ruta = os.path.join(raiz, archivo)
+                yield os.path.relpath(ruta, _BACKEND).replace(os.sep, "/"), ruta
 
 
 def test_NINGUN_REGISTRO_ESCRIBE_UN_DATO_PERSONAL_CRUDO():
@@ -305,6 +319,34 @@ def test_el_barrido_mira_de_verdad():
             if _es_llamada_a_logger(nodo) and nodo.args and _interpolado(nodo, texto):
                 vistos += 1
     assert vistos > 150, f"el barrido sólo vio {vistos} registros con interpolación"
+
+
+def test_el_barrido_llega_a_la_raiz_y_a_todas_las_carpetas():
+    """El correo del PIX se escapó porque su archivo estaba fuera de las tres
+    carpetas que se barrían. Se nombran archivos de lugares distintos: si el
+    barrido vuelve a ser una lista, alguno queda afuera."""
+    vistos = {rel for rel, _ in _archivos()}
+    for esperado in ("mercadopago_service.py", "admin_routes.py", "server.py",
+                     "routes/gestor_pix.py", "services/registro.py"):
+        assert esperado in vistos, f"el barrido no mira {esperado}"
+    assert any(v.startswith("nucleo/") for v in vistos), "el barrido no mira nucleo/"
+    assert not any(v.startswith("tests/") for v in vistos), "los tests traen datos de ejemplo a propósito"
+
+
+@pytest.mark.parametrize("nombre", ["payer_email", "to_email", "user_email", "email"])
+def test_un_correo_con_cualquier_nombre_cae(nombre):
+    assert CRUDOS.search(nombre), f"«{nombre}» se escribiría entero"
+
+
+def test_de_una_llave_de_notificaciones_quedan_cuatro_caracteres():
+    llave = "ExponentPushToken[aB3xQ9mZkLp7Rt2Wv]"
+    assert registro.final(llave) == "...2Wv]"
+    assert "aB3xQ9mZ" not in registro.final(llave)
+
+
+@pytest.mark.parametrize("valor", ["", None, "corta"])
+def test_una_llave_corta_o_vacia_no_se_escribe(valor):
+    assert registro.final(valor) in ("(vacío)", "...")
 
 
 def test_los_dos_peores_quedaron_arreglados():
