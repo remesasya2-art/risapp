@@ -18,12 +18,25 @@ import {
   Power, LayoutGrid, Send,
 } from 'lucide-react';
 
+// QUIEN VE CADA SECCION: `superAdminOnly` Y `permiso`
+//
+//   El menú decidía sólo por el rol, y un colaborador veía secciones que el
+//   servidor después le negaba con un 403: Órdenes, Retiros, Recargas VES,
+//   Libro mayor y Reportes piden `get_super_admin` en el backend y acá no
+//   estaban marcadas. Ahora cada sección dice lo mismo que su ruta principal:
+//
+//     superAdminOnly   la ruta exige el super administrador.
+//     permiso          la ruta pasa por `services/permisos.py` y pide éste;
+//                      la sección se muestra a quien lo tenga.
+//
+//   El servidor sigue siendo el que decide: esto sólo evita ofrecer una
+//   puerta que va a contestar que no.
 export const CRM_SUBTABS = [
-  { key: 'users', label: 'Usuarios', icon: Users },
-  { key: 'kyc', label: 'KYC', icon: Shield },
-  { key: 'blacklist', label: 'Lista negra', icon: Shield },
-  { key: 'chat', label: 'Chat', icon: MessageSquare },
-  { key: 'support', label: 'Soporte', icon: MessageSquare },
+  { key: 'users', label: 'Usuarios', icon: Users, permiso: 'users.view' },
+  { key: 'kyc', label: 'KYC', icon: Shield, permiso: 'kyc.view' },
+  { key: 'blacklist', label: 'Lista negra', icon: Shield, permiso: 'users.blacklist' },
+  { key: 'chat', label: 'Chat', icon: MessageSquare, permiso: 'support.view' },
+  { key: 'support', label: 'Soporte', icon: MessageSquare, permiso: 'support.view' },
   { key: 'ratings', label: 'Calificaciones', icon: Star },
 ];
 
@@ -32,9 +45,9 @@ export const TABS = [
   // Qué usa la gente. `superAdminOnly`: es el cuadro de mando del negocio
   // —altas, embudo, funciones más usadas—, no una tarea que se delegue.
   { key: 'uso', label: 'Uso', icon: BarChart3, superAdminOnly: true },
-  { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle },
+  { key: 'ordenes', label: 'Órdenes por procesar', icon: CheckCircle, superAdminOnly: true },
   { key: 'diferencias', label: 'Diferencias de pago', icon: AlertCircle, superAdminOnly: true },
-  { key: 'reportes', label: 'Reportes', icon: Download },
+  { key: 'reportes', label: 'Reportes', icon: Download, superAdminOnly: true },
   // Antes del Libro mayor a propósito: acá están las cuatro respuestas, allá
   // el detalle contable de cada una. Sólo del super administrador, igual que
   // las rutas que consulta (`get_super_admin` en el backend).
@@ -50,15 +63,15 @@ export const TABS = [
   // consulta (`get_admin_user`): quien atiende a un cliente que dice «pagué y
   // no me aparece» tiene que poder mirarlo en el momento, y no hay dinero que
   // mover acá —es de sólo lectura y no muestra datos del pagador—.
-  { key: 'hoja_mp', label: 'Pagos de Mercado Pago', icon: Receipt },
-  { key: 'ledger', label: 'Libro mayor', icon: BookOpen },
+  { key: 'hoja_mp', label: 'Pagos de Mercado Pago', icon: Receipt, permiso: 'transactions.view' },
+  { key: 'ledger', label: 'Libro mayor', icon: BookOpen, superAdminOnly: true },
   // Crear y borrar las cuentas de donde salen los retiros y a donde entran
   // las recargas. Sólo del super administrador, como sus rutas.
   { key: 'bancos', label: 'Bancos', icon: Landmark, superAdminOnly: true },
-  { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight },
-  { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft },
+  { key: 'withdrawals', label: 'Retiros', icon: ArrowUpRight, superAdminOnly: true },
+  { key: 'recharges', label: 'Recargas VES', icon: ArrowDownLeft, superAdminOnly: true },
   { key: 'crm', label: 'CRM', icon: UserCog },
-  { key: 'rates', label: 'Tasas', icon: TrendingUp },
+  { key: 'rates', label: 'Tasas', icon: TrendingUp, permiso: 'settings.view' },
   // Sólo del super administrador, igual que las dos rutas que consulta: la
   // lista de órdenes (`/btc/operador/pendientes`) y marcarlas como enviadas
   // (`/admin/btc/marcar-enviado`). Visible para un `admin`, mostraba la lista
@@ -71,7 +84,7 @@ export const TABS = [
   // ruta lo rechaza—. La separacion de roles va en el otro sentido: el que viaja
   // y pesa cajas no puede cambiar los precios ni la cuenta que recibe los
   // fletes.
-  { key: 'operacion', label: 'Cola de envíos', icon: Boxes },
+  { key: 'operacion', label: 'Cola de envíos', icon: Boxes, permiso: 'envios.view' },
   // La configuracion, en cambio, si es solo del super administrador: cambia
   // precios, la cuenta que recibe los fletes y a nombre de quien se rotulan las
   // cajas.
@@ -172,3 +185,20 @@ export const SERVICIO_DE = Object.fromEntries(
 // contenedor de las subpestañas y ahora ese trabajo lo hace el grupo.
 export const POR_CLAVE = Object.fromEntries(
   [...TABS.filter((t) => t.key !== 'crm'), ...CRM_SUBTABS].map((s) => [s.key, s]));
+
+// Las secciones que ve un agente. Es la lista que ya usaba el panel (y el
+// efecto de AdminPanel.jsx que lo devuelve al chat): el agente atiende, y
+// dentro de esto ve lo que sus permisos le dejan abrir.
+const DEL_AGENTE = ['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion'];
+
+// ¿Esta persona puede abrir esta sección? `permisos` es la lista de
+// `/admin/mi-acceso`; mientras no llegó vale `null`, y se muestran sólo las
+// secciones que no piden ninguno.
+export function puedeVerSeccion(clave, rol, permisos) {
+  if (rol === 'super_admin') return true;
+  const s = POR_CLAVE[clave];
+  if (!s || s.superAdminOnly) return false;
+  if (rol === 'agent' && !DEL_AGENTE.includes(clave)) return false;
+  if (clave === 'ratings') return false;
+  return !s.permiso || (permisos || []).includes(s.permiso);
+}

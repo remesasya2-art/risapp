@@ -32,3 +32,8 @@ class UnServicio(BaseModel):
 
 class LosServicios(BaseModel):
     servicios: List[UnServicio] = []
+
+
+class MiAcceso(BaseModel):
+    rol: Escalar = None
+    permisos: List[str] = []

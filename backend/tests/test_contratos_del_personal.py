@@ -232,9 +232,12 @@ def test_DAR_DE_ALTA_Y_DE_BAJA_POR_HTTP(rrhh):
 def test_EL_CATALOGO_Y_LA_LISTA_DE_ADMINISTRADORES(rrhh):
     from _lote_c_comun import SUPER
     import admin_routes
-    from services.permisos import CATALOGO
+    from services.permisos import CATALOGO, SERVICIO_DEL_PERMISO
     c, _ = rrhh
-    assert c.get("/admin/rrhh/permisos").json() == {"permisos": CATALOGO}
+    # Con el servicio de cada permiso, para que RRHH los agrupe: ver
+    # tests/test_permisos_por_servicio.py.
+    assert c.get("/admin/rrhh/permisos").json() == {
+        "permisos": CATALOGO, "servicio_de": SERVICIO_DEL_PERMISO}
     assert c.get("/api/admin/permissions-list").json() == CATALOGO
     r = c.get("/api/admin/sub-admins")
     assert r.status_code == 200 and not _sin_secretos(r.text)

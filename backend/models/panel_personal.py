@@ -106,6 +106,8 @@ CatalogoDePermisos = Dict[str, Escalar]
 
 class PermisosQueSePuedenDar(BaseModel):
     permisos: CatalogoDePermisos = {}
+    # `{permiso: servicio}`, para que RRHH los muestre agrupados por servicio.
+    servicio_de: CatalogoDePermisos = {}
 
 
 # ── Lo que contesta cada acción de RRHH ───────────────────────────────────

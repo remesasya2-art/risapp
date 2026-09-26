@@ -7,7 +7,9 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import api from '../../utils/api';
-import { GRUPOS, POR_CLAVE, SERVICIOS_DEL_PANEL, SERVICIO_DE } from './seccionesDelPanel';
+import {
+  GRUPOS, POR_CLAVE, SERVICIOS_DEL_PANEL, SERVICIO_DE, puedeVerSeccion,
+} from './seccionesDelPanel';
 
 // El número que dice cuánto espera en una pestaña.
 //
@@ -34,24 +36,21 @@ function Pendiente({ cuantos, activa }) {
 export default function MenuDelPanel({
   user, activeTab, irA, abrirSeccion, pendientes, esAncho, menuAbierto, setMenuAbierto,
 }) {
-  const isAgent = user?.role === 'agent';
+  // Los permisos de quien mira, para mostrarle sólo lo que el servidor le va
+  // a dejar abrir. Ver `puedeVerSeccion` en seccionesDelPanel.js.
+  const [permisos, setPermisos] = useState(null);
+  useEffect(() => {
+    let vigente = true;
+    if (user?.role === 'super_admin') return undefined;
+    api.get('/admin/mi-acceso')
+      .then((r) => { if (vigente) setPermisos(r.data?.permisos || []); })
+      .catch(() => { if (vigente) setPermisos([]); });
+    return () => { vigente = false; };
+  }, [user?.role]);
 
-  // CRM no tiene trabajo propio: es la puerta a KYC, Soporte y las demás. Su
-  // número es la suma de lo que hay adentro, o la pestaña se ve vacía mientras
-  // hay ocho KYC esperando a un clic de distancia.
-  // Las mismas reglas de siempre, en un solo lugar en vez de repartidas entre
-  // la tira de arriba y la de las subpestañas.
-  const puedeVerSeccion = (clave) => {
-    if (isAgent) {
-      return ['chat', 'support', 'users', 'kyc', 'blacklist', 'operacion']
-        .includes(clave);
-    }
-    if (clave === 'ratings') return user?.role === 'super_admin';
-    return !POR_CLAVE[clave]?.superAdminOnly || user?.role === 'super_admin';
-  };
-
+  // Las reglas de quién ve qué, en un solo lugar: seccionesDelPanel.js.
   const gruposVisibles = GRUPOS
-    .map((g) => ({ ...g, hijas: g.hijas.filter(puedeVerSeccion) }))
+    .map((g) => ({ ...g, hijas: g.hijas.filter((c) => puedeVerSeccion(c, user?.role, permisos)) }))
     .filter((g) => g.hijas.length > 0);
 
   // EL CONTADOR SUBE AL GRUPO, Y NO ES UN ADORNO

@@ -203,9 +203,10 @@ def _puede_entrar_ya(doc: dict) -> bool:
 
 @router.get("/permisos", response_model=PermisosQueSePuedenDar, response_model_exclude_unset=True)
 async def catalogo_de_permisos(admin: User = Depends(get_super_admin)):
-    """Los permisos que se pueden otorgar, con su nombre legible."""
-    from services.permisos import CATALOGO
-    return {"permisos": CATALOGO}
+    """Los permisos que se pueden otorgar, con su nombre legible y el
+    servicio al que pertenece cada uno."""
+    from services.permisos import CATALOGO, SERVICIO_DEL_PERMISO
+    return {"permisos": CATALOGO, "servicio_de": SERVICIO_DEL_PERMISO}
 
 
 # ─── Legajos ──────────────────────────────────────────────────────────────

@@ -41,9 +41,35 @@ const VACIO = {
   documento: '', telefono: '', fecha_ingreso: '', notas: '', permisos: [],
 };
 
+// LOS PERMISOS, AGRUPADOS POR SERVICIO
+//
+//   El personal es un solo equipo, y en qué servicio trabaja cada persona lo
+//   dicen sus permisos. La grilla los mostraba en una sola tanda de veinte
+//   casillas; ahora van bajo el título de su servicio, que viene del servidor
+//   (`SERVICIO_DEL_PERMISO` en services/permisos.py). Un permiso que el
+//   servidor no ubicó va al final: sin título, pero no se pierde.
+const SERVICIOS_EN_ORDEN = [
+  ['plataforma', 'Plataforma'], ['remesas', 'Remesas'],
+  ['encomiendas', 'Encomiendas'], ['banco', 'Banco'],
+];
+
+function conTitulos(permisos, servicioDe) {
+  const filas = [];
+  const ubicados = new Set();
+  for (const [servicio, nombre] of SERVICIOS_EN_ORDEN) {
+    const suyos = Object.entries(permisos).filter(([c]) => servicioDe[c] === servicio);
+    if (!suyos.length) continue;
+    filas.push([`servicio:${servicio}`, null, nombre]);
+    suyos.forEach(([c, e]) => { filas.push([c, e]); ubicados.add(c); });
+  }
+  Object.entries(permisos).filter(([c]) => !ubicados.has(c)).forEach((f) => filas.push(f));
+  return filas;
+}
+
 export default function RecursosHumanos() {
   const [personal, setPersonal] = useState([]);
   const [permisos, setPermisos] = useState({});
+  const [servicioDe, setServicioDe] = useState({});
   const [cargando, setCargando] = useState(true);
   const [incluirBajas, setIncluirBajas] = useState(false);
   const [alta, setAlta] = useState(null);        // el formulario, o null
@@ -59,7 +85,8 @@ export default function RecursosHumanos() {
       api.get(`/admin/rrhh?incluir_bajas=${conBajas}`),
       api.get('/admin/rrhh/permisos'),
     ]);
-    return { personal: lista.data?.personal || [], permisos: cat.data?.permisos || {} };
+    return { personal: lista.data?.personal || [], permisos: cat.data?.permisos || {},
+             servicioDe: cat.data?.servicio_de || {} };
   };
 
   const cargar = async () => {
@@ -68,6 +95,7 @@ export default function RecursosHumanos() {
       const r = await traer(incluirBajas);
       setPersonal(r.personal);
       setPermisos(r.permisos);
+      setServicioDe(r.servicioDe);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'No se pudo cargar el personal');
     } finally {
@@ -86,6 +114,7 @@ export default function RecursosHumanos() {
         if (!vigente) return;
         setPersonal(r.personal);
         setPermisos(r.permisos);
+        setServicioDe(r.servicioDe);
       })
       .catch((e) => {
         if (vigente) toast.error(e?.response?.data?.detail || 'No se pudo cargar el personal');
@@ -215,7 +244,16 @@ export default function RecursosHumanos() {
       gap: 8, maxHeight: 260, overflowY: 'auto', border: '1px solid var(--en-oscuro-linea, #e5e7eb)',
       borderRadius: 8, padding: 12, background: 'var(--en-oscuro-superficie-2, #fafafa)',
     }}>
-      {Object.entries(permisos).map(([clave, etiqueta]) => {
+      {conTitulos(permisos, servicioDe).map(([clave, etiqueta, titulo]) => {
+        if (etiqueta === null) {
+          return (
+            <div key={clave} data-testid={`permisos-${clave}`} style={{
+              gridColumn: '1 / -1', marginTop: 4, fontSize: 11.5, fontWeight: 800,
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+              color: 'var(--en-oscuro-texto-2, #6b7280)',
+            }}>{titulo}</div>
+          );
+        }
         // El catálogo del backend marca con "(MUEVE DINERO)" los tres
         // permisos que dejan tocar plata: ajustar saldos, aprobar recargas y
         // cargar fletes. Se destacan para que otorgarlos sea una decisión y
